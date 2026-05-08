@@ -28,7 +28,7 @@ async def async_register_panel(hass: HomeAssistant, sidebar_title: str) -> None:
     except RuntimeError:
         pass
 
-    panel_custom.async_register_panel(
+    await panel_custom.async_register_panel(
         hass,
         webcomponent_name=PANEL_COMPONENT_NAME,
         frontend_url_path=PANEL_URL_PATH,
