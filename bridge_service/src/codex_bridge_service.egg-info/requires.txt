@@ -1,0 +1,10 @@
+fastapi>=0.116.0
+uvicorn>=0.35.0
+pydantic>=2.11.0
+pydantic-settings>=2.10.0
+httpx>=0.28.0
+python-multipart>=0.0.9
+
+[test]
+pytest>=8.3.0
+pytest-asyncio>=0.26.0

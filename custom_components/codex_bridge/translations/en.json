@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Codex Bridge",
+        "description": "Point Home Assistant at the local Codex bridge service running on your Windows machine.",
+        "data": {
+          "bridge_url": "Bridge URL",
+          "bridge_token": "Bridge token",
+          "panel_title": "Panel title"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Home Assistant could not reach the Codex bridge service.",
+      "invalid_auth": "The bridge token was rejected.",
+      "unknown": "Unexpected error while validating the bridge connection."
+    }
+  }
+}
