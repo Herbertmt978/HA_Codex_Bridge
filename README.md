@@ -70,7 +70,7 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
 ## Upgrade from 0.2.x
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.3.0`.
+2. Choose `Redownload` or update to `0.3.1`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.
