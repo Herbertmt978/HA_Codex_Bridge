@@ -5,8 +5,8 @@ from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 
-from .models import RunMode, RunRecord, ThreadRecord
-from .storage import BridgeStorage, ThreadNotFoundError
+from .models import RunMode, RunRecord, ThreadRecord, ThreadViewRecord
+from .storage import BridgeStorage
 
 
 class ThreadBusyError(RuntimeError):
@@ -34,6 +34,7 @@ class BridgeRunner:
             record.active_run_id = run.run_id
             record.last_error = None
             self.storage.save_thread(record)
+            self.storage.clear_limits_blocked()
             self.storage.append_thread_event(
                 thread_id=thread_id,
                 event_type="message.created",
@@ -45,19 +46,20 @@ class BridgeRunner:
             )
             worker = Thread(
                 target=self._run_prompt,
-                args=(record, run, prompt),
+                args=(self.storage.get_thread(thread_id), run, prompt),
                 daemon=True,
             )
             worker.start()
             return run
 
-    def _run_prompt(self, record: ThreadRecord, run: RunRecord, prompt: str) -> None:
+    def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
         stderr_lines: list[str] = []
         saw_run_completion = False
         try:
             process = subprocess.Popen(
                 self._build_command(record, prompt),
                 cwd=record.workspace_path,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -97,41 +99,38 @@ class BridgeRunner:
             self.storage.sync_thread_artifacts(record.thread_id)
             self._complete_run(record.thread_id)
         except Exception as exc:
+            failure_payload = self._failure_payload(str(exc))
             self.storage.append_thread_event(
                 thread_id=record.thread_id,
                 event_type="run.failed",
                 payload={
                     "run_id": run.run_id,
-                    "error": str(exc),
+                    **failure_payload,
                 },
             )
             self._complete_run(record.thread_id, error=str(exc))
 
-    def _build_command(self, record: ThreadRecord, prompt: str) -> list[str]:
+    def _build_command(self, record: ThreadViewRecord, prompt: str) -> list[str]:
         prompt_with_context = self._compose_prompt(record, prompt)
         command = self._command_prefix()
+        command.append("exec")
         if record.codex_session_id:
-            command.extend(
-                [
-                    "exec",
-                    "resume",
-                    record.codex_session_id,
-                    prompt_with_context,
-                    "--json",
-                    "--skip-git-repo-check",
-                ]
-            )
-        else:
-            command.extend(
-                [
-                    "exec",
-                    prompt_with_context,
-                    "--json",
-                    "--skip-git-repo-check",
-                    "-C",
-                    record.workspace_path,
-                ]
-            )
+            command.extend(["resume", record.codex_session_id])
+
+        if record.effective_model:
+            command.extend(["-m", record.effective_model])
+        if record.effective_thinking_level:
+            command.extend(["-c", f"model_reasoning_effort={record.effective_thinking_level}"])
+
+        command.extend(
+            [
+                prompt_with_context,
+                "--json",
+                "--skip-git-repo-check",
+            ]
+        )
+        if not record.codex_session_id:
+            command.extend(["-C", record.workspace_path])
             uploads_dir = self.storage.uploads_dir / record.thread_id
             if uploads_dir.exists():
                 command.extend(["--add-dir", str(uploads_dir)])
@@ -197,6 +196,12 @@ class BridgeRunner:
             )
             return False
 
+        if event_type == "token_count":
+            rate_limits = event.get("rate_limits")
+            if isinstance(rate_limits, dict):
+                self.storage.update_limits_from_rate_data(rate_limits)
+            return False
+
         if event_type == "item.completed":
             item = event.get("item", {})
             if isinstance(item, dict) and item.get("type") == "agent_message":
@@ -231,6 +236,23 @@ class BridgeRunner:
             },
         )
         return False
+
+    def _failure_payload(self, message: str) -> dict[str, object]:
+        lowered = message.lower()
+        blocked = any(marker in lowered for marker in ("limit", "credit", "quota"))
+        if blocked:
+            self.storage.mark_limits_blocked(message)
+            return {
+                "error": message,
+                "blocked": True,
+                "failure_type": "limits.exhausted",
+            }
+
+        return {
+            "error": message,
+            "blocked": False,
+            "failure_type": "run.failed",
+        }
 
     def _complete_run(self, thread_id: str, *, error: str | None = None) -> None:
         record = self.storage.load_thread(thread_id)

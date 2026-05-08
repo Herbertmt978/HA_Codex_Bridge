@@ -12,9 +12,16 @@ from .runtime import async_get_runtime
 
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_config)
+    websocket_api.async_register_command(hass, ws_get_status)
+    websocket_api.async_register_command(hass, ws_list_projects)
+    websocket_api.async_register_command(hass, ws_create_project)
+    websocket_api.async_register_command(hass, ws_update_project)
+    websocket_api.async_register_command(hass, ws_browse_paths)
+    websocket_api.async_register_command(hass, ws_create_folder)
     websocket_api.async_register_command(hass, ws_list_threads)
     websocket_api.async_register_command(hass, ws_get_thread)
     websocket_api.async_register_command(hass, ws_create_thread)
+    websocket_api.async_register_command(hass, ws_update_thread)
     websocket_api.async_register_command(hass, ws_send_prompt)
     websocket_api.async_register_command(hass, ws_get_events)
     websocket_api.async_register_command(hass, ws_list_artifacts)
@@ -58,6 +65,124 @@ async def ws_get_config(
     await _async_handle(hass, connection, msg, _handler)
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_status"})
+@websocket_api.async_response
+async def ws_get_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_get_status())
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_projects"})
+@websocket_api.async_response
+async def ws_list_projects(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_list_projects())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/create_project",
+        vol.Required("name"): str,
+        vol.Required("root_path"): str,
+        vol.Optional("default_model", default="gpt-5.4"): str,
+        vol.Optional("default_thinking_level", default="medium"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_create_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_create_project(
+            msg["name"],
+            msg["root_path"],
+            msg["default_model"],
+            msg["default_thinking_level"],
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/update_project",
+        vol.Required("project_id"): str,
+        vol.Optional("name"): vol.Any(None, str),
+        vol.Optional("root_path"): vol.Any(None, str),
+        vol.Optional("default_model"): vol.Any(None, str),
+        vol.Optional("default_thinking_level"): vol.Any(None, str),
+    }
+)
+@websocket_api.async_response
+async def ws_update_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    updates = {
+        key: msg[key]
+        for key in ("name", "root_path", "default_model", "default_thinking_level")
+        if key in msg
+    }
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_update_project(msg["project_id"], updates),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/browse_paths",
+        vol.Optional("path"): vol.Any(None, str),
+    }
+)
+@websocket_api.async_response
+async def ws_browse_paths(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_browse_paths(msg.get("path")),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/create_folder",
+        vol.Required("parent_path"): str,
+        vol.Required("folder_name"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_create_folder(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_create_folder(msg["parent_path"], msg["folder_name"]),
+    )
+
+
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_threads"})
 @websocket_api.async_response
 async def ws_list_threads(
@@ -92,7 +217,10 @@ async def ws_get_thread(
     {
         vol.Required("type"): f"{DOMAIN}/create_thread",
         vol.Required("title"): str,
+        vol.Optional("project_id"): vol.Any(None, str),
         vol.Optional("mode", default="full-auto"): vol.In(["observe", "edit", "full-auto"]),
+        vol.Optional("model_override"): vol.Any(None, str),
+        vol.Optional("thinking_override"): vol.Any(None, str),
     }
 )
 @websocket_api.async_response
@@ -105,7 +233,42 @@ async def ws_create_thread(
         hass,
         connection,
         msg,
-        lambda client: client.async_create_thread(msg["title"], msg["mode"]),
+        lambda client: client.async_create_thread(
+            msg["title"],
+            msg["mode"],
+            msg.get("project_id"),
+            msg.get("model_override"),
+            msg.get("thinking_override"),
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/update_thread",
+        vol.Required("thread_id"): str,
+        vol.Optional("title"): vol.Any(None, str),
+        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto"]),
+        vol.Optional("model_override"): vol.Any(None, str),
+        vol.Optional("thinking_override"): vol.Any(None, str),
+    }
+)
+@websocket_api.async_response
+async def ws_update_thread(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    updates = {
+        key: msg[key]
+        for key in ("title", "mode", "model_override", "thinking_override")
+        if key in msg
+    }
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_update_thread(msg["thread_id"], updates),
     )
 
 

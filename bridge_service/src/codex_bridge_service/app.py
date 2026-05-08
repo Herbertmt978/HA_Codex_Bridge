@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from .routes import artifacts, attachments, events, health, prompts, threads
+from .routes import artifacts, attachments, events, health, projects, prompts, status, threads
 from .runner import BridgeRunner
 from .storage import BridgeStorage
 
@@ -21,6 +21,8 @@ def create_app(
     app.include_router(attachments.router)
     app.include_router(events.router)
     app.include_router(health.router)
+    app.include_router(projects.router)
     app.include_router(prompts.router)
+    app.include_router(status.router)
     app.include_router(threads.router)
     return app

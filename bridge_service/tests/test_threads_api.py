@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
-from codex_bridge_service.models import RunRecord
+from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, RunRecord
 
 
 class FakeRunner:
@@ -33,48 +33,100 @@ class FakeRunner:
         )
 
 
-def test_health_and_thread_create_require_token(tmp_path) -> None:
+def test_health_project_create_and_status_require_token(tmp_path) -> None:
     app = create_app(root_path=tmp_path, auth_token="secret")
     client = TestClient(app)
 
     assert client.get("/health").status_code == 200
-    assert client.post("/threads", json={"title": "No token"}).status_code == 401
+    assert client.post("/projects", json={"name": "No token", "root_path": str(tmp_path / "nope")}).status_code == 401
+    assert client.get("/status").status_code == 401
 
     response = client.post(
-        "/threads",
+        "/projects",
         headers={"Authorization": "Bearer secret"},
-        json={"title": "With token", "mode": "full-auto"},
+        json={
+            "name": "With token",
+            "root_path": str(tmp_path / "projects" / "with-token"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
     )
 
     assert response.status_code == 201
     payload = response.json()
-    saved_path = tmp_path / "threads" / f"{payload['thread_id']}.json"
+    saved_path = tmp_path / "projects" / f"{payload['project_id']}.json"
     saved_payload = json.loads(saved_path.read_text(encoding="utf-8"))
 
-    assert payload["title"] == "With token"
+    assert payload["name"] == "With token"
     assert saved_path.exists()
-    assert saved_payload["thread_id"] == payload["thread_id"]
-    assert saved_payload["workspace_id"] == payload["workspace_id"]
-    assert saved_payload["title"] == "With token"
-    assert saved_payload["mode"] == "full-auto"
-    assert saved_payload["status"] == "idle"
-    assert saved_payload["workspace_path"] == payload["workspace_path"]
+    assert saved_payload["project_id"] == payload["project_id"]
+    assert saved_payload["root_path"] == payload["root_path"]
+
+    status_response = client.get(
+        "/status",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert status_response.status_code == 200
+    assert status_response.json()["models"][0] == DEFAULT_MODEL
+    assert status_response.json()["thinking_levels"][2] == DEFAULT_THINKING_LEVEL
 
 
-def test_thread_create_rejects_blank_title(tmp_path) -> None:
+def test_project_routes_list_browse_create_folder_and_update(tmp_path) -> None:
     app = create_app(root_path=tmp_path, auth_token="secret")
     client = TestClient(app)
 
-    response = client.post(
-        "/threads",
+    project_response = client.post(
+        "/projects",
         headers={"Authorization": "Bearer secret"},
-        json={"title": "   ", "mode": "full-auto"},
+        json={
+            "name": "VM Work",
+            "root_path": str(tmp_path / "vm-work"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    )
+    project_id = project_response.json()["project_id"]
+
+    folder_response = client.post(
+        "/projects/folders",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "parent_path": str(tmp_path / "vm-work"),
+            "folder_name": "notes",
+        },
+    )
+    browse_response = client.get(
+        f"/projects/browse?path={tmp_path / 'vm-work'}",
+        headers={"Authorization": "Bearer secret"},
+    )
+    update_response = client.patch(
+        f"/projects/{project_id}",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "VM Work Updated",
+            "default_model": "gpt-5.5",
+            "default_thinking_level": "high",
+        },
+    )
+    list_response = client.get(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
     )
 
-    assert response.status_code == 422
+    assert folder_response.status_code == 201
+    assert folder_response.json()["name"] == "notes"
+    assert browse_response.status_code == 200
+    assert browse_response.json()["path"] == str(tmp_path / "vm-work")
+    assert browse_response.json()["directories"][0]["name"] == "notes"
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "VM Work Updated"
+    assert update_response.json()["default_model"] == "gpt-5.5"
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["project_id"] == project_id
 
 
-def test_thread_upload_and_event_stream_require_token_and_persist(tmp_path) -> None:
+def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_path) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -82,10 +134,24 @@ def test_thread_upload_and_event_stream_require_token_and_persist(tmp_path) -> N
     )
     client = TestClient(app)
 
+    project_response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Upload project",
+            "root_path": str(tmp_path / "upload-project"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    )
     thread_response = client.post(
         "/threads",
         headers={"Authorization": "Bearer secret"},
-        json={"title": "Upload target", "mode": "full-auto"},
+        json={
+            "title": "Upload target",
+            "project_id": project_response.json()["project_id"],
+            "mode": "full-auto",
+        },
     )
     thread_payload = thread_response.json()
     thread_id = thread_payload["thread_id"]
@@ -112,6 +178,9 @@ def test_thread_upload_and_event_stream_require_token_and_persist(tmp_path) -> N
     saved_payload = json.loads(saved_path.read_text(encoding="utf-8"))
     attachment_path = tmp_path / "uploads" / thread_id / "notes.txt"
 
+    assert thread_payload["project_name"] == "Upload project"
+    assert thread_payload["effective_model"] == DEFAULT_MODEL
+    assert thread_payload["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
     assert upload_payload["filename"] == "notes.txt"
     assert upload_payload["mime_type"] == "text/plain"
     assert upload_payload["stored_path"] == str(attachment_path)
@@ -140,7 +209,7 @@ def test_thread_upload_and_event_stream_require_token_and_persist(tmp_path) -> N
     assert "event: attachment.added" in replay_response.text
 
 
-def test_thread_listing_prompt_replay_and_artifact_download_routes(tmp_path) -> None:
+def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_path) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -148,10 +217,24 @@ def test_thread_listing_prompt_replay_and_artifact_download_routes(tmp_path) -> 
     )
     client = TestClient(app)
 
+    project_response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Prompt project",
+            "root_path": str(tmp_path / "prompt-project"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    )
     thread_response = client.post(
         "/threads",
         headers={"Authorization": "Bearer secret"},
-        json={"title": "Prompt target", "mode": "full-auto"},
+        json={
+            "title": "Prompt target",
+            "project_id": project_response.json()["project_id"],
+            "mode": "full-auto",
+        },
     )
     thread_payload = thread_response.json()
     thread_id = thread_payload["thread_id"]
@@ -164,11 +247,22 @@ def test_thread_listing_prompt_replay_and_artifact_download_routes(tmp_path) -> 
         f"/threads/{thread_id}",
         headers={"Authorization": "Bearer secret"},
     )
+    update_response = client.patch(
+        f"/threads/{thread_id}",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "model_override": "gpt-5.5",
+            "thinking_override": "high",
+        },
+    )
 
     assert list_response.status_code == 200
     assert get_response.status_code == 200
+    assert update_response.status_code == 200
     assert list_response.json()[0]["thread_id"] == thread_id
     assert get_response.json()["thread_id"] == thread_id
+    assert update_response.json()["effective_model"] == "gpt-5.5"
+    assert update_response.json()["effective_thinking_level"] == "high"
 
     assert client.post(
         f"/threads/{thread_id}/prompts",
@@ -194,10 +288,11 @@ def test_thread_listing_prompt_replay_and_artifact_download_routes(tmp_path) -> 
     )
 
     assert replay_response.status_code == 200
-    assert replay_response.json()[0]["event_type"] == "message.created"
-    assert replay_response.json()[0]["payload"]["text"] == "Summarise the upload"
+    assert replay_response.json()[0]["event_type"] == "thread.updated"
+    assert replay_response.json()[-1]["event_type"] == "message.created"
+    assert replay_response.json()[-1]["payload"]["text"] == "Summarise the upload"
 
-    artifact_path = tmp_path / "workspaces" / thread_payload["workspace_id"] / "reply.md"
+    artifact_path = tmp_path / "prompt-project" / "reply.md"
     artifact_path.write_text("hello", encoding="utf-8")
     artifacts = app.state.storage.sync_thread_artifacts(thread_id)
 

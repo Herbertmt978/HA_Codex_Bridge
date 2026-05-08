@@ -1,19 +1,24 @@
 from codex_bridge_service.models import (
     ArtifactRecord,
     AttachmentRecord,
+    LimitsStatusRecord,
+    LimitsWindowRecord,
+    ProjectRecord,
     RunRecord,
     RunMode,
     ThreadEventRecord,
     ThreadRecord,
+    ThreadViewRecord,
 )
 
 
 def test_thread_record_round_trips() -> None:
     record = ThreadRecord(
         thread_id="thr_123",
+        project_id="prj_123",
         title="First thread",
         workspace_id="ws_123",
-        workspace_path="C:/CodexHA/workspaces/ws_123",
+        workspace_path="C:/CodexHA/projects/project-a",
         status="idle",
         mode=RunMode.FULL_AUTO,
         codex_session_id="019e08fb-92dc-7920-88f3-9fc949d1aef8",
@@ -28,32 +33,40 @@ def test_thread_record_round_trips() -> None:
             )
         ],
         artifacts=[],
+        model_override=None,
+        thinking_override=None,
     )
 
     payload = record.model_dump()
     restored = ThreadRecord.model_validate(payload)
 
     assert restored.thread_id == "thr_123"
+    assert restored.project_id == "prj_123"
     assert restored.title == "First thread"
     assert restored.workspace_id == "ws_123"
-    assert restored.workspace_path == "C:/CodexHA/workspaces/ws_123"
+    assert restored.workspace_path == "C:/CodexHA/projects/project-a"
     assert restored.status == "idle"
     assert restored.mode is RunMode.FULL_AUTO
     assert restored.codex_session_id == "019e08fb-92dc-7920-88f3-9fc949d1aef8"
     assert restored.active_run_id is None
     assert restored.last_error is None
+    assert restored.model_override is None
+    assert restored.thinking_override is None
     assert len(restored.attachments) == 1
     assert restored.attachments[0].filename == "notes.txt"
     assert restored.attachments[0].attachment_id == "att_1"
     assert restored.artifacts == []
 
 
-def test_thread_record_round_trips_nested_artifacts() -> None:
-    record = ThreadRecord(
+def test_thread_view_record_round_trips_effective_settings() -> None:
+    record = ThreadViewRecord(
         thread_id="thr_456",
+        project_id="prj_456",
+        project_name="Artifact thread",
+        project_root_path="C:/CodexHA/projects/artifacts",
         title="Artifact thread",
         workspace_id="ws_456",
-        workspace_path="C:/CodexHA/workspaces/ws_456",
+        workspace_path="C:/CodexHA/projects/artifacts",
         status="running",
         mode=RunMode.EDIT,
         codex_session_id="019e08fc-b413-7003-b0d5-fcb0bf29a11c",
@@ -75,24 +88,63 @@ def test_thread_record_round_trips_nested_artifacts() -> None:
                 stored_path="C:/CodexHA/artifacts/thr_456/report.md",
             )
         ],
+        model_override="gpt-5.5",
+        thinking_override="high",
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+        effective_model="gpt-5.5",
+        effective_thinking_level="high",
     )
 
     payload = record.model_dump()
+    restored = ThreadViewRecord.model_validate(payload)
 
     assert payload["mode"] == "edit"
-    assert payload["attachments"][0]["stored_path"] == "C:/CodexHA/uploads/thr_456/diagram.png"
-    assert payload["artifacts"][0]["artifact_id"] == "art_1"
-
-    restored = ThreadRecord.model_validate(payload)
-
-    assert restored.mode is RunMode.EDIT
-    assert restored.codex_session_id == "019e08fc-b413-7003-b0d5-fcb0bf29a11c"
-    assert restored.active_run_id == "run_123"
-    assert restored.last_error == "tool failed"
-    assert restored.attachments[0].mime_type == "image/png"
+    assert restored.project_name == "Artifact thread"
+    assert restored.project_root_path == "C:/CodexHA/projects/artifacts"
+    assert restored.default_model == "gpt-5.4"
+    assert restored.default_thinking_level == "medium"
+    assert restored.effective_model == "gpt-5.5"
+    assert restored.effective_thinking_level == "high"
     assert restored.artifacts[0].artifact_id == "art_1"
-    assert restored.artifacts[0].filename == "report.md"
-    assert restored.artifacts[0].stored_path == "C:/CodexHA/artifacts/thr_456/report.md"
+
+
+def test_project_record_and_limits_round_trip() -> None:
+    project = ProjectRecord(
+        project_id="prj_1",
+        name="Home Assistant",
+        root_path="C:/Projects/HomeAssistant",
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+        created_at="2026-05-08T18:40:00Z",
+        updated_at="2026-05-08T18:40:00Z",
+    )
+    limits = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        primary=LimitsWindowRecord(
+            used_percent=12.5,
+            remaining_percent=87.5,
+            window_minutes=300,
+            resets_at=1778302800,
+        ),
+        secondary=LimitsWindowRecord(
+            used_percent=44.0,
+            remaining_percent=56.0,
+            window_minutes=10080,
+            resets_at=1778907600,
+        ),
+        credits=None,
+        plan_type="team",
+        updated_at="2026-05-08T18:45:00Z",
+    )
+
+    assert ProjectRecord.model_validate(project.model_dump()).root_path == "C:/Projects/HomeAssistant"
+    restored_limits = LimitsStatusRecord.model_validate(limits.model_dump())
+    assert restored_limits.available is True
+    assert restored_limits.primary.remaining_percent == 87.5
+    assert restored_limits.secondary.window_minutes == 10080
 
 
 def test_thread_event_record_round_trips_payload() -> None:

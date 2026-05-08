@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -35,21 +36,95 @@ class BridgeApiClient:
     async def async_health(self) -> dict[str, Any]:
         return await self._async_json("GET", "/health")
 
+    async def async_get_status(self) -> dict[str, Any]:
+        return await self._async_json("GET", "/status")
+
+    async def async_list_projects(self) -> list[dict[str, Any]]:
+        return await self._async_json("GET", "/projects")
+
+    async def async_create_project(
+        self,
+        name: str,
+        root_path: str,
+        default_model: str,
+        default_thinking_level: str,
+    ) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            "/projects",
+            json_body={
+                "name": name,
+                "root_path": root_path,
+                "default_model": default_model,
+                "default_thinking_level": default_thinking_level,
+            },
+            expected_status={201},
+        )
+
+    async def async_update_project(
+        self,
+        project_id: str,
+        updates: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._async_json(
+            "PATCH",
+            f"/projects/{project_id}",
+            json_body=updates,
+        )
+
+    async def async_browse_paths(self, path: str | None = None) -> dict[str, Any]:
+        query = ""
+        if path:
+            query = f"?path={quote(path, safe='')}"
+        return await self._async_json("GET", f"/projects/browse{query}")
+
+    async def async_create_folder(self, parent_path: str, folder_name: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            "/projects/folders",
+            json_body={
+                "parent_path": parent_path,
+                "folder_name": folder_name,
+            },
+            expected_status={201},
+        )
+
     async def async_list_threads(self) -> list[dict[str, Any]]:
         return await self._async_json("GET", "/threads")
 
     async def async_get_thread(self, thread_id: str) -> dict[str, Any]:
         return await self._async_json("GET", f"/threads/{thread_id}")
 
-    async def async_create_thread(self, title: str, mode: str) -> dict[str, Any]:
+    async def async_create_thread(
+        self,
+        title: str,
+        mode: str,
+        project_id: str | None = None,
+        model_override: str | None = None,
+        thinking_override: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "title": title,
+            "mode": mode,
+        }
+        if project_id:
+            payload["project_id"] = project_id
+        if model_override is not None:
+            payload["model_override"] = model_override
+        if thinking_override is not None:
+            payload["thinking_override"] = thinking_override
         return await self._async_json(
             "POST",
             "/threads",
-            json_body={
-                "title": title,
-                "mode": mode,
-            },
+            json_body=payload,
             expected_status={201},
+        )
+
+    async def async_update_thread(self, thread_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+        return await self._async_json(
+            "PATCH",
+            f"/threads/{thread_id}",
+            json_body=updates,
         )
 
     async def async_send_prompt(self, thread_id: str, prompt: str) -> dict[str, Any]:
