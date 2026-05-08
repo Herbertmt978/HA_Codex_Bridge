@@ -1,2 +1,0 @@
-[console_scripts]
-codex-bridge-service = codex_bridge_service.__main__:main
