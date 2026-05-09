@@ -125,7 +125,12 @@ class BridgeStorage:
     def ensure_imported_project(self) -> ProjectRecord:
         target = self._project_path(self._imported_project_id())
         if target.exists():
-            return ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            if record.kind is not ProjectKind.IMPORTED or record.name != self.imported_project_name:
+                record.kind = ProjectKind.IMPORTED
+                record.name = self.imported_project_name
+                self.save_project(record)
+            return record
 
         record = ProjectRecord(
             project_id=self._imported_project_id(),
@@ -143,7 +148,12 @@ class BridgeStorage:
     def ensure_direct_project(self) -> ProjectRecord:
         target = self._project_path(self._direct_project_id())
         if target.exists():
-            return ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            if record.kind is not ProjectKind.DIRECT or record.name != self.direct_project_name:
+                record.kind = ProjectKind.DIRECT
+                record.name = self.direct_project_name
+                self.save_project(record)
+            return record
 
         record = ProjectRecord(
             project_id=self._direct_project_id(),
@@ -162,7 +172,16 @@ class BridgeStorage:
         target = self._project_path(project_id)
         if not target.exists():
             raise ProjectNotFoundError(project_id)
-        return ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        if project_id == self._imported_project_id() and record.kind is not ProjectKind.IMPORTED:
+            record.kind = ProjectKind.IMPORTED
+            record.name = self.imported_project_name
+            self.save_project(record)
+        if project_id == self._direct_project_id() and record.kind is not ProjectKind.DIRECT:
+            record.kind = ProjectKind.DIRECT
+            record.name = self.direct_project_name
+            self.save_project(record)
+        return record
 
     def list_projects(self) -> list[ProjectRecord]:
         records = {

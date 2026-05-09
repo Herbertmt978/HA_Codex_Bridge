@@ -278,6 +278,38 @@ def test_legacy_thread_records_are_assigned_to_imported_project(tmp_path) -> Non
     assert record.workspace_path == str(legacy_workspace)
 
 
+def test_existing_special_projects_are_migrated_to_correct_kind(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    stale_imported = {
+        "project_id": "prj_imported",
+        "name": "Imported Threads",
+        "root_path": str(tmp_path / "workspaces"),
+        "kind": "project",
+        "default_model": "gpt-5.4",
+        "default_thinking_level": "medium",
+        "created_at": "2026-05-09T00:00:00Z",
+        "updated_at": "2026-05-09T00:00:00Z",
+    }
+    stale_direct = {
+        "project_id": "prj_direct",
+        "name": "Direct chats",
+        "root_path": str(tmp_path / "workspaces"),
+        "kind": "project",
+        "default_model": "gpt-5.4",
+        "default_thinking_level": "medium",
+        "created_at": "2026-05-09T00:00:00Z",
+        "updated_at": "2026-05-09T00:00:00Z",
+    }
+    (tmp_path / "projects" / "prj_imported.json").write_text(json.dumps(stale_imported), encoding="utf-8")
+    (tmp_path / "projects" / "prj_direct.json").write_text(json.dumps(stale_direct), encoding="utf-8")
+
+    imported = storage.load_project("prj_imported")
+    direct = storage.load_project("prj_direct")
+
+    assert imported.kind is ProjectKind.IMPORTED
+    assert direct.kind is ProjectKind.DIRECT
+
+
 def test_archive_restore_and_delete_thread_metadata(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = storage.create_thread(title="Archive me", mode=RunMode.FULL_AUTO)
