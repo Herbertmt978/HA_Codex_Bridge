@@ -543,7 +543,7 @@ class BridgeStorage:
         event_type: str,
         payload: dict[str, object],
     ) -> ThreadEventRecord:
-        sequence = len(self.list_thread_events(thread_id)) + 1
+        sequence = self._next_thread_event_sequence(thread_id)
         record = ThreadEventRecord(
             event_id=f"evt_{uuid4().hex[:12]}",
             thread_id=thread_id,
@@ -563,14 +563,29 @@ class BridgeStorage:
         if not target.exists():
             return []
 
-        events = [
-            ThreadEventRecord.model_validate_json(line)
-            for line in target.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        if after is None:
-            return events
-        return [event for event in events if event.sequence > after]
+        events: list[ThreadEventRecord] = []
+        with target.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                event = ThreadEventRecord.model_validate_json(line)
+                if after is None or event.sequence > after:
+                    events.append(event)
+        return events
+
+    def _next_thread_event_sequence(self, thread_id: str) -> int:
+        target = self._event_log_path(thread_id)
+        if not target.exists():
+            return 1
+
+        latest_sequence = 0
+        with target.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                event = ThreadEventRecord.model_validate_json(line)
+                latest_sequence = max(latest_sequence, event.sequence)
+        return latest_sequence + 1
 
     def get_attachment(self, thread_id: str, attachment_id: str) -> AttachmentRecord:
         record = self.load_thread(thread_id)

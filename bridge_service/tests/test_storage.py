@@ -89,6 +89,19 @@ def test_create_thread_without_project_uses_direct_chat_workspace(tmp_path) -> N
     assert Path(record.workspace_path).name.startswith("ws_")
 
 
+def test_thread_events_can_be_read_after_sequence_without_reloading_history(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    record = storage.create_thread(title="Event stream", mode=RunMode.FULL_AUTO)
+
+    storage.append_thread_event(thread_id=record.thread_id, event_type="run.started", payload={})
+    storage.append_thread_event(thread_id=record.thread_id, event_type="message.completed", payload={"text": "done"})
+
+    later_events = storage.list_thread_events(record.thread_id, after=1)
+
+    assert [event.sequence for event in later_events] == [2, 3]
+    assert [event.event_type for event in later_events] == ["run.started", "message.completed"]
+
+
 def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     project = storage.create_project(

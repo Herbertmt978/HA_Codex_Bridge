@@ -46,8 +46,15 @@ template.innerHTML = `
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
+      --brand-cyan: #18c8d8;
+      --brand-blue: #3182f6;
+      --brand-violet: #8b5cf6;
+      --brand-emerald: #1dbf73;
+      --brand-amber: #f59e0b;
       --accent-soft: color-mix(in srgb, var(--accent-color) 12%, white 88%);
       --danger-color: #e25563;
+      --shadow-soft: 0 18px 42px rgba(15, 23, 42, 0.08);
+      --shadow-card: 0 10px 28px rgba(15, 23, 42, 0.08);
       display: block;
       height: 100%;
       color: var(--text-color);
@@ -71,7 +78,7 @@ template.innerHTML = `
       border-radius: 8px;
       cursor: pointer;
       padding: 0;
-      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
     }
 
     button:hover {
@@ -92,6 +99,15 @@ template.innerHTML = `
     textarea:focus,
     select:focus {
       border-color: color-mix(in srgb, var(--accent-color) 68%, white 32%);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent-color) 64%, white 36%);
+      outline-offset: 2px;
     }
 
     .shell {
@@ -100,10 +116,13 @@ template.innerHTML = `
       gap: 12px;
       min-height: calc(100vh - 64px);
       padding: 12px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 95%, white 5%), var(--panel-bg));
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 34%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 92%, white 8%), var(--panel-bg));
     }
 
     .pane {
+      position: relative;
       min-width: 0;
       min-height: 0;
       background: color-mix(in srgb, var(--surface-bg) 98%, #f5f8fd 2%);
@@ -112,6 +131,18 @@ template.innerHTML = `
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .pane::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--brand-cyan), var(--brand-blue), var(--brand-violet));
+      opacity: 0.86;
+      pointer-events: none;
+      z-index: 1;
     }
 
     .rail-pane,
@@ -128,7 +159,8 @@ template.innerHTML = `
       gap: 10px;
       padding: 14px 16px;
       border-bottom: 1px solid var(--border-color);
-      background: color-mix(in srgb, var(--surface-bg) 98%, #f6f9fd 2%);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 96%, #f1f7ff 4%), color-mix(in srgb, var(--surface-bg) 99%, #f8fbff 1%));
     }
 
     .title-block {
@@ -269,6 +301,7 @@ template.innerHTML = `
       border-radius: 10px;
       background: var(--surface-bg);
       color: var(--muted-color);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
     }
 
     .search-shell input {
@@ -290,7 +323,8 @@ template.innerHTML = `
       padding: 12px;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      background: color-mix(in srgb, var(--surface-bg) 98%, #f7fbff 2%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 97%, #f3f9ff 3%), var(--surface-bg));
+      box-shadow: var(--shadow-card);
     }
 
     .panel-form.visible {
@@ -372,11 +406,13 @@ template.innerHTML = `
       background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 90%, white 10%), color-mix(in srgb, var(--accent-color) 72%, #00d4ff 28%));
       border-color: transparent;
       font-weight: 600;
+      box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-color) 24%, transparent);
     }
 
     .send-button:hover {
       border-color: transparent;
       background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 82%, white 18%), color-mix(in srgb, var(--accent-color) 64%, #00d4ff 36%));
+      transform: translateY(-1px);
     }
 
     .rail-sections {
@@ -475,8 +511,9 @@ template.innerHTML = `
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: start;
       gap: 8px;
-      padding: 8px 6px 4px;
+      padding: 8px 8px 4px;
       border-top: 0;
+      border-radius: 10px;
     }
 
     .project-shell:first-child .project-head {
@@ -484,7 +521,8 @@ template.innerHTML = `
     }
 
     .project-head.active {
-      background: transparent;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--accent-color) 12%, transparent), transparent 78%);
+      box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-color) 74%, var(--brand-cyan) 26%);
     }
 
     .project-meta {
@@ -522,7 +560,7 @@ template.innerHTML = `
       gap: 8px;
       width: 100%;
       min-width: 0;
-      padding: 8px 10px;
+      padding: 9px 10px;
       text-align: left;
       border-radius: 9px;
       background: transparent;
@@ -531,8 +569,9 @@ template.innerHTML = `
     }
 
     .chat-select.active {
-      background: color-mix(in srgb, var(--accent-soft) 58%, white 42%);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 74%, white 26%), color-mix(in srgb, var(--surface-bg) 98%, #f7fbff 2%));
       border-color: color-mix(in srgb, var(--accent-color) 28%, var(--border-color) 72%);
+      box-shadow: inset 3px 0 0 var(--accent-color), 0 8px 18px rgba(15, 23, 42, 0.06);
     }
 
     .chat-select:hover {
@@ -558,6 +597,7 @@ template.innerHTML = `
     .status-pill.running {
       color: var(--accent-color);
       background: color-mix(in srgb, var(--accent-color) 12%, white 88%);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-color) 10%, transparent);
     }
 
     .status-pill.error {
@@ -566,8 +606,9 @@ template.innerHTML = `
     }
 
     .status-pill.idle {
-      color: #1dbf73;
-      background: color-mix(in srgb, #1dbf73 12%, white 88%);
+      color: var(--brand-emerald);
+      background: color-mix(in srgb, var(--brand-emerald) 12%, white 88%);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-emerald) 10%, transparent);
     }
 
     .main-pane {
@@ -610,7 +651,8 @@ template.innerHTML = `
       padding: 7px 9px;
       border: 1px solid var(--border-color);
       border-radius: 9px;
-      background: color-mix(in srgb, var(--surface-bg) 98%, #f7fbff 2%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 98%, #f5faff 2%), var(--surface-bg));
+      box-shadow: 0 7px 18px rgba(15, 23, 42, 0.04);
     }
 
     .toolbar-card.limits {
@@ -665,13 +707,30 @@ template.innerHTML = `
       line-height: 1.3;
     }
 
+    .mini-limit-bar {
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--border-color) 68%, transparent);
+      margin-top: 1px;
+    }
+
+    .mini-limit-fill {
+      display: block;
+      height: 100%;
+      width: var(--limit-width, 0%);
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--limit-color, var(--brand-emerald)), color-mix(in srgb, var(--limit-color, var(--brand-emerald)) 72%, white 28%));
+      transition: width 220ms ease;
+    }
+
     .compact-select {
       width: 100%;
       min-width: 0;
       height: 30px;
       padding: 0 8px;
       border-radius: 8px;
-      background: var(--surface-bg);
+      background: linear-gradient(180deg, var(--surface-bg), color-mix(in srgb, var(--surface-bg) 96%, #f0f5fb 4%));
       font-size: 12px;
     }
 
@@ -714,9 +773,10 @@ template.innerHTML = `
       align-items: center;
       justify-content: center;
       border-radius: 999px;
-      color: var(--muted-color);
-      background: color-mix(in srgb, var(--surface-bg) 92%, #eef3fb 8%);
-      border: 1px solid var(--border-color);
+      color: color-mix(in srgb, var(--accent-color) 88%, black 12%);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 13%, white 87%), color-mix(in srgb, var(--brand-cyan) 12%, white 88%));
+      border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
+      box-shadow: 0 7px 16px rgba(15, 23, 42, 0.06);
     }
 
     .bubble {
@@ -725,11 +785,18 @@ template.innerHTML = `
       padding: 12px 14px;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      background: color-mix(in srgb, var(--surface-bg) 99%, #f8fbff 1%);
+      background: linear-gradient(180deg, var(--surface-bg), color-mix(in srgb, var(--surface-bg) 97%, #f6faff 3%));
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+
+    .message.user .avatar {
+      color: color-mix(in srgb, var(--brand-violet) 72%, black 28%);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--brand-violet) 15%, white 85%), color-mix(in srgb, var(--brand-blue) 13%, white 87%));
+      border-color: color-mix(in srgb, var(--brand-violet) 24%, var(--border-color) 76%);
     }
 
     .message.user .bubble {
-      background: color-mix(in srgb, var(--accent-soft) 55%, white 45%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 66%, white 34%), color-mix(in srgb, var(--surface-bg) 94%, #eff8ff 6%));
       border-color: color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
     }
 
@@ -762,6 +829,7 @@ template.innerHTML = `
       border-radius: 8px;
       color: var(--muted-color);
       font-size: 12px;
+      background: color-mix(in srgb, var(--surface-bg) 94%, #f4f8fb 6%);
     }
 
     .event-row {
@@ -777,7 +845,8 @@ template.innerHTML = `
       gap: 10px;
       padding: 10px 16px 14px;
       border-top: 1px solid var(--border-color);
-      background: color-mix(in srgb, var(--surface-bg) 98%, #f8fbff 2%);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 97%, #f4faff 3%), var(--surface-bg));
     }
 
     .attachment-toolbar {
@@ -834,6 +903,7 @@ template.innerHTML = `
       resize: vertical;
       line-height: 1.5;
       padding: 12px 14px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
     .empty-state {
@@ -858,7 +928,8 @@ template.innerHTML = `
       padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      background: color-mix(in srgb, var(--surface-bg) 99%, #f8fbff 1%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 98%, #f6fbff 2%), var(--surface-bg));
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
     }
 
     .section-head-row {
@@ -959,7 +1030,8 @@ template.innerHTML = `
       padding: 8px 9px;
       margin: -4px -5px;
       border-radius: 10px;
-      background: color-mix(in srgb, var(--accent-soft) 48%, white 52%);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 66%, white 34%), var(--surface-bg));
+      box-shadow: inset 3px 0 0 var(--accent-color);
     }
 
     .artifact-preview {
@@ -1207,6 +1279,10 @@ class CodexBridgePanel extends HTMLElement {
     this._browseState = null;
     this._pollTimer = null;
     this._pollTick = 0;
+    this._pollActive = false;
+    this._pollGeneration = 0;
+    this._pollInFlight = false;
+    this._lastStatusRefreshAt = 0;
     this._isLoading = false;
     this._error = "";
     this._renderedThreadId = null;
@@ -1962,16 +2038,25 @@ class CodexBridgePanel extends HTMLElement {
             <span class="mini-limit-name">${this._escapeHtml(label)}</span>
             <span class="limit-value">--</span>
           </div>
+          <span class="mini-limit-bar"><span class="mini-limit-fill" style="--limit-width: 0%; --limit-color: var(--muted-color);"></span></span>
           <span class="limit-subline">Unavailable</span>
         </div>
       `;
     }
+    const remaining = typeof windowInfo.remaining_percent === "number" ? Math.max(0, Math.min(100, windowInfo.remaining_percent)) : 0;
+    const limitColor =
+      remaining <= 15
+        ? "var(--danger-color)"
+        : remaining <= 35
+          ? "var(--brand-amber)"
+          : "var(--brand-emerald)";
     return `
       <div class="mini-limit">
         <div class="mini-limit-head">
           <span class="mini-limit-name">${this._escapeHtml(label)}</span>
           <span class="limit-value">${this._formatPercent(windowInfo.remaining_percent)}</span>
         </div>
+        <span class="mini-limit-bar"><span class="mini-limit-fill" style="--limit-width: ${remaining.toFixed(0)}%; --limit-color: ${limitColor};"></span></span>
         <span class="limit-subline">${this._escapeHtml(this._formatReset(windowInfo.resets_at))}</span>
       </div>
     `;
@@ -2972,58 +3057,115 @@ class CodexBridgePanel extends HTMLElement {
     if (!this._selectedThreadId) {
       return;
     }
-    this._pollTimer = window.setInterval(async () => {
-      if (!this._selectedThreadId) {
+    this._pollActive = true;
+    this._pollGeneration += 1;
+    this._lastStatusRefreshAt = 0;
+    this._scheduleNextPoll(250, this._pollGeneration);
+  }
+
+  _scheduleNextPoll(delay = this._pollDelay(), generation = this._pollGeneration) {
+    if (!this._pollActive || !this._selectedThreadId) {
+      return;
+    }
+    this._pollTimer = window.setTimeout(() => {
+      if (generation !== this._pollGeneration) {
         return;
       }
-      try {
-        this._pollTick += 1;
-        const previousSequence = this._sequence;
-        const previousStatus = this._activeThread?.status;
-        const shouldRefreshStatus = this._pollTick % 8 === 0;
-        const [events, status, thread] = await Promise.all([
-          this._callWS("get_events", {
-            thread_id: this._selectedThreadId,
-            after: this._sequence,
-          }),
-          shouldRefreshStatus ? this._callWS("get_status") : Promise.resolve(this._status),
-          this._activeThread?.status === "running" || shouldRefreshStatus
-            ? this._callWS("get_thread", { thread_id: this._selectedThreadId })
-            : Promise.resolve(null),
-        ]);
-        if (events.length) {
-          this._events = [...this._events, ...events];
-          this._sequence = this._events[this._events.length - 1].sequence;
-        }
-        if (status) {
-          this._status = status;
-        }
+      this._pollTimer = null;
+      this._runPollTick(generation);
+    }, delay);
+  }
 
-        const hasNewEvents = this._sequence !== previousSequence;
-        const shouldRefreshThread = Boolean(thread) || hasNewEvents;
-        if (shouldRefreshThread) {
-          this._activeThread = thread || (await this._callWS("get_thread", { thread_id: this._selectedThreadId }));
-          this._syncThreadListStatus();
-          if (
-            this._activeThread.status !== "running" &&
-            (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)
-          ) {
-            this._artifacts = await this._callWS("list_artifacts", { thread_id: this._selectedThreadId });
-            this._syncSelectedArtifact();
-          }
-          this._render();
-        }
-      } catch (error) {
-        this._setError(error);
+  _pollDelay() {
+    if (document.visibilityState === "hidden") {
+      return 8000;
+    }
+    if (this._activeThread?.status === "running") {
+      return 900;
+    }
+    if (this._error) {
+      return 5000;
+    }
+    return 3600;
+  }
+
+  async _runPollTick(generation = this._pollGeneration) {
+    if (!this._pollActive || generation !== this._pollGeneration || !this._selectedThreadId) {
+      return;
+    }
+    if (this._pollInFlight) {
+      this._scheduleNextPoll(undefined, generation);
+      return;
+    }
+    this._pollInFlight = true;
+    const polledThreadId = this._selectedThreadId;
+    try {
+      this._pollTick += 1;
+      const previousSequence = this._sequence;
+      const previousStatus = this._activeThread?.status;
+      const isRunning = previousStatus === "running";
+      const now = Date.now();
+      const statusInterval = isRunning ? 7000 : 30000;
+      const shouldRefreshStatus = !this._lastStatusRefreshAt || now - this._lastStatusRefreshAt >= statusInterval;
+      const [events, status, thread] = await Promise.all([
+        this._callWS("get_events", {
+          thread_id: polledThreadId,
+          after: this._sequence,
+        }),
+        shouldRefreshStatus ? this._callWS("get_status") : Promise.resolve(this._status),
+        isRunning || shouldRefreshStatus
+          ? this._callWS("get_thread", { thread_id: polledThreadId })
+          : Promise.resolve(null),
+      ]);
+      if (polledThreadId !== this._selectedThreadId) {
+        return;
       }
-    }, 1100);
+      if (shouldRefreshStatus) {
+        this._lastStatusRefreshAt = Date.now();
+      }
+      if (events.length) {
+        this._events = [...this._events, ...events];
+        this._sequence = this._events[this._events.length - 1].sequence;
+      }
+      if (status) {
+        this._status = status;
+      }
+
+      const hasNewEvents = this._sequence !== previousSequence;
+      const shouldRefreshThread = Boolean(thread) || hasNewEvents;
+      if (shouldRefreshThread) {
+        this._activeThread = thread || (await this._callWS("get_thread", { thread_id: polledThreadId }));
+        if (polledThreadId !== this._selectedThreadId) {
+          return;
+        }
+        this._syncThreadListStatus();
+        if (
+          this._activeThread.status !== "running" &&
+          (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)
+        ) {
+          this._artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
+          this._syncSelectedArtifact();
+        }
+        this._render();
+      }
+    } catch (error) {
+      this._setError(error);
+    } finally {
+      this._pollInFlight = false;
+      if (this._pollActive && generation === this._pollGeneration && this._selectedThreadId) {
+        this._scheduleNextPoll(undefined, generation);
+      }
+    }
   }
 
   _stopPolling() {
+    this._pollActive = false;
+    this._pollGeneration += 1;
     if (this._pollTimer) {
-      window.clearInterval(this._pollTimer);
+      window.clearTimeout(this._pollTimer);
       this._pollTimer = null;
     }
+    this._pollInFlight = false;
   }
 
   _syncThreadListStatus() {
