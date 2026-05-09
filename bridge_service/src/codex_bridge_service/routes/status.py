@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header, Request
 
 from ..auth import require_bridge_token
-from ..models import BridgeStatusRecord, SUPPORTED_MODELS, SUPPORTED_THINKING_LEVELS
+from ..models import BridgeStatusRecord, CodexAccountRecord, SUPPORTED_MODELS, SUPPORTED_THINKING_LEVELS
 
 router = APIRouter()
 
@@ -19,4 +19,9 @@ def get_status(
         models=list(SUPPORTED_MODELS),
         thinking_levels=list(SUPPORTED_THINKING_LEVELS),
         limits=request.app.state.storage.get_limits_status(refresh=True),
+        account=(
+            request.app.state.account_probe.probe()
+            if getattr(request.app.state, "account_probe", None) is not None
+            else CodexAccountRecord()
+        ),
     )

@@ -76,10 +76,10 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
    - `Panel title`: the sidebar label you want in Home Assistant
 5. Open the new sidebar panel.
 
-## Upgrade to 0.4.4
+## Upgrade to 0.4.5
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.4.4`.
+2. Choose `Redownload` or update to `0.4.5`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.
@@ -91,6 +91,7 @@ After the upgrade, you can:
 - upload whole folders for VBA/codebase work
 - preview and download generated artifacts from the side panel
 - use the sleeker colour-accented panel with quieter idle polling and faster event replay
+- see the signed-in Codex account email/plan in the panel without exposing auth tokens
 
 ## Dashboard launcher
 

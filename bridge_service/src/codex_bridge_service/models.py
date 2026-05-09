@@ -128,10 +128,24 @@ class LimitsStatusRecord(BaseModel):
     updated_at: str | None = None
 
 
+class CodexAccountRecord(BaseModel):
+    available: bool = False
+    auth_mode: str | None = None
+    email: str | None = None
+    name: str | None = None
+    account_id: str | None = None
+    user_id: str | None = None
+    plan_type: str | None = None
+    organization_id: str | None = None
+    organization_title: str | None = None
+    updated_at: str | None = None
+
+
 class BridgeStatusRecord(BaseModel):
     models: list[str] = Field(default_factory=lambda: list(SUPPORTED_MODELS))
     thinking_levels: list[str] = Field(default_factory=lambda: list(SUPPORTED_THINKING_LEVELS))
     limits: LimitsStatusRecord = Field(default_factory=LimitsStatusRecord)
+    account: CodexAccountRecord = Field(default_factory=CodexAccountRecord)
 
 
 class PathBrowseEntryRecord(BaseModel):

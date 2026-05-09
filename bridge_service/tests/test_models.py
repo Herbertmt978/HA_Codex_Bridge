@@ -1,6 +1,7 @@
 from codex_bridge_service.models import (
     ArtifactRecord,
     AttachmentRecord,
+    CodexAccountRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
     ProjectRecord,
@@ -145,6 +146,27 @@ def test_project_record_and_limits_round_trip() -> None:
     assert restored_limits.available is True
     assert restored_limits.primary.remaining_percent == 87.5
     assert restored_limits.secondary.window_minutes == 10080
+
+
+def test_codex_account_record_round_trips_safe_profile_fields() -> None:
+    account = CodexAccountRecord(
+        available=True,
+        auth_mode="chatgpt",
+        email="person@example.com",
+        name="Person Example",
+        account_id="acc_123",
+        user_id="user_123",
+        plan_type="pro",
+        organization_id="org_123",
+        organization_title="Personal",
+        updated_at="2026-05-09T10:00:00Z",
+    )
+
+    restored = CodexAccountRecord.model_validate(account.model_dump())
+
+    assert restored.available is True
+    assert restored.email == "person@example.com"
+    assert restored.plan_type == "pro"
 
 
 def test_thread_event_record_round_trips_payload() -> None:

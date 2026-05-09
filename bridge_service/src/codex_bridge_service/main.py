@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from .account import CodexAccountProbe
 from .app import create_app
 from .limits import CodexLimitsProbe
 from .runner import BridgeRunner
@@ -27,6 +28,7 @@ def build_app() -> FastAPI:
         root_path=settings.root_path,
         auth_token=settings.auth_token,
         limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
+        account_probe=CodexAccountProbe(codex_home) if codex_home else None,
         runner_factory=lambda storage: BridgeRunner(
             storage=storage,
             codex_command=settings.codex_wrapper_path,

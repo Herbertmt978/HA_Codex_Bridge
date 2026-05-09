@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
-from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, RunRecord
+from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, CodexAccountRecord, RunRecord
 
 
 class FakeRunner:
@@ -33,8 +33,22 @@ class FakeRunner:
         )
 
 
+class FakeAccountProbe:
+    def probe(self) -> CodexAccountRecord:
+        return CodexAccountRecord(
+            available=True,
+            auth_mode="chatgpt",
+            email="person@example.com",
+            name="Person Example",
+            account_id="acc_123",
+            plan_type="pro",
+            organization_title="Personal",
+            updated_at="2026-05-09T10:00:00Z",
+        )
+
+
 def test_health_project_create_and_status_require_token(tmp_path) -> None:
-    app = create_app(root_path=tmp_path, auth_token="secret")
+    app = create_app(root_path=tmp_path, auth_token="secret", account_probe=FakeAccountProbe())
     client = TestClient(app)
 
     assert client.get("/health").status_code == 200
@@ -70,6 +84,8 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
     assert status_response.status_code == 200
     assert status_response.json()["models"][0] == DEFAULT_MODEL
     assert status_response.json()["thinking_levels"][2] == DEFAULT_THINKING_LEVEL
+    assert status_response.json()["account"]["email"] == "person@example.com"
+    assert status_response.json()["account"]["plan_type"] == "pro"
 
 
 def test_project_routes_list_browse_create_folder_and_update(tmp_path) -> None:

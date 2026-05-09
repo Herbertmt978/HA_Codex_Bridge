@@ -186,6 +186,32 @@ template.innerHTML = `
       text-overflow: ellipsis;
     }
 
+    .account-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 4px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: color-mix(in srgb, var(--accent-color) 78%, black 22%);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--brand-cyan) 13%, white 87%), color-mix(in srgb, var(--brand-blue) 10%, white 90%));
+      border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .account-pill.unavailable {
+      color: var(--muted-color);
+      background: color-mix(in srgb, var(--surface-bg) 94%, #eef3fb 6%);
+      border-color: var(--border-color);
+    }
+
     .subline,
     .meta-line,
     .row-meta,
@@ -1118,6 +1144,7 @@ template.innerHTML = `
         <div class="title-block">
           <span class="eyeline">Workspace</span>
           <span class="title" id="panel-title">Codex Bridge</span>
+          <span class="account-pill unavailable" id="account-pill">Account unavailable</span>
         </div>
       </div>
       <div class="rail-actions">
@@ -1617,6 +1644,11 @@ class CodexBridgePanel extends HTMLElement {
     const contextName = activeProject?.kind === "direct" ? "Direct chat" : activeProject?.name || "Ready";
 
     this.shadowRoot.getElementById("panel-title").textContent = this._config?.panel_title || "Codex Bridge";
+    const accountPill = this.shadowRoot.getElementById("account-pill");
+    const account = this._status?.account;
+    accountPill.textContent = this._accountLabel(account);
+    accountPill.title = this._accountTitle(account);
+    accountPill.classList.toggle("unavailable", !account?.available);
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
     this.shadowRoot.getElementById("thread-title-label").textContent =
       activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
@@ -2371,7 +2403,11 @@ class CodexBridgePanel extends HTMLElement {
     const container = this.shadowRoot.getElementById("context-list");
     const thread = this._activeThread;
     const project = this._activeProject();
+    const account = this._status?.account;
     const rows = [
+      ["Signed in", this._accountLabel(account)],
+      ["Account plan", account?.plan_type ? this._titleCase(account.plan_type) : "Unknown"],
+      ["Organization", account?.organization_title || "Unknown"],
       ["Workspace", thread?.workspace_path || project?.root_path || "Not selected"],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
       ["Mode", thread?.mode || "full-auto"],
@@ -3307,6 +3343,27 @@ class CodexBridgePanel extends HTMLElement {
 
   _limitState() {
     return this._status?.limits || null;
+  }
+
+  _accountLabel(account) {
+    if (!account?.available) {
+      return "Account unavailable";
+    }
+    return account.email || account.name || account.account_id || "Signed in";
+  }
+
+  _accountTitle(account) {
+    if (!account?.available) {
+      return "The bridge could not read a Codex login from auth.json";
+    }
+    const parts = [
+      account.name,
+      account.email,
+      account.plan_type ? `${this._titleCase(account.plan_type)} plan` : "",
+      account.organization_title,
+      account.auth_mode ? `Auth: ${account.auth_mode}` : "",
+    ].filter(Boolean);
+    return parts.join(" | ");
   }
 
   _formatPercent(value) {
