@@ -76,10 +76,10 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
    - `Panel title`: the sidebar label you want in Home Assistant
 5. Open the new sidebar panel.
 
-## Upgrade to 0.4.0
+## Upgrade to 0.4.1
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.4.0`.
+2. Choose `Redownload` or update to `0.4.1`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.

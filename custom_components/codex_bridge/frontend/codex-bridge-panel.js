@@ -876,6 +876,8 @@ template.innerHTML = `
       transition: opacity 120ms ease;
     }
 
+    .chat-row.selected .thread-actions,
+    .chat-row.archived .thread-actions,
     .chat-row:hover .thread-actions,
     .chat-row:focus-within .thread-actions {
       opacity: 1;
@@ -1478,20 +1480,19 @@ class CodexBridgePanel extends HTMLElement {
 
   _handleFocusIn(event) {
     const target = event.target;
-    if (!(target instanceof HTMLElement) || !target.classList.contains("stable-select")) {
+    if (!this._isRefreshLockTarget(target)) {
       return;
     }
     this._suspendUiRefresh = true;
   }
 
   _handleFocusOut(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement) || !target.classList.contains("stable-select")) {
+    if (!this._isRefreshLockTarget(event.target)) {
       return;
     }
     window.setTimeout(() => {
       const activeElement = this.shadowRoot.activeElement;
-      if (activeElement instanceof HTMLElement && activeElement.classList.contains("stable-select")) {
+      if (this._isRefreshLockTarget(activeElement)) {
         return;
       }
       this._suspendUiRefresh = false;
@@ -1624,6 +1625,19 @@ class CodexBridgePanel extends HTMLElement {
         <button class="text-button" type="button" data-action="cancel-thread-form">Close</button>
       </div>
     `;
+  }
+
+  _isRefreshLockTarget(target) {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    if (target.classList.contains("stable-select")) {
+      return true;
+    }
+    if (!["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+      return false;
+    }
+    return Boolean(target.closest("#thread-form-panel, #project-form-panel"));
   }
 
   _renderDirectSection() {
@@ -1760,9 +1774,10 @@ class CodexBridgePanel extends HTMLElement {
     const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
     const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
+    const selected = thread.thread_id === this._selectedThreadId;
     return `
-      <div class="chat-row">
-        <button class="chat-select ${thread.thread_id === this._selectedThreadId ? "active" : ""}" type="button" data-action="select-thread" data-thread-id="${thread.thread_id}">
+      <div class="chat-row ${selected ? "selected" : ""} ${archived ? "archived" : ""}">
+        <button class="chat-select ${selected ? "active" : ""}" type="button" data-action="select-thread" data-thread-id="${thread.thread_id}">
           <div class="title-block">
             <span class="thread-name">${this._escapeHtml(thread.title)}</span>
             <span class="row-meta">${this._escapeHtml(meta)}</span>
