@@ -1302,6 +1302,7 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
+    this.shadowRoot.addEventListener("paste", (event) => this._handlePaste(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
 
@@ -1478,6 +1479,23 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
+  _handlePaste(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || target.id !== "prompt-input") {
+      return;
+    }
+    const files = this._clipboardFiles(event.clipboardData);
+    if (!files.length) {
+      return;
+    }
+    event.preventDefault();
+    if (!this._selectedThreadId) {
+      this._setError("Select a chat before pasting a screenshot.");
+      return;
+    }
+    this._uploadFiles(files, { useRelativePaths: false });
+  }
+
   _handleFocusIn(event) {
     const target = event.target;
     if (!this._isRefreshLockTarget(target)) {
@@ -1524,7 +1542,7 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
       ? `Uploading ${this._pendingUploads} file${this._pendingUploads === 1 ? "" : "s"}`
       : activeThread
-        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"}`
+        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} · paste screenshot`
         : "No chat selected";
 
     const errorStrip = this.shadowRoot.getElementById("error-strip");
@@ -1638,6 +1656,48 @@ class CodexBridgePanel extends HTMLElement {
       return false;
     }
     return Boolean(target.closest("#thread-form-panel, #project-form-panel"));
+  }
+
+  _clipboardFiles(clipboardData) {
+    if (!clipboardData?.items?.length) {
+      return [];
+    }
+    const files = [];
+    for (const item of Array.from(clipboardData.items)) {
+      if (item.kind !== "file") {
+        continue;
+      }
+      const rawFile = item.getAsFile();
+      if (!rawFile) {
+        continue;
+      }
+      files.push(this._normalizeClipboardFile(rawFile, files.length));
+    }
+    return files;
+  }
+
+  _normalizeClipboardFile(file, index = 0) {
+    if (file.name) {
+      return file;
+    }
+    const extension = this._extensionFromMime(file.type);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `clipboard-${stamp}${index ? `-${index + 1}` : ""}.${extension}`;
+    return new File([file], filename, {
+      type: file.type || "application/octet-stream",
+      lastModified: Date.now(),
+    });
+  }
+
+  _extensionFromMime(mimeType) {
+    const map = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+      "image/gif": "gif",
+      "image/bmp": "bmp",
+    };
+    return map[mimeType] || "bin";
   }
 
   _renderDirectSection() {
