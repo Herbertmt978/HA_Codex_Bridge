@@ -46,6 +46,7 @@ $env:CODEX_BRIDGE_PORT = "8766"
 $env:CODEX_BRIDGE_ROOT_PATH = "C:\\CodexHA"
 $env:CODEX_BRIDGE_AUTH_TOKEN = "replace-this-with-a-long-random-token"
 $env:CODEX_BRIDGE_CODEX_WRAPPER_PATH = "C:\\Users\\Ashby\\.codex\\.sandbox-bin\\codex.exe"
+$env:CODEX_BRIDGE_BYPASS_SANDBOX = "1"
 ```
 
 Then start the bridge:
@@ -55,6 +56,8 @@ codex-bridge-service
 ```
 
 If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a `.ps1` or `.py` file instead of `codex.exe`.
+
+`CODEX_BRIDGE_BYPASS_SANDBOX=1` is recommended for isolated Windows VMs where the bridge should run with full local access and the Codex Windows sandbox helper has not been bootstrapped. It keeps file/tool workflows working through the bridge without depending on the missing sandbox setup marker and local sandbox users.
 
 ## Home Assistant setup
 
@@ -70,7 +73,7 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
 ## Upgrade from 0.2.x
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.3.1`.
+2. Choose `Redownload` or update to `0.3.2`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.

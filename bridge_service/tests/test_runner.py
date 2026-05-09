@@ -207,3 +207,27 @@ def test_runner_closes_stdin_for_codex_process(tmp_path, monkeypatch) -> None:
     _wait_for_idle(storage, thread.thread_id)
 
     assert captured["stdin"] is subprocess.DEVNULL
+
+
+def test_runner_can_bypass_sandbox_for_trusted_vm_exec(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+    script_path = tmp_path / "fake_codex.py"
+    argv_path = tmp_path / "argv-bypass.json"
+    script_path.write_text(FAKE_CODEX, encoding="utf-8")
+
+    monkeypatch.setenv("FAKE_CODEX_ARGV_PATH", str(argv_path))
+
+    runner = BridgeRunner(
+        storage=storage,
+        codex_command=str(script_path),
+        bypass_sandbox=True,
+    )
+    runner.submit_prompt(thread.thread_id, "Trusted VM run")
+    _wait_for_idle(storage, thread.thread_id)
+
+    argv = json.loads(argv_path.read_text(encoding="utf-8"))
+
+    assert "--dangerously-bypass-approvals-and-sandbox" in argv
+    assert "--full-auto" not in argv
+    assert "--sandbox" not in argv

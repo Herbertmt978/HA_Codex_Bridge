@@ -1,4 +1,4 @@
-const MODE_OPTIONS = [
+﻿const MODE_OPTIONS = [
   { value: "observe", label: "Observe" },
   { value: "edit", label: "Edit" },
   { value: "full-auto", label: "Full auto" },
@@ -47,15 +47,16 @@ template.innerHTML = `
 
     .shell {
       display: grid;
-      grid-template-columns: minmax(300px, 360px) minmax(480px, 1fr) minmax(280px, 340px);
-      gap: 16px;
+      grid-template-columns: minmax(244px, 292px) minmax(0, 1fr) minmax(228px, 272px);
+      gap: 12px;
       min-height: calc(100vh - 64px);
-      padding: 18px;
+      padding: 14px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 94%, white 6%), var(--panel-bg));
     }
 
     .pane {
       min-height: 0;
+      min-width: 0;
       background: color-mix(in srgb, var(--surface-bg) 88%, black 12%);
       border: 1px solid var(--border-color);
       border-radius: 8px;
@@ -71,7 +72,7 @@ template.innerHTML = `
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 16px 18px;
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 94%, white 6%);
     }
@@ -84,14 +85,14 @@ template.innerHTML = `
     }
 
     .eyeline {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted-color);
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
 
     .title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 600;
       line-height: 1.25;
       white-space: nowrap;
@@ -105,7 +106,7 @@ template.innerHTML = `
     .status-text,
     .empty-note,
     .timestamp {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted-color);
       line-height: 1.45;
     }
@@ -159,18 +160,24 @@ template.innerHTML = `
       min-height: 0;
     }
 
+    .section-scroll,
+    .message-list,
+    .file-section {
+      flex: 1 1 auto;
+    }
+
     .forms-stack {
       display: grid;
-      gap: 10px;
-      padding: 12px;
+      gap: 8px;
+      padding: 10px;
       border-bottom: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 93%, white 7%);
     }
 
     .panel-form {
       display: none;
-      gap: 10px;
-      padding: 12px;
+      gap: 8px;
+      padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 8px;
       background: color-mix(in srgb, var(--surface-bg) 90%, white 10%);
@@ -187,7 +194,7 @@ template.innerHTML = `
       border-radius: 8px;
       border: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 90%, black 10%);
-      padding: 12px 14px;
+      padding: 10px 12px;
       outline: none;
     }
 
@@ -200,13 +207,14 @@ template.innerHTML = `
     .field-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
     }
 
     .project-list {
-      padding: 10px;
+      padding: 8px;
       display: grid;
-      gap: 10px;
+      gap: 8px;
+      align-content: start;
     }
 
     .project-card {
@@ -224,9 +232,9 @@ template.innerHTML = `
     .project-head {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 10px;
+      gap: 8px;
       align-items: start;
-      padding: 12px;
+      padding: 10px;
       border-bottom: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
     }
 
@@ -253,7 +261,7 @@ template.innerHTML = `
     .project-name,
     .thread-name,
     .file-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       line-height: 1.35;
       overflow: hidden;
@@ -264,17 +272,17 @@ template.innerHTML = `
     .chat-list {
       display: grid;
       gap: 6px;
-      padding: 10px 12px 12px;
+      padding: 8px 10px 10px;
     }
 
     .chat-row {
       width: 100%;
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
       text-align: left;
-      padding: 10px 12px;
+      padding: 9px 10px;
       border-radius: 8px;
       background: color-mix(in srgb, var(--surface-bg) 95%, white 5%);
     }
@@ -312,8 +320,8 @@ template.innerHTML = `
     }
 
     .banner {
-      margin: 0 18px;
-      padding: 12px 14px;
+      margin: 0 14px;
+      padding: 10px 12px;
       border-radius: 8px;
       border: 1px solid color-mix(in srgb, #ef4444 45%, var(--border-color) 55%);
       background: color-mix(in srgb, #ef4444 12%, var(--surface-bg) 88%);
@@ -324,23 +332,22 @@ template.innerHTML = `
 
     .control-bar {
       display: grid;
-      gap: 12px;
-      padding: 14px 18px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      padding: 8px 14px 10px;
       border-bottom: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 93%, white 7%);
     }
 
     .limits-grid,
     .chat-settings {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      display: contents;
     }
 
     .limit-card,
     .setting-card,
     .browser-card {
-      padding: 12px;
+      padding: 8px 10px;
       border-radius: 8px;
       border: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 91%, white 9%);
@@ -355,40 +362,46 @@ template.innerHTML = `
     .limit-label,
     .browser-label,
     .section-header {
-      font-size: 12px;
+      font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--muted-color);
     }
 
     .limit-value {
-      margin-top: 6px;
-      font-size: 20px;
+      margin-top: 3px;
+      font-size: 15px;
       font-weight: 600;
       line-height: 1.2;
     }
 
     .limit-subline {
-      margin-top: 4px;
-      font-size: 12px;
+      margin-top: 2px;
+      font-size: 10px;
       color: var(--muted-color);
     }
 
     .setting-card {
       display: grid;
-      gap: 8px;
+      gap: 5px;
     }
 
     .setting-foot {
-      font-size: 12px;
+      font-size: 10px;
       color: var(--muted-color);
+    }
+
+    .setting-card .field-select {
+      min-height: 34px;
+      padding: 6px 9px;
+      font-size: 12px;
     }
 
     .message-list {
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      padding: 20px;
+      gap: 12px;
+      padding: 14px;
     }
 
     .message {
@@ -419,7 +432,7 @@ template.innerHTML = `
     .bubble {
       display: grid;
       gap: 8px;
-      padding: 14px 16px;
+      padding: 12px 14px;
       border-radius: 8px;
       border: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 90%, white 10%);
@@ -448,7 +461,7 @@ template.innerHTML = `
 
     .bubble-text {
       margin: 0;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.5;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -464,14 +477,14 @@ template.innerHTML = `
 
     .composer {
       border-top: 1px solid var(--border-color);
-      padding: 16px 18px 18px;
+      padding: 12px 14px 14px;
       display: grid;
-      gap: 12px;
+      gap: 8px;
       background: color-mix(in srgb, var(--surface-bg) 94%, white 6%);
     }
 
     .composer textarea {
-      min-height: 120px;
+      min-height: 84px;
       resize: vertical;
       line-height: 1.5;
     }
@@ -492,9 +505,9 @@ template.innerHTML = `
     }
 
     .send-button {
-      min-width: 132px;
-      height: 42px;
-      padding: 0 16px;
+      min-width: 116px;
+      height: 38px;
+      padding: 0 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -506,7 +519,7 @@ template.innerHTML = `
 
     .files-body {
       display: grid;
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: repeat(2, minmax(0, 1fr));
       min-height: 0;
     }
 
@@ -522,21 +535,22 @@ template.innerHTML = `
     }
 
     .section-header {
-      padding: 14px 16px 10px;
+      padding: 10px 12px 8px;
     }
 
     .file-list {
-      padding: 0 10px 10px;
+      padding: 0 8px 8px;
       display: grid;
-      gap: 8px;
+      gap: 6px;
+      align-content: start;
     }
 
     .file-row {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
-      padding: 12px;
+      padding: 10px;
       border-radius: 8px;
       border: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 90%, white 10%);
@@ -583,9 +597,15 @@ template.innerHTML = `
       word-break: break-word;
     }
 
+    @media (max-width: 1420px) {
+      .control-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     @media (max-width: 1260px) {
       .shell {
-        grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+        grid-template-columns: minmax(250px, 292px) minmax(0, 1fr);
       }
 
       .files-pane {
@@ -601,8 +621,7 @@ template.innerHTML = `
       }
 
       .field-grid,
-      .limits-grid,
-      .chat-settings {
+      .control-bar {
         grid-template-columns: 1fr;
       }
 
@@ -670,7 +689,7 @@ template.innerHTML = `
           <div class="composer-left">
             <button class="icon-button" type="button" data-action="upload-file" title="Upload file" aria-label="Upload file"></button>
             <span class="meta-line" id="attachment-meta"></span>
-            <input id="file-input" type="file" class="hidden" />
+            <input id="file-input" type="file" class="hidden" multiple />
           </div>
           <div class="composer-right">
             <span class="meta-line" id="run-meta"></span>
@@ -767,7 +786,12 @@ class CodexBridgePanel extends HTMLElement {
     this._error = "";
     this._renderedThreadId = null;
     this._renderedSequence = 0;
+    this._renderedLimitsKey = "";
+    this._renderedChatSettingsKey = "";
     this._forceMessageRebuild = true;
+    this._pendingUploads = 0;
+    this._suspendUiRefresh = false;
+    this._queuedRender = false;
   }
 
   connectedCallback() {
@@ -845,10 +869,12 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
+    this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
+    this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
-      const [file] = event.target.files || [];
-      if (file) {
-        this._uploadFile(file);
+      const files = Array.from(event.target.files || []);
+      if (files.length) {
+        this._uploadFiles(files);
       }
       event.target.value = "";
     });
@@ -979,7 +1005,37 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  _render() {
+  _handleFocusIn(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains("field-select")) {
+      return;
+    }
+    this._suspendUiRefresh = true;
+  }
+
+  _handleFocusOut(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains("field-select")) {
+      return;
+    }
+    window.setTimeout(() => {
+      const activeElement = this.shadowRoot.activeElement;
+      if (activeElement instanceof HTMLElement && activeElement.classList.contains("field-select")) {
+        return;
+      }
+      this._suspendUiRefresh = false;
+      if (this._queuedRender) {
+        this._render(true);
+      }
+    }, 0);
+  }
+
+  _render(force = false) {
+    if (!force && this._suspendUiRefresh) {
+      this._queuedRender = true;
+      return;
+    }
+    this._queuedRender = false;
     this.shadowRoot.getElementById("panel-title").textContent =
       this._config?.panel_title || "Codex Bridge";
 
@@ -996,17 +1052,22 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.getElementById("thread-status-text").textContent = activeThread
       ? `Status: ${status}`
       : "";
-    this.shadowRoot.getElementById("attachment-meta").textContent = activeThread
-      ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"}`
-      : activeProject
-        ? `Project: ${activeProject.name}`
-        : "Select a project";
+    this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
+      ? `Uploading ${this._pendingUploads} file${this._pendingUploads === 1 ? "" : "s"}`
+      : activeThread
+        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"}`
+        : activeProject
+          ? `Project: ${activeProject.name}`
+          : "Select a project";
     this.shadowRoot.getElementById("run-meta").textContent = activeThread?.last_error
       ? activeThread.last_error
       : activeThread?.active_run_id
         ? `Run ${activeThread.active_run_id}`
         : "";
-    this.shadowRoot.getElementById("prompt-input").value = this._draft;
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    if (promptInput.value !== this._draft) {
+      promptInput.value = this._draft;
+    }
 
     const errorBanner = this.shadowRoot.getElementById("error-banner");
     errorBanner.textContent = this._error;
@@ -1118,7 +1179,7 @@ class CodexBridgePanel extends HTMLElement {
               <button class="project-select" type="button" data-action="select-project" data-project-id="${project.project_id}">
                 <span class="project-name">${this._escapeHtml(project.name)}</span>
                 <span class="thread-meta">${this._escapeHtml(project.root_path)}</span>
-                <span class="thread-meta">${this._escapeHtml(project.default_model)} · ${this._escapeHtml(project.default_thinking_level)}</span>
+                <span class="thread-meta">${this._escapeHtml(project.default_model)} Â· ${this._escapeHtml(project.default_thinking_level)}</span>
               </button>
               <div class="project-actions">
                 <button class="icon-button small" type="button" data-action="new-chat" data-project-id="${project.project_id}" title="New chat" aria-label="New chat">${icons.chat}</button>
@@ -1151,19 +1212,25 @@ class CodexBridgePanel extends HTMLElement {
   _renderLimits() {
     const container = this.shadowRoot.getElementById("limits-grid");
     const limits = this._status?.limits;
+    const limitsKey = JSON.stringify(limits || null);
+    if (limitsKey === this._renderedLimitsKey) {
+      return;
+    }
+
     if (!limits?.available) {
       container.innerHTML = `
         <div class="limit-card">
           <div class="limit-label">5-hour limit</div>
           <div class="limit-value">Unavailable</div>
-          <div class="limit-subline">A live rate-limit snapshot appears after Codex reports one.</div>
+          <div class="limit-subline">Waiting for the first limit snapshot.</div>
         </div>
         <div class="limit-card">
           <div class="limit-label">Weekly limit</div>
           <div class="limit-value">Unavailable</div>
-          <div class="limit-subline">The bridge still detects exhausted-credit failures cleanly.</div>
+          <div class="limit-subline">Exhausted-credit detection still works.</div>
         </div>
       `;
+      this._renderedLimitsKey = limitsKey;
       return;
     }
 
@@ -1171,6 +1238,7 @@ class CodexBridgePanel extends HTMLElement {
       ${this._limitCard("5-hour limit", limits.primary, limits.blocked, limits.message)}
       ${this._limitCard("Weekly limit", limits.secondary, limits.blocked, limits.message)}
     `;
+    this._renderedLimitsKey = limitsKey;
   }
 
   _renderChatSettings() {
@@ -1179,6 +1247,21 @@ class CodexBridgePanel extends HTMLElement {
     const project = this._activeProject();
     const models = this._status?.models || ["gpt-5.4"];
     const thinkingLevels = this._status?.thinking_levels || ["medium"];
+    const settingsKey = JSON.stringify({
+      threadId: thread?.thread_id || null,
+      projectId: project?.project_id || null,
+      projectModel: project?.default_model || null,
+      projectThinking: project?.default_thinking_level || null,
+      modelOverride: thread?.model_override || null,
+      thinkingOverride: thread?.thinking_override || null,
+      effectiveModel: thread?.effective_model || null,
+      effectiveThinking: thread?.effective_thinking_level || null,
+      models,
+      thinkingLevels,
+    });
+    if (settingsKey === this._renderedChatSettingsKey) {
+      return;
+    }
     if (!thread || !project) {
       container.innerHTML = `
         <div class="setting-card">
@@ -1190,6 +1273,7 @@ class CodexBridgePanel extends HTMLElement {
           <div class="setting-foot">Chat overrides inherit project defaults until you change them.</div>
         </div>
       `;
+      this._renderedChatSettingsKey = settingsKey;
       return;
     }
 
@@ -1199,26 +1283,27 @@ class CodexBridgePanel extends HTMLElement {
       <div class="setting-card">
         <div class="setting-label">Model</div>
         <select class="field-select" id="thread-model-select">
-          <option value="">Inherit project default (${this._escapeHtml(project.default_model)})</option>
+          <option value="">Inherit (${this._escapeHtml(project.default_model)})</option>
           ${models.map(
             (model) =>
               `<option value="${this._escapeHtml(model)}" ${model === modelValue ? "selected" : ""}>${this._escapeHtml(model)}</option>`
           ).join("")}
         </select>
-        <div class="setting-foot">${modelValue ? `Override active · effective ${this._escapeHtml(thread.effective_model)}` : `Inherited from project · effective ${this._escapeHtml(thread.effective_model)}`}</div>
+        <div class="setting-foot">${modelValue ? `Override active / effective ${this._escapeHtml(thread.effective_model)}` : `Project default / effective ${this._escapeHtml(thread.effective_model)}`}</div>
       </div>
       <div class="setting-card">
         <div class="setting-label">Thinking</div>
         <select class="field-select" id="thread-thinking-select">
-          <option value="">Inherit project default (${this._escapeHtml(project.default_thinking_level)})</option>
+          <option value="">Inherit (${this._escapeHtml(project.default_thinking_level)})</option>
           ${thinkingLevels.map(
             (level) =>
               `<option value="${this._escapeHtml(level)}" ${level === thinkingValue ? "selected" : ""}>${this._escapeHtml(this._titleCase(level))}</option>`
           ).join("")}
         </select>
-        <div class="setting-foot">${thinkingValue ? `Override active · effective ${this._escapeHtml(thread.effective_thinking_level)}` : `Inherited from project · effective ${this._escapeHtml(thread.effective_thinking_level)}`}</div>
+        <div class="setting-foot">${thinkingValue ? `Override active / effective ${this._escapeHtml(thread.effective_thinking_level)}` : `Project default / effective ${this._escapeHtml(thread.effective_thinking_level)}`}</div>
       </div>
     `;
+    this._renderedChatSettingsKey = settingsKey;
   }
 
   _renderMessages() {
@@ -1392,15 +1477,27 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
-      this._activeThread = await this._callWS("get_thread", {
-        thread_id: this._selectedThreadId,
-      });
+      const threadId = this._selectedThreadId;
+      const [thread, events, artifacts, status] = await Promise.all([
+        this._callWS("get_thread", {
+          thread_id: threadId,
+        }),
+        this._callWS("get_events", {
+          thread_id: threadId,
+          after: 0,
+        }),
+        this._callWS("list_artifacts", {
+          thread_id: threadId,
+        }),
+        this._callWS("get_status"),
+      ]);
+      this._activeThread = thread;
       this._selectedProjectId = this._activeThread.project_id;
-      await this._loadEvents(this._selectedThreadId, 0, true);
-      this._artifacts = await this._callWS("list_artifacts", {
-        thread_id: this._selectedThreadId,
-      });
-      await this._loadStatus();
+      this._events = events;
+      this._sequence = this._events.length ? this._events[this._events.length - 1].sequence : 0;
+      this._artifacts = artifacts;
+      this._status = status;
+      this._forceMessageRebuild = true;
       this._clearError();
       this._syncThreadListStatus();
       this._render();
@@ -1652,31 +1749,40 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  async _uploadFile(file) {
-    if (!this._selectedThreadId) {
+  async _uploadFiles(files) {
+    if (!this._selectedThreadId || !files.length) {
       return;
     }
     try {
-      const formData = new FormData();
-      formData.append("file", file, file.name);
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await fetch(
-        `/api/codex_bridge/threads/${this._selectedThreadId}/attachments`,
-        {
-          method: "POST",
-          headers,
-          body: formData,
+      this._pendingUploads = files.length;
+      this._render();
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+        const response = await fetch(
+          `/api/codex_bridge/threads/${this._selectedThreadId}/attachments`,
+          {
+            method: "POST",
+            headers,
+            body: formData,
+          }
+        );
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.message || "Upload failed");
         }
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Upload failed");
+        this._pendingUploads -= 1;
+        this._render();
       }
       this._clearError();
       await this._refreshActiveThread();
     } catch (error) {
       this._setError(error);
+    } finally {
+      this._pendingUploads = 0;
+      this._render();
     }
   }
 
@@ -1749,18 +1855,35 @@ class CodexBridgePanel extends HTMLElement {
       try {
         this._pollTick += 1;
         const previousSequence = this._sequence;
-        await this._loadEvents(this._selectedThreadId, this._sequence, false);
-        const hasNewEvents = this._sequence !== previousSequence;
+        const previousStatus = this._activeThread?.status;
         const shouldRefreshStatus = this._pollTick % 4 === 0;
-        if (shouldRefreshStatus) {
-          await this._loadStatus();
-        }
-        if (this._activeThread?.status === "running" || hasNewEvents || shouldRefreshStatus) {
-          this._activeThread = await this._callWS("get_thread", {
+        const [events, status, thread] = await Promise.all([
+          this._callWS("get_events", {
             thread_id: this._selectedThreadId,
-          });
+            after: this._sequence,
+          }),
+          shouldRefreshStatus ? this._callWS("get_status") : Promise.resolve(this._status),
+          this._activeThread?.status === "running" || shouldRefreshStatus
+            ? this._callWS("get_thread", {
+                thread_id: this._selectedThreadId,
+              })
+            : Promise.resolve(null),
+        ]);
+        if (events.length) {
+          this._events = [...this._events, ...events];
+          this._sequence = this._events[this._events.length - 1].sequence;
+        }
+        if (status) {
+          this._status = status;
+        }
+        const hasNewEvents = this._sequence !== previousSequence;
+        const shouldRefreshThread = Boolean(thread) || hasNewEvents;
+        if (shouldRefreshThread) {
+          this._activeThread = thread || (await this._callWS("get_thread", {
+            thread_id: this._selectedThreadId,
+          }));
           this._syncThreadListStatus();
-          if (this._activeThread.status !== "running") {
+          if (this._activeThread.status !== "running" && (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)) {
             this._artifacts = await this._callWS("list_artifacts", {
               thread_id: this._selectedThreadId,
             });
@@ -1770,7 +1893,7 @@ class CodexBridgePanel extends HTMLElement {
       } catch (error) {
         this._setError(error);
       }
-    }, 1600);
+    }, 1100);
   }
 
   _stopPolling() {
@@ -1797,7 +1920,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _effectiveMeta(thread) {
-    return `${this._escapeHtml(thread.status)} · ${this._escapeHtml(thread.effective_model)} · ${this._escapeHtml(thread.effective_thinking_level)}`;
+    return `${this._escapeHtml(thread.status)} / ${this._escapeHtml(thread.effective_model)} / ${this._escapeHtml(thread.effective_thinking_level)}`;
   }
 
   _limitCard(label, window, blocked, message) {
@@ -1814,7 +1937,7 @@ class CodexBridgePanel extends HTMLElement {
       <div class="limit-card ${blocked ? "blocked" : ""}">
         <div class="limit-label">${this._escapeHtml(label)}</div>
         <div class="limit-value">${this._formatPercent(window.remaining_percent)}</div>
-        <div class="limit-subline">Used ${this._formatPercent(window.used_percent)} · resets ${this._escapeHtml(this._formatReset(window.resets_at))}</div>
+        <div class="limit-subline">Used ${this._formatPercent(window.used_percent)} / resets ${this._escapeHtml(this._formatReset(window.resets_at))}</div>
         ${blocked && message ? `<div class="limit-subline">${this._escapeHtml(message)}</div>` : ""}
       </div>
     `;
@@ -1890,3 +2013,5 @@ class CodexBridgePanel extends HTMLElement {
 if (!customElements.get("codex-bridge-panel")) {
   customElements.define("codex-bridge-panel", CodexBridgePanel);
 }
+
+

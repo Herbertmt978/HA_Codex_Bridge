@@ -23,11 +23,12 @@ async def upload_attachment(
         expected_token=request.app.state.auth_token,
     )
     try:
+        await file.seek(0)
         return request.app.state.storage.attach_file(
             thread_id=thread_id,
             filename=file.filename or "",
             mime_type=file.content_type or "application/octet-stream",
-            content=await file.read(),
+            content=file.file,
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(

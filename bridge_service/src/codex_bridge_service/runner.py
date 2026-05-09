@@ -14,9 +14,16 @@ class ThreadBusyError(RuntimeError):
 
 
 class BridgeRunner:
-    def __init__(self, storage: BridgeStorage, codex_command: str = "codex") -> None:
+    def __init__(
+        self,
+        storage: BridgeStorage,
+        codex_command: str = "codex",
+        *,
+        bypass_sandbox: bool = False,
+    ) -> None:
         self.storage = storage
         self.codex_command = codex_command
+        self.bypass_sandbox = bypass_sandbox
         self._lock = Lock()
 
     def submit_prompt(self, thread_id: str, prompt: str) -> RunRecord:
@@ -135,7 +142,9 @@ class BridgeRunner:
             if uploads_dir.exists():
                 command.extend(["--add-dir", str(uploads_dir)])
 
-        if record.mode is RunMode.OBSERVE:
+        if self.bypass_sandbox:
+            command.append("--dangerously-bypass-approvals-and-sandbox")
+        elif record.mode is RunMode.OBSERVE:
             command.extend(["--sandbox", "read-only"])
         elif record.mode is RunMode.FULL_AUTO:
             command.append("--full-auto")

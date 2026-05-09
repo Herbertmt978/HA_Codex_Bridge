@@ -3,6 +3,7 @@ import mimetypes
 import string
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import BinaryIO
 from uuid import uuid4
 
 from .models import (
@@ -397,7 +398,7 @@ class BridgeStorage:
         thread_id: str,
         filename: str,
         mime_type: str,
-        content: bytes,
+        content: bytes | BinaryIO,
     ) -> AttachmentRecord:
         record = self.load_thread(thread_id)
         safe_name = Path(filename).name.strip()
@@ -410,7 +411,15 @@ class BridgeStorage:
         if target.exists():
             target = thread_upload_dir / f"{target.stem}-{uuid4().hex[:8]}{target.suffix}"
 
-        target.write_bytes(content)
+        with target.open("wb") as handle:
+            if hasattr(content, "read"):
+                while True:
+                    chunk = content.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+            else:
+                handle.write(content)
 
         attachment = AttachmentRecord(
             attachment_id=f"att_{uuid4().hex[:12]}",

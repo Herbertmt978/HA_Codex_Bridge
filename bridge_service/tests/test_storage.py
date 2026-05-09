@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,31 @@ def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
     ]
     assert events[1].sequence == 2
     assert events[1].payload["filename"] == "notes.txt"
+
+
+def test_attach_file_accepts_stream_content_for_large_uploads(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(
+        name="Large uploads",
+        root_path=str(tmp_path / "projects" / "large-uploads"),
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+    )
+    record = storage.create_thread(title="Large uploads", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+    payload = b"module Option Explicit\n" * 70000
+
+    attachment = storage.attach_file(
+        thread_id=record.thread_id,
+        filename="vba-project.zip",
+        mime_type="application/zip",
+        content=BytesIO(payload),
+    )
+
+    attachment_path = tmp_path / "uploads" / record.thread_id / "vba-project.zip"
+
+    assert attachment.filename == "vba-project.zip"
+    assert attachment.stored_path == str(attachment_path)
+    assert attachment_path.read_bytes() == payload
 
 
 def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:

@@ -13,6 +13,7 @@ def build_app() -> FastAPI:
         runner_factory=lambda storage: BridgeRunner(
             storage=storage,
             codex_command=settings.codex_wrapper_path,
+            bypass_sandbox=settings.bypass_sandbox,
         ),
     )
 
