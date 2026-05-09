@@ -16,6 +16,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_list_projects)
     websocket_api.async_register_command(hass, ws_create_project)
     websocket_api.async_register_command(hass, ws_update_project)
+    websocket_api.async_register_command(hass, ws_archive_project)
+    websocket_api.async_register_command(hass, ws_restore_project)
+    websocket_api.async_register_command(hass, ws_delete_project)
     websocket_api.async_register_command(hass, ws_browse_paths)
     websocket_api.async_register_command(hass, ws_create_folder)
     websocket_api.async_register_command(hass, ws_list_threads)
@@ -143,6 +146,66 @@ async def ws_update_project(
         connection,
         msg,
         lambda client: client.async_update_project(msg["project_id"], updates),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/archive_project",
+        vol.Required("project_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_archive_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_archive_project(msg["project_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/restore_project",
+        vol.Required("project_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_restore_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_restore_project(msg["project_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/delete_project",
+        vol.Required("project_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_delete_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_delete_project(msg["project_id"]),
     )
 
 

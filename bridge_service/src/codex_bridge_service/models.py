@@ -62,6 +62,7 @@ class ProjectRecord(BaseModel):
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
     created_at: str
     updated_at: str
+    archived_at: str | None = None
 
 
 class ThreadEventRecord(BaseModel):

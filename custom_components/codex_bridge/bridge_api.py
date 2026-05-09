@@ -72,6 +72,25 @@ class BridgeApiClient:
             json_body=updates,
         )
 
+    async def async_archive_project(self, project_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/projects/{project_id}/archive",
+        )
+
+    async def async_restore_project(self, project_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/projects/{project_id}/restore",
+        )
+
+    async def async_delete_project(self, project_id: str) -> None:
+        await self._async_request(
+            "DELETE",
+            f"/projects/{project_id}",
+            expected_status={204},
+        )
+
     async def async_browse_paths(self, path: str | None = None) -> dict[str, Any]:
         query = ""
         if path:

@@ -1380,6 +1380,15 @@ class CodexBridgePanel extends HTMLElement {
       case "edit-project":
         this._openProjectFormForEdit(actionTarget.dataset.projectId || "");
         break;
+      case "archive-project":
+        this._archiveProject(actionTarget.dataset.projectId || "");
+        break;
+      case "restore-project":
+        this._restoreProject(actionTarget.dataset.projectId || "");
+        break;
+      case "delete-project":
+        this._deleteProject(actionTarget.dataset.projectId || "");
+        break;
       case "new-chat":
         this._openThreadFormForProject(actionTarget.dataset.projectId || null);
         break;
@@ -1737,7 +1746,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderProjectList() {
     const section = this.shadowRoot.getElementById("project-section");
-    const projects = this._projects.filter((project) => project.kind !== "direct");
+    const projects = this._projects.filter((project) => project.kind !== "direct" && !project.archived_at);
     const visibleProjects = projects.filter((project) => this._projectIsVisible(project));
 
     if (!projects.length) {
@@ -1768,13 +1777,13 @@ class CodexBridgePanel extends HTMLElement {
     `;
   }
 
-  _projectSection(project) {
-    const threads = this._projectThreads(project.project_id, false);
+  _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
+    const threads = this._projectThreads(project.project_id, includeArchivedThreads);
     const collapsed = Boolean(this._collapsedProjects[project.project_id]);
     const active = this._selectedProjectId === project.project_id || this._activeThread?.project_id === project.project_id;
     const chatCount = threads.length === 1 ? "1 chat" : `${threads.length} chats`;
     return `
-      <section class="project-shell">
+      <section class="project-shell ${archived ? "archived" : ""}">
         <div class="project-head ${active ? "active" : ""}">
           <button class="project-button" type="button" data-action="select-project" data-project-id="${project.project_id}">
             <div class="project-meta">
@@ -1789,13 +1798,24 @@ class CodexBridgePanel extends HTMLElement {
              </div>
            </button>
            <div class="project-actions">
-             <button class="icon-button small" type="button" data-action="new-chat" data-project-id="${project.project_id}" title="New chat" aria-label="New chat">${icons.plus}</button>
-             ${project.kind === "project" ? `<button class="icon-button small" type="button" data-action="edit-project" data-project-id="${project.project_id}" title="Edit project" aria-label="Edit project">${icons.edit}</button>` : ""}
+             ${project.kind === "project"
+                ? archived
+                  ? `
+                    <button class="icon-button small" type="button" data-action="restore-project" data-project-id="${project.project_id}" title="Restore project" aria-label="Restore project">${icons.restore}</button>
+                    <button class="icon-button small" type="button" data-action="delete-project" data-project-id="${project.project_id}" title="Delete project" aria-label="Delete project">${icons.trash}</button>
+                  `
+                  : `
+                    <button class="icon-button small" type="button" data-action="new-chat" data-project-id="${project.project_id}" title="New chat" aria-label="New chat">${icons.plus}</button>
+                    <button class="icon-button small" type="button" data-action="edit-project" data-project-id="${project.project_id}" title="Edit project" aria-label="Edit project">${icons.edit}</button>
+                    <button class="icon-button small" type="button" data-action="archive-project" data-project-id="${project.project_id}" title="Archive project" aria-label="Archive project">${icons.archive}</button>
+                    <button class="icon-button small" type="button" data-action="delete-project" data-project-id="${project.project_id}" title="Delete project" aria-label="Delete project">${icons.trash}</button>
+                  `
+                : ""}
           </div>
         </div>
         ${collapsed ? "" : `
           <div class="chat-list">
-            ${threads.length ? threads.map((thread) => this._threadRow(thread)).join("") : `<div class="empty-note">No chats yet.</div>`}
+            ${threads.length ? threads.map((thread) => this._threadRow(thread, { archived: Boolean(thread.archived_at) })).join("") : `<div class="empty-note">No chats yet.</div>`}
           </div>
         `}
       </section>
@@ -1804,10 +1824,17 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderArchivedSection() {
     const section = this.shadowRoot.getElementById("archived-section");
-    const archivedThreads = this._threads.filter((thread) => Boolean(thread.archived_at) && this._threadMatchesQuery(thread));
+    const archivedProjects = this._projects.filter((project) => Boolean(project.archived_at) && this._projectMatchesQuery(project));
+    const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
+    const archivedThreads = this._threads.filter(
+      (thread) =>
+        Boolean(thread.archived_at) &&
+        !archivedProjectIds.has(thread.project_id) &&
+        this._threadMatchesQuery(thread)
+    );
     const collapsed = Boolean(this._collapsedSections.archived);
 
-    if (!archivedThreads.length) {
+    if (!archivedProjects.length && !archivedThreads.length) {
       section.innerHTML = "";
       return;
     }
@@ -1824,6 +1851,7 @@ class CodexBridgePanel extends HTMLElement {
       </div>
       ${collapsed ? "" : `
         <div class="chat-list">
+          ${archivedProjects.map((project) => this._projectSection(project, { archived: true, includeArchivedThreads: true })).join("")}
           ${archivedThreads.map((thread) => this._threadRow(thread, { archived: true })).join("")}
         </div>
       `}
@@ -2286,6 +2314,9 @@ class CodexBridgePanel extends HTMLElement {
 
   async _loadProjects() {
     this._projects = await this._callWS("list_projects");
+    if (this._selectedProjectId && !this._projects.some((project) => project.project_id === this._selectedProjectId)) {
+      this._selectedProjectId = null;
+    }
     if (!this._selectedProjectId) {
       this._selectedProjectId = this._directProject()?.project_id || this._projects[0]?.project_id || null;
     }
@@ -2299,7 +2330,7 @@ class CodexBridgePanel extends HTMLElement {
       this._selectedThreadId = null;
     }
     if (!this._selectedThreadId) {
-      const firstActive = this._threads.find((thread) => !thread.archived_at);
+      const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
       this._selectedThreadId = firstActive?.thread_id || null;
     }
     if (!this._selectedProjectId && this._threads.length) {
@@ -2423,7 +2454,13 @@ class CodexBridgePanel extends HTMLElement {
 
   _selectProject(projectId) {
     this._selectedProjectId = projectId;
-    const visibleThread = this._threads.find((thread) => thread.project_id === projectId && !thread.archived_at);
+    const project = this._projects.find((item) => item.project_id === projectId) || null;
+    const visibleThread = this._threads.find(
+      (thread) =>
+        thread.project_id === projectId &&
+        this._threadMatchesQuery(thread) &&
+        (project?.archived_at ? true : !thread.archived_at)
+    );
     if (visibleThread && visibleThread.thread_id !== this._selectedThreadId) {
       this._selectThread(visibleThread.thread_id);
       return;
@@ -2651,6 +2688,65 @@ class CodexBridgePanel extends HTMLElement {
           this._artifactPreview = null;
           this._forceMessageRebuild = true;
         }
+      }
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _archiveProject(projectId) {
+    if (!projectId) {
+      return;
+    }
+    try {
+      const archived = await this._callWS("archive_project", { project_id: projectId });
+      this._projects = this._projects.map((project) => (project.project_id === projectId ? archived : project));
+      this._clearSelectionForProject(projectId, { preferProjectId: this._directProject()?.project_id || null });
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _restoreProject(projectId) {
+    if (!projectId) {
+      return;
+    }
+    try {
+      const restored = await this._callWS("restore_project", { project_id: projectId });
+      this._projects = this._projects.map((project) => (project.project_id === projectId ? restored : project));
+      this._selectedProjectId = projectId;
+      const replacement = this._threads.find((thread) => thread.project_id === projectId && !thread.archived_at) || null;
+      if (replacement) {
+        await this._selectThread(replacement.thread_id);
+      } else {
+        this._render();
+      }
+      this._clearError();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _deleteProject(projectId) {
+    if (!projectId || !window.confirm("Delete this project and its chat records? The VM folder will be left in place.")) {
+      return;
+    }
+    try {
+      await this._callWS("delete_project", { project_id: projectId });
+      const removedThreadIds = new Set(
+        this._threads.filter((thread) => thread.project_id === projectId).map((thread) => thread.thread_id)
+      );
+      this._projects = this._projects.filter((project) => project.project_id !== projectId);
+      this._threads = this._threads.filter((thread) => thread.project_id !== projectId);
+      this._clearSelectionForProject(projectId, {
+        preferProjectId: this._directProject()?.project_id || this._projects[0]?.project_id || null,
+      });
+      if (removedThreadIds.has(this._selectedThreadId)) {
+        this._selectedThreadId = null;
       }
       this._clearError();
       this._render();
@@ -2970,6 +3066,14 @@ class CodexBridgePanel extends HTMLElement {
     return this._projects.find((project) => project.kind === "direct") || null;
   }
 
+  _threadIsPrimaryActive(thread) {
+    if (thread.archived_at) {
+      return false;
+    }
+    const project = this._projects.find((item) => item.project_id === thread.project_id) || null;
+    return !project?.archived_at;
+  }
+
   _directThreads(includeArchived) {
     return this._threads.filter(
       (thread) =>
@@ -2992,6 +3096,13 @@ class CodexBridgePanel extends HTMLElement {
     if (project.kind === "direct") {
       return false;
     }
+    if (project.archived_at) {
+      return false;
+    }
+    return this._projectMatchesQuery(project);
+  }
+
+  _projectMatchesQuery(project) {
     const query = this._searchQuery.trim().toLowerCase();
     if (!query) {
       return true;
@@ -3006,6 +3117,41 @@ class CodexBridgePanel extends HTMLElement {
         !thread.archived_at &&
         this._threadMatchesQuery(thread)
     );
+  }
+
+  _clearSelectionForProject(projectId, { preferProjectId = null } = {}) {
+    const selectedThread = this._threads.find((thread) => thread.thread_id === this._selectedThreadId) || null;
+    if (selectedThread?.project_id !== projectId && this._selectedProjectId !== projectId) {
+      return;
+    }
+    const replacement =
+      this._threads.find(
+        (thread) => this._threadIsPrimaryActive(thread) && (!preferProjectId || thread.project_id === preferProjectId)
+      ) ||
+      this._threads.find((thread) => this._threadIsPrimaryActive(thread)) ||
+      null;
+    this._selectedThreadId = replacement?.thread_id || null;
+    this._selectedProjectId = replacement?.project_id || preferProjectId || this._directProject()?.project_id || null;
+    if (replacement) {
+      this._activeThread = replacement;
+      this._events = [];
+      this._artifacts = [];
+      this._selectedArtifactId = null;
+      this._revokePreviewUrl();
+      this._artifactPreview = null;
+      this._forceMessageRebuild = true;
+      this._refreshActiveThread();
+      this._startPolling();
+      return;
+    }
+    this._stopPolling();
+    this._activeThread = null;
+    this._events = [];
+    this._artifacts = [];
+    this._selectedArtifactId = null;
+    this._revokePreviewUrl();
+    this._artifactPreview = null;
+    this._forceMessageRebuild = true;
   }
 
   _threadMatchesQuery(thread) {

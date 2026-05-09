@@ -126,6 +126,62 @@ def test_project_routes_list_browse_create_folder_and_update(tmp_path) -> None:
     assert any(project["project_id"] == project_id for project in list_response.json())
 
 
+def test_project_archive_restore_and_delete_routes(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    client = TestClient(app)
+
+    project_response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Disposable project",
+            "root_path": str(tmp_path / "disposable"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    )
+    project_id = project_response.json()["project_id"]
+    thread_response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "title": "Child thread",
+            "project_id": project_id,
+            "mode": "full-auto",
+        },
+    )
+
+    archive_response = client.post(
+        f"/projects/{project_id}/archive",
+        headers={"Authorization": "Bearer secret"},
+    )
+    restore_response = client.post(
+        f"/projects/{project_id}/restore",
+        headers={"Authorization": "Bearer secret"},
+    )
+    delete_response = client.delete(
+        f"/projects/{project_id}",
+        headers={"Authorization": "Bearer secret"},
+    )
+    deleted_project_response = client.patch(
+        f"/projects/{project_id}",
+        headers={"Authorization": "Bearer secret"},
+        json={"name": "gone"},
+    )
+    deleted_thread_response = client.get(
+        f"/threads/{thread_response.json()['thread_id']}",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert archive_response.status_code == 200
+    assert archive_response.json()["archived_at"] is not None
+    assert restore_response.status_code == 200
+    assert restore_response.json()["archived_at"] is None
+    assert delete_response.status_code == 204
+    assert deleted_project_response.status_code == 404
+    assert deleted_thread_response.status_code == 404
+
+
 def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_path) -> None:
     app = create_app(
         root_path=tmp_path,

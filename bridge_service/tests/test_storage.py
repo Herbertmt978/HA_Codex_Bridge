@@ -328,6 +328,36 @@ def test_archive_restore_and_delete_thread_metadata(tmp_path) -> None:
         storage.load_thread(thread.thread_id)
 
 
+def test_archive_restore_and_delete_project_metadata(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project_root = tmp_path / "projects" / "archive-project"
+    project = storage.create_project(
+        name="Archive project",
+        root_path=str(project_root),
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+    )
+    thread = storage.create_thread(
+        title="Child chat",
+        mode=RunMode.FULL_AUTO,
+        project_id=project.project_id,
+    )
+
+    archived = storage.archive_project(project.project_id)
+    assert archived.archived_at is not None
+    assert storage.load_project(project.project_id).archived_at == archived.archived_at
+
+    restored = storage.restore_project(project.project_id)
+    assert restored.archived_at is None
+
+    storage.delete_project(project.project_id)
+    with pytest.raises(FileNotFoundError):
+        storage.load_project(project.project_id)
+    with pytest.raises(FileNotFoundError):
+        storage.load_thread(thread.thread_id)
+    assert project_root.exists()
+
+
 def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
     codex_home = tmp_path / ".codex"
     session_dir = codex_home / "sessions" / "2026" / "05" / "09"

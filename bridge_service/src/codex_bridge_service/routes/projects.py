@@ -3,7 +3,7 @@ from pydantic import BaseModel, field_validator
 
 from ..auth import require_bridge_token
 from ..models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, PathBrowseEntryRecord, PathBrowseRecord, ProjectRecord
-from ..storage import ProjectNotFoundError
+from ..storage import ProjectMutationError, ProjectNotFoundError
 
 router = APIRouter()
 
@@ -92,6 +92,62 @@ def update_project(
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/projects/{project_id}/archive", response_model=ProjectRecord)
+def archive_project(
+    project_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> ProjectRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.storage.archive_project(project_id)
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="project not found") from exc
+    except ProjectMutationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/projects/{project_id}/restore", response_model=ProjectRecord)
+def restore_project(
+    project_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> ProjectRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.storage.restore_project(project_id)
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="project not found") from exc
+    except ProjectMutationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project(
+    project_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> None:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        request.app.state.storage.delete_project(project_id)
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="project not found") from exc
+    except ProjectMutationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/projects/browse", response_model=PathBrowseRecord)

@@ -36,6 +36,10 @@ class ProjectNotFoundError(FileNotFoundError):
     pass
 
 
+class ProjectMutationError(ValueError):
+    pass
+
+
 class BridgeStorage:
     imported_project_name = "Imported Threads"
     direct_project_name = "Direct chats"
@@ -264,6 +268,35 @@ class BridgeStorage:
 
     def save_project(self, record: ProjectRecord) -> None:
         self._atomic_write_json(self._project_path(record.project_id), record.model_dump())
+
+    def archive_project(self, project_id: str) -> ProjectRecord:
+        record = self.load_project(project_id)
+        if record.kind is not ProjectKind.PROJECT:
+            raise ProjectMutationError("only normal projects can be archived")
+        record.archived_at = self._now()
+        record.updated_at = record.archived_at
+        self.save_project(record)
+        return record
+
+    def restore_project(self, project_id: str) -> ProjectRecord:
+        record = self.load_project(project_id)
+        if record.kind is not ProjectKind.PROJECT:
+            raise ProjectMutationError("only normal projects can be restored")
+        record.archived_at = None
+        record.updated_at = self._now()
+        self.save_project(record)
+        return record
+
+    def delete_project(self, project_id: str) -> None:
+        record = self.load_project(project_id)
+        if record.kind is not ProjectKind.PROJECT:
+            raise ProjectMutationError("only normal projects can be deleted")
+        for thread in self.list_threads(include_archived=True):
+            if thread.project_id == project_id:
+                self.delete_thread(thread.thread_id)
+        target = self._project_path(project_id)
+        if target.exists():
+            target.unlink()
 
     def browse_paths(self, path: str | None = None) -> PathBrowseRecord:
         if path is None or not str(path).strip():
