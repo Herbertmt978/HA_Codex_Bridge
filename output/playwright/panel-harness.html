@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex Bridge Panel Harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #f5f7fb;
+        color: #151b29;
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      }
+
+      codex-bridge-panel {
+        display: block;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <codex-bridge-panel></codex-bridge-panel>
+    <script type="module">
+      import "../../custom_components/codex_bridge/frontend/codex-bridge-panel.js";
+
+      const statusPayload = {
+        models: ["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"],
+        thinking_levels: ["minimal", "low", "medium", "high", "xhigh"],
+        limits: {
+          available: true,
+          blocked: false,
+          message: null,
+          plan_type: "pro",
+          updated_at: "2026-05-09T10:40:00Z",
+          primary: {
+            used_percent: 42,
+            remaining_percent: 58,
+            window_minutes: 300,
+            resets_at: 1778320427,
+          },
+          secondary: {
+            used_percent: 71,
+            remaining_percent: 29,
+            window_minutes: 10080,
+            resets_at: 1778539055,
+          },
+        },
+      };
+
+      const projects = [
+        {
+          project_id: "prj_direct",
+          name: "Direct chats",
+          root_path: "C:\\CodexHA\\workspaces",
+          kind: "direct",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          created_at: "2026-05-09T09:00:00Z",
+          updated_at: "2026-05-09T09:00:00Z",
+        },
+        {
+          project_id: "prj_vba",
+          name: "VBA Upgrade",
+          root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          kind: "project",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          created_at: "2026-05-09T09:20:00Z",
+          updated_at: "2026-05-09T10:10:00Z",
+        },
+        {
+          project_id: "prj_ytdlp",
+          name: "Youtube DL",
+          root_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          kind: "project",
+          default_model: "gpt-5.5",
+          default_thinking_level: "high",
+          created_at: "2026-05-09T09:30:00Z",
+          updated_at: "2026-05-09T10:11:00Z",
+        },
+        {
+          project_id: "prj_imported",
+          name: "Imported Threads",
+          root_path: "C:\\CodexHA\\workspaces",
+          kind: "imported",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          created_at: "2026-05-08T18:00:00Z",
+          updated_at: "2026-05-09T08:00:00Z",
+        },
+      ];
+
+      const threadMap = {
+        thr_direct: {
+          thread_id: "thr_direct",
+          project_id: "prj_direct",
+          title: "Quick bridge note",
+          workspace_id: "ws_0a",
+          workspace_path: "C:\\CodexHA\\workspaces\\ws_0a",
+          status: "idle",
+          mode: "full-auto",
+          codex_session_id: "sess_direct",
+          active_run_id: null,
+          last_error: null,
+          attachments: [],
+          artifacts: [],
+          model_override: null,
+          thinking_override: null,
+          created_at: "2026-05-09T08:20:00Z",
+          updated_at: "2026-05-09T08:24:00Z",
+          archived_at: null,
+          project_name: "Direct chats",
+          project_root_path: "C:\\CodexHA\\workspaces",
+          project_kind: "direct",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          effective_model: "gpt-5.4",
+          effective_thinking_level: "medium",
+        },
+        thr_vba_1: {
+          thread_id: "thr_vba_1",
+          project_id: "prj_vba",
+          title: "Attachment validation",
+          workspace_id: "ws_vba_1",
+          workspace_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          status: "idle",
+          mode: "full-auto",
+          codex_session_id: "sess_vba_1",
+          active_run_id: null,
+          last_error: null,
+          attachments: [
+            {
+              attachment_id: "att_1",
+              filename: "Module1.bas",
+              mime_type: "text/plain",
+              stored_path: "C:\\CodexHA\\uploads\\thr_vba_1\\src\\Module1.bas",
+              relative_path: "src/Module1.bas",
+              size_bytes: 1204,
+            },
+            {
+              attachment_id: "att_2",
+              filename: "sample.xlsx",
+              mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              stored_path: "C:\\CodexHA\\uploads\\thr_vba_1\\sample.xlsx",
+              relative_path: "sample.xlsx",
+              size_bytes: 5632,
+            },
+          ],
+          artifacts: [
+            {
+              artifact_id: "art_csv",
+              filename: "attachment_inventory.csv",
+              mime_type: "text/csv",
+              stored_path: "C:\\Projects\\Finance\\VBA Upgrade\\attachment_inventory.csv",
+              relative_path: "attachment_inventory.csv",
+              size_bytes: 284,
+            },
+            {
+              artifact_id: "art_zip",
+              filename: "attachment-validation-20260509-114500.zip",
+              mime_type: "application/zip",
+              stored_path: "C:\\CodexHA\\artifacts\\thr_vba_1\\attachment-validation-20260509-114500.zip",
+              relative_path: "attachment-validation-20260509-114500.zip",
+              size_bytes: 14882,
+            },
+          ],
+          model_override: null,
+          thinking_override: null,
+          created_at: "2026-05-09T09:50:00Z",
+          updated_at: "2026-05-09T10:42:00Z",
+          archived_at: null,
+          project_name: "VBA Upgrade",
+          project_root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          project_kind: "project",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          effective_model: "gpt-5.4",
+          effective_thinking_level: "medium",
+        },
+        thr_vba_2: {
+          thread_id: "thr_vba_2",
+          project_id: "prj_vba",
+          title: "Module split review",
+          workspace_id: "ws_vba_2",
+          workspace_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          status: "running",
+          mode: "edit",
+          codex_session_id: "sess_vba_2",
+          active_run_id: "run_22",
+          last_error: null,
+          attachments: [],
+          artifacts: [],
+          model_override: "gpt-5.5",
+          thinking_override: "high",
+          created_at: "2026-05-09T10:05:00Z",
+          updated_at: "2026-05-09T10:43:00Z",
+          archived_at: null,
+          project_name: "VBA Upgrade",
+          project_root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          project_kind: "project",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          effective_model: "gpt-5.5",
+          effective_thinking_level: "high",
+        },
+        thr_ytdlp: {
+          thread_id: "thr_ytdlp",
+          project_id: "prj_ytdlp",
+          title: "Investigate metadata parsing",
+          workspace_id: "ws_ytdlp",
+          workspace_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          status: "error",
+          mode: "full-auto",
+          codex_session_id: "sess_ytdlp",
+          active_run_id: null,
+          last_error: "Network call failed",
+          attachments: [],
+          artifacts: [],
+          model_override: null,
+          thinking_override: null,
+          created_at: "2026-05-09T09:15:00Z",
+          updated_at: "2026-05-09T09:45:00Z",
+          archived_at: null,
+          project_name: "Youtube DL",
+          project_root_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          project_kind: "project",
+          default_model: "gpt-5.5",
+          default_thinking_level: "high",
+          effective_model: "gpt-5.5",
+          effective_thinking_level: "high",
+        },
+        thr_old: {
+          thread_id: "thr_old",
+          project_id: "prj_imported",
+          title: "Old continuation",
+          workspace_id: "ws_old",
+          workspace_path: "C:\\CodexHA\\workspaces\\ws_old",
+          status: "idle",
+          mode: "full-auto",
+          codex_session_id: "sess_old",
+          active_run_id: null,
+          last_error: null,
+          attachments: [],
+          artifacts: [],
+          model_override: null,
+          thinking_override: null,
+          created_at: "2026-05-08T18:10:00Z",
+          updated_at: "2026-05-08T18:20:00Z",
+          archived_at: "2026-05-09T07:00:00Z",
+          project_name: "Imported Threads",
+          project_root_path: "C:\\CodexHA\\workspaces",
+          project_kind: "imported",
+          default_model: "gpt-5.4",
+          default_thinking_level: "medium",
+          effective_model: "gpt-5.4",
+          effective_thinking_level: "medium",
+        },
+      };
+
+      const eventMap = {
+        thr_vba_1: [
+          {
+            event_id: "evt_1",
+            thread_id: "thr_vba_1",
+            sequence: 1,
+            event_type: "thread.created",
+            payload: {},
+            timestamp: "2026-05-09T09:50:00Z",
+          },
+          {
+            event_id: "evt_2",
+            thread_id: "thr_vba_1",
+            sequence: 2,
+            event_type: "message.created",
+            payload: {
+              role: "user",
+              text: "Create an attachment inventory and zip the workspace.",
+            },
+            timestamp: "2026-05-09T10:00:00Z",
+          },
+          {
+            event_id: "evt_3",
+            thread_id: "thr_vba_1",
+            sequence: 3,
+            event_type: "run.started",
+            payload: {},
+            timestamp: "2026-05-09T10:00:02Z",
+          },
+          {
+            event_id: "evt_4",
+            thread_id: "thr_vba_1",
+            sequence: 4,
+            event_type: "message.completed",
+            payload: {
+              role: "assistant",
+              text: "I’m collecting the uploaded file sizes from disk, then I’ll write `attachment_inventory.csv` and bundle the workspace so you can download it cleanly.",
+            },
+            timestamp: "2026-05-09T10:00:05Z",
+          },
+          {
+            event_id: "evt_5",
+            thread_id: "thr_vba_1",
+            sequence: 5,
+            event_type: "artifact.added",
+            payload: {
+              filename: "attachment_inventory.csv",
+              relative_path: "attachment_inventory.csv",
+            },
+            timestamp: "2026-05-09T10:00:14Z",
+          },
+          {
+            event_id: "evt_6",
+            thread_id: "thr_vba_1",
+            sequence: 6,
+            event_type: "artifact.added",
+            payload: {
+              filename: "attachment-validation-20260509-114500.zip",
+              relative_path: "attachment-validation-20260509-114500.zip",
+            },
+            timestamp: "2026-05-09T10:00:18Z",
+          },
+          {
+            event_id: "evt_7",
+            thread_id: "thr_vba_1",
+            sequence: 7,
+            event_type: "run.completed",
+            payload: {},
+            timestamp: "2026-05-09T10:00:19Z",
+          },
+        ],
+      };
+
+      const defaultEvents = [];
+
+      window.fetch = async (url) => {
+        if (String(url).includes("/artifacts/art_csv")) {
+          return new Response("filename,size_bytes\nModule1.bas,1204\nsample.xlsx,5632\n", {
+            status: 200,
+            headers: { "Content-Type": "text/csv" },
+          });
+        }
+        if (String(url).includes("/artifacts/art_zip")) {
+          return new Response("zip preview unavailable", {
+            status: 200,
+            headers: { "Content-Type": "application/zip" },
+          });
+        }
+        return new Response("Preview unavailable", {
+          status: 200,
+          headers: { "Content-Type": "text/plain" },
+        });
+      };
+
+      const harnessState = {
+        selectedThreadId: "thr_vba_1",
+      };
+
+      const clone = (value) => JSON.parse(JSON.stringify(value));
+
+      const hass = {
+        auth: { data: { access_token: "demo-token" } },
+        connection: {
+          sendMessagePromise: async (payload) => {
+            switch (payload.type) {
+              case "codex_bridge/get_config":
+                return {
+                  panel_title: "Codex Bridge",
+                  bridge_url: "http://192.168.50.25:8766",
+                };
+              case "codex_bridge/get_status":
+                return clone(statusPayload);
+              case "codex_bridge/list_projects":
+                return clone(projects);
+              case "codex_bridge/list_threads":
+                return clone(Object.values(threadMap));
+              case "codex_bridge/get_thread":
+                harnessState.selectedThreadId = payload.thread_id;
+                return clone(threadMap[payload.thread_id]);
+              case "codex_bridge/get_events":
+                return clone((eventMap[payload.thread_id] || defaultEvents).filter((item) => item.sequence > (payload.after || 0)));
+              case "codex_bridge/list_artifacts":
+                return clone(threadMap[payload.thread_id]?.artifacts || []);
+              case "codex_bridge/update_thread": {
+                const thread = threadMap[payload.thread_id];
+                if ("model_override" in payload) {
+                  thread.model_override = payload.model_override;
+                  thread.effective_model = payload.model_override || thread.default_model;
+                }
+                if ("thinking_override" in payload) {
+                  thread.thinking_override = payload.thinking_override;
+                  thread.effective_thinking_level = payload.thinking_override || thread.default_thinking_level;
+                }
+                thread.updated_at = "2026-05-09T10:44:00Z";
+                return clone(thread);
+              }
+              case "codex_bridge/create_workspace_archive": {
+                const thread = threadMap[payload.thread_id];
+                const artifact = {
+                  artifact_id: "art_bundle",
+                  filename: "workspace-bundle-20260509-114900.zip",
+                  mime_type: "application/zip",
+                  stored_path: "C:\\CodexHA\\artifacts\\thr_vba_1\\workspace-bundle-20260509-114900.zip",
+                  relative_path: "workspace-bundle-20260509-114900.zip",
+                  size_bytes: 18222,
+                };
+                thread.artifacts = [...thread.artifacts, artifact];
+                return clone(artifact);
+              }
+              case "codex_bridge/browse_paths":
+                return { path: "C:\\Projects", parent_path: "C:\\", directories: [] };
+              case "codex_bridge/create_project":
+              case "codex_bridge/update_project":
+              case "codex_bridge/create_folder":
+              case "codex_bridge/create_thread":
+              case "codex_bridge/archive_thread":
+              case "codex_bridge/restore_thread":
+              case "codex_bridge/delete_thread":
+              case "codex_bridge/send_prompt":
+                return {};
+              default:
+                throw new Error(`Unhandled WS call: ${payload.type}`);
+            }
+          },
+        },
+      };
+
+      const panel = document.querySelector("codex-bridge-panel");
+      panel.hass = hass;
+      panel.panel = { config: { title: "Codex Bridge" } };
+    </script>
+  </body>
+</html>

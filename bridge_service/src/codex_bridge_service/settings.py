@@ -9,4 +9,5 @@ class Settings(BaseSettings):
     root_path: str = "C:/CodexHA"
     auth_token: str = "change-me"
     codex_wrapper_path: str = "codex"
+    codex_home: str | None = None
     bypass_sandbox: bool = False

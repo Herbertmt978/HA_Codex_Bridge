@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile, status
 
 from ..auth import require_bridge_token
 from ..models import AttachmentRecord
@@ -16,6 +16,7 @@ async def upload_attachment(
     thread_id: str,
     request: Request,
     file: UploadFile = File(...),
+    relative_path: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
 ) -> AttachmentRecord:
     require_bridge_token(
@@ -29,6 +30,7 @@ async def upload_attachment(
             filename=file.filename or "",
             mime_type=file.content_type or "application/octet-stream",
             content=file.file,
+            relative_path=relative_path,
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(

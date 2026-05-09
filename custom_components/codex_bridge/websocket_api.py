@@ -22,9 +22,13 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_thread)
     websocket_api.async_register_command(hass, ws_create_thread)
     websocket_api.async_register_command(hass, ws_update_thread)
+    websocket_api.async_register_command(hass, ws_archive_thread)
+    websocket_api.async_register_command(hass, ws_restore_thread)
+    websocket_api.async_register_command(hass, ws_delete_thread)
     websocket_api.async_register_command(hass, ws_send_prompt)
     websocket_api.async_register_command(hass, ws_get_events)
     websocket_api.async_register_command(hass, ws_list_artifacts)
+    websocket_api.async_register_command(hass, ws_create_workspace_archive)
 
 
 async def _async_handle(
@@ -183,14 +187,24 @@ async def ws_create_folder(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_threads"})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_threads",
+        vol.Optional("include_archived", default=False): bool,
+    }
+)
 @websocket_api.async_response
 async def ws_list_threads(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    await _async_handle(hass, connection, msg, lambda client: client.async_list_threads())
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_list_threads(msg["include_archived"]),
+    )
 
 
 @websocket_api.websocket_command(
@@ -274,6 +288,66 @@ async def ws_update_thread(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/archive_thread",
+        vol.Required("thread_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_archive_thread(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_archive_thread(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/restore_thread",
+        vol.Required("thread_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_restore_thread(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_restore_thread(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/delete_thread",
+        vol.Required("thread_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_delete_thread(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_delete_thread(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/send_prompt",
         vol.Required("thread_id"): str,
         vol.Required("prompt"): str,
@@ -331,4 +405,24 @@ async def ws_list_artifacts(
         connection,
         msg,
         lambda client: client.async_list_artifacts(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/create_workspace_archive",
+        vol.Required("thread_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_create_workspace_archive(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_create_workspace_archive(msg["thread_id"]),
     )

@@ -29,11 +29,19 @@ class RunMode(StrEnum):
     FULL_AUTO = "full-auto"
 
 
+class ProjectKind(StrEnum):
+    PROJECT = "project"
+    DIRECT = "direct"
+    IMPORTED = "imported"
+
+
 class AttachmentRecord(BaseModel):
     attachment_id: str
     filename: str
     mime_type: str
     stored_path: str
+    relative_path: str | None = None
+    size_bytes: int | None = None
 
 
 class ArtifactRecord(BaseModel):
@@ -41,12 +49,15 @@ class ArtifactRecord(BaseModel):
     filename: str
     mime_type: str
     stored_path: str
+    relative_path: str | None = None
+    size_bytes: int | None = None
 
 
 class ProjectRecord(BaseModel):
     project_id: str
     name: str
     root_path: str
+    kind: ProjectKind = ProjectKind.PROJECT
     default_model: str = DEFAULT_MODEL
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
     created_at: str
@@ -77,11 +88,15 @@ class ThreadRecord(BaseModel):
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
     model_override: str | None = None
     thinking_override: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    archived_at: str | None = None
 
 
 class ThreadViewRecord(ThreadRecord):
     project_name: str
     project_root_path: str
+    project_kind: ProjectKind = ProjectKind.PROJECT
     default_model: str = DEFAULT_MODEL
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
     effective_model: str = DEFAULT_MODEL

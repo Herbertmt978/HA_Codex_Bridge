@@ -123,7 +123,7 @@ def test_project_routes_list_browse_create_folder_and_update(tmp_path) -> None:
     assert update_response.json()["name"] == "VM Work Updated"
     assert update_response.json()["default_model"] == "gpt-5.5"
     assert list_response.status_code == 200
-    assert list_response.json()[0]["project_id"] == project_id
+    assert any(project["project_id"] == project_id for project in list_response.json())
 
 
 def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_path) -> None:
@@ -300,6 +300,10 @@ def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_pa
         f"/threads/{thread_id}/artifacts",
         headers={"Authorization": "Bearer secret"},
     )
+    archive_response = client.post(
+        f"/threads/{thread_id}/artifacts/workspace-archive",
+        headers={"Authorization": "Bearer secret"},
+    )
     download_response = client.get(
         f"/threads/{thread_id}/artifacts/{artifacts[0].artifact_id}",
         headers={"Authorization": "Bearer secret"},
@@ -307,5 +311,91 @@ def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_pa
 
     assert artifacts_response.status_code == 200
     assert artifacts_response.json()[0]["filename"] == "reply.md"
+    assert archive_response.status_code == 201
+    assert archive_response.json()["filename"].endswith(".zip")
     assert download_response.status_code == 200
     assert download_response.text == "hello"
+
+
+def test_thread_archive_restore_delete_and_include_archived_routes(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=FakeRunner,
+    )
+    client = TestClient(app)
+
+    thread_response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "title": "Direct target",
+            "mode": "full-auto",
+        },
+    )
+    thread_id = thread_response.json()["thread_id"]
+
+    archive_response = client.post(
+        f"/threads/{thread_id}/archive",
+        headers={"Authorization": "Bearer secret"},
+    )
+    active_response = client.get(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+    )
+    archived_response = client.get(
+        "/threads?include_archived=true",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert archive_response.status_code == 200
+    assert archive_response.json()["archived_at"] is not None
+    assert active_response.json() == []
+    assert archived_response.json()[0]["thread_id"] == thread_id
+
+    restore_response = client.post(
+        f"/threads/{thread_id}/restore",
+        headers={"Authorization": "Bearer secret"},
+    )
+    delete_response = client.delete(
+        f"/threads/{thread_id}",
+        headers={"Authorization": "Bearer secret"},
+    )
+    get_deleted_response = client.get(
+        f"/threads/{thread_id}",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert restore_response.status_code == 200
+    assert restore_response.json()["archived_at"] is None
+    assert delete_response.status_code == 204
+    assert get_deleted_response.status_code == 404
+
+
+def test_thread_attachment_upload_accepts_relative_path(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=FakeRunner,
+    )
+    client = TestClient(app)
+
+    thread_response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "title": "Folder upload",
+            "mode": "full-auto",
+        },
+    )
+    thread_id = thread_response.json()["thread_id"]
+
+    upload_response = client.post(
+        f"/threads/{thread_id}/attachments",
+        headers={"Authorization": "Bearer secret"},
+        data={"relative_path": "src/vba/Module1.bas"},
+        files={"file": ("Module1.bas", b"Attribute VB_Name = \"Module1\"", "text/plain")},
+    )
+
+    assert upload_response.status_code == 201
+    assert upload_response.json()["relative_path"] == "src/vba/Module1.bas"

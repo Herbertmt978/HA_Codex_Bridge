@@ -2,10 +2,12 @@ import json
 import mimetypes
 import string
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 from uuid import uuid4
+import zipfile
 
+from .limits import CodexLimitsProbe
 from .models import (
     DEFAULT_MODEL,
     DEFAULT_THINKING_LEVEL,
@@ -15,6 +17,7 @@ from .models import (
     LimitsWindowRecord,
     PathBrowseEntryRecord,
     PathBrowseRecord,
+    ProjectKind,
     ProjectRecord,
     RunMode,
     ThreadEventRecord,
@@ -35,8 +38,14 @@ class ProjectNotFoundError(FileNotFoundError):
 
 class BridgeStorage:
     imported_project_name = "Imported Threads"
+    direct_project_name = "Direct chats"
 
-    def __init__(self, root_path: Path | str) -> None:
+    def __init__(
+        self,
+        root_path: Path | str,
+        *,
+        limits_probe: CodexLimitsProbe | None = None,
+    ) -> None:
         self.root = Path(root_path)
         self.projects_dir = self.root / "projects"
         self.threads_dir = self.root / "threads"
@@ -45,6 +54,7 @@ class BridgeStorage:
         self.artifacts_dir = self.root / "artifacts"
         self.logs_dir = self.root / "logs"
         self.limits_status_path = self.root / "limits_status.json"
+        self.limits_probe = limits_probe
 
         for directory in (
             self.projects_dir,
@@ -82,6 +92,36 @@ class BridgeStorage:
     def _imported_project_id(self) -> str:
         return "prj_imported"
 
+    def _direct_project_id(self) -> str:
+        return "prj_direct"
+
+    def _ensure_thread_timestamps(self, record: ThreadRecord) -> ThreadRecord:
+        changed = False
+        if not record.created_at:
+            record.created_at = self._now()
+            changed = True
+        if not record.updated_at:
+            record.updated_at = record.created_at
+            changed = True
+        if changed:
+            self.save_thread(record)
+        return record
+
+    def _touch_thread(self, record: ThreadRecord) -> None:
+        if not record.created_at:
+            record.created_at = self._now()
+        record.updated_at = self._now()
+
+    def _has_legacy_threads(self) -> bool:
+        for path in self.threads_dir.glob("*.json"):
+            try:
+                record = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if record.project_id is None or record.project_id == self._imported_project_id():
+                return True
+        return False
+
     def ensure_imported_project(self) -> ProjectRecord:
         target = self._project_path(self._imported_project_id())
         if target.exists():
@@ -91,6 +131,25 @@ class BridgeStorage:
             project_id=self._imported_project_id(),
             name=self.imported_project_name,
             root_path=str(self.workspaces_dir),
+            kind=ProjectKind.IMPORTED,
+            default_model=DEFAULT_MODEL,
+            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            created_at=self._now(),
+            updated_at=self._now(),
+        )
+        self.save_project(record)
+        return record
+
+    def ensure_direct_project(self) -> ProjectRecord:
+        target = self._project_path(self._direct_project_id())
+        if target.exists():
+            return ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+
+        record = ProjectRecord(
+            project_id=self._direct_project_id(),
+            name=self.direct_project_name,
+            root_path=str(self.workspaces_dir),
+            kind=ProjectKind.DIRECT,
             default_model=DEFAULT_MODEL,
             default_thinking_level=DEFAULT_THINKING_LEVEL,
             created_at=self._now(),
@@ -106,17 +165,28 @@ class BridgeStorage:
         return ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
 
     def list_projects(self) -> list[ProjectRecord]:
-        records = [
-            ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
-            for path in self.projects_dir.glob("*.json")
-        ]
-        if not records and any(self.threads_dir.glob("*.json")):
-            records.append(self.ensure_imported_project())
-        return sorted(
-            records,
-            key=lambda record: self._project_path(record.project_id).stat().st_mtime,
-            reverse=True,
-        )
+        records = {
+            record.project_id: record
+            for record in [
+                ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                for path in self.projects_dir.glob("*.json")
+            ]
+        }
+        direct = self.ensure_direct_project()
+        records[direct.project_id] = direct
+        if self._has_legacy_threads():
+            imported = self.ensure_imported_project()
+            records[imported.project_id] = imported
+        ordered = sorted(records.values(), key=lambda record: record.updated_at, reverse=True)
+        ordered.sort(key=self._project_rank)
+        return ordered
+
+    def _project_rank(self, record: ProjectRecord) -> int:
+        if record.kind is ProjectKind.DIRECT:
+            return 0
+        if record.kind is ProjectKind.IMPORTED:
+            return 2
+        return 1
 
     def create_project(
         self,
@@ -133,14 +203,16 @@ class BridgeStorage:
 
         project_root = self._normalize_root_path(root_path)
         project_root.mkdir(parents=True, exist_ok=True)
+        now = self._now()
         record = ProjectRecord(
             project_id=f"prj_{uuid4().hex[:12]}",
             name=name.strip(),
             root_path=str(project_root),
+            kind=ProjectKind.PROJECT,
             default_model=default_model or DEFAULT_MODEL,
             default_thinking_level=default_thinking_level or DEFAULT_THINKING_LEVEL,
-            created_at=self._now(),
-            updated_at=self._now(),
+            created_at=now,
+            updated_at=now,
         )
         self.save_project(record)
         return record
@@ -222,22 +294,26 @@ class BridgeStorage:
         if not target.exists():
             raise ThreadNotFoundError(thread_id)
         record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
-        return self._ensure_thread_project(record)
+        record = self._ensure_thread_project(record)
+        return self._ensure_thread_timestamps(record)
 
     def get_thread(self, thread_id: str) -> ThreadViewRecord:
         return self._resolve_thread(self.load_thread(thread_id))
 
-    def list_threads(self) -> list[ThreadViewRecord]:
+    def list_threads(self, *, include_archived: bool = False) -> list[ThreadViewRecord]:
         records = [
             self._ensure_thread_project(
                 ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
             )
             for path in self.threads_dir.glob("*.json")
         ]
+        records = [self._ensure_thread_timestamps(record) for record in records]
+        if not include_archived:
+            records = [record for record in records if not record.archived_at]
         resolved = [self._resolve_thread(record) for record in records]
         return sorted(
             resolved,
-            key=lambda record: self._thread_path(record.thread_id).stat().st_mtime,
+            key=lambda record: record.updated_at or record.created_at or "",
             reverse=True,
         )
 
@@ -253,10 +329,16 @@ class BridgeStorage:
         if not title.strip():
             raise ValueError("title must not be blank")
 
-        project = self.ensure_imported_project() if project_id is None else self.load_project(project_id)
+        project = self.ensure_direct_project() if project_id is None else self.load_project(project_id)
         workspace_id = f"ws_{uuid4().hex[:12]}"
-        workspace_path = Path(project.root_path)
+        workspace_root = Path(project.root_path)
+        workspace_path = (
+            workspace_root / workspace_id
+            if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED)
+            else workspace_root
+        )
         workspace_path.mkdir(parents=True, exist_ok=True)
+        now = self._now()
 
         record = ThreadRecord(
             thread_id=f"thr_{uuid4().hex[:12]}",
@@ -268,6 +350,9 @@ class BridgeStorage:
             mode=mode,
             model_override=model_override,
             thinking_override=thinking_override,
+            created_at=now,
+            updated_at=now,
+            archived_at=None,
         )
         self.save_thread(record)
         self.append_thread_event(
@@ -282,6 +367,7 @@ class BridgeStorage:
                 "mode": record.mode.value,
                 "model_override": record.model_override,
                 "thinking_override": record.thinking_override,
+                "created_at": record.created_at,
             },
         )
         return self._resolve_thread(record)
@@ -306,6 +392,7 @@ class BridgeStorage:
             record.model_override = model_override
         if thinking_override is not _UNSET:
             record.thinking_override = thinking_override
+        self._touch_thread(record)
         self.save_thread(record)
         self.append_thread_event(
             thread_id=record.thread_id,
@@ -319,7 +406,54 @@ class BridgeStorage:
         )
         return self._resolve_thread(record)
 
+    def archive_thread(self, thread_id: str) -> ThreadViewRecord:
+        record = self.load_thread(thread_id)
+        record.archived_at = self._now()
+        self._touch_thread(record)
+        self.save_thread(record)
+        self.append_thread_event(
+            thread_id=thread_id,
+            event_type="thread.archived",
+            payload={"archived_at": record.archived_at},
+        )
+        return self._resolve_thread(record)
+
+    def restore_thread(self, thread_id: str) -> ThreadViewRecord:
+        record = self.load_thread(thread_id)
+        record.archived_at = None
+        self._touch_thread(record)
+        self.save_thread(record)
+        self.append_thread_event(
+            thread_id=thread_id,
+            event_type="thread.restored",
+            payload={"restored_at": record.updated_at},
+        )
+        return self._resolve_thread(record)
+
+    def delete_thread(self, thread_id: str) -> None:
+        self.load_thread(thread_id)
+        thread_path = self._thread_path(thread_id)
+        if thread_path.exists():
+            thread_path.unlink()
+
+        event_path = self._event_log_path(thread_id)
+        if event_path.exists():
+            event_path.unlink()
+
+        upload_dir = self.uploads_dir / thread_id
+        if upload_dir.exists():
+            for path in sorted(upload_dir.rglob("*"), reverse=True):
+                if path.is_file():
+                    path.unlink()
+                elif path.is_dir():
+                    path.rmdir()
+            upload_dir.rmdir()
+
     def save_thread(self, record: ThreadRecord) -> None:
+        if not record.created_at:
+            record.created_at = self._now()
+        if not record.updated_at:
+            record.updated_at = record.created_at
         self._atomic_write_json(self._thread_path(record.thread_id), record.model_dump())
 
     def _ensure_thread_project(self, record: ThreadRecord) -> ThreadRecord:
@@ -343,6 +477,7 @@ class BridgeStorage:
             **record.model_dump(),
             project_name=project.name,
             project_root_path=project.root_path,
+            project_kind=project.kind,
             default_model=project.default_model,
             default_thinking_level=project.default_thinking_level,
             effective_model=effective_model,
@@ -399,6 +534,7 @@ class BridgeStorage:
         filename: str,
         mime_type: str,
         content: bytes | BinaryIO,
+        relative_path: str | None = None,
     ) -> AttachmentRecord:
         record = self.load_thread(thread_id)
         safe_name = Path(filename).name.strip()
@@ -407,10 +543,13 @@ class BridgeStorage:
 
         thread_upload_dir = self.uploads_dir / thread_id
         thread_upload_dir.mkdir(parents=True, exist_ok=True)
-        target = thread_upload_dir / safe_name
+        relative_target = self._sanitize_relative_path(relative_path, safe_name)
+        target = thread_upload_dir / relative_target
+        target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
-            target = thread_upload_dir / f"{target.stem}-{uuid4().hex[:8]}{target.suffix}"
+            target = target.with_name(f"{target.stem}-{uuid4().hex[:8]}{target.suffix}")
 
+        size_bytes = 0
         with target.open("wb") as handle:
             if hasattr(content, "read"):
                 while True:
@@ -418,16 +557,21 @@ class BridgeStorage:
                     if not chunk:
                         break
                     handle.write(chunk)
+                    size_bytes += len(chunk)
             else:
                 handle.write(content)
+                size_bytes = len(content)
 
         attachment = AttachmentRecord(
             attachment_id=f"att_{uuid4().hex[:12]}",
             filename=target.name,
             mime_type=mime_type,
             stored_path=str(target),
+            relative_path=str(target.relative_to(thread_upload_dir)).replace("\\", "/"),
+            size_bytes=size_bytes,
         )
         record.attachments.append(attachment)
+        self._touch_thread(record)
         self.save_thread(record)
         self.append_thread_event(
             thread_id=thread_id,
@@ -437,6 +581,8 @@ class BridgeStorage:
                 "filename": attachment.filename,
                 "mime_type": attachment.mime_type,
                 "stored_path": attachment.stored_path,
+                "relative_path": attachment.relative_path,
+                "size_bytes": attachment.size_bytes,
             },
         )
         return attachment
@@ -452,6 +598,7 @@ class BridgeStorage:
         record = self.load_thread(thread_id)
         workspace_path = Path(record.workspace_path)
         known_by_path = {artifact.stored_path: artifact for artifact in record.artifacts}
+        added_any = False
 
         for target in sorted(path for path in workspace_path.rglob("*") if path.is_file()):
             stored_path = str(target)
@@ -463,6 +610,8 @@ class BridgeStorage:
                 filename=target.name,
                 mime_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
                 stored_path=stored_path,
+                relative_path=str(target.relative_to(workspace_path)).replace("\\", "/"),
+                size_bytes=target.stat().st_size,
             )
             record.artifacts.append(artifact)
             self.append_thread_event(
@@ -473,16 +622,110 @@ class BridgeStorage:
                     "filename": artifact.filename,
                     "mime_type": artifact.mime_type,
                     "stored_path": artifact.stored_path,
+                    "relative_path": artifact.relative_path,
+                    "size_bytes": artifact.size_bytes,
                 },
             )
+            added_any = True
 
+        if added_any:
+            self._touch_thread(record)
         self.save_thread(record)
         return record.artifacts
 
-    def get_limits_status(self) -> LimitsStatusRecord:
+    def create_workspace_archive(self, thread_id: str) -> ArtifactRecord:
+        record = self.load_thread(thread_id)
+        target_dir = self.artifacts_dir / thread_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        title_stem = "".join(
+            char.lower() if char.isalnum() else "-"
+            for char in (record.title or record.workspace_id)
+        ).strip("-")
+        filename = f"{title_stem or record.workspace_id}-{timestamp}.zip"
+        target = target_dir / filename
+
+        workspace_root = Path(record.workspace_path)
+        uploads_root = self.uploads_dir / thread_id
+        included_files = 0
+
+        with zipfile.ZipFile(
+            target,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            if workspace_root.exists():
+                for path in sorted(candidate for candidate in workspace_root.rglob("*") if candidate.is_file()):
+                    archive.write(path, arcname=str(Path("workspace") / path.relative_to(workspace_root)))
+                    included_files += 1
+
+            if uploads_root.exists():
+                for path in sorted(candidate for candidate in uploads_root.rglob("*") if candidate.is_file()):
+                    archive.write(path, arcname=str(Path("uploads") / path.relative_to(uploads_root)))
+                    included_files += 1
+
+            if included_files == 0:
+                archive.writestr(
+                    "README.txt",
+                    "This chat did not have any workspace files or uploaded files yet.\n",
+                )
+
+        artifact = ArtifactRecord(
+            artifact_id=f"art_{uuid4().hex[:12]}",
+            filename=filename,
+            mime_type="application/zip",
+            stored_path=str(target),
+            relative_path=filename,
+            size_bytes=target.stat().st_size,
+        )
+        record.artifacts.append(artifact)
+        self._touch_thread(record)
+        self.save_thread(record)
+        self.append_thread_event(
+            thread_id=thread_id,
+            event_type="artifact.added",
+            payload={
+                "artifact_id": artifact.artifact_id,
+                "filename": artifact.filename,
+                "mime_type": artifact.mime_type,
+                "stored_path": artifact.stored_path,
+                "relative_path": artifact.relative_path,
+                "size_bytes": artifact.size_bytes,
+                "source": "workspace_archive",
+            },
+        )
+        return artifact
+
+    def _sanitize_relative_path(self, relative_path: str | None, filename: str) -> Path:
+        if not relative_path:
+            return Path(filename)
+
+        candidate = PurePosixPath(relative_path.replace("\\", "/"))
+        if candidate.is_absolute():
+            raise ValueError("relative_path must be relative")
+        parts = [part for part in candidate.parts if part not in ("", ".")]
+        if not parts or any(part == ".." for part in parts):
+            raise ValueError("relative_path must stay inside the upload root")
+        return Path(*parts)
+
+    def get_limits_status(self, *, refresh: bool = False) -> LimitsStatusRecord:
         if not self.limits_status_path.exists():
-            return LimitsStatusRecord()
-        return LimitsStatusRecord.model_validate_json(self.limits_status_path.read_text(encoding="utf-8"))
+            status = LimitsStatusRecord()
+        else:
+            status = LimitsStatusRecord.model_validate_json(
+                self.limits_status_path.read_text(encoding="utf-8")
+            )
+
+        if refresh and self.limits_probe is not None:
+            snapshot = self.limits_probe.probe()
+            if snapshot is not None:
+                merged = self._merge_limits_status(status, snapshot)
+                if merged.model_dump() != status.model_dump():
+                    self.save_limits_status(merged)
+                return merged
+        return status
 
     def save_limits_status(self, status: LimitsStatusRecord) -> None:
         self._atomic_write_json(self.limits_status_path, status.model_dump())
@@ -518,6 +761,18 @@ class BridgeStorage:
             status.updated_at = self._now()
             self.save_limits_status(status)
         return status
+
+    def _merge_limits_status(
+        self,
+        current: LimitsStatusRecord,
+        snapshot: LimitsStatusRecord,
+    ) -> LimitsStatusRecord:
+        snapshot.blocked = snapshot.blocked or current.blocked
+        if current.blocked and current.message:
+            snapshot.message = current.message
+        if current.updated_at and (snapshot.updated_at is None or current.updated_at > snapshot.updated_at):
+            snapshot.updated_at = current.updated_at
+        return snapshot
 
     def _limits_window(self, payload: object) -> LimitsWindowRecord | None:
         if not isinstance(payload, dict):

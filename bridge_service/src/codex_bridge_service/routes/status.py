@@ -18,5 +18,5 @@ def get_status(
     return BridgeStatusRecord(
         models=list(SUPPORTED_MODELS),
         thinking_levels=list(SUPPORTED_THINKING_LEVELS),
-        limits=request.app.state.storage.get_limits_status(),
+        limits=request.app.state.storage.get_limits_status(refresh=True),
     )

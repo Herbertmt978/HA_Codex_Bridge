@@ -26,6 +26,26 @@ def list_artifacts(
         raise HTTPException(status_code=404, detail="thread not found") from exc
 
 
+@router.post(
+    "/threads/{thread_id}/artifacts/workspace-archive",
+    response_model=ArtifactRecord,
+    status_code=201,
+)
+def create_workspace_archive(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> ArtifactRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.storage.create_workspace_archive(thread_id)
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+
+
 @router.get("/threads/{thread_id}/artifacts/{artifact_id}")
 def download_artifact(
     thread_id: str,

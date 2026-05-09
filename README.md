@@ -23,11 +23,17 @@ The flow is:
 ## Project-first panel features
 
 - Projects map to real folders on the Windows VM.
+- Direct chats exist outside projects and are managed in the same left rail.
 - Chats live under projects and inherit project defaults for:
   - model
   - thinking level
 - Per-chat overrides can diverge from the project defaults without changing the whole project.
-- The panel shows the latest Codex-reported 5-hour and weekly limit snapshot when available.
+- The panel surfaces live 5-hour and weekly limit snapshots from the Codex auth session when available.
+- Chats can be archived, restored, or deleted from the left rail.
+- Folder uploads preserve relative paths for larger VBA/codebase drops.
+- Workspace artifacts can be previewed in-panel for text, image, and PDF outputs.
+- The right-side panel shows progress, artifacts, previews, and workspace details without duplicating attachment management.
+- A one-click workspace archive action can bundle workspace files and uploads into a downloadable zip artifact.
 - Assistant messages have explicit copy buttons and are rendered in stable selectable blocks so code can be copied cleanly from Edge.
 
 ## Bridge service setup
@@ -70,15 +76,20 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
    - `Panel title`: the sidebar label you want in Home Assistant
 5. Open the new sidebar panel.
 
-## Upgrade from 0.2.x
+## Upgrade to 0.4.0
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.3.2`.
+2. Choose `Redownload` or update to `0.4.0`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.
 
-After the upgrade, create a project that points at the VM folder you want to work in, then create chats underneath it.
+After the upgrade, you can:
+- create or browse real VM-backed projects
+- keep standalone direct chats outside projects
+- archive or delete old chats from the left rail
+- upload whole folders for VBA/codebase work
+- preview and download generated artifacts from the side panel
 
 ## Dashboard launcher
 

@@ -1,10 +1,12 @@
 import json
 from io import BytesIO
 from pathlib import Path
+import zipfile
 
 import pytest
 
-from codex_bridge_service.models import RunMode
+from codex_bridge_service.limits import CodexLimitsProbe
+from codex_bridge_service.models import ProjectKind, RunMode
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -76,6 +78,17 @@ def test_create_thread_rejects_blank_title(tmp_path) -> None:
         storage.create_thread(title="   ", mode=RunMode.FULL_AUTO, project_id=project.project_id)
 
 
+def test_create_thread_without_project_uses_direct_chat_workspace(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+
+    record = storage.create_thread(title="Direct chat", mode=RunMode.FULL_AUTO)
+
+    assert record.project_name == "Direct chats"
+    assert record.project_kind is ProjectKind.DIRECT
+    assert Path(record.workspace_path).parent == tmp_path / "workspaces"
+    assert Path(record.workspace_path).name.startswith("ws_")
+
+
 def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     project = storage.create_project(
@@ -139,6 +152,32 @@ def test_attach_file_accepts_stream_content_for_large_uploads(tmp_path) -> None:
     assert attachment_path.read_bytes() == payload
 
 
+def test_attach_file_preserves_relative_path_for_folder_uploads(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(
+        name="Folder uploads",
+        root_path=str(tmp_path / "projects" / "folder-uploads"),
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+    )
+    record = storage.create_thread(title="Folder target", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+
+    attachment = storage.attach_file(
+        thread_id=record.thread_id,
+        filename="Module1.bas",
+        mime_type="text/plain",
+        content=b"Attribute VB_Name = \"Module1\"",
+        relative_path="src/vba/Module1.bas",
+    )
+
+    attachment_path = tmp_path / "uploads" / record.thread_id / "src" / "vba" / "Module1.bas"
+
+    assert attachment.relative_path == "src/vba/Module1.bas"
+    assert attachment.stored_path == str(attachment_path)
+    assert attachment.size_bytes == len(b"Attribute VB_Name = \"Module1\"")
+    assert attachment_path.read_text(encoding="utf-8") == 'Attribute VB_Name = "Module1"'
+
+
 def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     project = storage.create_project(
@@ -173,6 +212,41 @@ def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
     assert events[-1].payload["artifact_id"] == artifacts[0].artifact_id
 
 
+def test_create_workspace_archive_packages_workspace_and_uploads(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(
+        name="Archive project",
+        root_path=str(tmp_path / "projects" / "archive-project"),
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+    )
+    thread = storage.create_thread(
+        title="Archive target",
+        mode=RunMode.FULL_AUTO,
+        project_id=project.project_id,
+    )
+    workspace_file = Path(thread.workspace_path) / "src" / "Module1.bas"
+    workspace_file.parent.mkdir(parents=True, exist_ok=True)
+    workspace_file.write_text("Attribute VB_Name = \"Module1\"\n", encoding="utf-8")
+    storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="requirements.txt",
+        mime_type="text/plain",
+        content=b"openpyxl\npandas\n",
+        relative_path="deps/requirements.txt",
+    )
+
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    assert artifact.filename.endswith(".zip")
+    assert artifact.mime_type == "application/zip"
+    assert Path(artifact.stored_path).exists()
+    with zipfile.ZipFile(artifact.stored_path) as archive:
+        names = set(archive.namelist())
+        assert "workspace/src/Module1.bas" in names
+        assert "uploads/deps/requirements.txt" in names
+
+
 def test_legacy_thread_records_are_assigned_to_imported_project(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     legacy_workspace = tmp_path / "workspaces" / "ws_legacy"
@@ -197,7 +271,136 @@ def test_legacy_thread_records_are_assigned_to_imported_project(tmp_path) -> Non
 
     record = storage.get_thread("thr_legacy")
     projects = storage.list_projects()
+    imported = next(project for project in projects if project.project_id == record.project_id)
 
     assert record.project_name == "Imported Threads"
-    assert record.project_id == projects[0].project_id
+    assert imported.kind is ProjectKind.IMPORTED
     assert record.workspace_path == str(legacy_workspace)
+
+
+def test_archive_restore_and_delete_thread_metadata(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Archive me", mode=RunMode.FULL_AUTO)
+
+    archived = storage.archive_thread(thread.thread_id)
+    assert archived.archived_at is not None
+    assert storage.list_threads() == []
+    assert storage.list_threads(include_archived=True)[0].thread_id == thread.thread_id
+
+    restored = storage.restore_thread(thread.thread_id)
+    assert restored.archived_at is None
+    assert storage.list_threads()[0].thread_id == thread.thread_id
+
+    storage.delete_thread(thread.thread_id)
+    with pytest.raises(FileNotFoundError):
+        storage.load_thread(thread.thread_id)
+
+
+def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
+    codex_home = tmp_path / ".codex"
+    session_dir = codex_home / "sessions" / "2026" / "05" / "09"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_path = session_dir / "rollout-2026-05-09T10-00-00-foo.jsonl"
+    session_path.write_text(
+        "\n".join(
+            [
+                json.dumps({"timestamp": "2026-05-09T09:59:00Z", "type": "session_meta", "payload": {}}),
+                json.dumps(
+                    {
+                        "timestamp": "2026-05-09T10:00:00Z",
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "token_count",
+                            "rate_limits": {
+                                "primary": {
+                                    "used_percent": 20.0,
+                                    "window_minutes": 300,
+                                    "resets_at": 1778302800,
+                                },
+                                "secondary": {
+                                    "used_percent": 50.0,
+                                    "window_minutes": 10080,
+                                    "resets_at": 1778907600,
+                                },
+                                "plan_type": "team",
+                                "credits": None,
+                            },
+                        },
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    storage = BridgeStorage(root_path=tmp_path / "bridge", limits_probe=CodexLimitsProbe(codex_home))
+    status = storage.get_limits_status(refresh=True)
+
+    assert status.available is True
+    assert status.primary is not None
+    assert status.primary.remaining_percent == 80.0
+    assert status.secondary is not None
+    assert status.secondary.remaining_percent == 50.0
+
+
+def test_limits_probe_uses_live_backend_snapshot_when_auth_is_available(tmp_path, monkeypatch) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir(parents=True, exist_ok=True)
+    token = (
+        "eyJhbGciOiJub25lIn0."
+        "eyJleHAiIjo0MTAyNDQ0ODAwfQ."
+        "sig"
+    )
+    (codex_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": token,
+                    "refresh_token": "refresh",
+                    "account_id": "acct_123",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    captured = {}
+
+    def fake_fetch(url, *, headers, method="GET", body=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        return {
+            "plan_type": "pro",
+            "rate_limit": {
+                "limit_reached": False,
+                "primary_window": {
+                    "used_percent": 5,
+                    "limit_window_seconds": 18000,
+                    "reset_at": 1778320427,
+                },
+                "secondary_window": {
+                    "used_percent": 65,
+                    "limit_window_seconds": 604800,
+                    "reset_at": 1778539055,
+                },
+            },
+            "credits": {
+                "has_credits": True,
+                "unlimited": False,
+                "balance": 12,
+            },
+        }
+
+    probe = CodexLimitsProbe(codex_home, min_fetch_interval_seconds=0)
+    monkeypatch.setattr(probe, "_fetch_json", fake_fetch)
+
+    status = probe.probe()
+
+    assert captured["url"] == "https://chatgpt.com/backend-api/wham/usage"
+    assert captured["headers"]["ChatGPT-Account-Id"] == "acct_123"
+    assert status is not None
+    assert status.plan_type == "pro"
+    assert status.primary is not None
+    assert status.primary.remaining_percent == 95.0
+    assert status.secondary is not None
+    assert status.secondary.remaining_percent == 35.0

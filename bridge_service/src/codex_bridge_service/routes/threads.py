@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
@@ -55,13 +55,14 @@ def create_thread(
 @router.get("/threads", response_model=list[ThreadViewRecord])
 def list_threads(
     request: Request,
+    include_archived: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> list[ThreadViewRecord]:
     require_bridge_token(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
-    return request.app.state.storage.list_threads()
+    return request.app.state.storage.list_threads(include_archived=include_archived)
 
 
 @router.get("/threads/{thread_id}", response_model=ThreadViewRecord)
@@ -98,3 +99,52 @@ def update_thread(
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+
+
+@router.post("/threads/{thread_id}/archive", response_model=ThreadViewRecord)
+def archive_thread(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> ThreadViewRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.storage.archive_thread(thread_id)
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+
+
+@router.post("/threads/{thread_id}/restore", response_model=ThreadViewRecord)
+def restore_thread(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> ThreadViewRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.storage.restore_thread(thread_id)
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_thread(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        request.app.state.storage.delete_thread(thread_id)
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

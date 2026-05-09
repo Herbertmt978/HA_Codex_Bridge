@@ -89,8 +89,9 @@ class BridgeApiClient:
             expected_status={201},
         )
 
-    async def async_list_threads(self) -> list[dict[str, Any]]:
-        return await self._async_json("GET", "/threads")
+    async def async_list_threads(self, include_archived: bool = False) -> list[dict[str, Any]]:
+        suffix = "?include_archived=true" if include_archived else ""
+        return await self._async_json("GET", f"/threads{suffix}")
 
     async def async_get_thread(self, thread_id: str) -> dict[str, Any]:
         return await self._async_json("GET", f"/threads/{thread_id}")
@@ -127,6 +128,25 @@ class BridgeApiClient:
             json_body=updates,
         )
 
+    async def async_archive_thread(self, thread_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/threads/{thread_id}/archive",
+        )
+
+    async def async_restore_thread(self, thread_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/threads/{thread_id}/restore",
+        )
+
+    async def async_delete_thread(self, thread_id: str) -> None:
+        await self._async_request(
+            "DELETE",
+            f"/threads/{thread_id}",
+            expected_status={204},
+        )
+
     async def async_send_prompt(self, thread_id: str, prompt: str) -> dict[str, Any]:
         return await self._async_json(
             "POST",
@@ -144,12 +164,20 @@ class BridgeApiClient:
     async def async_list_artifacts(self, thread_id: str) -> list[dict[str, Any]]:
         return await self._async_json("GET", f"/threads/{thread_id}/artifacts")
 
+    async def async_create_workspace_archive(self, thread_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/threads/{thread_id}/artifacts/workspace-archive",
+            expected_status={201},
+        )
+
     async def async_upload_attachment(
         self,
         thread_id: str,
         filename: str,
         content_type: str,
-        content: bytes,
+        content: Any,
+        relative_path: str | None = None,
     ) -> dict[str, Any]:
         form_data = aiohttp.FormData()
         form_data.add_field(
@@ -158,6 +186,8 @@ class BridgeApiClient:
             filename=filename,
             content_type=content_type,
         )
+        if relative_path:
+            form_data.add_field("relative_path", relative_path)
         return await self._async_json(
             "POST",
             f"/threads/{thread_id}/attachments",
