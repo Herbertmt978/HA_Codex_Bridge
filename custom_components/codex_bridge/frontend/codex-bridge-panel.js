@@ -1071,6 +1071,23 @@ template.innerHTML = `
       align-items: start;
     }
 
+    .context-row {
+      grid-template-columns: minmax(74px, 0.42fr) minmax(0, 1fr);
+    }
+
+    .context-row .label-text,
+    .context-row .row-meta {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .context-row .row-meta {
+      justify-self: end;
+      text-align: right;
+      white-space: normal;
+    }
+
     .progress-row {
       grid-template-columns: 16px minmax(0, 1fr);
     }
@@ -1432,6 +1449,8 @@ class CodexBridgePanel extends HTMLElement {
     this._renderedThreadId = null;
     this._renderedSequence = 0;
     this._renderedToolbarKey = "";
+    this._renderedProjectFormKey = "";
+    this._renderedThreadFormKey = "";
     this._forceMessageRebuild = true;
     this._pendingUploads = 0;
     this._suspendUiRefresh = false;
@@ -1819,6 +1838,7 @@ class CodexBridgePanel extends HTMLElement {
     panel.classList.toggle("visible", this._showProjectForm);
     if (!this._showProjectForm) {
       panel.innerHTML = "";
+      this._renderedProjectFormKey = "";
       return;
     }
 
@@ -1831,6 +1851,17 @@ class CodexBridgePanel extends HTMLElement {
         `
       )
       .join("");
+
+    const formKey = JSON.stringify({
+      mode: this._projectFormMode,
+      editingProjectId: this._editingProjectId,
+      browsePath: this._browseState?.path || "",
+      browseParent: this._browseState?.parent_path || "",
+      browseDirectories: (this._browseState?.directories || []).map((entry) => [entry.name, entry.path]),
+    });
+    if (formKey === this._renderedProjectFormKey && panel.innerHTML) {
+      return;
+    }
 
     panel.innerHTML = `
       <div class="title-block">
@@ -1862,6 +1893,7 @@ class CodexBridgePanel extends HTMLElement {
         <button class="text-button" type="button" data-action="cancel-project-form">Close</button>
       </div>
     `;
+    this._renderedProjectFormKey = formKey;
   }
 
   _renderThreadForm() {
@@ -1869,6 +1901,7 @@ class CodexBridgePanel extends HTMLElement {
     panel.classList.toggle("visible", this._showThreadForm);
     if (!this._showThreadForm) {
       panel.innerHTML = "";
+      this._renderedThreadFormKey = "";
       return;
     }
 
@@ -1876,6 +1909,16 @@ class CodexBridgePanel extends HTMLElement {
       ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null
       : this._directProject();
     const isDirect = !this._threadForm.projectId || targetProject?.kind === "direct";
+    const formKey = JSON.stringify({
+      projectId: this._threadForm.projectId || "",
+      targetProjectId: targetProject?.project_id || "",
+      targetProjectName: targetProject?.name || "",
+      targetProjectPath: targetProject?.root_path || "",
+      isDirect,
+    });
+    if (formKey === this._renderedThreadFormKey && panel.innerHTML) {
+      return;
+    }
     panel.innerHTML = `
       <div class="title-block">
         <span class="eyeline">${isDirect ? "New direct chat" : "New project chat"}</span>
@@ -1894,6 +1937,7 @@ class CodexBridgePanel extends HTMLElement {
         <button class="text-button" type="button" data-action="cancel-thread-form">Close</button>
       </div>
     `;
+    this._renderedThreadFormKey = formKey;
   }
 
   _isRefreshLockTarget(target) {
