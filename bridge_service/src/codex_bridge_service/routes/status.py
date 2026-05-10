@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Header, Request
 
 from ..auth import require_bridge_token
-from ..models import BridgeStatusRecord, CodexAccountRecord, SUPPORTED_MODELS, SUPPORTED_THINKING_LEVELS
+from ..models import (
+    BridgeDiagnosticsRecord,
+    BridgeStatusRecord,
+    CodexAccountRecord,
+    SUPPORTED_MODELS,
+    SUPPORTED_THINKING_LEVELS,
+)
 
 router = APIRouter()
 
@@ -23,5 +29,10 @@ def get_status(
             request.app.state.account_probe.probe()
             if getattr(request.app.state, "account_probe", None) is not None
             else CodexAccountRecord()
+        ),
+        diagnostics=(
+            request.app.state.diagnostics_probe.probe()
+            if getattr(request.app.state, "diagnostics_probe", None) is not None
+            else BridgeDiagnosticsRecord()
         ),
     )

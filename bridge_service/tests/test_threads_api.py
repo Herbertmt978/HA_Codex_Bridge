@@ -32,6 +32,20 @@ class FakeRunner:
             status="running",
         )
 
+    def cancel_run(self, thread_id: str) -> RunRecord:
+        record = self.storage.load_thread(thread_id)
+        run_id = record.active_run_id or "run_fake123"
+        record.status = "idle"
+        record.active_run_id = None
+        record.last_error = "Run cancelled"
+        self.storage.save_thread(record)
+        self.storage.append_thread_event(
+            thread_id=thread_id,
+            event_type="run.cancelled",
+            payload={"run_id": run_id},
+        )
+        return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
+
 
 class FakeAccountProbe:
     def probe(self) -> CodexAccountRecord:
@@ -387,6 +401,45 @@ def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_pa
     assert archive_response.json()["filename"].endswith(".zip")
     assert download_response.status_code == 200
     assert download_response.text == "hello"
+
+
+def test_cancel_active_run_route_marks_thread_idle(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=lambda storage: FakeRunner(storage),
+    )
+    client = TestClient(app)
+    thread_response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "Cancelable", "mode": "full-auto"},
+    )
+    thread_id = thread_response.json()["thread_id"]
+    prompt_response = client.post(
+        f"/threads/{thread_id}/prompts",
+        headers={"Authorization": "Bearer secret"},
+        json={"prompt": "Keep going"},
+    )
+
+    cancel_response = client.post(
+        f"/threads/{thread_id}/runs/current/cancel",
+        headers={"Authorization": "Bearer secret"},
+    )
+    thread_after_cancel = client.get(
+        f"/threads/{thread_id}",
+        headers={"Authorization": "Bearer secret"},
+    )
+    events_response = client.get(
+        f"/threads/{thread_id}/events/replay",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert prompt_response.status_code == 202
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+    assert thread_after_cancel.json()["status"] == "idle"
+    assert events_response.json()[-1]["event_type"] == "run.cancelled"
 
 
 def test_thread_archive_restore_delete_and_include_archived_routes(tmp_path) -> None:

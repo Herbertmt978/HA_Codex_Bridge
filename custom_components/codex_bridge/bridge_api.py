@@ -174,6 +174,12 @@ class BridgeApiClient:
             expected_status={202},
         )
 
+    async def async_cancel_run(self, thread_id: str) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            f"/threads/{thread_id}/runs/current/cancel",
+        )
+
     async def async_get_events(self, thread_id: str, after: int = 0) -> list[dict[str, Any]]:
         return await self._async_json(
             "GET",

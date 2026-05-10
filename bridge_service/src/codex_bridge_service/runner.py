@@ -13,6 +13,10 @@ class ThreadBusyError(RuntimeError):
     pass
 
 
+class NoActiveRunError(RuntimeError):
+    pass
+
+
 class BridgeRunner:
     def __init__(
         self,
@@ -25,6 +29,8 @@ class BridgeRunner:
         self.codex_command = codex_command
         self.bypass_sandbox = bypass_sandbox
         self._lock = Lock()
+        self._processes: dict[str, subprocess.Popen[str]] = {}
+        self._cancelled_runs: set[str] = set()
 
     def submit_prompt(self, thread_id: str, prompt: str) -> RunRecord:
         with self._lock:
@@ -59,6 +65,32 @@ class BridgeRunner:
             worker.start()
             return run
 
+    def cancel_run(self, thread_id: str) -> RunRecord:
+        with self._lock:
+            record = self.storage.load_thread(thread_id)
+            run_id = record.active_run_id
+            if record.status != "running" or not run_id:
+                raise NoActiveRunError(thread_id)
+
+            self._cancelled_runs.add(run_id)
+            process = self._processes.get(thread_id)
+            if process is not None and process.poll() is None:
+                process.terminate()
+
+            record.status = "idle"
+            record.active_run_id = None
+            record.last_error = "Run cancelled"
+            self.storage.save_thread(record)
+            self.storage.append_thread_event(
+                thread_id=thread_id,
+                event_type="run.cancelled",
+                payload={
+                    "run_id": run_id,
+                    "reason": "cancelled by user",
+                },
+            )
+            return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
+
     def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
         stderr_lines: list[str] = []
         saw_run_completion = False
@@ -74,6 +106,8 @@ class BridgeRunner:
             )
             assert process.stdout is not None
             assert process.stderr is not None
+            with self._lock:
+                self._processes[record.thread_id] = process
 
             for raw_line in process.stdout:
                 line = raw_line.strip()
@@ -90,6 +124,9 @@ class BridgeRunner:
 
             stderr_lines.extend(line.strip() for line in process.stderr if line.strip())
             return_code = process.wait()
+            if run.run_id in self._cancelled_runs:
+                self.storage.sync_thread_artifacts(record.thread_id)
+                return
             if return_code != 0:
                 raise RuntimeError(
                     stderr_lines[-1] if stderr_lines else f"codex exited with code {return_code}"
@@ -106,6 +143,8 @@ class BridgeRunner:
             self.storage.sync_thread_artifacts(record.thread_id)
             self._complete_run(record.thread_id)
         except Exception as exc:
+            if run.run_id in self._cancelled_runs:
+                return
             failure_payload = self._failure_payload(str(exc))
             self.storage.append_thread_event(
                 thread_id=record.thread_id,
@@ -116,6 +155,10 @@ class BridgeRunner:
                 },
             )
             self._complete_run(record.thread_id, error=str(exc))
+        finally:
+            with self._lock:
+                self._processes.pop(record.thread_id, None)
+                self._cancelled_runs.discard(run.run_id)
 
     def _build_command(self, record: ThreadViewRecord, prompt: str) -> list[str]:
         prompt_with_context = self._compose_prompt(record, prompt)

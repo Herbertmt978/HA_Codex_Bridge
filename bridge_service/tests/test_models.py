@@ -1,7 +1,9 @@
 from codex_bridge_service.models import (
     ArtifactRecord,
     AttachmentRecord,
+    BridgeDiagnosticsRecord,
     CodexAccountRecord,
+    DiagnosticToolRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
     ProjectRecord,
@@ -167,6 +169,29 @@ def test_codex_account_record_round_trips_safe_profile_fields() -> None:
     assert restored.available is True
     assert restored.email == "person@example.com"
     assert restored.plan_type == "pro"
+
+
+def test_bridge_diagnostics_record_round_trips() -> None:
+    diagnostics = BridgeDiagnosticsRecord(
+        bridge_version="0.4.6",
+        git_commit="abc1234",
+        python_version="3.12.10",
+        service_uptime_seconds=12.5,
+        last_error="none",
+        tools=[
+            DiagnosticToolRecord(
+                name="python",
+                available=True,
+                path="C:/Python/python.exe",
+                version="Python 3.12.10",
+            )
+        ],
+    )
+
+    restored = BridgeDiagnosticsRecord.model_validate(diagnostics.model_dump())
+
+    assert restored.bridge_version == "0.4.6"
+    assert restored.tools[0].available is True
 
 
 def test_thread_event_record_round_trips_payload() -> None:

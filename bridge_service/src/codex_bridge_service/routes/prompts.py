@@ -3,7 +3,7 @@ from pydantic import BaseModel, field_validator
 
 from ..auth import require_bridge_token
 from ..models import RunRecord
-from ..runner import ThreadBusyError
+from ..runner import NoActiveRunError, ThreadBusyError
 from ..storage import ThreadNotFoundError
 
 router = APIRouter()
@@ -39,5 +39,26 @@ def submit_prompt(
         return request.app.state.runner.submit_prompt(thread_id, payload.prompt)
     except ThreadBusyError as exc:
         raise HTTPException(status_code=409, detail="thread already running") from exc
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+
+
+@router.post(
+    "/threads/{thread_id}/runs/current/cancel",
+    response_model=RunRecord,
+)
+def cancel_active_run(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> RunRecord:
+    require_bridge_token(
+        authorization=authorization,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        return request.app.state.runner.cancel_run(thread_id)
+    except NoActiveRunError as exc:
+        raise HTTPException(status_code=409, detail="thread is not running") from exc
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import voluptuous as vol
@@ -29,7 +30,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_restore_thread)
     websocket_api.async_register_command(hass, ws_delete_thread)
     websocket_api.async_register_command(hass, ws_send_prompt)
+    websocket_api.async_register_command(hass, ws_cancel_run)
     websocket_api.async_register_command(hass, ws_get_events)
+    websocket_api.async_register_command(hass, ws_subscribe_events)
     websocket_api.async_register_command(hass, ws_list_artifacts)
     websocket_api.async_register_command(hass, ws_create_workspace_archive)
 
@@ -432,6 +435,26 @@ async def ws_send_prompt(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/cancel_run",
+        vol.Required("thread_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_cancel_run(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_cancel_run(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/get_events",
         vol.Required("thread_id"): str,
         vol.Optional("after", default=0): vol.Coerce(int),
@@ -449,6 +472,57 @@ async def ws_get_events(
         msg,
         lambda client: client.async_get_events(msg["thread_id"], msg["after"]),
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/subscribe_events",
+        vol.Required("thread_id"): str,
+        vol.Optional("after", default=0): vol.Coerce(int),
+    }
+)
+@websocket_api.async_response
+async def ws_subscribe_events(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    try:
+        runtime = async_get_runtime(hass)
+    except RuntimeError as exc:
+        connection.send_error(msg["id"], "not_configured", str(exc))
+        return
+
+    thread_id = msg["thread_id"]
+    after = msg["after"]
+
+    async def _forward_events() -> None:
+        nonlocal after
+        try:
+            while True:
+                events = await runtime.client.async_get_events(thread_id, after)
+                for event in events:
+                    sequence = event.get("sequence")
+                    if isinstance(sequence, int):
+                        after = max(after, sequence)
+                    connection.send_event(msg["id"], event)
+                await asyncio.sleep(0.75 if events else 1.5)
+        except asyncio.CancelledError:
+            raise
+        except BridgeApiAuthError as exc:
+            connection.send_event(msg["id"], {"event_type": "bridge.error", "payload": {"error": str(exc)}})
+        except BridgeApiConnectionError as exc:
+            connection.send_event(msg["id"], {"event_type": "bridge.error", "payload": {"error": str(exc)}})
+        except BridgeApiError as exc:
+            connection.send_event(msg["id"], {"event_type": "bridge.error", "payload": {"error": str(exc)}})
+
+    task = hass.async_create_task(_forward_events())
+
+    def _unsubscribe() -> None:
+        task.cancel()
+
+    connection.subscriptions[msg["id"]] = _unsubscribe
+    connection.send_result(msg["id"])
 
 
 @websocket_api.websocket_command(

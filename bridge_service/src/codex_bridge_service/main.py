@@ -29,6 +29,7 @@ def build_app() -> FastAPI:
         auth_token=settings.auth_token,
         limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
         account_probe=CodexAccountProbe(codex_home) if codex_home else None,
+        codex_command=settings.codex_wrapper_path,
         runner_factory=lambda storage: BridgeRunner(
             storage=storage,
             codex_command=settings.codex_wrapper_path,

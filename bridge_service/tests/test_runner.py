@@ -178,6 +178,57 @@ def test_runner_marks_thread_error_and_limits_blocked_after_credit_failure(tmp_p
     assert "Usage limit reached" in (limits.message or "")
 
 
+def test_runner_can_cancel_active_process(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    class SlowStdout:
+        def __init__(self, process) -> None:
+            self.process = process
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            time.sleep(0.05)
+            if self.process.terminated:
+                raise StopIteration
+            return json.dumps({"type": "turn.started"}) + "\n"
+
+    class DummyProcess:
+        def __init__(self) -> None:
+            self.terminated = False
+            self.stdout = SlowStdout(self)
+            self.stderr = iter([])
+
+        def poll(self):
+            return 1 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self) -> int:
+            return 1 if self.terminated else 0
+
+    monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", lambda *args, **kwargs: DummyProcess())
+
+    runner = BridgeRunner(storage=storage, codex_command="codex")
+    run = runner.submit_prompt(thread.thread_id, "Please wait")
+    deadline = time.time() + 2
+    while time.time() < deadline and not runner._processes:
+        time.sleep(0.02)
+
+    cancelled = runner.cancel_run(thread.thread_id)
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+
+    assert cancelled.run_id == run.run_id
+    assert cancelled.status == "cancelled"
+    assert saved.status == "idle"
+    assert saved.active_run_id is None
+    assert events[-1].event_type == "run.cancelled"
+
+
 def test_runner_closes_stdin_for_codex_process(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = _create_project_thread(storage, tmp_path)

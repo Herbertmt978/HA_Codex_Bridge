@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from .account import CodexAccountProbe
+from .diagnostics import BridgeDiagnosticsProbe
 from .limits import CodexLimitsProbe
 from .routes import artifacts, attachments, events, health, projects, prompts, status, threads
 from .runner import BridgeRunner
@@ -14,6 +15,8 @@ def create_app(
     auth_token: str,
     limits_probe: CodexLimitsProbe | None = None,
     account_probe: CodexAccountProbe | None = None,
+    diagnostics_probe: BridgeDiagnosticsProbe | None = None,
+    codex_command: str = "codex",
     runner_factory=None,
 ) -> FastAPI:
     app = FastAPI(title="Codex Bridge")
@@ -21,6 +24,10 @@ def create_app(
     app.state.storage = storage
     app.state.auth_token = auth_token
     app.state.account_probe = account_probe
+    app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
+        storage=storage,
+        codex_command=codex_command,
+    )
     app.state.runner = runner_factory(storage) if runner_factory is not None else BridgeRunner(storage)
     app.include_router(artifacts.router)
     app.include_router(attachments.router)

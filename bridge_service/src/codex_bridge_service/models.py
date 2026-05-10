@@ -141,11 +141,33 @@ class CodexAccountRecord(BaseModel):
     updated_at: str | None = None
 
 
+class DiagnosticToolRecord(BaseModel):
+    name: str
+    available: bool = False
+    path: str | None = None
+    version: str | None = None
+
+
+class BridgeDiagnosticsRecord(BaseModel):
+    bridge_version: str | None = None
+    git_commit: str | None = None
+    git_branch: str | None = None
+    python_version: str | None = None
+    python_executable: str | None = None
+    platform: str | None = None
+    codex_cli_version: str | None = None
+    service_started_at: str | None = None
+    service_uptime_seconds: float | None = None
+    last_error: str | None = None
+    tools: list[DiagnosticToolRecord] = Field(default_factory=list)
+
+
 class BridgeStatusRecord(BaseModel):
     models: list[str] = Field(default_factory=lambda: list(SUPPORTED_MODELS))
     thinking_levels: list[str] = Field(default_factory=lambda: list(SUPPORTED_THINKING_LEVELS))
     limits: LimitsStatusRecord = Field(default_factory=LimitsStatusRecord)
     account: CodexAccountRecord = Field(default_factory=CodexAccountRecord)
+    diagnostics: BridgeDiagnosticsRecord = Field(default_factory=BridgeDiagnosticsRecord)
 
 
 class PathBrowseEntryRecord(BaseModel):
