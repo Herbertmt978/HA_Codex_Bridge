@@ -102,6 +102,27 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
     assert status_response.json()["account"]["plan_type"] == "pro"
 
 
+def test_project_create_can_auto_create_workspace_from_name(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    client = TestClient(app)
+
+    response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Power Apps",
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "Power Apps"
+    assert payload["root_path"] == str(tmp_path / "project-workspaces" / "Power Apps")
+    assert (tmp_path / "project-workspaces" / "Power Apps").is_dir()
+
+
 def test_project_routes_list_browse_create_folder_and_update(tmp_path) -> None:
     app = create_app(root_path=tmp_path, auth_token="secret")
     client = TestClient(app)

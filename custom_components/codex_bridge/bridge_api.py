@@ -45,19 +45,21 @@ class BridgeApiClient:
     async def async_create_project(
         self,
         name: str,
-        root_path: str,
         default_model: str,
         default_thinking_level: str,
+        root_path: str | None = None,
     ) -> dict[str, Any]:
+        json_body: dict[str, Any] = {
+            "name": name,
+            "default_model": default_model,
+            "default_thinking_level": default_thinking_level,
+        }
+        if root_path:
+            json_body["root_path"] = root_path
         return await self._async_json(
             "POST",
             "/projects",
-            json_body={
-                "name": name,
-                "root_path": root_path,
-                "default_model": default_model,
-                "default_thinking_level": default_thinking_level,
-            },
+            json_body=json_body,
             expected_status={201},
         )
 

@@ -99,7 +99,7 @@ async def ws_list_projects(
     {
         vol.Required("type"): f"{DOMAIN}/create_project",
         vol.Required("name"): str,
-        vol.Required("root_path"): str,
+        vol.Optional("root_path"): vol.Any(None, str),
         vol.Optional("default_model", default="gpt-5.4"): str,
         vol.Optional("default_thinking_level", default="medium"): str,
     }
@@ -116,9 +116,9 @@ async def ws_create_project(
         msg,
         lambda client: client.async_create_project(
             msg["name"],
-            msg["root_path"],
             msg["default_model"],
             msg["default_thinking_level"],
+            msg.get("root_path"),
         ),
     )
 

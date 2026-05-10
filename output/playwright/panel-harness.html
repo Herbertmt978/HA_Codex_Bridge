@@ -495,10 +495,14 @@
               case "codex_bridge/browse_paths":
                 return { path: "C:\\Projects", parent_path: "C:\\", directories: [] };
               case "codex_bridge/create_project": {
+                const folderName = (payload.name || "New project")
+                  .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+                  .trim()
+                  .replace(/\s+/g, " ") || "Project";
                 const project = {
                   project_id: `prj_new_${Date.now()}`,
                   name: payload.name || "New project",
-                  root_path: payload.root_path || "C:\\Projects\\New",
+                  root_path: payload.root_path || `C:\\CodexHA\\project-workspaces\\${folderName}`,
                   kind: "project",
                   default_model: payload.default_model || "gpt-5.4",
                   default_thinking_level: payload.default_thinking_level || "medium",

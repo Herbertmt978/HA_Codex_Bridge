@@ -10,11 +10,11 @@ router = APIRouter()
 
 class CreateProjectRequest(BaseModel):
     name: str
-    root_path: str
+    root_path: str | None = None
     default_model: str = DEFAULT_MODEL
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
 
-    @field_validator("name", "root_path")
+    @field_validator("name")
     @classmethod
     def validate_required_text(cls, value: str) -> str:
         if not value.strip():

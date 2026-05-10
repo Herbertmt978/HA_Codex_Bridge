@@ -31,6 +31,29 @@ def test_create_project_persists_defaults_and_root_path(tmp_path) -> None:
     assert payload["default_thinking_level"] == "medium"
 
 
+def test_create_project_without_root_path_creates_named_workspace(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+
+    project = storage.create_project(
+        name="Power Apps",
+        default_model="gpt-5.4",
+        default_thinking_level="medium",
+    )
+
+    assert Path(project.root_path) == tmp_path / "project-workspaces" / "Power Apps"
+    assert Path(project.root_path).is_dir()
+
+
+def test_create_project_without_root_path_uses_unique_folder(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+
+    first = storage.create_project(name="Power Apps")
+    second = storage.create_project(name="Power Apps")
+
+    assert Path(first.root_path) == tmp_path / "project-workspaces" / "Power Apps"
+    assert Path(second.root_path) == tmp_path / "project-workspaces" / "Power Apps 2"
+
+
 def test_create_thread_persists_project_metadata_and_defaults(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     project = storage.create_project(

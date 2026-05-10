@@ -1842,6 +1842,7 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
+    const isEditMode = this._projectFormMode === "edit";
     const browseDirectories = (this._browseState?.directories || [])
       .map(
         (entry) => `
@@ -1865,31 +1866,37 @@ class CodexBridgePanel extends HTMLElement {
 
     panel.innerHTML = `
       <div class="title-block">
-        <span class="eyeline">${this._projectFormMode === "edit" ? "Edit project" : "New project"}</span>
-        <span class="title">${this._projectFormMode === "edit" ? "Project settings" : "Create a VM-backed project"}</span>
+        <span class="eyeline">${isEditMode ? "Edit project" : "New project"}</span>
+        <span class="title">${isEditMode ? "Project settings" : "Create project"}</span>
       </div>
       <input class="field" id="project-name-input" type="text" placeholder="Project name" value="${this._escapeHtml(this._projectForm.name)}" />
-      <input class="field" id="project-root-input" type="text" placeholder="C:\\\\Projects\\\\My Work" value="${this._escapeHtml(this._projectForm.rootPath)}" />
-      <div class="field-grid">
-        <select class="field-select stable-select" id="project-model-select">${this._modelOptions(this._projectForm.defaultModel)}</select>
-        <select class="field-select stable-select" id="project-thinking-select">${this._thinkingOptions(this._projectForm.defaultThinkingLevel)}</select>
-      </div>
-      <div class="browser-card">
-        <span class="browser-label">Path browser</span>
-        <div class="meta-line">${this._escapeHtml(this._browseState?.path || "No folder loaded yet")}</div>
-        <div class="browser-actions">
-          <button class="text-button" type="button" data-action="browse-current">Browse</button>
-          <button class="text-button" type="button" data-action="browse-up">Up</button>
-          <button class="text-button" type="button" data-action="browse-roots">Drives</button>
-        </div>
-        <div class="browse-list">${browseDirectories || `<div class="empty-note">Browse a path to list folders.</div>`}</div>
-        <div class="browser-actions">
-          <input class="field" id="folder-name-input" type="text" placeholder="New folder name" value="${this._escapeHtml(this._folderDraft)}" />
-          <button class="text-button" type="button" data-action="create-folder">Create folder</button>
-        </div>
-      </div>
+      ${
+        isEditMode
+          ? `
+            <input class="field" id="project-root-input" type="text" placeholder="C:\\\\Projects\\\\My Work" value="${this._escapeHtml(this._projectForm.rootPath)}" />
+            <div class="field-grid">
+              <select class="field-select stable-select" id="project-model-select">${this._modelOptions(this._projectForm.defaultModel)}</select>
+              <select class="field-select stable-select" id="project-thinking-select">${this._thinkingOptions(this._projectForm.defaultThinkingLevel)}</select>
+            </div>
+            <div class="browser-card">
+              <span class="browser-label">Path browser</span>
+              <div class="meta-line">${this._escapeHtml(this._browseState?.path || "No folder loaded yet")}</div>
+              <div class="browser-actions">
+                <button class="text-button" type="button" data-action="browse-current">Browse</button>
+                <button class="text-button" type="button" data-action="browse-up">Up</button>
+                <button class="text-button" type="button" data-action="browse-roots">Drives</button>
+              </div>
+              <div class="browse-list">${browseDirectories || `<div class="empty-note">Browse a path to list folders.</div>`}</div>
+              <div class="browser-actions">
+                <input class="field" id="folder-name-input" type="text" placeholder="New folder name" value="${this._escapeHtml(this._folderDraft)}" />
+                <button class="text-button" type="button" data-action="create-folder">Create folder</button>
+              </div>
+            </div>
+          `
+          : ""
+      }
       <div class="form-actions">
-        <button class="send-button" type="button" data-action="save-project">${icons.save}<span>${this._projectFormMode === "edit" ? "Update project" : "Create project"}</span></button>
+        <button class="send-button" type="button" data-action="save-project">${icons.save}<span>${isEditMode ? "Update project" : "Create project"}</span></button>
         <button class="text-button" type="button" data-action="cancel-project-form">Close</button>
       </div>
     `;
@@ -2936,12 +2943,13 @@ class CodexBridgePanel extends HTMLElement {
 
   async _saveProject() {
     try {
-      if (!this._projectForm.name.trim() || !this._projectForm.rootPath.trim()) {
+      const isEditMode = this._projectFormMode === "edit" && this._editingProjectId;
+      if (!this._projectForm.name.trim() || (isEditMode && !this._projectForm.rootPath.trim())) {
         return;
       }
 
       let project;
-      if (this._projectFormMode === "edit" && this._editingProjectId) {
+      if (isEditMode) {
         project = await this._callWS("update_project", {
           project_id: this._editingProjectId,
           name: this._projectForm.name.trim(),
@@ -2952,7 +2960,6 @@ class CodexBridgePanel extends HTMLElement {
       } else {
         project = await this._callWS("create_project", {
           name: this._projectForm.name.trim(),
-          root_path: this._projectForm.rootPath.trim(),
           default_model: this._projectForm.defaultModel,
           default_thinking_level: this._projectForm.defaultThinkingLevel,
         });

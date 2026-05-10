@@ -54,6 +54,7 @@ class BridgeStorage:
         self.projects_dir = self.root / "projects"
         self.threads_dir = self.root / "threads"
         self.workspaces_dir = self.root / "workspaces"
+        self.project_workspaces_dir = self.root / "project-workspaces"
         self.uploads_dir = self.root / "uploads"
         self.artifacts_dir = self.root / "artifacts"
         self.logs_dir = self.root / "logs"
@@ -64,6 +65,7 @@ class BridgeStorage:
             self.projects_dir,
             self.threads_dir,
             self.workspaces_dir,
+            self.project_workspaces_dir,
             self.uploads_dir,
             self.artifacts_dir,
             self.logs_dir,
@@ -92,6 +94,24 @@ class BridgeStorage:
         if not target.is_absolute():
             target = target.resolve()
         return target
+
+    def _safe_project_folder_name(self, name: str) -> str:
+        invalid_chars = '<>:"/\\|?*'
+        cleaned = "".join(
+            " " if char in invalid_chars or ord(char) < 32 else char
+            for char in name.strip()
+        )
+        cleaned = " ".join(cleaned.split()).strip(" .")
+        return cleaned or "Project"
+
+    def _default_project_root(self, name: str) -> Path:
+        folder_name = self._safe_project_folder_name(name)
+        candidate = self.project_workspaces_dir / folder_name
+        suffix = 2
+        while candidate.exists():
+            candidate = self.project_workspaces_dir / f"{folder_name} {suffix}"
+            suffix += 1
+        return candidate
 
     def _imported_project_id(self) -> str:
         return "prj_imported"
@@ -215,16 +235,18 @@ class BridgeStorage:
         self,
         *,
         name: str,
-        root_path: str,
+        root_path: str | None = None,
         default_model: str = DEFAULT_MODEL,
         default_thinking_level: str = DEFAULT_THINKING_LEVEL,
     ) -> ProjectRecord:
         if not name.strip():
             raise ValueError("name must not be blank")
-        if not root_path.strip():
-            raise ValueError("root_path must not be blank")
 
-        project_root = self._normalize_root_path(root_path)
+        project_root = (
+            self._normalize_root_path(root_path)
+            if root_path and root_path.strip()
+            else self._default_project_root(name)
+        )
         project_root.mkdir(parents=True, exist_ok=True)
         now = self._now()
         record = ProjectRecord(
