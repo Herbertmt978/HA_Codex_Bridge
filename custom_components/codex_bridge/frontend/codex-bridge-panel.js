@@ -1812,6 +1812,7 @@ class CodexBridgePanel extends HTMLElement {
       : activeThread
         ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - paste screenshot`
         : "No chat selected";
+    this._renderComposerState(activeThread);
 
     const errorStrip = this.shadowRoot.getElementById("error-strip");
     errorStrip.textContent = this._error;
@@ -1831,6 +1832,19 @@ class CodexBridgePanel extends HTMLElement {
     this._renderArtifactPreview();
     this._renderContext();
     this._renderDiagnostics();
+  }
+
+  _renderComposerState(activeThread) {
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    const sendButton = this.shadowRoot.getElementById("send-button");
+    const isRunning = activeThread?.status === "running";
+    promptInput.placeholder = isRunning
+      ? "Steer the running Codex turn"
+      : "Message Codex through Home Assistant";
+    sendButton.innerHTML = `${icons.send}<span>${isRunning ? "Steer" : "Send"}</span>`;
+    sendButton.title = isRunning
+      ? "Queue steering for this running Codex turn"
+      : "Send message to Codex";
   }
 
   _renderProjectForm() {
@@ -2422,7 +2436,13 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderEvent(event) {
     if (event.event_type === "message.created") {
-      return this._renderMessage("user", event.payload.text, event.sequence, false);
+      return this._renderMessage(
+        "user",
+        event.payload.text,
+        event.sequence,
+        false,
+        event.payload.queued ? "Queued steer" : ""
+      );
     }
     if (event.event_type === "message.completed") {
       return this._renderMessage("assistant", event.payload.text, event.sequence, true);
@@ -2432,6 +2452,15 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (event.event_type === "run.completed") {
       return `<div class="event-row">Run completed</div>`;
+    }
+    if (event.event_type === "run.queued") {
+      return `<div class="event-row">Steer queued</div>`;
+    }
+    if (event.event_type === "run.dequeued") {
+      return `<div class="event-row">Steer applied</div>`;
+    }
+    if (event.event_type === "run.queue_cleared") {
+      return `<div class="event-row">Steer queue cleared</div>`;
     }
     if (event.event_type === "run.failed") {
       return `<div class="event-row">Run failed: ${this._escapeHtml(event.payload.error || "Unknown error")}</div>`;
@@ -2457,7 +2486,7 @@ class CodexBridgePanel extends HTMLElement {
     return "";
   }
 
-  _renderMessage(role, text, key, canCopy) {
+  _renderMessage(role, text, key, canCopy, label = "") {
     const icon = role === "user" ? icons.user : icons.bot;
     const head = canCopy
       ? `
@@ -2469,6 +2498,8 @@ class CodexBridgePanel extends HTMLElement {
           </button>
         </div>
       `
+      : label
+        ? `<div class="message-head"><span class="row-meta">${this._escapeHtml(label)}</span></div>`
       : "";
     return `
       <article class="message ${role}" data-sequence="${key}">
@@ -2565,7 +2596,17 @@ class CodexBridgePanel extends HTMLElement {
 
     const notable = this._events
       .filter((event) =>
-        ["run.failed", "run.completed", "artifact.added", "thread.updated", "thread.archived", "thread.restored"].includes(event.event_type)
+        [
+          "run.failed",
+          "run.completed",
+          "run.queued",
+          "run.dequeued",
+          "run.queue_cleared",
+          "artifact.added",
+          "thread.updated",
+          "thread.archived",
+          "thread.restored",
+        ].includes(event.event_type)
       )
       .slice(-4)
       .reverse()
@@ -2587,6 +2628,27 @@ class CodexBridgePanel extends HTMLElement {
         title: "Run completed",
         meta: this._timeAgo(event.timestamp),
         state: "complete",
+      };
+    }
+    if (event.event_type === "run.queued") {
+      return {
+        title: "Steer queued",
+        meta: `${event.payload.pending_count || 1} pending`,
+        state: "active",
+      };
+    }
+    if (event.event_type === "run.dequeued") {
+      return {
+        title: "Steer applied",
+        meta: this._timeAgo(event.timestamp),
+        state: "active",
+      };
+    }
+    if (event.event_type === "run.queue_cleared") {
+      return {
+        title: "Steer queue cleared",
+        meta: event.payload.reason || "Run stopped",
+        state: "error",
       };
     }
     if (event.event_type === "artifact.added") {
@@ -2694,6 +2756,7 @@ class CodexBridgePanel extends HTMLElement {
       ["Model", thread?.effective_model || project?.default_model || "gpt-5.4"],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
+      ["Queued steer", String(thread?.pending_prompts?.length || 0)],
       ["Files", String(this._artifacts.length)],
     ];
 
@@ -3688,9 +3751,17 @@ class CodexBridgePanel extends HTMLElement {
     this._sequence = event.sequence;
     this._renderMessages();
     if (
-      ["run.started", "run.completed", "run.failed", "run.cancelled", "artifact.added", "session.bound"].includes(
-        event.event_type
-      )
+      [
+        "run.started",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+        "run.queued",
+        "run.dequeued",
+        "run.queue_cleared",
+        "artifact.added",
+        "session.bound",
+      ].includes(event.event_type)
     ) {
       this._scheduleLiveRefresh(threadId);
     }

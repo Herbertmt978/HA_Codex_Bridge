@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 
-from .models import RunMode, RunRecord, ThreadRecord, ThreadViewRecord
+from .models import PendingPromptRecord, RunMode, RunRecord, ThreadRecord, ThreadViewRecord
 from .storage import BridgeStorage
 
 
@@ -36,7 +36,7 @@ class BridgeRunner:
         with self._lock:
             record = self.storage.load_thread(thread_id)
             if record.status == "running":
-                raise ThreadBusyError(thread_id)
+                return self._queue_prompt(record, prompt)
 
             run = RunRecord(
                 run_id=f"run_{uuid4().hex[:12]}",
@@ -57,12 +57,7 @@ class BridgeRunner:
                     "text": prompt,
                 },
             )
-            worker = Thread(
-                target=self._run_prompt,
-                args=(self.storage.get_thread(thread_id), run, prompt),
-                daemon=True,
-            )
-            worker.start()
+            self._start_worker(self.storage.get_thread(thread_id), run, prompt)
             return run
 
     def cancel_run(self, thread_id: str) -> RunRecord:
@@ -80,6 +75,8 @@ class BridgeRunner:
             record.status = "idle"
             record.active_run_id = None
             record.last_error = "Run cancelled"
+            queued_count = len(record.pending_prompts)
+            record.pending_prompts.clear()
             self.storage.save_thread(record)
             self.storage.append_thread_event(
                 thread_id=thread_id,
@@ -89,11 +86,58 @@ class BridgeRunner:
                     "reason": "cancelled by user",
                 },
             )
+            if queued_count:
+                self.storage.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="run.queue_cleared",
+                    payload={
+                        "reason": "active run cancelled",
+                        "queued_count": queued_count,
+                    },
+                )
             return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
+
+    def _queue_prompt(self, record: ThreadRecord, prompt: str) -> RunRecord:
+        pending = PendingPromptRecord(
+            run_id=f"run_{uuid4().hex[:12]}",
+            prompt=prompt,
+            created_at=self.storage._now(),
+        )
+        record.pending_prompts.append(pending)
+        self.storage._touch_thread(record)
+        self.storage.save_thread(record)
+        self.storage.append_thread_event(
+            thread_id=record.thread_id,
+            event_type="message.created",
+            payload={
+                "run_id": pending.run_id,
+                "role": "user",
+                "text": prompt,
+                "queued": True,
+            },
+        )
+        self.storage.append_thread_event(
+            thread_id=record.thread_id,
+            event_type="run.queued",
+            payload={
+                "run_id": pending.run_id,
+                "pending_count": len(record.pending_prompts),
+            },
+        )
+        return RunRecord(run_id=pending.run_id, thread_id=record.thread_id, status="queued")
+
+    def _start_worker(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+        worker = Thread(
+            target=self._run_prompt,
+            args=(record, run, prompt),
+            daemon=True,
+        )
+        worker.start()
 
     def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
         stderr_lines: list[str] = []
         saw_run_completion = False
+        error: str | None = None
         try:
             process = subprocess.Popen(
                 self._build_command(record, prompt),
@@ -141,10 +185,10 @@ class BridgeRunner:
                     },
                 )
             self.storage.sync_thread_artifacts(record.thread_id)
-            self._complete_run(record.thread_id)
         except Exception as exc:
             if run.run_id in self._cancelled_runs:
                 return
+            error = str(exc)
             failure_payload = self._failure_payload(str(exc))
             self.storage.append_thread_event(
                 thread_id=record.thread_id,
@@ -154,11 +198,8 @@ class BridgeRunner:
                     **failure_payload,
                 },
             )
-            self._complete_run(record.thread_id, error=str(exc))
         finally:
-            with self._lock:
-                self._processes.pop(record.thread_id, None)
-                self._cancelled_runs.discard(run.run_id)
+            self._finish_run(record.thread_id, run.run_id, error=error)
 
     def _build_command(self, record: ThreadViewRecord, prompt: str) -> list[str]:
         prompt_with_context = self._compose_prompt(record, prompt)
@@ -306,9 +347,56 @@ class BridgeRunner:
             "failure_type": "run.failed",
         }
 
-    def _complete_run(self, thread_id: str, *, error: str | None = None) -> None:
-        record = self.storage.load_thread(thread_id)
-        record.status = "error" if error else "idle"
-        record.active_run_id = None
-        record.last_error = error
-        self.storage.save_thread(record)
+    def _finish_run(self, thread_id: str, run_id: str, *, error: str | None = None) -> None:
+        with self._lock:
+            was_cancelled = run_id in self._cancelled_runs
+            self._processes.pop(thread_id, None)
+            self._cancelled_runs.discard(run_id)
+            if was_cancelled:
+                return
+
+            record = self.storage.load_thread(thread_id)
+            if error:
+                queued_count = len(record.pending_prompts)
+                record.status = "error"
+                record.active_run_id = None
+                record.last_error = error
+                record.pending_prompts.clear()
+                self.storage.save_thread(record)
+                if queued_count:
+                    self.storage.append_thread_event(
+                        thread_id=thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "active run failed",
+                            "queued_count": queued_count,
+                        },
+                    )
+                return
+
+            if record.pending_prompts:
+                pending = record.pending_prompts.pop(0)
+                next_run = RunRecord(
+                    run_id=pending.run_id,
+                    thread_id=thread_id,
+                    status="running",
+                )
+                record.status = "running"
+                record.active_run_id = pending.run_id
+                record.last_error = None
+                self.storage.save_thread(record)
+                self.storage.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="run.dequeued",
+                    payload={
+                        "run_id": pending.run_id,
+                        "pending_count": len(record.pending_prompts),
+                    },
+                )
+                self._start_worker(self.storage.get_thread(thread_id), next_run, pending.prompt)
+                return
+
+            record.status = "idle"
+            record.active_run_id = None
+            record.last_error = None
+            self.storage.save_thread(record)

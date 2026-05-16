@@ -74,6 +74,12 @@ class ThreadEventRecord(BaseModel):
     timestamp: str
 
 
+class PendingPromptRecord(BaseModel):
+    run_id: str
+    prompt: str
+    created_at: str
+
+
 class ThreadRecord(BaseModel):
     thread_id: str
     project_id: str | None = None
@@ -85,6 +91,7 @@ class ThreadRecord(BaseModel):
     codex_session_id: str | None = None
     active_run_id: str | None = None
     last_error: str | None = None
+    pending_prompts: list[PendingPromptRecord] = Field(default_factory=list)
     attachments: list[AttachmentRecord] = Field(default_factory=list)
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
     model_override: str | None = None

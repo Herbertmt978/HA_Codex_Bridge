@@ -1,6 +1,7 @@
 import json
 import subprocess
 import time
+from threading import Event
 
 from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, RunMode
 from codex_bridge_service.runner import BridgeRunner
@@ -145,6 +146,76 @@ def test_runner_resumes_existing_session_for_follow_up_prompt_and_uses_overrides
     assert "-m" in argv
     assert "gpt-5.5" in argv
     assert "model_reasoning_effort=high" in " ".join(argv)
+
+
+def test_runner_queues_steer_prompt_submitted_while_run_is_active(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    class BlockingProcess:
+        instances = []
+
+        def __init__(self, command) -> None:
+            self.command = command
+            self.released = Event()
+            self.stdout = self._stdout()
+            self.stderr = iter([])
+            BlockingProcess.instances.append(self)
+
+        def _stdout(self):
+            prompt = self.command[self.command.index("--json") - 1]
+            yield json.dumps({"type": "thread.started", "thread_id": "019e08fb-92dc-7920-88f3-9fc949d1aef8"}) + "\n"
+            yield json.dumps({"type": "turn.started"}) + "\n"
+            assert self.released.wait(2), "fake codex process was not released"
+            yield json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "item_1", "type": "agent_message", "text": f"Echo: {prompt}"},
+                }
+            ) + "\n"
+            yield json.dumps({"type": "turn.completed", "usage": {}}) + "\n"
+
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "codex_bridge_service.runner.subprocess.Popen",
+        lambda command, **kwargs: BlockingProcess(command),
+    )
+
+    runner = BridgeRunner(storage=storage, codex_command="codex")
+    first = runner.submit_prompt(thread.thread_id, "Start the work")
+
+    deadline = time.time() + 2
+    while time.time() < deadline and not BlockingProcess.instances:
+        time.sleep(0.02)
+    assert storage.load_thread(thread.thread_id).status == "running"
+
+    queued = runner.submit_prompt(thread.thread_id, "Actually, steer toward the smaller fix")
+
+    assert first.status == "running"
+    assert queued.status == "queued"
+    assert storage.load_thread(thread.thread_id).pending_prompts[0].prompt == "Actually, steer toward the smaller fix"
+
+    BlockingProcess.instances[0].released.set()
+    deadline = time.time() + 2
+    while time.time() < deadline and len(BlockingProcess.instances) < 2:
+        time.sleep(0.02)
+    assert len(BlockingProcess.instances) == 2
+    BlockingProcess.instances[1].released.set()
+    _wait_for_idle(storage, thread.thread_id)
+
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+    prompts = [process.command[process.command.index("--json") - 1] for process in BlockingProcess.instances]
+
+    assert saved.status == "idle"
+    assert saved.active_run_id is None
+    assert saved.pending_prompts == []
+    assert prompts == ["Start the work", "Actually, steer toward the smaller fix"]
+    assert [event.event_type for event in events].count("message.created") == 2
+    assert any(event.event_type == "run.queued" for event in events)
+    assert [event.event_type for event in events].count("run.completed") == 2
 
 
 def test_runner_marks_thread_error_and_limits_blocked_after_credit_failure(tmp_path, monkeypatch) -> None:

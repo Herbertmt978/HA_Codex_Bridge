@@ -1,9 +1,12 @@
-import json
+﻿import json
+import time
+from threading import Event
 
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, CodexAccountRecord, RunRecord
+from codex_bridge_service.runner import BridgeRunner
 
 
 class FakeRunner:
@@ -461,6 +464,99 @@ def test_cancel_active_run_route_marks_thread_idle(tmp_path) -> None:
     assert cancel_response.json()["status"] == "cancelled"
     assert thread_after_cancel.json()["status"] == "idle"
     assert events_response.json()[-1]["event_type"] == "run.cancelled"
+
+
+def test_prompt_route_accepts_steer_message_while_thread_is_running(tmp_path, monkeypatch) -> None:
+    class BlockingProcess:
+        instances = []
+
+        def __init__(self, command) -> None:
+            self.command = command
+            self.released = Event()
+            self.stdout = self._stdout()
+            self.stderr = iter([])
+            BlockingProcess.instances.append(self)
+
+        def _stdout(self):
+            prompt = self.command[self.command.index("--json") - 1]
+            yield json.dumps({"type": "thread.started", "thread_id": "019e08fb-92dc-7920-88f3-9fc949d1aef8"}) + "\n"
+            yield json.dumps({"type": "turn.started"}) + "\n"
+            assert self.released.wait(2), "fake codex process was not released"
+            yield json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "item_1", "type": "agent_message", "text": f"Echo: {prompt}"},
+                }
+            ) + "\n"
+            yield json.dumps({"type": "turn.completed", "usage": {}}) + "\n"
+
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "codex_bridge_service.runner.subprocess.Popen",
+        lambda command, **kwargs: BlockingProcess(command),
+    )
+
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=lambda storage: BridgeRunner(storage=storage, codex_command="codex"),
+    )
+    client = TestClient(app)
+    thread_response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "Steerable", "mode": "full-auto"},
+    )
+    thread_id = thread_response.json()["thread_id"]
+    first_response = client.post(
+        f"/threads/{thread_id}/prompts",
+        headers={"Authorization": "Bearer secret"},
+        json={"prompt": "Start the work"},
+    )
+
+    deadline = time.time() + 2
+    while time.time() < deadline and not BlockingProcess.instances:
+        time.sleep(0.02)
+
+    steer_response = client.post(
+        f"/threads/{thread_id}/prompts",
+        headers={"Authorization": "Bearer secret"},
+        json={"prompt": "Steer toward the smaller fix"},
+    )
+
+    assert first_response.status_code == 202
+    assert steer_response.status_code == 202
+    assert steer_response.json()["status"] == "queued"
+
+    BlockingProcess.instances[0].released.set()
+    deadline = time.time() + 2
+    while time.time() < deadline and len(BlockingProcess.instances) < 2:
+        time.sleep(0.02)
+    assert len(BlockingProcess.instances) == 2
+    BlockingProcess.instances[1].released.set()
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        thread_after = client.get(
+            f"/threads/{thread_id}",
+            headers={"Authorization": "Bearer secret"},
+        ).json()
+        if thread_after["status"] == "idle":
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("thread did not return to idle in time")
+
+    events_response = client.get(
+        f"/threads/{thread_id}/events/replay",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert events_response.status_code == 200
+    assert any(event["event_type"] == "run.queued" for event in events_response.json())
+    assert events_response.json()[-1]["event_type"] == "run.completed"
 
 
 def test_thread_archive_restore_delete_and_include_archived_routes(tmp_path) -> None:
