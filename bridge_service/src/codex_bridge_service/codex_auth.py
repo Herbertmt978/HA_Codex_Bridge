@@ -16,6 +16,8 @@ _AUTH_FAILURE_MARKERS = (
     "not authenticated",
     "authentication failed",
 )
+_ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+_DEVICE_CODE_PATTERN = re.compile(r"\b(?=[A-Z0-9-]*\d)[A-Z0-9]{4,6}-[A-Z0-9]{4,6}\b")
 
 
 def is_codex_auth_failure(message: str | None) -> bool:
@@ -175,7 +177,8 @@ class CodexAuthManager:
                 )
 
     def _update_login_output(self, output_lines: list[str]) -> None:
-        text = "\n".join(output_lines)
+        clean_lines = [self._strip_ansi(line) for line in output_lines]
+        text = "\n".join(clean_lines)
         urls = re.findall(r"https?://[^\s)>\"]+", text)
         code = self._extract_user_code(text)
         with self._lock:
@@ -187,17 +190,25 @@ class CodexAuthManager:
                     "verification_uri": urls[0] if urls else self._status.verification_uri,
                     "login_url": urls[-1] if urls else self._status.login_url,
                     "user_code": code or self._status.user_code,
-                    "output_tail": output_lines[-20:],
+                    "output_tail": clean_lines[-20:],
                     "updated_at": self._now(),
                 }
             )
 
     def _extract_user_code(self, text: str) -> str | None:
-        labelled = re.search(r"(?:code|user code)[:\s]+([A-Z0-9-]{6,})", text, flags=re.IGNORECASE)
+        clean_text = self._strip_ansi(text)
+        labelled = re.search(
+            r"(?:one-time code|user code)[:\s\(\)A-Za-z0-9-]*?\n\s*([A-Z0-9]{4,6}-[A-Z0-9]{4,6})",
+            clean_text,
+            flags=re.IGNORECASE,
+        )
         if labelled:
             return labelled.group(1)
-        standalone = re.search(r"\b[A-Z0-9]{4}-[A-Z0-9]{4}\b", text)
+        standalone = _DEVICE_CODE_PATTERN.search(clean_text)
         return standalone.group(0) if standalone else None
+
+    def _strip_ansi(self, value: str) -> str:
+        return _ANSI_PATTERN.sub("", value)
 
     def _command_prefix(self) -> list[str]:
         target = Path(self.codex_command)
