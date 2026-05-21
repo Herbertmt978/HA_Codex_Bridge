@@ -30,6 +30,8 @@ class CodexAuthManager:
         self.codex_command = codex_command
         self._lock = Lock()
         self._process: subprocess.Popen[str] | None = None
+        self._last_auth_error: str | None = None
+        self._resolved_auth_error: str | None = None
         self._status = CodexAuthStatusRecord(
             state="unknown",
             message="Codex auth has not been checked by the bridge yet.",
@@ -40,9 +42,16 @@ class CodexAuthManager:
         with self._lock:
             current = self._status.model_copy(deep=True)
             login_is_running = self._process is not None and self._process.poll() is None
+            stale_auth_error = (
+                last_error is not None
+                and self._resolved_auth_error is not None
+                and last_error == self._resolved_auth_error
+            )
         if login_is_running:
             return current
-        if is_codex_auth_failure(last_error):
+        if is_codex_auth_failure(last_error) and not stale_auth_error:
+            with self._lock:
+                self._last_auth_error = last_error
             return CodexAuthStatusRecord(
                 state="expired",
                 auth_required=True,
@@ -134,6 +143,7 @@ class CodexAuthManager:
             with self._lock:
                 self._process = None
                 if return_code == 0:
+                    self._resolved_auth_error = self._last_auth_error
                     self._status = self._status.model_copy(
                         update={
                             "state": "ok",
