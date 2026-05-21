@@ -249,6 +249,41 @@ def test_runner_marks_thread_error_and_limits_blocked_after_credit_failure(tmp_p
     assert "Usage limit reached" in (limits.message or "")
 
 
+def test_runner_marks_thread_auth_expired_after_refresh_token_failure(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    class DummyProcess:
+        def __init__(self) -> None:
+            self.stdout = iter([json.dumps({"type": "turn.started"}) + "\n"])
+            self.stderr = iter(
+                [
+                    "failed to connect to websocket: HTTP error: 401 Unauthorized\n",
+                    "Your access token could not be refreshed because your refresh token was already used.\n",
+                ]
+            )
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", lambda *args, **kwargs: DummyProcess())
+
+    runner = BridgeRunner(storage=storage, codex_command="codex")
+    runner.submit_prompt(thread.thread_id, "Please keep going")
+    _wait_for_idle(storage, thread.thread_id)
+
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+
+    assert saved.status == "error"
+    assert saved.active_run_id is None
+    assert saved.last_error == "Codex login expired on the VM. Start a new VM sign-in from Home Assistant."
+    assert events[-1].event_type == "run.failed"
+    assert events[-1].payload["failure_type"] == "auth.expired"
+    assert events[-1].payload["auth_required"] is True
+    assert "refresh token" in events[-1].payload["raw_error"]
+
+
 def test_runner_marks_thread_error_after_silent_codex_timeout(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = _create_project_thread(storage, tmp_path)

@@ -5,6 +5,7 @@ from ..models import (
     BridgeDiagnosticsRecord,
     BridgeStatusRecord,
     CodexAccountRecord,
+    CodexAuthStatusRecord,
     SUPPORTED_MODELS,
     SUPPORTED_THINKING_LEVELS,
 )
@@ -21,6 +22,11 @@ def get_status(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
+    diagnostics = (
+        request.app.state.diagnostics_probe.probe()
+        if getattr(request.app.state, "diagnostics_probe", None) is not None
+        else BridgeDiagnosticsRecord()
+    )
     return BridgeStatusRecord(
         models=list(SUPPORTED_MODELS),
         thinking_levels=list(SUPPORTED_THINKING_LEVELS),
@@ -30,9 +36,10 @@ def get_status(
             if getattr(request.app.state, "account_probe", None) is not None
             else CodexAccountRecord()
         ),
-        diagnostics=(
-            request.app.state.diagnostics_probe.probe()
-            if getattr(request.app.state, "diagnostics_probe", None) is not None
-            else BridgeDiagnosticsRecord()
+        auth=(
+            request.app.state.auth_manager.status(last_error=diagnostics.last_error)
+            if getattr(request.app.state, "auth_manager", None) is not None
+            else CodexAuthStatusRecord()
         ),
+        diagnostics=diagnostics,
     )

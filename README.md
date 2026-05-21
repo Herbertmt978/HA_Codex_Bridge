@@ -16,7 +16,7 @@ The flow is:
   - Background runner that shells out to `codex exec --json` / `codex exec resume --json`.
 - `custom_components/codex_bridge/`
   - Home Assistant custom integration with config flow.
-  - WebSocket proxy commands for projects, threads, prompts, status, events, and artifacts.
+  - WebSocket proxy commands for projects, threads, prompts, status, Codex VM auth, events, and artifacts.
   - Authenticated HTTP proxy views for uploads and downloads.
   - Full-screen Home Assistant panel UI for project-first chat, file uploads, artifact downloads, model controls, limit status, and copy-friendly responses.
 
@@ -29,6 +29,7 @@ The flow is:
   - thinking level
 - Per-chat overrides can diverge from the project defaults without changing the whole project.
 - The panel surfaces live 5-hour and weekly limit snapshots from the Codex auth session when available.
+- Expired Codex logins are shown clearly with a VM sign-in action and copyable device-code details.
 - Chats can be archived, restored, or deleted from the left rail.
 - Folder uploads preserve relative paths for larger VBA/codebase drops.
 - Workspace artifacts can be previewed in-panel for text, image, and PDF outputs.
@@ -66,6 +67,8 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
 
 `CODEX_BRIDGE_BYPASS_SANDBOX=1` is recommended for isolated Windows VMs where the bridge should run with full local access and the Codex Windows sandbox helper has not been bootstrapped. It keeps file/tool workflows working through the bridge without depending on the missing sandbox setup marker and local sandbox users.
 
+If Codex reports that the refresh token was already used or a websocket request returns `401 Unauthorized`, the bridge will mark auth as expired and expose a VM sign-in action in Home Assistant. That flow can start and monitor sign-in from HA, but OpenAI still requires the account approval step to be completed from a device/browser that can reach ChatGPT or from the VM console.
+
 ## Home Assistant setup
 
 1. Copy `custom_components/codex_bridge` into your Home Assistant config's `custom_components/` directory, or install the repo through HACS.
@@ -77,15 +80,18 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
    - `Panel title`: the sidebar label you want in Home Assistant
 5. Open the new sidebar panel.
 
-## Upgrade to 0.4.11
+## Upgrade to 0.4.12
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.4.11`.
+2. Choose `Redownload` or update to `0.4.12`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.
 
 After the upgrade, you can:
+- see Codex refresh-token failures as a clear auth-expired banner instead of a raw websocket 401
+- start a VM-side Codex device sign-in from Home Assistant and copy the displayed device code/login URL
+- refresh the bridge auth status after completing sign-in on a phone, home browser, or the VM console
 - avoid permanently stuck runs when Codex stops emitting output; silent runs now fail cleanly after the bridge watchdog timeout
 - recover stale `running` chats after a bridge restart instead of leaving them pinned forever
 - create a project by entering only its name; the bridge creates a VM folder under `C:\CodexHA\project-workspaces`

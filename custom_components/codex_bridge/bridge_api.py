@@ -39,6 +39,20 @@ class BridgeApiClient:
     async def async_get_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/status")
 
+    async def async_get_auth_status(self) -> dict[str, Any]:
+        return await self._async_json("GET", "/auth/status")
+
+    async def async_start_auth_login(self, force_logout: bool = True) -> dict[str, Any]:
+        return await self._async_json(
+            "POST",
+            "/auth/device-login",
+            json_body={"force_logout": force_logout},
+            expected_status={202},
+        )
+
+    async def async_logout_auth(self) -> dict[str, Any]:
+        return await self._async_json("POST", "/auth/logout")
+
     async def async_list_projects(self) -> list[dict[str, Any]]:
         return await self._async_json("GET", "/projects")
 

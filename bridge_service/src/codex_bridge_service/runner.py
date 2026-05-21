@@ -7,6 +7,7 @@ from threading import Lock, Thread
 from time import monotonic
 from uuid import uuid4
 
+from .codex_auth import AUTH_EXPIRED_MESSAGE, is_codex_auth_failure
 from .models import PendingPromptRecord, RunMode, RunRecord, ThreadRecord, ThreadViewRecord
 from .storage import BridgeStorage
 
@@ -247,8 +248,8 @@ class BridgeRunner:
         except Exception as exc:
             if run.run_id in self._cancelled_runs:
                 return
-            error = str(exc)
             failure_payload = self._failure_payload(str(exc))
+            error = str(failure_payload["error"])
             self.storage.append_thread_event(
                 thread_id=record.thread_id,
                 event_type="run.failed",
@@ -442,6 +443,15 @@ class BridgeRunner:
         return False
 
     def _failure_payload(self, message: str) -> dict[str, object]:
+        if is_codex_auth_failure(message):
+            return {
+                "error": AUTH_EXPIRED_MESSAGE,
+                "raw_error": message,
+                "blocked": False,
+                "auth_required": True,
+                "failure_type": "auth.expired",
+            }
+
         lowered = message.lower()
         blocked = any(marker in lowered for marker in ("limit", "credit", "quota"))
         if blocked:

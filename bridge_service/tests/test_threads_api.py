@@ -5,7 +5,14 @@ from threading import Event
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
-from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, CodexAccountRecord, RunRecord
+from codex_bridge_service.models import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING_LEVEL,
+    BridgeDiagnosticsRecord,
+    CodexAccountRecord,
+    CodexAuthStatusRecord,
+    RunRecord,
+)
 from codex_bridge_service.runner import BridgeRunner
 
 
@@ -64,6 +71,43 @@ class FakeAccountProbe:
         )
 
 
+class FakeDiagnosticsProbe:
+    def probe(self) -> BridgeDiagnosticsRecord:
+        return BridgeDiagnosticsRecord(
+            bridge_version="0.4.test",
+            last_error="failed to connect to websocket: HTTP error: 401 Unauthorized",
+        )
+
+
+class FakeAuthManager:
+    def __init__(self) -> None:
+        self.started = False
+        self.logged_out = False
+
+    def status(self, *, last_error: str | None = None) -> CodexAuthStatusRecord:
+        if last_error:
+            return CodexAuthStatusRecord(
+                state="expired",
+                auth_required=True,
+                message="Codex login expired on the VM. Start a new VM sign-in from Home Assistant.",
+            )
+        return CodexAuthStatusRecord(state="ok", message="Codex login is ready.")
+
+    def start_device_login(self, *, force_logout: bool = True) -> CodexAuthStatusRecord:
+        self.started = True
+        return CodexAuthStatusRecord(
+            state="login_running",
+            auth_required=True,
+            message="Open the verification URL and enter the code.",
+            verification_uri="https://chatgpt.com/activate",
+            user_code="ABCD-EFGH",
+        )
+
+    def logout(self) -> CodexAuthStatusRecord:
+        self.logged_out = True
+        return CodexAuthStatusRecord(state="logged_out", auth_required=True, message="Logged out.")
+
+
 def test_health_project_create_and_status_require_token(tmp_path) -> None:
     app = create_app(root_path=tmp_path, auth_token="secret", account_probe=FakeAccountProbe())
     client = TestClient(app)
@@ -103,6 +147,46 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
     assert status_response.json()["thinking_levels"][2] == DEFAULT_THINKING_LEVEL
     assert status_response.json()["account"]["email"] == "person@example.com"
     assert status_response.json()["account"]["plan_type"] == "pro"
+
+
+def test_status_surfaces_codex_auth_expired_state(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        diagnostics_probe=FakeDiagnosticsProbe(),
+        auth_manager=FakeAuthManager(),
+    )
+    client = TestClient(app)
+
+    response = client.get("/status", headers={"Authorization": "Bearer secret"})
+
+    assert response.status_code == 200
+    assert response.json()["auth"]["state"] == "expired"
+    assert response.json()["auth"]["auth_required"] is True
+    assert "login expired" in response.json()["auth"]["message"]
+
+
+def test_auth_routes_start_device_login_and_logout_require_token(tmp_path) -> None:
+    auth_manager = FakeAuthManager()
+    app = create_app(root_path=tmp_path, auth_token="secret", auth_manager=auth_manager)
+    client = TestClient(app)
+
+    assert client.post("/auth/device-login", json={"force_logout": True}).status_code == 401
+
+    start_response = client.post(
+        "/auth/device-login",
+        headers={"Authorization": "Bearer secret"},
+        json={"force_logout": True},
+    )
+    logout_response = client.post("/auth/logout", headers={"Authorization": "Bearer secret"})
+
+    assert start_response.status_code == 202
+    assert start_response.json()["state"] == "login_running"
+    assert start_response.json()["user_code"] == "ABCD-EFGH"
+    assert logout_response.status_code == 200
+    assert logout_response.json()["state"] == "logged_out"
+    assert auth_manager.started is True
+    assert auth_manager.logged_out is True
 
 
 def test_project_create_can_auto_create_workspace_from_name(tmp_path) -> None:

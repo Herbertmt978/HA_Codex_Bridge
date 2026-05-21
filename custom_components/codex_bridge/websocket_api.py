@@ -14,6 +14,9 @@ from .runtime import async_get_runtime
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_config)
     websocket_api.async_register_command(hass, ws_get_status)
+    websocket_api.async_register_command(hass, ws_get_auth_status)
+    websocket_api.async_register_command(hass, ws_start_auth_login)
+    websocket_api.async_register_command(hass, ws_logout_auth)
     websocket_api.async_register_command(hass, ws_list_projects)
     websocket_api.async_register_command(hass, ws_create_project)
     websocket_api.async_register_command(hass, ws_update_project)
@@ -83,6 +86,46 @@ async def ws_get_status(
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_get_status())
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_auth_status"})
+@websocket_api.async_response
+async def ws_get_auth_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_get_auth_status())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/start_auth_login",
+        vol.Optional("force_logout", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_start_auth_login(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_start_auth_login(msg["force_logout"]),
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/logout_auth"})
+@websocket_api.async_response
+async def ws_logout_auth(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_logout_auth())
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_projects"})

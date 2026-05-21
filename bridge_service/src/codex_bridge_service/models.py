@@ -148,6 +148,17 @@ class CodexAccountRecord(BaseModel):
     updated_at: str | None = None
 
 
+class CodexAuthStatusRecord(BaseModel):
+    state: str = "unknown"
+    auth_required: bool = False
+    message: str | None = None
+    verification_uri: str | None = None
+    login_url: str | None = None
+    user_code: str | None = None
+    output_tail: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
 class DiagnosticToolRecord(BaseModel):
     name: str
     available: bool = False
@@ -174,6 +185,7 @@ class BridgeStatusRecord(BaseModel):
     thinking_levels: list[str] = Field(default_factory=lambda: list(SUPPORTED_THINKING_LEVELS))
     limits: LimitsStatusRecord = Field(default_factory=LimitsStatusRecord)
     account: CodexAccountRecord = Field(default_factory=CodexAccountRecord)
+    auth: CodexAuthStatusRecord = Field(default_factory=CodexAuthStatusRecord)
     diagnostics: BridgeDiagnosticsRecord = Field(default_factory=BridgeDiagnosticsRecord)
 
 

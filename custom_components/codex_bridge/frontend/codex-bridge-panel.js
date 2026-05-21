@@ -680,6 +680,39 @@ template.innerHTML = `
       line-height: 1.35;
     }
 
+    .banner-content {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .banner-message {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .banner-action {
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: inherit;
+      background: color-mix(in srgb, var(--surface-bg) 82%, transparent);
+    }
+
+    .banner-action.primary {
+      color: white;
+      border-color: color-mix(in srgb, var(--danger-color) 65%, black 10%);
+      background: linear-gradient(135deg, var(--danger-color), color-mix(in srgb, var(--danger-color) 72%, var(--brand-violet) 28%));
+      box-shadow: 0 8px 20px color-mix(in srgb, var(--danger-color) 18%, transparent);
+    }
+
     .status-banner.visible {
       display: grid;
     }
@@ -1672,6 +1705,15 @@ class CodexBridgePanel extends HTMLElement {
       case "copy-code-block":
         this._copyCodeBlock(actionTarget);
         break;
+      case "start-auth-login":
+        this._startAuthLogin();
+        break;
+      case "refresh-auth-status":
+        this._refreshAuthStatus();
+        break;
+      case "copy-auth-code":
+        this._copyAuthCode();
+        break;
       case "dismiss-banner":
         this._dismissStatusBanner();
         break;
@@ -2318,13 +2360,48 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     banner.className = `status-banner visible ${state.tone}`;
+    const actions = state.actions || [];
     banner.innerHTML = `
-      <span>${this._escapeHtml(state.message)}</span>
+      <div class="banner-content">
+        <span class="banner-message">${this._escapeHtml(state.message)}</span>
+        ${
+          actions.length
+            ? `<div class="banner-actions">
+                ${actions
+                  .map(
+                    (action) => `
+                      <button class="banner-action ${action.primary ? "primary" : ""}" type="button" data-action="${this._escapeHtml(action.action)}">
+                        ${this._escapeHtml(action.label)}
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
+      </div>
       <button class="banner-dismiss" type="button" data-action="dismiss-banner" title="Dismiss" aria-label="Dismiss">x</button>
     `;
   }
 
   _statusBannerState() {
+    const auth = this._status?.auth;
+    if (auth?.auth_required || ["expired", "login_failed", "login_running", "login_starting"].includes(auth?.state)) {
+      const message = this._authBannerMessage(auth);
+      const actions = [
+        { action: "start-auth-login", label: auth?.state === "login_running" ? "Restart VM sign-in" : "Start VM sign-in", primary: true },
+        { action: "refresh-auth-status", label: "Check again" },
+      ];
+      if (auth?.user_code) {
+        actions.push({ action: "copy-auth-code", label: "Copy code" });
+      }
+      return {
+        key: `auth:${auth?.state || "unknown"}:${message}:${auth?.user_code || ""}`,
+        tone: "error",
+        message,
+        actions,
+      };
+    }
     const limits = this._status?.limits;
     if (limits?.blocked) {
       const message = limits.message || "Codex reported that the current account is out of available usage.";
@@ -2350,6 +2427,20 @@ class CodexBridgePanel extends HTMLElement {
       };
     }
     return null;
+  }
+
+  _authBannerMessage(auth) {
+    const base = auth?.message || "Codex needs a fresh sign-in on the VM.";
+    if (auth?.state === "login_running") {
+      const code = auth.user_code ? ` Code: ${auth.user_code}.` : "";
+      const url = auth.verification_uri || auth.login_url;
+      const target = url ? ` Open ${url} from a device that can reach ChatGPT.` : " Complete the sign-in step from a device that can reach ChatGPT.";
+      return `${base}.${code}${target}`;
+    }
+    if (auth?.state === "login_failed") {
+      return `${base} You can restart the VM sign-in from here; if your work PC blocks ChatGPT, finish the device-code step on your phone, home browser, or the VM console.`;
+    }
+    return `${base} HA can start the VM sign-in and show the device code, but an invalid refresh token still needs approval from a device that can reach ChatGPT.`;
   }
 
   _dismissStatusBanner() {
@@ -2780,11 +2871,16 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     const tools = diagnostics.tools || [];
+    const auth = this._status?.auth;
     const rows = [
       ["Bridge", diagnostics.bridge_version || "Unknown"],
       ["Git", [diagnostics.git_branch, diagnostics.git_commit].filter(Boolean).join(" @ ") || "Unknown"],
       ["Python", diagnostics.python_version || "Unknown"],
       ["Codex CLI", diagnostics.codex_cli_version || "Unknown"],
+      ["Auth state", auth?.state || "Unknown"],
+      ["Auth message", auth?.message || "None"],
+      ["Device code", auth?.user_code || "None"],
+      ["Login URL", auth?.verification_uri || auth?.login_url || "None"],
       ["Uptime", this._formatDuration(diagnostics.service_uptime_seconds)],
       ["Last error", diagnostics.last_error || "None"],
     ];
@@ -3144,6 +3240,53 @@ class CodexBridgePanel extends HTMLElement {
       await this._callWS("cancel_run", { thread_id: this._selectedThreadId });
       this._clearError();
       await this._refreshActiveThread();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _startAuthLogin() {
+    try {
+      const auth = await this._callWS("start_auth_login", { force_logout: true });
+      this._status = {
+        ...(this._status || {}),
+        auth,
+      };
+      this._dismissedBannerKey = "";
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _refreshAuthStatus() {
+    try {
+      const [auth, status] = await Promise.all([
+        this._callWS("get_auth_status"),
+        this._callWS("get_status"),
+      ]);
+      this._status = {
+        ...(status || this._status || {}),
+        auth: auth || status?.auth,
+      };
+      this._dismissedBannerKey = "";
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _copyAuthCode() {
+    const auth = this._status?.auth;
+    const text = [auth?.user_code, auth?.verification_uri || auth?.login_url].filter(Boolean).join("\n");
+    if (!text) {
+      return;
+    }
+    try {
+      await this._writeClipboardText(text);
+      this._clearError();
     } catch (error) {
       this._setError(error);
     }
@@ -3540,16 +3683,7 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const helper = document.createElement("textarea");
-        helper.value = text;
-        document.body.appendChild(helper);
-        helper.select();
-        document.execCommand("copy");
-        helper.remove();
-      }
+      await this._writeClipboardText(text);
       this._clearError();
     } catch (error) {
       this._setError(error);
@@ -3563,20 +3697,24 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const helper = document.createElement("textarea");
-        helper.value = text;
-        document.body.appendChild(helper);
-        helper.select();
-        document.execCommand("copy");
-        helper.remove();
-      }
+      await this._writeClipboardText(text);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
+  }
+
+  async _writeClipboardText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    document.body.appendChild(helper);
+    helper.select();
+    document.execCommand("copy");
+    helper.remove();
   }
 
   _startPolling() {
