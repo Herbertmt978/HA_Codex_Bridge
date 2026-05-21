@@ -53,6 +53,7 @@ $env:CODEX_BRIDGE_ROOT_PATH = "C:\\CodexHA"
 $env:CODEX_BRIDGE_AUTH_TOKEN = "replace-this-with-a-long-random-token"
 $env:CODEX_BRIDGE_CODEX_WRAPPER_PATH = "C:\\Users\\Ashby\\.codex\\.sandbox-bin\\codex.exe"
 $env:CODEX_BRIDGE_BYPASS_SANDBOX = "1"
+$env:CODEX_BRIDGE_RUN_IDLE_TIMEOUT_SECONDS = "1800"
 ```
 
 Then start the bridge:
@@ -76,15 +77,17 @@ If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a
    - `Panel title`: the sidebar label you want in Home Assistant
 5. Open the new sidebar panel.
 
-## Upgrade to 0.4.9
+## Upgrade to 0.4.11
 
 1. In HACS, open `Codex Bridge`.
-2. Choose `Redownload` or update to `0.4.9`.
+2. Choose `Redownload` or update to `0.4.11`.
 3. Restart Home Assistant.
 4. Hard refresh the browser.
 5. Open `/codex-bridge`.
 
 After the upgrade, you can:
+- avoid permanently stuck runs when Codex stops emitting output; silent runs now fail cleanly after the bridge watchdog timeout
+- recover stale `running` chats after a bridge restart instead of leaving them pinned forever
 - create a project by entering only its name; the bridge creates a VM folder under `C:\CodexHA\project-workspaces`
 - use stable create/edit form buttons during background refreshes
 - read long workspace/account detail values without overlapping text

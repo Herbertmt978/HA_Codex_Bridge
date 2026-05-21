@@ -30,10 +30,12 @@ def build_app() -> FastAPI:
         limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
         account_probe=CodexAccountProbe(codex_home) if codex_home else None,
         codex_command=settings.codex_wrapper_path,
+        run_idle_timeout_seconds=settings.run_idle_timeout_seconds,
         runner_factory=lambda storage: BridgeRunner(
             storage=storage,
             codex_command=settings.codex_wrapper_path,
             bypass_sandbox=settings.bypass_sandbox,
+            idle_timeout_seconds=settings.run_idle_timeout_seconds,
         ),
     )
 

@@ -17,6 +17,7 @@ def create_app(
     account_probe: CodexAccountProbe | None = None,
     diagnostics_probe: BridgeDiagnosticsProbe | None = None,
     codex_command: str = "codex",
+    run_idle_timeout_seconds: float | None = 1800.0,
     runner_factory=None,
 ) -> FastAPI:
     app = FastAPI(title="Codex Bridge")
@@ -28,7 +29,15 @@ def create_app(
         storage=storage,
         codex_command=codex_command,
     )
-    app.state.runner = runner_factory(storage) if runner_factory is not None else BridgeRunner(storage)
+    app.state.runner = (
+        runner_factory(storage)
+        if runner_factory is not None
+        else BridgeRunner(
+            storage,
+            codex_command=codex_command,
+            idle_timeout_seconds=run_idle_timeout_seconds,
+        )
+    )
     app.include_router(artifacts.router)
     app.include_router(attachments.router)
     app.include_router(events.router)

@@ -249,6 +249,77 @@ def test_runner_marks_thread_error_and_limits_blocked_after_credit_failure(tmp_p
     assert "Usage limit reached" in (limits.message or "")
 
 
+def test_runner_marks_thread_error_after_silent_codex_timeout(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    class BlockingStdout:
+        def __init__(self, process) -> None:
+            self.process = process
+            self.started = False
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if not self.started:
+                self.started = True
+                return json.dumps({"type": "turn.started"}) + "\n"
+            while not self.process.terminated:
+                time.sleep(0.01)
+            raise StopIteration
+
+    class SilentProcess:
+        def __init__(self) -> None:
+            self.terminated = False
+            self.stdout = BlockingStdout(self)
+            self.stderr = iter([])
+
+        def poll(self):
+            return 1 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self) -> int:
+            return 1 if self.terminated else 0
+
+    monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", lambda *args, **kwargs: SilentProcess())
+
+    runner = BridgeRunner(storage=storage, codex_command="codex", idle_timeout_seconds=0.1)
+    runner.submit_prompt(thread.thread_id, "Hang forever")
+    _wait_for_idle(storage, thread.thread_id)
+
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+
+    assert saved.status == "error"
+    assert saved.active_run_id is None
+    assert "no output" in (saved.last_error or "")
+    assert events[-1].event_type == "run.failed"
+    assert "no output" in events[-1].payload["error"]
+
+
+def test_runner_marks_stale_active_run_error_on_startup(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+    record = storage.load_thread(thread.thread_id)
+    record.status = "running"
+    record.active_run_id = "run_stale"
+    storage.save_thread(record)
+
+    BridgeRunner(storage=storage, codex_command="codex")
+
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+
+    assert saved.status == "error"
+    assert saved.active_run_id is None
+    assert "Bridge restarted" in (saved.last_error or "")
+    assert events[-1].event_type == "run.failed"
+    assert events[-1].payload["run_id"] == "run_stale"
+
+
 def test_runner_can_cancel_active_process(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = _create_project_thread(storage, tmp_path)

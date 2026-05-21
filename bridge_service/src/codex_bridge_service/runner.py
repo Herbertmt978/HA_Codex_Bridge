@@ -2,7 +2,9 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from queue import Empty, Queue
 from threading import Lock, Thread
+from time import monotonic
 from uuid import uuid4
 
 from .models import PendingPromptRecord, RunMode, RunRecord, ThreadRecord, ThreadViewRecord
@@ -24,13 +26,18 @@ class BridgeRunner:
         codex_command: str = "codex",
         *,
         bypass_sandbox: bool = False,
+        idle_timeout_seconds: float | None = 1800.0,
+        recover_stale_runs: bool = True,
     ) -> None:
         self.storage = storage
         self.codex_command = codex_command
         self.bypass_sandbox = bypass_sandbox
+        self.idle_timeout_seconds = idle_timeout_seconds
         self._lock = Lock()
         self._processes: dict[str, subprocess.Popen[str]] = {}
         self._cancelled_runs: set[str] = set()
+        if recover_stale_runs:
+            self._recover_stale_runs()
 
     def submit_prompt(self, thread_id: str, prompt: str) -> RunRecord:
         with self._lock:
@@ -153,10 +160,53 @@ class BridgeRunner:
             with self._lock:
                 self._processes[record.thread_id] = process
 
-            for raw_line in process.stdout:
+            stream_queue: Queue[tuple[str, str | None]] = Queue()
+            Thread(
+                target=self._read_stream,
+                args=(process.stdout, "stdout", stream_queue),
+                daemon=True,
+            ).start()
+            Thread(
+                target=self._read_stream,
+                args=(process.stderr, "stderr", stream_queue),
+                daemon=True,
+            ).start()
+
+            stdout_done = False
+            stderr_done = False
+            last_output_at = monotonic()
+            while not stdout_done:
+                if (
+                    self.idle_timeout_seconds is not None
+                    and self._process_is_running(process)
+                    and monotonic() - last_output_at > self.idle_timeout_seconds
+                ):
+                    process.terminate()
+                    raise TimeoutError(
+                        f"codex produced no output for {self.idle_timeout_seconds:g} seconds"
+                    )
+
+                try:
+                    stream_name, raw_line = stream_queue.get(timeout=0.2)
+                except Empty:
+                    continue
+
+                if raw_line is None:
+                    if stream_name == "stdout":
+                        stdout_done = True
+                    elif stream_name == "stderr":
+                        stderr_done = True
+                    continue
+
                 line = raw_line.strip()
                 if not line:
                     continue
+                last_output_at = monotonic()
+
+                if stream_name == "stderr":
+                    stderr_lines.append(line)
+                    continue
+
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
@@ -166,8 +216,17 @@ class BridgeRunner:
                 if self._handle_codex_event(record.thread_id, run.run_id, event):
                     saw_run_completion = True
 
-            stderr_lines.extend(line.strip() for line in process.stderr if line.strip())
             return_code = process.wait()
+            while not stderr_done:
+                try:
+                    stream_name, raw_line = stream_queue.get(timeout=0.2)
+                except Empty:
+                    break
+                if stream_name == "stderr" and raw_line is None:
+                    stderr_done = True
+                    continue
+                if stream_name == "stderr" and raw_line and raw_line.strip():
+                    stderr_lines.append(raw_line.strip())
             if run.run_id in self._cancelled_runs:
                 self.storage.sync_thread_artifacts(record.thread_id)
                 return
@@ -200,6 +259,58 @@ class BridgeRunner:
             )
         finally:
             self._finish_run(record.thread_id, run.run_id, error=error)
+
+    def _read_stream(
+        self,
+        stream,
+        stream_name: str,
+        stream_queue: Queue[tuple[str, str | None]],
+    ) -> None:
+        try:
+            for raw_line in stream:
+                stream_queue.put((stream_name, raw_line))
+        finally:
+            stream_queue.put((stream_name, None))
+
+    def _process_is_running(self, process) -> bool:
+        poll = getattr(process, "poll", None)
+        if poll is None:
+            return True
+        return poll() is None
+
+    def _recover_stale_runs(self) -> None:
+        for thread in self.storage.list_threads(include_archived=True):
+            record = self.storage.load_thread(thread.thread_id)
+            if record.status != "running" or not record.active_run_id:
+                continue
+
+            run_id = record.active_run_id
+            queued_count = len(record.pending_prompts)
+            message = "Bridge restarted while this run was active; the previous Codex process can no longer be tracked."
+            record.status = "error"
+            record.active_run_id = None
+            record.last_error = message
+            record.pending_prompts.clear()
+            self.storage.save_thread(record)
+            self.storage.append_thread_event(
+                thread_id=record.thread_id,
+                event_type="run.failed",
+                payload={
+                    "run_id": run_id,
+                    "error": message,
+                    "blocked": False,
+                    "failure_type": "run.orphaned",
+                },
+            )
+            if queued_count:
+                self.storage.append_thread_event(
+                    thread_id=record.thread_id,
+                    event_type="run.queue_cleared",
+                    payload={
+                        "reason": "bridge restarted",
+                        "queued_count": queued_count,
+                    },
+                )
 
     def _build_command(self, record: ThreadViewRecord, prompt: str) -> list[str]:
         prompt_with_context = self._compose_prompt(record, prompt)

@@ -11,3 +11,4 @@ class Settings(BaseSettings):
     codex_wrapper_path: str = "codex"
     codex_home: str | None = None
     bypass_sandbox: bool = False
+    run_idle_timeout_seconds: float | None = 1800.0
