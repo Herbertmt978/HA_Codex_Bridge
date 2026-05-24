@@ -173,7 +173,7 @@ def test_codex_account_record_round_trips_safe_profile_fields() -> None:
 
 def test_bridge_diagnostics_record_round_trips() -> None:
     diagnostics = BridgeDiagnosticsRecord(
-        bridge_version="0.4.14",
+        bridge_version="0.4.15",
         git_commit="abc1234",
         python_version="3.12.10",
         service_uptime_seconds=12.5,
@@ -190,7 +190,7 @@ def test_bridge_diagnostics_record_round_trips() -> None:
 
     restored = BridgeDiagnosticsRecord.model_validate(diagnostics.model_dump())
 
-    assert restored.bridge_version == "0.4.14"
+    assert restored.bridge_version == "0.4.15"
     assert restored.tools[0].available is True
 
 

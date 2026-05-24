@@ -2412,6 +2412,9 @@ class CodexBridgePanel extends HTMLElement {
       };
     }
     if (this._activeThread?.last_error) {
+      if (this._isResolvedAuthError(this._activeThread.last_error)) {
+        return null;
+      }
       return {
         key: `thread:${this._selectedThreadId}:${this._activeThread.last_error}`,
         tone: "error",
@@ -2420,6 +2423,9 @@ class CodexBridgePanel extends HTMLElement {
     }
     const diagnosticsError = this._status?.diagnostics?.last_error;
     if (diagnosticsError) {
+      if (this._isResolvedAuthError(diagnosticsError)) {
+        return null;
+      }
       return {
         key: `diagnostics:${diagnosticsError}`,
         tone: "error",
@@ -2441,6 +2447,19 @@ class CodexBridgePanel extends HTMLElement {
       return `${base} You can restart the VM sign-in from here; if your work PC blocks ChatGPT, finish the device-code step on your phone, home browser, or the VM console.`;
     }
     return `${base} HA can start the VM sign-in and show the device code, but an invalid refresh token still needs approval from a device that can reach ChatGPT.`;
+  }
+
+  _isResolvedAuthError(message) {
+    const auth = this._status?.auth;
+    if (auth?.auth_required || auth?.state !== "ok") {
+      return false;
+    }
+    const lowered = String(message || "").toLowerCase();
+    return (
+      lowered.includes("codex login expired") ||
+      lowered.includes("401 unauthorized") ||
+      lowered.includes("refresh token")
+    );
   }
 
   _dismissStatusBanner() {
