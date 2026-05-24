@@ -2450,8 +2450,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _isResolvedAuthError(message) {
-    const auth = this._status?.auth;
-    if (auth?.auth_required || auth?.state !== "ok") {
+    if (!this._authLooksRecovered()) {
       return false;
     }
     const lowered = String(message || "").toLowerCase();
@@ -2460,6 +2459,17 @@ class CodexBridgePanel extends HTMLElement {
       lowered.includes("401 unauthorized") ||
       lowered.includes("refresh token")
     );
+  }
+
+  _authLooksRecovered() {
+    const auth = this._status?.auth;
+    if (auth?.auth_required) {
+      return false;
+    }
+    if (auth?.state === "ok") {
+      return true;
+    }
+    return Boolean(this._status?.account?.available && this._status?.limits?.available);
   }
 
   _dismissStatusBanner() {
