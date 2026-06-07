@@ -3,6 +3,7 @@ import mimetypes
 import string
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from threading import Lock
 from typing import BinaryIO
 from uuid import uuid4
 import zipfile
@@ -23,6 +24,7 @@ from .models import (
     ThreadEventRecord,
     ThreadRecord,
     ThreadViewRecord,
+    normalize_model,
 )
 
 _UNSET = object()
@@ -60,6 +62,7 @@ class BridgeStorage:
         self.logs_dir = self.root / "logs"
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
+        self._event_lock = Lock()
 
         for directory in (
             self.projects_dir,
@@ -197,6 +200,7 @@ class BridgeStorage:
         if not target.exists():
             raise ProjectNotFoundError(project_id)
         record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        record = self._ensure_project_defaults(record)
         if project_id == self._imported_project_id() and record.kind is not ProjectKind.IMPORTED:
             record.kind = ProjectKind.IMPORTED
             record.name = self.imported_project_name
@@ -207,11 +211,21 @@ class BridgeStorage:
             self.save_project(record)
         return record
 
+    def _ensure_project_defaults(self, record: ProjectRecord) -> ProjectRecord:
+        normalized_model = normalize_model(record.default_model)
+        if normalized_model != record.default_model:
+            record.default_model = normalized_model
+            record.updated_at = self._now()
+            self.save_project(record)
+        return record
+
     def list_projects(self) -> list[ProjectRecord]:
         records = {
             record.project_id: record
             for record in [
-                ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                self._ensure_project_defaults(
+                    ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                )
                 for path in self.projects_dir.glob("*.json")
             ]
         }
@@ -254,7 +268,7 @@ class BridgeStorage:
             name=name.strip(),
             root_path=str(project_root),
             kind=ProjectKind.PROJECT,
-            default_model=default_model or DEFAULT_MODEL,
+            default_model=normalize_model(default_model),
             default_thinking_level=default_thinking_level or DEFAULT_THINKING_LEVEL,
             created_at=now,
             updated_at=now,
@@ -281,7 +295,7 @@ class BridgeStorage:
             normalized.mkdir(parents=True, exist_ok=True)
             record.root_path = str(normalized)
         if default_model is not None:
-            record.default_model = default_model or DEFAULT_MODEL
+            record.default_model = normalize_model(default_model)
         if default_thinking_level is not None:
             record.default_thinking_level = default_thinking_level or DEFAULT_THINKING_LEVEL
         record.updated_at = self._now()
@@ -369,6 +383,7 @@ class BridgeStorage:
             raise ThreadNotFoundError(thread_id)
         record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
         record = self._ensure_thread_project(record)
+        record = self._ensure_thread_model(record)
         return self._ensure_thread_timestamps(record)
 
     def get_thread(self, thread_id: str) -> ThreadViewRecord:
@@ -422,7 +437,7 @@ class BridgeStorage:
             workspace_path=str(workspace_path),
             status="idle",
             mode=mode,
-            model_override=model_override,
+            model_override=normalize_model(model_override) if model_override else None,
             thinking_override=thinking_override,
             created_at=now,
             updated_at=now,
@@ -463,7 +478,7 @@ class BridgeStorage:
         if mode is not None:
             record.mode = mode
         if model_override is not _UNSET:
-            record.model_override = model_override
+            record.model_override = normalize_model(model_override) if model_override else None
         if thinking_override is not _UNSET:
             record.thinking_override = thinking_override
         self._touch_thread(record)
@@ -543,9 +558,17 @@ class BridgeStorage:
         self.save_thread(record)
         return record
 
+    def _ensure_thread_model(self, record: ThreadRecord) -> ThreadRecord:
+        if record.model_override:
+            normalized_model = normalize_model(record.model_override)
+            if normalized_model != record.model_override:
+                record.model_override = None
+                self.save_thread(record)
+        return record
+
     def _resolve_thread(self, record: ThreadRecord) -> ThreadViewRecord:
         project = self.load_project(record.project_id or self.ensure_imported_project().project_id)
-        effective_model = record.model_override or project.default_model
+        effective_model = normalize_model(record.model_override or project.default_model)
         effective_thinking_level = record.thinking_override or project.default_thinking_level
         return ThreadViewRecord(
             **record.model_dump(),
@@ -565,20 +588,21 @@ class BridgeStorage:
         event_type: str,
         payload: dict[str, object],
     ) -> ThreadEventRecord:
-        sequence = self._next_thread_event_sequence(thread_id)
-        record = ThreadEventRecord(
-            event_id=f"evt_{uuid4().hex[:12]}",
-            thread_id=thread_id,
-            sequence=sequence,
-            event_type=event_type,
-            payload=payload,
-            timestamp=self._now(),
-        )
-        target = self._event_log_path(thread_id)
-        with target.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(record.model_dump()))
-            stream.write("\n")
-        return record
+        with self._event_lock:
+            sequence = self._next_thread_event_sequence(thread_id)
+            record = ThreadEventRecord(
+                event_id=f"evt_{uuid4().hex[:12]}",
+                thread_id=thread_id,
+                sequence=sequence,
+                event_type=event_type,
+                payload=payload,
+                timestamp=self._now(),
+            )
+            target = self._event_log_path(thread_id)
+            with target.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(record.model_dump()))
+                stream.write("\n")
+            return record
 
     def list_thread_events(self, thread_id: str, *, after: int | None = None) -> list[ThreadEventRecord]:
         target = self._event_log_path(thread_id)

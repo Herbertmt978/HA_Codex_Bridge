@@ -3,6 +3,7 @@ from codex_bridge_service.models import (
     AttachmentRecord,
     BridgeDiagnosticsRecord,
     CodexAccountRecord,
+    DEFAULT_MODEL,
     DiagnosticToolRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
@@ -93,7 +94,7 @@ def test_thread_view_record_round_trips_effective_settings() -> None:
         ],
         model_override="gpt-5.5",
         thinking_override="high",
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
         effective_model="gpt-5.5",
         effective_thinking_level="high",
@@ -105,7 +106,7 @@ def test_thread_view_record_round_trips_effective_settings() -> None:
     assert payload["mode"] == "edit"
     assert restored.project_name == "Artifact thread"
     assert restored.project_root_path == "C:/CodexHA/projects/artifacts"
-    assert restored.default_model == "gpt-5.4"
+    assert restored.default_model == DEFAULT_MODEL
     assert restored.default_thinking_level == "medium"
     assert restored.effective_model == "gpt-5.5"
     assert restored.effective_thinking_level == "high"
@@ -117,7 +118,7 @@ def test_project_record_and_limits_round_trip() -> None:
         project_id="prj_1",
         name="Home Assistant",
         root_path="C:/Projects/HomeAssistant",
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
         created_at="2026-05-08T18:40:00Z",
         updated_at="2026-05-08T18:40:00Z",
@@ -173,7 +174,7 @@ def test_codex_account_record_round_trips_safe_profile_fields() -> None:
 
 def test_bridge_diagnostics_record_round_trips() -> None:
     diagnostics = BridgeDiagnosticsRecord(
-        bridge_version="0.4.16",
+        bridge_version="0.4.17",
         git_commit="abc1234",
         python_version="3.12.10",
         service_uptime_seconds=12.5,
@@ -190,7 +191,7 @@ def test_bridge_diagnostics_record_round_trips() -> None:
 
     restored = BridgeDiagnosticsRecord.model_validate(diagnostics.model_dump())
 
-    assert restored.bridge_version == "0.4.16"
+    assert restored.bridge_version == "0.4.17"
     assert restored.tools[0].available is True
 
 

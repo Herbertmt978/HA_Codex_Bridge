@@ -1455,7 +1455,7 @@ class CodexBridgePanel extends HTMLElement {
     this._projectForm = {
       name: "",
       rootPath: "",
-      defaultModel: "gpt-5.4",
+      defaultModel: "gpt-5.5",
       defaultThinkingLevel: "medium",
     };
     this._threadForm = {
@@ -2242,7 +2242,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     const thread = this._activeThread;
     const project = this._activeProject();
-    const models = this._status?.models || ["gpt-5.4"];
+    const models = this._status?.models || ["gpt-5.5"];
     const thinkingLevels = this._status?.thinking_levels || ["medium"];
     const limits = this._status?.limits;
     const toolbarKey = JSON.stringify({
@@ -2283,7 +2283,7 @@ class CodexBridgePanel extends HTMLElement {
                     `<option value="${this._escapeHtml(model)}" ${model === modelValue ? "selected" : ""}>${this._escapeHtml(model)}</option>`
                 ).join("")}
               </select>
-              <span class="setting-foot">Effective ${this._escapeHtml(thread.effective_model || project?.default_model || "gpt-5.4")}</span>
+              <span class="setting-foot">Effective ${this._escapeHtml(thread.effective_model || project?.default_model || "gpt-5.5")}</span>
             `
             : `<span class="setting-foot">Select a chat.</span>`}
         </div>
@@ -2873,7 +2873,7 @@ class CodexBridgePanel extends HTMLElement {
       ["Workspace", thread?.workspace_path || project?.root_path || "Not selected"],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
       ["Mode", thread?.mode || "full-auto"],
-      ["Model", thread?.effective_model || project?.default_model || "gpt-5.4"],
+      ["Model", thread?.effective_model || project?.default_model || "gpt-5.5"],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
       ["Queued steer", String(thread?.pending_prompts?.length || 0)],
@@ -3020,7 +3020,7 @@ class CodexBridgePanel extends HTMLElement {
     this._projectForm = {
       name: "",
       rootPath: "",
-      defaultModel: "gpt-5.4",
+      defaultModel: "gpt-5.5",
       defaultThinkingLevel: "medium",
     };
     this._folderDraft = "";
@@ -4219,7 +4219,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _modelOptions(selectedValue) {
-    const models = this._status?.models || ["gpt-5.4"];
+    const models = this._status?.models || ["gpt-5.5"];
     return models
       .map(
         (model) =>

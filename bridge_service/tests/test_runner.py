@@ -284,6 +284,49 @@ def test_runner_marks_thread_auth_expired_after_refresh_token_failure(tmp_path, 
     assert "refresh token" in events[-1].payload["raw_error"]
 
 
+def test_runner_prefers_structured_codex_failure_over_stderr_tail(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    api_error = {
+        "type": "error",
+        "status": 400,
+        "error": {
+            "type": "invalid_request_error",
+            "message": "The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account.",
+        },
+    }
+
+    class DummyProcess:
+        def __init__(self) -> None:
+            self.stdout = iter(
+                [
+                    json.dumps({"type": "turn.started"}) + "\n",
+                    json.dumps({"type": "error", "message": json.dumps(api_error)}) + "\n",
+                    json.dumps({"type": "turn.failed", "error": {"message": json.dumps(api_error)}}) + "\n",
+                ]
+            )
+            self.stderr = iter(["Reading additional input from stdin...\n"])
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", lambda *args, **kwargs: DummyProcess())
+
+    runner = BridgeRunner(storage=storage, codex_command="codex")
+    runner.submit_prompt(thread.thread_id, "Please keep going")
+    _wait_for_idle(storage, thread.thread_id)
+
+    saved = storage.load_thread(thread.thread_id)
+    events = storage.list_thread_events(thread.thread_id)
+
+    assert saved.status == "error"
+    assert saved.last_error == api_error["error"]["message"]
+    assert events[-1].event_type == "run.failed"
+    assert events[-1].payload["failure_type"] == "model.unsupported"
+    assert "Reading additional input" not in events[-1].payload["error"]
+
+
 def test_runner_marks_thread_error_after_silent_codex_timeout(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = _create_project_thread(storage, tmp_path)

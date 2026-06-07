@@ -143,7 +143,7 @@ async def ws_list_projects(
         vol.Required("type"): f"{DOMAIN}/create_project",
         vol.Required("name"): str,
         vol.Optional("root_path"): vol.Any(None, str),
-        vol.Optional("default_model", default="gpt-5.4"): str,
+        vol.Optional("default_model", default="gpt-5.5"): str,
         vol.Optional("default_thinking_level", default="medium"): str,
     }
 )

@@ -144,6 +144,7 @@ class BridgeRunner:
 
     def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
         stderr_lines: list[str] = []
+        codex_error: str | None = None
         saw_run_completion = False
         error: str | None = None
         try:
@@ -214,6 +215,7 @@ class BridgeRunner:
                     stderr_lines.append(line)
                     continue
 
+                codex_error = self._extract_codex_error(event) or codex_error
                 if self._handle_codex_event(record.thread_id, run.run_id, event):
                     saw_run_completion = True
 
@@ -233,7 +235,8 @@ class BridgeRunner:
                 return
             if return_code != 0:
                 raise RuntimeError(
-                    stderr_lines[-1] if stderr_lines else f"codex exited with code {return_code}"
+                    codex_error
+                    or (stderr_lines[-1] if stderr_lines else f"codex exited with code {return_code}")
                 )
             if not saw_run_completion:
                 self.storage.append_thread_event(
@@ -442,6 +445,41 @@ class BridgeRunner:
         )
         return False
 
+    def _extract_codex_error(self, event: dict[str, object]) -> str | None:
+        event_type = str(event.get("type", ""))
+        if event_type == "error":
+            return self._error_message(event.get("message"))
+        if event_type == "turn.failed":
+            return self._error_message(event.get("error"))
+        return None
+
+    def _error_message(self, value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            nested_error = value.get("error")
+            if nested_error is not None:
+                nested = self._error_message(nested_error)
+                if nested:
+                    return nested
+            nested_message = value.get("message")
+            if nested_message is not None:
+                nested = self._error_message(nested_message)
+                if nested:
+                    return nested
+            return None
+        if isinstance(value, str):
+            message = value.strip()
+            if not message:
+                return None
+            if message.startswith("{"):
+                try:
+                    return self._error_message(json.loads(message)) or message
+                except json.JSONDecodeError:
+                    return message
+            return message
+        return str(value)
+
     def _failure_payload(self, message: str) -> dict[str, object]:
         if is_codex_auth_failure(message):
             return {
@@ -453,6 +491,13 @@ class BridgeRunner:
             }
 
         lowered = message.lower()
+        if "model is not supported" in lowered:
+            return {
+                "error": message,
+                "blocked": False,
+                "failure_type": "model.unsupported",
+            }
+
         blocked = any(marker in lowered for marker in ("limit", "credit", "quota"))
         if blocked:
             self.storage.mark_limits_blocked(message)

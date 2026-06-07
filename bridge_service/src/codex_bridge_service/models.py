@@ -4,16 +4,20 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-DEFAULT_MODEL = "gpt-5.4"
+DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_THINKING_LEVEL = "medium"
 SUPPORTED_MODELS = [
-    "gpt-5.4",
     "gpt-5.5",
     "gpt-5.4-mini",
+]
+LEGACY_UNSUPPORTED_MODELS = {
+    "gpt-5",
+    "gpt-5.1",
+    "gpt-5.2",
     "gpt-5.3-codex",
     "gpt-5.3-codex-spark",
-    "gpt-5.2",
-]
+    "gpt-5.4",
+}
 SUPPORTED_THINKING_LEVELS = [
     "minimal",
     "low",
@@ -21,6 +25,15 @@ SUPPORTED_THINKING_LEVELS = [
     "high",
     "xhigh",
 ]
+
+
+def normalize_model(model: str | None) -> str:
+    if not model or not model.strip():
+        return DEFAULT_MODEL
+    candidate = model.strip()
+    if candidate in LEGACY_UNSUPPORTED_MODELS:
+        return DEFAULT_MODEL
+    return candidate
 
 
 class RunMode(StrEnum):

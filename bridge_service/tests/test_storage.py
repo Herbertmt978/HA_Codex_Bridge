@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from codex_bridge_service.limits import CodexLimitsProbe
-from codex_bridge_service.models import ProjectKind, RunMode
+from codex_bridge_service.models import DEFAULT_MODEL, ProjectKind, RunMode
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -16,7 +16,7 @@ def test_create_project_persists_defaults_and_root_path(tmp_path) -> None:
     project = storage.create_project(
         name="HA Workspace",
         root_path=str(tmp_path / "vm-projects" / "ha"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
 
@@ -27,7 +27,7 @@ def test_create_project_persists_defaults_and_root_path(tmp_path) -> None:
     assert saved_path.exists()
     assert Path(project.root_path).exists()
     assert payload["name"] == "HA Workspace"
-    assert payload["default_model"] == "gpt-5.4"
+    assert payload["default_model"] == DEFAULT_MODEL
     assert payload["default_thinking_level"] == "medium"
 
 
@@ -36,7 +36,7 @@ def test_create_project_without_root_path_creates_named_workspace(tmp_path) -> N
 
     project = storage.create_project(
         name="Power Apps",
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
 
@@ -59,7 +59,7 @@ def test_create_thread_persists_project_metadata_and_defaults(tmp_path) -> None:
     project = storage.create_project(
         name="Bridge MVP",
         root_path=str(tmp_path / "projects" / "bridge-mvp"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
 
@@ -76,9 +76,9 @@ def test_create_thread_persists_project_metadata_and_defaults(tmp_path) -> None:
     assert record.project_id == project.project_id
     assert record.project_name == "Bridge MVP"
     assert record.workspace_path == str(tmp_path / "projects" / "bridge-mvp")
-    assert record.default_model == "gpt-5.4"
+    assert record.default_model == DEFAULT_MODEL
     assert record.default_thinking_level == "medium"
-    assert record.effective_model == "gpt-5.4"
+    assert record.effective_model == DEFAULT_MODEL
     assert record.effective_thinking_level == "medium"
     assert payload["project_id"] == project.project_id
     assert payload["workspace_path"] == str(tmp_path / "projects" / "bridge-mvp")
@@ -93,7 +93,7 @@ def test_create_thread_rejects_blank_title(tmp_path) -> None:
     project = storage.create_project(
         name="Default",
         root_path=str(tmp_path / "projects" / "default"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
 
@@ -130,7 +130,7 @@ def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
     project = storage.create_project(
         name="Bridge MVP",
         root_path=str(tmp_path / "projects" / "bridge-mvp"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     record = storage.create_thread(title="Bridge MVP", mode=RunMode.FULL_AUTO, project_id=project.project_id)
@@ -168,7 +168,7 @@ def test_attach_file_accepts_stream_content_for_large_uploads(tmp_path) -> None:
     project = storage.create_project(
         name="Large uploads",
         root_path=str(tmp_path / "projects" / "large-uploads"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     record = storage.create_thread(title="Large uploads", mode=RunMode.FULL_AUTO, project_id=project.project_id)
@@ -193,7 +193,7 @@ def test_attach_file_preserves_relative_path_for_folder_uploads(tmp_path) -> Non
     project = storage.create_project(
         name="Folder uploads",
         root_path=str(tmp_path / "projects" / "folder-uploads"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     record = storage.create_thread(title="Folder target", mode=RunMode.FULL_AUTO, project_id=project.project_id)
@@ -219,7 +219,7 @@ def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
     project = storage.create_project(
         name="Second",
         root_path=str(tmp_path / "projects" / "second"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     first = storage.create_thread(title="First", mode=RunMode.FULL_AUTO, project_id=project.project_id)
@@ -253,7 +253,7 @@ def test_create_workspace_archive_packages_workspace_and_uploads(tmp_path) -> No
     project = storage.create_project(
         name="Archive project",
         root_path=str(tmp_path / "projects" / "archive-project"),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     thread = storage.create_thread(
@@ -344,6 +344,8 @@ def test_existing_special_projects_are_migrated_to_correct_kind(tmp_path) -> Non
 
     assert imported.kind is ProjectKind.IMPORTED
     assert direct.kind is ProjectKind.DIRECT
+    assert imported.default_model == DEFAULT_MODEL
+    assert direct.default_model == DEFAULT_MODEL
 
 
 def test_archive_restore_and_delete_thread_metadata(tmp_path) -> None:
@@ -370,7 +372,7 @@ def test_archive_restore_and_delete_project_metadata(tmp_path) -> None:
     project = storage.create_project(
         name="Archive project",
         root_path=str(project_root),
-        default_model="gpt-5.4",
+        default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
     thread = storage.create_thread(
