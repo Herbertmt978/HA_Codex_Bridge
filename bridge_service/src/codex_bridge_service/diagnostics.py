@@ -13,7 +13,7 @@ from .models import BridgeDiagnosticsRecord, DiagnosticToolRecord
 if TYPE_CHECKING:
     from .storage import BridgeStorage
 
-FALLBACK_BRIDGE_VERSION = "0.4.17"
+FALLBACK_BRIDGE_VERSION = "0.4.18"
 DEFAULT_TOOL_NAMES = ("python", "git", "node", "npm", "rg", "uv", "gh", "codex", "fd", "jq", "7z")
 
 
@@ -113,12 +113,8 @@ class BridgeDiagnosticsProbe:
         return output[0][:220] if output else None
 
     def _last_thread_error(self) -> str | None:
-        errored_threads = [
-            thread
-            for thread in self.storage.list_threads(include_archived=True)
-            if thread.last_error
-        ]
-        if not errored_threads:
+        threads = self.storage.list_threads(include_archived=False)
+        if not threads:
             return None
-        latest = max(errored_threads, key=lambda thread: thread.updated_at or thread.created_at or "")
+        latest = max(threads, key=lambda thread: thread.updated_at or thread.created_at or "")
         return latest.last_error

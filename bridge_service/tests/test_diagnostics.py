@@ -34,3 +34,17 @@ def test_diagnostics_probe_surfaces_latest_thread_error(tmp_path) -> None:
     diagnostics = BridgeDiagnosticsProbe(storage=storage, tool_names=(), cache_seconds=0).probe()
 
     assert diagnostics.last_error == "Codex failed"
+
+
+def test_diagnostics_probe_clears_stale_error_after_newer_healthy_thread(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path / "bridge")
+    broken = storage.create_thread(title="Broken run", mode="full-auto")
+    saved = storage.load_thread(broken.thread_id)
+    saved.status = "error"
+    saved.last_error = "Codex failed"
+    storage.save_thread(saved)
+    storage.create_thread(title="Recovered run", mode="full-auto")
+
+    diagnostics = BridgeDiagnosticsProbe(storage=storage, tool_names=(), cache_seconds=0).probe()
+
+    assert diagnostics.last_error is None
