@@ -2422,7 +2422,7 @@ class CodexBridgePanel extends HTMLElement {
       };
     }
     const diagnosticsError = this._status?.diagnostics?.last_error;
-    if (diagnosticsError) {
+    if (diagnosticsError && !this._activeThread) {
       if (this._isResolvedAuthError(diagnosticsError)) {
         return null;
       }
