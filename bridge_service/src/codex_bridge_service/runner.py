@@ -27,12 +27,14 @@ class BridgeRunner:
         codex_command: str = "codex",
         *,
         bypass_sandbox: bool = False,
+        ignore_user_config: bool = False,
         idle_timeout_seconds: float | None = 1800.0,
         recover_stale_runs: bool = True,
     ) -> None:
         self.storage = storage
         self.codex_command = codex_command
         self.bypass_sandbox = bypass_sandbox
+        self.ignore_user_config = ignore_user_config
         self.idle_timeout_seconds = idle_timeout_seconds
         self._lock = Lock()
         self._processes: dict[str, subprocess.Popen[str]] = {}
@@ -320,6 +322,8 @@ class BridgeRunner:
         prompt_with_context = self._compose_prompt(record, prompt)
         command = self._command_prefix()
         command.append("exec")
+        if self.ignore_user_config:
+            command.append("--ignore-user-config")
         if record.codex_session_id:
             command.extend(["resume", record.codex_session_id])
 

@@ -13,7 +13,7 @@ from .models import BridgeDiagnosticsRecord, DiagnosticToolRecord
 if TYPE_CHECKING:
     from .storage import BridgeStorage
 
-FALLBACK_BRIDGE_VERSION = "0.4.18"
+FALLBACK_BRIDGE_VERSION = "0.4.19"
 DEFAULT_TOOL_NAMES = ("python", "git", "node", "npm", "rg", "uv", "gh", "codex", "fd", "jq", "7z")
 
 

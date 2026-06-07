@@ -35,6 +35,7 @@ def build_app() -> FastAPI:
             storage=storage,
             codex_command=settings.codex_wrapper_path,
             bypass_sandbox=settings.bypass_sandbox,
+            ignore_user_config=settings.ignore_user_config,
             idle_timeout_seconds=settings.run_idle_timeout_seconds,
         ),
     )
