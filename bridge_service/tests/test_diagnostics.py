@@ -1,3 +1,6 @@
+import importlib.metadata
+
+from codex_bridge_service import __version__
 from codex_bridge_service.diagnostics import BridgeDiagnosticsProbe
 from codex_bridge_service.storage import BridgeStorage
 
@@ -21,6 +24,16 @@ def test_diagnostics_probe_reports_runtime_and_tools(tmp_path) -> None:
     assert diagnostics.tools[0].name == "python"
     assert diagnostics.tools[0].available is True
     assert diagnostics.tools[1].available is False
+
+
+def test_diagnostics_bridge_version_identifies_loaded_code(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", lambda _name: "0.4.19")
+    probe = BridgeDiagnosticsProbe(
+        storage=BridgeStorage(root_path=tmp_path / "bridge"),
+        tool_names=(),
+    )
+
+    assert probe._bridge_version() == __version__
 
 
 def test_diagnostics_probe_surfaces_latest_thread_error(tmp_path) -> None:

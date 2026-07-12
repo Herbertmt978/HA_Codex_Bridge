@@ -41,7 +41,7 @@ cd C:\CodexHA\ha-codex-bridge
 
 py -3.12 -m venv C:\CodexHA\.venv
 C:\CodexHA\.venv\Scripts\python.exe -m pip install `
-  .\bridge_service\dist\codex_bridge_service-0.5.1-py3-none-any.whl
+  .\bridge_service\dist\codex_bridge_service-0.5.2-py3-none-any.whl
 ```
 
 Generate a token and configure the process:
@@ -221,14 +221,14 @@ The bridge does not rotate or log Codex refresh tokens. Codex remains the owner 
 </details>
 
 <details>
-<summary><b>Upgrade from 0.4.x or 0.5.0</b></summary>
+<summary><b>Upgrade from an earlier release</b></summary>
 
-Version 0.5.1 includes the Windows PowerShell 5.1 updater-installer compatibility fix plus the 0.5.0 dynamic-model, migration, and security changes.
+Version 0.5.2 adds the first-chat direct-project recovery fix and makes diagnostics report the code version actually running. It also includes the 0.5.1 Windows PowerShell updater fix and the 0.5.0 dynamic-model, migration, and security changes.
 
 1. Replace old placeholder or short bridge tokens in both the VM launcher and Home Assistant.
-2. Update the VM checkout and install the 0.5.1 wheel.
+2. Update the VM checkout and install the 0.5.2 wheel.
 3. Point `CODEX_BRIDGE_CODEX_WRAPPER_PATH` at the managed Codex executable.
-4. Update or redownload version 0.5.1 in HACS.
+4. Update or redownload version 0.5.2 in HACS.
 5. Restart the bridge and Home Assistant, then hard-refresh the browser.
 
 Back up `projects/` and `threads/` under the bridge root before the first 0.5.x start.
