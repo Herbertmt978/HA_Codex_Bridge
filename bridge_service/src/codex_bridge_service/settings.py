@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ha_run_idle_timeout_seconds: float = Field(default=10 * 60, gt=0)
     cancel_grace_seconds: float = Field(default=15, gt=0)
     max_upload_file_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
+    max_upload_request_overhead_bytes: int = Field(default=1024 * 1024, gt=0)
     max_workspace_bytes: int = Field(default=10 * 1024 * 1024 * 1024, gt=0)
     max_private_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)
     max_archive_entries: int = Field(default=20_000, gt=0)
@@ -88,6 +89,7 @@ class Settings(BaseSettings):
             run_idle_timeout_seconds=self.ha_run_idle_timeout_seconds,
             cancel_grace_seconds=self.cancel_grace_seconds,
             max_upload_file_bytes=self.max_upload_file_bytes,
+            max_upload_request_overhead_bytes=self.max_upload_request_overhead_bytes,
             max_workspace_bytes=self.max_workspace_bytes,
             max_private_bytes=self.max_private_bytes,
             max_archive_entries=self.max_archive_entries,

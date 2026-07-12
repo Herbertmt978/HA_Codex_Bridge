@@ -5,7 +5,7 @@ import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Literal
+from typing import BinaryIO, Callable, Literal
 
 
 _WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
@@ -23,6 +23,7 @@ _ERROR_MESSAGES = {
     "wrong_type": "The workspace entry has an unsupported type.",
     "already_exists": "The workspace entry already exists.",
     "secure_operations_unavailable": "Secure filesystem operations are unavailable.",
+    "resource_limit": "The workspace operation exceeds a resource limit.",
 }
 _HAS_DIR_FD_PRIMITIVES = (
     os.name != "nt"
@@ -74,6 +75,17 @@ class WorkspaceExistsError(WorkspaceBoundaryError, FileExistsError):
 
 class WorkspaceUnsupportedError(WorkspaceBoundaryError, RuntimeError):
     code = "secure_operations_unavailable"
+
+
+class WorkspaceResourceLimitError(WorkspaceBoundaryError, RuntimeError):
+    code = "resource_limit"
+
+    def __init__(self, resource: str) -> None:
+        self.resource = resource
+        super().__init__()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(code={self.code!r}, resource={self.resource!r})"
 
 
 def normalize_portable_relative_path(
@@ -137,11 +149,39 @@ class WorkspaceFileIdentity:
     inode: int
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceTreeUsage:
+    entry_count: int
+    logical_bytes: int
+    allocated_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceFileManifest:
+    files: tuple[str, ...]
+    usage: WorkspaceTreeUsage
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceFilesystemSpace:
+    filesystem_id: str
+    total_bytes: int
+    free_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceRegularFileStat:
+    identity: WorkspaceFileIdentity
+    size_bytes: int
+    allocated_bytes: int
+
+
 class WorkspaceAnonymousFileLease:
     """Read-only sealed anonymous file inherited by one child process."""
 
     def __init__(self, file_fd: int, size_bytes: int) -> None:
         self._file_fd: int | None = file_fd
+        self._close_callback: Callable[[], None] | None = None
         self.size_bytes = size_bytes
 
     def fileno(self) -> int:
@@ -155,18 +195,40 @@ class WorkspaceAnonymousFileLease:
 
     def detach(self) -> int:
         """Transfer descriptor ownership to a file object or another caller."""
+        if self._close_callback is not None:
+            raise WorkspaceResourceLimitError("snapshot_lease")
         file_fd = self.fileno()
         self._file_fd = None
         return file_fd
 
+    def set_close_callback(self, callback: Callable[[], None]) -> None:
+        if self._close_callback is not None or self._file_fd is None:
+            raise WorkspaceResourceLimitError("snapshot_lease")
+        self._close_callback = callback
+
+    def detach_with_close_callback(
+        self,
+    ) -> tuple[int, Callable[[], None] | None]:
+        file_fd = self.fileno()
+        callback = self._close_callback
+        self._file_fd = None
+        self._close_callback = None
+        return file_fd, callback
+
     def close(self) -> None:
         file_fd = self._file_fd
+        callback = self._close_callback
         self._file_fd = None
-        if file_fd is not None:
-            try:
-                os.close(file_fd)
-            except OSError:
-                pass
+        self._close_callback = None
+        try:
+            if file_fd is not None:
+                try:
+                    os.close(file_fd)
+                except OSError:
+                    pass
+        finally:
+            if callback is not None:
+                callback()
 
     def __enter__(self) -> "WorkspaceAnonymousFileLease":
         self.fileno()
@@ -370,6 +432,137 @@ class WorkspaceBoundary:
             os.close(directory_fd)
         return tuple(sorted(files, key=str.casefold))
 
+    def manifest_regular_files(
+        self,
+        relative: Path | str = ".",
+        *,
+        reject_unsafe: bool = False,
+        max_entries: int | None = None,
+        max_bytes: int | None = None,
+    ) -> WorkspaceFileManifest:
+        return self._scan_regular_files(
+            relative,
+            reject_unsafe=reject_unsafe,
+            max_entries=max_entries,
+            max_bytes=max_bytes,
+            collect_files=True,
+        )
+
+    def measure_regular_files(
+        self,
+        relative: Path | str = ".",
+        *,
+        reject_unsafe: bool = False,
+        max_entries: int | None = None,
+        max_bytes: int | None = None,
+    ) -> WorkspaceTreeUsage:
+        return self._scan_regular_files(
+            relative,
+            reject_unsafe=reject_unsafe,
+            max_entries=max_entries,
+            max_bytes=max_bytes,
+            collect_files=False,
+        ).usage
+
+    def regular_file_stat(self, relative: Path | str) -> WorkspaceRegularFileStat:
+        with self.open_regular_file(relative) as stream:
+            file_stat = os.fstat(stream.fileno())
+        return WorkspaceRegularFileStat(
+            identity=WorkspaceFileIdentity(
+                device=int(file_stat.st_dev),
+                inode=int(file_stat.st_ino),
+            ),
+            size_bytes=int(file_stat.st_size),
+            allocated_bytes=self._allocated_bytes(file_stat),
+        )
+
+    def open_readonly_duplicate(self, open_file: BinaryIO) -> BinaryIO:
+        """Reopen one already-held regular inode read-only without its locator."""
+
+        self._require_secure_operations()
+        read_fd: int | None = None
+        try:
+            source_fd = open_file.fileno()
+            source_stat = os.fstat(source_fd)
+            if not stat.S_ISREG(source_stat.st_mode):
+                raise WorkspaceTypeError()
+            read_fd = os.open(
+                f"/proc/self/fd/{source_fd}",
+                os.O_RDONLY | self._cloexec_flag(),
+            )
+            if not os.path.samestat(source_stat, os.fstat(read_fd)):
+                raise WorkspaceEscapeError()
+            return os.fdopen(read_fd, "rb")
+        except WorkspaceBoundaryError:
+            if read_fd is not None:
+                os.close(read_fd)
+            raise
+        except (AttributeError, OSError, TypeError, ValueError):
+            if read_fd is not None:
+                os.close(read_fd)
+            raise WorkspaceTypeError() from None
+
+    def filesystem_space(self) -> WorkspaceFilesystemSpace:
+        self._require_secure_operations()
+        assert self._root_fd is not None
+        root_fd = os.dup(self._root_fd)
+        try:
+            root_stat = os.fstat(root_fd)
+            filesystem = os.fstatvfs(root_fd)
+        except OSError:
+            raise WorkspaceTypeError() from None
+        finally:
+            os.close(root_fd)
+        fragment_size = int(filesystem.f_frsize or filesystem.f_bsize)
+        return WorkspaceFilesystemSpace(
+            filesystem_id=f"device:{int(root_stat.st_dev)}",
+            total_bytes=int(filesystem.f_blocks) * fragment_size,
+            free_bytes=int(filesystem.f_bavail) * fragment_size,
+        )
+
+    def _scan_regular_files(
+        self,
+        relative: Path | str,
+        *,
+        reject_unsafe: bool,
+        max_entries: int | None,
+        max_bytes: int | None,
+        collect_files: bool,
+    ) -> WorkspaceFileManifest:
+        self._require_secure_operations()
+        for value, resource in (
+            (max_entries, "entries"),
+            (max_bytes, "bytes"),
+        ):
+            if value is not None and (type(value) is not int or value < 0):
+                raise WorkspaceResourceLimitError(resource)
+        normalized = self.normalize(relative, allow_root=True)
+        parts = () if normalized == "." else tuple(normalized.split("/"))
+        directory_fd = self._open_parent_fd(parts)
+        files: list[str] | None = [] if collect_files else None
+        state = [0, 0, 0]
+        try:
+            self._scan_regular_files_fd(
+                directory_fd,
+                normalized,
+                files,
+                state,
+                reject_unsafe=reject_unsafe,
+                max_entries=max_entries,
+                max_bytes=max_bytes,
+                depth=0,
+            )
+        finally:
+            os.close(directory_fd)
+        return WorkspaceFileManifest(
+            files=tuple(sorted(files or (), key=str.casefold)),
+            usage=WorkspaceTreeUsage(
+                entry_count=state[0],
+                logical_bytes=state[1],
+                allocated_bytes=state[2],
+            ),
+        )
+
     def open_regular_file(self, relative: Path | str) -> BinaryIO:
         self._require_secure_operations()
         normalized = self.normalize(relative)
@@ -407,6 +600,8 @@ class WorkspaceBoundary:
     def copy_regular_file_to_anonymous_lease(
         self,
         relative: Path | str,
+        *,
+        max_bytes: int | None = None,
     ) -> WorkspaceAnonymousFileLease:
         """Copy one confined file into a sealed pathless Linux file.
 
@@ -415,6 +610,8 @@ class WorkspaceBoundary:
         private source locator. The caller owns and must close the lease.
         """
         self._require_secure_operations()
+        if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
+            raise WorkspaceResourceLimitError("bytes")
         creator = getattr(os, "memfd_create", None)
         cloexec = getattr(os, "MFD_CLOEXEC", 0)
         allow_sealing = getattr(os, "MFD_ALLOW_SEALING", 0)
@@ -442,10 +639,15 @@ class WorkspaceBoundary:
             )
             size_bytes = 0
             with self.open_regular_file(relative) as source:
+                source_stat = os.fstat(source.fileno())
+                if max_bytes is not None and source_stat.st_size > max_bytes:
+                    raise WorkspaceResourceLimitError("bytes")
                 while True:
                     chunk = source.read(1024 * 1024)
                     if not chunk:
                         break
+                    if max_bytes is not None and size_bytes + len(chunk) > max_bytes:
+                        raise WorkspaceResourceLimitError("bytes")
                     view = memoryview(chunk)
                     while view:
                         written = os.write(write_fd, view)
@@ -790,6 +992,115 @@ class WorkspaceBoundary:
             raise
         except OSError:
             raise WorkspaceTypeError() from None
+
+    def _scan_regular_files_fd(
+        self,
+        directory_fd: int,
+        prefix: str,
+        files: list[str] | None,
+        state: list[int],
+        *,
+        reject_unsafe: bool,
+        max_entries: int | None,
+        max_bytes: int | None,
+        depth: int,
+    ) -> None:
+        if depth > 64:
+            raise WorkspaceResourceLimitError("depth")
+        try:
+            with os.scandir(directory_fd) as entries:
+                for entry in entries:
+                    if entry.is_symlink():
+                        if reject_unsafe:
+                            raise WorkspaceEscapeError()
+                        continue
+                    try:
+                        entry_stat = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        raise WorkspaceTypeError() from None
+                    public = entry.name if prefix == "." else f"{prefix}/{entry.name}"
+                    try:
+                        public = self.normalize(public)
+                    except WorkspaceInputError:
+                        if reject_unsafe:
+                            raise
+                        continue
+                    if stat.S_ISDIR(entry_stat.st_mode):
+                        child_fd: int | None = None
+                        try:
+                            child_fd = os.open(
+                                entry.name,
+                                self._directory_open_flags(),
+                                dir_fd=directory_fd,
+                            )
+                            self._scan_regular_files_fd(
+                                child_fd,
+                                public,
+                                files,
+                                state,
+                                reject_unsafe=reject_unsafe,
+                                max_entries=max_entries,
+                                max_bytes=max_bytes,
+                                depth=depth + 1,
+                            )
+                        except OSError as error:
+                            raise self._translated_entry_error(
+                                error,
+                                entry.name,
+                                directory_fd,
+                            ) from None
+                        finally:
+                            if child_fd is not None:
+                                os.close(child_fd)
+                    elif stat.S_ISREG(entry_stat.st_mode):
+                        file_fd: int | None = None
+                        try:
+                            file_fd = os.open(
+                                entry.name,
+                                os.O_RDONLY
+                                | self._nofollow_flag()
+                                | self._cloexec_flag()
+                                | getattr(os, "O_NONBLOCK", 0),
+                                dir_fd=directory_fd,
+                            )
+                            opened_stat = os.fstat(file_fd)
+                            if not stat.S_ISREG(opened_stat.st_mode):
+                                if reject_unsafe:
+                                    raise WorkspaceTypeError()
+                                continue
+                            next_entries = state[0] + 1
+                            next_bytes = state[1] + int(opened_stat.st_size)
+                            if max_entries is not None and next_entries > max_entries:
+                                raise WorkspaceResourceLimitError("entries")
+                            if max_bytes is not None and next_bytes > max_bytes:
+                                raise WorkspaceResourceLimitError("bytes")
+                            state[0] = next_entries
+                            state[1] = next_bytes
+                            state[2] += self._allocated_bytes(opened_stat)
+                            if files is not None:
+                                files.append(public)
+                        except OSError as error:
+                            raise self._translated_entry_error(
+                                error,
+                                entry.name,
+                                directory_fd,
+                            ) from None
+                        finally:
+                            if file_fd is not None:
+                                os.close(file_fd)
+                    elif reject_unsafe:
+                        raise WorkspaceTypeError()
+        except WorkspaceBoundaryError:
+            raise
+        except OSError:
+            raise WorkspaceTypeError() from None
+
+    @staticmethod
+    def _allocated_bytes(file_stat: os.stat_result) -> int:
+        blocks = getattr(file_stat, "st_blocks", None)
+        if isinstance(blocks, int) and blocks >= 0:
+            return blocks * 512
+        return int(file_stat.st_size)
 
     @staticmethod
     def _identity_from_stat(entry_stat: os.stat_result) -> WorkspaceFileIdentity:

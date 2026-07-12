@@ -18,6 +18,7 @@ from codex_bridge_service.resource_limits import (
     ReservationConflictError,
     ResourceLimits,
     StreamingByteCounter,
+    archive_container_detected,
     copy_archive_entry,
     inspect_archive,
     open_inspected_archive,
@@ -33,6 +34,7 @@ def test_resource_limit_defaults_match_the_home_assistant_host_budget() -> None:
     assert limits.run_idle_timeout_seconds == 10 * 60
     assert limits.cancel_grace_seconds == 15
     assert limits.max_upload_file_bytes == 100 * MIB
+    assert limits.max_upload_request_overhead_bytes == MIB
     assert limits.max_workspace_bytes == 10 * GIB
     assert limits.max_private_bytes == 2 * GIB
     assert limits.max_archive_entries == 20_000
@@ -368,6 +370,46 @@ def test_active_reservation_rechecks_external_free_space_loss() -> None:
     reservation.release()
 
 
+def test_workspace_reservation_monotonically_observes_external_growth() -> None:
+    usage = {"bytes": 0}
+    available = {"bytes": 1_000}
+    manager = QuotaManager(
+        pools={
+            "workspace": QuotaPool(
+                limit_bytes=100,
+                usage_bytes=lambda: usage["bytes"],
+                free_bytes=lambda: available["bytes"],
+                total_bytes=lambda: 2_000,
+                filesystem_id=lambda: "device-1",
+            )
+        },
+        minimum_free_bytes=0,
+    )
+    reservation = manager.reserve(
+        "workspace",
+        conflict_key="workspace-mutation",
+    )
+    usage["bytes"] = 60
+    available["bytes"] = 940
+
+    assert manager.observe_growth(reservation) == 60
+    assert reservation.consumed_bytes == 60
+
+    usage["bytes"] = 40
+    available["bytes"] = 960
+    assert manager.observe_growth(reservation) == 60
+    assert reservation.consumed_bytes == 60
+
+    usage["bytes"] = 101
+    available["bytes"] = 899
+    with pytest.raises(QuotaExceededError):
+        manager.observe_growth(reservation)
+
+    reservation.release()
+    with pytest.raises(QuotaExceededError):
+        manager.reserve("workspace", amount_bytes=0)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -595,6 +637,29 @@ def test_safe_archive_context_does_not_reclassify_caller_exceptions() -> None:
     with pytest.raises(CallerFailure):
         with open_inspected_archive(io.BytesIO(payload), ResourceLimits()):
             raise CallerFailure
+
+
+def test_safe_archive_preflight_detects_and_accepts_bounded_prefix() -> None:
+    payload = b"MZ" + (b"X" * 32) + _zip_bytes([("one.txt", b"one")])
+    source = io.BytesIO(payload)
+
+    assert archive_container_detected(source) is True
+    with open_inspected_archive(source, ResourceLimits()) as inspected:
+        archive, entries = inspected
+        assert entries[0].name == "one.txt"
+        assert archive.read("one.txt") == b"one"
+
+    assert archive_container_detected(io.BytesIO(b"ordinary data")) is False
+
+
+def test_archive_detection_accepts_zipfile_compatible_trailing_data() -> None:
+    payload = _zip_bytes([("one.txt", b"one")]) + b"TRAILING-DATA"
+
+    assert archive_container_detected(io.BytesIO(payload)) is True
+    with open_inspected_archive(io.BytesIO(payload), ResourceLimits()) as inspected:
+        archive, entries = inspected
+        assert entries[0].name == "one.txt"
+        assert archive.read("one.txt") == b"one"
 
 
 def test_streaming_archive_copy_rolls_back_destination_after_crc_failure() -> None:

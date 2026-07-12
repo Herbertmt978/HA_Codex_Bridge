@@ -1,14 +1,21 @@
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from .account import CodexAccountProbe
 from .build_info import BuildInfo
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
+from .http_limits import AttachmentIngressMiddleware
 from .limits import CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
 from .models import RuntimeProfile
+from .resource_limits import (
+    QuotaExceededError,
+    ResourceLimitError,
+    ResourceLimits,
+)
 from .routes import artifacts, attachments, codex_auth, events, health, projects, prompts, status, threads
 from .runner import BridgeRunner
 from .storage import BridgeStorage
@@ -30,8 +37,23 @@ def create_app(
     build_info: BuildInfo | None = None,
     runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
     workspace_root: Path | str | None = None,
+    resource_limits: ResourceLimits | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Codex Bridge")
+
+    @app.exception_handler(ResourceLimitError)
+    async def resource_limit_handler(_request, error: ResourceLimitError) -> JSONResponse:
+        status_code = 413 if isinstance(error, QuotaExceededError) else 409
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "detail": {
+                    "code": error.code,
+                    "resource": error.resource,
+                    "retryable": status_code == 409,
+                }
+            },
+        )
     resolved_build_info = (
         build_info if build_info is not None else BuildInfo.from_environment()
     )
@@ -50,7 +72,19 @@ def create_app(
         special_project_defaults_provider=special_project_defaults,
         runtime_profile=runtime_profile,
         workspace_root=workspace_root,
+        resource_limits=resource_limits,
     )
+    if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        limits = storage.resource_limits
+        assert limits is not None
+        app.add_middleware(
+            AttachmentIngressMiddleware,
+            expected_token=auth_token,
+            max_body_bytes=(
+                limits.max_upload_file_bytes
+                + limits.max_upload_request_overhead_bytes
+            ),
+        )
     if initialize_special_projects:
         initial_catalog = resolved_model_catalog_probe.probe()
         if initial_catalog.stale:

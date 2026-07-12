@@ -15,6 +15,7 @@ def build_app() -> FastAPI:
         root_path=settings.root_path,
         runtime_profile=settings.runtime_profile,
         workspace_root=settings.workspace_root,
+        resource_limits=settings.to_resource_limits(),
         auth_token=settings.auth_token,
         limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
         account_probe=CodexAccountProbe(codex_home) if codex_home else None,

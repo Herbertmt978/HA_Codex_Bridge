@@ -1,4 +1,5 @@
 import json
+import io
 import mimetypes
 import os
 import re
@@ -32,6 +33,17 @@ from .models import (
     ThreadViewRecord,
     normalize_model,
 )
+from .resource_limits import (
+    QuotaExceededError,
+    QuotaManager,
+    QuotaPool,
+    QuotaReservation,
+    ReservationConflictError,
+    ResourceLimits,
+    StreamingByteCounter,
+    archive_container_detected,
+    open_inspected_archive,
+)
 from .workspace import (
     WorkspaceAnonymousFileLease,
     WorkspaceBoundary,
@@ -40,10 +52,80 @@ from .workspace import (
     WorkspaceExistsError,
     WorkspaceFileIdentity,
     WorkspaceInputError,
+    WorkspaceResourceLimitError,
 )
 
 _UNSET = object()
 _WORKSPACE_ID_PATTERN = re.compile(r"^ws_[0-9a-f]{12}$")
+
+
+def _write_all(output: BinaryIO, content: bytes | bytearray | memoryview) -> int:
+    view = memoryview(content)
+    total = len(view)
+    while view:
+        written = output.write(view)
+        if not isinstance(written, int) or written <= 0:
+            raise OSError("storage write failed")
+        view = view[written:]
+    return total
+
+
+class _QuotaSequentialWriter:
+    """Make ZipFile use data descriptors while reserving each appended byte."""
+
+    def __init__(self, output: BinaryIO, reservation: QuotaReservation) -> None:
+        self.output = output
+        self.reservation = reservation
+
+    def write(self, content: bytes | bytearray | memoryview) -> int:
+        view = memoryview(content)
+        total = len(view)
+        self.reservation.consume(total)
+        return _write_all(self.output, view)
+
+    def tell(self) -> int:
+        return self.output.tell()
+
+    def seek(self, *_args: object) -> int:
+        raise io.UnsupportedOperation("sequential archive output")
+
+    def seekable(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+    def flush(self) -> None:
+        self.output.flush()
+
+
+class _ReleasingBinaryStream:
+    def __init__(
+        self,
+        stream: BinaryIO,
+        release: Callable[[], None] | None,
+    ) -> None:
+        self._stream = stream
+        self._release = release
+
+    @property
+    def closed(self) -> bool:
+        return self._stream.closed
+
+    def read(self, size: int = -1) -> bytes:
+        return self._stream.read(size)
+
+    def fileno(self) -> int:
+        return self._stream.fileno()
+
+    def close(self) -> None:
+        release = self._release
+        self._release = None
+        try:
+            self._stream.close()
+        finally:
+            if release is not None:
+                release()
 
 
 class ThreadNotFoundError(FileNotFoundError):
@@ -70,6 +152,7 @@ class BridgeStorage:
         special_project_defaults_provider: Callable[[], tuple[str, str, bool]] | None = None,
         runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
         workspace_root: Path | str | None = None,
+        resource_limits: ResourceLimits | None = None,
     ) -> None:
         try:
             self.runtime_profile = RuntimeProfile(runtime_profile)
@@ -87,6 +170,9 @@ class BridgeStorage:
         self.uploads_boundary: WorkspaceBoundary | None = None
         self.artifacts_boundary: WorkspaceBoundary | None = None
         self.workspace_root: Path | None = None
+        self.resource_limits: ResourceLimits | None = None
+        self.quota_manager: QuotaManager | None = None
+        self.transient_quota_manager: QuotaManager | None = None
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
         self.special_project_defaults_provider = special_project_defaults_provider
@@ -138,6 +224,42 @@ class BridgeStorage:
             # any untrusted attachment or archive locator.
             self.uploads_boundary = WorkspaceBoundary(self.uploads_dir)
             self.artifacts_boundary = WorkspaceBoundary(self.artifacts_dir)
+            self.resource_limits = resource_limits or ResourceLimits()
+            limits = self.resource_limits
+            self.quota_manager = QuotaManager(
+                pools={
+                    "workspace": QuotaPool(
+                        limit_bytes=limits.max_workspace_bytes,
+                        usage_bytes=self._workspace_usage_bytes,
+                        free_bytes=self._workspace_free_bytes,
+                        total_bytes=self._workspace_total_bytes,
+                        filesystem_id=self._workspace_filesystem_id,
+                    ),
+                    "private": QuotaPool(
+                        limit_bytes=limits.max_private_bytes,
+                        usage_bytes=self._private_usage_bytes,
+                        free_bytes=self._private_free_bytes,
+                        total_bytes=self._private_total_bytes,
+                        filesystem_id=self._private_filesystem_id,
+                    ),
+                },
+                minimum_free_bytes=limits.minimum_free_bytes,
+                minimum_free_fraction=limits.minimum_free_fraction,
+                ledger_path=self.root / "quota.sqlite3",
+            )
+            self.transient_quota_manager = QuotaManager(
+                pools={
+                    "transient": QuotaPool(
+                        limit_bytes=limits.max_transient_snapshot_bytes,
+                        usage_bytes=lambda: 0,
+                        free_bytes=lambda: limits.max_transient_snapshot_bytes,
+                        total_bytes=lambda: limits.max_transient_snapshot_bytes,
+                        filesystem_id=lambda: "transient-memory",
+                    )
+                },
+                minimum_free_bytes=0,
+                minimum_free_fraction=0,
+            )
 
         if self.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
             self.workspaces_dir.mkdir(parents=True, exist_ok=True)
@@ -183,6 +305,125 @@ class BridgeStorage:
         if boundary is None:
             raise RuntimeError("artifact boundary is unavailable")
         return boundary
+
+    def _resource_limits(self) -> ResourceLimits:
+        if self.resource_limits is None:
+            raise RuntimeError("resource limits are unavailable")
+        return self.resource_limits
+
+    def _disk_quota(self) -> QuotaManager:
+        if self.quota_manager is None:
+            raise RuntimeError("disk quota manager is unavailable")
+        return self.quota_manager
+
+    def _transient_quota(self) -> QuotaManager:
+        if self.transient_quota_manager is None:
+            raise RuntimeError("transient quota manager is unavailable")
+        return self.transient_quota_manager
+
+    @staticmethod
+    def _boundary_usage_bytes(boundary: WorkspaceBoundary) -> int:
+        try:
+            return boundary.measure_regular_files(".", reject_unsafe=False).logical_bytes
+        except WorkspaceBoundaryError:
+            raise ReservationConflictError("filesystem_scan") from None
+
+    @staticmethod
+    def _boundary_space(boundary: WorkspaceBoundary):
+        try:
+            return boundary.filesystem_space()
+        except WorkspaceBoundaryError:
+            raise ReservationConflictError("filesystem_space") from None
+
+    def _workspace_usage_bytes(self) -> int:
+        return self._boundary_usage_bytes(self._home_assistant_boundary())
+
+    def _private_usage_bytes(self) -> int:
+        return self._boundary_usage_bytes(
+            self._home_assistant_uploads_boundary()
+        ) + self._boundary_usage_bytes(self._home_assistant_artifacts_boundary())
+
+    def _workspace_free_bytes(self) -> int:
+        return self._boundary_space(self._home_assistant_boundary()).free_bytes
+
+    def _workspace_total_bytes(self) -> int:
+        return self._boundary_space(self._home_assistant_boundary()).total_bytes
+
+    def _workspace_filesystem_id(self) -> str:
+        return self._boundary_space(self._home_assistant_boundary()).filesystem_id
+
+    def _private_free_bytes(self) -> int:
+        return self._boundary_space(
+            self._home_assistant_uploads_boundary()
+        ).free_bytes
+
+    def _private_total_bytes(self) -> int:
+        return self._boundary_space(
+            self._home_assistant_uploads_boundary()
+        ).total_bytes
+
+    def _private_filesystem_id(self) -> str:
+        return self._boundary_space(
+            self._home_assistant_uploads_boundary()
+        ).filesystem_id
+
+    def reserve_workspace_mutation(self) -> QuotaReservation:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("workspace mutation reservations require Home Assistant")
+        return self._disk_quota().reserve(
+            "workspace",
+            conflict_key="codex-workspace-mutation",
+        )
+
+    def observe_workspace_growth(self, reservation: QuotaReservation) -> int:
+        if reservation.pool != "workspace":
+            raise ReservationConflictError("workspace")
+        return self._disk_quota().observe_growth(reservation)
+
+    def _lease_transient_snapshot(
+        self,
+        boundary: WorkspaceBoundary,
+        stored_locator: str,
+    ) -> WorkspaceAnonymousFileLease:
+        file_stat = boundary.regular_file_stat(stored_locator)
+        reservation = self._transient_quota().reserve(
+            "transient",
+            amount_bytes=file_stat.size_bytes,
+            item_limit_bytes=self._resource_limits().max_transient_snapshot_bytes,
+        )
+        try:
+            lease = boundary.copy_regular_file_to_anonymous_lease(
+                stored_locator,
+                max_bytes=file_stat.size_bytes,
+            )
+            if lease.size_bytes != file_stat.size_bytes:
+                lease.close()
+                raise WorkspaceEscapeError()
+            lease.set_close_callback(reservation.release)
+            return lease
+        except BaseException:
+            if reservation.active:
+                reservation.release()
+            raise
+
+    def _validate_uploaded_archive_if_present(
+        self,
+        boundary: WorkspaceBoundary,
+        output: BinaryIO,
+        *,
+        filename: str,
+        mime_type: str,
+    ) -> None:
+        declared_archive = filename.casefold().endswith(".zip") or (
+            mime_type.split(";", 1)[0].strip().casefold()
+            in {"application/zip", "application/x-zip-compressed"}
+        )
+        with boundary.open_readonly_duplicate(output) as stream:
+            if not declared_archive and not archive_container_detected(stream):
+                return
+            stream.seek(0)
+            with open_inspected_archive(stream, self._resource_limits()):
+                pass
 
     def _special_project_root(self) -> str:
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
@@ -231,8 +472,9 @@ class BridgeStorage:
         leases: dict[str, WorkspaceAnonymousFileLease] = {}
         try:
             for attachment in record.attachments:
-                lease = boundary.copy_regular_file_to_anonymous_lease(
-                    attachment.stored_path
+                lease = self._lease_transient_snapshot(
+                    boundary,
+                    attachment.stored_path,
                 )
                 if (
                     attachment.size_bytes is not None
@@ -1635,21 +1877,33 @@ class BridgeStorage:
         stored_locator = f"{thread_locator}/{target_relative}"
         parent_locator = PurePosixPath(stored_locator).parent.as_posix()
         boundary.create_directory(parent_locator)
+        limits = self._resource_limits()
+        known_size = len(content) if isinstance(content, bytes) else 0
+        reservation = self._disk_quota().reserve(
+            "private",
+            amount_bytes=known_size,
+            item_limit_bytes=limits.max_upload_file_bytes,
+        )
 
         output: BinaryIO | None = None
-        for _attempt in range(100):
-            try:
-                output = boundary.create_file_exclusive(stored_locator)
-                break
-            except WorkspaceExistsError:
-                collision_name = (
-                    f"{target_path.stem}-{uuid4().hex[:8]}{target_path.suffix}"
-                )
-                target_path = target_path.with_name(collision_name)
-                target_relative = target_path.as_posix()
-                normalized_filename = target_path.name
-                stored_locator = f"{thread_locator}/{target_relative}"
+        try:
+            for _attempt in range(100):
+                try:
+                    output = boundary.create_file_exclusive(stored_locator)
+                    break
+                except WorkspaceExistsError:
+                    collision_name = (
+                        f"{target_path.stem}-{uuid4().hex[:8]}{target_path.suffix}"
+                    )
+                    target_path = target_path.with_name(collision_name)
+                    target_relative = target_path.as_posix()
+                    normalized_filename = target_path.name
+                    stored_locator = f"{thread_locator}/{target_relative}"
+        except BaseException:
+            reservation.release()
+            raise
         if output is None:
+            reservation.release()
             raise WorkspaceExistsError()
 
         identity: WorkspaceFileIdentity = boundary.identify_open_file(output)
@@ -1661,12 +1915,21 @@ class BridgeStorage:
                     chunk = content.read(1024 * 1024)
                     if not chunk:
                         break
-                    output.write(chunk)
+                    reservation.consume(len(chunk))
+                    _write_all(output, chunk)
                     size_bytes += len(chunk)
             else:
-                output.write(content)
+                reservation.consume(len(content))
+                _write_all(output, content)
                 size_bytes = len(content)
             output.flush()
+            os.fsync(output.fileno())
+            self._validate_uploaded_archive_if_present(
+                boundary,
+                output,
+                filename=normalized_filename,
+                mime_type=mime_type,
+            )
 
             attachment = AttachmentRecord(
                 attachment_id=f"att_{uuid4().hex[:12]}",
@@ -1680,6 +1943,7 @@ class BridgeStorage:
                 # Prove the published locator still names the inode created by
                 # this upload before committing any public metadata.
                 boundary.validate_regular_file_identity(stored_locator, identity)
+                reservation.commit(persisted_bytes=size_bytes)
                 # Reload only after the potentially long stream has finished.
                 # Concurrent uploads then merge into the latest thread record
                 # while holding a short metadata critical section.
@@ -1703,6 +1967,7 @@ class BridgeStorage:
                 )
             return attachment
         except BaseException:
+            cleanup_succeeded = False
             if not metadata_saved:
                 try:
                     boundary.unlink_regular_file(
@@ -1710,8 +1975,11 @@ class BridgeStorage:
                         missing_ok=True,
                         expected_identity=identity,
                     )
+                    cleanup_succeeded = True
                 except WorkspaceBoundaryError:
                     pass
+            if cleanup_succeeded and reservation.active:
+                reservation.release()
             raise
         finally:
             output.close()
@@ -1772,11 +2040,16 @@ class BridgeStorage:
         snapshot = self.load_thread(thread_id)
         boundary = self._home_assistant_boundary()
         workspace = boundary.normalize(snapshot.workspace_path, allow_root=True)
-        discovered = boundary.walk_regular_files(
-            workspace,
-            reject_unsafe=True,
-        )
-        scanned: list[tuple[str, str, int]] = []
+        try:
+            discovered = boundary.manifest_regular_files(
+                workspace,
+                reject_unsafe=True,
+                max_entries=self._resource_limits().max_archive_entries,
+            ).files
+        except WorkspaceResourceLimitError:
+            raise QuotaExceededError("workspace") from None
+        self._disk_quota().check("workspace")
+        scanned: list[tuple[str, str, WorkspaceFileIdentity, int]] = []
         workspace_parts = PurePosixPath(workspace)
         for stored in discovered:
             if workspace == ".":
@@ -1787,18 +2060,24 @@ class BridgeStorage:
                 except ValueError:
                     raise WorkspaceEscapeError() from None
             relative = boundary.normalize(relative)
-            with boundary.open_regular_file(stored) as stream:
-                size_bytes = os.fstat(stream.fileno()).st_size
-            scanned.append((stored, relative, size_bytes))
+            file_stat = boundary.regular_file_stat(stored)
+            if file_stat.size_bytes > self._resource_limits().max_transient_snapshot_bytes:
+                raise QuotaExceededError("artifact_snapshot")
+            scanned.append((stored, relative, file_stat.identity, file_stat.size_bytes))
 
         with self._thread_mutation_lock:
+            for stored, _relative, identity, size_bytes in scanned:
+                current = boundary.regular_file_stat(stored)
+                if current.identity != identity or current.size_bytes != size_bytes:
+                    raise WorkspaceEscapeError()
+            self._disk_quota().check("workspace")
             record = self.load_thread(thread_id)
             known = {
                 (artifact.source, artifact.stored_path)
                 for artifact in record.artifacts
             }
             added: list[ArtifactRecord] = []
-            for stored, relative, size_bytes in scanned:
+            for stored, relative, _identity, size_bytes in scanned:
                 owner = (ArtifactSource.WORKSPACE, stored)
                 if owner in known:
                     continue
@@ -1852,14 +2131,17 @@ class BridgeStorage:
             boundary = self._home_assistant_artifacts_boundary()
         else:
             raise WorkspaceInputError()
-        lease = boundary.copy_regular_file_to_anonymous_lease(artifact.stored_path)
+        lease = self._lease_transient_snapshot(boundary, artifact.stored_path)
         size_bytes = lease.size_bytes
-        file_fd = lease.detach()
+        file_fd, release = lease.detach_with_close_callback()
         try:
-            stream = os.fdopen(file_fd, "rb")
+            raw_stream = os.fdopen(file_fd, "rb")
+            stream = _ReleasingBinaryStream(raw_stream, release)
             return artifact, stream, size_bytes
         except BaseException:
             os.close(file_fd)
+            if release is not None:
+                release()
             raise
 
     def create_workspace_archive(self, thread_id: str) -> ArtifactRecord:
@@ -1935,6 +2217,8 @@ class BridgeStorage:
         thread_id: str,
     ) -> ArtifactRecord:
         snapshot = self.load_thread(thread_id)
+        limits = self._resource_limits()
+        disk_quota = self._disk_quota()
         workspace_boundary = self._home_assistant_boundary()
         uploads_boundary = self._home_assistant_uploads_boundary()
         artifacts_boundary = self._home_assistant_artifacts_boundary()
@@ -1942,10 +2226,33 @@ class BridgeStorage:
             snapshot.workspace_path,
             allow_root=True,
         )
-        workspace_files = workspace_boundary.walk_regular_files(
-            workspace,
-            reject_unsafe=True,
+        try:
+            workspace_manifest = workspace_boundary.manifest_regular_files(
+                workspace,
+                reject_unsafe=True,
+                max_entries=limits.max_archive_entries,
+                max_bytes=limits.max_archive_expanded_bytes,
+            )
+        except WorkspaceResourceLimitError as error:
+            resource = (
+                "archive_entries" if error.resource == "entries" else "archive_expanded"
+            )
+            raise QuotaExceededError(resource) from None
+        disk_quota.check("workspace")
+
+        attachment_stats: dict[str, int] = {}
+        preflight_expanded = StreamingByteCounter(
+            limit_bytes=limits.max_archive_expanded_bytes,
+            resource="archive_expanded",
         )
+        preflight_expanded.consume(workspace_manifest.usage.logical_bytes)
+        for attachment in snapshot.attachments:
+            file_stat = uploads_boundary.regular_file_stat(attachment.stored_path)
+            preflight_expanded.consume(file_stat.size_bytes)
+            attachment_stats[attachment.attachment_id] = file_stat.size_bytes
+        entry_count = workspace_manifest.usage.entry_count + len(snapshot.attachments)
+        if entry_count > limits.max_archive_entries:
+            raise QuotaExceededError("archive_entries")
 
         thread_locator = artifacts_boundary.normalize(snapshot.thread_id)
         if thread_locator != snapshot.thread_id or "/" in thread_locator:
@@ -1956,34 +2263,44 @@ class BridgeStorage:
             char.lower() if char.isalnum() else "-"
             for char in (snapshot.title or snapshot.workspace_id)
         ).strip("-")[:120]
+        reservation = disk_quota.reserve(
+            "private",
+            item_limit_bytes=limits.max_transient_snapshot_bytes,
+        )
         output: BinaryIO | None = None
-        for _attempt in range(100):
-            filename = (
-                f"{title_stem or snapshot.workspace_id}-{timestamp}-"
-                f"{uuid4().hex[:8]}.zip"
-            )
-            relative_path = artifacts_boundary.normalize(filename)
-            stored_locator = f"{thread_locator}/{relative_path}"
-            try:
-                output = artifacts_boundary.create_file_exclusive(stored_locator)
-                break
-            except WorkspaceExistsError:
-                continue
-        if output is None:
-            raise WorkspaceExistsError()
+        stored_locator: str | None = None
         identity: WorkspaceFileIdentity | None = None
         metadata_saved = False
         try:
+            for _attempt in range(100):
+                filename = (
+                    f"{title_stem or snapshot.workspace_id}-{timestamp}-"
+                    f"{uuid4().hex[:8]}.zip"
+                )
+                relative_path = artifacts_boundary.normalize(filename)
+                stored_locator = f"{thread_locator}/{relative_path}"
+                try:
+                    output = artifacts_boundary.create_file_exclusive(stored_locator)
+                    break
+                except WorkspaceExistsError:
+                    continue
+            if output is None or stored_locator is None:
+                raise WorkspaceExistsError()
             identity = artifacts_boundary.identify_open_file(output)
+            quota_output = _QuotaSequentialWriter(output, reservation)
             included_files = 0
             with zipfile.ZipFile(
-                output,
+                quota_output,
                 mode="w",
-                compression=zipfile.ZIP_DEFLATED,
-                compresslevel=6,
+                compression=zipfile.ZIP_STORED,
+                allowZip64=True,
             ) as archive:
                 workspace_parts = PurePosixPath(workspace)
-                for stored in workspace_files:
+                expanded = StreamingByteCounter(
+                    limit_bytes=limits.max_archive_expanded_bytes,
+                    resource="archive_expanded",
+                )
+                for stored in workspace_manifest.files:
                     if workspace == ".":
                         relative = stored
                     else:
@@ -1999,6 +2316,7 @@ class BridgeStorage:
                         member=f"workspace/{relative}",
                         boundary=workspace_boundary,
                         stored_locator=stored,
+                        expanded_counter=expanded,
                     )
                     included_files += 1
 
@@ -2012,13 +2330,19 @@ class BridgeStorage:
                         member=f"uploads/{attachment_relative}",
                         boundary=uploads_boundary,
                         stored_locator=attachment.stored_path,
+                        expanded_counter=expanded,
+                        expected_size=attachment_stats[attachment.attachment_id],
                     )
                     included_files += 1
 
                 if included_files == 0:
+                    readme = (
+                        "This chat did not have any workspace files or uploaded files yet.\n"
+                    )
+                    expanded.consume(len(readme.encode("utf-8")))
                     archive.writestr(
                         "README.txt",
-                        "This chat did not have any workspace files or uploaded files yet.\n",
+                        readme,
                     )
 
             output.flush()
@@ -2028,12 +2352,22 @@ class BridgeStorage:
                 identity,
             )
             size_bytes = os.fstat(output.fileno()).st_size
+            if size_bytes != reservation.consumed_bytes:
+                raise ReservationConflictError("private")
             output.close()
             output = None
             artifacts_boundary.validate_regular_file_identity(
                 stored_locator,
                 identity,
             )
+            with artifacts_boundary.open_regular_file(stored_locator) as archive_stream:
+                with open_inspected_archive(
+                    archive_stream,
+                    limits,
+                    max_container_bytes=limits.max_transient_snapshot_bytes,
+                ):
+                    pass
+            reservation.commit(persisted_bytes=size_bytes)
             artifact = ArtifactRecord(
                 artifact_id=f"art_{uuid4().hex[:12]}",
                 filename=filename,
@@ -2064,15 +2398,20 @@ class BridgeStorage:
                 )
             return artifact
         except BaseException:
+            cleanup_succeeded = stored_locator is None
             if not metadata_saved:
-                try:
-                    artifacts_boundary.unlink_regular_file(
-                        stored_locator,
-                        missing_ok=True,
-                        expected_identity=identity,
-                    )
-                except WorkspaceBoundaryError:
-                    pass
+                if stored_locator is not None:
+                    try:
+                        artifacts_boundary.unlink_regular_file(
+                            stored_locator,
+                            missing_ok=True,
+                            expected_identity=identity,
+                        )
+                        cleanup_succeeded = True
+                    except WorkspaceBoundaryError:
+                        cleanup_succeeded = False
+            if cleanup_succeeded and reservation.active:
+                reservation.release()
             raise
         finally:
             if output is not None:
@@ -2088,6 +2427,8 @@ class BridgeStorage:
         member: str,
         boundary: WorkspaceBoundary,
         stored_locator: str,
+        expanded_counter: StreamingByteCounter,
+        expected_size: int | None = None,
     ) -> None:
         normalized_member = member.replace("\\", "/")
         member_path = PurePosixPath(normalized_member)
@@ -2097,20 +2438,30 @@ class BridgeStorage:
             or any(part in {"", ".", ".."} for part in member_path.parts)
         ):
             raise WorkspaceInputError()
-        lease = boundary.copy_regular_file_to_anonymous_lease(stored_locator)
-        file_fd = lease.detach()
+        lease = self._lease_transient_snapshot(boundary, stored_locator)
+        if expected_size is not None and lease.size_bytes != expected_size:
+            lease.close()
+            raise WorkspaceEscapeError()
+        expanded_counter.consume(lease.size_bytes)
+        file_fd, release = lease.detach_with_close_callback()
         try:
             source = os.fdopen(file_fd, "rb")
         except BaseException:
             os.close(file_fd)
+            if release is not None:
+                release()
             raise
-        with source:
-            with archive.open(member_path.as_posix(), mode="w") as destination:
-                while True:
-                    chunk = source.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    destination.write(chunk)
+        try:
+            with source:
+                with archive.open(member_path.as_posix(), mode="w") as destination:
+                    while True:
+                        chunk = source.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        destination.write(chunk)
+        finally:
+            if release is not None:
+                release()
 
     def _sanitize_relative_path(self, relative_path: str | None, filename: str) -> Path:
         if not relative_path:

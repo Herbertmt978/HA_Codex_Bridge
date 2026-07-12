@@ -34,6 +34,7 @@ class ResourceLimits:
     run_idle_timeout_seconds: float = 10 * 60
     cancel_grace_seconds: float = 15
     max_upload_file_bytes: int = 100 * MIB
+    max_upload_request_overhead_bytes: int = MIB
     max_workspace_bytes: int = 10 * GIB
     max_private_bytes: int = 2 * GIB
     max_archive_entries: int = 20_000
@@ -53,6 +54,7 @@ class ResourceLimits:
         positive_integers = (
             "max_active_turns",
             "max_upload_file_bytes",
+            "max_upload_request_overhead_bytes",
             "max_workspace_bytes",
             "max_private_bytes",
             "max_archive_entries",
@@ -413,13 +415,23 @@ class QuotaManager:
                         raise ReservationConflictError(pool)
                 self._refresh_if_idle(pool, filesystem_id)
                 self._ensure_growth(pool, filesystem_id, amount_bytes)
+                baseline_row = self._connection.execute(
+                    """
+                    SELECT baseline_usage_bytes FROM quota_pool_state
+                    WHERE pool = ?
+                    """,
+                    (pool,),
+                ).fetchone()
+                if baseline_row is None:
+                    raise ReservationConflictError(pool)
                 try:
                     self._connection.execute(
                         """
                         INSERT INTO quota_reservations (
                             reservation_id, pool, reserved_bytes, consumed_bytes,
-                            item_limit_bytes, conflict_key, owner_id, filesystem_id
-                        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+                            item_limit_bytes, conflict_key, owner_id, filesystem_id,
+                            observed_baseline_bytes
+                        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?)
                         """,
                         (
                             reservation_id,
@@ -429,6 +441,7 @@ class QuotaManager:
                             conflict_key,
                             self._owner_id,
                             filesystem_id,
+                            int(baseline_row[0]),
                         ),
                     )
                 except sqlite3.IntegrityError:
@@ -454,6 +467,52 @@ class QuotaManager:
             with self._transaction():
                 self._refresh_if_idle(pool, filesystem_id)
                 self._ensure_growth(pool, filesystem_id, additional_bytes)
+
+    def observe_growth(self, reservation: QuotaReservation) -> int:
+        """Account for writes performed outside Bridge-owned output streams."""
+
+        with self._lock:
+            with self._transaction():
+                row = self._require_active(reservation)
+                reserved_bytes, consumed_bytes, item_limit, filesystem_id = row
+                baseline_row = self._connection.execute(
+                    """
+                    SELECT observed_baseline_bytes FROM quota_reservations
+                    WHERE reservation_id = ?
+                    """,
+                    (reservation.reservation_id,),
+                ).fetchone()
+                if baseline_row is None:
+                    raise ReservationConflictError(reservation.pool)
+                current_usage = self._pool(reservation.pool).usage_bytes()
+                if (
+                    type(current_usage) is not int
+                    or not 0 <= current_usage <= _MAX_SQLITE_INTEGER
+                ):
+                    raise ReservationConflictError(reservation.pool)
+                observed = max(0, current_usage - int(baseline_row[0]))
+                consumed = max(consumed_bytes, observed)
+                if item_limit is not None and consumed > item_limit:
+                    raise QuotaExceededError(reservation.pool)
+                growth = max(0, consumed - reserved_bytes)
+                self._ensure_growth(
+                    reservation.pool,
+                    filesystem_id,
+                    growth,
+                    observed_consumed_growth=growth,
+                )
+                reserved_bytes += growth
+                self._connection.execute(
+                    """
+                    UPDATE quota_reservations
+                    SET reserved_bytes = ?, consumed_bytes = ?
+                    WHERE reservation_id = ?
+                    """,
+                    (reserved_bytes, consumed, reservation.reservation_id),
+                )
+            reservation.reserved_bytes = reserved_bytes
+            reservation.consumed_bytes = consumed
+            return consumed
 
     def _pool(self, pool: str) -> QuotaPool:
         try:
@@ -564,6 +623,8 @@ class QuotaManager:
         pool: str,
         filesystem_id: str,
         growth_bytes: int,
+        *,
+        observed_consumed_growth: int = 0,
     ) -> None:
         state = self._connection.execute(
             """
@@ -616,7 +677,10 @@ class QuotaManager:
             raise ReservationConflictError(pool)
         effective_free = min(
             baseline_free_bytes,
-            min(_MAX_SQLITE_INTEGER, current_free + filesystem_consumed),
+            min(
+                _MAX_SQLITE_INTEGER,
+                current_free + filesystem_consumed + observed_consumed_growth,
+            ),
         )
         if effective_free != baseline_free_bytes:
             self._connection.execute(
@@ -773,7 +837,8 @@ class QuotaManager:
                     item_limit_bytes INTEGER,
                     conflict_key TEXT,
                     owner_id TEXT NOT NULL,
-                    filesystem_id TEXT NOT NULL
+                    filesystem_id TEXT NOT NULL,
+                    observed_baseline_bytes INTEGER NOT NULL
                 )
                 """
             )
@@ -786,6 +851,19 @@ class QuotaManager:
             if "filesystem_id" not in columns:
                 self._connection.execute(
                     "ALTER TABLE quota_reservations ADD COLUMN filesystem_id TEXT"
+                )
+            if "observed_baseline_bytes" not in columns:
+                self._connection.execute(
+                    """
+                    ALTER TABLE quota_reservations
+                    ADD COLUMN observed_baseline_bytes INTEGER
+                    """
+                )
+                self._connection.execute(
+                    """
+                    UPDATE quota_reservations SET observed_baseline_bytes = 0
+                    WHERE observed_baseline_bytes IS NULL
+                    """
                 )
                 self._connection.execute(
                     """
@@ -967,10 +1045,20 @@ def inspect_archive(
 def open_inspected_archive(
     source: BinaryIO,
     limits: ResourceLimits,
+    *,
+    max_container_bytes: int | None = None,
 ) -> Iterator[tuple[ZipFile, tuple[SafeArchiveEntry, ...]]]:
     """Bound ZIP metadata before constructing ``ZipFile`` and validate it."""
 
-    _preflight_archive_container(source, limits)
+    _preflight_archive_container(
+        source,
+        limits,
+        max_container_bytes=(
+            limits.max_upload_file_bytes
+            if max_container_bytes is None
+            else max_container_bytes
+        ),
+    )
     try:
         source.seek(0)
         archive = ZipFile(source, mode="r")
@@ -1042,14 +1130,46 @@ def copy_archive_entry(
         raise
 
 
-def _preflight_archive_container(source: BinaryIO, limits: ResourceLimits) -> None:
+def archive_container_detected(source: BinaryIO) -> bool:
+    """Detect a bounded EOCD record without trusting a filename or prefix."""
+
+    try:
+        original_position = source.tell()
+        source.seek(0, os.SEEK_END)
+        container_bytes = source.tell()
+        if not isinstance(container_bytes, int) or container_bytes < 22:
+            return False
+        tail_size = min(container_bytes, 22 + 65_535)
+        source.seek(container_bytes - tail_size)
+        tail = source.read(tail_size)
+        return isinstance(tail, bytes) and _find_eocd_index(tail) >= 0
+    except (AttributeError, OSError, ValueError):
+        return False
+    finally:
+        try:
+            source.seek(original_position)
+        except (AttributeError, OSError, UnboundLocalError, ValueError):
+            pass
+
+
+def _preflight_archive_container(
+    source: BinaryIO,
+    limits: ResourceLimits,
+    *,
+    max_container_bytes: int,
+) -> None:
+    if (
+        type(max_container_bytes) is not int
+        or not 0 < max_container_bytes <= _MAX_SQLITE_INTEGER
+    ):
+        raise ValueError("archive container limit must be positive")
     try:
         source.seek(0, os.SEEK_END)
         container_bytes = source.tell()
         if (
             type(container_bytes) is not int
             or container_bytes < 22
-            or container_bytes > limits.max_upload_file_bytes
+            or container_bytes > max_container_bytes
         ):
             raise QuotaExceededError("archive_container")
         tail_size = min(container_bytes, 22 + 65_535)
@@ -1062,19 +1182,7 @@ def _preflight_archive_container(source: BinaryIO, limits: ResourceLimits) -> No
     except (AttributeError, OSError, ValueError):
         raise QuotaExceededError("archive_entry") from None
 
-    signature = b"PK\x05\x06"
-    cursor = len(tail)
-    eocd_index = -1
-    while cursor:
-        candidate = tail.rfind(signature, 0, cursor)
-        if candidate < 0:
-            break
-        if candidate + 22 <= len(tail):
-            comment_bytes = struct.unpack_from("<H", tail, candidate + 20)[0]
-            if candidate + 22 + comment_bytes == len(tail):
-                eocd_index = candidate
-                break
-        cursor = candidate
+    eocd_index = _find_eocd_index(tail)
     if eocd_index < 0:
         raise QuotaExceededError("archive_entry")
 
@@ -1102,10 +1210,11 @@ def _preflight_archive_container(source: BinaryIO, limits: ResourceLimits) -> No
     if directory_bytes > limits.max_archive_metadata_bytes:
         raise QuotaExceededError("archive_metadata")
     eocd_absolute = container_bytes - tail_size + eocd_index
-    if directory_offset + directory_bytes != eocd_absolute:
+    prefix_bytes = eocd_absolute - (directory_offset + directory_bytes)
+    if prefix_bytes < 0:
         raise QuotaExceededError("archive_entry")
     try:
-        source.seek(directory_offset)
+        source.seek(prefix_bytes + directory_offset)
         directory = source.read(directory_bytes)
     except (AttributeError, OSError, ValueError):
         raise QuotaExceededError("archive_entry") from None
@@ -1114,6 +1223,28 @@ def _preflight_archive_container(source: BinaryIO, limits: ResourceLimits) -> No
     actual_entries = _count_central_directory_records(directory, limits)
     if actual_entries != entries_total:
         raise QuotaExceededError("archive_entry")
+
+
+def _find_eocd_index(tail: bytes) -> int:
+    """Find the last complete EOCD record, allowing bounded trailing data.
+
+    ``zipfile.ZipFile`` accepts archives with bytes after the EOCD record.  The
+    upload classifier must recognize the same shape or a disguised archive can
+    avoid the archive safety preflight merely by appending a suffix.
+    """
+
+    signature = b"PK\x05\x06"
+    cursor = len(tail)
+    while cursor:
+        candidate = tail.rfind(signature, 0, cursor)
+        if candidate < 0:
+            return -1
+        if candidate + 22 <= len(tail):
+            comment_bytes = struct.unpack_from("<H", tail, candidate + 20)[0]
+            if candidate + 22 + comment_bytes <= len(tail):
+                return candidate
+        cursor = candidate
+    return -1
 
 
 def _count_central_directory_records(

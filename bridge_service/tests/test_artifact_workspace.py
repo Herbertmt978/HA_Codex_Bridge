@@ -2,7 +2,6 @@ import json
 import os
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from io import BytesIO
 from pathlib import Path
 from threading import Barrier
 
@@ -458,12 +457,12 @@ def test_home_assistant_archive_copy_failure_removes_partial_output(
     original_copy = storage.workspace_boundary.copy_regular_file_to_anonymous_lease
     copy_count = 0
 
-    def fail_second_copy(relative):
+    def fail_second_copy(relative, **kwargs):
         nonlocal copy_count
         copy_count += 1
         if copy_count == 2:
             raise WorkspaceTypeError()
-        return original_copy(relative)
+        return original_copy(relative, **kwargs)
 
     monkeypatch.setattr(
         storage.workspace_boundary,
@@ -618,8 +617,8 @@ def test_home_assistant_archive_uses_sealed_source_snapshot_during_replacement(
     target.write_bytes(b"trusted")
     original_copy = storage.workspace_boundary.copy_regular_file_to_anonymous_lease
 
-    def copy_then_replace(relative):
-        lease = original_copy(relative)
+    def copy_then_replace(relative, **kwargs):
+        lease = original_copy(relative, **kwargs)
         target.write_bytes(b"hostile replacement")
         return lease
 
