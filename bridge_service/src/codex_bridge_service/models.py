@@ -51,6 +51,11 @@ class RuntimeProfile(StrEnum):
     HOME_ASSISTANT = "home_assistant"
 
 
+class ArtifactSource(StrEnum):
+    WORKSPACE = "workspace"
+    WORKSPACE_ARCHIVE = "workspace_archive"
+
+
 class AttachmentRecord(BaseModel):
     attachment_id: str
     filename: str
@@ -67,6 +72,7 @@ class ArtifactRecord(BaseModel):
     stored_path: str
     relative_path: str | None = None
     size_bytes: int | None = None
+    source: ArtifactSource = ArtifactSource.WORKSPACE
 
 
 class ProjectRecord(BaseModel):

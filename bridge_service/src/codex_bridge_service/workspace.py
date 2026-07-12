@@ -100,6 +100,12 @@ class WorkspaceAnonymousFileLease:
     def process_path(self) -> str:
         return f"/proc/self/fd/{self.fileno()}"
 
+    def detach(self) -> int:
+        """Transfer descriptor ownership to a file object or another caller."""
+        file_fd = self.fileno()
+        self._file_fd = None
+        return file_fd
+
     def close(self) -> None:
         file_fd = self._file_fd
         self._file_fd = None
@@ -319,14 +325,24 @@ class WorkspaceBoundary:
             os.close(directory_fd)
         return tuple(sorted(discovered, key=str.casefold))
 
-    def walk_regular_files(self, relative: Path | str = ".") -> tuple[str, ...]:
+    def walk_regular_files(
+        self,
+        relative: Path | str = ".",
+        *,
+        reject_unsafe: bool = False,
+    ) -> tuple[str, ...]:
         self._require_secure_operations()
         normalized = self.normalize(relative, allow_root=True)
         parts = () if normalized == "." else tuple(normalized.split("/"))
         directory_fd = self._open_parent_fd(parts)
         files: list[str] = []
         try:
-            self._walk_regular_files_fd(directory_fd, normalized, files)
+            self._walk_regular_files_fd(
+                directory_fd,
+                normalized,
+                files,
+                reject_unsafe=reject_unsafe,
+            )
         finally:
             os.close(directory_fd)
         return tuple(sorted(files, key=str.casefold))
@@ -676,12 +692,16 @@ class WorkspaceBoundary:
         directory_fd: int,
         prefix: str,
         files: list[str],
+        *,
+        reject_unsafe: bool,
     ) -> None:
         try:
             with os.scandir(directory_fd) as entries:
                 ordered = sorted(entries, key=lambda entry: entry.name.casefold())
             for entry in ordered:
                 if entry.is_symlink():
+                    if reject_unsafe:
+                        raise WorkspaceEscapeError()
                     continue
                 try:
                     entry_stat = entry.stat(follow_symlinks=False)
@@ -691,6 +711,8 @@ class WorkspaceBoundary:
                 try:
                     public = self.normalize(public)
                 except WorkspaceInputError:
+                    if reject_unsafe:
+                        raise
                     continue
                 if stat.S_ISDIR(entry_stat.st_mode):
                     child_fd: int | None = None
@@ -700,7 +722,12 @@ class WorkspaceBoundary:
                             self._directory_open_flags(),
                             dir_fd=directory_fd,
                         )
-                        self._walk_regular_files_fd(child_fd, public, files)
+                        self._walk_regular_files_fd(
+                            child_fd,
+                            public,
+                            files,
+                            reject_unsafe=reject_unsafe,
+                        )
                     except OSError as error:
                         raise self._translated_entry_error(
                             error,
@@ -723,6 +750,8 @@ class WorkspaceBoundary:
                         )
                         if stat.S_ISREG(os.fstat(file_fd).st_mode):
                             files.append(public)
+                        elif reject_unsafe:
+                            raise WorkspaceTypeError()
                     except OSError as error:
                         raise self._translated_entry_error(
                             error,
@@ -732,6 +761,8 @@ class WorkspaceBoundary:
                     finally:
                         if file_fd is not None:
                             os.close(file_fd)
+                elif reject_unsafe:
+                    raise WorkspaceTypeError()
         except WorkspaceBoundaryError:
             raise
         except OSError:

@@ -16,6 +16,7 @@ from .models import (
     DEFAULT_MODEL,
     DEFAULT_THINKING_LEVEL,
     ArtifactRecord,
+    ArtifactSource,
     AttachmentRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
@@ -39,6 +40,7 @@ from .workspace import (
     WorkspaceExistsError,
     WorkspaceFileIdentity,
     WorkspaceInputError,
+    WorkspaceUnsupportedError,
 )
 
 _UNSET = object()
@@ -84,6 +86,7 @@ class BridgeStorage:
         self.logs_dir = self.root / "logs"
         self.workspace_boundary: WorkspaceBoundary | None = None
         self.uploads_boundary: WorkspaceBoundary | None = None
+        self.artifacts_boundary: WorkspaceBoundary | None = None
         self.workspace_root: Path | None = None
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
@@ -133,8 +136,9 @@ class BridgeStorage:
 
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             # Retain a descriptor for the private upload root before handling
-            # any untrusted attachment locator.
+            # any untrusted attachment or archive locator.
             self.uploads_boundary = WorkspaceBoundary(self.uploads_dir)
+            self.artifacts_boundary = WorkspaceBoundary(self.artifacts_dir)
 
         if self.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
             self.workspaces_dir.mkdir(parents=True, exist_ok=True)
@@ -173,6 +177,12 @@ class BridgeStorage:
         boundary = self.uploads_boundary
         if boundary is None:
             raise RuntimeError("upload boundary is unavailable")
+        return boundary
+
+    def _home_assistant_artifacts_boundary(self) -> WorkspaceBoundary:
+        boundary = self.artifacts_boundary
+        if boundary is None:
+            raise RuntimeError("artifact boundary is unavailable")
         return boundary
 
     def _special_project_root(self) -> str:
@@ -330,6 +340,62 @@ class BridgeStorage:
             attachment_locators.add(stored)
             boundary.validate_file_locator(stored)
         return record
+
+    def _validate_thread_artifacts(self, record: ThreadRecord) -> ThreadRecord:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return record
+        workspace_boundary = self._home_assistant_boundary()
+        archive_boundary = self._home_assistant_artifacts_boundary()
+        artifact_ids: set[str] = set()
+        artifact_owners: set[tuple[ArtifactSource, str]] = set()
+        for artifact in record.artifacts:
+            if artifact.relative_path is None:
+                raise WorkspaceInputError()
+            if artifact.source is ArtifactSource.WORKSPACE:
+                boundary = workspace_boundary
+                relative = boundary.normalize(artifact.relative_path)
+                stored = boundary.normalize(artifact.stored_path)
+                expected_stored = self._workspace_child_locator(
+                    record.workspace_path,
+                    relative,
+                )
+            elif artifact.source is ArtifactSource.WORKSPACE_ARCHIVE:
+                boundary = archive_boundary
+                thread_locator = boundary.normalize(record.thread_id)
+                if thread_locator != record.thread_id or "/" in thread_locator:
+                    raise WorkspaceInputError()
+                relative = boundary.normalize(artifact.relative_path)
+                stored = boundary.normalize(artifact.stored_path)
+                expected_stored = f"{thread_locator}/{relative}"
+            else:
+                raise WorkspaceInputError()
+
+            filename = boundary.normalize(artifact.filename)
+            if (
+                relative != artifact.relative_path
+                or stored != artifact.stored_path
+                or filename != artifact.filename
+                or "/" in filename
+                or PurePosixPath(relative).name != filename
+            ):
+                raise WorkspaceInputError()
+            if stored != expected_stored:
+                raise WorkspaceEscapeError()
+            owner = (artifact.source, stored)
+            if artifact.artifact_id in artifact_ids or owner in artifact_owners:
+                raise WorkspaceInputError()
+            artifact_ids.add(artifact.artifact_id)
+            artifact_owners.add(owner)
+            boundary.validate_file_locator(stored)
+        return record
+
+    def _workspace_child_locator(self, workspace_path: str, child: str) -> str:
+        boundary = self._home_assistant_boundary()
+        workspace = boundary.normalize(workspace_path, allow_root=True)
+        relative = boundary.normalize(child)
+        if workspace == ".":
+            return relative
+        return boundary.normalize(f"{workspace}/{relative}")
 
     def _validate_thread_project_workspace(
         self,
@@ -991,6 +1057,7 @@ class BridgeStorage:
             record = self._ensure_thread_project(record)
             record = self._ensure_thread_model(record)
             record = self._validate_thread_attachments(record)
+            record = self._validate_thread_artifacts(record)
             return self._ensure_thread_timestamps(record)
 
     def get_thread(self, thread_id: str) -> ThreadViewRecord:
@@ -1007,6 +1074,7 @@ class BridgeStorage:
                 for path in self.threads_dir.glob("*.json")
             ]
             records = [self._validate_thread_attachments(record) for record in records]
+            records = [self._validate_thread_artifacts(record) for record in records]
             records = [self._ensure_thread_timestamps(record) for record in records]
             if not include_archived:
                 records = [record for record in records if not record.archived_at]
@@ -1211,8 +1279,11 @@ class BridgeStorage:
                     self.load_project(record.project_id),
                 )
                 self._validate_thread_attachments(record)
+                self._validate_thread_artifacts(record)
                 self._merge_persisted_home_assistant_attachments(record)
+                self._merge_persisted_home_assistant_artifacts(record)
                 self._validate_thread_attachments(record)
+                self._validate_thread_artifacts(record)
             if not record.created_at:
                 record.created_at = self._now()
             if not record.updated_at:
@@ -1249,6 +1320,30 @@ class BridgeStorage:
                 continue
             merged.append(attachment)
         record.attachments = merged
+
+    def _merge_persisted_home_assistant_artifacts(self, record: ThreadRecord) -> None:
+        """Preserve append-only artifact metadata across stale thread writers."""
+        target = self._thread_path(record.thread_id)
+        try:
+            persisted = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return
+        if persisted.thread_id != record.thread_id:
+            raise WorkspaceInputError()
+        self._validate_thread_artifacts(persisted)
+
+        persisted_by_id = {
+            artifact.artifact_id: artifact for artifact in persisted.artifacts
+        }
+        merged = list(persisted.artifacts)
+        for artifact in record.artifacts:
+            persisted_artifact = persisted_by_id.get(artifact.artifact_id)
+            if persisted_artifact is not None:
+                if persisted_artifact != artifact:
+                    raise WorkspaceInputError()
+                continue
+            merged.append(artifact)
+        record.artifacts = merged
 
     def fail_home_assistant_run_without_workspace_validation(
         self,
@@ -1622,6 +1717,9 @@ class BridgeStorage:
         raise ThreadNotFoundError(artifact_id)
 
     def sync_thread_artifacts(self, thread_id: str) -> list[ArtifactRecord]:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            return self._sync_thread_artifacts_home_assistant(thread_id)
+
         record = self.load_thread(thread_id)
         workspace_path = Path(record.workspace_path)
         known_by_path = {artifact.stored_path: artifact for artifact in record.artifacts}
@@ -1660,7 +1758,106 @@ class BridgeStorage:
         self.save_thread(record)
         return record.artifacts
 
+    def _sync_thread_artifacts_home_assistant(
+        self,
+        thread_id: str,
+    ) -> list[ArtifactRecord]:
+        snapshot = self.load_thread(thread_id)
+        boundary = self._home_assistant_boundary()
+        workspace = boundary.normalize(snapshot.workspace_path, allow_root=True)
+        discovered = boundary.walk_regular_files(
+            workspace,
+            reject_unsafe=True,
+        )
+        scanned: list[tuple[str, str, int]] = []
+        workspace_parts = PurePosixPath(workspace)
+        for stored in discovered:
+            if workspace == ".":
+                relative = stored
+            else:
+                try:
+                    relative = PurePosixPath(stored).relative_to(workspace_parts).as_posix()
+                except ValueError:
+                    raise WorkspaceEscapeError() from None
+            relative = boundary.normalize(relative)
+            with boundary.open_regular_file(stored) as stream:
+                size_bytes = os.fstat(stream.fileno()).st_size
+            scanned.append((stored, relative, size_bytes))
+
+        with self._thread_mutation_lock:
+            record = self.load_thread(thread_id)
+            known = {
+                (artifact.source, artifact.stored_path)
+                for artifact in record.artifacts
+            }
+            added: list[ArtifactRecord] = []
+            for stored, relative, size_bytes in scanned:
+                owner = (ArtifactSource.WORKSPACE, stored)
+                if owner in known:
+                    continue
+                artifact = ArtifactRecord(
+                    artifact_id=f"art_{uuid4().hex[:12]}",
+                    filename=PurePosixPath(relative).name,
+                    mime_type=(
+                        mimetypes.guess_type(PurePosixPath(relative).name)[0]
+                        or "application/octet-stream"
+                    ),
+                    source=ArtifactSource.WORKSPACE,
+                    stored_path=stored,
+                    relative_path=relative,
+                    size_bytes=size_bytes,
+                )
+                record.artifacts.append(artifact)
+                added.append(artifact)
+                known.add(owner)
+
+            if added:
+                self._touch_thread(record)
+                self.save_thread(record)
+                for artifact in added:
+                    self.append_thread_event(
+                        thread_id=thread_id,
+                        event_type="artifact.added",
+                        payload={
+                            "artifact_id": artifact.artifact_id,
+                            "filename": artifact.filename,
+                            "mime_type": artifact.mime_type,
+                            "source": artifact.source.value,
+                            "stored_path": artifact.stored_path,
+                            "relative_path": artifact.relative_path,
+                            "size_bytes": artifact.size_bytes,
+                        },
+                    )
+            return record.artifacts
+
+    def open_artifact(
+        self,
+        thread_id: str,
+        artifact_id: str,
+    ) -> tuple[ArtifactRecord, BinaryIO, int]:
+        """Open one HA artifact through its owning retained boundary."""
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("descriptor artifact opens require the home_assistant profile")
+        artifact = self.get_artifact(thread_id, artifact_id)
+        if artifact.source is ArtifactSource.WORKSPACE:
+            boundary = self._home_assistant_boundary()
+        elif artifact.source is ArtifactSource.WORKSPACE_ARCHIVE:
+            boundary = self._home_assistant_artifacts_boundary()
+        else:
+            raise WorkspaceInputError()
+        lease = boundary.copy_regular_file_to_anonymous_lease(artifact.stored_path)
+        size_bytes = lease.size_bytes
+        file_fd = lease.detach()
+        try:
+            stream = os.fdopen(file_fd, "rb")
+            return artifact, stream, size_bytes
+        except BaseException:
+            os.close(file_fd)
+            raise
+
     def create_workspace_archive(self, thread_id: str) -> ArtifactRecord:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            raise WorkspaceUnsupportedError()
         record = self.load_thread(thread_id)
         target_dir = self.artifacts_dir / thread_id
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -1706,6 +1903,7 @@ class BridgeStorage:
             stored_path=str(target),
             relative_path=filename,
             size_bytes=target.stat().st_size,
+            source=ArtifactSource.WORKSPACE_ARCHIVE,
         )
         record.artifacts.append(artifact)
         self._touch_thread(record)
