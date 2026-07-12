@@ -1,6 +1,20 @@
 import os
+import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+
+
+_PLATFORM_PATH_VARIABLES = ("SYSTEMROOT", "WINDIR", "COMSPEC")
+_TEMPORARY_DIRECTORY_VARIABLES = ("TMPDIR", "TMP", "TEMP")
+_LOCALE_VARIABLES = ("LANG", "LC_ALL", "LC_CTYPE")
+_LOCALE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}\Z")
+_PATHEXT_PATTERN = re.compile(r"(?:\.[A-Za-z0-9]+)(?:;(?:\.[A-Za-z0-9]+))*\Z")
+_SECRET_CARRIER_PATTERN = re.compile(
+    r"(?:bearer\s|ghp_|github_pat_|sk-(?:proj-)?|api[_-]?key\s*[=:]|"
+    r"authorization\s*[=:]|-----begin)",
+    re.IGNORECASE,
+)
 
 
 def resolve_codex_home(
@@ -32,12 +46,80 @@ def codex_command_prefix(codex_command: str) -> list[str]:
     return [str(target)]
 
 
-def codex_subprocess_environment(codex_home: Path | str | None = None) -> dict[str, str]:
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.upper().startswith("CODEX_BRIDGE_")
-    }
-    if codex_home is not None:
-        environment["CODEX_HOME"] = str(codex_home)
+def _is_plain_value(value: object, *, maximum_length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= maximum_length
+        and not any(ord(character) < 32 or ord(character) == 127 for character in value)
+        and not _SECRET_CARRIER_PATTERN.search(value)
+    )
+
+
+def _is_safe_path(value: object, *, expected_kind: str | None = None) -> bool:
+    if not _is_plain_value(value, maximum_length=4096):
+        return False
+    assert isinstance(value, str)
+    if "://" in value:
+        return False
+    path = Path(value)
+    if not path.is_absolute():
+        return False
+    if expected_kind == "file":
+        return path.is_file()
+    if expected_kind == "directory":
+        return path.is_dir()
+    return True
+
+
+def codex_subprocess_environment(
+    codex_home: Path | str | None = None,
+    source_environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    source = os.environ if source_environment is None else source_environment
+    environment: dict[str, str] = {}
+
+    path_value = source.get("PATH")
+    if _is_plain_value(path_value, maximum_length=32768):
+        environment["PATH"] = path_value
+
+    for name in _PLATFORM_PATH_VARIABLES:
+        value = source.get(name)
+        if _is_safe_path(value):
+            environment[name] = value
+
+    pathext = source.get("PATHEXT")
+    if (
+        _is_plain_value(pathext, maximum_length=256)
+        and isinstance(pathext, str)
+        and _PATHEXT_PATTERN.fullmatch(pathext)
+    ):
+        environment["PATHEXT"] = pathext
+
+    dedicated_home = str(codex_home) if codex_home is not None else source.get("CODEX_HOME")
+    if _is_safe_path(dedicated_home):
+        environment["HOME"] = dedicated_home
+        environment["CODEX_HOME"] = dedicated_home
+
+    for name in _TEMPORARY_DIRECTORY_VARIABLES:
+        value = source.get(name)
+        if _is_safe_path(value):
+            environment[name] = value
+
+    for name in _LOCALE_VARIABLES:
+        value = source.get(name)
+        if (
+            _is_plain_value(value, maximum_length=64)
+            and isinstance(value, str)
+            and _LOCALE_PATTERN.fullmatch(value)
+        ):
+            environment[name] = value
+
+    certificate_file = source.get("SSL_CERT_FILE")
+    if _is_safe_path(certificate_file, expected_kind="file"):
+        environment["SSL_CERT_FILE"] = certificate_file
+
+    certificate_directory = source.get("SSL_CERT_DIR")
+    if _is_safe_path(certificate_directory, expected_kind="directory"):
+        environment["SSL_CERT_DIR"] = certificate_directory
+
     return environment

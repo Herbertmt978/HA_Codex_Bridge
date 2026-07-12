@@ -1,8 +1,10 @@
 import json
+import os
 import subprocess
 import time
 from threading import Event
 
+from codex_bridge_service.codex_process import codex_subprocess_environment
 from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, RunMode
 from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
@@ -43,6 +45,21 @@ def _wait_for_idle(storage: BridgeStorage, thread_id: str) -> None:
     raise AssertionError("thread did not return to idle in time")
 
 
+def _allow_fake_codex_environment(monkeypatch) -> None:
+    def test_environment(codex_home=None):
+        environment = codex_subprocess_environment(codex_home)
+        for name in ("FAKE_CODEX_ARGV_PATH", "FAKE_CODEX_ARTIFACT_NAME"):
+            value = os.environ.get(name)
+            if value is not None:
+                environment[name] = value
+        return environment
+
+    monkeypatch.setattr(
+        "codex_bridge_service.runner.codex_subprocess_environment",
+        test_environment,
+    )
+
+
 def _create_project_thread(storage: BridgeStorage, tmp_path, *, model_override=None, thinking_override=None):
     project = storage.create_project(
         name="Runner",
@@ -78,6 +95,7 @@ def test_runner_executes_initial_prompt_collects_artifacts_binds_session_and_upd
 
     monkeypatch.setenv("FAKE_CODEX_ARGV_PATH", str(argv_path))
     monkeypatch.setenv("FAKE_CODEX_ARTIFACT_NAME", "report.md")
+    _allow_fake_codex_environment(monkeypatch)
 
     runner = BridgeRunner(storage=storage, codex_command=str(script_path))
     run = runner.submit_prompt(thread.thread_id, "Summarise the upload")
@@ -126,6 +144,7 @@ def test_runner_resumes_existing_session_for_follow_up_prompt_and_uses_overrides
     script_path.write_text(FAKE_CODEX, encoding="utf-8")
 
     monkeypatch.setenv("FAKE_CODEX_ARGV_PATH", str(first_argv_path))
+    _allow_fake_codex_environment(monkeypatch)
     runner = BridgeRunner(storage=storage, codex_command=str(script_path))
     runner.submit_prompt(thread.thread_id, "First prompt")
     _wait_for_idle(storage, thread.thread_id)
@@ -493,6 +512,7 @@ def test_runner_can_bypass_sandbox_for_trusted_vm_exec(tmp_path, monkeypatch) ->
     script_path.write_text(FAKE_CODEX, encoding="utf-8")
 
     monkeypatch.setenv("FAKE_CODEX_ARGV_PATH", str(argv_path))
+    _allow_fake_codex_environment(monkeypatch)
 
     runner = BridgeRunner(
         storage=storage,
@@ -517,6 +537,7 @@ def test_runner_can_ignore_user_config_for_fast_bridge_exec(tmp_path, monkeypatc
     script_path.write_text(FAKE_CODEX, encoding="utf-8")
 
     monkeypatch.setenv("FAKE_CODEX_ARGV_PATH", str(argv_path))
+    _allow_fake_codex_environment(monkeypatch)
 
     runner = BridgeRunner(
         storage=storage,

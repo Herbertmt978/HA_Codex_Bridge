@@ -64,10 +64,12 @@ def test_diagnostics_probe_clears_stale_error_after_newer_healthy_thread(tmp_pat
     assert diagnostics.last_error is None
 
 
-def test_diagnostics_subprocesses_do_not_inherit_bridge_secrets(tmp_path, monkeypatch) -> None:
+def test_diagnostics_subprocesses_use_isolated_codex_environment(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path / "bridge")
     calls: list[dict[str, object]] = []
     monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-proj-realistic-secret-carrier")
+    monkeypatch.setenv("HTTPS_PROXY", "https://user:secret@proxy.invalid:8443")
 
     class Completed:
         stdout = "ok"
@@ -90,6 +92,9 @@ def test_diagnostics_subprocesses_do_not_inherit_bridge_secrets(tmp_path, monkey
     assert calls
     assert all(call.get("env") is not None for call in calls)
     assert all("CODEX_BRIDGE_AUTH_TOKEN" not in call["env"] for call in calls)
+    assert all("OPENAI_API_KEY" not in call["env"] for call in calls)
+    assert all("HTTPS_PROXY" not in call["env"] for call in calls)
+    assert all("PATH" in call["env"] for call in calls)
 
 
 def test_diagnostics_probe_reports_validated_build_information(tmp_path) -> None:
