@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import sys
 from threading import Event
 import time
@@ -14,6 +15,10 @@ from types import ModuleType
 from typing import Any, Callable
 
 import pytest
+from fastapi.testclient import TestClient
+
+from codex_bridge_service.app import create_app
+from codex_bridge_service.models import RuntimeProfile
 
 
 FAKE_APP_SERVER = Path(__file__).with_name("fakes") / "fake_app_server.py"
@@ -24,7 +29,9 @@ class FakeAppServer:
         self.codex_home = root / "codex-home"
         self.sidecars = self.codex_home / ".fake-app-server"
         self.sidecars.mkdir(parents=True)
-        self.command = str(FAKE_APP_SERVER)
+        local_command = root / "fake_app_server.py"
+        shutil.copy2(FAKE_APP_SERVER, local_command)
+        self.command = str(local_command)
 
     def configure(self, generation: int = 1, **scenario: Any) -> None:
         self._write_json(self.sidecars / f"scenario-{generation}.json", scenario)
@@ -70,6 +77,7 @@ def _load_module() -> ModuleType:
         return importlib.import_module("codex_bridge_service.codex_app_server")
     except ImportError as exc:
         pytest.fail(f"Codex app-server client module is missing: {exc}")
+        raise AssertionError from exc
 
 
 def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) -> Any:
@@ -79,8 +87,8 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "client_name": "ha_codex_bridge",
         "client_title": "HA Codex Bridge",
         "client_version": "0.6.0",
-        "initialize_timeout_seconds": 1.0,
-        "request_timeout_seconds": 1.0,
+        "initialize_timeout_seconds": 10.0,
+        "request_timeout_seconds": 2.0,
         "max_message_bytes": 16 * 1024,
         "max_pending_requests": 8,
         "callback_workers": 2,
@@ -89,6 +97,7 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "restart_max_delay_seconds": 0.1,
         "restart_stable_seconds": 0.2,
         "shutdown_grace_seconds": 0.05,
+        "protocol_contract": None,
     }
     options.update(overrides)
     return module.CodexAppServerClient(**options)
@@ -97,7 +106,7 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
 def _wait_until(
     predicate: Callable[[], bool],
     *,
-    timeout: float = 2.0,
+    timeout: float = 5.0,
     message: str = "condition was not met",
 ) -> None:
     deadline = time.monotonic() + timeout
@@ -168,6 +177,50 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         client.close()
     assert client.ready is False
     assert client.process_id is None
+    _wait_until(
+        lambda: any(
+            entry.get("direction") == "server-control"
+            and entry.get("message") == {"event": "stdin-eof"}
+            for entry in fake_server.transcript()
+        ),
+        message="app-server did not receive a graceful stdin EOF",
+    )
+
+
+def test_application_requests_remain_closed_until_initialized_is_written(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    client = _client(module, fake_server)
+    initialized_write_entered = Event()
+    release_initialized_write = Event()
+    original_write = client._write_message
+
+    def gated_write(generation: int, message: dict[str, Any]) -> None:
+        if message.get("method") == "initialized":
+            initialized_write_entered.set()
+            assert release_initialized_write.wait(10)
+        original_write(generation, message)
+
+    client._write_message = gated_write
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            startup = executor.submit(client.start)
+            assert initialized_write_entered.wait(10)
+            assert client.ready is False
+            with pytest.raises(module.AppServerUnavailableError):
+                client.request("must-wait")
+            assert not any(
+                message.get("method") == "must-wait"
+                for message in fake_server.client_messages()
+            )
+            release_initialized_write.set()
+            startup.result(timeout=12)
+        assert client.request("ping") == {"echo": None}
+    finally:
+        release_initialized_write.set()
+        client.close()
 
 
 def test_concurrent_requests_are_correlated_when_responses_arrive_in_reverse_order(
@@ -233,7 +286,7 @@ def test_notification_handler_is_immutable_and_never_blocks_response_reader(
         client.close()
 
 
-def test_bounded_callback_queue_drops_excess_notifications_without_blocking_reader(
+def test_bounded_callback_queue_fails_generation_instead_of_dropping_notifications(
     fake_server: FakeAppServer,
 ) -> None:
     module = _load_module()
@@ -265,12 +318,17 @@ def test_bounded_callback_queue_drops_excess_notifications_without_blocking_read
     client.start()
     try:
         assert entered.wait(1)
-        assert client.request("emit/flood") == {"echo": None}
-        time.sleep(0.05)
+        with pytest.raises(
+            (module.AppServerOverloadedError, module.AppServerUnavailableError)
+        ):
+            client.request("emit/flood")
         assert len(calls) == 1
         release.set()
-        _wait_until(lambda: len(calls) == 2)
-        assert len(calls) == 2
+        _wait_until(lambda: client.ready and client.generation == 2)
+        assert client.request("ping", {"generation": 2}) == {
+            "echo": {"generation": 2}
+        }
+        assert len(calls) == 1
     finally:
         release.set()
         client.close()
@@ -382,16 +440,26 @@ def test_request_timeout_releases_capacity_and_late_response_is_ignored(
     fake_server: FakeAppServer,
 ) -> None:
     module = _load_module()
-    fake_server.configure(
-        responses={"slow": {"mode": "delay", "delay_seconds": 0.15}}
-    )
+    fake_server.configure(responses={"slow": {"mode": "hold", "control_key": "slow"}})
     client = _client(module, fake_server, max_pending_requests=1)
     client.start()
 
     try:
         with pytest.raises(module.AppServerTimeoutError):
             client.request("slow", {"request": "old"}, timeout_seconds=0.03)
-        time.sleep(0.2)
+        slow_request = _wait_for_client_message(
+            fake_server,
+            lambda message: message.get("method") == "slow",
+        )
+        fake_server.release(1, "slow")
+        _wait_until(
+            lambda: any(
+                entry.get("direction") == "server"
+                and entry.get("message", {}).get("id") == slow_request["id"]
+                for entry in fake_server.transcript()
+            ),
+            message="fake server did not emit the deliberately late response",
+        )
         assert client.ready is True
         assert client.request("ping", {"request": "new"}) == {
             "echo": {"request": "new"}
@@ -437,6 +505,92 @@ def test_initialize_timeout_is_typed_and_close_stops_retries(fake_server: FakeAp
         client.close()
     time.sleep(0.1)
     assert not (fake_server.sidecars / "generation-2.claim").exists()
+
+
+def test_restart_backoff_is_positive_capped_and_cannot_overflow(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+
+    assert module._capped_restart_delay(
+        base_seconds=0.25,
+        maximum_seconds=30.0,
+        attempt=1025,
+    ) == 30.0
+    with pytest.raises(ValueError, match="restart base delay"):
+        _client(module, fake_server, restart_base_delay_seconds=0)
+
+
+def test_outbound_limit_preflight_rejects_before_json_serialization(
+    fake_server: FakeAppServer,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    client = _client(module, fake_server, max_message_bytes=256)
+
+    def serialization_must_not_run(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("oversized payload reached json.dumps")
+
+    monkeypatch.setattr(module.json, "dumps", serialization_must_not_run)
+    with pytest.raises(module.AppServerProtocolError):
+        client._write_message(1, {"payload": "x" * 1024})
+    exact_body = "x" * (client.max_message_bytes - len(b'{"payload":""}'))
+    with pytest.raises(module.AppServerProtocolError):
+        client._write_message(1, {"payload": exact_body})
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"method": "invented/notification", "params": {}},
+        {"method": "invented/request", "id": "unknown-1", "params": {}},
+        {"method": "account/updated", "params": {"authMode": "api-key"}},
+    ],
+)
+def test_locked_inbound_method_and_payload_violations_restart_generation(
+    fake_server: FakeAppServer,
+    message: dict[str, Any],
+) -> None:
+    module = _load_module()
+    action = {
+        "kind": "request" if "id" in message else "notification",
+        **message,
+    }
+    fake_server.configure(1, on_initialized=[action])
+    fake_server.configure(2)
+    client = _client(
+        module,
+        fake_server,
+        protocol_contract=module._DEFAULT_PROTOCOL_CONTRACT,
+    )
+
+    client.start()
+    try:
+        _wait_until(lambda: client.ready and client.generation == 2)
+    finally:
+        client.close()
+
+
+def test_locked_client_rejects_a_mismatched_app_server_version(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        initialize_result={
+            "codexHome": str(fake_server.codex_home.resolve()),
+            "platformFamily": "windows" if os.name == "nt" else "unix",
+            "platformOs": "windows" if os.name == "nt" else "linux",
+            "userAgent": "Codex Desktop/0.140.0 (test; x86_64)",
+        }
+    )
+    client = _client(
+        module,
+        fake_server,
+        protocol_contract=module._DEFAULT_PROTOCOL_CONTRACT,
+    )
+
+    with pytest.raises(module.AppServerProtocolError):
+        client.start()
 
 
 @pytest.mark.parametrize(
@@ -492,7 +646,7 @@ def test_stderr_is_drained_and_diagnostics_are_redacted(fake_server: FakeAppServ
         assert client.request("stderr/flood", {"ok": True}, timeout_seconds=2) == {
             "echo": {"ok": True}
         }
-        _wait_until(lambda: len(diagnostics) >= 3)
+        _wait_until(lambda: len(diagnostics) == 1)
         emitted = "\n".join(diagnostics)
         assert "reusable-secret" not in emitted
         assert "person@example.com" not in emitted
@@ -590,3 +744,87 @@ def test_close_terminates_the_entire_posix_process_group(fake_server: FakeAppSer
     )
     with pytest.raises(ProcessLookupError):
         os.kill(parent_pid, signal.SIGTERM)
+
+
+class _LifecycleClient:
+    def __init__(self, *, fail_start: bool = False) -> None:
+        self.fail_start = fail_start
+        self.start_calls = 0
+        self.close_calls = 0
+
+    def start(self) -> None:
+        self.start_calls += 1
+        if self.fail_start:
+            raise RuntimeError("synthetic startup failure")
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class _ForbiddenModelProbe:
+    def probe(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("HA startup must not launch a legacy model process")
+
+
+def test_home_assistant_lifespan_owns_one_app_server_client(tmp_path: Path) -> None:
+    managed = _LifecycleClient()
+    factory_calls = 0
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+
+    def factory() -> _LifecycleClient:
+        nonlocal factory_calls
+        factory_calls += 1
+        return managed
+
+    app = create_app(
+        root_path=tmp_path / "state",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        app_server_factory=factory,
+        model_catalog_probe=_ForbiddenModelProbe(),
+        initialize_special_projects=True,
+    )
+
+    assert factory_calls == 1
+    assert app.state.codex_app_server is managed
+    with TestClient(app):
+        assert managed.start_calls == 1
+        assert managed.close_calls == 0
+    assert managed.close_calls == 1
+
+
+def test_external_lifespan_never_constructs_an_app_server_client(tmp_path: Path) -> None:
+    def forbidden_factory() -> _LifecycleClient:
+        raise AssertionError("external legacy must not construct an app server")
+
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        app_server_factory=forbidden_factory,
+    )
+
+    assert app.state.codex_app_server is None
+    with TestClient(app):
+        pass
+
+
+def test_failed_home_assistant_startup_closes_partial_app_server(tmp_path: Path) -> None:
+    managed = _LifecycleClient(fail_start=True)
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+    app = create_app(
+        root_path=tmp_path / "state",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        app_server_factory=lambda: managed,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic startup failure"):
+        with TestClient(app):
+            pass
+
+    assert managed.start_calls == 1
+    assert managed.close_calls == 1

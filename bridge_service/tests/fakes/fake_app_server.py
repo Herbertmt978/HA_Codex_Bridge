@@ -221,7 +221,19 @@ class ScriptedPeer:
                         "id": message["id"],
                         "result": self.scenario.get(
                             "initialize_result",
-                            {"serverInfo": {"name": "fake-codex", "version": "0.test"}},
+                            {
+                                "codexHome": str(self.codex_home.resolve()),
+                                "platformFamily": (
+                                    "windows" if os.name == "nt" else "unix"
+                                ),
+                                "platformOs": (
+                                    "windows" if os.name == "nt" else "linux"
+                                ),
+                                "userAgent": (
+                                    "Codex Desktop/0.139.0 (test; x86_64) "
+                                    "fake (ha_codex_bridge; 0.6.0)"
+                                ),
+                            },
                         ),
                     }
                 )
@@ -229,6 +241,7 @@ class ScriptedPeer:
                 self._on_initialized()
             elif method is not None and "id" in message:
                 self._handle_request(message)
+        self._record("server-control", {"event": "stdin-eof"})
         return 0
 
 

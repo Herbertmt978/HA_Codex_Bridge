@@ -1,10 +1,15 @@
+import asyncio
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Protocol
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from .account import CodexAccountProbe
 from .build_info import BuildInfo
+from .codex_app_server import CodexAppServerClient
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
 from .http_limits import AttachmentIngressMiddleware
@@ -19,6 +24,12 @@ from .resource_limits import (
 from .routes import artifacts, attachments, codex_auth, events, health, projects, prompts, status, threads
 from .runner import BridgeRunner
 from .storage import BridgeStorage
+
+
+class _AppServerLifecycle(Protocol):
+    def start(self) -> None: ...
+
+    def close(self) -> None: ...
 
 
 def create_app(
@@ -38,8 +49,40 @@ def create_app(
     runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
     workspace_root: Path | str | None = None,
     resource_limits: ResourceLimits | None = None,
+    app_server_factory: Callable[[], _AppServerLifecycle] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Codex Bridge")
+    resolved_runtime_profile = RuntimeProfile(runtime_profile)
+    resolved_build_info = (
+        build_info if build_info is not None else BuildInfo.from_environment()
+    )
+    resolved_app_server: _AppServerLifecycle | None = None
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        resolved_app_server = (
+            app_server_factory()
+            if app_server_factory is not None
+            else CodexAppServerClient(
+                codex_command=codex_command,
+                codex_home=codex_home,
+                client_version=(
+                    resolved_build_info.app_version
+                    or resolved_build_info.bridge_version
+                    or "0.6.0"
+                ),
+            )
+        )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if resolved_app_server is None:
+            yield
+            return
+        try:
+            await asyncio.to_thread(resolved_app_server.start)
+            yield
+        finally:
+            await asyncio.to_thread(resolved_app_server.close)
+
+    app = FastAPI(title="Codex Bridge", lifespan=lifespan)
 
     @app.exception_handler(ResourceLimitError)
     async def resource_limit_handler(_request, error: ResourceLimitError) -> JSONResponse:
@@ -54,9 +97,6 @@ def create_app(
                 }
             },
         )
-    resolved_build_info = (
-        build_info if build_info is not None else BuildInfo.from_environment()
-    )
     resolved_model_catalog_probe = model_catalog_probe or CodexModelCatalogProbe(
         codex_command=codex_command,
         codex_home=codex_home,
@@ -70,7 +110,7 @@ def create_app(
         root_path=root_path,
         limits_probe=limits_probe,
         special_project_defaults_provider=special_project_defaults,
-        runtime_profile=runtime_profile,
+        runtime_profile=resolved_runtime_profile,
         workspace_root=workspace_root,
         resource_limits=resource_limits,
     )
@@ -86,18 +126,22 @@ def create_app(
             ),
         )
     if initialize_special_projects:
-        initial_catalog = resolved_model_catalog_probe.probe()
-        if initial_catalog.stale:
+        if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             storage.defer_special_project_migration()
         else:
-            storage.initialize_special_projects(
-                default_model=initial_catalog.default_model,
-                default_thinking_level=initial_catalog.default_thinking_level,
-                defaults_provisional=False,
-            )
+            initial_catalog = resolved_model_catalog_probe.probe()
+            if initial_catalog.stale:
+                storage.defer_special_project_migration()
+            else:
+                storage.initialize_special_projects(
+                    default_model=initial_catalog.default_model,
+                    default_thinking_level=initial_catalog.default_thinking_level,
+                    defaults_provisional=False,
+                )
     app.state.storage = storage
     app.state.auth_token = auth_token
     app.state.build_info = resolved_build_info
+    app.state.codex_app_server = resolved_app_server
     app.state.account_probe = account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,

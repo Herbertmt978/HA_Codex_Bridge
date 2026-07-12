@@ -8,6 +8,7 @@ dependencies = [
   "pydantic>=2.11.0",
   "pydantic-settings>=2.10.0",
   "httpx>=0.28.0",
+  "jsonschema>=4.23.0,<5",
   "python-multipart>=0.0.9",
 ]
 
@@ -18,11 +19,19 @@ codex-bridge-service = "codex_bridge_service.__main__:main"
 test = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.26.0",
+  "types-jsonschema>=4.23.0",
 ]
 
 [build-system]
 requires = ["setuptools>=75.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+codex_bridge_service = [
+  "codex_app_server_contract.json",
+  "codex_app_server_protocol.schema.json",
+  "codex_app_server_protocol.v2.schema.json",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
