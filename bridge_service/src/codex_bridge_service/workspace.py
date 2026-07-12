@@ -195,6 +195,18 @@ class WorkspaceBoundary:
         candidate = self._root.joinpath(*parts)
         return self._validate_candidate(candidate, must_exist=must_exist, kind=kind)
 
+    def open_directory_fd(self, relative: Path | str) -> int:
+        """Lease a no-follow directory descriptor anchored below this root.
+
+        The caller owns the returned descriptor and must close it. Unlike a
+        resolved pathname, the descriptor continues to identify the opened
+        directory if an ancestor or the final entry is replaced later.
+        """
+        self._require_secure_operations()
+        normalized = self.normalize(relative, allow_root=True)
+        parts = () if normalized == "." else tuple(normalized.split("/"))
+        return self._open_parent_fd(parts)
+
     def relative_from_path(self, path: Path | str) -> str:
         try:
             candidate = Path(path)

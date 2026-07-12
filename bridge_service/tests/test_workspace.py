@@ -440,6 +440,28 @@ def test_operations_remain_anchored_when_root_ancestor_is_replaced(tmp_path) -> 
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_directory_lease_stays_anchored_when_entry_is_replaced(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    selected = root / "selected"
+    moved = root / "selected-original"
+    outside = tmp_path / "outside"
+    selected.mkdir(parents=True)
+    outside.mkdir()
+    boundary = WorkspaceBoundary(root)
+    original_inode = selected.stat().st_ino
+
+    directory_fd = boundary.open_directory_fd("selected")
+    try:
+        selected.rename(moved)
+        selected.symlink_to(outside, target_is_directory=True)
+
+        assert os.fstat(directory_fd).st_ino == original_inode
+        assert os.fstat(directory_fd).st_ino != outside.stat().st_ino
+    finally:
+        os.close(directory_fd)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
 def test_close_releases_root_descriptor_and_fails_future_io_closed(tmp_path) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
@@ -510,6 +532,7 @@ def test_secure_operations_fail_closed_when_required_primitives_are_unavailable(
         lambda: boundary.create_directory("new"),
         lambda: boundary.list_directories(),
         lambda: boundary.walk_regular_files(),
+        lambda: boundary.open_directory_fd("project"),
         lambda: boundary.open_regular_file("project/notes.txt"),
         lambda: boundary.create_file_exclusive("project/new.txt"),
     )

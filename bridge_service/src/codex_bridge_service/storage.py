@@ -9,6 +9,7 @@ from typing import BinaryIO, Callable, Literal
 from uuid import uuid4
 import zipfile
 
+from .codex_auth import AUTH_EXPIRED_MESSAGE
 from .limits import CodexLimitsProbe
 from .models import (
     DEFAULT_MODEL,
@@ -170,6 +171,12 @@ class BridgeStorage:
         if kind == "file" and (not target.exists() or not target.is_file()):
             raise FileNotFoundError("workspace file not found")
         return target
+
+    def open_workspace_directory_fd(self, workspace_path: str) -> int:
+        """Lease an HA workspace directory descriptor for process launch."""
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("workspace descriptor leases require the home_assistant profile")
+        return self._home_assistant_boundary().open_directory_fd(workspace_path)
 
     def _safe_project_folder_name(self, name: str) -> str:
         invalid_chars = '<>:"/\\|?*'
@@ -1106,6 +1113,82 @@ class BridgeStorage:
         if not record.updated_at:
             record.updated_at = record.created_at
         self._atomic_write_json(self._thread_path(record.thread_id), record.model_dump())
+
+    def fail_home_assistant_run_without_workspace_validation(
+        self,
+        *,
+        thread_id: str,
+        run_id: str,
+        failure_type: str,
+    ) -> bool:
+        """Terminalize one failed HA run when its workspace cannot be reloaded.
+
+        This deliberately bypasses only workspace validation. The private JSON
+        still passes the ThreadRecord schema, the active run must match, and
+        the emitted payload is selected from fixed path-free messages.
+        """
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("terminal metadata fallback requires the home_assistant profile")
+        target = self._thread_path(thread_id)
+        if not target.exists():
+            raise ThreadNotFoundError(thread_id)
+        record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        if record.thread_id != thread_id or record.active_run_id != run_id:
+            return False
+
+        safe_failures: dict[str, tuple[str, bool, bool]] = {
+            "auth.expired": (
+                AUTH_EXPIRED_MESSAGE,
+                False,
+                True,
+            ),
+            "model.unsupported": (
+                "The selected Codex model is not supported.",
+                False,
+                False,
+            ),
+            "limits.exhausted": (
+                "Codex usage limits have been reached.",
+                True,
+                False,
+            ),
+            "run.failed": ("The workspace is unavailable.", False, False),
+        }
+        normalized_failure_type = (
+            failure_type if failure_type in safe_failures else "run.failed"
+        )
+        message, blocked, auth_required = safe_failures[normalized_failure_type]
+        queued_count = len(record.pending_prompts)
+        record.status = "error"
+        record.active_run_id = None
+        record.last_error = message
+        record.pending_prompts.clear()
+        self._touch_thread(record)
+        self._atomic_write_json(target, record.model_dump())
+
+        payload: dict[str, object] = {
+            "run_id": run_id,
+            "error": message,
+            "blocked": blocked,
+            "failure_type": normalized_failure_type,
+        }
+        if auth_required:
+            payload["auth_required"] = True
+        self.append_thread_event(
+            thread_id=thread_id,
+            event_type="run.failed",
+            payload=payload,
+        )
+        if queued_count:
+            self.append_thread_event(
+                thread_id=thread_id,
+                event_type="run.queue_cleared",
+                payload={
+                    "reason": "active run failed",
+                    "queued_count": queued_count,
+                },
+            )
+        return True
 
     def _ensure_thread_project(self, record: ThreadRecord) -> ThreadRecord:
         if record.project_id:
