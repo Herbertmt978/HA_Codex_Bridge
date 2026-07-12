@@ -413,6 +413,48 @@ def test_raced_fifo_open_is_nonblocking_and_rejected(tmp_path, monkeypatch) -> N
         boundary.open_regular_file("project/notes.txt")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_operations_remain_anchored_when_root_ancestor_is_replaced(tmp_path) -> None:
+    parent = tmp_path / "parent"
+    original_root = parent / "workspace"
+    moved_parent = tmp_path / "moved-parent"
+    outside_parent = tmp_path / "outside-parent"
+    outside_root = outside_parent / "workspace"
+    (original_root / "safe-dir").mkdir(parents=True)
+    (original_root / "safe.txt").write_text("inside", encoding="utf-8")
+    (outside_root / "secret-dir").mkdir(parents=True)
+    (outside_root / "safe.txt").write_text("outside", encoding="utf-8")
+    boundary = WorkspaceBoundary(original_root)
+
+    parent.rename(moved_parent)
+    parent.symlink_to(outside_parent, target_is_directory=True)
+
+    with boundary.open_regular_file("safe.txt") as stream:
+        assert stream.read() == b"inside"
+    with boundary.create_file_exclusive("created.txt") as stream:
+        stream.write(b"created inside")
+    assert boundary.list_directories() == ("safe-dir",)
+    assert boundary.walk_regular_files() == ("created.txt", "safe.txt")
+    assert (moved_parent / "workspace" / "created.txt").read_bytes() == b"created inside"
+    assert not (outside_root / "created.txt").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_close_releases_root_descriptor_and_fails_future_io_closed(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    boundary = WorkspaceBoundary(root)
+    root_fd = boundary._root_fd
+    assert root_fd is not None
+
+    boundary.close()
+
+    with pytest.raises(OSError):
+        os.fstat(root_fd)
+    with pytest.raises(WorkspaceUnsupportedError):
+        boundary.list_directories()
+
+
 def test_platform_errors_never_cross_the_public_boundary(tmp_path, monkeypatch) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
@@ -431,6 +473,20 @@ def test_platform_errors_never_cross_the_public_boundary(tmp_path, monkeypatch) 
     rendered = "".join(traceback.format_exception(error.value))
     assert "private platform detail" not in rendered
     assert str(root) not in rendered
+
+
+def test_real_missing_path_traceback_is_redacted(tmp_path) -> None:
+    root = tmp_path / "private-workspace"
+    root.mkdir()
+    boundary = WorkspaceBoundary(root)
+
+    with pytest.raises(WorkspaceNotFoundError) as error:
+        boundary.resolve_relative("private/missing.txt", must_exist=True)
+
+    rendered = "".join(traceback.format_exception(error.value))
+    assert error.value.__cause__ is None
+    assert str(root) not in rendered
+    assert "[Errno" not in rendered
 
 
 def test_secure_operations_fail_closed_when_required_primitives_are_unavailable(

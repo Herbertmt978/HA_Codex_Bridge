@@ -82,6 +82,7 @@ class WorkspaceBoundary:
     """
 
     def __init__(self, root: Path | str, *, create: bool = False) -> None:
+        self._root_fd: int | None = None
         try:
             raw_root = os.fspath(root)
         except TypeError:
@@ -92,23 +93,37 @@ class WorkspaceBoundary:
         candidate = Path(raw_root)
         if not candidate.is_absolute():
             raise WorkspaceInputError()
+        candidate = Path(os.path.abspath(candidate))
+        root_fd: int | None = None
         try:
-            if create and not candidate.exists():
-                if not _secure_dir_fd_available():
-                    raise WorkspaceUnsupportedError()
-                self._create_absolute_directory(candidate)
+            if _secure_dir_fd_available():
+                if create and not candidate.exists():
+                    root_fd = self._create_absolute_directory(candidate)
+                else:
+                    root_fd = self._open_absolute_directory(candidate)
+            elif create and not candidate.exists():
+                raise WorkspaceUnsupportedError()
             self._reject_link_components(candidate)
             root_stat = candidate.lstat()
             if stat.S_ISLNK(root_stat.st_mode) or self._is_junction(candidate):
                 raise WorkspaceEscapeError()
             if not stat.S_ISDIR(root_stat.st_mode):
                 raise WorkspaceTypeError()
-            self._root = candidate.resolve(strict=True)
+            if root_fd is not None and not os.path.samestat(os.fstat(root_fd), root_stat):
+                raise WorkspaceEscapeError()
+            self._root = candidate
+            self._root_fd = root_fd
         except WorkspaceBoundaryError:
+            if root_fd is not None:
+                os.close(root_fd)
             raise
         except FileNotFoundError:
+            if root_fd is not None:
+                os.close(root_fd)
             raise WorkspaceNotFoundError() from None
         except OSError:
+            if root_fd is not None:
+                os.close(root_fd)
             raise WorkspaceTypeError() from None
 
     @property
@@ -117,6 +132,21 @@ class WorkspaceBoundary:
 
     def __repr__(self) -> str:
         return "WorkspaceBoundary()"
+
+    def close(self) -> None:
+        root_fd = self._root_fd
+        self._root_fd = None
+        if root_fd is not None:
+            try:
+                os.close(root_fd)
+            except OSError:
+                pass
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def normalize(self, relative: Path | str, *, allow_root: bool = False) -> str:
         try:
@@ -329,7 +359,7 @@ class WorkspaceBoundary:
                 current_stat = current.lstat()
             except FileNotFoundError:
                 if must_exist or index < len(relative_parts) - 1:
-                    raise WorkspaceNotFoundError()
+                    raise WorkspaceNotFoundError() from None
                 final_stat = None
                 break
             except OSError:
@@ -434,7 +464,7 @@ class WorkspaceBoundary:
         except OSError:
             raise WorkspaceTypeError() from None
 
-    def _create_absolute_directory(self, target: Path) -> None:
+    def _create_absolute_directory(self, target: Path) -> int:
         anchor = Path(target.anchor)
         try:
             parts = target.relative_to(anchor).parts
@@ -467,8 +497,38 @@ class WorkspaceBoundary:
                     ) from None
                 os.close(current_fd)
                 current_fd = next_fd
-        finally:
+            return current_fd
+        except WorkspaceBoundaryError:
             os.close(current_fd)
+            raise
+
+    def _open_absolute_directory(self, target: Path) -> int:
+        anchor = Path(target.anchor)
+        try:
+            parts = target.relative_to(anchor).parts
+            current_fd = os.open(anchor, self._directory_open_flags())
+        except (OSError, ValueError):
+            raise WorkspaceTypeError() from None
+        try:
+            for part in parts:
+                try:
+                    next_fd = os.open(
+                        part,
+                        self._directory_open_flags(),
+                        dir_fd=current_fd,
+                    )
+                except OSError as error:
+                    raise self._translated_entry_error(
+                        error,
+                        part,
+                        current_fd,
+                    ) from None
+                os.close(current_fd)
+                current_fd = next_fd
+            return current_fd
+        except WorkspaceBoundaryError:
+            os.close(current_fd)
+            raise
 
     def _reject_link_components(self, target: Path) -> None:
         anchor = Path(target.anchor)
@@ -491,9 +551,13 @@ class WorkspaceBoundary:
     def _create_directory_posix(self, parts: tuple[str, ...]) -> None:
         flags = self._directory_open_flags()
         try:
-            current_fd = os.open(self._root, flags)
-        except OSError as error:
-            raise self._translated_os_error(error, symlink_is_escape=True) from None
+            if self._root_fd is None:
+                raise WorkspaceUnsupportedError()
+            current_fd = os.dup(self._root_fd)
+        except WorkspaceBoundaryError:
+            raise
+        except OSError:
+            raise WorkspaceTypeError() from None
         try:
             for part in parts:
                 try:
@@ -522,12 +586,16 @@ class WorkspaceBoundary:
     def _open_parent_fd(self, parts: tuple[str, ...]) -> int:
         flags = self._directory_open_flags()
         try:
-            current_fd = os.open(self._root, flags)
+            if self._root_fd is None:
+                raise WorkspaceUnsupportedError()
+            current_fd = os.dup(self._root_fd)
             for part in parts:
                 next_fd = os.open(part, flags, dir_fd=current_fd)
                 os.close(current_fd)
                 current_fd = next_fd
             return current_fd
+        except WorkspaceBoundaryError:
+            raise
         except OSError as error:
             translated = self._translated_os_error(error, symlink_is_escape=True)
             if "current_fd" in locals() and "part" in locals():
@@ -537,7 +605,7 @@ class WorkspaceBoundary:
             raise translated from None
 
     def _require_secure_operations(self) -> None:
-        if not _secure_dir_fd_available():
+        if not _secure_dir_fd_available() or self._root_fd is None:
             raise WorkspaceUnsupportedError()
 
     def _directory_open_flags(self) -> int:
