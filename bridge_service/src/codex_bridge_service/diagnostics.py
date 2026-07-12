@@ -1,4 +1,3 @@
-import importlib.metadata
 import platform
 import shutil
 import subprocess
@@ -68,10 +67,7 @@ class BridgeDiagnosticsProbe:
         return updated
 
     def _bridge_version(self) -> str:
-        try:
-            return importlib.metadata.version("codex-bridge-service")
-        except importlib.metadata.PackageNotFoundError:
-            return __version__
+        return __version__
 
     def _repo_root(self) -> Path:
         return Path(__file__).resolve().parents[3]

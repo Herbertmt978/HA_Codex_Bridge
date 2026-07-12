@@ -128,6 +128,12 @@ class BridgeStorage:
     def _direct_project_id(self) -> str:
         return "prj_direct"
 
+    def is_special_project_id(self, project_id: str | None) -> bool:
+        return project_id in {
+            self._imported_project_id(),
+            self._direct_project_id(),
+        }
+
     def _special_project_defaults(
         self,
         default_model: str | None,

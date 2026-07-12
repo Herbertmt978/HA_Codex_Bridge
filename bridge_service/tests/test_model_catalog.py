@@ -136,7 +136,7 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
         "config/read",
         "model/list",
     ]
-    assert requests[0]["params"]["clientInfo"]["version"] == "0.5.1"
+    assert requests[0]["params"]["clientInfo"]["version"] == model_catalog.__version__
 
 
 def test_probe_follows_model_list_pagination_and_filters_hidden_models(tmp_path, monkeypatch) -> None:

@@ -86,6 +86,7 @@ def create_thread(
     )
     needs_catalog = (
         payload.project_id is None
+        or request.app.state.storage.is_special_project_id(payload.project_id)
         or payload.model_override is not None
         or payload.thinking_override is not None
     )

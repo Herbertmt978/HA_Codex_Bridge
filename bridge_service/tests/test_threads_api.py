@@ -316,6 +316,78 @@ def test_special_project_provisional_defaults_recover_with_fresh_catalog(tmp_pat
     assert preserved_thread["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
 
 
+def test_existing_direct_project_reconciles_before_first_post_recovery_chat(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    direct = initial_storage.ensure_direct_project(
+        default_model=DEFAULT_MODEL,
+        default_thinking_level=DEFAULT_THINKING_LEVEL,
+        defaults_provisional=True,
+    )
+    stale_thread = initial_storage.create_thread(
+        title="Created during discovery outage",
+        project_id=direct.project_id,
+        mode=RunMode.FULL_AUTO,
+    )
+    probe = RecoveringModelCatalogProbe(fallback_calls=1)
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=probe,
+        initialize_special_projects=True,
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    recovered_response = client.post(
+        "/threads",
+        headers=headers,
+        json={
+            "title": "First chat after recovery",
+            "project_id": "prj_direct",
+        },
+    )
+    assert recovered_response.status_code == 201
+    recovered_thread = recovered_response.json()
+    preserved_thread = client.get(
+        f"/threads/{stale_thread.thread_id}",
+        headers=headers,
+    ).json()
+    direct = json.loads(
+        (tmp_path / "projects" / "prj_direct.json").read_text(encoding="utf-8")
+    )
+
+    assert probe.calls == 2
+    assert direct["default_model"] == "gpt-5.6-sol"
+    assert direct["default_thinking_level"] == "ultra"
+    assert direct["defaults_origin"] == "codex"
+    assert recovered_thread["model_override"] is None
+    assert recovered_thread["thinking_override"] is None
+    assert recovered_thread["effective_model"] == "gpt-5.6-sol"
+    assert recovered_thread["effective_thinking_level"] == "ultra"
+    assert preserved_thread["model_override"] == DEFAULT_MODEL
+    assert preserved_thread["thinking_override"] == DEFAULT_THINKING_LEVEL
+
+
+def test_ordinary_project_thread_does_not_probe_catalog_without_overrides(tmp_path) -> None:
+    probe = RecoveringModelCatalogProbe(fallback_calls=0)
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=probe,
+    )
+    project = app.state.storage.create_project(name="Ordinary project")
+    client = TestClient(app)
+
+    response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "No catalogue needed", "project_id": project.project_id},
+    )
+
+    assert response.status_code == 201
+    assert probe.calls == 0
+
+
 def test_legacy_special_defaults_defer_until_catalog_recovers(tmp_path) -> None:
     initial_storage = BridgeStorage(root_path=tmp_path)
     direct = initial_storage.ensure_direct_project()
