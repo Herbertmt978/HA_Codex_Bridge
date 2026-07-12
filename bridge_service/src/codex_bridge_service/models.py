@@ -46,6 +46,11 @@ class ProjectDefaultsOrigin(StrEnum):
     EXPLICIT = "explicit"
 
 
+class RuntimeProfile(StrEnum):
+    EXTERNAL_LEGACY = "external_legacy"
+    HOME_ASSISTANT = "home_assistant"
+
+
 class AttachmentRecord(BaseModel):
     attachment_id: str
     filename: str

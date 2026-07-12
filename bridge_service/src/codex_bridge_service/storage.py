@@ -21,12 +21,14 @@ from .models import (
     ProjectDefaultsOrigin,
     ProjectKind,
     ProjectRecord,
+    RuntimeProfile,
     RunMode,
     ThreadEventRecord,
     ThreadRecord,
     ThreadViewRecord,
     normalize_model,
 )
+from .workspace import WorkspaceBoundary
 
 _UNSET = object()
 
@@ -53,7 +55,13 @@ class BridgeStorage:
         *,
         limits_probe: CodexLimitsProbe | None = None,
         special_project_defaults_provider: Callable[[], tuple[str, str, bool]] | None = None,
+        runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
+        workspace_root: Path | str | None = None,
     ) -> None:
+        try:
+            self.runtime_profile = RuntimeProfile(runtime_profile)
+        except ValueError:
+            raise ValueError("runtime profile is invalid") from None
         self.root = Path(root_path)
         self.projects_dir = self.root / "projects"
         self.threads_dir = self.root / "threads"
@@ -62,6 +70,8 @@ class BridgeStorage:
         self.uploads_dir = self.root / "uploads"
         self.artifacts_dir = self.root / "artifacts"
         self.logs_dir = self.root / "logs"
+        self.workspace_boundary: WorkspaceBoundary | None = None
+        self.workspace_root: Path | None = None
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
         self.special_project_defaults_provider = special_project_defaults_provider
@@ -70,16 +80,37 @@ class BridgeStorage:
         self._special_migration_lock = Lock()
         self._event_lock = Lock()
 
-        for directory in (
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            if workspace_root is None or not str(workspace_root).strip():
+                raise ValueError("home_assistant profile requires a workspace root")
+            state_identity = self.root.resolve(strict=False)
+            workspace_identity = Path(workspace_root).resolve(strict=False)
+            if (
+                state_identity == workspace_identity
+                or workspace_identity.is_relative_to(state_identity)
+                or state_identity.is_relative_to(workspace_identity)
+            ):
+                raise ValueError("workspace root must be separate from private state")
+
+        private_directories = (
             self.projects_dir,
             self.threads_dir,
-            self.workspaces_dir,
-            self.project_workspaces_dir,
             self.uploads_dir,
             self.artifacts_dir,
             self.logs_dir,
-        ):
+        )
+        for directory in private_directories:
             directory.mkdir(parents=True, exist_ok=True)
+
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            assert workspace_root is not None
+            self.workspace_boundary = WorkspaceBoundary(workspace_root, create=True)
+            self.workspace_root = self.workspace_boundary.root
+            self.workspaces_dir = self.workspace_root
+            self.project_workspaces_dir = self.workspace_root
+        else:
+            self.workspaces_dir.mkdir(parents=True, exist_ok=True)
+            self.project_workspaces_dir.mkdir(parents=True, exist_ok=True)
 
     def _now(self) -> str:
         return datetime.now(UTC).isoformat().replace("+00:00", "Z")

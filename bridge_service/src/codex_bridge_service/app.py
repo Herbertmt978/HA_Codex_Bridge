@@ -8,6 +8,7 @@ from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
 from .limits import CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
+from .models import RuntimeProfile
 from .routes import artifacts, attachments, codex_auth, events, health, projects, prompts, status, threads
 from .runner import BridgeRunner
 from .storage import BridgeStorage
@@ -27,6 +28,8 @@ def create_app(
     runner_factory=None,
     initialize_special_projects: bool = False,
     build_info: BuildInfo | None = None,
+    runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
+    workspace_root: Path | str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Codex Bridge")
     resolved_build_info = (
@@ -45,6 +48,8 @@ def create_app(
         root_path=root_path,
         limits_probe=limits_probe,
         special_project_defaults_provider=special_project_defaults,
+        runtime_profile=runtime_profile,
+        workspace_root=workspace_root,
     )
     if initialize_special_projects:
         initial_catalog = resolved_model_catalog_probe.probe()

@@ -13,6 +13,8 @@ def build_app() -> FastAPI:
     codex_home = resolve_codex_home(settings.codex_home, settings.codex_wrapper_path)
     return create_app(
         root_path=settings.root_path,
+        runtime_profile=settings.runtime_profile,
+        workspace_root=settings.workspace_root,
         auth_token=settings.auth_token,
         limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
         account_probe=CodexAccountProbe(codex_home) if codex_home else None,
