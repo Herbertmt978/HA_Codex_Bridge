@@ -116,6 +116,25 @@ The remaining Task 3 runtime fact is target-system evidence: a real HA App accep
 
 The external legacy profile remains outside the HA quota and ingress middleware paths. Task 4 deliberately exposes a reusable workspace-growth observer rather than duplicating runtime ownership: the one-active/eight-queued gate and turn watchdog are Task 7, event retention is Task 8, and rotated/redacted service logs are Task 20.
 
+## Task 5 — supervised Codex app-server transport
+
+| Evidence | Result |
+|----------|--------|
+| RED contract | Scripted peer and absent-client tests committed as `9c27c69` |
+| Locked protocol | Exact `codex-cli 0.139.0` stable/v2 method, payload, result, full-bundle, and schema digests generated from the installed Codex schemas |
+| Focused GREEN | 31 passed, 1 platform skip after runtime version and graceful-shutdown hardening |
+| Final 20-run gate | 20/20 runs; each 25 passed/1 POSIX skip; 500 pass executions, zero leaked fake/Codex processes |
+| Windows full suite | 489 passed, 136 skipped |
+| Linux full suite | 614 passed, 1 skipped in Python 3.13 container; the Windows-only updater module was explicitly excluded because the image has no PowerShell |
+| Unfiltered Linux context | 616 passed, 1 skipped; seven pre-existing updater tests failed only because `powershell` is absent |
+| Real Codex handshake | Native installed Codex 0.139.0 reached `ready=True`, generation 1, then closed with no live process |
+| Wheel inspection | Contract manifest plus stable and v2 runtime schema assets present in the built wheel |
+| Static/generation checks | Ruff, focused mypy, `compileall`, generator `--check`, and staged diff check passed |
+| Independent review | PASS after fixing EOF-before-TERM shutdown and retaining exact runtime/schema version binding |
+| Commit | `19cad27` |
+
+The HA profile constructs and owns exactly one app-server client through FastAPI lifespan. The transport rejects unlocked directions, malformed or oversized JSONL, invalid payload/results, stale generations, response-ID misuse, callback overload, and runtime/schema version mismatches without emitting raw server content. The remaining direct legacy auth, model, and run consumers are intentionally migrated in Tasks 6, 7, and 10; Task 5 does not claim repository-wide single-process ownership yet.
+
 ## Evidence status
 
-This is draft evidence for continuation. It now proves host/container resource ceilings and safe archive handling, but not yet the HA App image, target sandbox, proxy deployment, release, or cutover.
+This is draft evidence for continuation. It now proves host/container resource ceilings, safe archives, and the bounded app-server transport, but not yet the HA App image, target sandbox, proxy deployment, release, or cutover.

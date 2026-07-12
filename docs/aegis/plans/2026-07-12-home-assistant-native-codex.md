@@ -206,11 +206,11 @@ Runtime queue/turn enforcement consumes these immutable limits in Task 7; event 
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_codex_app_server.py`
 
-- [ ] Write a scripted JSONL peer and failing tests for initialize/initialized ordering, concurrent request IDs, notifications, server-initiated requests, synchronized responses, malformed lines, timeout, overload, stderr redaction, crash generation, pending-future failure, restart backoff, and process-group shutdown.
-- [ ] Run the tests and confirm the client module is absent.
-- [ ] Implement `CodexAppServerClient.start()`, `request()`, `respond()`, handler registration, `close()`, one reader thread, synchronized writes, response futures, bounded callback dispatch, and generation-aware restart. Generate/lock method schemas from the bundled Codex binary during CI rather than accepting arbitrary payloads.
-- [ ] Run the focused test 20 times with `1..20 | ForEach-Object { python -m pytest -q bridge_service/tests/test_codex_app_server.py; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }`, then run the full Bridge suite and confirm no reader threads/processes survive.
-- [ ] Commit with message `Add supervised Codex app server client`.
+- [x] Write a scripted JSONL peer and failing tests for initialize/initialized ordering, concurrent request IDs, notifications, server-initiated requests, synchronized responses, malformed lines, timeout, overload, stderr redaction, crash generation, pending-future failure, restart backoff, and process-group shutdown.
+- [x] Run the tests and confirm the client module is absent.
+- [x] Implement `CodexAppServerClient.start()`, `request()`, `respond()`, handler registration, `close()`, one reader thread, synchronized writes, response futures, bounded callback dispatch, and generation-aware restart. Generate/lock method schemas from the bundled Codex binary during CI rather than accepting arbitrary payloads.
+- [x] Run the focused test 20 times with `1..20 | ForEach-Object { python -m pytest -q bridge_service/tests/test_codex_app_server.py; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }`, then run the full Bridge suite and confirm no reader threads/processes survive.
+- [x] Commit as `19cad27` with message `Add supervised Codex app server client`.
 
 ## Task 6: Replace CLI login parsing with ChatGPT-only auth coordination
 

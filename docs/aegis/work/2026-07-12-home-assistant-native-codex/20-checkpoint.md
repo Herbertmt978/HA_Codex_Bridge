@@ -3,29 +3,29 @@
 ## TodoCheckpointDraft
 
 - **State:** active
-- **Current todo:** Task 5 — build the supervised Codex app-server transport
-- **Active slice:** Replace independent HA-side Codex subprocess ownership with one bounded, generation-aware JSONL app-server client
-- **Completed:** approved spec and plan; Tasks 1–3; Task 4 immutable limits, atomic disk/transient reservations, descriptor-rooted accounting, authenticated raw-ingress ceilings, safe archive preflight, immutable download snapshots, and typed quota failures
-- **Evidence refs:** `90-evidence.md`; Task 4 commits `a92e137`, `21978b7`
-- **Blocked on:** no implementation blocker; real HA inherited-descriptor and sandbox behavior remains an acceptance gate
-- **Next step:** prove app-server initialization, concurrent request correlation, notifications, server callbacks, bounded dispatch, malformed input, timeout/overload behavior, restart generations, and process-group shutdown
+- **Current todo:** Task 6 — replace CLI login parsing with ChatGPT-only auth coordination
+- **Active slice:** Build a structured, revisioned device-login state machine on the single locked app-server client while retaining the external legacy adapter
+- **Completed:** approved spec and plan; Tasks 1–4; Task 5 exact Codex 0.139.0 schema lock, bounded/generation-aware bidirectional JSONL transport, sanitized process ownership, graceful process-group shutdown, and HA lifespan ownership
+- **Evidence refs:** `90-evidence.md`; Task 5 commits `9c27c69`, `19cad27`
+- **Blocked on:** no implementation blocker; real HA inherited-descriptor, process-group, and sandbox behavior remain acceptance gates
+- **Next step:** turn the new auth-coordinator RED suite green, then replace HA auth routes/probes without allowing a second Codex owner
 
 ## ResumeStateHint
 
 - **Repository:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge`
 - **Worktree:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge\.worktrees\ha-app`
 - **Branch:** `Herb/ha-app`
-- **Current implementation head before this checkpoint update:** `21978b7`
-- **Worktree status at checkpoint:** clean before these work-record files
+- **Current implementation head before this checkpoint update:** `19cad27`
+- **Worktree status at checkpoint:** only the intentional untracked Task 6 RED test plus these work-record edits
 - **Baseline command:** `python -m pytest -q` from `bridge_service`
 - **Baseline result:** 115 passed
 - **Required readback on resume:** `10-intent.md`, this file, approved spec, plan, current `git status`, latest commits, and evidence file
 
 ## DriftCheckDraft
 
-- **Intent alignment:** yes; HA-owned storage now has immutable ceilings and atomic reservations, and the next slice establishes one structured Codex process owner for account and run traffic.
+- **Intent alignment:** yes; HA mode now owns one schema-locked app-server transport, and the next slice moves account/device authorization onto that owner.
 - **Compatibility:** v0 adapter and VM rollback remain explicit.
-- **New owner/fallback:** none beyond the approved App owner and bounded v0 carrier.
+- **New owner/fallback:** the approved App transport is implemented; external CLI auth/model/run owners remain bounded legacy adapters until their scheduled Task 6/7/10 retirement.
 - **Retirement:** unchanged; VM stops only after real acceptance.
-- **Evidence sufficiency:** sufficient to accept Task 4 storage/archive resource enforcement on supported Linux hosts; runtime queues/timeouts, event compaction, and rotated service logs remain explicitly owned by Tasks 7, 8, and 20.
+- **Evidence sufficiency:** sufficient to accept Task 5 transport behavior on Windows and Linux host/container tests, including a live native 0.139.0 handshake; protected HA process and sandbox proof remains a later release gate.
 - **Decision:** continue.
