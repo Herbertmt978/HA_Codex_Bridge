@@ -18,7 +18,7 @@ from .models import (
     ThreadViewRecord,
 )
 from .storage import BridgeStorage
-from .workspace import WorkspaceBoundaryError
+from .workspace import WorkspaceAnonymousFileLease, WorkspaceBoundaryError
 
 
 class ThreadBusyError(RuntimeError):
@@ -52,6 +52,7 @@ class BridgeRunner:
         self.ignore_user_config = ignore_user_config
         self.idle_timeout_seconds = idle_timeout_seconds
         self._lock = Lock()
+        self._home_assistant_run_lock = Lock()
         self._processes: dict[str, subprocess.Popen[str]] = {}
         self._cancelled_runs: set[str] = set()
         if recover_stale_runs:
@@ -160,24 +161,52 @@ class BridgeRunner:
         worker.start()
 
     def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+        home_assistant_run_lock_acquired = False
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            self._home_assistant_run_lock.acquire()
+            home_assistant_run_lock_acquired = True
         stderr_lines: list[str] = []
         codex_error: str | None = None
         completion_usage: dict[str, object] = {}
         error: str | None = None
         failure_payload: dict[str, object] | None = None
+        run_attachment_paths: dict[str, str] | None = None
+        workspace_fd: int | None = None
+        attachment_leases: dict[str, WorkspaceAnonymousFileLease] = {}
         try:
-            workspace_fd: int | None = None
-            try:
-                process_workspace_path, workspace_fd = self._lease_process_workspace(record)
-                popen_options: dict[str, object] = {}
-                if workspace_fd is not None:
-                    popen_options["pass_fds"] = (workspace_fd,)
+            if run.run_id in self._cancelled_runs:
+                return
+            process_workspace_path, workspace_fd = self._lease_process_workspace(record)
+            if (
+                self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+                and record.attachments
+            ):
+                attachment_leases = self.storage.lease_run_attachments(record)
+                run_attachment_paths = {
+                    attachment_id: lease.process_path
+                    for attachment_id, lease in attachment_leases.items()
+                }
+            popen_options: dict[str, object] = {}
+            leased_fds = tuple(
+                descriptor
+                for descriptor in (
+                    workspace_fd,
+                    *(lease.fileno() for lease in attachment_leases.values()),
+                )
+                if descriptor is not None
+            )
+            if leased_fds:
+                popen_options["pass_fds"] = leased_fds
+            with self._lock:
+                if run.run_id in self._cancelled_runs:
+                    return
                 try:
                     process = subprocess.Popen(
                         self._build_command(
                             record,
                             prompt,
                             process_workspace_path=process_workspace_path,
+                            run_attachment_paths=run_attachment_paths,
                         ),
                         cwd=process_workspace_path,
                         stdin=subprocess.DEVNULL,
@@ -194,16 +223,9 @@ class BridgeRunner:
                         # platform-specific process-start failure.
                         raise RuntimeError("Codex process could not be started.") from None
                     raise
-            finally:
-                if workspace_fd is not None:
-                    try:
-                        os.close(workspace_fd)
-                    except OSError:
-                        pass
+                self._processes[record.thread_id] = process
             assert process.stdout is not None
             assert process.stderr is not None
-            with self._lock:
-                self._processes[record.thread_id] = process
 
             stream_queue: Queue[tuple[str, str | None]] = Queue()
             Thread(
@@ -293,13 +315,24 @@ class BridgeRunner:
             )
             error = str(failure_payload["error"])
         finally:
-            self._finish_run(
-                record.thread_id,
-                run.run_id,
-                error=error,
-                failure_payload=failure_payload,
-                completion_usage=completion_usage,
-            )
+            for lease in attachment_leases.values():
+                lease.close()
+            if workspace_fd is not None:
+                try:
+                    os.close(workspace_fd)
+                except OSError:
+                    pass
+            try:
+                self._finish_run(
+                    record.thread_id,
+                    run.run_id,
+                    error=error,
+                    failure_payload=failure_payload,
+                    completion_usage=completion_usage,
+                )
+            finally:
+                if home_assistant_run_lock_acquired:
+                    self._home_assistant_run_lock.release()
 
     def _read_stream(
         self,
@@ -353,7 +386,10 @@ class BridgeRunner:
                     },
                 )
 
-    def _lease_process_workspace(self, record: ThreadViewRecord) -> tuple[str, int | None]:
+    def _lease_process_workspace(
+        self,
+        record: ThreadViewRecord,
+    ) -> tuple[str, int | None]:
         if self.storage.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
             # Preserve the legacy adapter exactly: Popen remains responsible
             # for interpreting and rejecting its persisted workspace string.
@@ -367,11 +403,13 @@ class BridgeRunner:
         prompt: str,
         *,
         process_workspace_path: str,
+        run_attachment_paths: dict[str, str] | None,
     ) -> list[str]:
         prompt_with_context = self._compose_prompt(
             record,
             prompt,
             process_workspace_path=process_workspace_path,
+            run_attachment_paths=run_attachment_paths,
         )
         command = self._command_prefix()
         command.append("exec")
@@ -394,9 +432,10 @@ class BridgeRunner:
         )
         if not record.codex_session_id:
             command.extend(["-C", process_workspace_path])
-            uploads_dir = self.storage.uploads_dir / record.thread_id
-            if uploads_dir.exists():
-                command.extend(["--add-dir", str(uploads_dir)])
+            if self.storage.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
+                uploads_dir = self.storage.uploads_dir / record.thread_id
+                if uploads_dir.exists():
+                    command.extend(["--add-dir", str(uploads_dir)])
 
         if self.bypass_sandbox:
             command.append("--dangerously-bypass-approvals-and-sandbox")
@@ -418,14 +457,29 @@ class BridgeRunner:
         prompt: str,
         *,
         process_workspace_path: str,
+        run_attachment_paths: dict[str, str] | None,
     ) -> str:
         if not record.attachments:
             return prompt
 
-        attachment_lines = "\n".join(
-            f"- {attachment.filename} ({attachment.mime_type}): {attachment.stored_path}"
-            for attachment in record.attachments
-        )
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            if run_attachment_paths is None:
+                raise WorkspaceBoundaryError()
+            attachment_lines_list: list[str] = []
+            for attachment in record.attachments:
+                materialized_path = run_attachment_paths.get(attachment.attachment_id)
+                if materialized_path is None:
+                    raise WorkspaceBoundaryError()
+                attachment_lines_list.append(
+                    f"- {attachment.filename} ({attachment.mime_type}): "
+                    f"{materialized_path}"
+                )
+            attachment_lines = "\n".join(attachment_lines_list)
+        else:
+            attachment_lines = "\n".join(
+                f"- {attachment.filename} ({attachment.mime_type}): {attachment.stored_path}"
+                for attachment in record.attachments
+            )
         return (
             "Bridge workspace context:\n"
             f"- Working directory: {process_workspace_path}\n"

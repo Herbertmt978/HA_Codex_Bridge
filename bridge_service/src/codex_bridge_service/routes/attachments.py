@@ -3,6 +3,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, Request, Uploa
 from ..auth import require_bridge_token
 from ..models import AttachmentRecord
 from ..storage import ThreadNotFoundError
+from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
 router = APIRouter()
 
@@ -36,4 +37,14 @@ async def upload_attachment(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="thread not found",
+        ) from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="attachment location not found",
+        ) from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid attachment location",
         ) from exc

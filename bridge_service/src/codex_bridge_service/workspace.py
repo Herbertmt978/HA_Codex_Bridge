@@ -3,6 +3,7 @@ import os
 import re
 import stat
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Literal
 
@@ -27,6 +28,8 @@ _HAS_DIR_FD_PRIMITIVES = (
     os.name != "nt"
     and os.open in os.supports_dir_fd
     and os.mkdir in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.unlink in os.supports_dir_fd
     and os.scandir in os.supports_fd
 )
 
@@ -71,6 +74,53 @@ class WorkspaceExistsError(WorkspaceBoundaryError, FileExistsError):
 
 class WorkspaceUnsupportedError(WorkspaceBoundaryError, RuntimeError):
     code = "secure_operations_unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceFileIdentity:
+    """Stable identity captured from an already-open regular file."""
+
+    device: int
+    inode: int
+
+
+class WorkspaceAnonymousFileLease:
+    """Read-only sealed anonymous file inherited by one child process."""
+
+    def __init__(self, file_fd: int, size_bytes: int) -> None:
+        self._file_fd: int | None = file_fd
+        self.size_bytes = size_bytes
+
+    def fileno(self) -> int:
+        if self._file_fd is None:
+            raise WorkspaceNotFoundError()
+        return self._file_fd
+
+    @property
+    def process_path(self) -> str:
+        return f"/proc/self/fd/{self.fileno()}"
+
+    def close(self) -> None:
+        file_fd = self._file_fd
+        self._file_fd = None
+        if file_fd is not None:
+            try:
+                os.close(file_fd)
+            except OSError:
+                pass
+
+    def __enter__(self) -> "WorkspaceAnonymousFileLease":
+        self.fileno()
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class WorkspaceBoundary:
@@ -315,6 +365,80 @@ class WorkspaceBoundary:
             os.close(file_fd)
             raise WorkspaceTypeError() from None
 
+    def copy_regular_file_to_anonymous_lease(
+        self,
+        relative: Path | str,
+    ) -> WorkspaceAnonymousFileLease:
+        """Copy one confined file into a sealed pathless Linux file.
+
+        The returned descriptor is reopened read-only after sealing. Its
+        ``/proc/self/fd`` path has no traversable parent and does not reveal the
+        private source locator. The caller owns and must close the lease.
+        """
+        self._require_secure_operations()
+        creator = getattr(os, "memfd_create", None)
+        cloexec = getattr(os, "MFD_CLOEXEC", 0)
+        allow_sealing = getattr(os, "MFD_ALLOW_SEALING", 0)
+        if creator is None or not cloexec or not allow_sealing:
+            raise WorkspaceUnsupportedError()
+
+        write_fd: int | None = None
+        read_fd: int | None = None
+        try:
+            import fcntl
+
+            seal_values = (
+                getattr(fcntl, "F_ADD_SEALS", None),
+                getattr(fcntl, "F_SEAL_SEAL", None),
+                getattr(fcntl, "F_SEAL_SHRINK", None),
+                getattr(fcntl, "F_SEAL_GROW", None),
+                getattr(fcntl, "F_SEAL_WRITE", None),
+            )
+            if any(value is None for value in seal_values):
+                raise WorkspaceUnsupportedError()
+            add_seals, seal_seal, seal_shrink, seal_grow, seal_write = seal_values
+            write_fd = creator(
+                "codex-bridge-input",
+                cloexec | allow_sealing,
+            )
+            size_bytes = 0
+            with self.open_regular_file(relative) as source:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    view = memoryview(chunk)
+                    while view:
+                        written = os.write(write_fd, view)
+                        if written <= 0:
+                            raise WorkspaceTypeError()
+                        view = view[written:]
+                    size_bytes += len(chunk)
+            os.lseek(write_fd, 0, os.SEEK_SET)
+            fcntl.fcntl(
+                write_fd,
+                add_seals,
+                seal_seal | seal_shrink | seal_grow | seal_write,
+            )
+            read_fd = os.open(
+                f"/proc/self/fd/{write_fd}",
+                os.O_RDONLY | self._cloexec_flag(),
+            )
+            if not stat.S_ISREG(os.fstat(read_fd).st_mode):
+                raise WorkspaceTypeError()
+            os.close(write_fd)
+            write_fd = None
+            return WorkspaceAnonymousFileLease(read_fd, size_bytes)
+        except WorkspaceBoundaryError:
+            raise
+        except (ImportError, OSError, TypeError, ValueError):
+            raise WorkspaceUnsupportedError() from None
+        finally:
+            if write_fd is not None:
+                os.close(write_fd)
+            if read_fd is not None and write_fd is not None:
+                os.close(read_fd)
+
     def create_file_exclusive(self, relative: Path | str) -> BinaryIO:
         self._require_secure_operations()
         normalized = self.normalize(relative)
@@ -349,6 +473,143 @@ class WorkspaceBoundary:
         except (OSError, ValueError):
             os.close(file_fd)
             raise WorkspaceTypeError() from None
+
+    def identify_open_file(self, stream: BinaryIO) -> WorkspaceFileIdentity:
+        """Capture the inode identity of a regular file lease."""
+        self._require_secure_operations()
+        try:
+            entry_stat = os.fstat(stream.fileno())
+        except (AttributeError, OSError, ValueError):
+            raise WorkspaceTypeError() from None
+        if not stat.S_ISREG(entry_stat.st_mode):
+            raise WorkspaceTypeError()
+        return WorkspaceFileIdentity(
+            device=entry_stat.st_dev,
+            inode=entry_stat.st_ino,
+        )
+
+    def validate_regular_file_identity(
+        self,
+        relative: Path | str,
+        identity: WorkspaceFileIdentity,
+    ) -> str:
+        """Require a locator to still name the exact opened regular file."""
+        normalized = self.normalize(relative)
+        with self.open_regular_file(normalized) as stream:
+            current = self.identify_open_file(stream)
+        if current != identity:
+            raise WorkspaceEscapeError()
+        return normalized
+
+    def validate_file_locator(
+        self,
+        relative: Path | str,
+        *,
+        must_exist: bool = False,
+    ) -> str:
+        """Validate a portable file locator without exposing the private root.
+
+        Missing entries are permitted unless ``must_exist`` is requested. Any
+        existing ancestor is still checked as a directory and the final entry,
+        when present, must be a regular file. POSIX checks stay anchored to the
+        retained root descriptor.
+        """
+        normalized = self.normalize(relative)
+        parts = tuple(normalized.split("/"))
+        if _secure_dir_fd_available() and self._root_fd is not None:
+            self._validate_file_locator_fd(
+                self._root_fd,
+                parts,
+                must_exist=must_exist,
+            )
+            return normalized
+
+        current = self._root
+        for index, part in enumerate(parts):
+            current = current / part
+            try:
+                entry_stat = current.lstat()
+            except FileNotFoundError:
+                if must_exist:
+                    raise WorkspaceNotFoundError() from None
+                return normalized
+            except OSError:
+                raise WorkspaceTypeError() from None
+            if stat.S_ISLNK(entry_stat.st_mode) or self._is_junction(current):
+                raise WorkspaceEscapeError()
+            if index < len(parts) - 1:
+                if not stat.S_ISDIR(entry_stat.st_mode):
+                    raise WorkspaceTypeError()
+            elif not stat.S_ISREG(entry_stat.st_mode):
+                raise WorkspaceTypeError()
+        return normalized
+
+    def validate_regular_file_at(self, directory_fd: int, relative: Path | str) -> str:
+        """Validate a regular file below a caller-owned directory lease."""
+        self._require_secure_operations()
+        normalized = self.normalize(relative)
+        self._validate_file_locator_fd(
+            directory_fd,
+            tuple(normalized.split("/")),
+            must_exist=True,
+        )
+        return normalized
+
+    def unlink_regular_file(
+        self,
+        relative: Path | str,
+        *,
+        missing_ok: bool = False,
+        expected_identity: WorkspaceFileIdentity | None = None,
+    ) -> None:
+        """Unlink one regular file through the retained no-follow root.
+
+        When an identity is supplied, a renamed or replaced entry is rejected
+        instead of deleting a file the caller did not create.
+        """
+        self._require_secure_operations()
+        normalized = self.normalize(relative)
+        parts = tuple(normalized.split("/"))
+        parent_fd = self._open_parent_fd(parts[:-1])
+        file_fd: int | None = None
+        try:
+            try:
+                entry_stat = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                if missing_ok:
+                    return
+                raise WorkspaceNotFoundError() from None
+            except OSError as error:
+                raise self._translated_entry_error(error, parts[-1], parent_fd) from None
+            if stat.S_ISLNK(entry_stat.st_mode):
+                raise WorkspaceEscapeError()
+            if not stat.S_ISREG(entry_stat.st_mode):
+                raise WorkspaceTypeError()
+            try:
+                file_fd = os.open(
+                    parts[-1],
+                    os.O_RDONLY
+                    | self._nofollow_flag()
+                    | self._cloexec_flag()
+                    | getattr(os, "O_NONBLOCK", 0),
+                    dir_fd=parent_fd,
+                )
+            except OSError as error:
+                raise self._translated_entry_error(error, parts[-1], parent_fd) from None
+            current_identity = self._identity_from_stat(os.fstat(file_fd))
+            if expected_identity is not None and current_identity != expected_identity:
+                raise WorkspaceEscapeError()
+            try:
+                os.unlink(parts[-1], dir_fd=parent_fd)
+            except FileNotFoundError:
+                if not missing_ok:
+                    raise WorkspaceNotFoundError() from None
+            except OSError as error:
+                raise self._translated_entry_error(error, parts[-1], parent_fd) from None
+        finally:
+            if file_fd is not None:
+                os.close(file_fd)
+            os.close(parent_fd)
 
     def _validate_candidate(
         self,
@@ -475,6 +736,67 @@ class WorkspaceBoundary:
             raise
         except OSError:
             raise WorkspaceTypeError() from None
+
+    @staticmethod
+    def _identity_from_stat(entry_stat: os.stat_result) -> WorkspaceFileIdentity:
+        return WorkspaceFileIdentity(
+            device=entry_stat.st_dev,
+            inode=entry_stat.st_ino,
+        )
+
+    def _validate_file_locator_fd(
+        self,
+        base_fd: int,
+        parts: tuple[str, ...],
+        *,
+        must_exist: bool,
+    ) -> None:
+        try:
+            current_fd = os.dup(base_fd)
+        except OSError:
+            raise WorkspaceTypeError() from None
+        try:
+            for index, part in enumerate(parts):
+                try:
+                    entry_stat = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    if must_exist:
+                        raise WorkspaceNotFoundError() from None
+                    return
+                except OSError as error:
+                    raise self._translated_entry_error(error, part, current_fd) from None
+                if stat.S_ISLNK(entry_stat.st_mode):
+                    raise WorkspaceEscapeError()
+                if index == len(parts) - 1:
+                    if not stat.S_ISREG(entry_stat.st_mode):
+                        raise WorkspaceTypeError()
+                    try:
+                        file_fd = os.open(
+                            part,
+                            os.O_RDONLY
+                            | self._nofollow_flag()
+                            | self._cloexec_flag()
+                            | getattr(os, "O_NONBLOCK", 0),
+                            dir_fd=current_fd,
+                        )
+                    except OSError as error:
+                        raise self._translated_entry_error(error, part, current_fd) from None
+                    try:
+                        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                            raise WorkspaceTypeError()
+                    finally:
+                        os.close(file_fd)
+                    return
+                if not stat.S_ISDIR(entry_stat.st_mode):
+                    raise WorkspaceTypeError()
+                try:
+                    next_fd = os.open(part, self._directory_open_flags(), dir_fd=current_fd)
+                except OSError as error:
+                    raise self._translated_entry_error(error, part, current_fd) from None
+                os.close(current_fd)
+                current_fd = next_fd
+        finally:
+            os.close(current_fd)
 
     def _create_absolute_directory(self, target: Path) -> int:
         anchor = Path(target.anchor)

@@ -1,5 +1,6 @@
 import json
 import mimetypes
+import os
 import re
 import string
 from datetime import UTC, datetime
@@ -30,7 +31,15 @@ from .models import (
     ThreadViewRecord,
     normalize_model,
 )
-from .workspace import WorkspaceBoundary, WorkspaceEscapeError, WorkspaceInputError
+from .workspace import (
+    WorkspaceAnonymousFileLease,
+    WorkspaceBoundary,
+    WorkspaceBoundaryError,
+    WorkspaceEscapeError,
+    WorkspaceExistsError,
+    WorkspaceFileIdentity,
+    WorkspaceInputError,
+)
 
 _UNSET = object()
 _WORKSPACE_ID_PATTERN = re.compile(r"^ws_[0-9a-f]{12}$")
@@ -74,6 +83,7 @@ class BridgeStorage:
         self.artifacts_dir = self.root / "artifacts"
         self.logs_dir = self.root / "logs"
         self.workspace_boundary: WorkspaceBoundary | None = None
+        self.uploads_boundary: WorkspaceBoundary | None = None
         self.workspace_root: Path | None = None
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
@@ -83,6 +93,7 @@ class BridgeStorage:
         self._special_migration_lock = Lock()
         self._event_lock = Lock()
         self._project_mutation_lock = RLock()
+        self._thread_mutation_lock = RLock()
 
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             if workspace_root is None or not str(workspace_root).strip():
@@ -107,8 +118,23 @@ class BridgeStorage:
             self.artifacts_dir,
             self.logs_dir,
         )
-        for directory in private_directories:
-            directory.mkdir(parents=True, exist_ok=True)
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT and os.name != "nt":
+            private_state_boundary = WorkspaceBoundary(self.root, create=True)
+            try:
+                for directory in private_directories:
+                    private_state_boundary.create_directory(directory.name)
+            finally:
+                private_state_boundary.close()
+        else:
+            # Windows is validation-only for the HA profile; production HA
+            # runs on Linux and takes the descriptor-rooted branch above.
+            for directory in private_directories:
+                directory.mkdir(parents=True, exist_ok=True)
+
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            # Retain a descriptor for the private upload root before handling
+            # any untrusted attachment locator.
+            self.uploads_boundary = WorkspaceBoundary(self.uploads_dir)
 
         if self.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
             self.workspaces_dir.mkdir(parents=True, exist_ok=True)
@@ -141,6 +167,12 @@ class BridgeStorage:
         boundary = self.workspace_boundary
         if boundary is None:
             raise RuntimeError("workspace boundary is unavailable")
+        return boundary
+
+    def _home_assistant_uploads_boundary(self) -> WorkspaceBoundary:
+        boundary = self.uploads_boundary
+        if boundary is None:
+            raise RuntimeError("upload boundary is unavailable")
         return boundary
 
     def _special_project_root(self) -> str:
@@ -177,6 +209,34 @@ class BridgeStorage:
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
             raise RuntimeError("workspace descriptor leases require the home_assistant profile")
         return self._home_assistant_boundary().open_directory_fd(workspace_path)
+
+    def lease_run_attachments(
+        self,
+        record: ThreadRecord,
+    ) -> dict[str, WorkspaceAnonymousFileLease]:
+        """Create sealed anonymous copies for one HA Codex process."""
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("anonymous attachment leases require the home_assistant profile")
+        self._validate_thread_attachments(record)
+        boundary = self._home_assistant_uploads_boundary()
+        leases: dict[str, WorkspaceAnonymousFileLease] = {}
+        try:
+            for attachment in record.attachments:
+                lease = boundary.copy_regular_file_to_anonymous_lease(
+                    attachment.stored_path
+                )
+                if (
+                    attachment.size_bytes is not None
+                    and lease.size_bytes != attachment.size_bytes
+                ):
+                    lease.close()
+                    raise WorkspaceEscapeError()
+                leases[attachment.attachment_id] = lease
+            return leases
+        except BaseException:
+            for lease in leases.values():
+                lease.close()
+            raise
 
     def _safe_project_folder_name(self, name: str) -> str:
         invalid_chars = '<>:"/\\|?*'
@@ -233,6 +293,42 @@ class BridgeStorage:
         if record.workspace_path != normalized:
             record.workspace_path = normalized
             self.save_thread(record)
+        return record
+
+    def _validate_thread_attachments(self, record: ThreadRecord) -> ThreadRecord:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return record
+        boundary = self._home_assistant_uploads_boundary()
+        thread_locator = boundary.normalize(record.thread_id)
+        if thread_locator != record.thread_id or "/" in thread_locator:
+            raise WorkspaceInputError()
+        attachment_ids: set[str] = set()
+        attachment_locators: set[str] = set()
+        for attachment in record.attachments:
+            if attachment.relative_path is None:
+                raise WorkspaceInputError()
+            relative = boundary.normalize(attachment.relative_path)
+            stored = boundary.normalize(attachment.stored_path)
+            filename = boundary.normalize(attachment.filename)
+            if (
+                relative != attachment.relative_path
+                or stored != attachment.stored_path
+                or filename != attachment.filename
+                or "/" in filename
+                or PurePosixPath(relative).name != filename
+            ):
+                raise WorkspaceInputError()
+            expected_stored = f"{thread_locator}/{relative}"
+            if stored != expected_stored:
+                raise WorkspaceEscapeError()
+            if (
+                attachment.attachment_id in attachment_ids
+                or stored in attachment_locators
+            ):
+                raise WorkspaceInputError()
+            attachment_ids.add(attachment.attachment_id)
+            attachment_locators.add(stored)
+            boundary.validate_file_locator(stored)
         return record
 
     def _validate_thread_project_workspace(
@@ -886,36 +982,40 @@ class BridgeStorage:
         return PathBrowseEntryRecord(path=str(target), name=target.name)
 
     def load_thread(self, thread_id: str) -> ThreadRecord:
-        target = self._thread_path(thread_id)
-        if not target.exists():
-            raise ThreadNotFoundError(thread_id)
-        record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
-        record = self._ensure_thread_workspace(record)
-        record = self._ensure_thread_project(record)
-        record = self._ensure_thread_model(record)
-        return self._ensure_thread_timestamps(record)
+        with self._thread_mutation_lock:
+            target = self._thread_path(thread_id)
+            if not target.exists():
+                raise ThreadNotFoundError(thread_id)
+            record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = self._ensure_thread_workspace(record)
+            record = self._ensure_thread_project(record)
+            record = self._ensure_thread_model(record)
+            record = self._validate_thread_attachments(record)
+            return self._ensure_thread_timestamps(record)
 
     def get_thread(self, thread_id: str) -> ThreadViewRecord:
         return self._resolve_thread(self.load_thread(thread_id))
 
     def list_threads(self, *, include_archived: bool = False) -> list[ThreadViewRecord]:
-        records = [
-            self._ensure_thread_project(
-                self._ensure_thread_workspace(
-                    ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+        with self._thread_mutation_lock:
+            records = [
+                self._ensure_thread_project(
+                    self._ensure_thread_workspace(
+                        ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                    )
                 )
+                for path in self.threads_dir.glob("*.json")
+            ]
+            records = [self._validate_thread_attachments(record) for record in records]
+            records = [self._ensure_thread_timestamps(record) for record in records]
+            if not include_archived:
+                records = [record for record in records if not record.archived_at]
+            resolved = [self._resolve_thread(record) for record in records]
+            return sorted(
+                resolved,
+                key=lambda record: record.updated_at or record.created_at or "",
+                reverse=True,
             )
-            for path in self.threads_dir.glob("*.json")
-        ]
-        records = [self._ensure_thread_timestamps(record) for record in records]
-        if not include_archived:
-            records = [record for record in records if not record.archived_at]
-        resolved = [self._resolve_thread(record) for record in records]
-        return sorted(
-            resolved,
-            key=lambda record: record.updated_at or record.created_at or "",
-            reverse=True,
-        )
 
     def create_thread(
         self,
@@ -1079,40 +1179,76 @@ class BridgeStorage:
         return self._resolve_thread(record)
 
     def delete_thread(self, thread_id: str) -> None:
-        self.load_thread(thread_id)
-        thread_path = self._thread_path(thread_id)
-        if thread_path.exists():
-            thread_path.unlink()
+        with self._thread_mutation_lock:
+            self.load_thread(thread_id)
+            thread_path = self._thread_path(thread_id)
+            if thread_path.exists():
+                thread_path.unlink()
 
-        event_path = self._event_log_path(thread_id)
-        if event_path.exists():
-            event_path.unlink()
+            event_path = self._event_log_path(thread_id)
+            if event_path.exists():
+                event_path.unlink()
 
-        upload_dir = self.uploads_dir / thread_id
-        if upload_dir.exists():
-            for path in sorted(upload_dir.rglob("*"), reverse=True):
-                if path.is_file():
-                    path.unlink()
-                elif path.is_dir():
-                    path.rmdir()
-            upload_dir.rmdir()
+            upload_dir = self.uploads_dir / thread_id
+            if upload_dir.exists():
+                for path in sorted(upload_dir.rglob("*"), reverse=True):
+                    if path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        path.rmdir()
+                upload_dir.rmdir()
 
     def save_thread(self, record: ThreadRecord) -> None:
-        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
-            boundary = self._home_assistant_boundary()
-            record.workspace_path = boundary.normalize(record.workspace_path)
-            boundary.resolve_relative(record.workspace_path, must_exist=True, kind="directory")
-            if record.project_id is None:
+        with self._thread_mutation_lock:
+            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                boundary = self._home_assistant_boundary()
+                record.workspace_path = boundary.normalize(record.workspace_path)
+                boundary.resolve_relative(record.workspace_path, must_exist=True, kind="directory")
+                if record.project_id is None:
+                    raise WorkspaceInputError()
+                self._validate_thread_project_workspace(
+                    record,
+                    self.load_project(record.project_id),
+                )
+                self._validate_thread_attachments(record)
+                self._merge_persisted_home_assistant_attachments(record)
+                self._validate_thread_attachments(record)
+            if not record.created_at:
+                record.created_at = self._now()
+            if not record.updated_at:
+                record.updated_at = record.created_at
+            self._atomic_write_json(self._thread_path(record.thread_id), record.model_dump())
+
+    def _merge_persisted_home_assistant_attachments(self, record: ThreadRecord) -> None:
+        """Preserve append-only attachment metadata across stale thread writers."""
+        target = self._thread_path(record.thread_id)
+        try:
+            persisted = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return
+        if persisted.thread_id != record.thread_id:
+            raise WorkspaceInputError()
+        self._validate_thread_attachments(persisted)
+
+        incoming_by_id: dict[str, AttachmentRecord] = {}
+        for attachment in record.attachments:
+            existing = incoming_by_id.get(attachment.attachment_id)
+            if existing is not None and existing != attachment:
                 raise WorkspaceInputError()
-            self._validate_thread_project_workspace(
-                record,
-                self.load_project(record.project_id),
-            )
-        if not record.created_at:
-            record.created_at = self._now()
-        if not record.updated_at:
-            record.updated_at = record.created_at
-        self._atomic_write_json(self._thread_path(record.thread_id), record.model_dump())
+            incoming_by_id[attachment.attachment_id] = attachment
+
+        merged = list(persisted.attachments)
+        persisted_by_id = {
+            attachment.attachment_id: attachment for attachment in persisted.attachments
+        }
+        for attachment in record.attachments:
+            persisted_attachment = persisted_by_id.get(attachment.attachment_id)
+            if persisted_attachment is not None:
+                if persisted_attachment != attachment:
+                    raise WorkspaceInputError()
+                continue
+            merged.append(attachment)
+        record.attachments = merged
 
     def fail_home_assistant_run_without_workspace_validation(
         self,
@@ -1129,66 +1265,67 @@ class BridgeStorage:
         """
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
             raise RuntimeError("terminal metadata fallback requires the home_assistant profile")
-        target = self._thread_path(thread_id)
-        if not target.exists():
-            raise ThreadNotFoundError(thread_id)
-        record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
-        if record.thread_id != thread_id or record.active_run_id != run_id:
-            return False
+        with self._thread_mutation_lock:
+            target = self._thread_path(thread_id)
+            if not target.exists():
+                raise ThreadNotFoundError(thread_id)
+            record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            if record.thread_id != thread_id or record.active_run_id != run_id:
+                return False
 
-        safe_failures: dict[str, tuple[str, bool, bool]] = {
-            "auth.expired": (
-                AUTH_EXPIRED_MESSAGE,
-                False,
-                True,
-            ),
-            "model.unsupported": (
-                "The selected Codex model is not supported.",
-                False,
-                False,
-            ),
-            "limits.exhausted": (
-                "Codex usage limits have been reached.",
-                True,
-                False,
-            ),
-            "run.failed": ("The workspace is unavailable.", False, False),
-        }
-        normalized_failure_type = (
-            failure_type if failure_type in safe_failures else "run.failed"
-        )
-        message, blocked, auth_required = safe_failures[normalized_failure_type]
-        queued_count = len(record.pending_prompts)
-        record.status = "error"
-        record.active_run_id = None
-        record.last_error = message
-        record.pending_prompts.clear()
-        self._touch_thread(record)
-        self._atomic_write_json(target, record.model_dump())
+            safe_failures: dict[str, tuple[str, bool, bool]] = {
+                "auth.expired": (
+                    AUTH_EXPIRED_MESSAGE,
+                    False,
+                    True,
+                ),
+                "model.unsupported": (
+                    "The selected Codex model is not supported.",
+                    False,
+                    False,
+                ),
+                "limits.exhausted": (
+                    "Codex usage limits have been reached.",
+                    True,
+                    False,
+                ),
+                "run.failed": ("The workspace is unavailable.", False, False),
+            }
+            normalized_failure_type = (
+                failure_type if failure_type in safe_failures else "run.failed"
+            )
+            message, blocked, auth_required = safe_failures[normalized_failure_type]
+            queued_count = len(record.pending_prompts)
+            record.status = "error"
+            record.active_run_id = None
+            record.last_error = message
+            record.pending_prompts.clear()
+            self._touch_thread(record)
+            self._atomic_write_json(target, record.model_dump())
 
-        payload: dict[str, object] = {
-            "run_id": run_id,
-            "error": message,
-            "blocked": blocked,
-            "failure_type": normalized_failure_type,
-        }
-        if auth_required:
-            payload["auth_required"] = True
-        self.append_thread_event(
-            thread_id=thread_id,
-            event_type="run.failed",
-            payload=payload,
-        )
-        if queued_count:
+            payload: dict[str, object] = {
+                "run_id": run_id,
+                "error": message,
+                "blocked": blocked,
+                "failure_type": normalized_failure_type,
+            }
+            if auth_required:
+                payload["auth_required"] = True
             self.append_thread_event(
                 thread_id=thread_id,
-                event_type="run.queue_cleared",
-                payload={
-                    "reason": "active run failed",
-                    "queued_count": queued_count,
-                },
+                event_type="run.failed",
+                payload=payload,
             )
-        return True
+            if queued_count:
+                self.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="run.queue_cleared",
+                    payload={
+                        "reason": "active run failed",
+                        "queued_count": queued_count,
+                    },
+                )
+            return True
 
     def _ensure_thread_project(self, record: ThreadRecord) -> ThreadRecord:
         if record.project_id:
@@ -1314,6 +1451,15 @@ class BridgeStorage:
         content: bytes | BinaryIO,
         relative_path: str | None = None,
     ) -> AttachmentRecord:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            return self._attach_file_home_assistant(
+                thread_id=thread_id,
+                filename=filename,
+                mime_type=mime_type,
+                content=content,
+                relative_path=relative_path,
+            )
+
         record = self.load_thread(thread_id)
         safe_name = Path(filename).name.strip()
         if not safe_name:
@@ -1364,6 +1510,109 @@ class BridgeStorage:
             },
         )
         return attachment
+
+    def _attach_file_home_assistant(
+        self,
+        *,
+        thread_id: str,
+        filename: str,
+        mime_type: str,
+        content: bytes | BinaryIO,
+        relative_path: str | None,
+    ) -> AttachmentRecord:
+        record = self.load_thread(thread_id)
+        boundary = self._home_assistant_uploads_boundary()
+        thread_locator = boundary.normalize(record.thread_id)
+        normalized_filename = boundary.normalize(filename)
+        if "/" in normalized_filename or normalized_filename != filename:
+            raise WorkspaceInputError()
+
+        target_relative = boundary.normalize(relative_path or normalized_filename)
+        target_path = PurePosixPath(target_relative)
+        normalized_filename = target_path.name
+        stored_locator = f"{thread_locator}/{target_relative}"
+        parent_locator = PurePosixPath(stored_locator).parent.as_posix()
+        boundary.create_directory(parent_locator)
+
+        output: BinaryIO | None = None
+        for _attempt in range(100):
+            try:
+                output = boundary.create_file_exclusive(stored_locator)
+                break
+            except WorkspaceExistsError:
+                collision_name = (
+                    f"{target_path.stem}-{uuid4().hex[:8]}{target_path.suffix}"
+                )
+                target_path = target_path.with_name(collision_name)
+                target_relative = target_path.as_posix()
+                normalized_filename = target_path.name
+                stored_locator = f"{thread_locator}/{target_relative}"
+        if output is None:
+            raise WorkspaceExistsError()
+
+        identity: WorkspaceFileIdentity = boundary.identify_open_file(output)
+        size_bytes = 0
+        metadata_saved = False
+        try:
+            if hasattr(content, "read"):
+                while True:
+                    chunk = content.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    size_bytes += len(chunk)
+            else:
+                output.write(content)
+                size_bytes = len(content)
+            output.flush()
+
+            attachment = AttachmentRecord(
+                attachment_id=f"att_{uuid4().hex[:12]}",
+                filename=normalized_filename,
+                mime_type=mime_type,
+                stored_path=stored_locator,
+                relative_path=target_relative,
+                size_bytes=size_bytes,
+            )
+            with self._thread_mutation_lock:
+                # Prove the published locator still names the inode created by
+                # this upload before committing any public metadata.
+                boundary.validate_regular_file_identity(stored_locator, identity)
+                # Reload only after the potentially long stream has finished.
+                # Concurrent uploads then merge into the latest thread record
+                # while holding a short metadata critical section.
+                record = self.load_thread(thread_id)
+                record.attachments.append(attachment)
+                self._touch_thread(record)
+                self.save_thread(record)
+                metadata_saved = True
+
+                self.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="attachment.added",
+                    payload={
+                        "attachment_id": attachment.attachment_id,
+                        "filename": attachment.filename,
+                        "mime_type": attachment.mime_type,
+                        "stored_path": attachment.stored_path,
+                        "relative_path": attachment.relative_path,
+                        "size_bytes": attachment.size_bytes,
+                    },
+                )
+            return attachment
+        except BaseException:
+            if not metadata_saved:
+                try:
+                    boundary.unlink_regular_file(
+                        stored_locator,
+                        missing_ok=True,
+                        expected_identity=identity,
+                    )
+                except WorkspaceBoundaryError:
+                    pass
+            raise
+        finally:
+            output.close()
 
     def get_artifact(self, thread_id: str, artifact_id: str) -> ArtifactRecord:
         record = self.load_thread(thread_id)

@@ -300,6 +300,138 @@ def test_create_file_is_exclusive_and_never_overwrites_a_collision(tmp_path) -> 
     assert (root / "project" / "new.txt").read_bytes() == b"new"
 
 
+def test_validate_file_locator_allows_missing_and_accepts_existing_regular_file(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    (root / "project").mkdir(parents=True)
+    (root / "project" / "notes.txt").write_text("safe", encoding="utf-8")
+    boundary = WorkspaceBoundary(root)
+
+    assert boundary.validate_file_locator("missing/notes.txt") == "missing/notes.txt"
+    assert boundary.validate_file_locator("project/notes.txt") == "project/notes.txt"
+    assert (
+        boundary.validate_file_locator("project/notes.txt", must_exist=True)
+        == "project/notes.txt"
+    )
+    with pytest.raises(WorkspaceNotFoundError):
+        boundary.validate_file_locator("missing/notes.txt", must_exist=True)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX special-file facilities are unavailable")
+def test_validate_file_locator_rejects_symlink_and_special_entries(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    outside = tmp_path / "outside.txt"
+    root.mkdir()
+    outside.write_text("outside", encoding="utf-8")
+    _symlink_or_skip(outside, root / "link.txt")
+    os.mkfifo(root / "pipe")
+    boundary = WorkspaceBoundary(root)
+
+    with pytest.raises(WorkspaceEscapeError):
+        boundary.validate_file_locator("link.txt")
+    with pytest.raises(WorkspaceTypeError):
+        boundary.validate_file_locator("pipe")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_validate_regular_file_at_stays_anchored_to_directory_lease(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    selected = root / "selected"
+    moved = root / "selected-original"
+    outside = tmp_path / "outside"
+    selected.mkdir(parents=True)
+    outside.mkdir()
+    (selected / "safe.txt").write_text("inside", encoding="utf-8")
+    (outside / "safe.txt").mkdir()
+    boundary = WorkspaceBoundary(root)
+    directory_fd = boundary.open_directory_fd("selected")
+    try:
+        selected.rename(moved)
+        selected.symlink_to(outside, target_is_directory=True)
+
+        assert boundary.validate_regular_file_at(directory_fd, "safe.txt") == "safe.txt"
+    finally:
+        os.close(directory_fd)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_unlink_regular_file_is_descriptor_rooted_and_type_checked(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    outside = tmp_path / "outside.txt"
+    root.mkdir()
+    outside.write_text("outside", encoding="utf-8")
+    (root / "remove.txt").write_text("remove", encoding="utf-8")
+    (root / "directory").mkdir()
+    _symlink_or_skip(outside, root / "link.txt")
+    os.mkfifo(root / "pipe")
+    boundary = WorkspaceBoundary(root)
+
+    boundary.unlink_regular_file("remove.txt")
+    assert not (root / "remove.txt").exists()
+    boundary.unlink_regular_file("missing.txt", missing_ok=True)
+    with pytest.raises(WorkspaceNotFoundError):
+        boundary.unlink_regular_file("missing.txt")
+    with pytest.raises(WorkspaceTypeError):
+        boundary.unlink_regular_file("directory")
+    with pytest.raises(WorkspaceTypeError):
+        boundary.unlink_regular_file("pipe")
+    with pytest.raises(WorkspaceEscapeError):
+        boundary.unlink_regular_file("link.txt")
+    assert outside.read_text(encoding="utf-8") == "outside"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_file_identity_rejects_replacement_and_protects_cleanup(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "upload.txt"
+    moved = root / "upload-original.txt"
+    boundary = WorkspaceBoundary(root)
+
+    with boundary.create_file_exclusive("upload.txt") as stream:
+        stream.write(b"uploaded")
+        stream.flush()
+        identity = boundary.identify_open_file(stream)
+        target.rename(moved)
+        target.write_bytes(b"replacement")
+
+        with pytest.raises(WorkspaceEscapeError):
+            boundary.validate_regular_file_identity("upload.txt", identity)
+        with pytest.raises(WorkspaceEscapeError):
+            boundary.unlink_regular_file(
+                "upload.txt",
+                expected_identity=identity,
+            )
+
+    assert target.read_bytes() == b"replacement"
+    assert moved.read_bytes() == b"uploaded"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux memfd facilities are unavailable")
+def test_anonymous_file_lease_is_sealed_pathless_and_read_only(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    source = root / "input.txt"
+    source.write_bytes(b"sealed input")
+    boundary = WorkspaceBoundary(root)
+
+    lease = boundary.copy_regular_file_to_anonymous_lease("input.txt")
+    descriptor = lease.fileno()
+    try:
+        assert Path(lease.process_path).read_bytes() == b"sealed input"
+        assert "/memfd:codex-bridge-input" in os.readlink(lease.process_path)
+        assert str(root) not in os.readlink(lease.process_path)
+        assert Path(f"{lease.process_path}/..").exists() is False
+        with pytest.raises(OSError):
+            os.write(descriptor, b"mutate")
+        source.write_bytes(b"replacement")
+        assert Path(lease.process_path).read_bytes() == b"sealed input"
+    finally:
+        lease.close()
+
+    with pytest.raises(OSError):
+        os.fstat(descriptor)
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX special-file facilities are unavailable")
 def test_special_files_are_not_enumerated_or_opened(tmp_path) -> None:
     root = tmp_path / "workspace"
@@ -535,6 +667,8 @@ def test_secure_operations_fail_closed_when_required_primitives_are_unavailable(
         lambda: boundary.open_directory_fd("project"),
         lambda: boundary.open_regular_file("project/notes.txt"),
         lambda: boundary.create_file_exclusive("project/new.txt"),
+        lambda: boundary.validate_regular_file_at(0, "notes.txt"),
+        lambda: boundary.unlink_regular_file("project/notes.txt"),
     )
     for operation in operations:
         with pytest.raises(WorkspaceUnsupportedError) as error:
