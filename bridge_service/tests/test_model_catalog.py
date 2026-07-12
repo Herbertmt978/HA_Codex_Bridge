@@ -1,5 +1,6 @@
 import io
 import json
+from threading import Event, Thread, current_thread
 
 import pytest
 
@@ -411,6 +412,129 @@ def test_probe_caches_successful_catalog_between_status_polls(tmp_path, monkeypa
 
     assert launches == 1
     assert second == first
+
+
+def test_probe_refreshes_stale_cache_before_ttl_expires(tmp_path, monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    recovered_process = ScriptedProcess(
+        [
+            {"id": 1, "result": {}},
+            {"id": 2, "result": {"config": {}, "origins": {}}},
+            {
+                "id": 3,
+                "result": {
+                    "data": [_model_payload("gpt-5.6-sol", is_default=True)],
+                    "nextCursor": None,
+                },
+            },
+        ]
+    )
+    launches = 0
+
+    def fake_popen(*args, **kwargs):
+        nonlocal launches
+        launches += 1
+        if launches == 1:
+            raise OSError("temporary startup outage")
+        return recovered_process
+
+    monkeypatch.setattr(model_catalog.subprocess, "Popen", fake_popen)
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(tmp_path / "codex.exe"),
+        codex_home=tmp_path,
+        timeout_seconds=1,
+        cache_ttl_seconds=600,
+    )
+
+    fallback = probe.probe()
+    cached_fallback = probe.probe()
+    recovered = probe.probe(refresh_stale=True)
+    cached_recovery = probe.probe(refresh_stale=True)
+
+    assert fallback.source == "fallback"
+    assert cached_fallback == fallback
+    assert recovered.source == "codex-app-server"
+    assert recovered.stale is False
+    assert [model.model for model in recovered.models] == ["gpt-5.6-sol"]
+    assert cached_recovery == recovered
+    assert launches == 2
+
+
+def test_concurrent_stale_refreshes_share_one_failed_attempt_then_allow_retry(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    model_catalog = _load_model_catalog_module()
+    recovered_process = ScriptedProcess(
+        [
+            {"id": 1, "result": {}},
+            {"id": 2, "result": {"config": {}, "origins": {}}},
+            {
+                "id": 3,
+                "result": {
+                    "data": [_model_payload("gpt-5.6-sol", is_default=True)],
+                    "nextCursor": None,
+                },
+            },
+        ]
+    )
+    retry_started = Event()
+    release_retry = Event()
+    waiter_timestamped = Event()
+    launches = 0
+
+    def fake_popen(*args, **kwargs):
+        nonlocal launches
+        launches += 1
+        if launches == 1:
+            raise OSError("startup outage")
+        if launches == 2:
+            retry_started.set()
+            assert release_retry.wait(timeout=2)
+            raise OSError("recovery still pending")
+        return recovered_process
+
+    real_monotonic = model_catalog.monotonic
+
+    def tracked_monotonic():
+        if current_thread().name == "catalog-waiter":
+            waiter_timestamped.set()
+        return real_monotonic()
+
+    monkeypatch.setattr(model_catalog.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(model_catalog, "monotonic", tracked_monotonic)
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(tmp_path / "codex.exe"),
+        timeout_seconds=1,
+        cache_ttl_seconds=600,
+    )
+    assert probe.probe().source == "fallback"
+
+    results: list[object] = []
+
+    def refresh() -> None:
+        results.append(probe.probe(refresh_stale=True))
+
+    leader = Thread(target=refresh, name="catalog-leader")
+    waiter = Thread(target=refresh, name="catalog-waiter")
+    leader.start()
+    assert retry_started.wait(timeout=1)
+    waiter.start()
+    waiter_observed = waiter_timestamped.wait(timeout=1)
+    release_retry.set()
+    leader.join(timeout=2)
+    waiter.join(timeout=2)
+
+    assert waiter_observed
+    assert not leader.is_alive()
+    assert not waiter.is_alive()
+    assert len(results) == 2
+    assert [catalog.source for catalog in results] == ["fallback", "fallback"]
+    assert launches == 2
+
+    recovered = probe.probe(refresh_stale=True)
+    assert recovered.source == "codex-app-server"
+    assert launches == 3
 
 
 def test_probe_keeps_last_known_catalog_when_refresh_fails(tmp_path, monkeypatch) -> None:

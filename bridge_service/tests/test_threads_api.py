@@ -2,6 +2,7 @@ import json
 import time
 from threading import Event
 
+import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
@@ -84,7 +85,7 @@ class FakeDiagnosticsProbe:
 
 
 class FakeModelCatalogProbe:
-    def probe(self) -> CodexModelCatalogRecord:
+    def probe(self, *, refresh_stale: bool = False) -> CodexModelCatalogRecord:
         return CodexModelCatalogRecord(
             source="codex-app-server",
             models=[
@@ -120,7 +121,7 @@ class FakeModelCatalogProbe:
 
 
 class FakeFallbackModelCatalogProbe:
-    def probe(self) -> CodexModelCatalogRecord:
+    def probe(self, *, refresh_stale: bool = False) -> CodexModelCatalogRecord:
         return CodexModelCatalogRecord(
             source="fallback",
             models=[
@@ -143,9 +144,11 @@ class RecoveringModelCatalogProbe:
     def __init__(self, *, fallback_calls: int = 3) -> None:
         self.calls = 0
         self.fallback_calls = fallback_calls
+        self.refresh_stale_requests: list[bool] = []
 
-    def probe(self) -> CodexModelCatalogRecord:
+    def probe(self, *, refresh_stale: bool = False) -> CodexModelCatalogRecord:
         self.calls += 1
+        self.refresh_stale_requests.append(refresh_stale)
         if self.calls <= self.fallback_calls:
             return FakeFallbackModelCatalogProbe().probe()
         return FakeModelCatalogProbe().probe()
@@ -283,10 +286,11 @@ def test_startup_seeds_special_projects_from_fresh_catalog(tmp_path) -> None:
 
 
 def test_special_project_provisional_defaults_recover_with_fresh_catalog(tmp_path) -> None:
+    probe = RecoveringModelCatalogProbe()
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
-        model_catalog_probe=RecoveringModelCatalogProbe(),
+        model_catalog_probe=probe,
         initialize_special_projects=True,
     )
     client = TestClient(app)
@@ -314,18 +318,31 @@ def test_special_project_provisional_defaults_recover_with_fresh_catalog(tmp_pat
     assert preserved_thread["thinking_override"] == DEFAULT_THINKING_LEVEL
     assert preserved_thread["effective_model"] == DEFAULT_MODEL
     assert preserved_thread["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
+    assert probe.refresh_stale_requests == [False, False, True, False]
 
 
-def test_existing_direct_project_reconciles_before_first_post_recovery_chat(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("project_id", "ensure_method"),
+    [
+        ("prj_direct", "ensure_direct_project"),
+        ("prj_imported", "ensure_imported_project"),
+    ],
+    ids=("direct", "imported"),
+)
+def test_existing_special_project_reconciles_before_first_post_recovery_chat(
+    tmp_path,
+    project_id: str,
+    ensure_method: str,
+) -> None:
     initial_storage = BridgeStorage(root_path=tmp_path)
-    direct = initial_storage.ensure_direct_project(
+    special_project = getattr(initial_storage, ensure_method)(
         default_model=DEFAULT_MODEL,
         default_thinking_level=DEFAULT_THINKING_LEVEL,
         defaults_provisional=True,
     )
     stale_thread = initial_storage.create_thread(
         title="Created during discovery outage",
-        project_id=direct.project_id,
+        project_id=special_project.project_id,
         mode=RunMode.FULL_AUTO,
     )
     probe = RecoveringModelCatalogProbe(fallback_calls=1)
@@ -343,7 +360,7 @@ def test_existing_direct_project_reconciles_before_first_post_recovery_chat(tmp_
         headers=headers,
         json={
             "title": "First chat after recovery",
-            "project_id": "prj_direct",
+            "project_id": project_id,
         },
     )
     assert recovered_response.status_code == 201
@@ -352,14 +369,15 @@ def test_existing_direct_project_reconciles_before_first_post_recovery_chat(tmp_
         f"/threads/{stale_thread.thread_id}",
         headers=headers,
     ).json()
-    direct = json.loads(
-        (tmp_path / "projects" / "prj_direct.json").read_text(encoding="utf-8")
+    special_project = json.loads(
+        (tmp_path / "projects" / f"{project_id}.json").read_text(encoding="utf-8")
     )
 
     assert probe.calls == 2
-    assert direct["default_model"] == "gpt-5.6-sol"
-    assert direct["default_thinking_level"] == "ultra"
-    assert direct["defaults_origin"] == "codex"
+    assert probe.refresh_stale_requests == [False, True]
+    assert special_project["default_model"] == "gpt-5.6-sol"
+    assert special_project["default_thinking_level"] == "ultra"
+    assert special_project["defaults_origin"] == "codex"
     assert recovered_thread["model_override"] is None
     assert recovered_thread["thinking_override"] is None
     assert recovered_thread["effective_model"] == "gpt-5.6-sol"

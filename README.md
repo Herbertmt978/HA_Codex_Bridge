@@ -41,7 +41,7 @@ cd C:\CodexHA\ha-codex-bridge
 
 py -3.12 -m venv C:\CodexHA\.venv
 C:\CodexHA\.venv\Scripts\python.exe -m pip install `
-  .\bridge_service\dist\codex_bridge_service-0.5.2-py3-none-any.whl
+  .\bridge_service\dist\codex_bridge_service-0.5.3-py3-none-any.whl
 ```
 
 Generate a token and configure the process:
@@ -209,7 +209,7 @@ The browser talks only to Home Assistant. The custom integration proxies authent
 | `CODEX_BRIDGE_IGNORE_USER_CONFIG` | `0` | Starts Codex without inheriting user configuration. |
 | `CODEX_BRIDGE_RUN_IDLE_TIMEOUT_SECONDS` | `1800` | Fails a run that stops producing output. |
 | `CODEX_BRIDGE_MODEL_DISCOVERY_TIMEOUT_SECONDS` | `10` | App-server catalogue timeout. |
-| `CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS` | `600` | Successful catalogue cache lifetime. |
+| `CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS` | `600` | Fresh catalogue cache lifetime; reserved recovery chats retry stale entries. |
 
 <details>
 <summary><b>Authentication recovery</b></summary>
@@ -223,12 +223,12 @@ The bridge does not rotate or log Codex refresh tokens. Codex remains the owner 
 <details>
 <summary><b>Upgrade from an earlier release</b></summary>
 
-Version 0.5.2 adds the first-chat direct-project recovery fix and makes diagnostics report the code version actually running. It also includes the 0.5.1 Windows PowerShell updater fix and the 0.5.0 dynamic-model, migration, and security changes.
+Version 0.5.3 immediately retries a stale startup catalogue for Direct and Imported recovery chats. It also includes the 0.5.2 first-chat recovery and runtime-version fixes, the 0.5.1 Windows PowerShell updater fix, and the 0.5.0 dynamic-model, migration, and security changes.
 
 1. Replace old placeholder or short bridge tokens in both the VM launcher and Home Assistant.
-2. Update the VM checkout and install the 0.5.2 wheel.
+2. Update the VM checkout and install the 0.5.3 wheel.
 3. Point `CODEX_BRIDGE_CODEX_WRAPPER_PATH` at the managed Codex executable.
-4. Update or redownload version 0.5.2 in HACS.
+4. Update or redownload version 0.5.3 in HACS.
 5. Restart the bridge and Home Assistant, then hard-refresh the browser.
 
 Back up `projects/` and `threads/` under the bridge root before the first 0.5.x start.
