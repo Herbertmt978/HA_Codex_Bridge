@@ -28,6 +28,9 @@ _SYNTHETIC_CREDENTIAL_CARRIERS = (
     "CI_SECRET=SYNTHETIC_CARRIER_1234567890",
     "CODEX_KEY:SYNTHETIC_CARRIER_1234567890",
     "SUPERVISOR_PAT=SYNTHETIC_CARRIER_1234567890",
+    "CODEX_BRIDGE_AUTH_TOKEN=SYNTHETIC_CARRIER_1234567890",
+    "GH_TOKEN=SYNTHETIC_CARRIER_1234567890",
+    "HA_TOKEN=SYNTHETIC_CARRIER_1234567890",
     "Cookie:SYNTHETIC_SESSION_1234567890",
     "sessionid=SYNTHETIC_CARRIER_1234567890",
     "PASSWORD:SYNTHETIC_CARRIER_1234567890",
@@ -233,6 +236,61 @@ def test_codex_subprocess_environment_rejects_carriers_in_existing_certificate_p
 
     assert "SSL_CERT_FILE" not in environment
     assert "SSL_CERT_DIR" not in environment
+
+
+@pytest.mark.parametrize(
+    ("carrier_class", "carrier"),
+    [
+        pytest.param(
+            "platform",
+            "CODEX_BRIDGE_AUTH_TOKEN=SYNTHETIC_CARRIER_1234567890",
+            id="platform-codex-bridge",
+        ),
+        pytest.param(
+            "temporary",
+            "GH_TOKEN=SYNTHETIC_CARRIER_1234567890",
+            id="temporary-gh",
+        ),
+        pytest.param(
+            "home",
+            "HA_TOKEN=SYNTHETIC_CARRIER_1234567890",
+            id="home-ha",
+        ),
+        pytest.param(
+            "certificate",
+            "HA_TOKEN=SYNTHETIC_CARRIER_1234567890",
+            id="certificate-ha",
+        ),
+    ],
+)
+def test_codex_subprocess_environment_rejects_bridge_and_ha_alias_carriers_in_paths(
+    tmp_path,
+    carrier_class: str,
+    carrier: str,
+) -> None:
+    carrier_path = tmp_path / carrier
+    codex_home = tmp_path / "codex-home"
+    source = {"PATH": str(tmp_path / "bin")}
+    rejected_names: tuple[str, ...]
+
+    if carrier_class == "platform":
+        source["SYSTEMROOT"] = str(carrier_path)
+        rejected_names = ("SYSTEMROOT",)
+    elif carrier_class == "temporary":
+        source["TMPDIR"] = str(carrier_path)
+        rejected_names = ("TMPDIR",)
+    elif carrier_class == "home":
+        codex_home = carrier_path
+        rejected_names = ("HOME", "CODEX_HOME")
+    else:
+        carrier_path.write_text("synthetic certificate", encoding="utf-8")
+        source["SSL_CERT_FILE"] = str(carrier_path)
+        rejected_names = ("SSL_CERT_FILE",)
+
+    environment = codex_subprocess_environment(codex_home, source)
+
+    assert all(name not in environment for name in rejected_names)
+    assert all(carrier not in value for value in environment.values())
 
 
 def test_codex_subprocess_environment_retains_only_valid_runtime_values(tmp_path) -> None:

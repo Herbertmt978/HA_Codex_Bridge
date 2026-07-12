@@ -39,9 +39,9 @@ _CREDENTIAL_CARRIER_PATTERNS = (
     ),
     re.compile(
         r"(?<![A-Za-z0-9])(?:"
-        r"github|gitlab|openai|bridge|hassio|home[_-]?assistant|"
-        r"ci|codex|supervisor"
-        r")[_-](?:(?:access|refresh|api|job)[_-])?"
+        r"codex[_-]bridge|home[_-]?assistant|github|gitlab|openai|"
+        r"bridge|hassio|gh|ha|ci|codex|supervisor"
+        r")[_-](?:(?:auth|access|refresh|api|job)[_-])?"
         r"(?:token|secret|key|pat|password)\s*[:=]\s*[-A-Za-z0-9._~]{8,}",
         re.IGNORECASE,
     ),
