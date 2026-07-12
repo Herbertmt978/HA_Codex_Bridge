@@ -1,5 +1,6 @@
 import json
 import os
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
@@ -19,6 +20,7 @@ from codex_bridge_service.storage import BridgeStorage
 from codex_bridge_service.workspace import (
     WorkspaceBoundaryError,
     WorkspaceEscapeError,
+    WorkspaceExistsError,
     WorkspaceInputError,
     WorkspaceTypeError,
 )
@@ -341,15 +343,311 @@ def test_home_assistant_artifact_api_uses_generic_missing_and_invalid_errors(
     assert str(workspace_root) not in serialized
 
 
-def test_home_assistant_archive_route_fails_closed_until_secure_archive_support(tmp_path) -> None:
-    app, _storage, thread, _, _, _ = _home_assistant_app(tmp_path)
-    response = TestClient(app).post(
+def test_home_assistant_archive_route_packages_owned_sources_with_relative_metadata(
+    tmp_path,
+) -> None:
+    app, storage, thread, state_root, workspace_root, workspace = _home_assistant_app(tmp_path)
+    workspace_file = workspace / "src" / "main.py"
+    workspace_file.parent.mkdir(parents=True)
+    workspace_file.write_text("print('safe')\n", encoding="utf-8")
+    storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="requirements.txt",
+        mime_type="text/plain",
+        content=b"fastapi\n",
+        relative_path="deps/requirements.txt",
+    )
+    client = TestClient(app)
+    response = client.post(
         f"/threads/{thread.thread_id}/artifacts/workspace-archive",
         headers={"Authorization": "Bearer secret"},
     )
 
-    assert response.status_code == 503
-    assert response.json() == {"detail": "workspace archive unavailable"}
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["source"] == "workspace_archive"
+    assert payload["relative_path"] == payload["filename"]
+    assert payload["stored_path"] == f"{thread.thread_id}/{payload['filename']}"
+    serialized = response.text + storage._thread_path(thread.thread_id).read_text(
+        encoding="utf-8"
+    )
+    assert str(state_root) not in serialized
+    assert str(workspace_root) not in serialized
+    archive_path = storage.artifacts_dir.joinpath(*payload["stored_path"].split("/"))
+    with zipfile.ZipFile(archive_path) as archive:
+        assert set(archive.namelist()) == {
+            "uploads/deps/requirements.txt",
+            "workspace/src/main.py",
+        }
+        assert archive.read("workspace/src/main.py") == b"print('safe')\n"
+        assert archive.read("uploads/deps/requirements.txt") == b"fastapi\n"
+
+    downloaded = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{payload['artifact_id']}",
+        headers={"Authorization": "Bearer secret"},
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content.startswith(b"PK")
+    assert downloaded.headers["content-type"] == "application/octet-stream"
+
+
+def test_home_assistant_empty_archive_contains_explanatory_readme(tmp_path) -> None:
+    storage, thread, _, _, _ = _home_assistant_thread(tmp_path)
+
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    archive_path = storage.artifacts_dir.joinpath(*artifact.stored_path.split("/"))
+    with zipfile.ZipFile(archive_path) as archive:
+        assert archive.namelist() == ["README.txt"]
+        assert b"did not have any workspace files" in archive.read("README.txt")
+
+
+def test_home_assistant_concurrent_archives_publish_unique_complete_records(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    barrier = Barrier(2)
+    original_walk = storage.workspace_boundary.walk_regular_files
+
+    def synchronized_walk(*args, **kwargs):
+        discovered = original_walk(*args, **kwargs)
+        barrier.wait(timeout=5)
+        return discovered
+
+    monkeypatch.setattr(storage.workspace_boundary, "walk_regular_files", synchronized_walk)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(storage.create_workspace_archive, thread.thread_id)
+        second_future = executor.submit(storage.create_workspace_archive, thread.thread_id)
+        archives = (first_future.result(), second_future.result())
+
+    assert len({artifact.artifact_id for artifact in archives}) == 2
+    assert len({artifact.stored_path for artifact in archives}) == 2
+    persisted = storage.load_thread(thread.thread_id)
+    assert len(persisted.artifacts) == 2
+    for artifact in archives:
+        target = storage.artifacts_dir.joinpath(*artifact.stored_path.split("/"))
+        with zipfile.ZipFile(target) as archive:
+            assert archive.read("workspace/result.txt") == b"result"
+
+
+def test_home_assistant_archive_rejects_unsafe_workspace_without_partial_output(
+    tmp_path,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    (workspace / "link.txt").symlink_to(outside)
+
+    with pytest.raises(WorkspaceEscapeError):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    assert storage.load_thread(thread.thread_id).artifacts == []
+    assert outside.read_text(encoding="utf-8") == "outside"
+
+
+def test_home_assistant_archive_copy_failure_removes_partial_output(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "first.txt").write_text("first", encoding="utf-8")
+    (workspace / "second.txt").write_text("second", encoding="utf-8")
+    original_copy = storage.workspace_boundary.copy_regular_file_to_anonymous_lease
+    copy_count = 0
+
+    def fail_second_copy(relative):
+        nonlocal copy_count
+        copy_count += 1
+        if copy_count == 2:
+            raise WorkspaceTypeError()
+        return original_copy(relative)
+
+    monkeypatch.setattr(
+        storage.workspace_boundary,
+        "copy_regular_file_to_anonymous_lease",
+        fail_second_copy,
+    )
+    with pytest.raises(WorkspaceTypeError):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    assert storage.load_thread(thread.thread_id).artifacts == []
+
+
+def test_home_assistant_archive_retries_exclusive_name_collision(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    original_create = storage.artifacts_boundary.create_file_exclusive
+    attempts = 0
+
+    def collide_once(relative):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise WorkspaceExistsError()
+        return original_create(relative)
+
+    monkeypatch.setattr(
+        storage.artifacts_boundary,
+        "create_file_exclusive",
+        collide_once,
+    )
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    assert attempts == 2
+    assert storage.artifacts_dir.joinpath(*artifact.stored_path.split("/")).is_file()
+
+
+def test_home_assistant_archive_zip_close_failure_removes_partial_output(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    real_zip_file = zipfile.ZipFile
+
+    class FailingCloseZipFile(real_zip_file):
+        def close(self):
+            if self.fp is None:
+                return super().close()
+            super().close()
+            raise OSError("zip close failed")
+
+    monkeypatch.setattr(
+        "codex_bridge_service.storage.zipfile.ZipFile",
+        FailingCloseZipFile,
+    )
+    with pytest.raises(OSError, match="zip close failed"):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    assert storage.load_thread(thread.thread_id).artifacts == []
+
+
+def test_home_assistant_archive_output_close_failure_prevents_publication(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    original_create = storage.artifacts_boundary.create_file_exclusive
+
+    class FailingCloseStream:
+        def __init__(self, stream) -> None:
+            self._stream = stream
+            self._failed = False
+
+        def __getattr__(self, name):
+            return getattr(self._stream, name)
+
+        def close(self):
+            self._stream.close()
+            if not self._failed:
+                self._failed = True
+                raise OSError("artifact close failed")
+
+    def create_failing_stream(relative):
+        return FailingCloseStream(original_create(relative))
+
+    monkeypatch.setattr(
+        storage.artifacts_boundary,
+        "create_file_exclusive",
+        create_failing_stream,
+    )
+    with pytest.raises(OSError, match="artifact close failed"):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    assert storage.load_thread(thread.thread_id).artifacts == []
+    assert all(
+        event.event_type != "artifact.added"
+        for event in storage.list_thread_events(thread.thread_id)
+    )
+
+
+def test_home_assistant_archive_identity_failure_cleans_exclusive_file(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    monkeypatch.setattr(
+        storage.artifacts_boundary,
+        "identify_open_file",
+        lambda _stream: (_ for _ in ()).throw(WorkspaceTypeError()),
+    )
+
+    with pytest.raises(WorkspaceTypeError):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    assert storage.load_thread(thread.thread_id).artifacts == []
+
+
+def test_home_assistant_archive_metadata_failure_removes_completed_output(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+
+    def fail_save(_record):
+        raise RuntimeError("metadata unavailable")
+
+    monkeypatch.setattr(storage, "save_thread", fail_save)
+    with pytest.raises(RuntimeError, match="metadata unavailable"):
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert list(storage.artifacts_dir.rglob("*.zip")) == []
+    raw = json.loads(storage._thread_path(thread.thread_id).read_text(encoding="utf-8"))
+    assert raw["artifacts"] == []
+
+
+def test_home_assistant_archive_uses_sealed_source_snapshot_during_replacement(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    target = workspace / "mutable.txt"
+    target.write_bytes(b"trusted")
+    original_copy = storage.workspace_boundary.copy_regular_file_to_anonymous_lease
+
+    def copy_then_replace(relative):
+        lease = original_copy(relative)
+        target.write_bytes(b"hostile replacement")
+        return lease
+
+    monkeypatch.setattr(
+        storage.workspace_boundary,
+        "copy_regular_file_to_anonymous_lease",
+        copy_then_replace,
+    )
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    archive_path = storage.artifacts_dir.joinpath(*artifact.stored_path.split("/"))
+    with zipfile.ZipFile(archive_path) as archive:
+        assert archive.read("workspace/mutable.txt") == b"trusted"
+    assert target.read_bytes() == b"hostile replacement"
+
+
+def test_home_assistant_thread_delete_removes_published_private_archives(tmp_path) -> None:
+    storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
+    (workspace / "result.txt").write_text("result", encoding="utf-8")
+    artifact = storage.create_workspace_archive(thread.thread_id)
+    archive_path = storage.artifacts_dir.joinpath(*artifact.stored_path.split("/"))
+    assert archive_path.is_file()
+
+    storage.delete_thread(thread.thread_id)
+
+    assert not archive_path.exists()
+    assert not storage._thread_path(thread.thread_id).exists()
+    assert not storage._event_log_path(thread.thread_id).exists()
 
 
 def test_workspace_artifact_source_is_additive_for_legacy_records() -> None:

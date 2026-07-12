@@ -40,7 +40,6 @@ from .workspace import (
     WorkspaceExistsError,
     WorkspaceFileIdentity,
     WorkspaceInputError,
-    WorkspaceUnsupportedError,
 )
 
 _UNSET = object()
@@ -1248,7 +1247,15 @@ class BridgeStorage:
 
     def delete_thread(self, thread_id: str) -> None:
         with self._thread_mutation_lock:
-            self.load_thread(thread_id)
+            record = self.load_thread(thread_id)
+            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                artifacts_boundary = self._home_assistant_artifacts_boundary()
+                for artifact in record.artifacts:
+                    if artifact.source is ArtifactSource.WORKSPACE_ARCHIVE:
+                        artifacts_boundary.unlink_regular_file(
+                            artifact.stored_path,
+                            missing_ok=True,
+                        )
             thread_path = self._thread_path(thread_id)
             if thread_path.exists():
                 thread_path.unlink()
@@ -1857,7 +1864,7 @@ class BridgeStorage:
 
     def create_workspace_archive(self, thread_id: str) -> ArtifactRecord:
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
-            raise WorkspaceUnsupportedError()
+            return self._create_workspace_archive_home_assistant(thread_id)
         record = self.load_thread(thread_id)
         target_dir = self.artifacts_dir / thread_id
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -1922,6 +1929,188 @@ class BridgeStorage:
             },
         )
         return artifact
+
+    def _create_workspace_archive_home_assistant(
+        self,
+        thread_id: str,
+    ) -> ArtifactRecord:
+        snapshot = self.load_thread(thread_id)
+        workspace_boundary = self._home_assistant_boundary()
+        uploads_boundary = self._home_assistant_uploads_boundary()
+        artifacts_boundary = self._home_assistant_artifacts_boundary()
+        workspace = workspace_boundary.normalize(
+            snapshot.workspace_path,
+            allow_root=True,
+        )
+        workspace_files = workspace_boundary.walk_regular_files(
+            workspace,
+            reject_unsafe=True,
+        )
+
+        thread_locator = artifacts_boundary.normalize(snapshot.thread_id)
+        if thread_locator != snapshot.thread_id or "/" in thread_locator:
+            raise WorkspaceInputError()
+        artifacts_boundary.create_directory(thread_locator)
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        title_stem = "".join(
+            char.lower() if char.isalnum() else "-"
+            for char in (snapshot.title or snapshot.workspace_id)
+        ).strip("-")[:120]
+        output: BinaryIO | None = None
+        for _attempt in range(100):
+            filename = (
+                f"{title_stem or snapshot.workspace_id}-{timestamp}-"
+                f"{uuid4().hex[:8]}.zip"
+            )
+            relative_path = artifacts_boundary.normalize(filename)
+            stored_locator = f"{thread_locator}/{relative_path}"
+            try:
+                output = artifacts_boundary.create_file_exclusive(stored_locator)
+                break
+            except WorkspaceExistsError:
+                continue
+        if output is None:
+            raise WorkspaceExistsError()
+        identity: WorkspaceFileIdentity | None = None
+        metadata_saved = False
+        try:
+            identity = artifacts_boundary.identify_open_file(output)
+            included_files = 0
+            with zipfile.ZipFile(
+                output,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=6,
+            ) as archive:
+                workspace_parts = PurePosixPath(workspace)
+                for stored in workspace_files:
+                    if workspace == ".":
+                        relative = stored
+                    else:
+                        try:
+                            relative = PurePosixPath(stored).relative_to(
+                                workspace_parts
+                            ).as_posix()
+                        except ValueError:
+                            raise WorkspaceEscapeError() from None
+                    relative = workspace_boundary.normalize(relative)
+                    self._copy_boundary_file_to_archive(
+                        archive=archive,
+                        member=f"workspace/{relative}",
+                        boundary=workspace_boundary,
+                        stored_locator=stored,
+                    )
+                    included_files += 1
+
+                for attachment in snapshot.attachments:
+                    assert attachment.relative_path is not None
+                    attachment_relative = uploads_boundary.normalize(
+                        attachment.relative_path
+                    )
+                    self._copy_boundary_file_to_archive(
+                        archive=archive,
+                        member=f"uploads/{attachment_relative}",
+                        boundary=uploads_boundary,
+                        stored_locator=attachment.stored_path,
+                    )
+                    included_files += 1
+
+                if included_files == 0:
+                    archive.writestr(
+                        "README.txt",
+                        "This chat did not have any workspace files or uploaded files yet.\n",
+                    )
+
+            output.flush()
+            os.fsync(output.fileno())
+            artifacts_boundary.validate_regular_file_identity(
+                stored_locator,
+                identity,
+            )
+            size_bytes = os.fstat(output.fileno()).st_size
+            output.close()
+            output = None
+            artifacts_boundary.validate_regular_file_identity(
+                stored_locator,
+                identity,
+            )
+            artifact = ArtifactRecord(
+                artifact_id=f"art_{uuid4().hex[:12]}",
+                filename=filename,
+                mime_type="application/zip",
+                source=ArtifactSource.WORKSPACE_ARCHIVE,
+                stored_path=stored_locator,
+                relative_path=relative_path,
+                size_bytes=size_bytes,
+            )
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                record.artifacts.append(artifact)
+                self._touch_thread(record)
+                self.save_thread(record)
+                metadata_saved = True
+                self.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="artifact.added",
+                    payload={
+                        "artifact_id": artifact.artifact_id,
+                        "filename": artifact.filename,
+                        "mime_type": artifact.mime_type,
+                        "source": artifact.source.value,
+                        "stored_path": artifact.stored_path,
+                        "relative_path": artifact.relative_path,
+                        "size_bytes": artifact.size_bytes,
+                    },
+                )
+            return artifact
+        except BaseException:
+            if not metadata_saved:
+                try:
+                    artifacts_boundary.unlink_regular_file(
+                        stored_locator,
+                        missing_ok=True,
+                        expected_identity=identity,
+                    )
+                except WorkspaceBoundaryError:
+                    pass
+            raise
+        finally:
+            if output is not None:
+                try:
+                    output.close()
+                except OSError:
+                    pass
+
+    def _copy_boundary_file_to_archive(
+        self,
+        *,
+        archive: zipfile.ZipFile,
+        member: str,
+        boundary: WorkspaceBoundary,
+        stored_locator: str,
+    ) -> None:
+        normalized_member = member.replace("\\", "/")
+        member_path = PurePosixPath(normalized_member)
+        if (
+            member_path.is_absolute()
+            or not member_path.parts
+            or any(part in {"", ".", ".."} for part in member_path.parts)
+        ):
+            raise WorkspaceInputError()
+        lease = boundary.copy_regular_file_to_anonymous_lease(stored_locator)
+        file_fd = lease.detach()
+        try:
+            source = os.fdopen(file_fd, "rb")
+        except BaseException:
+            os.close(file_fd)
+            raise
+        with source:
+            with archive.open(member_path.as_posix(), mode="w") as destination:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    destination.write(chunk)
 
     def _sanitize_relative_path(self, relative_path: str | None, filename: str) -> Path:
         if not relative_path:
