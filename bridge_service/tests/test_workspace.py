@@ -75,6 +75,9 @@ def test_boundary_creates_a_root_only_when_explicitly_requested(tmp_path) -> Non
         "control\x1fcharacter",
         "delete\x7fcharacter",
         "c1\x85character",
+        "bidi\u202ename",
+        "zero\u200bwidth",
+        "surrogate\ud800name",
         "file:stream",
         "safe?.txt",
         "a*b",
@@ -109,7 +112,19 @@ def test_normalize_returns_one_portable_public_form(tmp_path) -> None:
 
 @pytest.mark.parametrize(
     "reserved",
-    (".", "..", "NUL", "con.txt", "COM1", "lpt9.log", "CONIN$", "conout$.txt"),
+    (
+        ".",
+        "..",
+        "NUL",
+        "con.txt",
+        "COM1",
+        "lpt9.log",
+        "CONIN$",
+        "conout$.txt",
+        "COM¹",
+        "lpt².txt",
+        "com³.log",
+    ),
 )
 def test_normalize_rejects_reserved_components(tmp_path, reserved: str) -> None:
     boundary = WorkspaceBoundary(tmp_path)
@@ -170,9 +185,9 @@ def test_existing_parent_and_final_symlink_swaps_fail_closed(tmp_path) -> None:
 
     with pytest.raises(WorkspaceEscapeError):
         boundary.resolve_relative("project/secret.txt", must_exist=True)
-    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
+    with pytest.raises(WorkspaceEscapeError):
         boundary.open_regular_file("project/secret.txt")
-    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
+    with pytest.raises(WorkspaceEscapeError):
         boundary.create_file_exclusive("project/new.txt")
 
     parent.unlink()
@@ -182,8 +197,21 @@ def test_existing_parent_and_final_symlink_swaps_fail_closed(tmp_path) -> None:
 
     with pytest.raises(WorkspaceEscapeError):
         boundary.resolve_relative("project/secret.txt", must_exist=True)
-    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
+    with pytest.raises(WorkspaceEscapeError):
         boundary.open_regular_file("project/secret.txt")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd operations are unavailable")
+def test_regular_file_parent_reports_wrong_type_not_escape(tmp_path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "not-a-directory").write_text("file", encoding="utf-8")
+    boundary = WorkspaceBoundary(root)
+
+    with pytest.raises(WorkspaceTypeError):
+        boundary.open_regular_file("not-a-directory/child.txt")
+    with pytest.raises(WorkspaceTypeError):
+        boundary.create_file_exclusive("not-a-directory/child.txt")
 
 
 def test_dangling_and_internal_symlinks_are_rejected_uniformly(tmp_path) -> None:

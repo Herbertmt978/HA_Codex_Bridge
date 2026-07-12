@@ -2,6 +2,7 @@ import errno
 import os
 import re
 import stat
+import unicodedata
 from pathlib import Path
 from typing import BinaryIO, Literal
 
@@ -13,6 +14,7 @@ _WINDOWS_RESERVED_NAMES = frozenset(
     | {f"COM{index}" for index in range(1, 10)}
     | {f"LPT{index}" for index in range(1, 10)}
 )
+_WINDOWS_SUPERSCRIPT_DIGITS = str.maketrans({"¹": "1", "²": "2", "³": "3"})
 _ERROR_MESSAGES = {
     "invalid_relative_path": "The path is invalid.",
     "path_escape": "The workspace boundary rejected the path.",
@@ -123,10 +125,7 @@ class WorkspaceBoundary:
             raise WorkspaceInputError() from None
         if not isinstance(value, str) or not value or value != value.strip():
             raise WorkspaceInputError()
-        if any(
-            ord(character) < 32 or 127 <= ord(character) <= 159
-            for character in value
-        ):
+        if any(unicodedata.category(character).startswith("C") for character in value):
             raise WorkspaceInputError()
         if value == ".":
             if allow_root:
@@ -212,7 +211,11 @@ class WorkspaceBoundary:
                     except WorkspaceInputError:
                         continue
                     except OSError as error:
-                        raise self._translated_os_error(error, symlink_is_escape=True) from None
+                        raise self._translated_entry_error(
+                            error,
+                            entry.name,
+                            directory_fd,
+                        ) from None
                     finally:
                         if child_fd is not None:
                             os.close(child_fd)
@@ -252,7 +255,11 @@ class WorkspaceBoundary:
                     dir_fd=parent_fd,
                 )
             except OSError as error:
-                raise self._translated_os_error(error, symlink_is_escape=True) from None
+                raise self._translated_entry_error(
+                    error,
+                    parts[-1],
+                    parent_fd,
+                ) from None
         finally:
             os.close(parent_fd)
         try:
@@ -283,7 +290,11 @@ class WorkspaceBoundary:
             try:
                 file_fd = os.open(parts[-1], flags, 0o600, dir_fd=parent_fd)
             except OSError as error:
-                raise self._translated_os_error(error, symlink_is_escape=True) from None
+                raise self._translated_entry_error(
+                    error,
+                    parts[-1],
+                    parent_fd,
+                ) from None
         finally:
             os.close(parent_fd)
         try:
@@ -388,9 +399,10 @@ class WorkspaceBoundary:
                         )
                         self._walk_regular_files_fd(child_fd, public, files)
                     except OSError as error:
-                        raise self._translated_os_error(
+                        raise self._translated_entry_error(
                             error,
-                            symlink_is_escape=True,
+                            entry.name,
+                            directory_fd,
                         ) from None
                     finally:
                         if child_fd is not None:
@@ -409,9 +421,10 @@ class WorkspaceBoundary:
                         if stat.S_ISREG(os.fstat(file_fd).st_mode):
                             files.append(public)
                     except OSError as error:
-                        raise self._translated_os_error(
+                        raise self._translated_entry_error(
                             error,
-                            symlink_is_escape=True,
+                            entry.name,
+                            directory_fd,
                         ) from None
                     finally:
                         if file_fd is not None:
@@ -435,9 +448,10 @@ class WorkspaceBoundary:
                 except FileExistsError:
                     pass
                 except OSError as error:
-                    raise self._translated_os_error(
+                    raise self._translated_entry_error(
                         error,
-                        symlink_is_escape=True,
+                        part,
+                        current_fd,
                     ) from None
                 try:
                     next_fd = os.open(
@@ -446,9 +460,10 @@ class WorkspaceBoundary:
                         dir_fd=current_fd,
                     )
                 except OSError as error:
-                    raise self._translated_os_error(
+                    raise self._translated_entry_error(
                         error,
-                        symlink_is_escape=True,
+                        part,
+                        current_fd,
                     ) from None
                 os.close(current_fd)
                 current_fd = next_fd
@@ -486,11 +501,19 @@ class WorkspaceBoundary:
                 except FileExistsError:
                     pass
                 except OSError as error:
-                    raise self._translated_os_error(error, symlink_is_escape=True) from None
+                    raise self._translated_entry_error(
+                        error,
+                        part,
+                        current_fd,
+                    ) from None
                 try:
                     next_fd = os.open(part, flags, dir_fd=current_fd)
                 except OSError as error:
-                    raise self._translated_os_error(error, symlink_is_escape=True) from None
+                    raise self._translated_entry_error(
+                        error,
+                        part,
+                        current_fd,
+                    ) from None
                 os.close(current_fd)
                 current_fd = next_fd
         finally:
@@ -506,9 +529,12 @@ class WorkspaceBoundary:
                 current_fd = next_fd
             return current_fd
         except OSError as error:
+            translated = self._translated_os_error(error, symlink_is_escape=True)
+            if "current_fd" in locals() and "part" in locals():
+                translated = self._translated_entry_error(error, part, current_fd)
             if "current_fd" in locals():
                 os.close(current_fd)
-            raise self._translated_os_error(error, symlink_is_escape=True) from None
+            raise translated from None
 
     def _require_secure_operations(self) -> None:
         if not _secure_dir_fd_available():
@@ -539,7 +565,7 @@ class WorkspaceBoundary:
             return False
         if any(character in _WINDOWS_INVALID_CHARS for character in component):
             return False
-        base = component.split(".", 1)[0].upper()
+        base = component.split(".", 1)[0].upper().translate(_WINDOWS_SUPERSCRIPT_DIGITS)
         return base not in _WINDOWS_RESERVED_NAMES
 
     @staticmethod
@@ -551,6 +577,24 @@ class WorkspaceBoundary:
             return bool(checker())
         except OSError:
             raise WorkspaceTypeError() from None
+
+    @classmethod
+    def _translated_entry_error(
+        cls,
+        error: OSError,
+        name: str,
+        parent_fd: int,
+    ) -> WorkspaceBoundaryError:
+        translated = cls._translated_os_error(error, symlink_is_escape=True)
+        if error.errno not in {errno.ENOTDIR, errno.EEXIST}:
+            return translated
+        try:
+            entry_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        except OSError:
+            return translated
+        if stat.S_ISLNK(entry_stat.st_mode):
+            return WorkspaceEscapeError()
+        return translated
 
     @staticmethod
     def _translated_os_error(
