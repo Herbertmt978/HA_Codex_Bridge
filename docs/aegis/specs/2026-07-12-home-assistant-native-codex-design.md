@@ -23,7 +23,7 @@ The immediate goal is a reliable system for the repository owner. Official Home 
 
 ### TaskIntentDraft
 
-- **Outcome:** Codex runs entirely on Home Assistant OS and is usable remotely through the normal HA/Nabu Casa frontend.
+- **Outcome:** Codex runs entirely on Home Assistant OS and is usable through the normal HA frontend over LAN, Nabu Casa, Cloudflare Tunnel/reverse proxy, VPN, or another standards-compatible HA access path.
 - **Goal:** Remove the Windows VM as the runtime owner without weakening authentication, sandboxing, streaming, or rollback behavior.
 - **Success evidence:** A real remote session from an authorized network that cannot reach OpenAI can sign in, create a workspace/chat, stream and approve/cancel a Codex run, upload and download a file, recover from a dropped connection, update Codex, and restore the prior App version—all through Home Assistant.
 - **Stop condition:** The HA App is the verified canonical runtime, selected workspace files are present, fresh HA chat history is working, and the Windows service can be shut down without losing wanted data.
@@ -57,7 +57,7 @@ The immediate goal is a reliable system for the repository owner. Official Home 
 
 The existing HA panel remains the product UI. A protected App owns Codex locally, and Supervisor discovery joins the two components.
 
-**Advantages:** Meets the Nabu Casa workflow; reuses the strongest existing UI and HA authorization boundary; keeps browser traffic on the HA origin; supports background runtime and immutable updates; remains portable to Community-quality packaging.
+**Advantages:** Meets the provider-neutral remote HA workflow; reuses the strongest existing UI and HA authorization boundary; keeps browser traffic on the current HA origin; supports background runtime and immutable updates; remains portable to Community-quality packaging.
 
 **Costs:** Two installation actions are unavoidable, and Integration/App protocol compatibility must tolerate version skew.
 
@@ -82,7 +82,7 @@ Retain the current Bridge and use HA only as a proxy.
 ```mermaid
 flowchart LR
     Browser["Work browser or HA Companion App"]
-    Nabu["Nabu Casa Remote UI"]
+    Access["HA access path: LAN, Nabu Casa, Cloudflare, reverse proxy, or VPN"]
     Core["Home Assistant Core"]
     Integration["Codex Bridge Integration"]
     App["Codex Bridge App"]
@@ -91,8 +91,8 @@ flowchart LR
     OpenAI["OpenAI services"]
     Workspace["Dedicated App workspaces"]
 
-    Browser -->|"HA HTTPS + authenticated WebSocket/HTTP"| Nabu
-    Nabu --> Core
+    Browser -->|"HA HTTPS + authenticated WebSocket/HTTP"| Access
+    Access --> Core
     Core --> Integration
     Integration -->|"private app network + bearer token"| Bridge
     App --> Bridge
@@ -105,11 +105,13 @@ flowchart LR
 
 The browser must make requests only to its current Home Assistant origin. It must never receive the Bridge address/token or call the App/OpenAI directly. Home Assistant authenticates the user, requires an administrator, validates command shapes, and proxies streaming and binary data to the App.
 
-Nabu Casa provides the remote browser-to-HA path. The App-to-OpenAI connection leaves from the user's home network; Nabu Casa is not an OpenAI egress proxy. This allows a work network that blocks OpenAI but permits the user's HA Remote UI to use Codex through HA.
+The access layer may be direct LAN, Nabu Casa, Cloudflare Tunnel/reverse proxy, a VPN, or another standards-compatible route to Home Assistant. The Integration and panel use same-origin relative HA URLs and contain no Nabu Casa or Cloudflare dependency. The App-to-OpenAI connection leaves from the user's home network; the browser access proxy is not an OpenAI egress proxy. This allows a network that blocks OpenAI but permits the user's HA frontend to use Codex through HA.
+
+A supported access path must carry Home Assistant authentication, `/api/websocket` upgrades and long-lived bidirectional frames, streamed/chunked authenticated HTTP uploads and downloads, range/error responses, and normal HA security headers without exposing or rewriting the App endpoint. Proxy-specific credentials stay between the browser and that proxy and are never forwarded to the Bridge or Codex. Idle timeouts are handled by heartbeats plus replay cursors, not provider-specific browser code.
 
 First-time device authorization is the deliberate exception to normal operation: the panel initiates and displays the short-lived device code, but the OpenAI approval page must be completed on a device/network that can reach OpenAI. No reusable OpenAI access or refresh token is sent to the work browser.
 
-This routing solves a technical reachability problem; it does not override an employer's acceptable-use, confidentiality, security, or data-transfer policy. Work/customer code and prompts may be used only when the user is authorized to send them through personal Home Assistant and OpenAI. Testing on the actual work network occurs only if permitted; otherwise acceptance uses a controlled network that blocks OpenAI while allowing the Nabu Casa URL.
+This routing solves a technical reachability problem; it does not override an employer's acceptable-use, confidentiality, security, or data-transfer policy. Work/customer code and prompts may be used only when the user is authorized to send them through personal Home Assistant and OpenAI. Testing on the actual work network occurs only if permitted; otherwise acceptance uses a controlled network that blocks OpenAI while allowing the configured HA URL.
 
 ## Repository and release shape
 
@@ -196,17 +198,17 @@ If the user opens the Integration's manual Add flow before the App is ready, the
 
 ### Text and state events
 
-The panel subscribes through Home Assistant's authenticated WebSocket API. The Integration forwards normalized Bridge events with monotonic cursors and heartbeats. The Bridge retains replayable events, so after a Nabu Casa interruption or intermediary idle timeout the panel resubscribes from its last acknowledged cursor and receives missed output without duplicating completed events.
+The panel subscribes through Home Assistant's authenticated WebSocket API. The Integration forwards normalized Bridge events with monotonic cursors and heartbeats. The Bridge retains replayable events, so after an access-proxy interruption or intermediary idle timeout the panel resubscribes from its last acknowledged cursor and receives missed output without duplicating completed events.
 
 Auth events have their own subscription and work even when no project/chat exists. Slow clients receive bounded batches; a cursor gap triggers a clean snapshot-and-resume flow rather than unbounded in-memory queues.
 
 ### Files and artifacts
 
-Binary traffic uses authenticated Home Assistant HTTP views, not base64 WebSocket frames. Upload and download proxies stream bounded chunks without writing complete payloads into Home Assistant Core temporary storage or buffering whole artifacts in memory. The Bridge validates filenames, relative paths, declared/observed sizes, and workspace confinement. User-visible limits and retry behavior must be explicit.
+Binary traffic uses authenticated Home Assistant HTTP views, not base64 WebSocket frames. Uploads use resumable, idempotent 8 MiB chunks with per-chunk and final checksums so common proxy body limits or disconnects do not restart a complete workspace transfer. Downloads stream and support safe range resume. Neither direction writes complete payloads into Home Assistant Core temporary storage or buffers whole artifacts in memory. The Bridge validates filenames, relative paths, declared/observed sizes, and workspace confinement. User-visible limits and retry behavior must be explicit.
 
 All model output, filenames, model labels, diffs, links, and artifact metadata are untrusted. The panel renders transcript/diff content as text or through a reviewed sanitizer, permits only explicit safe link schemes, and never embeds/prefetches remote content. Downloads use a sanitized filename, `Content-Disposition: attachment`, `application/octet-stream` unless an explicitly safe preview endpoint is used, and `X-Content-Type-Options: nosniff`. XSS tests cover stored and streaming payloads on the HA administrator origin.
 
-The release acceptance test uses the Nabu Casa URL from a non-home network for a representative folder upload and artifact download. Local-only success is insufficient.
+Automated transport tests run through a reference reverse proxy with WebSocket upgrades, realistic idle timeouts, and bounded request bodies. Real-system acceptance uses the owner's configured external HA URL for a representative folder upload and artifact download. A documented Cloudflare Tunnel path and Nabu Casa path must use the same Integration code; local-only success is insufficient.
 
 ### Resource bounds
 
@@ -242,9 +244,21 @@ Human CLI stdout parsing is replaced with the structured Codex app-server accoun
 - `account/login/cancel` cancels an in-progress flow.
 - `account/logout`, followed by `account/read`, verifies sign-out.
 
+### Supported account mode
+
+The first HA-native release supports only Codex's recommended ChatGPT-managed account mode:
+
+- Start `account/login/start` with `type: "chatgptDeviceCode"`.
+- Require the resulting `account/updated.authMode` to be `chatgpt` and display the safe `planType` when OpenAI supplies it.
+- Let Codex persist and refresh the account's managed OAuth access/refresh tokens in private `auth.json`.
+- Do not request, accept, store, expose, or document an OpenAI API key, `OPENAI_API_KEY`, API-key billing, or the app-server `apiKey` login RPC.
+- Do not support externally supplied personal access tokens in the first release.
+
+If startup detects `apiKey` or `personalAccessToken` auth mode, the Bridge blocks runs and asks the administrator to sign out and complete ChatGPT device login. The panel describes this as **Sign in with ChatGPT**, not “enter a token.” Device-code authorization may need to be enabled in the user's ChatGPT security settings or by their ChatGPT workspace administrator.
+
 A single `CodexAuthCoordinator` serializes operations. Each operation has an internal generation identifier and the app-server `loginId`; notifications must match both before changing state, so stale process/event updates are ignored. The public record has a monotonic `revision`, normalized state, `busy`, safe message, device code/URL only while active, and no raw output or credentials. Every occurrence—including a repeated expiry/error with identical text—advances the revision.
 
-Starting a login does not implicitly log out the current account. Account switching is an explicit sign-out followed by sign-in. Login, logout, and active Codex runs share a runtime gate: auth mutation returns a clear conflict while a run is active, and new runs wait or fail clearly while auth is changing. Cancel/logout settle through a final `account/read`. Shutdown cancels login, terminates its process group, and prevents late state writes.
+Starting a login does not implicitly log out the current ChatGPT account. Account switching is an explicit sign-out followed by sign-in. Login, logout, and active Codex runs share a runtime gate: auth mutation returns a clear conflict while a run is active, and new runs wait or fail clearly while auth is changing. Cancel/logout settle through a final `account/read`. Shutdown cancels login, terminates its process group, and prevents late state writes.
 
 The panel provides live **Sign in**, **Cancel sign-in**, and confirmed **Sign out** actions. It explains that a phone can complete the approval when the work network blocks OpenAI. Terminal states clear the device code and URL.
 
@@ -327,7 +341,7 @@ Detailed visual restyling follows the existing interaction model and is validate
 | Failure | Required behavior |
 |---------|-------------------|
 | App stopped/updating | Panel remains loadable in HA, shows App unavailable, retries with backoff, and preserves local cursor. |
-| Nabu Casa/WebSocket drop | Reconnect through HA, replay after cursor, mark interrupted live state until reconciled. |
+| Remote proxy/WebSocket drop | Reconnect through HA, replay after cursor, mark interrupted live state until reconciled. |
 | Home internet cannot reach OpenAI | Run fails with a safe network category and retry action; no auth deletion. |
 | Login expires | Auth revision changes to expired, new prompts are blocked, live sign-in is offered. |
 | Login/logout races | Coordinator serializes or rejects the conflicting operation; stale completion cannot overwrite current state. |
@@ -355,13 +369,15 @@ Repository presentation is a release gate, not follow-up polish.
 
 - Rewrite the root README around the HA-native outcome: a concise value statement, polished hero/branding, the browser → HA → App → OpenAI path, feature summary, prerequisites, the exact two-surface installation path, first login, workspace import, remote-use proof, auto-updates, backup/rollback, security boundary, troubleshooting, development, and removal.
 - Provide valid My Home Assistant/App Store and HACS links/buttons where those platforms support them, while stating plainly that neither installer can install the other. Test every command and link against a fresh HA installation.
+- Document one provider-neutral remote-access contract plus concise Nabu Casa, Cloudflare Tunnel/reverse-proxy, VPN, and LAN examples. Make WebSocket, streaming, timeout, request-size, and trusted-proxy prerequisites explicit without embedding provider-specific behavior in the Integration.
+- State prominently that login uses the user's eligible ChatGPT account/plan through managed device authorization, not an OpenAI API key or API billing account.
 - Use a restrained badge row that reports real CI, App image, latest Integration/App versions, HACS, licence, supported HA architecture, and security/release state. Do not add decorative or misleading passing badges.
 - Include current desktop/mobile panel screenshots or a short recording captured from the real implementation, with private URLs, account data, prompts, and workspaces redacted.
 - Move the Windows procedure to a clearly deprecated rollback document rather than presenting it as Quick start.
 - Ship App `README.md`, `DOCS.md`, `CHANGELOG.md`, configuration translations, icon/logo, MIT licence reference, and third-party notices.
 - Add `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, support/issue guidance, focused issue and pull-request templates, release notes, and ownership/update-policy documentation. Keep these proportionate to a small personal project and avoid empty governance boilerplate.
 - Configure repository description, homepage, social preview, accurate GitHub topics, release tags, and changelog links. Topics should cover Home Assistant, HACS, Codex, remote coding, and App/add-on discoverability without implying official or Community endorsement.
-- Keep examples free of real tokens, account details, private Nabu Casa URLs, employer/customer data, and personal workspace paths. Run Markdown/link/spelling checks and a final rendered review in both light and dark contexts.
+- Keep examples free of real tokens, account details, private HA/proxy URLs, employer/customer data, and personal workspace paths. Run Markdown/link/spelling checks and a final rendered review in both light and dark contexts.
 
 ## Migration and retirement
 
@@ -369,7 +385,7 @@ Repository presentation is a release gate, not follow-up polish.
 2. Install the Integration/App and perform a new Codex device login in HA.
 3. Copy only wanted workspace files into the dedicated App workspace root.
 4. Start with fresh projects/chats; do not import Bridge JSON, event history, or `auth.json`.
-5. Pass local and Nabu Casa acceptance, restart persistence, backup/restore, update/rollback, and sandbox tests.
+5. Pass local and configured-remote-access acceptance, restart persistence, backup/restore, update/rollback, and sandbox tests.
 6. Stop—not delete—the Windows Bridge and observe the HA deployment.
 7. After the rollback window, archive Windows docs/scripts as legacy and remove them in the next breaking release; preserve the old VM/files until the user explicitly removes them.
 
@@ -379,7 +395,7 @@ Manual external Bridge configuration remains an advanced deprecated route for 0.
 
 ### Automated gates
 
-- Existing Python suite plus new TDD coverage for App settings, workspace confinement, auth state/races, app-server approval correlation, event replay, environment allowlist, resource bounds, model recovery, and version diagnostics.
+- Existing Python suite plus new TDD coverage for App settings, workspace confinement, ChatGPT-only auth mode/state/races, API-key rejection, app-server approval correlation, event replay, environment allowlist, resource bounds, model recovery, and version diagnostics.
 - Home Assistant config-flow discovery, token rotation, admin authorization, unload/cancellation, timeout, streaming proxy, redirect refusal, and redaction tests.
 - Frontend unit/DOM accessibility and hostile-content/XSS tests, plus a production asset build with no remote dependencies.
 - App configuration/repository validation, Hadolint, ShellCheck, YAML/JSON/format checks, action-security lint, dependency review, vulnerability scan, SBOM, upstream/downstream Sigstore verification, and a native build for the owner's HA architecture.
@@ -389,8 +405,8 @@ Manual external Bridge configuration remains an advanced deprecated route for 0.
 
 - Fresh install on the user's Home Assistant OS using the custom App repository and HACS.
 - Automatic discovery/pairing with no port, URL, or token entry.
-- Device login displayed live in the panel, approval completed on a reachable phone, persisted across App restart, then cancel and logout tested.
-- From the actual work network when policy permits, otherwise a controlled external network with OpenAI blocked, use the Nabu Casa URL and capture browser traffic proving requests target only the HA origin while a prompt streams to completion. App-side evidence must separately show OpenAI egress originating from HA without logging request contents or credentials.
+- **Sign in with ChatGPT** device login displayed live in the panel, approval completed on a reachable phone, `authMode: chatgpt` and safe plan type verified, persisted across App restart, then cancel and logout tested. No API-key input, environment, request, or billing path exists.
+- From the actual work network when policy permits, otherwise a controlled external network with OpenAI blocked, use the configured HA URL and capture browser traffic proving requests target only that HA/proxy origin while a prompt streams to completion. App-side evidence must separately show OpenAI egress originating from HA without logging request contents or credentials.
 - Drop/reconnect during a run replays exactly once from the last cursor.
 - Representative folder upload, artifact download, project creation, direct chat, inline command approval/decline, user-input response, cancellation, and model selection work remotely with no hidden stdin wait.
 - On every advertised architecture, sandboxed tools can write only the chosen workspace and cannot read authentication/token sentinels, parent environments, or unrelated paths; they also cannot connect to Supervisor, Core, sibling Apps, LAN targets, internet targets, or OpenAI while the trusted parent can reach OpenAI.
@@ -433,7 +449,9 @@ After verified implementation, the architecture baseline must be updated to the 
 - [App repositories](https://developers.home-assistant.io/docs/apps/repository/)
 - [Home Assistant WebSocket extensions](https://developers.home-assistant.io/docs/frontend/extending/websocket-api)
 - [Home Assistant Cloud remote access](https://www.home-assistant.io/docs/configuration/remote/)
+- [Cloudflare Tunnel WebSocket support](https://developers.cloudflare.com/cloudflare-one/faq/cloudflare-tunnels-faq/)
 - [OpenAI Codex app-server protocol](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+- [OpenAI Codex ChatGPT plan sign-in](https://github.com/openai/codex#using-codex-with-your-chatgpt-plan)
 - [OpenAI Codex authentication](https://developers.openai.com/codex/auth)
 - [OpenAI Codex sandboxing](https://developers.openai.com/codex/concepts/sandboxing)
 - [Home Assistant Community Apps repository](https://github.com/hassio-addons/repository)

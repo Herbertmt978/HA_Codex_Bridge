@@ -106,7 +106,7 @@ Open findings:
 6. Workspace paths must be confined and symlink-safe.
 7. Protected real HA OS must prove the Codex Linux sandbox before VM retirement.
 8. Dynamic model recovery must reconcile direct-chat defaults before the first post-recovery chat.
-9. Remote Nabu Casa operation needs explicit streaming, reconnect, upload, and download acceptance evidence.
+9. Provider-neutral remote HA operation needs explicit streaming, reconnect, upload, and download acceptance evidence.
 
 ## 10. Compatibility boundaries
 
