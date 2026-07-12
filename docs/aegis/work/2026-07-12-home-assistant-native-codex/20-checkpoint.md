@@ -3,19 +3,19 @@
 ## TodoCheckpointDraft
 
 - **State:** active
-- **Current todo:** Task 1 — API v1, independent versions, and typed readiness
-- **Active slice:** Write failing API/version/readiness tests
-- **Completed:** approved spec; implementation plan; plan review; ignored worktree path; isolated worktree; clean baseline verification
-- **Evidence refs:** `90-evidence.md`; commits `e129f17`, `5e8e8a4`, `0853dd5`, `dde1e8b`
+- **Current todo:** Task 1B — wire API/build records into readiness and diagnostics
+- **Active slice:** Add failing additive `/ready` and diagnostics tests
+- **Completed:** approved spec; implementation plan/review; isolated worktree/baseline; Task 1A API negotiation, immutable build metadata, realistic credential rejection, spec review, and quality review
+- **Evidence refs:** `90-evidence.md`; Task 1A commits `0739475`, `45597a5`, `afadc02`
 - **Blocked on:** target HA architecture and real sandbox result are later runtime facts, not blockers for Task 1
-- **Next step:** dispatch Task 1 implementer with RED/GREEN and compatibility requirements
+- **Next step:** dispatch Task 1B implementer for additive route/diagnostics integration
 
 ## ResumeStateHint
 
 - **Repository:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge`
 - **Worktree:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge\.worktrees\ha-app`
 - **Branch:** `Herb/ha-app`
-- **Checkpoint commit before work record:** `dde1e8b`
+- **Current implementation head before this checkpoint update:** `afadc02`
 - **Worktree status at checkpoint:** clean before these work-record files
 - **Baseline command:** `python -m pytest -q` from `bridge_service`
 - **Baseline result:** 115 passed
@@ -27,5 +27,5 @@
 - **Compatibility:** v0 adapter and VM rollback remain explicit.
 - **New owner/fallback:** none beyond the approved App owner and bounded v0 carrier.
 - **Retirement:** unchanged; VM stops only after real acceptance.
-- **Evidence sufficiency:** sufficient to start Task 1, not sufficient for any runtime claim.
+- **Evidence sufficiency:** sufficient to accept Task 1A and start Task 1B; not sufficient for a complete readiness/runtime claim.
 - **Decision:** continue.
