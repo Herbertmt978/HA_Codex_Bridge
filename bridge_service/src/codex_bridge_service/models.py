@@ -37,6 +37,13 @@ class ProjectKind(StrEnum):
     IMPORTED = "imported"
 
 
+class ProjectDefaultsOrigin(StrEnum):
+    LEGACY = "legacy"
+    CODEX = "codex"
+    FALLBACK = "fallback"
+    EXPLICIT = "explicit"
+
+
 class AttachmentRecord(BaseModel):
     attachment_id: str
     filename: str
@@ -62,6 +69,7 @@ class ProjectRecord(BaseModel):
     kind: ProjectKind = ProjectKind.PROJECT
     default_model: str = DEFAULT_MODEL
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
+    defaults_origin: ProjectDefaultsOrigin = ProjectDefaultsOrigin.LEGACY
     created_at: str
     updated_at: str
     archived_at: str | None = None

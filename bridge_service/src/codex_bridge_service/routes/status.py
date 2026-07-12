@@ -27,6 +27,11 @@ def get_status(
         else BridgeDiagnosticsRecord()
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
+    request.app.state.storage.reconcile_special_projects(
+        default_model=model_catalog.default_model,
+        default_thinking_level=model_catalog.default_thinking_level,
+        defaults_provisional=model_catalog.stale,
+    )
     thinking_levels = list(
         dict.fromkeys(
             level

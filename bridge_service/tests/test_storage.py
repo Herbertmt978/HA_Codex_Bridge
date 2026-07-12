@@ -7,7 +7,12 @@ import zipfile
 import pytest
 
 from codex_bridge_service.limits import CodexLimitsProbe
-from codex_bridge_service.models import DEFAULT_MODEL, ProjectKind, RunMode
+from codex_bridge_service.models import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING_LEVEL,
+    ProjectKind,
+    RunMode,
+)
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -354,10 +359,14 @@ def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(tmp
     original = initial_storage.ensure_direct_project()
     existing_thread = initial_storage.create_thread(title="Existing direct", mode=RunMode.FULL_AUTO)
     assert original.default_model == DEFAULT_MODEL
+    project_path = tmp_path / "projects" / "prj_direct.json"
+    legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
+    legacy_payload.pop("defaults_origin")
+    project_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
 
     discovered_storage = BridgeStorage(
         root_path=tmp_path,
-        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra", False),
     )
     discovered_storage.initialize_special_projects()
     migrated = discovered_storage.ensure_direct_project()
@@ -371,14 +380,121 @@ def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(tmp
     assert preserved.effective_thinking_level == "medium"
 
 
+def test_explicit_special_project_defaults_replace_provisional_catalog_defaults(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    provisional = storage.ensure_direct_project(
+        default_model=DEFAULT_MODEL,
+        default_thinking_level=DEFAULT_THINKING_LEVEL,
+        defaults_provisional=True,
+    )
+    assert provisional.defaults_origin.value == "fallback"
+
+    storage.update_project(
+        provisional.project_id,
+        default_model="gpt-5.4",
+        default_thinking_level="high",
+    )
+    restarted = BridgeStorage(
+        root_path=tmp_path,
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra", False),
+    )
+    restarted.initialize_special_projects()
+    fresh = restarted.ensure_direct_project()
+
+    assert fresh.default_model == "gpt-5.4"
+    assert fresh.default_thinking_level == "high"
+    assert fresh.defaults_origin.value == "explicit"
+
+
+def test_deferred_legacy_migration_waits_for_active_thread_to_finish(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    direct = initial_storage.ensure_direct_project()
+    thread = initial_storage.create_thread(
+        title="Running legacy chat",
+        project_id=direct.project_id,
+        mode=RunMode.FULL_AUTO,
+    )
+    project_path = tmp_path / "projects" / "prj_direct.json"
+    legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
+    legacy_payload.pop("defaults_origin")
+    project_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+    running = initial_storage.load_thread(thread.thread_id)
+    running.status = "running"
+    initial_storage.save_thread(running)
+
+    restarted = BridgeStorage(root_path=tmp_path)
+    restarted.defer_special_project_migration()
+    assert (
+        restarted.reconcile_special_projects(
+            default_model="gpt-5.6-sol",
+            default_thinking_level="ultra",
+            defaults_provisional=False,
+        )
+        is False
+    )
+    assert restarted.load_project(direct.project_id).default_model == DEFAULT_MODEL
+
+    finished = restarted.load_thread(thread.thread_id)
+    finished.status = "idle"
+    restarted.save_thread(finished)
+    assert (
+        restarted.reconcile_special_projects(
+            default_model="gpt-5.6-sol",
+            default_thinking_level="ultra",
+            defaults_provisional=False,
+        )
+        is True
+    )
+    migrated = restarted.load_project(direct.project_id)
+    preserved = restarted.get_thread(thread.thread_id)
+    assert migrated.default_model == "gpt-5.6-sol"
+    assert migrated.default_thinking_level == "ultra"
+    assert preserved.model_override == DEFAULT_MODEL
+    assert preserved.thinking_override == DEFAULT_THINKING_LEVEL
+
+
+def test_deferred_legacy_migration_recovers_imported_project(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    imported = initial_storage.ensure_imported_project()
+    thread = initial_storage.create_thread(
+        title="Imported 0.5.0 chat",
+        project_id=imported.project_id,
+        mode=RunMode.FULL_AUTO,
+    )
+    project_path = tmp_path / "projects" / "prj_imported.json"
+    legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
+    legacy_payload.pop("defaults_origin")
+    project_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    restarted = BridgeStorage(root_path=tmp_path)
+    restarted.defer_special_project_migration()
+    assert restarted.reconcile_special_projects(
+        default_model="gpt-5.6-sol",
+        default_thinking_level="ultra",
+        defaults_provisional=False,
+    )
+
+    migrated = restarted.load_project(imported.project_id)
+    preserved = restarted.get_thread(thread.thread_id)
+    assert migrated.default_model == "gpt-5.6-sol"
+    assert migrated.default_thinking_level == "ultra"
+    assert migrated.defaults_origin.value == "codex"
+    assert preserved.model_override == DEFAULT_MODEL
+    assert preserved.thinking_override == DEFAULT_THINKING_LEVEL
+
+
 def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(tmp_path) -> None:
     initial_storage = BridgeStorage(root_path=tmp_path)
     original = initial_storage.ensure_imported_project()
     assert original.default_model == DEFAULT_MODEL
+    project_path = tmp_path / "projects" / "prj_imported.json"
+    legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
+    legacy_payload.pop("defaults_origin")
+    project_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
 
     discovered_storage = BridgeStorage(
         root_path=tmp_path,
-        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra", False),
     )
     discovered_storage.initialize_special_projects()
 
@@ -390,7 +506,7 @@ def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(tmp_p
 def test_legacy_thread_resolution_uses_discovered_special_project_defaults(tmp_path) -> None:
     storage = BridgeStorage(
         root_path=tmp_path,
-        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra", False),
     )
     created = storage.create_thread(title="Legacy", mode=RunMode.FULL_AUTO)
     legacy = storage.load_thread(created.thread_id)

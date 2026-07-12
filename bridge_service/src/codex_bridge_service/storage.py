@@ -18,6 +18,7 @@ from .models import (
     LimitsWindowRecord,
     PathBrowseEntryRecord,
     PathBrowseRecord,
+    ProjectDefaultsOrigin,
     ProjectKind,
     ProjectRecord,
     RunMode,
@@ -51,7 +52,7 @@ class BridgeStorage:
         root_path: Path | str,
         *,
         limits_probe: CodexLimitsProbe | None = None,
-        special_project_defaults_provider: Callable[[], tuple[str, str]] | None = None,
+        special_project_defaults_provider: Callable[[], tuple[str, str, bool]] | None = None,
     ) -> None:
         self.root = Path(root_path)
         self.projects_dir = self.root / "projects"
@@ -65,6 +66,8 @@ class BridgeStorage:
         self.limits_probe = limits_probe
         self.special_project_defaults_provider = special_project_defaults_provider
         self._special_default_migration_enabled = False
+        self._special_default_migration_pending = False
+        self._special_migration_lock = Lock()
         self._event_lock = Lock()
 
         for directory in (
@@ -129,17 +132,40 @@ class BridgeStorage:
         self,
         default_model: str | None,
         default_thinking_level: str | None,
-    ) -> tuple[str, str]:
+        defaults_provisional: bool | None,
+    ) -> tuple[str, str, bool]:
         if default_model is not None and default_thinking_level is not None:
-            return default_model, default_thinking_level
+            return default_model, default_thinking_level, bool(defaults_provisional)
         discovered_model = DEFAULT_MODEL
         discovered_thinking = DEFAULT_THINKING_LEVEL
+        discovered_provisional = False
         if self.special_project_defaults_provider is not None:
-            discovered_model, discovered_thinking = self.special_project_defaults_provider()
+            (
+                discovered_model,
+                discovered_thinking,
+                discovered_provisional,
+            ) = self.special_project_defaults_provider()
         return (
             default_model or discovered_model,
             default_thinking_level or discovered_thinking,
+            discovered_provisional if defaults_provisional is None else defaults_provisional,
         )
+
+    def _migrate_provisional_special_defaults(
+        self,
+        record: ProjectRecord,
+        *,
+        default_model: str,
+        default_thinking_level: str,
+        defaults_provisional: bool,
+    ) -> bool:
+        if record.defaults_origin is not ProjectDefaultsOrigin.FALLBACK or defaults_provisional:
+            return False
+        record.default_model = default_model
+        record.default_thinking_level = default_thinking_level
+        record.defaults_origin = ProjectDefaultsOrigin.CODEX
+        record.updated_at = self._now()
+        return True
 
     def _migrate_legacy_special_defaults(
         self,
@@ -149,6 +175,8 @@ class BridgeStorage:
         default_thinking_level: str,
     ) -> bool:
         if not self._special_default_migration_enabled:
+            return False
+        if record.defaults_origin is not ProjectDefaultsOrigin.LEGACY:
             return False
         if (
             record.default_model != DEFAULT_MODEL
@@ -163,6 +191,7 @@ class BridgeStorage:
         self._materialize_special_thread_defaults(record)
         record.default_model = default_model
         record.default_thinking_level = default_thinking_level
+        record.defaults_origin = ProjectDefaultsOrigin.CODEX
         record.updated_at = self._now()
         return True
 
@@ -195,9 +224,11 @@ class BridgeStorage:
         kind: ProjectKind,
         discovered_model: str,
         discovered_thinking_level: str,
+        defaults_provisional: bool,
     ) -> None:
         if (
-            discovered_model == DEFAULT_MODEL
+            not defaults_provisional
+            and discovered_model == DEFAULT_MODEL
             and discovered_thinking_level == DEFAULT_THINKING_LEVEL
         ):
             return
@@ -214,12 +245,56 @@ class BridgeStorage:
         )
         self._materialize_special_thread_defaults(legacy_project)
 
-    def initialize_special_projects(self) -> None:
+    def initialize_special_projects(
+        self,
+        *,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
+        defaults_provisional: bool | None = None,
+    ) -> None:
         self._special_default_migration_enabled = True
         try:
-            self.list_projects()
+            self.list_projects(
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+                defaults_provisional=defaults_provisional,
+            )
         finally:
             self._special_default_migration_enabled = False
+
+    def defer_special_project_migration(self) -> None:
+        with self._special_migration_lock:
+            self._special_default_migration_pending = True
+
+    def reconcile_special_projects(
+        self,
+        *,
+        default_model: str,
+        default_thinking_level: str,
+        defaults_provisional: bool,
+    ) -> bool:
+        if defaults_provisional:
+            return False
+        with self._special_migration_lock:
+            if not self._special_default_migration_pending or self._has_active_thread_runs():
+                return False
+            self.initialize_special_projects(
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+                defaults_provisional=False,
+            )
+            self._special_default_migration_pending = False
+            return True
+
+    def _has_active_thread_runs(self) -> bool:
+        for path in self.threads_dir.glob("*.json"):
+            try:
+                record = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if record.status in {"queued", "running", "cancelling"}:
+                return True
+        return False
 
     def _ensure_thread_timestamps(self, record: ThreadRecord) -> ThreadRecord:
         changed = False
@@ -253,19 +328,27 @@ class BridgeStorage:
         *,
         default_model: str | None = None,
         default_thinking_level: str | None = None,
+        defaults_provisional: bool | None = None,
     ) -> ProjectRecord:
-        default_model, default_thinking_level = self._special_project_defaults(
+        default_model, default_thinking_level, defaults_provisional = self._special_project_defaults(
             default_model,
             default_thinking_level,
+            defaults_provisional,
         )
         target = self._project_path(self._imported_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            changed = self._migrate_provisional_special_defaults(
+                record,
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+                defaults_provisional=defaults_provisional,
+            )
             changed = self._migrate_legacy_special_defaults(
                 record,
                 default_model=default_model,
                 default_thinking_level=default_thinking_level,
-            )
+            ) or changed
             if record.kind is not ProjectKind.IMPORTED or record.name != self.imported_project_name:
                 record.kind = ProjectKind.IMPORTED
                 record.name = self.imported_project_name
@@ -280,6 +363,7 @@ class BridgeStorage:
             kind=ProjectKind.IMPORTED,
             discovered_model=default_model,
             discovered_thinking_level=default_thinking_level,
+            defaults_provisional=defaults_provisional,
         )
         record = ProjectRecord(
             project_id=self._imported_project_id(),
@@ -288,6 +372,11 @@ class BridgeStorage:
             kind=ProjectKind.IMPORTED,
             default_model=default_model,
             default_thinking_level=default_thinking_level,
+            defaults_origin=(
+                ProjectDefaultsOrigin.FALLBACK
+                if defaults_provisional
+                else ProjectDefaultsOrigin.CODEX
+            ),
             created_at=self._now(),
             updated_at=self._now(),
         )
@@ -299,19 +388,27 @@ class BridgeStorage:
         *,
         default_model: str | None = None,
         default_thinking_level: str | None = None,
+        defaults_provisional: bool | None = None,
     ) -> ProjectRecord:
-        default_model, default_thinking_level = self._special_project_defaults(
+        default_model, default_thinking_level, defaults_provisional = self._special_project_defaults(
             default_model,
             default_thinking_level,
+            defaults_provisional,
         )
         target = self._project_path(self._direct_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            changed = self._migrate_provisional_special_defaults(
+                record,
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+                defaults_provisional=defaults_provisional,
+            )
             changed = self._migrate_legacy_special_defaults(
                 record,
                 default_model=default_model,
                 default_thinking_level=default_thinking_level,
-            )
+            ) or changed
             if record.kind is not ProjectKind.DIRECT or record.name != self.direct_project_name:
                 record.kind = ProjectKind.DIRECT
                 record.name = self.direct_project_name
@@ -326,6 +423,7 @@ class BridgeStorage:
             kind=ProjectKind.DIRECT,
             discovered_model=default_model,
             discovered_thinking_level=default_thinking_level,
+            defaults_provisional=defaults_provisional,
         )
         record = ProjectRecord(
             project_id=self._direct_project_id(),
@@ -334,6 +432,11 @@ class BridgeStorage:
             kind=ProjectKind.DIRECT,
             default_model=default_model,
             default_thinking_level=default_thinking_level,
+            defaults_origin=(
+                ProjectDefaultsOrigin.FALLBACK
+                if defaults_provisional
+                else ProjectDefaultsOrigin.CODEX
+            ),
             created_at=self._now(),
             updated_at=self._now(),
         )
@@ -369,6 +472,7 @@ class BridgeStorage:
         *,
         default_model: str | None = None,
         default_thinking_level: str | None = None,
+        defaults_provisional: bool | None = None,
     ) -> list[ProjectRecord]:
         records = {
             record.project_id: record
@@ -382,12 +486,14 @@ class BridgeStorage:
         direct = self.ensure_direct_project(
             default_model=default_model,
             default_thinking_level=default_thinking_level,
+            defaults_provisional=defaults_provisional,
         )
         records[direct.project_id] = direct
         if self._project_path(self._imported_project_id()).exists() or self._has_legacy_threads():
             imported = self.ensure_imported_project(
                 default_model=default_model,
                 default_thinking_level=default_thinking_level,
+                defaults_provisional=defaults_provisional,
             )
             records[imported.project_id] = imported
         ordered = sorted(records.values(), key=lambda record: record.updated_at, reverse=True)
@@ -426,6 +532,7 @@ class BridgeStorage:
             kind=ProjectKind.PROJECT,
             default_model=normalize_model(default_model),
             default_thinking_level=default_thinking_level or DEFAULT_THINKING_LEVEL,
+            defaults_origin=ProjectDefaultsOrigin.EXPLICIT,
             created_at=now,
             updated_at=now,
         )
@@ -454,6 +561,8 @@ class BridgeStorage:
             record.default_model = normalize_model(default_model)
         if default_thinking_level is not None:
             record.default_thinking_level = default_thinking_level or DEFAULT_THINKING_LEVEL
+        if default_model is not None or default_thinking_level is not None:
+            record.defaults_origin = ProjectDefaultsOrigin.EXPLICIT
         record.updated_at = self._now()
         self.save_project(record)
         return record
@@ -572,6 +681,7 @@ class BridgeStorage:
         thinking_override: str | None = None,
         direct_default_model: str | None = None,
         direct_default_thinking_level: str | None = None,
+        direct_defaults_provisional: bool | None = None,
     ) -> ThreadViewRecord:
         if not title.strip():
             raise ValueError("title must not be blank")
@@ -580,10 +690,16 @@ class BridgeStorage:
             self.ensure_direct_project(
                 default_model=direct_default_model,
                 default_thinking_level=direct_default_thinking_level,
+                defaults_provisional=direct_defaults_provisional,
             )
             if project_id is None
             else self.load_project(project_id)
         )
+        if project.defaults_origin is ProjectDefaultsOrigin.FALLBACK:
+            if model_override is None:
+                model_override = project.default_model
+            if thinking_override is None:
+                thinking_override = project.default_thinking_level
         workspace_id = f"ws_{uuid4().hex[:12]}"
         workspace_root = Path(project.root_path)
         workspace_path = (
@@ -715,13 +831,20 @@ class BridgeStorage:
             try:
                 self.load_project(record.project_id)
             except ProjectNotFoundError:
-                record.project_id = self.ensure_imported_project().project_id
+                imported_project = self.ensure_imported_project()
+                if imported_project.defaults_origin is ProjectDefaultsOrigin.FALLBACK:
+                    if record.model_override is None:
+                        record.model_override = DEFAULT_MODEL
+                    if record.thinking_override is None:
+                        record.thinking_override = DEFAULT_THINKING_LEVEL
+                record.project_id = imported_project.project_id
                 self.save_thread(record)
             return record
 
         imported_project = self.ensure_imported_project()
         if (
-            imported_project.default_model != DEFAULT_MODEL
+            imported_project.defaults_origin is ProjectDefaultsOrigin.FALLBACK
+            or imported_project.default_model != DEFAULT_MODEL
             or imported_project.default_thinking_level != DEFAULT_THINKING_LEVEL
         ):
             if record.model_override is None:
