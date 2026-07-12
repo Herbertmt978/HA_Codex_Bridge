@@ -79,7 +79,12 @@ class FakeAccountProbe:
 class FakeDiagnosticsProbe:
     def probe(self) -> BridgeDiagnosticsRecord:
         return BridgeDiagnosticsRecord(
+            app_version="0.6.0",
             bridge_version="0.4.test",
+            bundled_codex_version="0.144.1",
+            image_revision="a" * 40,
+            architecture="amd64",
+            release_lock_digest="b" * 64,
             last_error="failed to connect to websocket: HTTP error: 401 Unauthorized",
         )
 
@@ -223,7 +228,7 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
         headers={"Authorization": "Bearer secret"},
     )
     assert ready_response.status_code == 200
-    assert ready_response.json() == {"status": "ok"}
+    assert ready_response.json()["status"] == "ok"
 
     status_response = client.get(
         "/status",
@@ -677,9 +682,19 @@ def test_status_surfaces_codex_auth_expired_state(tmp_path) -> None:
     response = client.get("/status", headers={"Authorization": "Bearer secret"})
 
     assert response.status_code == 200
-    assert response.json()["auth"]["state"] == "expired"
-    assert response.json()["auth"]["auth_required"] is True
-    assert "login expired" in response.json()["auth"]["message"]
+    payload = response.json()
+    assert payload["auth"]["state"] == "expired"
+    assert payload["auth"]["auth_required"] is True
+    assert "login expired" in payload["auth"]["message"]
+    assert payload["diagnostics"]["app_version"] == "0.6.0"
+    assert payload["diagnostics"]["bridge_version"] == "0.4.test"
+    assert payload["diagnostics"]["api_current"] == 1
+    assert payload["diagnostics"]["api_minimum"] == 1
+    assert payload["diagnostics"]["api_maximum"] == 1
+    assert payload["diagnostics"]["bundled_codex_version"] == "0.144.1"
+    assert payload["diagnostics"]["image_revision"] == "a" * 40
+    assert payload["diagnostics"]["architecture"] == "amd64"
+    assert payload["diagnostics"]["release_lock_digest"] == "b" * 64
 
 
 def test_auth_routes_start_device_login_and_logout_require_token(tmp_path) -> None:

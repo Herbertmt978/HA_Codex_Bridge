@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import __version__
+from .build_info import BuildInfo
 from .codex_process import codex_subprocess_environment
 from .models import BridgeDiagnosticsRecord, DiagnosticToolRecord
 
@@ -22,12 +23,14 @@ class BridgeDiagnosticsProbe:
         self,
         storage: "BridgeStorage",
         *,
+        build_info: BuildInfo | None = None,
         codex_command: str = "codex",
         codex_home: Path | str | None = None,
         tool_names: tuple[str, ...] = DEFAULT_TOOL_NAMES,
         cache_seconds: int = 20,
     ) -> None:
         self.storage = storage
+        self.build_info = build_info if build_info is not None else BuildInfo()
         self.codex_command = codex_command
         self.codex_home = codex_home
         self.tool_names = tool_names
@@ -44,7 +47,12 @@ class BridgeDiagnosticsProbe:
         repo_root = self._repo_root()
         tools = [self._tool_status(name) for name in self.tool_names]
         record = BridgeDiagnosticsRecord(
+            app_version=self.build_info.app_version,
             bridge_version=self._bridge_version(),
+            bundled_codex_version=self.build_info.codex_version,
+            image_revision=self.build_info.image_revision,
+            architecture=self.build_info.architecture,
+            release_lock_digest=self.build_info.release_lock_digest,
             git_commit=self._git_value(repo_root, "rev-parse", "--short", "HEAD"),
             git_branch=self._git_value(repo_root, "rev-parse", "--abbrev-ref", "HEAD"),
             python_version=platform.python_version(),
@@ -67,7 +75,7 @@ class BridgeDiagnosticsProbe:
         return updated
 
     def _bridge_version(self) -> str:
-        return __version__
+        return self.build_info.bridge_version or __version__
 
     def _repo_root(self) -> Path:
         return Path(__file__).resolve().parents[3]

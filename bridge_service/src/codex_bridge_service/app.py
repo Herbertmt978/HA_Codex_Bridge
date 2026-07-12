@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from .account import CodexAccountProbe
+from .build_info import BuildInfo
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
 from .limits import CodexLimitsProbe
@@ -25,8 +26,12 @@ def create_app(
     auth_manager: CodexAuthManager | None = None,
     runner_factory=None,
     initialize_special_projects: bool = False,
+    build_info: BuildInfo | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Codex Bridge")
+    resolved_build_info = (
+        build_info if build_info is not None else BuildInfo.from_environment()
+    )
     resolved_model_catalog_probe = model_catalog_probe or CodexModelCatalogProbe(
         codex_command=codex_command,
         codex_home=codex_home,
@@ -53,9 +58,11 @@ def create_app(
             )
     app.state.storage = storage
     app.state.auth_token = auth_token
+    app.state.build_info = resolved_build_info
     app.state.account_probe = account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,
+        build_info=resolved_build_info,
         codex_command=codex_command,
         codex_home=codex_home,
     )

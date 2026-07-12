@@ -1,8 +1,10 @@
-from typing import Any
+from typing import Any, Literal
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from .api_contract import API_CONTRACT, ApiContractRecord
 
 DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_THINKING_LEVEL = "medium"
@@ -199,8 +201,53 @@ class DiagnosticToolRecord(BaseModel):
     version: str | None = None
 
 
+class ComponentVersionRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    version: str | None = None
+
+
+class ImageBuildRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    revision: str | None = None
+    release_lock_digest: str | None = None
+
+
+class ReadinessStateRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["ready"] = "ready"
+    reasons: tuple[str, ...] = ()
+
+
+class BridgeReadinessRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    api: ApiContractRecord = Field(default_factory=lambda: API_CONTRACT)
+    app: ComponentVersionRecord = Field(default_factory=ComponentVersionRecord)
+    bridge: ComponentVersionRecord
+    codex: ComponentVersionRecord = Field(default_factory=ComponentVersionRecord)
+    image: ImageBuildRecord = Field(default_factory=ImageBuildRecord)
+    architecture: Literal["amd64", "aarch64", "unknown"] = "unknown"
+    capabilities: tuple[Literal["api_v1"], Literal["legacy_v0"]] = (
+        "api_v1",
+        "legacy_v0",
+    )
+    readiness: ReadinessStateRecord = Field(default_factory=ReadinessStateRecord)
+
+
 class BridgeDiagnosticsRecord(BaseModel):
+    app_version: str | None = None
     bridge_version: str | None = None
+    api_current: int = API_CONTRACT.current
+    api_minimum: int = API_CONTRACT.minimum
+    api_maximum: int = API_CONTRACT.maximum
+    bundled_codex_version: str | None = None
+    image_revision: str | None = None
+    architecture: Literal["amd64", "aarch64", "unknown"] = "unknown"
+    release_lock_digest: str | None = None
     git_commit: str | None = None
     git_branch: str | None = None
     python_version: str | None = None
