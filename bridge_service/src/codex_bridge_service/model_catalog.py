@@ -40,13 +40,20 @@ class CodexModelCatalogProbe:
         self._cached_catalog: CodexModelCatalogRecord | None = None
         self._cached_at: float | None = None
 
-    def probe(self) -> CodexModelCatalogRecord:
+    def probe(self, *, refresh_stale: bool = False) -> CodexModelCatalogRecord:
+        requested_at = monotonic()
         with self._cache_lock:
             now = monotonic()
             if (
                 self._cached_catalog is not None
                 and self._cached_at is not None
-                and now - self._cached_at < self.cache_ttl_seconds
+                and (
+                    self._cached_at >= requested_at
+                    or (
+                        now - self._cached_at < self.cache_ttl_seconds
+                        and (not refresh_stale or not self._cached_catalog.stale)
+                    )
+                )
             ):
                 return self._cached_catalog
             try:
@@ -67,7 +74,7 @@ class CodexModelCatalogProbe:
                 else:
                     catalog = self._fallback_catalog(exc)
             self._cached_catalog = catalog
-            self._cached_at = now
+            self._cached_at = monotonic()
             return catalog
 
     @staticmethod

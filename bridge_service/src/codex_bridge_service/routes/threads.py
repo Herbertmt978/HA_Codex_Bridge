@@ -84,13 +84,20 @@ def create_thread(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
-    needs_catalog = (
+    is_special_project = (
         payload.project_id is None
         or request.app.state.storage.is_special_project_id(payload.project_id)
+    )
+    needs_catalog = (
+        is_special_project
         or payload.model_override is not None
         or payload.thinking_override is not None
     )
-    model_catalog = request.app.state.model_catalog_probe.probe() if needs_catalog else None
+    model_catalog = (
+        request.app.state.model_catalog_probe.probe(refresh_stale=is_special_project)
+        if needs_catalog
+        else None
+    )
     if model_catalog is not None:
         request.app.state.storage.reconcile_special_projects(
             default_model=model_catalog.default_model,
