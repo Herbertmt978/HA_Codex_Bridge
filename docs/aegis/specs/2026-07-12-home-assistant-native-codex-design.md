@@ -1,6 +1,6 @@
 # Home Assistant-native Codex Design
 
-**Status:** Proposed — awaiting user review
+**Status:** Approved for implementation on 2026-07-12
 
 **Date:** 2026-07-12
 
