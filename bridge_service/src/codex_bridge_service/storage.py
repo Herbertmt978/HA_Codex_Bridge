@@ -91,6 +91,10 @@ class BridgeStorage:
                 or state_identity.is_relative_to(workspace_identity)
             ):
                 raise ValueError("workspace root must be separate from private state")
+            self.workspace_boundary = WorkspaceBoundary(workspace_root, create=True)
+            self.workspace_root = self.workspace_boundary.root
+            self.workspaces_dir = self.workspace_root
+            self.project_workspaces_dir = self.workspace_root
 
         private_directories = (
             self.projects_dir,
@@ -102,13 +106,7 @@ class BridgeStorage:
         for directory in private_directories:
             directory.mkdir(parents=True, exist_ok=True)
 
-        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
-            assert workspace_root is not None
-            self.workspace_boundary = WorkspaceBoundary(workspace_root, create=True)
-            self.workspace_root = self.workspace_boundary.root
-            self.workspaces_dir = self.workspace_root
-            self.project_workspaces_dir = self.workspace_root
-        else:
+        if self.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
             self.workspaces_dir.mkdir(parents=True, exist_ok=True)
             self.project_workspaces_dir.mkdir(parents=True, exist_ok=True)
 

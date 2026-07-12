@@ -1,3 +1,5 @@
+from pathlib import PurePosixPath, PureWindowsPath
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -44,6 +46,11 @@ class Settings(BaseSettings):
             return None
         if not value.strip() or value != value.strip():
             raise ValueError("workspace root must be a nonblank trimmed path")
+        if not (
+            PurePosixPath(value).is_absolute()
+            or PureWindowsPath(value).is_absolute()
+        ):
+            raise ValueError("workspace root must be absolute")
         return value
 
     @model_validator(mode="after")

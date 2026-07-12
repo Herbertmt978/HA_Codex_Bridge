@@ -36,10 +36,12 @@ def test_home_assistant_storage_separates_private_state_and_workspace_roots(tmp_
     assert storage.threads_dir.parent == state_root
     assert storage.uploads_dir.parent == state_root
     assert storage.artifacts_dir.parent == state_root
+    assert storage.logs_dir.parent == state_root
     assert not (workspace_root / "projects").exists()
     assert not (workspace_root / "threads").exists()
     assert not (workspace_root / "uploads").exists()
     assert not (workspace_root / "artifacts").exists()
+    assert not (workspace_root / "logs").exists()
 
 
 def test_home_assistant_storage_rejects_missing_or_shared_workspace_root(tmp_path) -> None:
@@ -72,6 +74,53 @@ def test_home_assistant_storage_rejects_missing_or_shared_workspace_root(tmp_pat
             root_path=private_marker / "nested-state",
             runtime_profile=RuntimeProfile.HOME_ASSISTANT,
             workspace_root=private_marker,
+        )
+
+
+@pytest.mark.parametrize("workspace_root", ["relative/workspaces", "~/workspaces"])
+def test_invalid_home_assistant_workspace_root_has_no_private_state_side_effect(
+    tmp_path,
+    workspace_root: str,
+) -> None:
+    state_root = tmp_path / "state-must-not-exist"
+
+    with pytest.raises(ValueError):
+        BridgeStorage(
+            root_path=state_root,
+            runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+            workspace_root=workspace_root,
+        )
+
+    assert not state_root.exists()
+
+
+def test_home_assistant_storage_rejects_symlink_alias_of_private_state(tmp_path) -> None:
+    state_root = tmp_path / "state"
+    state_root.mkdir()
+    workspace_alias = tmp_path / "workspace-alias"
+    try:
+        workspace_alias.symlink_to(state_root, target_is_directory=True)
+    except (NotImplementedError, OSError) as exc:
+        pytest.skip(f"symbolic links are unavailable: {type(exc).__name__}")
+
+    with pytest.raises(ValueError):
+        BridgeStorage(
+            root_path=state_root,
+            runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+            workspace_root=workspace_alias,
+        )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows case-insensitive paths are unavailable")
+def test_home_assistant_storage_rejects_case_alias_of_private_state(tmp_path) -> None:
+    state_root = tmp_path / "MixedCaseState"
+    state_root.mkdir()
+
+    with pytest.raises(ValueError):
+        BridgeStorage(
+            root_path=state_root,
+            runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+            workspace_root=str(state_root).swapcase(),
         )
 
 

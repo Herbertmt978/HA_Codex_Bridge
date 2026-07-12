@@ -73,6 +73,21 @@ def test_home_assistant_settings_accept_posix_workspace_root_on_windows_host(
     assert settings.workspace_root == "/config/workspaces"
 
 
+@pytest.mark.parametrize("workspace_root", ["relative/workspaces", "~/workspaces"])
+def test_home_assistant_settings_reject_nonabsolute_workspace_roots_without_leaking_them(
+    monkeypatch,
+    workspace_root: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    monkeypatch.setenv("CODEX_BRIDGE_RUNTIME_PROFILE", "home_assistant")
+    monkeypatch.setenv("CODEX_BRIDGE_WORKSPACE_ROOT", workspace_root)
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert workspace_root not in str(error.value)
+
+
 @pytest.mark.parametrize("workspace_root", [None, "", "   "])
 def test_settings_require_a_nonblank_home_assistant_workspace_root(
     monkeypatch,
