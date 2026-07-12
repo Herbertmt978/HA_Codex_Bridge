@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 from ..auth import require_bridge_token
 from ..models import PathBrowseEntryRecord, PathBrowseRecord, ProjectRecord
 from ..storage import ProjectMutationError, ProjectNotFoundError
+from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
 router = APIRouter()
 
@@ -65,16 +66,21 @@ def list_projects(
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
-    request.app.state.storage.reconcile_special_projects(
-        default_model=model_catalog.default_model,
-        default_thinking_level=model_catalog.default_thinking_level,
-        defaults_provisional=model_catalog.stale,
-    )
-    return request.app.state.storage.list_projects(
-        default_model=model_catalog.default_model,
-        default_thinking_level=model_catalog.default_thinking_level,
-        defaults_provisional=model_catalog.stale,
-    )
+    try:
+        request.app.state.storage.reconcile_special_projects(
+            default_model=model_catalog.default_model,
+            default_thinking_level=model_catalog.default_thinking_level,
+            defaults_provisional=model_catalog.stale,
+        )
+        return request.app.state.storage.list_projects(
+            default_model=model_catalog.default_model,
+            default_thinking_level=model_catalog.default_thinking_level,
+            defaults_provisional=model_catalog.stale,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.post("/projects", response_model=ProjectRecord, status_code=status.HTTP_201_CREATED)
@@ -110,12 +116,17 @@ def create_project(
             status_code=400,
             detail=f"{default_thinking_level} is not supported by {default_model}",
         )
-    return request.app.state.storage.create_project(
-        name=payload.name,
-        root_path=payload.root_path,
-        default_model=default_model,
-        default_thinking_level=default_thinking_level,
-    )
+    try:
+        return request.app.state.storage.create_project(
+            name=payload.name,
+            root_path=payload.root_path,
+            default_model=default_model,
+            default_thinking_level=default_thinking_level,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectRecord)
@@ -161,6 +172,10 @@ def update_project(
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -179,6 +194,10 @@ def archive_project(
         return request.app.state.storage.archive_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -197,6 +216,10 @@ def restore_project(
         return request.app.state.storage.restore_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -215,6 +238,10 @@ def delete_project(
         request.app.state.storage.delete_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -231,6 +258,10 @@ def browse_project_paths(
     )
     try:
         return request.app.state.storage.browse_paths(path)
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="path not found") from exc
 
@@ -245,7 +276,12 @@ def create_project_folder(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
-    return request.app.state.storage.create_folder(
-        parent_path=payload.parent_path,
-        folder_name=payload.folder_name,
-    )
+    try:
+        return request.app.state.storage.create_folder(
+            parent_path=payload.parent_path,
+            folder_name=payload.folder_name,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc

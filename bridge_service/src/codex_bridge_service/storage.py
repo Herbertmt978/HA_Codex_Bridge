@@ -1,10 +1,11 @@
 import json
 import mimetypes
+import re
 import string
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from threading import Lock
-from typing import BinaryIO, Callable
+from threading import Lock, RLock
+from typing import BinaryIO, Callable, Literal
 from uuid import uuid4
 import zipfile
 
@@ -28,9 +29,10 @@ from .models import (
     ThreadViewRecord,
     normalize_model,
 )
-from .workspace import WorkspaceBoundary
+from .workspace import WorkspaceBoundary, WorkspaceEscapeError, WorkspaceInputError
 
 _UNSET = object()
+_WORKSPACE_ID_PATTERN = re.compile(r"^ws_[0-9a-f]{12}$")
 
 
 class ThreadNotFoundError(FileNotFoundError):
@@ -79,6 +81,7 @@ class BridgeStorage:
         self._special_default_migration_pending = False
         self._special_migration_lock = Lock()
         self._event_lock = Lock()
+        self._project_mutation_lock = RLock()
 
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             if workspace_root is None or not str(workspace_root).strip():
@@ -133,6 +136,41 @@ class BridgeStorage:
             target = target.resolve()
         return target
 
+    def _home_assistant_boundary(self) -> WorkspaceBoundary:
+        boundary = self.workspace_boundary
+        if boundary is None:
+            raise RuntimeError("workspace boundary is unavailable")
+        return boundary
+
+    def _special_project_root(self) -> str:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            return "."
+        return str(self.workspaces_dir)
+
+    def resolve_workspace_path(
+        self,
+        workspace_path: str,
+        *,
+        must_exist: bool = True,
+        kind: Literal["file", "directory"] | None = "directory",
+    ) -> Path:
+        """Resolve a trusted internal path without changing its public representation."""
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            return self._home_assistant_boundary().resolve_relative(
+                workspace_path,
+                must_exist=must_exist,
+                kind=kind,
+            )
+
+        target = self._normalize_root_path(workspace_path)
+        if must_exist and not target.exists():
+            raise FileNotFoundError("workspace path not found")
+        if kind == "directory" and (not target.exists() or not target.is_dir()):
+            raise NotADirectoryError("workspace path is not a directory")
+        if kind == "file" and (not target.exists() or not target.is_file()):
+            raise FileNotFoundError("workspace file not found")
+        return target
+
     def _safe_project_folder_name(self, name: str) -> str:
         invalid_chars = '<>:"/\\|?*'
         cleaned = "".join(
@@ -150,6 +188,80 @@ class BridgeStorage:
             candidate = self.project_workspaces_dir / f"{folder_name} {suffix}"
             suffix += 1
         return candidate
+
+    def _default_home_assistant_project_root(self, name: str) -> str:
+        boundary = self._home_assistant_boundary()
+        folder_name = self._safe_project_folder_name(name)
+        # Reserve room for the separator and random suffix while retaining a
+        # readable workspace name. Randomized names avoid a create/check race.
+        folder_name = folder_name[:246].rstrip(" .") or "Project"
+        try:
+            folder_name = boundary.normalize(folder_name)
+        except ValueError:
+            folder_name = "Project"
+        relative = f"{folder_name}-{uuid4().hex[:8]}"
+        return boundary.create_directory(relative)
+
+    def _ensure_project_workspace(self, record: ProjectRecord) -> ProjectRecord:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return record
+        boundary = self._home_assistant_boundary()
+        is_special = self.is_special_project_id(record.project_id) or record.kind in {
+            ProjectKind.DIRECT,
+            ProjectKind.IMPORTED,
+        }
+        normalized = "." if is_special else boundary.normalize(record.root_path)
+        boundary.resolve_relative(normalized, must_exist=True, kind="directory")
+        if record.root_path != normalized:
+            record.root_path = normalized
+            self.save_project(record)
+        return record
+
+    def _ensure_thread_workspace(self, record: ThreadRecord) -> ThreadRecord:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return record
+        boundary = self._home_assistant_boundary()
+        normalized = boundary.normalize(record.workspace_path)
+        boundary.resolve_relative(normalized, must_exist=True, kind="directory")
+        if record.workspace_path != normalized:
+            record.workspace_path = normalized
+            self.save_thread(record)
+        return record
+
+    def _validate_thread_project_workspace(
+        self,
+        record: ThreadRecord,
+        project: ProjectRecord,
+    ) -> None:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return
+        boundary = self._home_assistant_boundary()
+        if _WORKSPACE_ID_PATTERN.fullmatch(record.workspace_id) is None:
+            raise WorkspaceInputError()
+        if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED):
+            expected = boundary.normalize(record.workspace_id)
+        else:
+            expected = boundary.normalize(project.root_path)
+        if boundary.normalize(record.workspace_path) != expected:
+            raise WorkspaceEscapeError()
+
+    def _preflight_project_threads(self, project: ProjectRecord) -> list[ThreadRecord]:
+        """Load associated HA threads without repairing or mutating persisted state."""
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            return []
+        boundary = self._home_assistant_boundary()
+        records: list[ThreadRecord] = []
+        for path in self.threads_dir.glob("*.json"):
+            record = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            if record.project_id != project.project_id:
+                continue
+            normalized = boundary.normalize(record.workspace_path)
+            if record.workspace_path != normalized:
+                raise WorkspaceInputError()
+            boundary.resolve_relative(normalized, must_exist=True, kind="directory")
+            self._validate_thread_project_workspace(record, project)
+            records.append(record)
+        return records
 
     def _imported_project_id(self) -> str:
         return "prj_imported"
@@ -271,7 +383,7 @@ class BridgeStorage:
         legacy_project = ProjectRecord(
             project_id=project_id,
             name=name,
-            root_path=str(self.workspaces_dir),
+            root_path=self._special_project_root(),
             kind=kind,
             default_model=DEFAULT_MODEL,
             default_thinking_level=DEFAULT_THINKING_LEVEL,
@@ -373,6 +485,7 @@ class BridgeStorage:
         target = self._project_path(self._imported_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = self._ensure_project_workspace(record)
             changed = self._migrate_provisional_special_defaults(
                 record,
                 default_model=default_model,
@@ -403,7 +516,7 @@ class BridgeStorage:
         record = ProjectRecord(
             project_id=self._imported_project_id(),
             name=self.imported_project_name,
-            root_path=str(self.workspaces_dir),
+            root_path=self._special_project_root(),
             kind=ProjectKind.IMPORTED,
             default_model=default_model,
             default_thinking_level=default_thinking_level,
@@ -433,6 +546,7 @@ class BridgeStorage:
         target = self._project_path(self._direct_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = self._ensure_project_workspace(record)
             changed = self._migrate_provisional_special_defaults(
                 record,
                 default_model=default_model,
@@ -463,7 +577,7 @@ class BridgeStorage:
         record = ProjectRecord(
             project_id=self._direct_project_id(),
             name=self.direct_project_name,
-            root_path=str(self.workspaces_dir),
+            root_path=self._special_project_root(),
             kind=ProjectKind.DIRECT,
             default_model=default_model,
             default_thinking_level=default_thinking_level,
@@ -483,6 +597,7 @@ class BridgeStorage:
         if not target.exists():
             raise ProjectNotFoundError(project_id)
         record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        record = self._ensure_project_workspace(record)
         record = self._ensure_project_defaults(record)
         if project_id == self._imported_project_id() and record.kind is not ProjectKind.IMPORTED:
             record.kind = ProjectKind.IMPORTED
@@ -513,7 +628,9 @@ class BridgeStorage:
             record.project_id: record
             for record in [
                 self._ensure_project_defaults(
-                    ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                    self._ensure_project_workspace(
+                        ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                    )
                 )
                 for path in self.projects_dir.glob("*.json")
             ]
@@ -553,12 +670,20 @@ class BridgeStorage:
         if not name.strip():
             raise ValueError("name must not be blank")
 
-        project_root = (
-            self._normalize_root_path(root_path)
-            if root_path and root_path.strip()
-            else self._default_project_root(name)
-        )
-        project_root.mkdir(parents=True, exist_ok=True)
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            project_root: Path | str
+            if root_path and root_path.strip():
+                project_root = boundary.create_directory(boundary.normalize(root_path))
+            else:
+                project_root = self._default_home_assistant_project_root(name)
+        else:
+            project_root = (
+                self._normalize_root_path(root_path)
+                if root_path and root_path.strip()
+                else self._default_project_root(name)
+            )
+            project_root.mkdir(parents=True, exist_ok=True)
         now = self._now()
         record = ProjectRecord(
             project_id=f"prj_{uuid4().hex[:12]}",
@@ -583,15 +708,48 @@ class BridgeStorage:
         default_model: str | None = None,
         default_thinking_level: str | None = None,
     ) -> ProjectRecord:
+        with self._project_mutation_lock:
+            return self._update_project_locked(
+                project_id,
+                name=name,
+                root_path=root_path,
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+            )
+
+    def _update_project_locked(
+        self,
+        project_id: str,
+        *,
+        name: str | None = None,
+        root_path: str | None = None,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
+    ) -> ProjectRecord:
         record = self.load_project(project_id)
         if name is not None:
             if not name.strip():
                 raise ValueError("name must not be blank")
             record.name = name.strip()
         if root_path is not None:
-            normalized = self._normalize_root_path(root_path)
-            normalized.mkdir(parents=True, exist_ok=True)
-            record.root_path = str(normalized)
+            if (
+                self.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+                and record.kind is not ProjectKind.PROJECT
+            ):
+                raise ProjectMutationError("special project workspaces cannot be changed")
+            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                boundary = self._home_assistant_boundary()
+                normalized_root = boundary.normalize(root_path)
+                if normalized_root != record.root_path:
+                    if self._preflight_project_threads(record):
+                        raise ProjectMutationError(
+                            "project workspace cannot be changed after chats are created"
+                        )
+                    record.root_path = boundary.create_directory(normalized_root)
+            else:
+                normalized = self._normalize_root_path(root_path)
+                normalized.mkdir(parents=True, exist_ok=True)
+                record.root_path = str(normalized)
         if default_model is not None:
             record.default_model = normalize_model(default_model)
         if default_thinking_level is not None:
@@ -603,6 +761,17 @@ class BridgeStorage:
         return record
 
     def save_project(self, record: ProjectRecord) -> None:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            if self.is_special_project_id(record.project_id) or record.kind in {
+                ProjectKind.DIRECT,
+                ProjectKind.IMPORTED,
+            }:
+                if record.root_path != ".":
+                    raise WorkspaceInputError()
+            else:
+                record.root_path = boundary.normalize(record.root_path)
+                boundary.resolve_relative(record.root_path, must_exist=True, kind="directory")
         self._atomic_write_json(self._project_path(record.project_id), record.model_dump())
 
     def archive_project(self, project_id: str) -> ProjectRecord:
@@ -635,6 +804,29 @@ class BridgeStorage:
             target.unlink()
 
     def browse_paths(self, path: str | None = None) -> PathBrowseRecord:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            relative = "." if path is None or not str(path).strip() else boundary.normalize(
+                path,
+                allow_root=True,
+            )
+            directories = [
+                PathBrowseEntryRecord(
+                    path=child,
+                    name=PurePosixPath(child).name,
+                )
+                for child in boundary.list_directories(relative)
+            ]
+            parent_path: str | None = None
+            if relative != ".":
+                parent = PurePosixPath(relative).parent.as_posix()
+                parent_path = "." if parent == "." else parent
+            return PathBrowseRecord(
+                path=relative,
+                parent_path=parent_path,
+                directories=directories,
+            )
+
         if path is None or not str(path).strip():
             directories = []
             for letter in string.ascii_uppercase:
@@ -671,6 +863,15 @@ class BridgeStorage:
             raise ValueError("parent_path must not be blank")
         if not folder_name.strip():
             raise ValueError("folder_name must not be blank")
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            parent = boundary.normalize(parent_path, allow_root=True)
+            name = boundary.normalize(folder_name)
+            if "/" in name:
+                raise WorkspaceInputError()
+            target = name if parent == "." else f"{parent}/{name}"
+            created = boundary.create_directory(target)
+            return PathBrowseEntryRecord(path=created, name=name)
         parent = self._normalize_root_path(parent_path)
         parent.mkdir(parents=True, exist_ok=True)
         target = parent / folder_name.strip()
@@ -682,6 +883,7 @@ class BridgeStorage:
         if not target.exists():
             raise ThreadNotFoundError(thread_id)
         record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+        record = self._ensure_thread_workspace(record)
         record = self._ensure_thread_project(record)
         record = self._ensure_thread_model(record)
         return self._ensure_thread_timestamps(record)
@@ -692,7 +894,9 @@ class BridgeStorage:
     def list_threads(self, *, include_archived: bool = False) -> list[ThreadViewRecord]:
         records = [
             self._ensure_thread_project(
-                ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                self._ensure_thread_workspace(
+                    ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                )
             )
             for path in self.threads_dir.glob("*.json")
         ]
@@ -707,6 +911,30 @@ class BridgeStorage:
         )
 
     def create_thread(
+        self,
+        *,
+        title: str,
+        mode: RunMode,
+        project_id: str | None = None,
+        model_override: str | None = None,
+        thinking_override: str | None = None,
+        direct_default_model: str | None = None,
+        direct_default_thinking_level: str | None = None,
+        direct_defaults_provisional: bool | None = None,
+    ) -> ThreadViewRecord:
+        with self._project_mutation_lock:
+            return self._create_thread_locked(
+                title=title,
+                mode=mode,
+                project_id=project_id,
+                model_override=model_override,
+                thinking_override=thinking_override,
+                direct_default_model=direct_default_model,
+                direct_default_thinking_level=direct_default_thinking_level,
+                direct_defaults_provisional=direct_defaults_provisional,
+            )
+
+    def _create_thread_locked(
         self,
         *,
         title: str,
@@ -736,13 +964,21 @@ class BridgeStorage:
             if thinking_override is None:
                 thinking_override = project.default_thinking_level
         workspace_id = f"ws_{uuid4().hex[:12]}"
-        workspace_root = Path(project.root_path)
-        workspace_path = (
-            workspace_root / workspace_id
-            if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED)
-            else workspace_root
-        )
-        workspace_path.mkdir(parents=True, exist_ok=True)
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            workspace_path: Path | str
+            if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED):
+                workspace_path = boundary.create_directory(workspace_id)
+            else:
+                workspace_path = boundary.create_directory(boundary.normalize(project.root_path))
+        else:
+            workspace_root = Path(project.root_path)
+            workspace_path = (
+                workspace_root / workspace_id
+                if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED)
+                else workspace_root
+            )
+            workspace_path.mkdir(parents=True, exist_ok=True)
         now = self._now()
 
         record = ThreadRecord(
@@ -855,6 +1091,16 @@ class BridgeStorage:
             upload_dir.rmdir()
 
     def save_thread(self, record: ThreadRecord) -> None:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            record.workspace_path = boundary.normalize(record.workspace_path)
+            boundary.resolve_relative(record.workspace_path, must_exist=True, kind="directory")
+            if record.project_id is None:
+                raise WorkspaceInputError()
+            self._validate_thread_project_workspace(
+                record,
+                self.load_project(record.project_id),
+            )
         if not record.created_at:
             record.created_at = self._now()
         if not record.updated_at:
@@ -864,7 +1110,7 @@ class BridgeStorage:
     def _ensure_thread_project(self, record: ThreadRecord) -> ThreadRecord:
         if record.project_id:
             try:
-                self.load_project(record.project_id)
+                project = self.load_project(record.project_id)
             except ProjectNotFoundError:
                 imported_project = self.ensure_imported_project()
                 if imported_project.defaults_origin is ProjectDefaultsOrigin.FALLBACK:
@@ -874,6 +1120,8 @@ class BridgeStorage:
                         record.thinking_override = DEFAULT_THINKING_LEVEL
                 record.project_id = imported_project.project_id
                 self.save_thread(record)
+                project = imported_project
+            self._validate_thread_project_workspace(record, project)
             return record
 
         imported_project = self.ensure_imported_project()
@@ -888,6 +1136,7 @@ class BridgeStorage:
                 record.thinking_override = DEFAULT_THINKING_LEVEL
         record.project_id = imported_project.project_id
         self.save_thread(record)
+        self._validate_thread_project_workspace(record, imported_project)
         return record
 
     def _ensure_thread_model(self, record: ThreadRecord) -> ThreadRecord:
@@ -900,6 +1149,7 @@ class BridgeStorage:
 
     def _resolve_thread(self, record: ThreadRecord) -> ThreadViewRecord:
         project = self.load_project(record.project_id or self.ensure_imported_project().project_id)
+        self._validate_thread_project_workspace(record, project)
         effective_model = normalize_model(record.model_override or project.default_model)
         effective_thinking_level = record.thinking_override or project.default_thinking_level
         return ThreadViewRecord(

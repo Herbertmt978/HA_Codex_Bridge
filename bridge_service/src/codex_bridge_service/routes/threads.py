@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from ..auth import require_bridge_token
 from ..models import RunMode, ThreadViewRecord
 from ..storage import ProjectNotFoundError, ThreadNotFoundError
+from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
 router = APIRouter()
 
@@ -98,13 +99,13 @@ def create_thread(
         if needs_catalog
         else None
     )
-    if model_catalog is not None:
-        request.app.state.storage.reconcile_special_projects(
-            default_model=model_catalog.default_model,
-            default_thinking_level=model_catalog.default_thinking_level,
-            defaults_provisional=model_catalog.stale,
-        )
     try:
+        if model_catalog is not None:
+            request.app.state.storage.reconcile_special_projects(
+                default_model=model_catalog.default_model,
+                default_thinking_level=model_catalog.default_thinking_level,
+                defaults_provisional=model_catalog.stale,
+            )
         if payload.project_id is None:
             project = request.app.state.storage.ensure_direct_project(
                 default_model=model_catalog.default_model,
@@ -115,6 +116,10 @@ def create_thread(
             project = request.app.state.storage.load_project(payload.project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
     thinking_override = payload.thinking_override
     if model_catalog is not None and (
@@ -153,6 +158,10 @@ def create_thread(
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.get("/threads", response_model=list[ThreadViewRecord])
@@ -165,7 +174,12 @@ def list_threads(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
-    return request.app.state.storage.list_threads(include_archived=include_archived)
+    try:
+        return request.app.state.storage.list_threads(include_archived=include_archived)
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.get("/threads/{thread_id}", response_model=ThreadViewRecord)
@@ -182,6 +196,10 @@ def get_thread(
         return request.app.state.storage.get_thread(thread_id)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.patch("/threads/{thread_id}", response_model=ThreadViewRecord)
@@ -230,6 +248,10 @@ def update_thread(
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -248,6 +270,10 @@ def archive_thread(
         return request.app.state.storage.archive_thread(thread_id)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.post("/threads/{thread_id}/restore", response_model=ThreadViewRecord)
@@ -264,6 +290,10 @@ def restore_thread(
         return request.app.state.storage.restore_thread(thread_id)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -280,4 +310,8 @@ def delete_thread(
         request.app.state.storage.delete_thread(thread_id)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

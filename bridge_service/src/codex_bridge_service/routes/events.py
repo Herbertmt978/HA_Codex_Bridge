@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from ..auth import require_bridge_token
 from ..models import ThreadEventRecord
 from ..storage import ThreadNotFoundError
+from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
 router = APIRouter()
 
@@ -29,6 +30,10 @@ def stream_thread_events(
             status_code=404,
             detail="thread not found",
         ) from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
     def emit() -> str:
         for event in events:
@@ -55,3 +60,7 @@ def replay_thread_events(
         return request.app.state.storage.list_thread_events(thread_id, after=after)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
