@@ -98,6 +98,24 @@ The HA profile now owns every private path involved in a run. Attachment, artifa
 
 The remaining Task 3 runtime fact is target-system evidence: a real HA App acceptance run must confirm inherited file-descriptor behavior under the final container and sandbox configuration. That is an explicit release gate, not evidence claimed by the host test suites.
 
+## Task 4 — immutable resource limits and safe archives
+
+| Evidence | Result |
+|----------|--------|
+| Atomic limit primitive | Immutable defaults; SQLite `BEGIN IMMEDIATE` reservations; process-lock fencing; crash-owner recovery; shared-filesystem and free-floor accounting |
+| Storage integration | HA-only workspace/private/transient pools; reserve-before-mutate uploads; immutable attachment/download leases; observed workspace growth; conservative cleanup |
+| Ingress boundary | Bearer authentication and raw request ceilings run before multipart parsing for both declared and chunked bodies |
+| Archive boundary | Bounded EOCD and central-directory preflight; prefix and trailing-data detection; entry, metadata, expanded-byte, ratio, special-file, CRC, and rollback enforcement |
+| Race coverage | Upload, workspace-growth, free-space, transient-snapshot, artifact-publication, reservation, and cleanup races covered |
+| Task 4A full suites | Windows 452 passed/107 skipped; Linux 548 passed/1 skipped |
+| Task 4B final full suites | Windows 458 passed/135 skipped; Linux 582 passed/1 skipped |
+| Static verification | Ruff, focused mypy, `compileall`, and `git diff --check` passed |
+| Spec review | Approved; fresh Linux focused run 104 passed and Windows HTTP boundary 3 passed |
+| Code-quality review | Ready: Yes after reproducing and closing a disguised trailing-data ZIP bypass |
+| Commits | `a92e137`, `21978b7` |
+
+The external legacy profile remains outside the HA quota and ingress middleware paths. Task 4 deliberately exposes a reusable workspace-growth observer rather than duplicating runtime ownership: the one-active/eight-queued gate and turn watchdog are Task 7, event retention is Task 8, and rotated/redacted service logs are Task 20.
+
 ## Evidence status
 
-This is draft evidence for continuation. It does not yet prove resource ceilings, the HA App image, target sandbox, proxy deployment, release, or cutover.
+This is draft evidence for continuation. It now proves host/container resource ceilings and safe archive handling, but not yet the HA App image, target sandbox, proxy deployment, release, or cutover.

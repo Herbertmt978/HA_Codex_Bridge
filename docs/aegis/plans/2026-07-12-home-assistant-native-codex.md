@@ -182,11 +182,13 @@ Failure of the sandbox fact is a stop condition for cutover, not permission to e
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_resource_limits.py bridge_service/tests/test_storage.py`
 
-- [ ] Write failing tests for reservation races, insufficient free space, per-file/workspace/artifact ceilings, zip bombs, entry counts, compression ratio, special entries, partial failures, crash recovery, and quota release.
-- [ ] Run the tests and confirm current storage accepts the over-limit fixtures.
-- [ ] Implement immutable `ResourceLimits`, atomic `QuotaManager` reservations, streaming byte counters, free-space margins, safe archive iteration, and typed `413 quota_exceeded`/`409 reservation_conflict` responses.
-- [ ] Run focused/full tests and verify temporary files/reservations are removed after cancellation and exceptions.
-- [ ] Commit with message `Bound Bridge resource usage`.
+- [x] Write failing tests for reservation races, insufficient free space, per-file/workspace/artifact ceilings, zip bombs, entry counts, compression ratio, special entries, partial failures, crash recovery, and quota release.
+- [x] Run the tests and confirm current storage accepts the over-limit fixtures.
+- [x] Implement immutable `ResourceLimits`, atomic `QuotaManager` reservations, streaming byte counters, free-space margins, safe archive iteration, and typed `413 quota_exceeded`/`409 reservation_conflict` responses.
+- [x] Run focused/full tests and verify temporary files/reservations are removed after cancellation and exceptions.
+- [x] Commit the atomic limit primitive and HA storage integration as `a92e137` and `21978b7`.
+
+Runtime queue/turn enforcement consumes these immutable limits in Task 7; event compaction and rotated service logging remain owned by Tasks 8 and 20 respectively.
 
 ## Task 5: Build the supervised Codex app-server transport
 
