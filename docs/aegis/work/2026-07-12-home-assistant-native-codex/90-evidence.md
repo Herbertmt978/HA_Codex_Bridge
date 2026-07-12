@@ -41,6 +41,23 @@ Build metadata now accepts only bounded SemVer, supported architectures, exact G
 
 `/ready` is still bearer-token protected and now returns frozen typed API, component-version, image, capability, architecture, and readiness records. `create_app` captures validated build metadata once; `/status` retains its existing shape and gains safe version/build diagnostics. Readiness intentionally remains statically `ready` until Task 10 wires runtime and sandbox health.
 
+## Task 2 — isolated Codex subprocess environments
+
+| Evidence | Result |
+|----------|--------|
+| Initial RED | 29 failed and 18 passed; inherited parent values crossed the subprocess boundary |
+| Hardening RED | 21 credential/PATH failures, then 13 provider/locale failures, then 7 Bridge/HA alias failures |
+| POSIX compatibility RED | `relative:/usr/bin` incorrectly discarded the valid absolute entry |
+| Independent focused GREEN | 95 passed |
+| Independent full Bridge GREEN | 330 passed in 17.09s |
+| Real Windows environment probe | 43 absolute PATH entries, zero empty entries, nine allowlisted keys, dedicated HOME/CODEX_HOME present |
+| Spec review | Approved after credential-carrier and Bridge/HA alias fixes |
+| Code-quality review | Ready: Yes; final confirmation found no findings after the POSIX compatibility fix |
+| Diff hygiene | `git diff --check` passed; worktree clean |
+| Commits | `61ad49a`, `649af01`, `6982cd7`, `c37042a` |
+
+Codex subprocesses no longer copy the parent environment. The builder retains only validated executable paths, dedicated home/Codex home, safe temporary paths, structured locales, platform essentials, and existing certificate paths. Supervisor, HA, Bridge, OpenAI, GitHub, CI, cookie, authorization, proxy, and unrelated values are excluded. Realistic carrier forms are rejected even when embedded in an otherwise allowlisted value. Legacy fake-runner controls are injected only inside their tests.
+
 ## Evidence status
 
 This is draft evidence for continuation. It does not prove the HA App, sandbox, proxy, release, or cutover.
