@@ -479,14 +479,18 @@ def test_real_missing_path_traceback_is_redacted(tmp_path) -> None:
     root = tmp_path / "private-workspace"
     root.mkdir()
     boundary = WorkspaceBoundary(root)
+    sensitive_name = "not-for-logs.txt"
 
     with pytest.raises(WorkspaceNotFoundError) as error:
-        boundary.resolve_relative("private/missing.txt", must_exist=True)
+        boundary.resolve_relative(f"private/{sensitive_name}", must_exist=True)
 
     rendered = "".join(traceback.format_exception(error.value))
     assert error.value.__cause__ is None
     assert str(root) not in rendered
     assert "[Errno" not in rendered
+    assert "WinError" not in rendered
+    assert "FileNotFoundError" not in rendered
+    assert sensitive_name not in rendered
 
 
 def test_secure_operations_fail_closed_when_required_primitives_are_unavailable(
