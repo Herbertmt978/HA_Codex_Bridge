@@ -1,7 +1,9 @@
 import os
+from pathlib import PurePosixPath
 
 import pytest
 
+from codex_bridge_service import codex_process
 from codex_bridge_service.codex_process import (
     codex_subprocess_environment,
     resolve_codex_home,
@@ -141,6 +143,20 @@ def test_codex_subprocess_environment_filters_unsafe_path_entries(tmp_path) -> N
     )
 
     assert environment["PATH"] == os.pathsep.join((str(safe_bin), str(safe_tools)))
+
+
+def test_codex_subprocess_environment_preserves_absolute_path_after_relative_posix_entry(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(codex_process.os, "pathsep", ":")
+    monkeypatch.setattr(codex_process, "Path", PurePosixPath)
+
+    environment = codex_subprocess_environment(
+        "/codex-home",
+        {"PATH": "relative:/usr/bin:https://executables.invalid/bin:/opt/bin"},
+    )
+
+    assert environment["PATH"] == "/usr/bin:/opt/bin"
 
 
 @pytest.mark.parametrize(

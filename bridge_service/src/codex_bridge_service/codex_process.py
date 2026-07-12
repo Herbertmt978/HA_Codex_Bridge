@@ -125,7 +125,7 @@ def _safe_path_entries(value: object) -> list[str]:
     url_fragments: set[int] = set()
     if os.pathsep == ":":
         for index, entry in enumerate(entries[:-1]):
-            if _URL_SCHEME_PATTERN.fullmatch(entry) and entries[index + 1].startswith("/"):
+            if _URL_SCHEME_PATTERN.fullmatch(entry) and entries[index + 1].startswith("//"):
                 url_fragments.update((index, index + 1))
 
     return [
