@@ -8,12 +8,55 @@ from pathlib import Path
 _PLATFORM_PATH_VARIABLES = ("SYSTEMROOT", "WINDIR", "COMSPEC")
 _TEMPORARY_DIRECTORY_VARIABLES = ("TMPDIR", "TMP", "TEMP")
 _LOCALE_VARIABLES = ("LANG", "LC_ALL", "LC_CTYPE")
-_LOCALE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}\Z")
+_LOCALE_PATTERN = re.compile(
+    r"(?:(?:C|POSIX)(?:\.[A-Za-z0-9][A-Za-z0-9_-]{0,15})?|"
+    r"[A-Za-z]{2,3}(?:_(?:[A-Za-z]{2}|[0-9]{3}))?"
+    r"(?:\.[A-Za-z0-9][A-Za-z0-9_-]{0,15})?"
+    r"(?:@[A-Za-z0-9][A-Za-z0-9_-]{0,15})?)\Z"
+)
 _PATHEXT_PATTERN = re.compile(r"(?:\.[A-Za-z0-9]+)(?:;(?:\.[A-Za-z0-9]+))*\Z")
-_SECRET_CARRIER_PATTERN = re.compile(
-    r"(?:bearer\s|ghp_|github_pat_|sk-(?:proj-)?|api[_-]?key\s*[=:]|"
-    r"authorization\s*[=:]|-----begin)",
-    re.IGNORECASE,
+_URL_SCHEME_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*\Z")
+_CREDENTIAL_CARRIER_PATTERNS = (
+    re.compile(
+        r"(?<![A-Za-z0-9])(?:gh[pousr]_|github_pat_)[A-Za-z0-9_=-]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])sk-(?:proj-)?[-A-Za-z0-9._~]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9_-])eyJ[-A-Za-z0-9_]{5,}"
+        r"\.[-A-Za-z0-9_]{5,}\.[-A-Za-z0-9_]{5,}(?![-A-Za-z0-9_])",
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])bearer(?:\s+|\s*[:=]\s*)[-A-Za-z0-9._~]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])pat[_-][-A-Za-z0-9._~]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])(?:"
+        r"github|gitlab|openai|bridge|hassio|home[_-]?assistant|"
+        r"ci|codex|supervisor"
+        r")[_-](?:(?:access|refresh|api|job)[_-])?"
+        r"(?:token|secret|key|pat|password)\s*[:=]\s*[-A-Za-z0-9._~]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])(?:"
+        r"api[_-]?key|authorization|access[_-]?token|refresh[_-]?token|"
+        r"cookie|session(?:id)?|password|passwd|client[_-]secret|"
+        r"private[_-]key|pat"
+        r")\s*[:=]\s*[-A-Za-z0-9._~]{8,}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -51,7 +94,7 @@ def _is_plain_value(value: object, *, maximum_length: int) -> bool:
         isinstance(value, str)
         and 0 < len(value) <= maximum_length
         and not any(ord(character) < 32 or ord(character) == 127 for character in value)
-        and not _SECRET_CARRIER_PATTERN.search(value)
+        and not any(pattern.search(value) for pattern in _CREDENTIAL_CARRIER_PATTERNS)
     )
 
 
@@ -61,14 +104,35 @@ def _is_safe_path(value: object, *, expected_kind: str | None = None) -> bool:
     assert isinstance(value, str)
     if "://" in value:
         return False
-    path = Path(value)
-    if not path.is_absolute():
+    try:
+        path = Path(value)
+        if not path.is_absolute():
+            return False
+        if expected_kind == "file":
+            return path.is_file()
+        if expected_kind == "directory":
+            return path.is_dir()
+        return True
+    except OSError:
         return False
-    if expected_kind == "file":
-        return path.is_file()
-    if expected_kind == "directory":
-        return path.is_dir()
-    return True
+
+
+def _safe_path_entries(value: object) -> list[str]:
+    if not isinstance(value, str) or not value or len(value) > 32768:
+        return []
+
+    entries = value.split(os.pathsep)
+    url_fragments: set[int] = set()
+    if os.pathsep == ":":
+        for index, entry in enumerate(entries[:-1]):
+            if _URL_SCHEME_PATTERN.fullmatch(entry) and entries[index + 1].startswith("/"):
+                url_fragments.update((index, index + 1))
+
+    return [
+        entry
+        for index, entry in enumerate(entries)
+        if index not in url_fragments and _is_safe_path(entry)
+    ]
 
 
 def codex_subprocess_environment(
@@ -78,9 +142,9 @@ def codex_subprocess_environment(
     source = os.environ if source_environment is None else source_environment
     environment: dict[str, str] = {}
 
-    path_value = source.get("PATH")
-    if _is_plain_value(path_value, maximum_length=32768):
-        environment["PATH"] = path_value
+    path_entries = _safe_path_entries(source.get("PATH"))
+    if path_entries:
+        environment["PATH"] = os.pathsep.join(path_entries)
 
     for name in _PLATFORM_PATH_VARIABLES:
         value = source.get(name)
