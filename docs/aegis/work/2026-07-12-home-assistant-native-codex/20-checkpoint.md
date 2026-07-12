@@ -3,19 +3,19 @@
 ## TodoCheckpointDraft
 
 - **State:** active
-- **Current todo:** Task 3B — integrate confined HA workspaces into storage, routes, and run paths
-- **Active slice:** Add the explicit HA/external runtime profile and relative public-path adapters
-- **Completed:** approved spec; implementation plan/review; Tasks 1–2; Task 3A descriptor-anchored `WorkspaceBoundary`, strict portable names, typed redaction, race/symlink/special-file defenses, Linux validation, and independent reviews
-- **Evidence refs:** `90-evidence.md`; Task 3A commits `ccfbb20`, `ee38aed`, `13baaeb`, `f2072b0`, `6f3ffb6`
-- **Blocked on:** target HA architecture and real sandbox result are later runtime facts, not blockers for Task 3
-- **Next step:** integrate the accepted boundary without changing the external legacy storage contract
+- **Current todo:** Task 4 — enforce bounded resource use and crash-safe quota release
+- **Active slice:** Add immutable resource limits and atomic reservations before integrating upload, artifact, archive, queue, run, event, and log paths
+- **Completed:** approved spec and plan; Tasks 1–2; Task 3A descriptor-anchored boundary; Task 3B HA runtime profile, owned project/thread paths, confined runner workspaces, selected-only attachment descriptors, immutable artifact snapshots, and private archive lifecycle
+- **Evidence refs:** `90-evidence.md`; Task 3 commits `ccfbb20`, `ee38aed`, `13baaeb`, `f2072b0`, `6f3ffb6`, `51e1fc9`, `12d648a`, `1e5b1f3`, `b175578`, `e07d212`, `e3a7e0a`, `e3b7c24`
+- **Blocked on:** real HA inherited-descriptor and sandbox behavior remains an acceptance gate, not a blocker for resource-control implementation
+- **Next step:** prove reservation races, ceilings, free-space protection, bounded state, archive abuse limits, cleanup, and crash recovery without changing the external legacy profile
 
 ## ResumeStateHint
 
 - **Repository:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge`
 - **Worktree:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge\.worktrees\ha-app`
 - **Branch:** `Herb/ha-app`
-- **Current implementation head before this checkpoint update:** `6f3ffb6`
+- **Current implementation head before this checkpoint update:** `e3b7c24`
 - **Worktree status at checkpoint:** clean before these work-record files
 - **Baseline command:** `python -m pytest -q` from `bridge_service`
 - **Baseline result:** 115 passed
@@ -23,9 +23,9 @@
 
 ## DriftCheckDraft
 
-- **Intent alignment:** yes; the reusable HA filesystem boundary is proven on Linux and deliberately refuses protected I/O on unsupported platforms.
+- **Intent alignment:** yes; HA-owned workspaces, uploads, artifacts, and archives are confined behind relative public locators and immutable descriptor snapshots.
 - **Compatibility:** v0 adapter and VM rollback remain explicit.
 - **New owner/fallback:** none beyond the approved App owner and bounded v0 carrier.
 - **Retirement:** unchanged; VM stops only after real acceptance.
-- **Evidence sufficiency:** sufficient to accept Task 3A and integrate Task 3B; storage/routes are not yet confined until the next slice lands.
+- **Evidence sufficiency:** sufficient to accept Task 3 implementation on supported Linux hosts; target-HA sandbox proof is deliberately reserved for acceptance.
 - **Decision:** continue.

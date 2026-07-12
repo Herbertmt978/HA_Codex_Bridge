@@ -75,6 +75,29 @@ Codex subprocesses no longer copy the parent environment. The builder retains on
 
 The accepted boundary holds a trusted root descriptor and duplicates it for every protected operation. POSIX `dir_fd`, `O_NOFOLLOW`, `O_DIRECTORY`, exclusive creation, nonblocking special-file checks, descriptor-based listing/walking, and inode verification prevent lexical, symlink, ancestor-swap, and final-entry races. Unsupported platforms retain validation-only behavior and reject protected I/O; the Windows external legacy profile remains separate. Public names and errors are relative and redacted, including formatted exception chains.
 
+## Task 3B — Home Assistant-owned filesystem integration
+
+| Evidence | Result |
+|----------|--------|
+| Runtime/profile integration | HA and external profiles retain distinct storage contracts; public HA paths remain relative |
+| Project/thread integration | HA-owned project and thread directories are descriptor-anchored and portable-name validated |
+| Runner integration | Codex receives the selected HA workspace without broad upload-directory exposure |
+| Attachment security | Selected files are copied into sealed Linux memory descriptors, reopened read-only, and passed individually through `/proc/self/fd`; private paths and sibling files are not exposed |
+| Artifact security | Download metadata is source-qualified and relative; responses stream an already-open immutable snapshot with safe headers and generic failures |
+| Archive security | Sources are strict-walked and snapshot one at a time; private ZIPs publish only after successful close, fsync, identity validation, metadata save, and event append |
+| Concurrency and cleanup | Upload, stale-writer, artifact-dedup, archive-builder, cancellation, and thread-deletion races are covered; partial private files are removed on failure |
+| Windows full suite | 403 passed, 107 skipped |
+| Linux full suite | 499 passed, 1 skipped |
+| Artifact/archive focused suite | 26 passed |
+| Spec reviews | Approved for attachments, artifacts, and archives |
+| Code-quality reviews | Ready: Yes for each accepted slice |
+| Build/diff hygiene | `compileall` and `git diff --check` passed; worktree clean |
+| Commits | `51e1fc9`, `12d648a`, `1e5b1f3`, `b175578`, `e07d212`, `e3a7e0a`, `e3b7c24` |
+
+The HA profile now owns every private path involved in a run. Attachment, artifact, and archive payloads cross trust boundaries through verified descriptors and immutable snapshots, while serialized records expose only validated relative locators. Append-preserving saves and canonical locks prevent stale writers from erasing concurrent state. The external profile remains compatible with its existing path-based behavior.
+
+The remaining Task 3 runtime fact is target-system evidence: a real HA App acceptance run must confirm inherited file-descriptor behavior under the final container and sandbox configuration. That is an explicit release gate, not evidence claimed by the host test suites.
+
 ## Evidence status
 
-This is draft evidence for continuation. It does not prove the HA App, sandbox, proxy, release, or cutover.
+This is draft evidence for continuation. It does not yet prove resource ceilings, the HA App image, target sandbox, proxy deployment, release, or cutover.
