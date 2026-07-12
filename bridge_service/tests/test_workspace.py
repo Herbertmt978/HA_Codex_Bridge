@@ -1,8 +1,10 @@
 import os
+import traceback
 from pathlib import Path
 
 import pytest
 
+from codex_bridge_service import workspace
 from codex_bridge_service.workspace import (
     WorkspaceBoundary,
     WorkspaceEscapeError,
@@ -10,6 +12,7 @@ from codex_bridge_service.workspace import (
     WorkspaceInputError,
     WorkspaceNotFoundError,
     WorkspaceTypeError,
+    WorkspaceUnsupportedError,
 )
 
 
@@ -34,6 +37,7 @@ def test_boundary_requires_an_explicit_absolute_existing_root(tmp_path, monkeypa
     assert str(tmp_path) not in repr(relative_error.value)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd creation is unavailable")
 def test_boundary_creates_a_root_only_when_explicitly_requested(tmp_path) -> None:
     root = tmp_path / "new" / "workspace"
 
@@ -70,7 +74,13 @@ def test_boundary_creates_a_root_only_when_explicitly_requested(tmp_path) -> Non
         "line\nbreak",
         "control\x1fcharacter",
         "delete\x7fcharacter",
+        "c1\x85character",
         "file:stream",
+        "safe?.txt",
+        "a*b",
+        'quote"name',
+        "<name>",
+        "a|b",
         "trailing-dot.",
         "trailing-space ",
     ),
@@ -97,7 +107,10 @@ def test_normalize_returns_one_portable_public_form(tmp_path) -> None:
         boundary.normalize(".")
 
 
-@pytest.mark.parametrize("reserved", (".", "..", "NUL", "con.txt", "COM1", "lpt9.log"))
+@pytest.mark.parametrize(
+    "reserved",
+    (".", "..", "NUL", "con.txt", "COM1", "lpt9.log", "CONIN$", "conout$.txt"),
+)
 def test_normalize_rejects_reserved_components(tmp_path, reserved: str) -> None:
     boundary = WorkspaceBoundary(tmp_path)
 
@@ -157,9 +170,9 @@ def test_existing_parent_and_final_symlink_swaps_fail_closed(tmp_path) -> None:
 
     with pytest.raises(WorkspaceEscapeError):
         boundary.resolve_relative("project/secret.txt", must_exist=True)
-    with pytest.raises(WorkspaceEscapeError):
+    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
         boundary.open_regular_file("project/secret.txt")
-    with pytest.raises(WorkspaceEscapeError):
+    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
         boundary.create_file_exclusive("project/new.txt")
 
     parent.unlink()
@@ -169,7 +182,7 @@ def test_existing_parent_and_final_symlink_swaps_fail_closed(tmp_path) -> None:
 
     with pytest.raises(WorkspaceEscapeError):
         boundary.resolve_relative("project/secret.txt", must_exist=True)
-    with pytest.raises(WorkspaceEscapeError):
+    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
         boundary.open_regular_file("project/secret.txt")
 
 
@@ -187,6 +200,7 @@ def test_dangling_and_internal_symlinks_are_rejected_uniformly(tmp_path) -> None
             boundary.resolve_relative(relative)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd operations are unavailable")
 def test_create_directory_and_browse_return_only_public_real_directories(tmp_path) -> None:
     root = tmp_path / "workspace"
     outside = tmp_path / "outside"
@@ -205,6 +219,7 @@ def test_create_directory_and_browse_return_only_public_real_directories(tmp_pat
     )
 
 
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd operations are unavailable")
 def test_walk_regular_files_does_not_follow_links_or_include_special_entries(tmp_path) -> None:
     root = tmp_path / "workspace"
     outside = tmp_path / "outside"
@@ -224,6 +239,7 @@ def test_walk_regular_files_does_not_follow_links_or_include_special_entries(tmp
     )
 
 
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd operations are unavailable")
 def test_open_regular_file_reads_bytes_and_rejects_directories(tmp_path) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
@@ -237,6 +253,7 @@ def test_open_regular_file_reads_bytes_and_rejects_directories(tmp_path) -> None
         boundary.open_regular_file("project")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd operations are unavailable")
 def test_create_file_is_exclusive_and_never_overwrites_a_collision(tmp_path) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
@@ -270,6 +287,104 @@ def test_special_files_are_not_enumerated_or_opened(tmp_path) -> None:
         boundary.open_regular_file("pipe")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_root_creation_does_not_follow_a_symlinked_ancestor(tmp_path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
+        WorkspaceBoundary(linked_parent / "created-outside", create=True)
+
+    assert not (outside / "created-outside").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_directory_listing_stays_on_open_descriptor_during_path_swap(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    base = root / "base"
+    moved = root / "moved"
+    (base / "safe").mkdir(parents=True)
+    (outside / "secret").mkdir(parents=True)
+    boundary = WorkspaceBoundary(root)
+    real_scandir = os.scandir
+    swapped = False
+
+    def swap_then_scan(path):
+        nonlocal swapped
+        if isinstance(path, int) and not swapped:
+            base.rename(moved)
+            base.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return real_scandir(path)
+
+    monkeypatch.setattr(workspace.os, "scandir", swap_then_scan)
+
+    assert boundary.list_directories("base") == ("base/safe",)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_recursive_walk_fails_closed_when_child_is_swapped_for_symlink(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    nested = root / "base" / "nested"
+    moved = root / "base" / "moved"
+    nested.mkdir(parents=True)
+    (nested / "safe.txt").write_text("safe", encoding="utf-8")
+    outside.mkdir()
+    (outside / "secret.txt").write_text("secret", encoding="utf-8")
+    boundary = WorkspaceBoundary(root)
+    real_open = os.open
+    swapped = False
+
+    def swap_then_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if path == "nested" and kwargs.get("dir_fd") is not None and not swapped:
+            nested.rename(moved)
+            nested.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(workspace.os, "open", swap_then_open)
+
+    with pytest.raises((WorkspaceEscapeError, WorkspaceTypeError)):
+        boundary.walk_regular_files("base")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX FIFO facilities are unavailable")
+def test_raced_fifo_open_is_nonblocking_and_rejected(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "workspace"
+    project = root / "project"
+    project.mkdir(parents=True)
+    target = project / "notes.txt"
+    target.write_text("safe", encoding="utf-8")
+    boundary = WorkspaceBoundary(root)
+    real_open = os.open
+    swapped = False
+
+    def swap_then_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if path == "notes.txt" and kwargs.get("dir_fd") is not None and not swapped:
+            target.unlink()
+            os.mkfifo(target)
+            swapped = True
+            assert flags & os.O_NONBLOCK
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(workspace.os, "open", swap_then_open)
+
+    with pytest.raises(WorkspaceTypeError):
+        boundary.open_regular_file("project/notes.txt")
+
+
 def test_platform_errors_never_cross_the_public_boundary(tmp_path, monkeypatch) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
@@ -284,3 +399,43 @@ def test_platform_errors_never_cross_the_public_boundary(tmp_path, monkeypatch) 
         boundary.resolve_relative("safe.txt")
     assert "private platform detail" not in str(error.value)
     assert str(root) not in repr(error.value)
+    assert error.value.__cause__ is None
+    rendered = "".join(traceback.format_exception(error.value))
+    assert "private platform detail" not in rendered
+    assert str(root) not in rendered
+
+
+def test_secure_operations_fail_closed_when_required_primitives_are_unavailable(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "project").mkdir()
+    (root / "project" / "notes.txt").write_text("safe", encoding="utf-8")
+    boundary = WorkspaceBoundary(root)
+    monkeypatch.setattr(workspace, "_secure_dir_fd_available", lambda: False)
+
+    with pytest.raises(WorkspaceUnsupportedError):
+        WorkspaceBoundary(tmp_path / "new-root", create=True)
+    operations = (
+        lambda: boundary.create_directory("new"),
+        lambda: boundary.list_directories(),
+        lambda: boundary.walk_regular_files(),
+        lambda: boundary.open_regular_file("project/notes.txt"),
+        lambda: boundary.create_file_exclusive("project/new.txt"),
+    )
+    for operation in operations:
+        with pytest.raises(WorkspaceUnsupportedError) as error:
+            operation()
+        assert error.value.code == "secure_operations_unavailable"
+
+
+def test_secure_capability_requires_no_follow_and_directory_flags(monkeypatch) -> None:
+    monkeypatch.setattr(workspace, "_HAS_DIR_FD_PRIMITIVES", True)
+    monkeypatch.setattr(workspace.os, "O_NOFOLLOW", 0, raising=False)
+    assert workspace._secure_dir_fd_available() is False
+
+    monkeypatch.setattr(workspace.os, "O_NOFOLLOW", 1, raising=False)
+    monkeypatch.setattr(workspace.os, "O_DIRECTORY", 0, raising=False)
+    assert workspace._secure_dir_fd_available() is False

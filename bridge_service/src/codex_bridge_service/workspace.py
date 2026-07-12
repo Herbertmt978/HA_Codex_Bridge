@@ -7,8 +7,9 @@ from typing import BinaryIO, Literal
 
 
 _WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
+_WINDOWS_INVALID_CHARS = frozenset('<>:"/\\|?*')
 _WINDOWS_RESERVED_NAMES = frozenset(
-    {"CON", "PRN", "AUX", "NUL"}
+    {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
     | {f"COM{index}" for index in range(1, 10)}
     | {f"LPT{index}" for index in range(1, 10)}
 )
@@ -18,7 +19,22 @@ _ERROR_MESSAGES = {
     "not_found": "The workspace entry was not found.",
     "wrong_type": "The workspace entry has an unsupported type.",
     "already_exists": "The workspace entry already exists.",
+    "secure_operations_unavailable": "Secure filesystem operations are unavailable.",
 }
+_HAS_DIR_FD_PRIMITIVES = (
+    os.name != "nt"
+    and os.open in os.supports_dir_fd
+    and os.mkdir in os.supports_dir_fd
+    and os.scandir in os.supports_fd
+)
+
+
+def _secure_dir_fd_available() -> bool:
+    return (
+        _HAS_DIR_FD_PRIMITIVES
+        and bool(getattr(os, "O_NOFOLLOW", 0))
+        and bool(getattr(os, "O_DIRECTORY", 0))
+    )
 
 
 class WorkspaceBoundaryError(Exception):
@@ -51,14 +67,23 @@ class WorkspaceExistsError(WorkspaceBoundaryError, FileExistsError):
     code = "already_exists"
 
 
+class WorkspaceUnsupportedError(WorkspaceBoundaryError, RuntimeError):
+    code = "secure_operations_unavailable"
+
+
 class WorkspaceBoundary:
-    """Confines trusted filesystem operations to one explicit directory root."""
+    """Confines filesystem operations to one explicit directory root.
+
+    Race-safe I/O requires POSIX ``dir_fd`` and no-follow primitives. Platforms
+    without them may validate names and snapshots, but mutating, reading, and
+    enumerating operations fail closed with ``WorkspaceUnsupportedError``.
+    """
 
     def __init__(self, root: Path | str, *, create: bool = False) -> None:
         try:
             raw_root = os.fspath(root)
-        except TypeError as exc:
-            raise WorkspaceInputError() from exc
+        except TypeError:
+            raise WorkspaceInputError() from None
         if not isinstance(raw_root, str) or raw_root.startswith("~"):
             raise WorkspaceInputError()
 
@@ -66,8 +91,11 @@ class WorkspaceBoundary:
         if not candidate.is_absolute():
             raise WorkspaceInputError()
         try:
-            if create:
-                candidate.mkdir(parents=True, exist_ok=True)
+            if create and not candidate.exists():
+                if not _secure_dir_fd_available():
+                    raise WorkspaceUnsupportedError()
+                self._create_absolute_directory(candidate)
+            self._reject_link_components(candidate)
             root_stat = candidate.lstat()
             if stat.S_ISLNK(root_stat.st_mode) or self._is_junction(candidate):
                 raise WorkspaceEscapeError()
@@ -76,10 +104,10 @@ class WorkspaceBoundary:
             self._root = candidate.resolve(strict=True)
         except WorkspaceBoundaryError:
             raise
-        except FileNotFoundError as exc:
-            raise WorkspaceNotFoundError() from exc
-        except OSError as exc:
-            raise WorkspaceTypeError() from exc
+        except FileNotFoundError:
+            raise WorkspaceNotFoundError() from None
+        except OSError:
+            raise WorkspaceTypeError() from None
 
     @property
     def root(self) -> Path:
@@ -91,11 +119,14 @@ class WorkspaceBoundary:
     def normalize(self, relative: Path | str, *, allow_root: bool = False) -> str:
         try:
             value = os.fspath(relative)
-        except TypeError as exc:
-            raise WorkspaceInputError() from exc
+        except TypeError:
+            raise WorkspaceInputError() from None
         if not isinstance(value, str) or not value or value != value.strip():
             raise WorkspaceInputError()
-        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        if any(
+            ord(character) < 32 or 127 <= ord(character) <= 159
+            for character in value
+        ):
             raise WorkspaceInputError()
         if value == ".":
             if allow_root:
@@ -138,110 +169,107 @@ class WorkspaceBoundary:
     def relative_from_path(self, path: Path | str) -> str:
         try:
             candidate = Path(path)
-        except TypeError as exc:
-            raise WorkspaceInputError() from exc
+        except TypeError:
+            raise WorkspaceInputError() from None
         if not candidate.is_absolute():
             raise WorkspaceInputError()
         try:
             lexical_relative = candidate.relative_to(self._root)
-        except ValueError as exc:
-            raise WorkspaceEscapeError() from exc
+        except ValueError:
+            raise WorkspaceEscapeError() from None
         self._validate_candidate(candidate, must_exist=True, kind=None)
         if not lexical_relative.parts:
             return "."
         return self.normalize(lexical_relative.as_posix())
 
     def create_directory(self, relative: Path | str) -> str:
+        self._require_secure_operations()
         normalized = self.normalize(relative)
         parts = tuple(normalized.split("/"))
-        if self._supports_secure_dir_fd():
-            self._create_directory_posix(parts)
-        else:
-            current = self._root
-            for part in parts:
-                current = current / part
-                try:
-                    current.mkdir()
-                except FileExistsError:
-                    pass
-                except OSError as exc:
-                    raise self._translated_os_error(exc) from exc
-                self._validate_candidate(current, must_exist=True, kind="directory")
+        self._create_directory_posix(parts)
         return normalized
 
     def list_directories(self, relative: Path | str = ".") -> tuple[str, ...]:
-        base = self.resolve_relative(relative, must_exist=True, kind="directory")
-        prefix = self.relative_from_path(base)
+        self._require_secure_operations()
+        normalized = self.normalize(relative, allow_root=True)
+        parts = () if normalized == "." else tuple(normalized.split("/"))
+        directory_fd = self._open_parent_fd(parts)
         discovered: list[str] = []
         try:
-            with os.scandir(base) as entries:
+            with os.scandir(directory_fd) as entries:
                 for entry in entries:
                     if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
                         continue
-                    entry_path = Path(entry.path)
-                    if self._is_junction(entry_path):
+                    child_fd: int | None = None
+                    try:
+                        child_fd = os.open(
+                            entry.name,
+                            self._directory_open_flags(),
+                            dir_fd=directory_fd,
+                        )
+                        public = entry.name if normalized == "." else f"{normalized}/{entry.name}"
+                        discovered.append(self.normalize(public))
+                    except WorkspaceInputError:
                         continue
-                    public = entry.name if prefix == "." else f"{prefix}/{entry.name}"
-                    discovered.append(self.normalize(public))
+                    except OSError as error:
+                        raise self._translated_os_error(error, symlink_is_escape=True) from None
+                    finally:
+                        if child_fd is not None:
+                            os.close(child_fd)
         except WorkspaceBoundaryError:
             raise
-        except OSError as exc:
-            raise WorkspaceTypeError() from exc
+        except OSError:
+            raise WorkspaceTypeError() from None
+        finally:
+            os.close(directory_fd)
         return tuple(sorted(discovered, key=str.casefold))
 
     def walk_regular_files(self, relative: Path | str = ".") -> tuple[str, ...]:
-        base = self.resolve_relative(relative, must_exist=True, kind="directory")
+        self._require_secure_operations()
+        normalized = self.normalize(relative, allow_root=True)
+        parts = () if normalized == "." else tuple(normalized.split("/"))
+        directory_fd = self._open_parent_fd(parts)
         files: list[str] = []
-        self._walk_regular_files(base, files)
+        try:
+            self._walk_regular_files_fd(directory_fd, normalized, files)
+        finally:
+            os.close(directory_fd)
         return tuple(sorted(files, key=str.casefold))
 
     def open_regular_file(self, relative: Path | str) -> BinaryIO:
+        self._require_secure_operations()
         normalized = self.normalize(relative)
         parts = tuple(normalized.split("/"))
-        self.resolve_relative(normalized, must_exist=True, kind="file")
-        if self._supports_secure_dir_fd():
-            parent_fd = self._open_parent_fd(parts[:-1])
-            try:
-                flags = os.O_RDONLY | self._nofollow_flag() | self._cloexec_flag()
-                try:
-                    file_fd = os.open(parts[-1], flags, dir_fd=parent_fd)
-                except OSError as exc:
-                    raise self._translated_os_error(exc, symlink_is_escape=True) from exc
-            finally:
-                os.close(parent_fd)
-            try:
-                if not stat.S_ISREG(os.fstat(file_fd).st_mode):
-                    raise WorkspaceTypeError()
-                return os.fdopen(file_fd, "rb")
-            except Exception:
-                os.close(file_fd)
-                raise
-
-        candidate = self.resolve_relative(normalized, must_exist=True, kind="file")
+        parent_fd = self._open_parent_fd(parts[:-1])
         try:
-            file_fd = os.open(candidate, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+            try:
+                file_fd = os.open(
+                    parts[-1],
+                    os.O_RDONLY
+                    | self._nofollow_flag()
+                    | self._cloexec_flag()
+                    | getattr(os, "O_NONBLOCK", 0),
+                    dir_fd=parent_fd,
+                )
+            except OSError as error:
+                raise self._translated_os_error(error, symlink_is_escape=True) from None
+        finally:
+            os.close(parent_fd)
+        try:
             if not stat.S_ISREG(os.fstat(file_fd).st_mode):
                 raise WorkspaceTypeError()
-            if candidate.resolve(strict=True).is_relative_to(self._root) is False:
-                raise WorkspaceEscapeError()
             return os.fdopen(file_fd, "rb")
         except WorkspaceBoundaryError:
-            if "file_fd" in locals():
-                os.close(file_fd)
+            os.close(file_fd)
             raise
-        except OSError as exc:
-            if "file_fd" in locals():
-                os.close(file_fd)
-            raise self._translated_os_error(exc, symlink_is_escape=True) from exc
+        except (OSError, ValueError):
+            os.close(file_fd)
+            raise WorkspaceTypeError() from None
 
     def create_file_exclusive(self, relative: Path | str) -> BinaryIO:
+        self._require_secure_operations()
         normalized = self.normalize(relative)
         parts = tuple(normalized.split("/"))
-        parent_relative = "/".join(parts[:-1]) or "."
-        self.resolve_relative(parent_relative, must_exist=True, kind="directory")
-        candidate = self._root.joinpath(*parts)
-        self._validate_candidate(candidate, must_exist=False, kind=None)
-
         flags = (
             os.O_WRONLY
             | os.O_CREAT
@@ -250,27 +278,24 @@ class WorkspaceBoundary:
             | self._cloexec_flag()
             | getattr(os, "O_BINARY", 0)
         )
-        parent_fd: int | None = None
+        parent_fd = self._open_parent_fd(parts[:-1])
         try:
-            if self._supports_secure_dir_fd():
-                parent_fd = self._open_parent_fd(parts[:-1])
+            try:
                 file_fd = os.open(parts[-1], flags, 0o600, dir_fd=parent_fd)
-            else:
-                file_fd = os.open(candidate, flags, 0o600)
+            except OSError as error:
+                raise self._translated_os_error(error, symlink_is_escape=True) from None
+        finally:
+            os.close(parent_fd)
+        try:
             if not stat.S_ISREG(os.fstat(file_fd).st_mode):
                 raise WorkspaceTypeError()
             return os.fdopen(file_fd, "wb")
         except WorkspaceBoundaryError:
-            if "file_fd" in locals():
-                os.close(file_fd)
+            os.close(file_fd)
             raise
-        except OSError as exc:
-            if "file_fd" in locals():
-                os.close(file_fd)
-            raise self._translated_os_error(exc, symlink_is_escape=True) from exc
-        finally:
-            if parent_fd is not None:
-                os.close(parent_fd)
+        except (OSError, ValueError):
+            os.close(file_fd)
+            raise WorkspaceTypeError() from None
 
     def _validate_candidate(
         self,
@@ -281,8 +306,8 @@ class WorkspaceBoundary:
     ) -> Path:
         try:
             candidate.relative_to(self._root)
-        except ValueError as exc:
-            raise WorkspaceEscapeError() from exc
+        except ValueError:
+            raise WorkspaceEscapeError() from None
 
         relative_parts = candidate.relative_to(self._root).parts
         current = self._root
@@ -296,8 +321,8 @@ class WorkspaceBoundary:
                     raise WorkspaceNotFoundError()
                 final_stat = None
                 break
-            except OSError as exc:
-                raise WorkspaceTypeError() from exc
+            except OSError:
+                raise WorkspaceTypeError() from None
             if stat.S_ISLNK(current_stat.st_mode) or self._is_junction(current):
                 raise WorkspaceEscapeError()
             if index < len(relative_parts) - 1 and not stat.S_ISDIR(current_stat.st_mode):
@@ -306,12 +331,12 @@ class WorkspaceBoundary:
 
         try:
             resolved = candidate.resolve(strict=must_exist)
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             if must_exist:
-                raise WorkspaceNotFoundError() from exc
+                raise WorkspaceNotFoundError() from None
             resolved = candidate.resolve(strict=False)
-        except OSError as exc:
-            raise WorkspaceTypeError() from exc
+        except OSError:
+            raise WorkspaceTypeError() from None
         if not resolved.is_relative_to(self._root):
             raise WorkspaceEscapeError()
 
@@ -320,8 +345,8 @@ class WorkspaceBoundary:
         if candidate == self._root:
             try:
                 final_stat = self._root.lstat()
-            except OSError as exc:
-                raise WorkspaceTypeError() from exc
+            except OSError:
+                raise WorkspaceTypeError() from None
         if final_stat is not None and not (
             stat.S_ISREG(final_stat.st_mode) or stat.S_ISDIR(final_stat.st_mode)
         ):
@@ -332,52 +357,147 @@ class WorkspaceBoundary:
             raise WorkspaceTypeError()
         return candidate
 
-    def _walk_regular_files(self, directory: Path, files: list[str]) -> None:
+    def _walk_regular_files_fd(
+        self,
+        directory_fd: int,
+        prefix: str,
+        files: list[str],
+    ) -> None:
         try:
-            with os.scandir(directory) as entries:
+            with os.scandir(directory_fd) as entries:
                 ordered = sorted(entries, key=lambda entry: entry.name.casefold())
             for entry in ordered:
-                entry_path = Path(entry.path)
-                if entry.is_symlink() or self._is_junction(entry_path):
+                if entry.is_symlink():
                     continue
                 try:
                     entry_stat = entry.stat(follow_symlinks=False)
-                except OSError as exc:
-                    raise WorkspaceTypeError() from exc
+                except OSError:
+                    raise WorkspaceTypeError() from None
+                public = entry.name if prefix == "." else f"{prefix}/{entry.name}"
+                try:
+                    public = self.normalize(public)
+                except WorkspaceInputError:
+                    continue
                 if stat.S_ISDIR(entry_stat.st_mode):
-                    self._walk_regular_files(entry_path, files)
+                    child_fd: int | None = None
+                    try:
+                        child_fd = os.open(
+                            entry.name,
+                            self._directory_open_flags(),
+                            dir_fd=directory_fd,
+                        )
+                        self._walk_regular_files_fd(child_fd, public, files)
+                    except OSError as error:
+                        raise self._translated_os_error(
+                            error,
+                            symlink_is_escape=True,
+                        ) from None
+                    finally:
+                        if child_fd is not None:
+                            os.close(child_fd)
                 elif stat.S_ISREG(entry_stat.st_mode):
-                    files.append(self.relative_from_path(entry_path))
+                    file_fd: int | None = None
+                    try:
+                        file_fd = os.open(
+                            entry.name,
+                            os.O_RDONLY
+                            | self._nofollow_flag()
+                            | self._cloexec_flag()
+                            | getattr(os, "O_NONBLOCK", 0),
+                            dir_fd=directory_fd,
+                        )
+                        if stat.S_ISREG(os.fstat(file_fd).st_mode):
+                            files.append(public)
+                    except OSError as error:
+                        raise self._translated_os_error(
+                            error,
+                            symlink_is_escape=True,
+                        ) from None
+                    finally:
+                        if file_fd is not None:
+                            os.close(file_fd)
         except WorkspaceBoundaryError:
             raise
-        except OSError as exc:
-            raise WorkspaceTypeError() from exc
+        except OSError:
+            raise WorkspaceTypeError() from None
 
-    def _create_directory_posix(self, parts: tuple[str, ...]) -> None:
-        flags = os.O_RDONLY | self._directory_flag() | self._nofollow_flag() | self._cloexec_flag()
+    def _create_absolute_directory(self, target: Path) -> None:
+        anchor = Path(target.anchor)
         try:
-            current_fd = os.open(self._root, flags)
-        except OSError as exc:
-            raise self._translated_os_error(exc, symlink_is_escape=True) from exc
+            parts = target.relative_to(anchor).parts
+            current_fd = os.open(anchor, self._directory_open_flags())
+        except (OSError, ValueError):
+            raise WorkspaceTypeError() from None
         try:
             for part in parts:
                 try:
                     os.mkdir(part, 0o700, dir_fd=current_fd)
                 except FileExistsError:
                     pass
-                except OSError as exc:
-                    raise self._translated_os_error(exc, symlink_is_escape=True) from exc
+                except OSError as error:
+                    raise self._translated_os_error(
+                        error,
+                        symlink_is_escape=True,
+                    ) from None
+                try:
+                    next_fd = os.open(
+                        part,
+                        self._directory_open_flags(),
+                        dir_fd=current_fd,
+                    )
+                except OSError as error:
+                    raise self._translated_os_error(
+                        error,
+                        symlink_is_escape=True,
+                    ) from None
+                os.close(current_fd)
+                current_fd = next_fd
+        finally:
+            os.close(current_fd)
+
+    def _reject_link_components(self, target: Path) -> None:
+        anchor = Path(target.anchor)
+        current = anchor
+        try:
+            parts = target.relative_to(anchor).parts
+        except ValueError:
+            raise WorkspaceInputError() from None
+        for part in parts:
+            current = current / part
+            try:
+                current_stat = current.lstat()
+            except FileNotFoundError:
+                raise WorkspaceNotFoundError() from None
+            except OSError:
+                raise WorkspaceTypeError() from None
+            if stat.S_ISLNK(current_stat.st_mode) or self._is_junction(current):
+                raise WorkspaceEscapeError()
+
+    def _create_directory_posix(self, parts: tuple[str, ...]) -> None:
+        flags = self._directory_open_flags()
+        try:
+            current_fd = os.open(self._root, flags)
+        except OSError as error:
+            raise self._translated_os_error(error, symlink_is_escape=True) from None
+        try:
+            for part in parts:
+                try:
+                    os.mkdir(part, 0o700, dir_fd=current_fd)
+                except FileExistsError:
+                    pass
+                except OSError as error:
+                    raise self._translated_os_error(error, symlink_is_escape=True) from None
                 try:
                     next_fd = os.open(part, flags, dir_fd=current_fd)
-                except OSError as exc:
-                    raise self._translated_os_error(exc, symlink_is_escape=True) from exc
+                except OSError as error:
+                    raise self._translated_os_error(error, symlink_is_escape=True) from None
                 os.close(current_fd)
                 current_fd = next_fd
         finally:
             os.close(current_fd)
 
     def _open_parent_fd(self, parts: tuple[str, ...]) -> int:
-        flags = os.O_RDONLY | self._directory_flag() | self._nofollow_flag() | self._cloexec_flag()
+        flags = self._directory_open_flags()
         try:
             current_fd = os.open(self._root, flags)
             for part in parts:
@@ -385,13 +505,17 @@ class WorkspaceBoundary:
                 os.close(current_fd)
                 current_fd = next_fd
             return current_fd
-        except OSError as exc:
+        except OSError as error:
             if "current_fd" in locals():
                 os.close(current_fd)
-            raise self._translated_os_error(exc, symlink_is_escape=True) from exc
+            raise self._translated_os_error(error, symlink_is_escape=True) from None
 
-    def _supports_secure_dir_fd(self) -> bool:
-        return os.name != "nt" and os.open in os.supports_dir_fd and os.mkdir in os.supports_dir_fd
+    def _require_secure_operations(self) -> None:
+        if not _secure_dir_fd_available():
+            raise WorkspaceUnsupportedError()
+
+    def _directory_open_flags(self) -> int:
+        return os.O_RDONLY | self._directory_flag() | self._nofollow_flag() | self._cloexec_flag()
 
     @staticmethod
     def _nofollow_flag() -> int:
@@ -413,6 +537,8 @@ class WorkspaceBoundary:
             return False
         if len(component) > 255:
             return False
+        if any(character in _WINDOWS_INVALID_CHARS for character in component):
+            return False
         base = component.split(".", 1)[0].upper()
         return base not in _WINDOWS_RESERVED_NAMES
 
@@ -423,8 +549,8 @@ class WorkspaceBoundary:
             return False
         try:
             return bool(checker())
-        except OSError as exc:
-            raise WorkspaceTypeError() from exc
+        except OSError:
+            raise WorkspaceTypeError() from None
 
     @staticmethod
     def _translated_os_error(
@@ -436,6 +562,6 @@ class WorkspaceBoundary:
             return WorkspaceExistsError()
         if isinstance(error, FileNotFoundError) or error.errno == errno.ENOENT:
             return WorkspaceNotFoundError()
-        if symlink_is_escape and error.errno in {errno.ELOOP, errno.ENOTDIR}:
+        if symlink_is_escape and error.errno == errno.ELOOP:
             return WorkspaceEscapeError()
         return WorkspaceTypeError()
