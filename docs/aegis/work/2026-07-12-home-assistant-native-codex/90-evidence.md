@@ -58,6 +58,23 @@ Build metadata now accepts only bounded SemVer, supported architectures, exact G
 
 Codex subprocesses no longer copy the parent environment. The builder retains only validated executable paths, dedicated home/Codex home, safe temporary paths, structured locales, platform essentials, and existing certificate paths. Supervisor, HA, Bridge, OpenAI, GitHub, CI, cookie, authorization, proxy, and unrelated values are excluded. Realistic carrier forms are rejected even when embedded in an otherwise allowlisted value. Legacy fake-runner controls are injected only inside their tests.
 
+## Task 3A — descriptor-anchored workspace boundary
+
+| Evidence | Result |
+|----------|--------|
+| Initial RED | New test module failed collection because `codex_bridge_service.workspace` did not exist |
+| Initial platform GREEN | Windows 40 passed/5 unavailable; Linux 45/45 |
+| Review challenge | Initial implementation rejected for Windows TOCTOU fallback, path-based list/walk races, FIFO blocking, traceback causes, and portable-name gaps |
+| Hardened Windows GREEN | 54 passed, 15 protected-I/O capability skips |
+| Hardened Linux GREEN | 69 passed, zero skips, including descriptor/root-ancestor swaps, symlinks, FIFO, and special files |
+| Full Bridge GREEN | 384 passed, 15 Windows capability skips in 18.75s |
+| Spec review | Approved with no remaining findings after Unicode/device-alias and uniform link-error fixes |
+| Code-quality review | Ready: Yes after reproducing and fixing the root-ancestor escape; final Minor regression suggestion also fixed |
+| Build/diff hygiene | `compileall` and `git diff --check` passed; worktree clean |
+| Commits | `ccfbb20`, `ee38aed`, `13baaeb`, `f2072b0`, `6f3ffb6` |
+
+The accepted boundary holds a trusted root descriptor and duplicates it for every protected operation. POSIX `dir_fd`, `O_NOFOLLOW`, `O_DIRECTORY`, exclusive creation, nonblocking special-file checks, descriptor-based listing/walking, and inode verification prevent lexical, symlink, ancestor-swap, and final-entry races. Unsupported platforms retain validation-only behavior and reject protected I/O; the Windows external legacy profile remains separate. Public names and errors are relative and redacted, including formatted exception chains.
+
 ## Evidence status
 
 This is draft evidence for continuation. It does not prove the HA App, sandbox, proxy, release, or cutover.
