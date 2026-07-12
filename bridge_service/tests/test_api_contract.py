@@ -24,6 +24,18 @@ EXPECTED_BUILD_ENVIRONMENT_KEYS = {
     "CODEX_BRIDGE_RELEASE_LOCK_DIGEST",
 }
 
+BUILD_ENVIRONMENT_KEYS = tuple(sorted(EXPECTED_BUILD_ENVIRONMENT_KEYS))
+
+UNSAFE_BUILD_VALUES = (
+    "Bearer request-token-must-not-escape",
+    "https://example.com/private?token=secret",
+    "person@example.com",
+    "C:\\Users\\Person\\private\\auth.json",
+    "safe-looking\nvalue\x00secret",
+    "summarize all of my private work files",
+    "x" * 129,
+)
+
 
 class TrackingEnvironment(Mapping[str, str]):
     def __init__(self, values: dict[str, str]) -> None:
@@ -167,3 +179,64 @@ def test_build_info_normalizes_missing_or_blank_values_without_mutation() -> Non
 
     with pytest.raises(ValidationError):
         build.architecture = "amd64"
+
+
+@pytest.mark.parametrize("environment_key", BUILD_ENVIRONMENT_KEYS)
+@pytest.mark.parametrize("unsafe_value", UNSAFE_BUILD_VALUES)
+def test_build_info_never_serializes_unsafe_allowlisted_values(
+    environment_key: str,
+    unsafe_value: str,
+) -> None:
+    build = BuildInfo.from_environment({environment_key: unsafe_value})
+    payload = build.model_dump()
+
+    assert unsafe_value not in payload.values()
+    assert unsafe_value not in repr(build)
+    assert unsafe_value not in repr(payload)
+
+
+@pytest.mark.parametrize(
+    "environment_key",
+    [
+        "CODEX_BRIDGE_APP_VERSION",
+        "CODEX_BRIDGE_VERSION",
+        "CODEX_BRIDGE_CODEX_VERSION",
+    ],
+)
+@pytest.mark.parametrize(
+    "safe_value",
+    [
+        "1",
+        "v0.6.0-ha_1+local",
+        "A" + ("z" * 63),
+    ],
+)
+def test_build_info_accepts_bounded_safe_version_values(
+    environment_key: str,
+    safe_value: str,
+) -> None:
+    build = BuildInfo.from_environment({environment_key: safe_value})
+
+    assert safe_value in build.model_dump().values()
+
+
+@pytest.mark.parametrize("architecture", ["amd64", "aarch64"])
+def test_build_info_accepts_only_supported_architectures(architecture: str) -> None:
+    build = BuildInfo.from_environment({"CODEX_BRIDGE_ARCH": architecture})
+
+    assert build.architecture == architecture
+
+
+def test_build_info_accepts_bounded_image_revision_and_normalizes_digest() -> None:
+    image_revision = "r" + ("A" * 126) + "@"
+    uppercase_digest = "ABCDEF0123456789" * 4
+
+    build = BuildInfo.from_environment(
+        {
+            "CODEX_BRIDGE_IMAGE_REVISION": image_revision,
+            "CODEX_BRIDGE_RELEASE_LOCK_DIGEST": uppercase_digest,
+        }
+    )
+
+    assert build.image_revision == image_revision
+    assert build.release_lock_digest == uppercase_digest.lower()
