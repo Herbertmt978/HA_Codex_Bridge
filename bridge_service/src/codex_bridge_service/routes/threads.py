@@ -90,11 +90,18 @@ def create_thread(
         or payload.thinking_override is not None
     )
     model_catalog = request.app.state.model_catalog_probe.probe() if needs_catalog else None
+    if model_catalog is not None:
+        request.app.state.storage.reconcile_special_projects(
+            default_model=model_catalog.default_model,
+            default_thinking_level=model_catalog.default_thinking_level,
+            defaults_provisional=model_catalog.stale,
+        )
     try:
         if payload.project_id is None:
             project = request.app.state.storage.ensure_direct_project(
                 default_model=model_catalog.default_model,
                 default_thinking_level=model_catalog.default_thinking_level,
+                defaults_provisional=model_catalog.stale,
             )
         else:
             project = request.app.state.storage.load_project(payload.project_id)
@@ -130,6 +137,7 @@ def create_thread(
         create_kwargs.update(
             direct_default_model=model_catalog.default_model,
             direct_default_thinking_level=model_catalog.default_thinking_level,
+            direct_defaults_provisional=model_catalog.stale,
         )
     try:
         return request.app.state.storage.create_thread(

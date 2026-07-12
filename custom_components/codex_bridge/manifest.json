@@ -1,9 +1,12 @@
 {
   "domain": "codex_bridge",
   "name": "Codex Bridge",
+  "documentation": "https://github.com/Herbertmt978/ha-codex-bridge#readme",
+  "issue_tracker": "https://github.com/Herbertmt978/ha-codex-bridge/issues",
+  "codeowners": ["@Herbertmt978"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom"],
   "integration_type": "service",
   "iot_class": "local_push",
-  "version": "0.5.0"
+  "version": "0.5.1"
 }

@@ -2,7 +2,7 @@
 param(
     [string]$CodexPath = "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe",
 
-    [string]$UpdaterPath = (Join-Path $PSScriptRoot "Update-Codex.ps1"),
+    [string]$UpdaterPath,
 
     [string]$LogPath = "C:\CodexHA\logs\codex-update.log",
 
@@ -18,6 +18,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($UpdaterPath)) {
+    $UpdaterPath = Join-Path $PSScriptRoot "Update-Codex.ps1"
+}
 
 if ($Uninstall) {
     Write-Output "Scheduled task: $TaskName"

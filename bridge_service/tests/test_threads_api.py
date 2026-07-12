@@ -13,9 +13,11 @@ from codex_bridge_service.models import (
     CodexAuthStatusRecord,
     CodexModelCatalogRecord,
     CodexModelRecord,
+    RunMode,
     RunRecord,
 )
 from codex_bridge_service.runner import BridgeRunner
+from codex_bridge_service.storage import BridgeStorage
 
 
 class FakeRunner:
@@ -115,6 +117,38 @@ class FakeModelCatalogProbe:
             configured_thinking_level="ultra",
             refreshed_at="2026-07-12T00:00:00Z",
         )
+
+
+class FakeFallbackModelCatalogProbe:
+    def probe(self) -> CodexModelCatalogRecord:
+        return CodexModelCatalogRecord(
+            source="fallback",
+            models=[
+                CodexModelRecord(
+                    model=DEFAULT_MODEL,
+                    display_name=DEFAULT_MODEL,
+                    is_default=True,
+                    default_thinking_level=DEFAULT_THINKING_LEVEL,
+                    thinking_levels=[DEFAULT_THINKING_LEVEL],
+                )
+            ],
+            default_model=DEFAULT_MODEL,
+            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            stale=True,
+            error="temporary startup discovery failure",
+        )
+
+
+class RecoveringModelCatalogProbe:
+    def __init__(self, *, fallback_calls: int = 3) -> None:
+        self.calls = 0
+        self.fallback_calls = fallback_calls
+
+    def probe(self) -> CodexModelCatalogRecord:
+        self.calls += 1
+        if self.calls <= self.fallback_calls:
+            return FakeFallbackModelCatalogProbe().probe()
+        return FakeModelCatalogProbe().probe()
 
 
 class FakeAuthManager:
@@ -220,6 +254,103 @@ def test_project_without_explicit_settings_uses_configured_codex_defaults(tmp_pa
     assert response.status_code == 201
     assert response.json()["default_model"] == "gpt-5.6-sol"
     assert response.json()["default_thinking_level"] == "ultra"
+
+
+def test_startup_does_not_seed_special_projects_from_fallback_catalog(tmp_path) -> None:
+    create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeFallbackModelCatalogProbe(),
+        initialize_special_projects=True,
+    )
+
+    assert not (tmp_path / "projects" / "prj_direct.json").exists()
+
+
+def test_startup_seeds_special_projects_from_fresh_catalog(tmp_path) -> None:
+    create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+        initialize_special_projects=True,
+    )
+
+    direct = json.loads(
+        (tmp_path / "projects" / "prj_direct.json").read_text(encoding="utf-8")
+    )
+    assert direct["default_model"] == "gpt-5.6-sol"
+    assert direct["default_thinking_level"] == "ultra"
+
+
+def test_special_project_provisional_defaults_recover_with_fresh_catalog(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=RecoveringModelCatalogProbe(),
+        initialize_special_projects=True,
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    stale_direct = client.get("/projects", headers=headers).json()[0]
+    stale_thread = client.post(
+        "/threads",
+        headers=headers,
+        json={"title": "Created during discovery outage"},
+    ).json()
+    fresh_direct = client.get("/projects", headers=headers).json()[0]
+    preserved_thread = client.get(
+        f"/threads/{stale_thread['thread_id']}",
+        headers=headers,
+    ).json()
+
+    assert stale_direct["default_model"] == DEFAULT_MODEL
+    assert stale_direct["default_thinking_level"] == DEFAULT_THINKING_LEVEL
+    assert stale_direct["defaults_origin"] == "fallback"
+    assert fresh_direct["default_model"] == "gpt-5.6-sol"
+    assert fresh_direct["default_thinking_level"] == "ultra"
+    assert fresh_direct["defaults_origin"] == "codex"
+    assert preserved_thread["model_override"] == DEFAULT_MODEL
+    assert preserved_thread["thinking_override"] == DEFAULT_THINKING_LEVEL
+    assert preserved_thread["effective_model"] == DEFAULT_MODEL
+    assert preserved_thread["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
+
+
+def test_legacy_special_defaults_defer_until_catalog_recovers(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    direct = initial_storage.ensure_direct_project()
+    existing_thread = initial_storage.create_thread(
+        title="Existing 0.5.0 chat",
+        project_id=direct.project_id,
+        mode=RunMode.FULL_AUTO,
+    )
+    project_path = tmp_path / "projects" / "prj_direct.json"
+    legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
+    legacy_payload.pop("defaults_origin")
+    project_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=RecoveringModelCatalogProbe(fallback_calls=1),
+        initialize_special_projects=True,
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    recovered_direct = client.get("/projects", headers=headers).json()[0]
+    preserved_thread = client.get(
+        f"/threads/{existing_thread.thread_id}",
+        headers=headers,
+    ).json()
+
+    assert recovered_direct["default_model"] == "gpt-5.6-sol"
+    assert recovered_direct["default_thinking_level"] == "ultra"
+    assert recovered_direct["defaults_origin"] == "codex"
+    assert preserved_thread["model_override"] == DEFAULT_MODEL
+    assert preserved_thread["thinking_override"] == DEFAULT_THINKING_LEVEL
+    assert preserved_thread["effective_model"] == DEFAULT_MODEL
+    assert preserved_thread["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
 
 
 def test_project_with_only_model_uses_that_models_default_thinking_level(tmp_path) -> None:

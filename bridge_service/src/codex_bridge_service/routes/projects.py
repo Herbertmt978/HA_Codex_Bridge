@@ -65,9 +65,15 @@ def list_projects(
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
+    request.app.state.storage.reconcile_special_projects(
+        default_model=model_catalog.default_model,
+        default_thinking_level=model_catalog.default_thinking_level,
+        defaults_provisional=model_catalog.stale,
+    )
     return request.app.state.storage.list_projects(
         default_model=model_catalog.default_model,
         default_thinking_level=model_catalog.default_thinking_level,
+        defaults_provisional=model_catalog.stale,
     )
 
 

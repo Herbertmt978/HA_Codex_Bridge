@@ -32,9 +32,9 @@ def create_app(
         codex_home=codex_home,
     )
 
-    def special_project_defaults() -> tuple[str, str]:
+    def special_project_defaults() -> tuple[str, str, bool]:
         catalog = resolved_model_catalog_probe.probe()
-        return catalog.default_model, catalog.default_thinking_level
+        return catalog.default_model, catalog.default_thinking_level, catalog.stale
 
     storage = BridgeStorage(
         root_path=root_path,
@@ -42,7 +42,15 @@ def create_app(
         special_project_defaults_provider=special_project_defaults,
     )
     if initialize_special_projects:
-        storage.initialize_special_projects()
+        initial_catalog = resolved_model_catalog_probe.probe()
+        if initial_catalog.stale:
+            storage.defer_special_project_migration()
+        else:
+            storage.initialize_special_projects(
+                default_model=initial_catalog.default_model,
+                default_thinking_level=initial_catalog.default_thinking_level,
+                defaults_provisional=False,
+            )
     app.state.storage = storage
     app.state.auth_token = auth_token
     app.state.account_probe = account_probe

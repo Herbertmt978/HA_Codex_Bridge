@@ -1,153 +1,292 @@
+<div align="center">
+
+<img src="brand/logo.png" alt="Codex Bridge" width="420">
+
 # Home Assistant Codex Bridge
 
-This repository turns Home Assistant into the only browser-visible surface for talking to Codex on a Windows machine.
+### Use Codex from Home Assistant while the agent, credentials, and workspaces stay on a dedicated machine.
 
-The flow is:
+[![Latest release](https://img.shields.io/github/v/release/Herbertmt978/ha-codex-bridge?display_name=tag&sort=semver)](https://github.com/Herbertmt978/ha-codex-bridge/releases/latest)
+[![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
+![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![Admin only](https://img.shields.io/badge/Home%20Assistant-Admin%20only-18BCF2?logo=home-assistant&logoColor=white)
 
-1. A small bridge service runs next to Codex on Windows.
-2. Home Assistant connects to that bridge with a token.
-3. The Home Assistant panel proxies project management, thread creation, prompts, uploads, event polling, and artifact downloads.
-4. Your work browser only ever talks to Home Assistant.
+[Quick start](#quick-start) · [Features](#what-you-get) · [Automatic models](#automatic-model-discovery) · [Security](#security) · [Home Assistant app](#could-this-run-as-a-home-assistant-app) · [Uninstall](#uninstall) · [Development](#development)
 
-## What is included
+</div>
 
-- `bridge_service/`
-  - FastAPI bridge for project/thread storage, prompt execution, uploads, event replay, limit snapshots, and artifact downloads.
-  - Background runner that shells out to `codex exec --json` / `codex exec resume --json`.
-- `custom_components/codex_bridge/`
-  - Home Assistant custom integration with config flow.
-  - WebSocket proxy commands for projects, threads, prompts, status, Codex VM auth, events, and artifacts.
-  - Authenticated HTTP proxy views for uploads and downloads.
-  - Full-screen Home Assistant panel UI for project-first chat, file uploads, artifact downloads, model controls, limit status, and copy-friendly responses.
+---
 
-## Project-first panel features
+Home Assistant is a convenient place to start a coding task, but Codex needs a real machine, persistent credentials, and access to real project folders. This bridge connects those two environments without exposing the Windows desktop or Codex CLI directly to the browser.
 
-- Projects map to real folders on the Windows VM.
-- Direct chats exist outside projects and are managed in the same left rail.
-- Chats live under projects and inherit project defaults for:
-  - model
-  - thinking level
-- The model picker is populated from the configured VM Codex executable at runtime, including each model's supported thinking levels.
-- New projects inherit the effective Codex model and reasoning defaults instead of a bridge release's hard-coded values.
-- Per-chat overrides can diverge from the project defaults without changing the whole project.
-- The panel surfaces live 5-hour and weekly limit snapshots from the Codex auth session when available.
-- Expired Codex logins are shown clearly with a VM sign-in action and copyable device-code details.
-- Chats can be archived, restored, or deleted from the left rail.
-- Folder uploads preserve relative paths for larger VBA/codebase drops.
-- Workspace artifacts can be previewed in-panel for text, image, and PDF outputs.
-- The right-side panel shows progress, artifacts, previews, and workspace details without duplicating attachment management.
-- A one-click workspace archive action can bundle workspace files and uploads into a downloadable zip artifact.
-- Assistant messages have explicit copy buttons and are rendered in stable selectable blocks so code can be copied cleanly from Edge.
+If you already use a remote development VM, the shape is familiar. The bridge adds a Home Assistant-native project/chat interface, authenticated proxying, artifact handling, and model discovery from the installed Codex CLI.
 
-## Bridge service setup
+> [!IMPORTANT]
+> **Trust and access:** the bridge can run Codex commands and read or write the workspaces you assign to it. It stores metadata, uploads, logs, and artifacts under its configured root. Home Assistant-to-bridge traffic carries a bearer token; keep plain HTTP on a trusted private network or place it behind HTTPS/private tunnelling. The integration panel, WebSocket commands, uploads, and downloads are restricted to Home Assistant administrators.
 
-From `ha-codex-bridge/bridge_service`:
+## Quick start
+
+### Requirements
+
+- Home Assistant with HACS, or permission to install a custom integration manually.
+- A Windows machine or VM that stays online and can reach Home Assistant and OpenAI.
+- Python 3.12 or newer.
+- The [Codex CLI](https://github.com/openai/codex) installed and signed in on that Windows account.
+
+### 1. Install the bridge on Windows
 
 ```powershell
-python -m pip install -e .[test]
+git clone https://github.com/Herbertmt978/ha-codex-bridge.git C:\CodexHA\ha-codex-bridge
+cd C:\CodexHA\ha-codex-bridge
+
+py -3.12 -m venv C:\CodexHA\.venv
+C:\CodexHA\.venv\Scripts\python.exe -m pip install `
+  .\bridge_service\dist\codex_bridge_service-0.5.1-py3-none-any.whl
 ```
 
-Set the bridge environment variables on the Windows machine that can run Codex:
+Generate a token and configure the process:
 
 ```powershell
-$bridgeToken = python -c "import secrets; print(secrets.token_urlsafe(32))"
-$env:CODEX_BRIDGE_HOST = "127.0.0.1"
+$bridgeToken = & C:\CodexHA\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
+
+$env:CODEX_BRIDGE_HOST = "0.0.0.0"
 $env:CODEX_BRIDGE_PORT = "8766"
-$env:CODEX_BRIDGE_ROOT_PATH = "C:\\CodexHA"
+$env:CODEX_BRIDGE_ROOT_PATH = "C:\CodexHA"
 $env:CODEX_BRIDGE_AUTH_TOKEN = $bridgeToken
-$env:CODEX_BRIDGE_CODEX_WRAPPER_PATH = "$env:LOCALAPPDATA\\Programs\\OpenAI\\Codex\\bin\\codex.exe"
-$env:CODEX_BRIDGE_BYPASS_SANDBOX = "1"
-$env:CODEX_BRIDGE_RUN_IDLE_TIMEOUT_SECONDS = "1800"
-$env:CODEX_BRIDGE_MODEL_DISCOVERY_TIMEOUT_SECONDS = "10"
-$env:CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS = "600"
+$env:CODEX_BRIDGE_CODEX_WRAPPER_PATH = "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe"
+
+C:\CodexHA\.venv\Scripts\codex-bridge-service.exe
 ```
 
-Store the generated token securely and enter the same value in Home Assistant. Version 0.5.0 refuses missing tokens, tokens shorter than 32 characters, and the old documentation placeholders; validation errors are configured not to echo a rejected token.
+Store the token securely. The same value is entered in Home Assistant, and it must be at least 32 characters. Do not commit it or paste it into logs.
 
-Then start the bridge:
+The example keeps Codex's normal sandbox behavior. On a disposable, isolated VM where the Windows sandbox helper is unavailable, you may opt into `CODEX_BRIDGE_BYPASS_SANDBOX=1`; doing so lets Codex access anything available to the Windows account, not just folders listed in the panel.
+
+This is a foreground smoke start: closing PowerShell stops the bridge. Once it is verified, run the same command through Windows Task Scheduler or your service manager under the dedicated bridge account. Keep the environment/token launcher readable only by that account, start it at boot, and use `C:\CodexHA` as the working directory. This repository does not silently register the bridge itself as a Windows service.
+
+### 2. Install the Home Assistant integration
+
+Use the HACS badge above, or add this repository as a HACS custom repository with category **Integration**. Open **Codex Bridge** in HACS and choose **Download** before restarting Home Assistant.
+
+Then:
+
+1. Restart Home Assistant.
+2. Open **Settings → Devices & services → Add integration**.
+3. Search for **Codex Bridge**.
+4. Enter the Windows bridge URL, token, and desired sidebar title.
+5. Open **Codex Bridge** from the Home Assistant sidebar.
+
+<details>
+<summary><b>Manual Home Assistant installation</b></summary>
+
+Copy `custom_components/codex_bridge` from this repository to:
+
+```text
+/config/custom_components/codex_bridge
+```
+
+Restart Home Assistant, then add **Codex Bridge** from **Settings → Devices & services**. Repeat the copy after each manual upgrade.
+
+</details>
+
+For example, Home Assistant might reach the VM at:
+
+```text
+http://192.168.1.50:8766
+```
+
+### 3. Confirm it is working
+
+From the VM, a healthy authenticated bridge returns:
 
 ```powershell
-codex-bridge-service
+$headers = @{ Authorization = "Bearer $env:CODEX_BRIDGE_AUTH_TOKEN" }
+
+Invoke-RestMethod http://127.0.0.1:8766/ready -Headers $headers
+# status
+# ------
+# ok
+
+(Invoke-RestMethod http://127.0.0.1:8766/status -Headers $headers).model_catalog |
+  Select-Object source, default_model, default_thinking_level, stale
+# source             default_model  default_thinking_level stale
+# ------             -------------  ---------------------- -----
+# codex-app-server   gpt-5.6-sol    ultra                  False
 ```
 
-If you prefer a wrapper script, `CODEX_BRIDGE_CODEX_WRAPPER_PATH` can point at a `.ps1` or `.py` file instead of `codex.exe`.
+The exact models come from the installed Codex CLI and can change independently of this README.
 
-The bridge bearer token is sent on every Home Assistant-to-VM request. Keep plain HTTP on a trusted private network only; use an HTTPS reverse proxy or private tunnel when traffic crosses an untrusted network.
+## What you get
 
-`CODEX_BRIDGE_BYPASS_SANDBOX=1` is recommended for isolated Windows VMs where the bridge should run with full local access and the Codex Windows sandbox helper has not been bootstrapped. It keeps file/tool workflows working through the bridge without depending on the missing sandbox setup marker and local sandbox users.
+| Area | Capability |
+| --- | --- |
+| Projects | Map Home Assistant projects to real VM folders and inherit project-level model/reasoning defaults. |
+| Chats | Direct chats, project chats, per-chat overrides, archive/restore/delete, queued prompts, and cancellation. |
+| Models | Runtime model discovery with each model's supported reasoning levels, cached last-known-good data, and safe fallback behavior. |
+| Files | Folder uploads with relative paths, pasted screenshots, workspace archives, previews, and artifact downloads. |
+| Visibility | Account/plan status, 5-hour and weekly limit snapshots, run progress, diagnostics, and tool availability. |
+| Recovery | Device-code sign-in, explicit auth-expired states, idle-run watchdogs, and stale-run recovery after restart. |
+| Security | Required bridge token plus Home Assistant administrator checks across the panel, WebSocket, upload, and download surfaces. |
 
-If Codex reports that the refresh token was already used or a websocket request returns `401 Unauthorized`, the bridge will mark auth as expired and expose a VM sign-in action in Home Assistant. That flow can start and monitor sign-in from HA, but OpenAI still requires the account approval step to be completed from a device/browser that can reach ChatGPT or from the VM console.
+## Automatic model discovery
+
+The bridge asks the configured Codex app-server for its current model catalogue. The Home Assistant picker therefore follows the CLI instead of a hard-coded list:
+
+- newly exposed models appear automatically;
+- each model shows only its advertised reasoning levels;
+- configured models temporarily missing from a response remain selectable;
+- a last-known-good catalogue is used during transient failures;
+- fallback-derived special-project defaults are marked provisional and replaced after discovery recovers, without changing chats created during the outage.
+
+New projects inherit Codex's effective model and reasoning defaults. Existing chats keep explicit or materialized settings when a project default is migrated.
 
 ## Automatic Codex CLI updates
 
-The model catalogue follows the executable configured by `CODEX_BRIDGE_CODEX_WRAPPER_PATH`. To check that executable daily for Codex releases, install the included scheduled task from an elevated PowerShell prompt on the bridge VM (the task itself runs with limited privileges):
+Install the included daily scheduled task from an elevated PowerShell prompt on the bridge VM. The registered task itself runs with limited privileges:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-CodexAutoUpdate.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\Install-CodexAutoUpdate.ps1 `
   -CodexPath "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe" `
   -DailyAt "03:15" `
   -RunNow
 ```
 
-The updater pins the official installer to that exact directory, puts Windows `tar.exe` first for the update process, backs up the launcher/real executable layout, and validates `codex debug models --bundled` after updating. A failed update or model smoke test rolls back automatically. It writes only sanitized version/status lines to `C:\CodexHA\logs\codex-update.log`, retries transient task failures, and never reads or logs bridge credentials. Preview or remove it with:
+The task runs with limited privileges. It pins the official installer to the configured directory, backs up supported launcher layouts, runs the update, and validates the bundled model catalogue. A failed update or smoke test triggers rollback.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-CodexAutoUpdate.ps1 -WhatIf
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-CodexAutoUpdate.ps1 -Uninstall
+Its sanitized log is written to:
+
+```text
+C:\CodexHA\logs\codex-update.log
 ```
 
-## Home Assistant setup
+Preview or uninstall the task:
 
-1. Copy `custom_components/codex_bridge` into your Home Assistant config's `custom_components/` directory, or install the repo through HACS.
-2. Restart Home Assistant.
-3. Add the `Codex Bridge` integration from Settings -> Devices & Services.
-4. Enter:
-   - `Bridge URL`: the Windows bridge URL reachable from Home Assistant, for example `http://192.168.1.50:8766`
-   - `Bridge token`: the same token used by the bridge service
-   - `Panel title`: the sidebar label you want in Home Assistant
-5. Open the new sidebar panel.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\Install-CodexAutoUpdate.ps1 -WhatIf
 
-## Upgrade to 0.5.0
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\Install-CodexAutoUpdate.ps1 -Uninstall
+```
 
-1. Before restarting the VM bridge, replace any token shorter than 32 characters or old placeholder in both the VM service configuration and Home Assistant.
-2. Update the VM bridge service and point `CODEX_BRIDGE_CODEX_WRAPPER_PATH` at the current managed Codex executable.
-3. In HACS, open `Codex Bridge` and choose `Redownload` or update to `0.5.0`.
-4. Restart the VM bridge and Home Assistant.
-5. Hard refresh the browser and open `/codex-bridge`.
+## How it works
 
-After the upgrade, you can:
-- automatically see newly available Codex models, including GPT-5.6 variants, without another bridge code change
-- use the reasoning levels advertised by each model, including `max` and `ultra` where available
-- create projects with the VM's effective Codex model/reasoning defaults
-- retain configured or stored model choices when a temporary catalogue response omits them
-- restrict the panel, WebSocket commands, uploads, and downloads to Home Assistant administrators
-- validate the bridge token during Home Assistant setup instead of accepting any token through the public health endpoint
-- keep the VM Codex CLI current with the optional logged scheduled updater
-- see Codex refresh-token failures as a clear auth-expired banner instead of a raw websocket 401
-- start a VM-side Codex device sign-in from Home Assistant and copy the displayed device code/login URL
-- refresh the bridge auth status after completing sign-in on a phone, home browser, or the VM console
-- avoid permanently stuck runs when Codex stops emitting output; silent runs now fail cleanly after the bridge watchdog timeout
-- recover stale `running` chats after a bridge restart instead of leaving them pinned forever
-- create a project by entering only its name; the bridge creates a VM folder under `C:\CodexHA\project-workspaces`
-- use stable create/edit form buttons during background refreshes
-- read long workspace/account detail values without overlapping text
-- see the Codex Bridge brand icon in HACS and the Home Assistant integration UI
-- create or browse real VM-backed projects
-- keep standalone direct chats outside projects
-- archive or delete old chats from the left rail
-- upload whole folders for VBA/codebase work
-- paste screenshots directly into the prompt box
-- preview and download generated artifacts from the side panel
-- use the sleeker colour-accented panel with quieter idle polling and faster event replay
-- see the signed-in Codex account email/plan in the panel without exposing auth tokens
-- stop a running Codex job from the panel
-- see bridge diagnostics, tool availability, and the latest bridge/Codex error in the side panel
-- get persistent out-of-credit and last-error banners until a new state replaces them
-- copy full assistant replies or individual fenced code blocks line-for-line
+```mermaid
+flowchart LR
+    Browser["Browser"] --> HA["Home Assistant panel"]
+    HA --> Integration["Codex Bridge integration"]
+    Integration -->|Bearer token| Bridge["FastAPI bridge"]
+    Bridge --> Catalog["Codex app-server model catalogue"]
+    Bridge --> Runner["Codex exec / resume"]
+    Runner --> Workspace["VM project workspaces"]
+```
+
+The browser talks only to Home Assistant. The custom integration proxies authenticated commands to the bridge, and the bridge owns storage, Codex subprocesses, uploads, event history, and artifacts on the VM.
+
+<details>
+<summary><b>Repository layout</b></summary>
+
+- `bridge_service/` — FastAPI service, storage, Codex process management, discovery, runner, and tests.
+- `custom_components/codex_bridge/` — Home Assistant config flow, authenticated proxy APIs, panel registration, and frontend.
+- `scripts/` — Windows Codex updater and scheduled-task installer.
+- `brand/` — HACS and Home Assistant branding assets.
+- `output/playwright/` — standalone panel harness used for browser smoke testing.
+
+</details>
+
+## Configuration reference
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_BRIDGE_HOST` | `127.0.0.1` | Listener address. Use `0.0.0.0` only on a trusted/private network. |
+| `CODEX_BRIDGE_PORT` | `8766` | Bridge HTTP port. |
+| `CODEX_BRIDGE_ROOT_PATH` | `C:/CodexHA` | Metadata, workspaces, uploads, artifacts, and logs. |
+| `CODEX_BRIDGE_AUTH_TOKEN` | required | Random bearer token of at least 32 characters. |
+| `CODEX_BRIDGE_CODEX_WRAPPER_PATH` | `codex` | Managed `codex.exe`, or a `.ps1`/`.py` wrapper. |
+| `CODEX_BRIDGE_CODEX_HOME` | inferred | Optional explicit Codex configuration/auth directory. |
+| `CODEX_BRIDGE_BYPASS_SANDBOX` | `0` | Passes the Codex full-access bypass flag; use only on an isolated VM. |
+| `CODEX_BRIDGE_IGNORE_USER_CONFIG` | `0` | Starts Codex without inheriting user configuration. |
+| `CODEX_BRIDGE_RUN_IDLE_TIMEOUT_SECONDS` | `1800` | Fails a run that stops producing output. |
+| `CODEX_BRIDGE_MODEL_DISCOVERY_TIMEOUT_SECONDS` | `10` | App-server catalogue timeout. |
+| `CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS` | `600` | Successful catalogue cache lifetime. |
+
+<details>
+<summary><b>Authentication recovery</b></summary>
+
+If Codex reports an expired login or a WebSocket `401 Unauthorized`, the bridge exposes a VM sign-in action in Home Assistant. Start the device flow from the panel, complete the account approval in a browser that can reach ChatGPT, then refresh the auth status.
+
+The bridge does not rotate or log Codex refresh tokens. Codex remains the owner of its authentication files.
+
+</details>
+
+<details>
+<summary><b>Upgrade from 0.4.x or 0.5.0</b></summary>
+
+Version 0.5.1 includes the Windows PowerShell 5.1 updater-installer compatibility fix plus the 0.5.0 dynamic-model, migration, and security changes.
+
+1. Replace old placeholder or short bridge tokens in both the VM launcher and Home Assistant.
+2. Update the VM checkout and install the 0.5.1 wheel.
+3. Point `CODEX_BRIDGE_CODEX_WRAPPER_PATH` at the managed Codex executable.
+4. Update or redownload version 0.5.1 in HACS.
+5. Restart the bridge and Home Assistant, then hard-refresh the browser.
+
+Back up `projects/` and `threads/` under the bridge root before the first 0.5.x start.
+
+</details>
+
+## Security
+
+- Do not expose port `8766` directly to the public internet.
+- Use a random token and keep the VM and Home Assistant values synchronized.
+- Prefer a dedicated, non-administrator Windows account and an isolated VM.
+- Enable `CODEX_BRIDGE_BYPASS_SANDBOX` only when the VM itself is the security boundary.
+- Map projects narrowly; Codex can change files inside the workspaces it is allowed to use.
+- Use HTTPS or a private tunnel when the Home Assistant-to-VM path is not fully trusted.
+- Rotate the bridge token after suspected exposure and restart both ends.
+
+To disable the system immediately, stop the bridge process. To remove it completely, remove the Home Assistant integration, uninstall the scheduled updater, uninstall `codex-bridge-service` from the VM environment, and delete the bridge root only after preserving any wanted workspaces/artifacts.
+
+## Could this run as a Home Assistant app?
+
+Yes. Home Assistant now calls add-ons **apps**, and the bridge can run in a Supervisor-managed Linux container. The Codex project publishes standalone Linux binaries for both `amd64` and `aarch64`, which match the two most useful Home Assistant app architectures.
+
+The recommended design is a separate optional app package:
+
+1. Build a versioned container with the bridge and a pinned Codex Linux binary.
+2. Persist `CODEX_HOME`, authentication, and bridge metadata in the app's private writable `/data` volume.
+3. Map only an explicit workspace such as `/share/codex-workspaces` read/write.
+4. Keep protection mode enabled, provide an AppArmor profile, avoid host networking, and avoid mapping the full Home Assistant config directory.
+5. Reuse the existing Home Assistant integration and panel, pointing it at the internal app service.
+6. Handle ChatGPT device authentication through the existing panel and persist the resulting Codex auth state.
+
+The main trade-offs are container memory/CPU use, headless authentication, limited access to folders outside Home Assistant, and Codex upgrades. For reproducibility, the app image should pin Codex and use automation to publish a new image when Codex releases, rather than downloading an unpinned executable on every start.
+
+This repository does not ship that app yet. The Windows bridge remains the supported deployment path while the container permissions, persistence, multi-architecture build, and update lifecycle are designed and tested.
+
+References: [Home Assistant app configuration](https://developers.home-assistant.io/docs/apps/configuration/), [Home Assistant app security](https://developers.home-assistant.io/docs/apps/security/), and [Codex CLI installation](https://github.com/openai/codex#installing-and-running-codex-cli).
+
+## Uninstall
+
+1. Remove the **Codex Bridge** integration from Home Assistant, then remove it from HACS (or delete the manually copied `custom_components/codex_bridge` folder) and restart Home Assistant.
+2. Remove the CLI updater task:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass `
+     -File .\scripts\Install-CodexAutoUpdate.ps1 -Uninstall
+   ```
+
+3. Stop and remove any bridge startup task/service, then uninstall the Python package:
+
+   ```powershell
+   C:\CodexHA\.venv\Scripts\python.exe -m pip uninstall -y codex-bridge-service
+   ```
+
+4. Preserve any wanted workspaces or artifacts before manually removing `C:\CodexHA`. Removing the integration or Python package does not delete project files.
 
 ## Dashboard launcher
 
-The main UI is a full Home Assistant panel because chat, files, and run history need more room than a small tile. If you want a dashboard entry point, add a button card that opens the panel:
+The primary UI is a full Home Assistant panel. A dashboard button can link to it:
 
 ```yaml
 type: button
@@ -160,15 +299,42 @@ tap_action:
 
 ## Development
 
-Run the bridge tests:
-
 ```powershell
-pytest bridge_service/tests -q
+python -m pip install -e ".\bridge_service[test]"
+python -m pytest bridge_service\tests -q
+python -m compileall -q bridge_service\src custom_components
+node --check custom_components\codex_bridge\frontend\codex-bridge-panel.js
 ```
 
-Quick syntax checks for the custom component and panel:
+Updater tests use Windows PowerShell and include real junction rollback coverage.
 
-```powershell
-python -m compileall bridge_service/src custom_components/codex_bridge
-node --check custom_components/codex_bridge/frontend/codex-bridge-panel.js
-```
+## FAQ
+
+<details>
+<summary><b>Will new Codex models require another integration release?</b></summary>
+
+Normally, no. The bridge reads the catalogue from the installed Codex CLI. A bridge update is needed only if the Codex protocol or bridge behavior changes.
+
+</details>
+
+<details>
+<summary><b>Can I run the bridge on the same machine as Home Assistant?</b></summary>
+
+Not with the current Windows deployment. A future Home Assistant app would make this possible on Home Assistant OS/Supervised installations.
+
+</details>
+
+<details>
+<summary><b>Why does the model list say it is stale?</b></summary>
+
+The latest discovery attempt failed, so the bridge is serving its last-known-good or fallback catalogue. Check the configured Codex path, Codex login, and bridge diagnostics.
+
+</details>
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes focused, add regression coverage for behavior changes, and run the backend, JavaScript, and PowerShell checks before opening a PR.
+
+## License
+
+No license has been declared for this repository yet. Until one is added, normal copyright restrictions apply.

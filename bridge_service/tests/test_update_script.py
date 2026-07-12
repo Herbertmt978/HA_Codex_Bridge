@@ -360,6 +360,39 @@ def test_auto_update_installer_supports_non_mutating_preview(tmp_path) -> None:
     assert "CodexBridgeAutoUpdate-TestPreview" in completed.stdout
 
 
+def test_auto_update_installer_resolves_default_updater_from_script_directory(tmp_path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    install_script = repo_root / "scripts" / "Install-CodexAutoUpdate.ps1"
+    fake_codex = tmp_path / "codex.exe"
+    fake_codex.write_bytes(b"placeholder")
+
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(install_script),
+            "-CodexPath",
+            str(fake_codex),
+            "-LogPath",
+            str(tmp_path / "update.log"),
+            "-TaskName",
+            "CodexBridgeAutoUpdate-TestDefaultUpdater",
+            "-WhatIf",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "CodexBridgeAutoUpdate-TestDefaultUpdater" in completed.stdout
+
+
 def test_auto_update_installer_registers_a_limited_principal() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     install_script = repo_root / "scripts" / "Install-CodexAutoUpdate.ps1"
