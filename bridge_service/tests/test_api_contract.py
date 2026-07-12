@@ -27,7 +27,12 @@ EXPECTED_BUILD_ENVIRONMENT_KEYS = {
 BUILD_ENVIRONMENT_KEYS = tuple(sorted(EXPECTED_BUILD_ENVIRONMENT_KEYS))
 
 UNSAFE_BUILD_VALUES = (
+    "ghp_0123456789abcdefghijklmnopqrstuvwxyz",
+    "github_pat_11AA0123456789abcdefghijklmnopqrstuvwxyz",
+    "sk-proj-0123456789abcdefghijklmnopqrstuvwxyz",
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.sig",
     "Bearer request-token-must-not-escape",
+    "v1.2.3",
     "https://example.com/private?token=secret",
     "person@example.com",
     "C:\\Users\\Person\\private\\auth.json",
@@ -137,7 +142,7 @@ def test_build_info_reads_only_explicit_environment_fields() -> None:
             "CODEX_BRIDGE_APP_VERSION": "0.6.0",
             "CODEX_BRIDGE_VERSION": "0.6.1",
             "CODEX_BRIDGE_CODEX_VERSION": "0.144.1",
-            "CODEX_BRIDGE_IMAGE_REVISION": "sha256:abc123",
+            "CODEX_BRIDGE_IMAGE_REVISION": "sha256:" + ("a" * 64),
             "CODEX_BRIDGE_ARCH": "aarch64",
             "CODEX_BRIDGE_RELEASE_LOCK_DIGEST": "d" * 64,
             "SUPERVISOR_TOKEN": "supervisor-secret",
@@ -152,7 +157,7 @@ def test_build_info_reads_only_explicit_environment_fields() -> None:
         "app_version": "0.6.0",
         "bridge_version": "0.6.1",
         "codex_version": "0.144.1",
-        "image_revision": "sha256:abc123",
+        "image_revision": "sha256:" + ("a" * 64),
         "architecture": "aarch64",
         "release_lock_digest": "d" * 64,
     }
@@ -206,9 +211,9 @@ def test_build_info_never_serializes_unsafe_allowlisted_values(
 @pytest.mark.parametrize(
     "safe_value",
     [
-        "1",
-        "v0.6.0-ha_1+local",
-        "A" + ("z" * 63),
+        "0.0.0",
+        "1.2.3-alpha.1+build.5",
+        "1.2.3-" + ("z" * 58),
     ],
 )
 def test_build_info_accepts_bounded_safe_version_values(
@@ -220,6 +225,37 @@ def test_build_info_accepts_bounded_safe_version_values(
     assert safe_value in build.model_dump().values()
 
 
+@pytest.mark.parametrize(
+    "environment_key",
+    [
+        "CODEX_BRIDGE_APP_VERSION",
+        "CODEX_BRIDGE_VERSION",
+        "CODEX_BRIDGE_CODEX_VERSION",
+    ],
+)
+@pytest.mark.parametrize(
+    "invalid_version",
+    [
+        "1.2",
+        "01.2.3",
+        "1.02.3",
+        "1.2.03",
+        "1.2.3-",
+        "1.2.3-alpha..1",
+        "1.2.3-01",
+        "1.2.3+build_1",
+        "1.2.3-" + ("z" * 59),
+    ],
+)
+def test_build_info_rejects_non_semver_version_values(
+    environment_key: str,
+    invalid_version: str,
+) -> None:
+    build = BuildInfo.from_environment({environment_key: invalid_version})
+
+    assert invalid_version not in build.model_dump().values()
+
+
 @pytest.mark.parametrize("architecture", ["amd64", "aarch64"])
 def test_build_info_accepts_only_supported_architectures(architecture: str) -> None:
     build = BuildInfo.from_environment({"CODEX_BRIDGE_ARCH": architecture})
@@ -227,8 +263,18 @@ def test_build_info_accepts_only_supported_architectures(architecture: str) -> N
     assert build.architecture == architecture
 
 
-def test_build_info_accepts_bounded_image_revision_and_normalizes_digest() -> None:
-    image_revision = "r" + ("A" * 126) + "@"
+@pytest.mark.parametrize(
+    ("image_revision", "expected_revision"),
+    [
+        ("A" * 40, "a" * 40),
+        ("B" * 64, "b" * 64),
+        ("SHA256:" + ("C" * 64), "sha256:" + ("c" * 64)),
+    ],
+)
+def test_build_info_accepts_git_image_revisions_and_normalizes_digest(
+    image_revision: str,
+    expected_revision: str,
+) -> None:
     uppercase_digest = "ABCDEF0123456789" * 4
 
     build = BuildInfo.from_environment(
@@ -238,5 +284,26 @@ def test_build_info_accepts_bounded_image_revision_and_normalizes_digest() -> No
         }
     )
 
-    assert build.image_revision == image_revision
+    assert build.image_revision == expected_revision
     assert build.release_lock_digest == uppercase_digest.lower()
+
+
+@pytest.mark.parametrize(
+    "invalid_revision",
+    [
+        "a" * 39,
+        "a" * 41,
+        "b" * 63,
+        "b" * 65,
+        "g" * 40,
+        "sha256:" + ("c" * 63),
+        "sha256:" + ("c" * 65),
+        "sha512:" + ("d" * 64),
+    ],
+)
+def test_build_info_rejects_non_git_image_revisions(invalid_revision: str) -> None:
+    build = BuildInfo.from_environment(
+        {"CODEX_BRIDGE_IMAGE_REVISION": invalid_revision}
+    )
+
+    assert build.image_revision is None
