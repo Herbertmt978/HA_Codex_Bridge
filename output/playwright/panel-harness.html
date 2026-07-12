@@ -27,8 +27,24 @@
       import "../../custom_components/codex_bridge/frontend/codex-bridge-panel.js";
 
       const statusPayload = {
-        models: ["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"],
-        thinking_levels: ["minimal", "low", "medium", "high", "xhigh"],
+        models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+        thinking_levels: ["low", "medium", "high", "xhigh", "max", "ultra"],
+        model_catalog: {
+          source: "codex-app-server",
+          default_model: "gpt-5.6-sol",
+          default_thinking_level: "ultra",
+          configured_model: "gpt-5.6-sol",
+          configured_thinking_level: "ultra",
+          refreshed_at: "2026-07-12T00:00:00Z",
+          stale: false,
+          error: null,
+          models: [
+            { model: "gpt-5.6-sol", display_name: "GPT-5.6-Sol", is_default: true, default_thinking_level: "medium", thinking_levels: ["low", "medium", "high", "xhigh", "max", "ultra"], input_modalities: ["text", "image"], catalogued: true },
+            { model: "gpt-5.6-terra", display_name: "GPT-5.6-Terra", is_default: false, default_thinking_level: "medium", thinking_levels: ["low", "medium", "high", "xhigh", "max", "ultra"], input_modalities: ["text", "image"], catalogued: true },
+            { model: "gpt-5.6-luna", display_name: "GPT-5.6-Luna", is_default: false, default_thinking_level: "medium", thinking_levels: ["low", "medium", "high", "xhigh", "max"], input_modalities: ["text", "image"], catalogued: true },
+            { model: "gpt-5.5", display_name: "GPT-5.5", is_default: false, default_thinking_level: "medium", thinking_levels: ["low", "medium", "high", "xhigh"], input_modalities: ["text", "image"], catalogued: true },
+          ],
+        },
         limits: {
           available: true,
           blocked: false,
@@ -60,13 +76,13 @@
           updated_at: "2026-05-09T10:40:00Z",
         },
         diagnostics: {
-          bridge_version: "0.4.6",
+          bridge_version: "0.5.0",
           git_commit: "abc1234",
           git_branch: "main",
           python_version: "3.12.10",
           python_executable: "C:\\Python312\\python.exe",
           platform: "Windows",
-          codex_cli_version: "codex-cli 0.119.0-alpha.28",
+          codex_cli_version: "codex-cli 0.144.1",
           service_started_at: "2026-05-10T10:00:00Z",
           service_uptime_seconds: 742,
           last_error: null,
@@ -504,8 +520,8 @@
                   name: payload.name || "New project",
                   root_path: payload.root_path || `C:\\CodexHA\\project-workspaces\\${folderName}`,
                   kind: "project",
-                  default_model: payload.default_model || "gpt-5.4",
-                  default_thinking_level: payload.default_thinking_level || "medium",
+                  default_model: payload.default_model || statusPayload.model_catalog.default_model,
+                  default_thinking_level: payload.default_thinking_level || statusPayload.model_catalog.default_thinking_level,
                   created_at: "2026-05-09T10:45:00Z",
                   updated_at: "2026-05-09T10:45:00Z",
                 };

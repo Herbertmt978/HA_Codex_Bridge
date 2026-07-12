@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 import zipfile
@@ -344,8 +345,67 @@ def test_existing_special_projects_are_migrated_to_correct_kind(tmp_path) -> Non
 
     assert imported.kind is ProjectKind.IMPORTED
     assert direct.kind is ProjectKind.DIRECT
-    assert imported.default_model == DEFAULT_MODEL
-    assert direct.default_model == DEFAULT_MODEL
+    assert imported.default_model == "gpt-5.4"
+    assert direct.default_model == "gpt-5.4"
+
+
+def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    original = initial_storage.ensure_direct_project()
+    existing_thread = initial_storage.create_thread(title="Existing direct", mode=RunMode.FULL_AUTO)
+    assert original.default_model == DEFAULT_MODEL
+
+    discovered_storage = BridgeStorage(
+        root_path=tmp_path,
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+    )
+    discovered_storage.initialize_special_projects()
+    migrated = discovered_storage.ensure_direct_project()
+
+    assert migrated.default_model == "gpt-5.6-sol"
+    assert migrated.default_thinking_level == "ultra"
+    preserved = discovered_storage.get_thread(existing_thread.thread_id)
+    assert preserved.model_override == DEFAULT_MODEL
+    assert preserved.thinking_override == "medium"
+    assert preserved.effective_model == DEFAULT_MODEL
+    assert preserved.effective_thinking_level == "medium"
+
+
+def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(tmp_path) -> None:
+    initial_storage = BridgeStorage(root_path=tmp_path)
+    original = initial_storage.ensure_imported_project()
+    assert original.default_model == DEFAULT_MODEL
+
+    discovered_storage = BridgeStorage(
+        root_path=tmp_path,
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+    )
+    discovered_storage.initialize_special_projects()
+
+    migrated = discovered_storage.load_project("prj_imported")
+    assert migrated.default_model == "gpt-5.6-sol"
+    assert migrated.default_thinking_level == "ultra"
+
+
+def test_legacy_thread_resolution_uses_discovered_special_project_defaults(tmp_path) -> None:
+    storage = BridgeStorage(
+        root_path=tmp_path,
+        special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra"),
+    )
+    created = storage.create_thread(title="Legacy", mode=RunMode.FULL_AUTO)
+    legacy = storage.load_thread(created.thread_id)
+    legacy.project_id = None
+    storage.save_thread(legacy)
+
+    resolved = storage.get_thread(created.thread_id)
+
+    assert resolved.project_kind is ProjectKind.IMPORTED
+    assert resolved.default_model == "gpt-5.6-sol"
+    assert resolved.default_thinking_level == "ultra"
+    assert resolved.model_override == DEFAULT_MODEL
+    assert resolved.thinking_override == "medium"
+    assert resolved.effective_model == DEFAULT_MODEL
+    assert resolved.effective_thinking_level == "medium"
 
 
 def test_archive_restore_and_delete_thread_metadata(tmp_path) -> None:
@@ -504,3 +564,38 @@ def test_limits_probe_uses_live_backend_snapshot_when_auth_is_available(tmp_path
     assert status.primary.remaining_percent == 95.0
     assert status.secondary is not None
     assert status.secondary.remaining_percent == 35.0
+
+
+def test_limits_probe_never_rotates_codex_refresh_token(tmp_path, monkeypatch) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir(parents=True, exist_ok=True)
+    expired_token = "eyJhbGciOiJub25lIn0.eyJleHAiOjF9.sig"
+    auth_path = codex_home / "auth.json"
+    auth_path.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": expired_token,
+                    "refresh_token": "one-time-refresh-token",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    original_auth = auth_path.read_text(encoding="utf-8")
+    fetch_calls = 0
+
+    def fake_fetch(url, *, headers, method="GET", body=None):
+        nonlocal fetch_calls
+        fetch_calls += 1
+        raise AssertionError(f"expired credentials must not be sent to {url}")
+
+    probe = CodexLimitsProbe(codex_home, min_fetch_interval_seconds=45)
+    monkeypatch.setattr(probe, "_fetch_json", fake_fetch)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: probe.probe(), range(2)))
+
+    assert fetch_calls == 0
+    assert results == [None, None]
+    assert auth_path.read_text(encoding="utf-8") == original_auth

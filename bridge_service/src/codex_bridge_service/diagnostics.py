@@ -8,12 +8,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from . import __version__
+from .codex_process import codex_subprocess_environment
 from .models import BridgeDiagnosticsRecord, DiagnosticToolRecord
 
 if TYPE_CHECKING:
     from .storage import BridgeStorage
 
-FALLBACK_BRIDGE_VERSION = "0.4.19"
 DEFAULT_TOOL_NAMES = ("python", "git", "node", "npm", "rg", "uv", "gh", "codex", "fd", "jq", "7z")
 
 
@@ -23,11 +24,13 @@ class BridgeDiagnosticsProbe:
         storage: "BridgeStorage",
         *,
         codex_command: str = "codex",
+        codex_home: Path | str | None = None,
         tool_names: tuple[str, ...] = DEFAULT_TOOL_NAMES,
         cache_seconds: int = 20,
     ) -> None:
         self.storage = storage
         self.codex_command = codex_command
+        self.codex_home = codex_home
         self.tool_names = tool_names
         self.cache_seconds = cache_seconds
         self.started_at = datetime.now(UTC)
@@ -68,7 +71,7 @@ class BridgeDiagnosticsProbe:
         try:
             return importlib.metadata.version("codex-bridge-service")
         except importlib.metadata.PackageNotFoundError:
-            return FALLBACK_BRIDGE_VERSION
+            return __version__
 
     def _repo_root(self) -> Path:
         return Path(__file__).resolve().parents[3]
@@ -79,6 +82,7 @@ class BridgeDiagnosticsProbe:
                 ["git", "-C", str(repo_root), *args],
                 check=False,
                 capture_output=True,
+                env=codex_subprocess_environment(self.codex_home),
                 text=True,
                 timeout=3,
             )
@@ -104,6 +108,7 @@ class BridgeDiagnosticsProbe:
                 [command, "--version"],
                 check=False,
                 capture_output=True,
+                env=codex_subprocess_environment(self.codex_home),
                 text=True,
                 timeout=4,
             )

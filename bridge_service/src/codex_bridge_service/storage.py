@@ -4,7 +4,7 @@ import string
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from threading import Lock
-from typing import BinaryIO
+from typing import BinaryIO, Callable
 from uuid import uuid4
 import zipfile
 
@@ -51,6 +51,7 @@ class BridgeStorage:
         root_path: Path | str,
         *,
         limits_probe: CodexLimitsProbe | None = None,
+        special_project_defaults_provider: Callable[[], tuple[str, str]] | None = None,
     ) -> None:
         self.root = Path(root_path)
         self.projects_dir = self.root / "projects"
@@ -62,6 +63,8 @@ class BridgeStorage:
         self.logs_dir = self.root / "logs"
         self.limits_status_path = self.root / "limits_status.json"
         self.limits_probe = limits_probe
+        self.special_project_defaults_provider = special_project_defaults_provider
+        self._special_default_migration_enabled = False
         self._event_lock = Lock()
 
         for directory in (
@@ -122,6 +125,102 @@ class BridgeStorage:
     def _direct_project_id(self) -> str:
         return "prj_direct"
 
+    def _special_project_defaults(
+        self,
+        default_model: str | None,
+        default_thinking_level: str | None,
+    ) -> tuple[str, str]:
+        if default_model is not None and default_thinking_level is not None:
+            return default_model, default_thinking_level
+        discovered_model = DEFAULT_MODEL
+        discovered_thinking = DEFAULT_THINKING_LEVEL
+        if self.special_project_defaults_provider is not None:
+            discovered_model, discovered_thinking = self.special_project_defaults_provider()
+        return (
+            default_model or discovered_model,
+            default_thinking_level or discovered_thinking,
+        )
+
+    def _migrate_legacy_special_defaults(
+        self,
+        record: ProjectRecord,
+        *,
+        default_model: str,
+        default_thinking_level: str,
+    ) -> bool:
+        if not self._special_default_migration_enabled:
+            return False
+        if (
+            record.default_model != DEFAULT_MODEL
+            or record.default_thinking_level != DEFAULT_THINKING_LEVEL
+        ):
+            return False
+        if (
+            default_model == DEFAULT_MODEL
+            and default_thinking_level == DEFAULT_THINKING_LEVEL
+        ):
+            return False
+        self._materialize_special_thread_defaults(record)
+        record.default_model = default_model
+        record.default_thinking_level = default_thinking_level
+        record.updated_at = self._now()
+        return True
+
+    def _materialize_special_thread_defaults(self, project: ProjectRecord) -> None:
+        for path in self.threads_dir.glob("*.json"):
+            try:
+                thread = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            belongs_to_project = thread.project_id == project.project_id
+            if project.project_id == self._imported_project_id() and thread.project_id is None:
+                belongs_to_project = True
+            if not belongs_to_project:
+                continue
+            changed = False
+            if thread.model_override is None:
+                thread.model_override = project.default_model
+                changed = True
+            if thread.thinking_override is None:
+                thread.thinking_override = project.default_thinking_level
+                changed = True
+            if changed:
+                self.save_thread(thread)
+
+    def _materialize_missing_special_defaults(
+        self,
+        *,
+        project_id: str,
+        name: str,
+        kind: ProjectKind,
+        discovered_model: str,
+        discovered_thinking_level: str,
+    ) -> None:
+        if (
+            discovered_model == DEFAULT_MODEL
+            and discovered_thinking_level == DEFAULT_THINKING_LEVEL
+        ):
+            return
+        timestamp = self._now()
+        legacy_project = ProjectRecord(
+            project_id=project_id,
+            name=name,
+            root_path=str(self.workspaces_dir),
+            kind=kind,
+            default_model=DEFAULT_MODEL,
+            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        self._materialize_special_thread_defaults(legacy_project)
+
+    def initialize_special_projects(self) -> None:
+        self._special_default_migration_enabled = True
+        try:
+            self.list_projects()
+        finally:
+            self._special_default_migration_enabled = False
+
     def _ensure_thread_timestamps(self, record: ThreadRecord) -> ThreadRecord:
         changed = False
         if not record.created_at:
@@ -149,46 +248,92 @@ class BridgeStorage:
                 return True
         return False
 
-    def ensure_imported_project(self) -> ProjectRecord:
+    def ensure_imported_project(
+        self,
+        *,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
+    ) -> ProjectRecord:
+        default_model, default_thinking_level = self._special_project_defaults(
+            default_model,
+            default_thinking_level,
+        )
         target = self._project_path(self._imported_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            changed = self._migrate_legacy_special_defaults(
+                record,
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+            )
             if record.kind is not ProjectKind.IMPORTED or record.name != self.imported_project_name:
                 record.kind = ProjectKind.IMPORTED
                 record.name = self.imported_project_name
+                changed = True
+            if changed:
                 self.save_project(record)
             return record
 
+        self._materialize_missing_special_defaults(
+            project_id=self._imported_project_id(),
+            name=self.imported_project_name,
+            kind=ProjectKind.IMPORTED,
+            discovered_model=default_model,
+            discovered_thinking_level=default_thinking_level,
+        )
         record = ProjectRecord(
             project_id=self._imported_project_id(),
             name=self.imported_project_name,
             root_path=str(self.workspaces_dir),
             kind=ProjectKind.IMPORTED,
-            default_model=DEFAULT_MODEL,
-            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            default_model=default_model,
+            default_thinking_level=default_thinking_level,
             created_at=self._now(),
             updated_at=self._now(),
         )
         self.save_project(record)
         return record
 
-    def ensure_direct_project(self) -> ProjectRecord:
+    def ensure_direct_project(
+        self,
+        *,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
+    ) -> ProjectRecord:
+        default_model, default_thinking_level = self._special_project_defaults(
+            default_model,
+            default_thinking_level,
+        )
         target = self._project_path(self._direct_project_id())
         if target.exists():
             record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            changed = self._migrate_legacy_special_defaults(
+                record,
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+            )
             if record.kind is not ProjectKind.DIRECT or record.name != self.direct_project_name:
                 record.kind = ProjectKind.DIRECT
                 record.name = self.direct_project_name
+                changed = True
+            if changed:
                 self.save_project(record)
             return record
 
+        self._materialize_missing_special_defaults(
+            project_id=self._direct_project_id(),
+            name=self.direct_project_name,
+            kind=ProjectKind.DIRECT,
+            discovered_model=default_model,
+            discovered_thinking_level=default_thinking_level,
+        )
         record = ProjectRecord(
             project_id=self._direct_project_id(),
             name=self.direct_project_name,
             root_path=str(self.workspaces_dir),
             kind=ProjectKind.DIRECT,
-            default_model=DEFAULT_MODEL,
-            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            default_model=default_model,
+            default_thinking_level=default_thinking_level,
             created_at=self._now(),
             updated_at=self._now(),
         )
@@ -219,7 +364,12 @@ class BridgeStorage:
             self.save_project(record)
         return record
 
-    def list_projects(self) -> list[ProjectRecord]:
+    def list_projects(
+        self,
+        *,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
+    ) -> list[ProjectRecord]:
         records = {
             record.project_id: record
             for record in [
@@ -229,10 +379,16 @@ class BridgeStorage:
                 for path in self.projects_dir.glob("*.json")
             ]
         }
-        direct = self.ensure_direct_project()
+        direct = self.ensure_direct_project(
+            default_model=default_model,
+            default_thinking_level=default_thinking_level,
+        )
         records[direct.project_id] = direct
-        if self._has_legacy_threads():
-            imported = self.ensure_imported_project()
+        if self._project_path(self._imported_project_id()).exists() or self._has_legacy_threads():
+            imported = self.ensure_imported_project(
+                default_model=default_model,
+                default_thinking_level=default_thinking_level,
+            )
             records[imported.project_id] = imported
         ordered = sorted(records.values(), key=lambda record: record.updated_at, reverse=True)
         ordered.sort(key=self._project_rank)
@@ -414,11 +570,20 @@ class BridgeStorage:
         project_id: str | None = None,
         model_override: str | None = None,
         thinking_override: str | None = None,
+        direct_default_model: str | None = None,
+        direct_default_thinking_level: str | None = None,
     ) -> ThreadViewRecord:
         if not title.strip():
             raise ValueError("title must not be blank")
 
-        project = self.ensure_direct_project() if project_id is None else self.load_project(project_id)
+        project = (
+            self.ensure_direct_project(
+                default_model=direct_default_model,
+                default_thinking_level=direct_default_thinking_level,
+            )
+            if project_id is None
+            else self.load_project(project_id)
+        )
         workspace_id = f"ws_{uuid4().hex[:12]}"
         workspace_root = Path(project.root_path)
         workspace_path = (
@@ -554,7 +719,16 @@ class BridgeStorage:
                 self.save_thread(record)
             return record
 
-        record.project_id = self.ensure_imported_project().project_id
+        imported_project = self.ensure_imported_project()
+        if (
+            imported_project.default_model != DEFAULT_MODEL
+            or imported_project.default_thinking_level != DEFAULT_THINKING_LEVEL
+        ):
+            if record.model_override is None:
+                record.model_override = DEFAULT_MODEL
+            if record.thinking_override is None:
+                record.thinking_override = DEFAULT_THINKING_LEVEL
+        record.project_id = imported_project.project_id
         self.save_thread(record)
         return record
 

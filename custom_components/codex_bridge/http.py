@@ -4,9 +4,16 @@ import tempfile
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import Unauthorized
 
 from .bridge_api import BridgeApiAuthError, BridgeApiConnectionError, BridgeApiError
 from .runtime import async_get_runtime
+
+
+def _require_admin(request: web.Request) -> None:
+    user = request.get("hass_user")
+    if user is None or not user.is_admin:
+        raise Unauthorized()
 
 
 class CodexBridgeAttachmentUploadView(HomeAssistantView):
@@ -18,6 +25,7 @@ class CodexBridgeAttachmentUploadView(HomeAssistantView):
         self.hass = hass
 
     async def post(self, request: web.Request, thread_id: str) -> web.Response:
+        _require_admin(request)
         temp_path: Path | None = None
         try:
             runtime = async_get_runtime(self.hass)
@@ -77,6 +85,7 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
         self.hass = hass
 
     async def get(self, request: web.Request, thread_id: str, artifact_id: str) -> web.Response:
+        _require_admin(request)
         try:
             runtime = async_get_runtime(self.hass)
             artifacts = await runtime.client.async_list_artifacts(thread_id)

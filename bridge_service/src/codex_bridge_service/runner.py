@@ -1,6 +1,5 @@
 import json
 import subprocess
-import sys
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Lock, Thread
@@ -8,6 +7,7 @@ from time import monotonic
 from uuid import uuid4
 
 from .codex_auth import AUTH_EXPIRED_MESSAGE, is_codex_auth_failure
+from .codex_process import codex_command_prefix, codex_subprocess_environment
 from .models import PendingPromptRecord, RunMode, RunRecord, ThreadRecord, ThreadViewRecord
 from .storage import BridgeStorage
 
@@ -26,6 +26,7 @@ class BridgeRunner:
         storage: BridgeStorage,
         codex_command: str = "codex",
         *,
+        codex_home: Path | str | None = None,
         bypass_sandbox: bool = False,
         ignore_user_config: bool = False,
         idle_timeout_seconds: float | None = 1800.0,
@@ -33,6 +34,7 @@ class BridgeRunner:
     ) -> None:
         self.storage = storage
         self.codex_command = codex_command
+        self.codex_home = codex_home
         self.bypass_sandbox = bypass_sandbox
         self.ignore_user_config = ignore_user_config
         self.idle_timeout_seconds = idle_timeout_seconds
@@ -156,6 +158,7 @@ class BridgeRunner:
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                env=codex_subprocess_environment(self.codex_home),
                 text=True,
                 encoding="utf-8",
             )
@@ -357,13 +360,7 @@ class BridgeRunner:
         return command
 
     def _command_prefix(self) -> list[str]:
-        target = Path(self.codex_command)
-        suffix = target.suffix.lower()
-        if suffix == ".ps1":
-            return ["powershell", "-File", str(target)]
-        if suffix == ".py":
-            return [sys.executable, str(target)]
-        return [str(target)]
+        return codex_command_prefix(self.codex_command)
 
     def _compose_prompt(self, record: ThreadRecord, prompt: str) -> str:
         if not record.attachments:

@@ -34,7 +34,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_BRIDGE_TOKEN],
             )
             try:
-                await client.async_health()
+                await client.async_ready()
             except BridgeApiAuthError:
                 errors["base"] = "invalid_auth"
             except BridgeApiConnectionError:

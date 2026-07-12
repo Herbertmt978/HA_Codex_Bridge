@@ -1,10 +1,10 @@
 import re
 import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock, Thread
 
+from .codex_process import codex_command_prefix, codex_subprocess_environment
 from .models import CodexAuthStatusRecord
 
 AUTH_EXPIRED_MESSAGE = "Codex login expired on the VM. Start a new VM sign-in from Home Assistant."
@@ -28,8 +28,14 @@ def is_codex_auth_failure(message: str | None) -> bool:
 
 
 class CodexAuthManager:
-    def __init__(self, codex_command: str = "codex") -> None:
+    def __init__(
+        self,
+        codex_command: str = "codex",
+        *,
+        codex_home: Path | str | None = None,
+    ) -> None:
         self.codex_command = codex_command
+        self.codex_home = codex_home
         self._lock = Lock()
         self._process: subprocess.Popen[str] | None = None
         self._last_auth_error: str | None = None
@@ -88,6 +94,7 @@ class CodexAuthManager:
             text=True,
             encoding="utf-8",
             timeout=30,
+            env=codex_subprocess_environment(self.codex_home),
         )
         output_tail = self._tail_output(completed.stdout, completed.stderr)
         state = "logged_out" if completed.returncode == 0 else "logout_failed"
@@ -113,6 +120,7 @@ class CodexAuthManager:
                     text=True,
                     encoding="utf-8",
                     timeout=30,
+                    env=codex_subprocess_environment(self.codex_home),
                 )
 
             process = subprocess.Popen(
@@ -120,6 +128,7 @@ class CodexAuthManager:
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=codex_subprocess_environment(self.codex_home),
                 text=True,
                 encoding="utf-8",
             )
@@ -211,13 +220,7 @@ class CodexAuthManager:
         return _ANSI_PATTERN.sub("", value)
 
     def _command_prefix(self) -> list[str]:
-        target = Path(self.codex_command)
-        suffix = target.suffix.lower()
-        if suffix == ".ps1":
-            return ["powershell", "-File", str(target)]
-        if suffix == ".py":
-            return [sys.executable, str(target)]
-        return [str(target)]
+        return codex_command_prefix(self.codex_command)
 
     def _tail_output(self, stdout: str | None, stderr: str | None) -> list[str]:
         lines = []

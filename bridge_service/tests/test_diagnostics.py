@@ -48,3 +48,31 @@ def test_diagnostics_probe_clears_stale_error_after_newer_healthy_thread(tmp_pat
     diagnostics = BridgeDiagnosticsProbe(storage=storage, tool_names=(), cache_seconds=0).probe()
 
     assert diagnostics.last_error is None
+
+
+def test_diagnostics_subprocesses_do_not_inherit_bridge_secrets(tmp_path, monkeypatch) -> None:
+    storage = BridgeStorage(root_path=tmp_path / "bridge")
+    calls: list[dict[str, object]] = []
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
+
+    class Completed:
+        stdout = "ok"
+        stderr = ""
+        returncode = 0
+
+    def fake_run(*args, **kwargs):
+        calls.append(kwargs)
+        return Completed()
+
+    monkeypatch.setattr("codex_bridge_service.diagnostics.subprocess.run", fake_run)
+
+    BridgeDiagnosticsProbe(
+        storage=storage,
+        codex_command="codex",
+        tool_names=(),
+        cache_seconds=0,
+    ).probe()
+
+    assert calls
+    assert all(call.get("env") is not None for call in calls)
+    assert all("CODEX_BRIDGE_AUTH_TOKEN" not in call["env"] for call in calls)

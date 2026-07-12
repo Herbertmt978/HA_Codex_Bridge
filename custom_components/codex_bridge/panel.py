@@ -36,7 +36,7 @@ async def async_register_panel(hass: HomeAssistant, sidebar_title: str) -> None:
         sidebar_title=sidebar_title,
         sidebar_icon=PANEL_ICON,
         config={"panel_path": PANEL_URL_PATH},
-        require_admin=False,
+        require_admin=True,
     )
 
 

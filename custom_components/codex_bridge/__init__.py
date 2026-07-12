@@ -4,7 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .bridge_api import BridgeApiAuthError, BridgeApiConnectionError, BridgeApiClient
+from .bridge_api import BridgeApiAuthError, BridgeApiConnectionError, BridgeApiClient, BridgeApiError
 from .const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
@@ -39,11 +39,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_BRIDGE_TOKEN],
     )
     try:
-        await client.async_health()
+        await client.async_ready()
     except BridgeApiAuthError as exc:
         raise ConfigEntryAuthFailed("bridge token rejected") from exc
     except BridgeApiConnectionError as exc:
         raise ConfigEntryNotReady("bridge service is unavailable") from exc
+    except BridgeApiError as exc:
+        raise ConfigEntryNotReady("bridge service is not ready") from exc
 
     runtime = CodexBridgeRuntime(
         entry_id=entry.entry_id,

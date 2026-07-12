@@ -1,15 +1,14 @@
 import base64
 import json
 from pathlib import Path
+from threading import Lock
 import time
 from typing import Any
 from urllib import request
 
 from .models import LimitsStatusRecord, LimitsWindowRecord
 
-CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
-REFRESH_URL = "https://auth.openai.com/oauth/token"
 
 
 class CodexLimitsProbe:
@@ -19,8 +18,13 @@ class CodexLimitsProbe:
         self._cached_status: LimitsStatusRecord | None = None
         self._last_live_fetch_at = 0.0
         self._min_fetch_interval_seconds = min_fetch_interval_seconds
+        self._probe_lock = Lock()
 
     def probe(self) -> LimitsStatusRecord | None:
+        with self._probe_lock:
+            return self._probe_serialized()
+
+    def _probe_serialized(self) -> LimitsStatusRecord | None:
         live_status = self._probe_live_backend()
         if live_status is not None:
             self._cached_status = live_status
@@ -59,8 +63,7 @@ class CodexLimitsProbe:
             if not access_token:
                 return None
             if self._token_expired(access_token):
-                access_token = self._refresh_auth(auth_path, auth)
-                tokens = auth.get("tokens") or {}
+                return None
 
             headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -175,34 +178,6 @@ class CodexLimitsProbe:
             return False
         exp = claims.get("exp")
         return isinstance(exp, (int, float)) and exp <= time.time() + skew_seconds
-
-    def _refresh_auth(self, auth_path: Path, auth: dict[str, Any]) -> str:
-        refresh_token = ((auth.get("tokens") or {}).get("refresh_token")) or ""
-        if not refresh_token:
-            raise RuntimeError("missing refresh token")
-
-        payload = json.dumps(
-            {
-                "client_id": CLIENT_ID,
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-            }
-        ).encode("utf-8")
-        refreshed = self._fetch_json(
-            REFRESH_URL,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-            body=payload,
-        )
-
-        tokens = auth.setdefault("tokens", {})
-        if refreshed.get("access_token"):
-            tokens["access_token"] = refreshed["access_token"]
-        if refreshed.get("refresh_token"):
-            tokens["refresh_token"] = refreshed["refresh_token"]
-        auth["last_refresh"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        auth_path.write_text(f"{json.dumps(auth, indent=2)}\n", encoding="utf-8")
-        return str(tokens.get("access_token") or "")
 
     def _normalize_backend_snapshot(self, payload: dict[str, Any]) -> LimitsStatusRecord:
         rate_limit = payload.get("rate_limit") or payload.get("rateLimits") or {}

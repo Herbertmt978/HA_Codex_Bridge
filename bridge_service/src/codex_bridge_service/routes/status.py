@@ -6,7 +6,6 @@ from ..models import (
     BridgeStatusRecord,
     CodexAccountRecord,
     CodexAuthStatusRecord,
-    SUPPORTED_MODELS,
     SUPPORTED_THINKING_LEVELS,
 )
 
@@ -27,9 +26,18 @@ def get_status(
         if getattr(request.app.state, "diagnostics_probe", None) is not None
         else BridgeDiagnosticsRecord()
     )
+    model_catalog = request.app.state.model_catalog_probe.probe()
+    thinking_levels = list(
+        dict.fromkeys(
+            level
+            for model in model_catalog.models
+            for level in model.thinking_levels
+        )
+    ) or list(SUPPORTED_THINKING_LEVELS)
     return BridgeStatusRecord(
-        models=list(SUPPORTED_MODELS),
-        thinking_levels=list(SUPPORTED_THINKING_LEVELS),
+        models=[model.model for model in model_catalog.models],
+        thinking_levels=thinking_levels,
+        model_catalog=model_catalog,
         limits=request.app.state.storage.get_limits_status(refresh=True),
         account=(
             request.app.state.account_probe.probe()

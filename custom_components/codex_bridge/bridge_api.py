@@ -36,6 +36,9 @@ class BridgeApiClient:
     async def async_health(self) -> dict[str, Any]:
         return await self._async_json("GET", "/health")
 
+    async def async_ready(self) -> dict[str, Any]:
+        return await self._async_json("GET", "/ready")
+
     async def async_get_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/status")
 
@@ -59,15 +62,15 @@ class BridgeApiClient:
     async def async_create_project(
         self,
         name: str,
-        default_model: str,
-        default_thinking_level: str,
+        default_model: str | None = None,
+        default_thinking_level: str | None = None,
         root_path: str | None = None,
     ) -> dict[str, Any]:
-        json_body: dict[str, Any] = {
-            "name": name,
-            "default_model": default_model,
-            "default_thinking_level": default_thinking_level,
-        }
+        json_body: dict[str, Any] = {"name": name}
+        if default_model is not None:
+            json_body["default_model"] = default_model
+        if default_thinking_level is not None:
+            json_body["default_thinking_level"] = default_thinking_level
         if root_path:
             json_body["root_path"] = root_path
         return await self._async_json(

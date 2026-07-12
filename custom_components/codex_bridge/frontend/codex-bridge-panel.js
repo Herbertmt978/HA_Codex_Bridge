@@ -1455,7 +1455,7 @@ class CodexBridgePanel extends HTMLElement {
     this._projectForm = {
       name: "",
       rootPath: "",
-      defaultModel: "gpt-5.5",
+      defaultModel: "",
       defaultThinkingLevel: "medium",
     };
     this._threadForm = {
@@ -1761,10 +1761,23 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (target.id === "project-model-select") {
       this._projectForm.defaultModel = target.value;
+      const supportedLevels = this._thinkingLevelsForModel(target.value);
+      if (!supportedLevels.includes(this._projectForm.defaultThinkingLevel)) {
+        this._projectForm.defaultThinkingLevel = this._defaultThinkingLevel(target.value);
+      }
+      const thinkingSelect = this.shadowRoot.getElementById("project-thinking-select");
+      if (thinkingSelect) {
+        thinkingSelect.innerHTML = this._thinkingOptions(
+          this._projectForm.defaultThinkingLevel,
+          this._projectForm.defaultModel
+        );
+      }
+      this._renderedProjectFormKey = this._projectFormRenderKey();
       return;
     }
     if (target.id === "project-thinking-select") {
       this._projectForm.defaultThinkingLevel = target.value;
+      this._renderedProjectFormKey = this._projectFormRenderKey();
       return;
     }
     if (target.id === "thread-mode-select") {
@@ -1772,7 +1785,23 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (target.id === "thread-model-select") {
-      this._updateThreadSettings({ model_override: target.value || null });
+      const modelOverride = target.value || null;
+      const project = this._activeProject();
+      const effectiveModel = modelOverride || project?.default_model || this._defaultModel();
+      const effectiveThinkingLevel =
+        this._activeThread?.thinking_override ||
+        this._activeThread?.effective_thinking_level ||
+        project?.default_thinking_level ||
+        this._defaultThinkingLevel(effectiveModel);
+      const updates = { model_override: modelOverride };
+      const modelRecord = this._modelRecords().find((item) => item.model === effectiveModel);
+      const advertisedLevels = Array.isArray(modelRecord?.thinking_levels)
+        ? modelRecord.thinking_levels
+        : [];
+      if (advertisedLevels.length && !advertisedLevels.includes(effectiveThinkingLevel)) {
+        updates.thinking_override = this._defaultThinkingLevel(effectiveModel);
+      }
+      this._updateThreadSettings(updates);
       return;
     }
     if (target.id === "thread-thinking-select") {
@@ -1889,6 +1918,19 @@ class CodexBridgePanel extends HTMLElement {
       : "Send message to Codex";
   }
 
+  _projectFormRenderKey() {
+    return JSON.stringify({
+      mode: this._projectFormMode,
+      editingProjectId: this._editingProjectId,
+      browsePath: this._browseState?.path || "",
+      browseParent: this._browseState?.parent_path || "",
+      browseDirectories: (this._browseState?.directories || []).map((entry) => [entry.name, entry.path]),
+      model: this._projectForm.defaultModel,
+      thinking: this._projectForm.defaultThinkingLevel,
+      models: this._modelRecords(),
+    });
+  }
+
   _renderProjectForm() {
     const panel = this.shadowRoot.getElementById("project-form-panel");
     panel.classList.toggle("visible", this._showProjectForm);
@@ -1909,13 +1951,7 @@ class CodexBridgePanel extends HTMLElement {
       )
       .join("");
 
-    const formKey = JSON.stringify({
-      mode: this._projectFormMode,
-      editingProjectId: this._editingProjectId,
-      browsePath: this._browseState?.path || "",
-      browseParent: this._browseState?.parent_path || "",
-      browseDirectories: (this._browseState?.directories || []).map((entry) => [entry.name, entry.path]),
-    });
+    const formKey = this._projectFormRenderKey();
     if (formKey === this._renderedProjectFormKey && panel.innerHTML) {
       return;
     }
@@ -1932,7 +1968,7 @@ class CodexBridgePanel extends HTMLElement {
             <input class="field" id="project-root-input" type="text" placeholder="C:\\\\Projects\\\\My Work" value="${this._escapeHtml(this._projectForm.rootPath)}" />
             <div class="field-grid">
               <select class="field-select stable-select" id="project-model-select">${this._modelOptions(this._projectForm.defaultModel)}</select>
-              <select class="field-select stable-select" id="project-thinking-select">${this._thinkingOptions(this._projectForm.defaultThinkingLevel)}</select>
+              <select class="field-select stable-select" id="project-thinking-select">${this._thinkingOptions(this._projectForm.defaultThinkingLevel, this._projectForm.defaultModel)}</select>
             </div>
             <div class="browser-card">
               <span class="browser-label">Path browser</span>
@@ -2242,8 +2278,9 @@ class CodexBridgePanel extends HTMLElement {
     }
     const thread = this._activeThread;
     const project = this._activeProject();
-    const models = this._status?.models || ["gpt-5.5"];
-    const thinkingLevels = this._status?.thinking_levels || ["medium"];
+    const modelRecords = this._modelRecords();
+    const effectiveModel = thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel();
+    const thinkingLevels = this._thinkingLevelsForModel(effectiveModel, thread?.thinking_override || null);
     const limits = this._status?.limits;
     const toolbarKey = JSON.stringify({
       threadId: thread?.thread_id || null,
@@ -2253,7 +2290,7 @@ class CodexBridgePanel extends HTMLElement {
       effectiveModel: thread?.effective_model || null,
       effectiveThinking: thread?.effective_thinking_level || null,
       limits,
-      models,
+      modelRecords,
       thinkingLevels,
     });
     if (toolbarKey === this._renderedToolbarKey) {
@@ -2278,12 +2315,9 @@ class CodexBridgePanel extends HTMLElement {
             ? `
               <select class="compact-select stable-select" id="thread-model-select">
                 <option value="">${this._escapeHtml(project?.default_model ? `Inherit (${project.default_model})` : "Inherit default")}</option>
-                ${models.map(
-                  (model) =>
-                    `<option value="${this._escapeHtml(model)}" ${model === modelValue ? "selected" : ""}>${this._escapeHtml(model)}</option>`
-                ).join("")}
+                ${this._modelOptions(modelValue)}
               </select>
-              <span class="setting-foot">Effective ${this._escapeHtml(thread.effective_model || project?.default_model || "gpt-5.5")}</span>
+              <span class="setting-foot">Effective ${this._escapeHtml(thread.effective_model || project?.default_model || this._defaultModel())}</span>
             `
             : `<span class="setting-foot">Select a chat.</span>`}
         </div>
@@ -2873,7 +2907,7 @@ class CodexBridgePanel extends HTMLElement {
       ["Workspace", thread?.workspace_path || project?.root_path || "Not selected"],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
       ["Mode", thread?.mode || "full-auto"],
-      ["Model", thread?.effective_model || project?.default_model || "gpt-5.5"],
+      ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
       ["Queued steer", String(thread?.pending_prompts?.length || 0)],
@@ -2901,11 +2935,16 @@ class CodexBridgePanel extends HTMLElement {
     }
     const tools = diagnostics.tools || [];
     const auth = this._status?.auth;
+    const modelCatalog = this._status?.model_catalog;
     const rows = [
       ["Bridge", diagnostics.bridge_version || "Unknown"],
       ["Git", [diagnostics.git_branch, diagnostics.git_commit].filter(Boolean).join(" @ ") || "Unknown"],
       ["Python", diagnostics.python_version || "Unknown"],
       ["Codex CLI", diagnostics.codex_cli_version || "Unknown"],
+      ["Model catalogue", modelCatalog?.source || "Legacy bridge"],
+      ["Codex default", modelCatalog?.default_model || this._defaultModel()],
+      ["Catalogue refreshed", modelCatalog?.refreshed_at || "Unknown"],
+      ["Catalogue error", modelCatalog?.error || "None"],
       ["Auth state", auth?.state || "Unknown"],
       ["Auth message", auth?.message || "None"],
       ["Device code", auth?.user_code || "None"],
@@ -3017,11 +3056,12 @@ class CodexBridgePanel extends HTMLElement {
     this._editingProjectId = null;
     this._showProjectForm = !(wasVisible && wasCreateMode);
     this._showThreadForm = false;
+    const defaultModel = this._defaultModel();
     this._projectForm = {
       name: "",
       rootPath: "",
-      defaultModel: "gpt-5.5",
-      defaultThinkingLevel: "medium",
+      defaultModel,
+      defaultThinkingLevel: this._defaultThinkingLevel(defaultModel),
     };
     this._folderDraft = "";
     this._browseState = null;
@@ -3148,8 +3188,6 @@ class CodexBridgePanel extends HTMLElement {
       } else {
         project = await this._callWS("create_project", {
           name: this._projectForm.name.trim(),
-          default_model: this._projectForm.defaultModel,
-          default_thinking_level: this._projectForm.defaultThinkingLevel,
         });
       }
 
@@ -4218,19 +4256,83 @@ class CodexBridgePanel extends HTMLElement {
     return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(value));
   }
 
+  _modelRecords() {
+    const catalogModels = this._status?.model_catalog?.models;
+    if (Array.isArray(catalogModels) && catalogModels.length) {
+      return catalogModels.filter((model) => typeof model?.model === "string" && model.model);
+    }
+    const legacyModels = Array.isArray(this._status?.models) && this._status.models.length
+      ? this._status.models
+      : ["gpt-5.5"];
+    return legacyModels.map((model) => ({ model, display_name: model, catalogued: true }));
+  }
+
+  _availableModels() {
+    return this._modelRecords().map((record) => record.model);
+  }
+
+  _defaultModel() {
+    return this._status?.model_catalog?.default_model || this._availableModels()[0] || "gpt-5.5";
+  }
+
+  _thinkingLevelsForModel(model, selectedValue = null) {
+    const record = this._modelRecords().find((item) => item.model === model);
+    const structuredCatalog = this._status?.model_catalog;
+    let advertised;
+    if (Array.isArray(record?.thinking_levels) && record.thinking_levels.length) {
+      advertised = record.thinking_levels;
+    } else if (structuredCatalog && Array.isArray(structuredCatalog.models)) {
+      advertised = selectedValue ? [selectedValue] : ["medium"];
+    } else if (Array.isArray(this._status?.thinking_levels) && this._status.thinking_levels.length) {
+      advertised = this._status.thinking_levels;
+    } else {
+      advertised = ["medium"];
+    }
+    return selectedValue && !advertised.includes(selectedValue)
+      ? [selectedValue, ...advertised]
+      : advertised;
+  }
+
+  _defaultThinkingLevel(model = this._defaultModel()) {
+    const record = this._modelRecords().find((item) => item.model === model);
+    const supportedLevels = this._thinkingLevelsForModel(model);
+    const catalog = this._status?.model_catalog;
+    if (
+      model === catalog?.default_model &&
+      catalog.default_thinking_level &&
+      supportedLevels.includes(catalog.default_thinking_level)
+    ) {
+      return catalog.default_thinking_level;
+    }
+    if (record?.default_thinking_level && supportedLevels.includes(record.default_thinking_level)) {
+      return record.default_thinking_level;
+    }
+    if (supportedLevels.includes("medium")) {
+      return "medium";
+    }
+    return supportedLevels[0] || "medium";
+  }
+
   _modelOptions(selectedValue) {
-    const models = this._status?.models || ["gpt-5.5"];
-    return models
-      .map(
-        (model) =>
-          `<option value="${this._escapeHtml(model)}" ${model === selectedValue ? "selected" : ""}>${this._escapeHtml(model)}</option>`
-      )
+    const records = [...this._modelRecords()];
+    if (selectedValue && !records.some((record) => record.model === selectedValue)) {
+      records.unshift({
+        model: selectedValue,
+        display_name: selectedValue,
+        catalogued: false,
+      });
+    }
+    return records
+      .map((record) => {
+        const suffix = record.catalogued === false ? " (configured)" : "";
+        const label = `${record.display_name || record.model}${suffix}`;
+        return `<option value="${this._escapeHtml(record.model)}" ${record.model === selectedValue ? "selected" : ""}>${this._escapeHtml(label)}</option>`;
+      })
       .join("");
   }
 
-  _thinkingOptions(selectedValue) {
-    const thinkingLevels = this._status?.thinking_levels || ["medium"];
-    return thinkingLevels
+  _thinkingOptions(selectedValue, model = this._defaultModel()) {
+    return this._thinkingLevelsForModel(model, selectedValue)
       .map(
         (level) =>
           `<option value="${this._escapeHtml(level)}" ${level === selectedValue ? "selected" : ""}>${this._escapeHtml(this._titleCase(level))}</option>`
