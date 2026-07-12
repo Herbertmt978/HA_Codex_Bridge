@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from codex_bridge_service.models import RuntimeProfile
+from codex_bridge_service.resource_limits import MIB, ResourceLimits
 from codex_bridge_service.settings import Settings
 
 
@@ -106,3 +107,33 @@ def test_settings_require_a_nonblank_home_assistant_workspace_root(
 
     serialized_error = str(error.value)
     assert private_token not in serialized_error
+
+
+def test_settings_expose_the_home_assistant_resource_limit_defaults(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+
+    assert Settings().to_resource_limits() == ResourceLimits()
+
+
+def test_settings_build_immutable_resource_limits_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    monkeypatch.setenv("CODEX_BRIDGE_MAX_QUEUED_PROMPTS", "3")
+    monkeypatch.setenv("CODEX_BRIDGE_MAX_UPLOAD_FILE_BYTES", str(12 * MIB))
+    monkeypatch.setenv("CODEX_BRIDGE_MINIMUM_FREE_FRACTION", "0.1")
+
+    limits = Settings().to_resource_limits()
+
+    assert limits.max_queued_prompts == 3
+    assert limits.max_upload_file_bytes == 12 * MIB
+    assert limits.minimum_free_fraction == 0.1
+
+
+def test_settings_reject_invalid_resource_limits_without_echoing_input(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    invalid_value = "-999999999999999999999"
+    monkeypatch.setenv("CODEX_BRIDGE_MAX_PRIVATE_BYTES", invalid_value)
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert invalid_value not in str(error.value)

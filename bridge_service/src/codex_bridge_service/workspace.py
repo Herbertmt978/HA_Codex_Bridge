@@ -76,6 +76,59 @@ class WorkspaceUnsupportedError(WorkspaceBoundaryError, RuntimeError):
     code = "secure_operations_unavailable"
 
 
+def normalize_portable_relative_path(
+    relative: Path | str,
+    *,
+    allow_root: bool = False,
+) -> str:
+    """Apply the canonical cross-platform workspace name grammar."""
+
+    try:
+        value = os.fspath(relative)
+    except TypeError:
+        raise WorkspaceInputError() from None
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise WorkspaceInputError()
+    if any(unicodedata.category(character).startswith("C") for character in value):
+        raise WorkspaceInputError()
+    if value == ".":
+        if allow_root:
+            return "."
+        raise WorkspaceInputError()
+    if "/" in value and "\\" in value:
+        raise WorkspaceInputError()
+    if "\\\\" in value:
+        raise WorkspaceInputError()
+
+    portable = value.replace("\\", "/")
+    if (
+        portable.startswith("/")
+        or portable.endswith("/")
+        or "//" in portable
+        or _WINDOWS_DRIVE_PATTERN.match(portable)
+        or ":" in portable
+    ):
+        raise WorkspaceInputError()
+
+    parts = portable.split("/")
+    if not parts or any(not _valid_portable_component(part) for part in parts):
+        raise WorkspaceInputError()
+    return "/".join(parts)
+
+
+def _valid_portable_component(component: str) -> bool:
+    if not component or component in {".", ".."}:
+        return False
+    if component != component.strip() or component.endswith((".", " ")):
+        return False
+    if len(component) > 255:
+        return False
+    if any(character in _WINDOWS_INVALID_CHARS for character in component):
+        return False
+    base = component.split(".", 1)[0].upper().translate(_WINDOWS_SUPERSCRIPT_DIGITS)
+    return base not in _WINDOWS_RESERVED_NAMES
+
+
 @dataclass(frozen=True, slots=True)
 class WorkspaceFileIdentity:
     """Stable identity captured from an already-open regular file."""
@@ -205,37 +258,7 @@ class WorkspaceBoundary:
             pass
 
     def normalize(self, relative: Path | str, *, allow_root: bool = False) -> str:
-        try:
-            value = os.fspath(relative)
-        except TypeError:
-            raise WorkspaceInputError() from None
-        if not isinstance(value, str) or not value or value != value.strip():
-            raise WorkspaceInputError()
-        if any(unicodedata.category(character).startswith("C") for character in value):
-            raise WorkspaceInputError()
-        if value == ".":
-            if allow_root:
-                return "."
-            raise WorkspaceInputError()
-        if "/" in value and "\\" in value:
-            raise WorkspaceInputError()
-        if "\\\\" in value:
-            raise WorkspaceInputError()
-
-        portable = value.replace("\\", "/")
-        if (
-            portable.startswith("/")
-            or portable.endswith("/")
-            or "//" in portable
-            or _WINDOWS_DRIVE_PATTERN.match(portable)
-            or ":" in portable
-        ):
-            raise WorkspaceInputError()
-
-        parts = portable.split("/")
-        if not parts or any(not self._valid_component(part) for part in parts):
-            raise WorkspaceInputError()
-        return "/".join(parts)
+        return normalize_portable_relative_path(relative, allow_root=allow_root)
 
     def resolve_relative(
         self,
@@ -990,16 +1013,7 @@ class WorkspaceBoundary:
 
     @staticmethod
     def _valid_component(component: str) -> bool:
-        if not component or component in {".", ".."}:
-            return False
-        if component != component.strip() or component.endswith((".", " ")):
-            return False
-        if len(component) > 255:
-            return False
-        if any(character in _WINDOWS_INVALID_CHARS for character in component):
-            return False
-        base = component.split(".", 1)[0].upper().translate(_WINDOWS_SUPERSCRIPT_DIGITS)
-        return base not in _WINDOWS_RESERVED_NAMES
+        return _valid_portable_component(component)
 
     @staticmethod
     def _is_junction(path: Path) -> bool:
