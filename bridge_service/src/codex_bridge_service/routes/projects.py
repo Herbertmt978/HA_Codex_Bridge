@@ -2,7 +2,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, field_validator
 
 from ..auth import require_bridge_token
-from ..models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, PathBrowseEntryRecord, PathBrowseRecord, ProjectRecord
+from ..models import PathBrowseEntryRecord, PathBrowseRecord, ProjectRecord
 from ..storage import ProjectMutationError, ProjectNotFoundError
 
 router = APIRouter()
@@ -11,8 +11,8 @@ router = APIRouter()
 class CreateProjectRequest(BaseModel):
     name: str
     root_path: str | None = None
-    default_model: str = DEFAULT_MODEL
-    default_thinking_level: str = DEFAULT_THINKING_LEVEL
+    default_model: str | None = None
+    default_thinking_level: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -21,12 +21,26 @@ class CreateProjectRequest(BaseModel):
             raise ValueError("value must not be blank")
         return value
 
+    @field_validator("default_model", "default_thinking_level")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("value must not be blank")
+        return value.strip() if value is not None else None
+
 
 class UpdateProjectRequest(BaseModel):
     name: str | None = None
     root_path: str | None = None
     default_model: str | None = None
     default_thinking_level: str | None = None
+
+    @field_validator("default_model", "default_thinking_level")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("value must not be blank")
+        return value.strip() if value is not None else None
 
 
 class CreateFolderRequest(BaseModel):
@@ -50,7 +64,11 @@ def list_projects(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
-    return request.app.state.storage.list_projects()
+    model_catalog = request.app.state.model_catalog_probe.probe()
+    return request.app.state.storage.list_projects(
+        default_model=model_catalog.default_model,
+        default_thinking_level=model_catalog.default_thinking_level,
+    )
 
 
 @router.post("/projects", response_model=ProjectRecord, status_code=status.HTTP_201_CREATED)
@@ -63,11 +81,34 @@ def create_project(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
+    model_catalog = request.app.state.model_catalog_probe.probe()
+    default_model = payload.default_model or model_catalog.default_model
+    model_record = next(
+        (model for model in model_catalog.models if model.model == default_model),
+        None,
+    )
+    if payload.default_thinking_level is not None:
+        default_thinking_level = payload.default_thinking_level
+    elif payload.default_model is None:
+        default_thinking_level = model_catalog.default_thinking_level
+    elif model_record is not None:
+        default_thinking_level = model_record.default_thinking_level
+    else:
+        default_thinking_level = model_catalog.default_thinking_level
+    if (
+        model_record is not None
+        and model_record.thinking_levels
+        and default_thinking_level not in model_record.thinking_levels
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{default_thinking_level} is not supported by {default_model}",
+        )
     return request.app.state.storage.create_project(
         name=payload.name,
         root_path=payload.root_path,
-        default_model=payload.default_model,
-        default_thinking_level=payload.default_thinking_level,
+        default_model=default_model,
+        default_thinking_level=default_thinking_level,
     )
 
 
@@ -83,12 +124,34 @@ def update_project(
         expected_token=request.app.state.auth_token,
     )
     try:
+        current = request.app.state.storage.load_project(project_id)
+        updates = payload.model_dump(exclude_unset=True)
+        model_was_requested = updates.get("default_model") is not None
+        thinking_was_requested = updates.get("default_thinking_level") is not None
+        target_model = updates.get("default_model") or current.default_model
+        target_thinking = updates.get("default_thinking_level") or current.default_thinking_level
+        if model_was_requested or thinking_was_requested:
+            model_catalog = request.app.state.model_catalog_probe.probe()
+            model_record = next(
+                (model for model in model_catalog.models if model.model == target_model),
+                None,
+            )
+            if (
+                model_record is not None
+                and model_record.thinking_levels
+                and target_thinking not in model_record.thinking_levels
+            ):
+                if model_was_requested and not thinking_was_requested:
+                    target_thinking = model_record.default_thinking_level
+                    updates["default_thinking_level"] = target_thinking
+                else:
+                    raise ValueError(f"{target_thinking} is not supported by {target_model}")
         return request.app.state.storage.update_project(
             project_id,
-            name=payload.name,
-            root_path=payload.root_path,
-            default_model=payload.default_model,
-            default_thinking_level=payload.default_thinking_level,
+            name=updates.get("name"),
+            root_path=updates.get("root_path"),
+            default_model=updates.get("default_model"),
+            default_thinking_level=updates.get("default_thinking_level"),
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc

@@ -453,6 +453,7 @@ def test_runner_closes_stdin_for_codex_process(tmp_path, monkeypatch) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = _create_project_thread(storage, tmp_path)
     captured: dict[str, object] = {}
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
 
     class DummyProcess:
         def __init__(self) -> None:
@@ -473,11 +474,15 @@ def test_runner_closes_stdin_for_codex_process(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
 
-    runner = BridgeRunner(storage=storage, codex_command="codex")
+    codex_home = tmp_path / "codex-home"
+    runner = BridgeRunner(storage=storage, codex_command="codex", codex_home=codex_home)
     runner.submit_prompt(thread.thread_id, "Check stdin handling")
     _wait_for_idle(storage, thread.thread_id)
 
     assert captured["stdin"] is subprocess.DEVNULL
+    assert captured.get("env") is not None
+    assert "CODEX_BRIDGE_AUTH_TOKEN" not in captured["env"]
+    assert captured["env"]["CODEX_HOME"] == str(codex_home)
 
 
 def test_runner_can_bypass_sandbox_for_trusted_vm_exec(tmp_path, monkeypatch) -> None:

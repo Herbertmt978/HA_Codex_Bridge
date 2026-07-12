@@ -12,32 +12,36 @@ from .runtime import async_get_runtime
 
 
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
-    websocket_api.async_register_command(hass, ws_get_config)
-    websocket_api.async_register_command(hass, ws_get_status)
-    websocket_api.async_register_command(hass, ws_get_auth_status)
-    websocket_api.async_register_command(hass, ws_start_auth_login)
-    websocket_api.async_register_command(hass, ws_logout_auth)
-    websocket_api.async_register_command(hass, ws_list_projects)
-    websocket_api.async_register_command(hass, ws_create_project)
-    websocket_api.async_register_command(hass, ws_update_project)
-    websocket_api.async_register_command(hass, ws_archive_project)
-    websocket_api.async_register_command(hass, ws_restore_project)
-    websocket_api.async_register_command(hass, ws_delete_project)
-    websocket_api.async_register_command(hass, ws_browse_paths)
-    websocket_api.async_register_command(hass, ws_create_folder)
-    websocket_api.async_register_command(hass, ws_list_threads)
-    websocket_api.async_register_command(hass, ws_get_thread)
-    websocket_api.async_register_command(hass, ws_create_thread)
-    websocket_api.async_register_command(hass, ws_update_thread)
-    websocket_api.async_register_command(hass, ws_archive_thread)
-    websocket_api.async_register_command(hass, ws_restore_thread)
-    websocket_api.async_register_command(hass, ws_delete_thread)
-    websocket_api.async_register_command(hass, ws_send_prompt)
-    websocket_api.async_register_command(hass, ws_cancel_run)
-    websocket_api.async_register_command(hass, ws_get_events)
-    websocket_api.async_register_command(hass, ws_subscribe_events)
-    websocket_api.async_register_command(hass, ws_list_artifacts)
-    websocket_api.async_register_command(hass, ws_create_workspace_archive)
+    commands = (
+        ws_get_config,
+        ws_get_status,
+        ws_get_auth_status,
+        ws_start_auth_login,
+        ws_logout_auth,
+        ws_list_projects,
+        ws_create_project,
+        ws_update_project,
+        ws_archive_project,
+        ws_restore_project,
+        ws_delete_project,
+        ws_browse_paths,
+        ws_create_folder,
+        ws_list_threads,
+        ws_get_thread,
+        ws_create_thread,
+        ws_update_thread,
+        ws_archive_thread,
+        ws_restore_thread,
+        ws_delete_thread,
+        ws_send_prompt,
+        ws_cancel_run,
+        ws_get_events,
+        ws_subscribe_events,
+        ws_list_artifacts,
+        ws_create_workspace_archive,
+    )
+    for command in commands:
+        websocket_api.async_register_command(hass, websocket_api.require_admin(command))
 
 
 async def _async_handle(
@@ -143,8 +147,8 @@ async def ws_list_projects(
         vol.Required("type"): f"{DOMAIN}/create_project",
         vol.Required("name"): str,
         vol.Optional("root_path"): vol.Any(None, str),
-        vol.Optional("default_model", default="gpt-5.5"): str,
-        vol.Optional("default_thinking_level", default="medium"): str,
+        vol.Optional("default_model"): str,
+        vol.Optional("default_thinking_level"): str,
     }
 )
 @websocket_api.async_response
@@ -159,8 +163,8 @@ async def ws_create_project(
         msg,
         lambda client: client.async_create_project(
             msg["name"],
-            msg["default_model"],
-            msg["default_thinking_level"],
+            msg.get("default_model"),
+            msg.get("default_thinking_level"),
             msg.get("root_path"),
         ),
     )

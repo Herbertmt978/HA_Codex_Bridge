@@ -10,14 +10,6 @@ SUPPORTED_MODELS = [
     "gpt-5.5",
     "gpt-5.4-mini",
 ]
-LEGACY_UNSUPPORTED_MODELS = {
-    "gpt-5",
-    "gpt-5.1",
-    "gpt-5.2",
-    "gpt-5.3-codex",
-    "gpt-5.3-codex-spark",
-    "gpt-5.4",
-}
 SUPPORTED_THINKING_LEVELS = [
     "minimal",
     "low",
@@ -30,10 +22,7 @@ SUPPORTED_THINKING_LEVELS = [
 def normalize_model(model: str | None) -> str:
     if not model or not model.strip():
         return DEFAULT_MODEL
-    candidate = model.strip()
-    if candidate in LEGACY_UNSUPPORTED_MODELS:
-        return DEFAULT_MODEL
-    return candidate
+    return model.strip()
 
 
 class RunMode(StrEnum):
@@ -172,6 +161,29 @@ class CodexAuthStatusRecord(BaseModel):
     updated_at: str | None = None
 
 
+class CodexModelRecord(BaseModel):
+    model: str
+    display_name: str
+    description: str | None = None
+    is_default: bool = False
+    default_thinking_level: str = DEFAULT_THINKING_LEVEL
+    thinking_levels: list[str] = Field(default_factory=list)
+    input_modalities: list[str] = Field(default_factory=list)
+    catalogued: bool = True
+
+
+class CodexModelCatalogRecord(BaseModel):
+    source: str = "fallback"
+    models: list[CodexModelRecord] = Field(default_factory=list)
+    default_model: str = DEFAULT_MODEL
+    default_thinking_level: str = DEFAULT_THINKING_LEVEL
+    configured_model: str | None = None
+    configured_thinking_level: str | None = None
+    refreshed_at: str | None = None
+    stale: bool = False
+    error: str | None = None
+
+
 class DiagnosticToolRecord(BaseModel):
     name: str
     available: bool = False
@@ -196,6 +208,7 @@ class BridgeDiagnosticsRecord(BaseModel):
 class BridgeStatusRecord(BaseModel):
     models: list[str] = Field(default_factory=lambda: list(SUPPORTED_MODELS))
     thinking_levels: list[str] = Field(default_factory=lambda: list(SUPPORTED_THINKING_LEVELS))
+    model_catalog: CodexModelCatalogRecord = Field(default_factory=CodexModelCatalogRecord)
     limits: LimitsStatusRecord = Field(default_factory=LimitsStatusRecord)
     account: CodexAccountRecord = Field(default_factory=CodexAccountRecord)
     auth: CodexAuthStatusRecord = Field(default_factory=CodexAuthStatusRecord)

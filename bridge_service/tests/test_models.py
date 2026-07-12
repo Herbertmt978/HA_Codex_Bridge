@@ -13,7 +13,14 @@ from codex_bridge_service.models import (
     ThreadEventRecord,
     ThreadRecord,
     ThreadViewRecord,
+    normalize_model,
 )
+
+
+def test_normalize_model_preserves_models_currently_advertised_by_codex() -> None:
+    assert normalize_model("gpt-5.2") == "gpt-5.2"
+    assert normalize_model("gpt-5.4") == "gpt-5.4"
+    assert normalize_model("gpt-5.3-codex-spark") == "gpt-5.3-codex-spark"
 
 
 def test_thread_record_round_trips() -> None:

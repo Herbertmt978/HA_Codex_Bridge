@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from codex_bridge_service.codex_auth import CodexAuthManager
 from codex_bridge_service.models import CodexAuthStatusRecord
 
@@ -43,3 +45,64 @@ def test_auth_status_ignores_resolved_stale_auth_error() -> None:
     expired_again = manager.status(last_error=new_error)
     assert expired_again.state == "expired"
     assert expired_again.auth_required is True
+
+
+def test_auth_logout_strips_bridge_secrets_and_propagates_codex_home(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    captured = {}
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
+    monkeypatch.setattr(
+        "codex_bridge_service.codex_auth.subprocess.run",
+        lambda *args, **kwargs: (
+            captured.update(kwargs)
+            or SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
+    )
+    codex_home = tmp_path / "codex-home"
+
+    status = CodexAuthManager(codex_home=codex_home).logout()
+
+    assert status.state == "logged_out"
+    assert "CODEX_BRIDGE_AUTH_TOKEN" not in captured["env"]
+    assert captured["env"]["CODEX_HOME"] == str(codex_home)
+
+
+def test_device_login_subprocesses_use_sanitized_codex_environment(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    environments = []
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
+    monkeypatch.setattr(
+        "codex_bridge_service.codex_auth.subprocess.run",
+        lambda *args, **kwargs: (
+            environments.append(kwargs["env"])
+            or SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
+    )
+
+    class FakeLoginProcess:
+        stdout = iter(())
+
+        def poll(self):
+            return None
+
+        def wait(self):
+            return 0
+
+    def fake_popen(*args, **kwargs):
+        environments.append(kwargs["env"])
+        return FakeLoginProcess()
+
+    monkeypatch.setattr("codex_bridge_service.codex_auth.subprocess.Popen", fake_popen)
+    codex_home = tmp_path / "codex-home"
+    manager = CodexAuthManager(codex_home=codex_home)
+
+    manager._run_device_login(force_logout=True)
+
+    assert manager.status().state == "ok"
+    assert len(environments) == 2
+    assert all("CODEX_BRIDGE_AUTH_TOKEN" not in environment for environment in environments)
+    assert all(environment["CODEX_HOME"] == str(codex_home) for environment in environments)

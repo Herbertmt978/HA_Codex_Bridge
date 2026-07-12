@@ -11,6 +11,8 @@ from codex_bridge_service.models import (
     BridgeDiagnosticsRecord,
     CodexAccountRecord,
     CodexAuthStatusRecord,
+    CodexModelCatalogRecord,
+    CodexModelRecord,
     RunRecord,
 )
 from codex_bridge_service.runner import BridgeRunner
@@ -79,6 +81,42 @@ class FakeDiagnosticsProbe:
         )
 
 
+class FakeModelCatalogProbe:
+    def probe(self) -> CodexModelCatalogRecord:
+        return CodexModelCatalogRecord(
+            source="codex-app-server",
+            models=[
+                CodexModelRecord(
+                    model="gpt-5.6-sol",
+                    display_name="GPT-5.6-Sol",
+                    is_default=True,
+                    default_thinking_level="medium",
+                    thinking_levels=["low", "medium", "high", "xhigh", "max", "ultra"],
+                    input_modalities=["text", "image"],
+                ),
+                CodexModelRecord(
+                    model="gpt-5.6-luna",
+                    display_name="GPT-5.6-Luna",
+                    default_thinking_level="medium",
+                    thinking_levels=["low", "medium", "high", "xhigh", "max"],
+                    input_modalities=["text", "image"],
+                ),
+                CodexModelRecord(
+                    model="gpt-5.4-mini",
+                    display_name="GPT-5.4-Mini",
+                    default_thinking_level="medium",
+                    thinking_levels=["low", "medium", "high"],
+                    input_modalities=["text", "image"],
+                ),
+            ],
+            default_model="gpt-5.6-sol",
+            default_thinking_level="ultra",
+            configured_model="gpt-5.6-sol",
+            configured_thinking_level="ultra",
+            refreshed_at="2026-07-12T00:00:00Z",
+        )
+
+
 class FakeAuthManager:
     def __init__(self) -> None:
         self.started = False
@@ -109,10 +147,16 @@ class FakeAuthManager:
 
 
 def test_health_project_create_and_status_require_token(tmp_path) -> None:
-    app = create_app(root_path=tmp_path, auth_token="secret", account_probe=FakeAccountProbe())
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        account_probe=FakeAccountProbe(),
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
     client = TestClient(app)
 
     assert client.get("/health").status_code == 200
+    assert client.get("/ready").status_code == 401
     assert client.post("/projects", json={"name": "No token", "root_path": str(tmp_path / "nope")}).status_code == 401
     assert client.get("/status").status_code == 401
 
@@ -137,16 +181,266 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
     assert saved_payload["project_id"] == payload["project_id"]
     assert saved_payload["root_path"] == payload["root_path"]
 
+    ready_response = client.get(
+        "/ready",
+        headers={"Authorization": "Bearer secret"},
+    )
+    assert ready_response.status_code == 200
+    assert ready_response.json() == {"status": "ok"}
+
     status_response = client.get(
         "/status",
         headers={"Authorization": "Bearer secret"},
     )
 
     assert status_response.status_code == 200
-    assert status_response.json()["models"][0] == DEFAULT_MODEL
-    assert status_response.json()["thinking_levels"][2] == DEFAULT_THINKING_LEVEL
-    assert status_response.json()["account"]["email"] == "person@example.com"
-    assert status_response.json()["account"]["plan_type"] == "pro"
+    status = status_response.json()
+    assert status["models"] == ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.4-mini"]
+    assert status["thinking_levels"] == ["low", "medium", "high", "xhigh", "max", "ultra"]
+    assert status["model_catalog"]["default_model"] == "gpt-5.6-sol"
+    assert status["model_catalog"]["configured_thinking_level"] == "ultra"
+    assert status["account"]["email"] == "person@example.com"
+    assert status["account"]["plan_type"] == "pro"
+
+
+def test_project_without_explicit_settings_uses_configured_codex_defaults(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={"name": "Latest Codex defaults"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["default_model"] == "gpt-5.6-sol"
+    assert response.json()["default_thinking_level"] == "ultra"
+
+
+def test_project_with_only_model_uses_that_models_default_thinking_level(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={"name": "Mini project", "default_model": "gpt-5.4-mini"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["default_model"] == "gpt-5.4-mini"
+    assert response.json()["default_thinking_level"] == "medium"
+
+
+def test_project_rejects_reasoning_level_not_supported_by_model(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Invalid mini project",
+            "default_model": "gpt-5.4-mini",
+            "default_thinking_level": "ultra",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not supported" in response.json()["detail"]
+
+
+def test_project_rejects_blank_model_defaults(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={"name": "Blank model", "default_model": ""},
+    )
+
+    assert response.status_code == 422
+
+
+def test_project_model_update_repairs_incompatible_existing_thinking_level(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    created = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Switch models",
+            "default_model": "gpt-5.6-sol",
+            "default_thinking_level": "ultra",
+        },
+    )
+
+    response = client.patch(
+        f"/projects/{created.json()['project_id']}",
+        headers={"Authorization": "Bearer secret"},
+        json={"default_model": "gpt-5.4-mini"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["default_model"] == "gpt-5.4-mini"
+    assert response.json()["default_thinking_level"] == "medium"
+
+
+def test_project_update_rejects_blank_model(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    created = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={"name": "Blank update"},
+    )
+
+    response = client.patch(
+        f"/projects/{created.json()['project_id']}",
+        headers={"Authorization": "Bearer secret"},
+        json={"default_model": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_thread_create_repairs_inherited_effort_for_explicit_model(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    project = client.post(
+        "/projects",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "name": "Thread settings",
+            "default_model": "gpt-5.6-sol",
+            "default_thinking_level": "ultra",
+        },
+    ).json()
+
+    response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "title": "Luna thread",
+            "project_id": project["project_id"],
+            "mode": "full-auto",
+            "model_override": "gpt-5.6-luna",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["model_override"] == "gpt-5.6-luna"
+    assert response.json()["thinking_override"] == "medium"
+    assert response.json()["effective_thinking_level"] == "medium"
+
+
+def test_thread_update_repairs_or_rejects_incompatible_model_effort_pair(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    thread = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "Switch thread", "mode": "full-auto"},
+    ).json()
+
+    repaired = client.patch(
+        f"/threads/{thread['thread_id']}",
+        headers={"Authorization": "Bearer secret"},
+        json={"model_override": "gpt-5.6-luna"},
+    )
+    rejected = client.patch(
+        f"/threads/{thread['thread_id']}",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "model_override": "gpt-5.6-luna",
+            "thinking_override": "ultra",
+        },
+    )
+
+    assert repaired.status_code == 200
+    assert repaired.json()["thinking_override"] == "medium"
+    assert rejected.status_code == 400
+    assert "not supported" in rejected.json()["detail"]
+
+
+def test_thread_update_preserves_unknown_future_model_pair(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    thread = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "Future model", "mode": "full-auto"},
+    ).json()
+
+    response = client.patch(
+        f"/threads/{thread['thread_id']}",
+        headers={"Authorization": "Bearer secret"},
+        json={
+            "model_override": "gpt-future-codex",
+            "thinking_override": "future-effort",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["model_override"] == "gpt-future-codex"
+    assert response.json()["thinking_override"] == "future-effort"
+
+
+def test_fresh_direct_chat_uses_configured_codex_defaults(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/threads",
+        headers={"Authorization": "Bearer secret"},
+        json={"title": "Direct with current defaults"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["effective_model"] == "gpt-5.6-sol"
+    assert response.json()["effective_thinking_level"] == "ultra"
 
 
 def test_status_surfaces_codex_auth_expired_state(tmp_path) -> None:
@@ -154,6 +448,7 @@ def test_status_surfaces_codex_auth_expired_state(tmp_path) -> None:
         root_path=tmp_path,
         auth_token="secret",
         diagnostics_probe=FakeDiagnosticsProbe(),
+        model_catalog_probe=FakeModelCatalogProbe(),
         auth_manager=FakeAuthManager(),
     )
     client = TestClient(app)
@@ -586,6 +881,7 @@ def test_prompt_route_accepts_steer_message_while_thread_is_running(tmp_path, mo
         root_path=tmp_path,
         auth_token="secret",
         runner_factory=lambda storage: BridgeRunner(storage=storage, codex_command="codex"),
+        model_catalog_probe=FakeModelCatalogProbe(),
     )
     client = TestClient(app)
     thread_response = client.post(
