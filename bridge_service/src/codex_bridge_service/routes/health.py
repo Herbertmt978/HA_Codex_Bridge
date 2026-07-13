@@ -7,6 +7,7 @@ from ..models import (
     ComponentVersionRecord,
     ImageBuildRecord,
 )
+from ..readiness import evaluate_readiness
 
 router = APIRouter()
 
@@ -26,6 +27,7 @@ def readiness_check(
         expected_token=request.app.state.auth_token,
     )
     build_info = request.app.state.build_info
+    readiness = evaluate_readiness(request.app.state)
     return BridgeReadinessRecord(
         app=ComponentVersionRecord(version=build_info.app_version),
         bridge=ComponentVersionRecord(
@@ -37,4 +39,5 @@ def readiness_check(
             release_lock_digest=build_info.release_lock_digest,
         ),
         architecture=build_info.architecture,
+        readiness=readiness,
     )

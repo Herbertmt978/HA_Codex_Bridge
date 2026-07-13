@@ -408,7 +408,7 @@ class ImageBuildRecord(BaseModel):
 class ReadinessStateRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    state: Literal["ready"] = "ready"
+    state: Literal["ready", "auth_required", "degraded_catalogue", "fatal"] = "ready"
     reasons: tuple[str, ...] = ()
 
 
@@ -436,6 +436,8 @@ class BridgeDiagnosticsRecord(BaseModel):
     api_minimum: int = API_CONTRACT.minimum
     api_maximum: int = API_CONTRACT.maximum
     bundled_codex_version: str | None = None
+    active_codex_version: str | None = None
+    codex_version_match: bool | None = None
     image_revision: str | None = None
     architecture: Literal["amd64", "aarch64", "unknown"] = "unknown"
     release_lock_digest: str | None = None

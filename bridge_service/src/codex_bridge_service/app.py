@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from .account import AppServerAccountProbe, CodexAccountProbe
 from .auth_coordinator import CodexAuthCoordinator
 from .build_info import BuildInfo
-from .codex_app_server import CodexAppServerClient
+from .codex_app_server import CodexAppServerClient, CodexAppServerError
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
 from .event_store import (
@@ -23,7 +23,7 @@ from .event_store import (
 )
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
-from .model_catalog import CodexModelCatalogProbe
+from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
 from .models import CodexAuthStatusRecord, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
@@ -129,6 +129,9 @@ def create_app(
     auth_coordinator_factory: (
         Callable[[Any], _AuthCoordinatorLifecycle] | None
     ) = None,
+    sandbox_ready: bool | None = None,
+    model_discovery_timeout_seconds: float = 5.0,
+    model_cache_ttl_seconds: float = 600.0,
 ) -> FastAPI:
     resolved_runtime_profile = RuntimeProfile(runtime_profile)
     resolved_build_info = (
@@ -181,7 +184,16 @@ def create_app(
                 await asyncio.to_thread(storage.event_store.close)
             return
         try:
-            await asyncio.to_thread(resolved_app_server.start)
+            try:
+                await asyncio.to_thread(resolved_app_server.start)
+            except CodexAppServerError:
+                # Keep the authenticated diagnostic surface alive for a
+                # missing, incompatible, or otherwise unavailable bundled
+                # runtime. The App remains fail-closed and requires a restart
+                # after the underlying installation is repaired.
+                _app.state.runtime_startup_failed = True
+                yield
+                return
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
             runner_start = getattr(resolved_runner, "start", None)
@@ -303,9 +315,19 @@ def create_app(
             },
         )
 
-    resolved_model_catalog_probe = model_catalog_probe or CodexModelCatalogProbe(
-        codex_command=codex_command,
-        codex_home=codex_home,
+    resolved_model_catalog_probe = (
+        model_catalog_probe
+        if model_catalog_probe is not None
+        else AppServerModelCatalogProbe(
+            cast(Any, resolved_app_server),
+            timeout_seconds=model_discovery_timeout_seconds,
+            cache_ttl_seconds=model_cache_ttl_seconds,
+        )
+        if resolved_app_server is not None
+        else CodexModelCatalogProbe(
+            codex_command=codex_command,
+            codex_home=codex_home,
+        )
     )
 
     def special_project_defaults() -> tuple[str, str, bool]:
@@ -392,6 +414,10 @@ def create_app(
     app.state.auth_token = auth_token
     app.state.build_info = resolved_build_info
     app.state.codex_app_server = resolved_app_server
+    app.state.runtime_startup_failed = False
+    # Task 10 accepts only an injected/proven health signal.  Task 21 owns
+    # proving real OS confinement, so HA fails closed when none is supplied.
+    app.state.sandbox_ready = sandbox_ready
     app.state.runtime_gate = resolved_runtime_gate
     app.state.auth_coordinator = resolved_auth_coordinator
     app.state.account_probe = resolved_account_probe
@@ -400,6 +426,11 @@ def create_app(
         build_info=resolved_build_info,
         codex_command=codex_command,
         codex_home=codex_home,
+        runtime_version_provider=(
+            lambda: getattr(resolved_app_server, "server_version", None)
+            if resolved_app_server is not None
+            else None
+        ),
     )
     app.state.model_catalog_probe = resolved_model_catalog_probe
     app.state.auth_manager = (

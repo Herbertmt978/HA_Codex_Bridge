@@ -581,4 +581,5 @@ def test_probe_keeps_last_known_catalog_when_refresh_fails(tmp_path, monkeypatch
     assert [model.model for model in stale.models] == [model.model for model in fresh.models]
     assert stale.source == "last-known-good"
     assert stale.stale is True
-    assert "temporary outage" in (stale.error or "")
+    assert "unavailable" in (stale.error or "")
+    assert "temporary outage" not in (stale.error or "")

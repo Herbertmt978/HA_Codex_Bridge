@@ -143,7 +143,7 @@ def test_start_reads_persisted_account_and_publishes_only_safe_state() -> None:
     status = coordinator.start()
 
     assert client.calls == [
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
     ]
     assert set(client.handlers) == {"account/login/completed", "account/updated"}
     assert status.state == "ok"
@@ -234,7 +234,7 @@ def test_device_login_uses_chatgpt_device_code_without_implicit_logout() -> None
     status = coordinator.start_device_login(force_logout=True)
 
     assert client.calls == [
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
         AppServerCall("account/login/start", {"type": "chatgptDeviceCode"}),
     ]
     assert status.state == "login_running"
@@ -266,7 +266,7 @@ def test_login_requires_explicit_sign_out_from_an_existing_account(
         coordinator.start_device_login(force_logout=True)
 
     assert client.calls == [
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
     ]
 
 
@@ -328,7 +328,9 @@ def test_matching_generation_and_login_id_complete_login_with_final_read() -> No
     assert status.verification_uri is None
     assert status.login_url is None
     assert status.user_code is None
-    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
+    assert client.calls[-1] == AppServerCall(
+        "account/read", {"refreshToken": False}, 5.0
+    )
     _assert_monotonic(states)
 
 
@@ -377,7 +379,7 @@ def test_cancel_uses_active_login_id_then_settles_through_account_read() -> None
 
     assert client.calls[-2:] == [
         AppServerCall("account/login/cancel", {"loginId": "login-to-cancel"}),
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
     ]
     assert status.state == "logged_out"
     assert status.busy is False
@@ -413,7 +415,7 @@ def test_cancel_during_login_start_is_honored_once_login_id_arrives() -> None:
 
     assert client.calls[-2:] == [
         AppServerCall("account/login/cancel", {"loginId": "late-login-id"}),
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
     ]
     assert settled.state == "logged_out"
     assert settled.busy is False
@@ -430,7 +432,7 @@ def test_logout_is_explicit_and_verifies_sign_out_with_final_read() -> None:
 
     assert client.calls[-2:] == [
         AppServerCall("account/logout", None),
-        AppServerCall("account/read", {"refreshToken": False}),
+        AppServerCall("account/read", {"refreshToken": False}, 5.0),
     ]
     assert status.state == "logged_out"
     assert status.busy is False
@@ -492,7 +494,9 @@ def test_restart_reconciles_persisted_login_with_account_read() -> None:
     assert recovered.state == "ok"
     assert recovered.auth_mode == "chatgpt"
     assert recovered.plan_type == "team"
-    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
+    assert client.calls[-1] == AppServerCall(
+        "account/read", {"refreshToken": False}, 5.0
+    )
 
 
 def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None:
@@ -511,7 +515,9 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     assert recovered.revision > active.revision
     assert recovered.verification_uri is None
     assert recovered.user_code is None
-    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
+    assert client.calls[-1] == AppServerCall(
+        "account/read", {"refreshToken": False}, 5.0
+    )
 
 
 def test_repeated_identical_failures_each_advance_revision_and_clear_codes() -> None:

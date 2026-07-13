@@ -14,6 +14,9 @@ USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
 _MAX_SIGNED_64 = (1 << 63) - 1
 class _AppServerClient(Protocol):
+    @property
+    def generation(self) -> int: ...
+
     def request(
         self,
         method: str,
@@ -31,16 +34,32 @@ class AppServerLimitsProbe:
         client: _AppServerClient,
         *,
         min_fetch_interval_seconds: int = 45,
+        timeout_seconds: float = 5.0,
     ) -> None:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("limits probe timeout must be positive")
         self._client = client
+        self._timeout_seconds = float(timeout_seconds)
         self._min_fetch_interval_seconds = max(0, min_fetch_interval_seconds)
         self._last_fetch_at = 0.0
         self._cached_status: LimitsStatusRecord | None = None
+        self._generation: int | None = None
         self._probe_lock = Lock()
 
     def probe(self) -> LimitsStatusRecord | None:
         with self._probe_lock:
             now = time.monotonic()
+            generation = getattr(self._client, "generation", None)
+            resolved_generation = generation if type(generation) is int else None
+            if self._generation != resolved_generation:
+                self._generation = resolved_generation
+                self._last_fetch_at = 0.0
+                self._cached_status = None
             if (
                 self._cached_status is not None
                 and now - self._last_fetch_at < self._min_fetch_interval_seconds
@@ -48,7 +67,11 @@ class AppServerLimitsProbe:
                 return self._cached_status.model_copy(deep=True)
 
             try:
-                response = self._client.request("account/rateLimits/read", None)
+                response = self._client.request(
+                    "account/rateLimits/read",
+                    None,
+                    timeout_seconds=self._timeout_seconds,
+                )
             except Exception:
                 return (
                     self._cached_status.model_copy(deep=True)
@@ -63,6 +86,7 @@ class AppServerLimitsProbe:
                     else None
                 )
             self._last_fetch_at = now
+            self._generation = resolved_generation
             self._cached_status = status.model_copy(deep=True)
             return status.model_copy(deep=True)
 

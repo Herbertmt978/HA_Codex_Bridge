@@ -30,6 +30,7 @@ class AppServerCall:
 class RecordingAppServerClient:
     def __init__(self, *replies: Any) -> None:
         self.calls: list[AppServerCall] = []
+        self.timeouts: list[float | None] = []
         self._replies = deque(replies)
         self._lock = Lock()
 
@@ -40,9 +41,9 @@ class RecordingAppServerClient:
         *,
         timeout_seconds: float | None = None,
     ) -> Any:
-        del timeout_seconds
         with self._lock:
             self.calls.append(AppServerCall(method, deepcopy(params)))
+            self.timeouts.append(timeout_seconds)
             if not self._replies:
                 raise AssertionError(f"no scripted reply for {method}")
             reply = self._replies.popleft()
@@ -164,6 +165,7 @@ def test_account_probe_reads_chatgpt_account_through_the_shared_client() -> None
     assert client.calls == [
         AppServerCall("account/read", {"refreshToken": False}),
     ]
+    assert client.timeouts == [5.0]
     assert account.available is True
     assert account.auth_mode == "chatgpt"
     assert account.plan_type == "pro"
@@ -294,6 +296,7 @@ def test_limits_probe_normalizes_primary_and_secondary_windows() -> None:
 
     assert isinstance(status, LimitsStatusRecord)
     assert client.calls == [AppServerCall("account/rateLimits/read", None)]
+    assert client.timeouts == [5.0]
     assert status.available is True
     assert status.blocked is False
     assert status.primary is not None

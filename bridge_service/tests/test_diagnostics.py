@@ -3,6 +3,7 @@ import importlib.metadata
 from codex_bridge_service import __version__
 from codex_bridge_service.build_info import BuildInfo
 from codex_bridge_service.diagnostics import BridgeDiagnosticsProbe
+from codex_bridge_service.models import RunMode, RuntimeProfile
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -141,3 +142,56 @@ def test_diagnostics_probe_falls_back_to_package_bridge_version(tmp_path) -> Non
     )
 
     assert probe.probe().bridge_version == __version__
+
+
+def test_home_assistant_diagnostics_redact_paths_errors_and_report_version_match(
+    tmp_path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    storage = BridgeStorage(
+        root_path=tmp_path / "bridge",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace,
+    )
+    original_profile = storage.runtime_profile
+    storage.runtime_profile = RuntimeProfile.EXTERNAL_LEGACY
+    try:
+        project = storage.create_project(
+            name="Diagnostics",
+            root_path=str(workspace / "diagnostics"),
+        )
+        thread = storage.create_thread(
+            title="Diagnostics",
+            mode=RunMode.EDIT,
+            project_id=project.project_id,
+        )
+        saved = storage.load_thread(thread.thread_id)
+        saved.last_error = "Bearer private-secret /data/codex-home/auth.json"
+        storage.save_thread(saved)
+    finally:
+        storage.runtime_profile = original_profile
+    probe = BridgeDiagnosticsProbe(
+        storage=storage,
+        build_info=BuildInfo(codex_version="0.144.3"),
+        runtime_version_provider=lambda: "0.144.3",
+        tool_names=("python",),
+        cache_seconds=0,
+    )
+
+    storage.runtime_profile = RuntimeProfile.EXTERNAL_LEGACY
+    try:
+        diagnostics = probe.probe()
+    finally:
+        storage.runtime_profile = original_profile
+    serialized = diagnostics.model_dump_json()
+
+    assert diagnostics.active_codex_version == "0.144.3"
+    assert diagnostics.codex_version_match is True
+    assert diagnostics.python_executable is None
+    assert diagnostics.tools[0].available is True
+    assert diagnostics.tools[0].path is None
+    assert diagnostics.tools[0].version is None
+    assert "private-secret" not in serialized
+    assert "auth.json" not in serialized
+    assert str(tmp_path) not in serialized

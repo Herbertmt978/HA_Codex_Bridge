@@ -1,5 +1,6 @@
 import base64
 import json
+from math import isfinite
 from pathlib import Path
 from threading import Lock
 from typing import Any, Protocol
@@ -47,8 +48,21 @@ class _AppServerClient(Protocol):
 class AppServerAccountProbe:
     """Read a privacy-preserving account projection from the shared app-server."""
 
-    def __init__(self, client: _AppServerClient) -> None:
+    def __init__(
+        self,
+        client: _AppServerClient,
+        *,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("account probe timeout must be positive")
         self._client = client
+        self._timeout_seconds = float(timeout_seconds)
         self._probe_lock = Lock()
 
     def probe(self) -> CodexAccountRecord:
@@ -57,6 +71,7 @@ class AppServerAccountProbe:
                 response = self._client.request(
                     "account/read",
                     {"refreshToken": False},
+                    timeout_seconds=self._timeout_seconds,
                 )
             except Exception:
                 return CodexAccountRecord()

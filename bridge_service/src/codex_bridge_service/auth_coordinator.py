@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable
+from math import isfinite
 from threading import Lock
 from typing import Any, Protocol
 
@@ -81,8 +82,17 @@ class CodexAuthCoordinator:
         initial_status: CodexAuthStatusRecord | None = None,
         state_listener_fatal: bool = False,
         runtime_gate: RuntimeGate | None = None,
+        account_read_timeout_seconds: float = 5.0,
     ) -> None:
+        if (
+            isinstance(account_read_timeout_seconds, bool)
+            or not isinstance(account_read_timeout_seconds, (int, float))
+            or not isfinite(account_read_timeout_seconds)
+            or account_read_timeout_seconds <= 0
+        ):
+            raise ValueError("account read timeout must be positive")
         self._client = client
+        self._account_read_timeout_seconds = float(account_read_timeout_seconds)
         self._state_listener = state_listener
         self._state_listener_fatal = state_listener_fatal
         self._runtime_gate = runtime_gate
@@ -554,7 +564,11 @@ class CodexAuthCoordinator:
 
     def _read_account(self) -> tuple[int, Any]:
         generation = self._client.generation
-        response = self._client.request("account/read", _ACCOUNT_READ_PARAMS)
+        response = self._client.request(
+            "account/read",
+            _ACCOUNT_READ_PARAMS,
+            timeout_seconds=self._account_read_timeout_seconds,
+        )
         if generation != self._client.generation:
             raise RuntimeError("app-server generation changed during account read")
         return generation, response

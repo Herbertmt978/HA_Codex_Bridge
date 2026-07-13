@@ -29,22 +29,34 @@ def build_app() -> FastAPI:
             if external_legacy and codex_home
             else None
         ),
-        model_catalog_probe=CodexModelCatalogProbe(
-            codex_command=settings.codex_wrapper_path,
-            codex_home=codex_home,
-            timeout_seconds=settings.model_discovery_timeout_seconds,
-            cache_ttl_seconds=settings.model_cache_ttl_seconds,
+        model_catalog_probe=(
+            CodexModelCatalogProbe(
+                codex_command=settings.codex_wrapper_path,
+                codex_home=codex_home,
+                timeout_seconds=settings.model_discovery_timeout_seconds,
+                cache_ttl_seconds=settings.model_cache_ttl_seconds,
+            )
+            if external_legacy
+            else None
         ),
         codex_command=settings.codex_wrapper_path,
         codex_home=codex_home,
         run_idle_timeout_seconds=settings.run_idle_timeout_seconds,
-        runner_factory=lambda storage: BridgeRunner(
-            storage=storage,
-            codex_command=settings.codex_wrapper_path,
-            codex_home=codex_home,
-            bypass_sandbox=settings.bypass_sandbox,
-            ignore_user_config=settings.ignore_user_config,
-            idle_timeout_seconds=settings.run_idle_timeout_seconds,
+        model_discovery_timeout_seconds=settings.model_discovery_timeout_seconds,
+        model_cache_ttl_seconds=settings.model_cache_ttl_seconds,
+        runner_factory=(
+            (
+                lambda storage: BridgeRunner(
+                    storage=storage,
+                    codex_command=settings.codex_wrapper_path,
+                    codex_home=codex_home,
+                    bypass_sandbox=settings.bypass_sandbox,
+                    ignore_user_config=settings.ignore_user_config,
+                    idle_timeout_seconds=settings.run_idle_timeout_seconds,
+                )
+            )
+            if external_legacy
+            else None
         ),
         initialize_special_projects=True,
     )

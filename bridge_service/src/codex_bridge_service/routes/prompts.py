@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from ..auth import require_bridge_token
 from ..models import RunRecord
 from ..runner import NoActiveRunError, ThreadBusyError
+from ..readiness import evaluate_readiness
 from ..storage import ThreadNotFoundError
 
 router = APIRouter()
@@ -47,6 +48,17 @@ def submit_prompt(
         authorization=authorization,
         expected_token=request.app.state.auth_token,
     )
+    readiness = evaluate_readiness(request.app.state, include_catalogue=False)
+    if readiness.state == "fatal":
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "runtime_unavailable", "reasons": readiness.reasons},
+        )
+    if readiness.state == "auth_required":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "authentication_required"},
+        )
     try:
         if request.app.state.storage.runtime_profile.value == "home_assistant":
             return request.app.state.runner.submit_prompt(

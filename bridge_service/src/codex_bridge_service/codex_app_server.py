@@ -281,6 +281,7 @@ class CodexAppServerClient:
         self._ever_ready = False
         self._startup_error: CodexAppServerError | None = None
         self._generation = 0
+        self._server_version: str | None = None
         self._dispatch_generation: int | None = None
         self._next_request_id = 1
         self._process: subprocess.Popen[bytes] | None = None
@@ -316,6 +317,11 @@ class CodexAppServerClient:
     def generation(self) -> int:
         with self._state_lock:
             return self._generation
+
+    @property
+    def server_version(self) -> str | None:
+        with self._state_lock:
+            return self._server_version if self._ready.is_set() else None
 
     @property
     def process_id(self) -> int | None:
@@ -608,7 +614,7 @@ class CodexAppServerClient:
                     timeout_seconds=self.initialize_timeout_seconds,
                     require_ready=False,
                 )
-                self._validate_initialize_response(result)
+                server_version = self._validate_initialize_response(result)
                 with self._state_lock:
                     if (
                         self._generation != generation
@@ -616,6 +622,7 @@ class CodexAppServerClient:
                         or self._closing.is_set()
                     ):
                         raise AppServerUnavailableError()
+                    self._server_version = server_version
                     # Callbacks may arrive as soon as the server reads the
                     # initialized notification. Keep public requests closed until
                     # that synchronized write has completed.
@@ -676,6 +683,7 @@ class CodexAppServerClient:
                         self._process = None
                         self._reader_thread = None
                         self._stderr_thread = None
+                        self._server_version = None
                     if self._dispatch_generation == generation:
                         self._dispatch_generation = None
                     self._generation_failures.pop(generation, None)
@@ -1154,7 +1162,7 @@ class CodexAppServerClient:
                 key for key in self._server_requests if key[0] != generation
             }
 
-    def _validate_initialize_response(self, result: JsonValue) -> None:
+    def _validate_initialize_response(self, result: JsonValue) -> str:
         if not isinstance(result, dict):
             raise AppServerProtocolError()
         codex_home = result.get("codexHome")
@@ -1167,11 +1175,14 @@ class CodexAppServerClient:
         ):
             raise AppServerProtocolError()
         assert isinstance(user_agent, str)
+        version_match = _APP_SERVER_VERSION_PATTERN.match(user_agent)
+        if version_match is None:
+            raise AppServerProtocolError()
+        server_version = version_match.group(1)
         contract = self.protocol_contract
         if contract is not None:
-            version_match = _APP_SERVER_VERSION_PATTERN.match(user_agent)
             expected_version = contract.codex_version.removeprefix("codex-cli ")
-            if version_match is None or version_match.group(1) != expected_version:
+            if server_version != expected_version:
                 raise AppServerProtocolError()
         assert isinstance(codex_home, str)
         try:
@@ -1182,6 +1193,7 @@ class CodexAppServerClient:
                 raise AppServerProtocolError()
         except OSError:
             raise AppServerProtocolError() from None
+        return server_version
 
     def _drain_stderr(self, generation: int, stream: BinaryIO) -> None:
         while True:

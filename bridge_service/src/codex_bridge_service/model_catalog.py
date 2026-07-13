@@ -1,6 +1,7 @@
 import json
 import subprocess
 from datetime import UTC, datetime
+from math import isfinite
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Lock, Thread
@@ -21,6 +22,118 @@ from .models import (
 
 class ModelCatalogError(RuntimeError):
     pass
+
+
+_MAX_MODEL_CATALOG_PAGES = 100
+
+
+class AppServerModelCatalogProbe:
+    """Catalog projection served by the application's single app-server."""
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        cache_ttl_seconds: float = 600.0,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("model catalogue timeout must be positive")
+        self._client = client
+        self._cache_ttl_seconds = cache_ttl_seconds
+        self._timeout_seconds = timeout_seconds
+        self._lock = Lock()
+        self._cached: CodexModelCatalogRecord | None = None
+        self._cached_at = 0.0
+        self._generation: int | None = None
+
+    def probe(self, *, refresh_stale: bool = False) -> CodexModelCatalogRecord:
+        with self._lock:
+            generation = getattr(self._client, "generation", None)
+            now = monotonic()
+            if (
+                self._cached is not None
+                and generation == self._generation
+                and now - self._cached_at < self._cache_ttl_seconds
+                and (not refresh_stale or not self._cached.stale)
+            ):
+                return self._cached
+            try:
+                deadline = monotonic() + self._timeout_seconds
+                config = self._request(
+                    "config/read",
+                    {"includeLayers": False},
+                    deadline=deadline,
+                )
+                cursor: str | None = None
+                data: list[Any] = []
+                seen: set[str] = set()
+                for _page_number in range(_MAX_MODEL_CATALOG_PAGES):
+                    params: dict[str, Any] = {"includeHidden": False, "limit": 100}
+                    if cursor is not None:
+                        params["cursor"] = cursor
+                    page = self._request("model/list", params, deadline=deadline)
+                    if not isinstance(page, dict):
+                        raise ModelCatalogError(
+                            "Codex app-server returned an invalid model catalogue"
+                        )
+                    data.extend(CodexModelCatalogProbe._model_list_items(page))
+                    next_cursor = page.get("nextCursor")
+                    if (
+                        not isinstance(next_cursor, str)
+                        or not next_cursor
+                        or next_cursor in seen
+                    ):
+                        break
+                    seen.add(next_cursor)
+                    cursor = next_cursor
+                else:
+                    raise ModelCatalogError(
+                        "Codex app-server returned too many model catalogue pages"
+                    )
+                if not isinstance(config, dict):
+                    raise ModelCatalogError(
+                        "Codex app-server returned an invalid model catalogue"
+                    )
+                if getattr(self._client, "generation", None) != generation:
+                    raise ModelCatalogError(
+                        "Codex app-server generation changed during model discovery"
+                    )
+                result = CodexModelCatalogProbe._build_catalog(config, {"data": data})
+            except (ModelCatalogError, OSError, RuntimeError, ValueError) as exc:
+                if (
+                    self._cached is not None
+                    and self._cached.models
+                    and self._cached.source != "fallback"
+                ):
+                    result = self._cached.model_copy(
+                        update={
+                            "source": "last-known-good",
+                            "stale": True,
+                            "error": CodexModelCatalogProbe._error_message(exc),
+                        }
+                    )
+                else:
+                    result = CodexModelCatalogProbe._fallback_catalog(exc)
+            self._cached = result
+            self._cached_at = now
+            self._generation = generation if type(generation) is int else None
+            return result
+
+    def _request(self, method: str, params: dict[str, Any], *, deadline: float) -> Any:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise ModelCatalogError("Codex model discovery timed out")
+        return self._client.request(
+            method,
+            params,
+            timeout_seconds=remaining,
+        )
 
 
 class CodexModelCatalogProbe:
@@ -99,8 +212,11 @@ class CodexModelCatalogProbe:
         )
 
     @staticmethod
-    def _error_message(error: Exception) -> str:
-        return f"Codex model discovery failed: {error}"[:500]
+    def _error_message(_error: Exception) -> str:
+        # Exceptions may contain command lines, paths, remote payloads, or
+        # credentials. The catalogue is returned through status APIs, so only
+        # expose a stable recovery category.
+        return "Codex model discovery is temporarily unavailable."
 
     def _discover_from_app_server(self) -> CodexModelCatalogRecord:
         environment = codex_subprocess_environment(self.codex_home)
@@ -144,7 +260,7 @@ class CodexModelCatalogProbe:
             cursor: str | None = None
             raw_models: list[Any] = []
             seen_cursors: set[str] = set()
-            while True:
+            for _page_number in range(_MAX_MODEL_CATALOG_PAGES):
                 params: dict[str, Any] = {"includeHidden": False, "limit": 100}
                 if cursor is not None:
                     params["cursor"] = cursor
@@ -161,6 +277,10 @@ class CodexModelCatalogProbe:
                 seen_cursors.add(next_cursor)
                 cursor = next_cursor
                 request_id += 1
+            else:
+                raise ModelCatalogError(
+                    "Codex app-server returned too many model catalogue pages"
+                )
             models_result = {"data": raw_models}
             return self._build_catalog(config_result, models_result)
         finally:
