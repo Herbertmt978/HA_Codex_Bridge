@@ -2,7 +2,8 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, 
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
-from ..models import RunMode, ThreadViewRecord
+from ..models import RunMode, RuntimeProfile, ThreadViewRecord
+from ..runtime_broker import RuntimeUnavailableError
 from ..storage import ProjectNotFoundError, ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
@@ -71,11 +72,15 @@ def _repair_or_validate_model_effort(
     ):
         return None
     if explicit_thinking_level is not None:
-        raise ValueError(f"{effective_thinking_level} is not supported by {effective_model}")
+        raise ValueError(
+            f"{effective_thinking_level} is not supported by {effective_model}"
+        )
     return _compatible_default_thinking(model_record)
 
 
-@router.post("/threads", response_model=ThreadViewRecord, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/threads", response_model=ThreadViewRecord, status_code=status.HTTP_201_CREATED
+)
 def create_thread(
     payload: CreateThreadRequest,
     request: Request,
@@ -307,7 +312,17 @@ def delete_thread(
         expected_token=request.app.state.auth_token,
     )
     try:
-        request.app.state.storage.delete_thread(thread_id)
+        delete_with_runtime_ownership = getattr(
+            request.app.state.runner,
+            "delete_thread",
+            None,
+        )
+        if request.app.state.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            if not callable(delete_with_runtime_ownership):
+                raise RuntimeUnavailableError()
+            delete_with_runtime_ownership(thread_id)
+        else:
+            request.app.state.storage.delete_thread(thread_id)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except WorkspaceNotFoundError as exc:

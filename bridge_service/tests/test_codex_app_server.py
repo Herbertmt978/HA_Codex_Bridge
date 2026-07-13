@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import signal
 import shutil
+import subprocess
 import sys
 from threading import Event
 import time
@@ -46,7 +47,9 @@ class FakeAppServer:
         path = self.sidecars / f"transcript-{generation}.jsonl"
         if not path.exists():
             return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        return [
+            json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+        ]
 
     def client_messages(self, generation: int = 1) -> list[dict[str, Any]]:
         return [
@@ -127,7 +130,9 @@ def _wait_for_client_message(
 
     def locate() -> bool:
         found[:] = [
-            message for message in fake_server.client_messages(generation) if predicate(message)
+            message
+            for message in fake_server.client_messages(generation)
+            if predicate(message)
         ]
         return bool(found)
 
@@ -234,7 +239,9 @@ def test_concurrent_requests_are_correlated_when_responses_arrive_in_reverse_ord
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
             first = executor.submit(client.request, "echo/reverse", {"value": "first"})
-            second = executor.submit(client.request, "echo/reverse", {"value": "second"})
+            second = executor.submit(
+                client.request, "echo/reverse", {"value": "second"}
+            )
             results = [first.result(timeout=2), second.result(timeout=2)]
 
         assert results == [
@@ -325,9 +332,7 @@ def test_bounded_callback_queue_fails_generation_instead_of_dropping_notificatio
         assert len(calls) == 1
         release.set()
         _wait_until(lambda: client.ready and client.generation == 2)
-        assert client.request("ping", {"generation": 2}) == {
-            "echo": {"generation": 2}
-        }
+        assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
         assert len(calls) == 1
     finally:
         release.set()
@@ -371,6 +376,226 @@ def test_server_request_handler_can_respond_on_the_same_generation(
             received[0].generation = 2
     finally:
         client.close()
+
+
+def test_discard_server_request_atomically_invalidates_the_response_token(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        on_initialized=[
+            {
+                "kind": "request",
+                "id": "resolved-approval",
+                "method": "approval/request",
+                "params": {},
+            }
+        ]
+    )
+    client = _client(module, fake_server)
+    received: list[Any] = []
+    entered = Event()
+    release = Event()
+
+    def defer(request: Any) -> object:
+        received.append(request)
+        entered.set()
+        release.wait(2)
+        return module.DEFERRED_RESPONSE
+
+    client.register_request_handler("approval/request", defer)
+    client.start()
+    try:
+        assert entered.wait(1)
+        request = received[0]
+        assert (
+            client.discard_server_request(
+                request.request_id,
+                request.generation + 1,
+            )
+            is False
+        )
+        assert (
+            client.discard_server_request(
+                request.request_id,
+                request.generation,
+            )
+            is True
+        )
+        assert (
+            client.discard_server_request(
+                request.request_id,
+                request.generation,
+            )
+            is False
+        )
+
+        release.set()
+        with pytest.raises(module.AppServerStaleGenerationError):
+            client.respond(request, result={"decision": "accept"})
+        time.sleep(0.05)
+        assert not any(
+            message.get("id") == "resolved-approval"
+            for message in fake_server.client_messages()
+        )
+        assert client.ready is True
+    finally:
+        release.set()
+        client.close()
+
+
+def test_abort_generation_fails_waiters_discards_tokens_and_restarts_only_match(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        1,
+        on_initialized=[
+            {
+                "kind": "request",
+                "id": "aborted-approval",
+                "method": "approval/request",
+                "params": {},
+            }
+        ],
+        responses={"hold": {"mode": "hold", "control_key": "never"}},
+    )
+    fake_server.configure(2)
+    client = _client(module, fake_server)
+    retained: list[Any] = []
+    approval_received = Event()
+
+    def defer(request: Any) -> object:
+        retained.append(request)
+        approval_received.set()
+        return module.DEFERRED_RESPONSE
+
+    client.register_request_handler("approval/request", defer)
+    client.start()
+    try:
+        assert approval_received.wait(1)
+        first_generation = client.generation
+        first_process_id = client.process_id
+        assert first_process_id is not None
+        assert client.abort_generation(first_generation + 1) is False
+        assert client.generation == first_generation
+        assert client.process_id == first_process_id
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            pending = executor.submit(client.request, "hold", {"prompt": "bounded"})
+            _wait_for_client_message(
+                fake_server,
+                lambda message: message.get("method") == "hold",
+            )
+
+            assert client.abort_generation(first_generation) is True
+            assert client.abort_generation(first_generation) is False
+            with pytest.raises(module.AppServerUnavailableError):
+                pending.result(timeout=2)
+
+        with pytest.raises(module.AppServerStaleGenerationError):
+            client.respond(retained[0], result={"decision": "accept"})
+        _wait_until(lambda: client.ready and client.generation == 2)
+        second_process_id = client.process_id
+        assert second_process_id is not None
+        assert second_process_id == fake_server.process(2)["pid"]
+        assert client.abort_generation(first_generation) is False
+        assert client.ready is True
+        assert client.process_id == second_process_id
+        assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
+    finally:
+        client.close()
+
+    assert client.abort_generation(2) is False
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group contract")
+def test_abort_generation_force_kills_a_sigterm_resistant_process_group(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(1, spawn_child=True, ignore_sigterm=True)
+    fake_server.configure(2)
+    client = _client(module, fake_server, shutdown_grace_seconds=0.05)
+    parent_pid: int | None = None
+    child_pid: int | None = None
+
+    try:
+        client.start()
+        parent_pid = client.process_id
+        child_pid = fake_server.process(1)["childPid"]
+        assert parent_pid is not None
+        assert _pid_is_running(parent_pid)
+        assert _pid_is_running(child_pid)
+
+        assert client.abort_generation(client.generation) is True
+
+        _wait_until(
+            lambda: not _pid_is_running(parent_pid) and not _pid_is_running(child_pid),
+            timeout=1,
+            message="abort left a process in the Codex app-server process group",
+        )
+        _wait_until(lambda: client.ready and client.generation == 2)
+    finally:
+        client.close()
+        if parent_pid is not None and (
+            _pid_is_running(parent_pid)
+            or (child_pid is not None and _pid_is_running(child_pid))
+        ):
+            try:
+                os.killpg(parent_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group contract")
+def test_abort_generation_kills_child_after_sigterm_exits_group_leader() -> None:
+    module = _load_module()
+    parent_code = (
+        "import signal, subprocess, sys, time; "
+        "child = subprocess.Popen([sys.executable, '-c', "
+        '"import os, signal, time; '
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        'print(os.getpid(), flush=True); time.sleep(120)"]); '
+        "time.sleep(120)"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    child_pid: int | None = None
+
+    try:
+        assert process.stdout is not None
+        child_pid = int(process.stdout.readline().decode("ascii").strip())
+        assert _pid_is_running(process.pid)
+        assert _pid_is_running(child_pid)
+
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=1)
+        assert not _pid_is_running(process.pid)
+        assert _pid_is_running(child_pid)
+
+        module._force_stop_aborted_process(process, 0.05)
+
+        _wait_until(
+            lambda: not _pid_is_running(child_pid),
+            timeout=1,
+            message="abort left a child behind after the group leader exited",
+        )
+    finally:
+        if _pid_is_running(process.pid) or (
+            child_pid is not None and _pid_is_running(child_pid)
+        ):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if process.stdout is not None:
+            process.stdout.close()
 
 
 def test_missing_and_failed_server_request_handlers_return_safe_errors(
@@ -421,7 +646,8 @@ def test_pending_request_capacity_is_reserved_before_writing(
             first = executor.submit(client.request, "hold", {"request": 1})
             _wait_until(
                 lambda: any(
-                    message.get("method") == "hold" for message in fake_server.client_messages()
+                    message.get("method") == "hold"
+                    for message in fake_server.client_messages()
                 )
             )
             with pytest.raises(module.AppServerOverloadedError):
@@ -474,7 +700,11 @@ def test_remote_error_is_mapped_to_typed_exception(fake_server: FakeAppServer) -
         responses={
             "remote/fail": {
                 "mode": "error",
-                "error": {"code": -32042, "message": "request rejected", "data": {"retry": False}},
+                "error": {
+                    "code": -32042,
+                    "message": "request rejected",
+                    "data": {"retry": False},
+                },
             }
         }
     )
@@ -488,7 +718,9 @@ def test_remote_error_is_mapped_to_typed_exception(fake_server: FakeAppServer) -
         client.close()
 
 
-def test_initialize_timeout_is_typed_and_close_stops_retries(fake_server: FakeAppServer) -> None:
+def test_initialize_timeout_is_typed_and_close_stops_retries(
+    fake_server: FakeAppServer,
+) -> None:
     module = _load_module()
     fake_server.configure(startup="stall_initialize")
     client = _client(
@@ -512,11 +744,14 @@ def test_restart_backoff_is_positive_capped_and_cannot_overflow(
 ) -> None:
     module = _load_module()
 
-    assert module._capped_restart_delay(
-        base_seconds=0.25,
-        maximum_seconds=30.0,
-        attempt=1025,
-    ) == 30.0
+    assert (
+        module._capped_restart_delay(
+            base_seconds=0.25,
+            maximum_seconds=30.0,
+            attempt=1025,
+        )
+        == 30.0
+    )
     with pytest.raises(ValueError, match="restart base delay"):
         _client(module, fake_server, restart_base_delay_seconds=0)
 
@@ -617,14 +852,14 @@ def test_protocol_violation_fails_pending_request_and_restarts_clean_generation(
             lambda: client.ready and client.generation == 2,
             message="client did not restart after a fatal protocol violation",
         )
-        assert client.request("ping", {"generation": 2}) == {
-            "echo": {"generation": 2}
-        }
+        assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
     finally:
         client.close()
 
 
-def test_stderr_is_drained_and_diagnostics_are_redacted(fake_server: FakeAppServer) -> None:
+def test_stderr_is_drained_and_diagnostics_are_redacted(
+    fake_server: FakeAppServer,
+) -> None:
     module = _load_module()
     diagnostics: list[str] = []
     fake_server.configure(
@@ -662,7 +897,12 @@ def test_crash_fails_pending_request_and_old_server_request_cannot_cross_generat
     fake_server.configure(
         1,
         on_initialized=[
-            {"kind": "request", "id": "old-approval", "method": "approval/request", "params": {}}
+            {
+                "kind": "request",
+                "id": "old-approval",
+                "method": "approval/request",
+                "params": {},
+            }
         ],
         responses={"crash": {"mode": "crash"}},
     )
@@ -689,7 +929,9 @@ def test_crash_fails_pending_request_and_old_server_request_cannot_cross_generat
         client.close()
 
 
-def test_close_during_restart_backoff_prevents_another_process(fake_server: FakeAppServer) -> None:
+def test_close_during_restart_backoff_prevents_another_process(
+    fake_server: FakeAppServer,
+) -> None:
     module = _load_module()
     fake_server.configure(responses={"crash": {"mode": "crash"}})
     client = _client(
@@ -725,7 +967,9 @@ def _pid_is_running(pid: int) -> bool:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process-group contract")
-def test_close_terminates_the_entire_posix_process_group(fake_server: FakeAppServer) -> None:
+def test_close_terminates_the_entire_posix_process_group(
+    fake_server: FakeAppServer,
+) -> None:
     module = _load_module()
     fake_server.configure(spawn_child=True, ignore_sigterm=True)
     client = _client(module, fake_server, shutdown_grace_seconds=0.05)
@@ -761,6 +1005,14 @@ class _LifecycleClient:
         self.close_calls += 1
 
 
+class _LifecycleComponent:
+    def start(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
 class _ForbiddenModelProbe:
     def probe(self, *args: object, **kwargs: object) -> object:
         raise AssertionError("HA startup must not launch a legacy model process")
@@ -783,6 +1035,8 @@ def test_home_assistant_lifespan_owns_one_app_server_client(tmp_path: Path) -> N
         runtime_profile=RuntimeProfile.HOME_ASSISTANT,
         workspace_root=workspace_root,
         app_server_factory=factory,
+        auth_coordinator_factory=lambda _client: _LifecycleComponent(),
+        runner_factory=lambda _storage: _LifecycleComponent(),
         model_catalog_probe=_ForbiddenModelProbe(),
         initialize_special_projects=True,
     )
@@ -795,7 +1049,9 @@ def test_home_assistant_lifespan_owns_one_app_server_client(tmp_path: Path) -> N
     assert managed.close_calls == 1
 
 
-def test_external_lifespan_never_constructs_an_app_server_client(tmp_path: Path) -> None:
+def test_external_lifespan_never_constructs_an_app_server_client(
+    tmp_path: Path,
+) -> None:
     def forbidden_factory() -> _LifecycleClient:
         raise AssertionError("external legacy must not construct an app server")
 
@@ -810,7 +1066,9 @@ def test_external_lifespan_never_constructs_an_app_server_client(tmp_path: Path)
         pass
 
 
-def test_failed_home_assistant_startup_closes_partial_app_server(tmp_path: Path) -> None:
+def test_failed_home_assistant_startup_closes_partial_app_server(
+    tmp_path: Path,
+) -> None:
     managed = _LifecycleClient(fail_start=True)
     workspace_root = tmp_path / "workspaces"
     workspace_root.mkdir()
@@ -820,6 +1078,8 @@ def test_failed_home_assistant_startup_closes_partial_app_server(tmp_path: Path)
         runtime_profile=RuntimeProfile.HOME_ASSISTANT,
         workspace_root=workspace_root,
         app_server_factory=lambda: managed,
+        auth_coordinator_factory=lambda _client: _LifecycleComponent(),
+        runner_factory=lambda _storage: _LifecycleComponent(),
     )
 
     with pytest.raises(RuntimeError, match="synthetic startup failure"):

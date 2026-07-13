@@ -177,6 +177,7 @@ def _ha_app(
         workspace_root=workspace_root,
         app_server_factory=lambda: resolved_server,
         auth_coordinator_factory=resolved_factory,
+        runner_factory=lambda _storage: object(),
         diagnostics_probe=SafeDiagnosticsProbe(),
         model_catalog_probe=SafeModelCatalogProbe(),
     )

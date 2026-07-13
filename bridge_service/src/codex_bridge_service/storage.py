@@ -149,7 +149,8 @@ class BridgeStorage:
         root_path: Path | str,
         *,
         limits_probe: CodexLimitsProbe | None = None,
-        special_project_defaults_provider: Callable[[], tuple[str, str, bool]] | None = None,
+        special_project_defaults_provider: Callable[[], tuple[str, str, bool]]
+        | None = None,
         runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
         workspace_root: Path | str | None = None,
         resource_limits: ResourceLimits | None = None,
@@ -180,6 +181,7 @@ class BridgeStorage:
         self._special_default_migration_pending = False
         self._special_migration_lock = Lock()
         self._event_lock = Lock()
+        self._event_next_sequences: dict[str, int] = {}
         self._project_mutation_lock = RLock()
         self._thread_mutation_lock = RLock()
 
@@ -324,7 +326,9 @@ class BridgeStorage:
     @staticmethod
     def _boundary_usage_bytes(boundary: WorkspaceBoundary) -> int:
         try:
-            return boundary.measure_regular_files(".", reject_unsafe=False).logical_bytes
+            return boundary.measure_regular_files(
+                ".", reject_unsafe=False
+            ).logical_bytes
         except WorkspaceBoundaryError:
             raise ReservationConflictError("filesystem_scan") from None
 
@@ -353,14 +357,10 @@ class BridgeStorage:
         return self._boundary_space(self._home_assistant_boundary()).filesystem_id
 
     def _private_free_bytes(self) -> int:
-        return self._boundary_space(
-            self._home_assistant_uploads_boundary()
-        ).free_bytes
+        return self._boundary_space(self._home_assistant_uploads_boundary()).free_bytes
 
     def _private_total_bytes(self) -> int:
-        return self._boundary_space(
-            self._home_assistant_uploads_boundary()
-        ).total_bytes
+        return self._boundary_space(self._home_assistant_uploads_boundary()).total_bytes
 
     def _private_filesystem_id(self) -> str:
         return self._boundary_space(
@@ -457,7 +457,9 @@ class BridgeStorage:
     def open_workspace_directory_fd(self, workspace_path: str) -> int:
         """Lease an HA workspace directory descriptor for process launch."""
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
-            raise RuntimeError("workspace descriptor leases require the home_assistant profile")
+            raise RuntimeError(
+                "workspace descriptor leases require the home_assistant profile"
+            )
         return self._home_assistant_boundary().open_directory_fd(workspace_path)
 
     def lease_run_attachments(
@@ -466,7 +468,9 @@ class BridgeStorage:
     ) -> dict[str, WorkspaceAnonymousFileLease]:
         """Create sealed anonymous copies for one HA Codex process."""
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
-            raise RuntimeError("anonymous attachment leases require the home_assistant profile")
+            raise RuntimeError(
+                "anonymous attachment leases require the home_assistant profile"
+            )
         self._validate_thread_attachments(record)
         boundary = self._home_assistant_uploads_boundary()
         leases: dict[str, WorkspaceAnonymousFileLease] = {}
@@ -705,7 +709,9 @@ class BridgeStorage:
         return (
             default_model or discovered_model,
             default_thinking_level or discovered_thinking,
-            discovered_provisional if defaults_provisional is None else defaults_provisional,
+            discovered_provisional
+            if defaults_provisional is None
+            else defaults_provisional,
         )
 
     def _migrate_provisional_special_defaults(
@@ -716,7 +722,10 @@ class BridgeStorage:
         default_thinking_level: str,
         defaults_provisional: bool,
     ) -> bool:
-        if record.defaults_origin is not ProjectDefaultsOrigin.FALLBACK or defaults_provisional:
+        if (
+            record.defaults_origin is not ProjectDefaultsOrigin.FALLBACK
+            or defaults_provisional
+        ):
             return False
         record.default_model = default_model
         record.default_thinking_level = default_thinking_level
@@ -755,11 +764,16 @@ class BridgeStorage:
     def _materialize_special_thread_defaults(self, project: ProjectRecord) -> None:
         for path in self.threads_dir.glob("*.json"):
             try:
-                thread = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                thread = ThreadRecord.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
             except Exception:
                 continue
             belongs_to_project = thread.project_id == project.project_id
-            if project.project_id == self._imported_project_id() and thread.project_id is None:
+            if (
+                project.project_id == self._imported_project_id()
+                and thread.project_id is None
+            ):
                 belongs_to_project = True
             if not belongs_to_project:
                 continue
@@ -833,7 +847,10 @@ class BridgeStorage:
         if defaults_provisional:
             return False
         with self._special_migration_lock:
-            if not self._special_default_migration_pending or self._has_active_thread_runs():
+            if (
+                not self._special_default_migration_pending
+                or self._has_active_thread_runs()
+            ):
                 return False
             self.initialize_special_projects(
                 default_model=default_model,
@@ -846,7 +863,9 @@ class BridgeStorage:
     def _has_active_thread_runs(self) -> bool:
         for path in self.threads_dir.glob("*.json"):
             try:
-                record = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                record = ThreadRecord.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
             except Exception:
                 continue
             if record.status in {"queued", "running", "cancelling"}:
@@ -873,10 +892,15 @@ class BridgeStorage:
     def _has_legacy_threads(self) -> bool:
         for path in self.threads_dir.glob("*.json"):
             try:
-                record = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                record = ThreadRecord.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
             except Exception:
                 continue
-            if record.project_id is None or record.project_id == self._imported_project_id():
+            if (
+                record.project_id is None
+                or record.project_id == self._imported_project_id()
+            ):
                 return True
         return False
 
@@ -887,14 +911,18 @@ class BridgeStorage:
         default_thinking_level: str | None = None,
         defaults_provisional: bool | None = None,
     ) -> ProjectRecord:
-        default_model, default_thinking_level, defaults_provisional = self._special_project_defaults(
-            default_model,
-            default_thinking_level,
-            defaults_provisional,
+        default_model, default_thinking_level, defaults_provisional = (
+            self._special_project_defaults(
+                default_model,
+                default_thinking_level,
+                defaults_provisional,
+            )
         )
         target = self._project_path(self._imported_project_id())
         if target.exists():
-            record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ProjectRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
             record = self._ensure_project_workspace(record)
             changed = self._migrate_provisional_special_defaults(
                 record,
@@ -902,12 +930,18 @@ class BridgeStorage:
                 default_thinking_level=default_thinking_level,
                 defaults_provisional=defaults_provisional,
             )
-            changed = self._migrate_legacy_special_defaults(
-                record,
-                default_model=default_model,
-                default_thinking_level=default_thinking_level,
-            ) or changed
-            if record.kind is not ProjectKind.IMPORTED or record.name != self.imported_project_name:
+            changed = (
+                self._migrate_legacy_special_defaults(
+                    record,
+                    default_model=default_model,
+                    default_thinking_level=default_thinking_level,
+                )
+                or changed
+            )
+            if (
+                record.kind is not ProjectKind.IMPORTED
+                or record.name != self.imported_project_name
+            ):
                 record.kind = ProjectKind.IMPORTED
                 record.name = self.imported_project_name
                 changed = True
@@ -948,14 +982,18 @@ class BridgeStorage:
         default_thinking_level: str | None = None,
         defaults_provisional: bool | None = None,
     ) -> ProjectRecord:
-        default_model, default_thinking_level, defaults_provisional = self._special_project_defaults(
-            default_model,
-            default_thinking_level,
-            defaults_provisional,
+        default_model, default_thinking_level, defaults_provisional = (
+            self._special_project_defaults(
+                default_model,
+                default_thinking_level,
+                defaults_provisional,
+            )
         )
         target = self._project_path(self._direct_project_id())
         if target.exists():
-            record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ProjectRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
             record = self._ensure_project_workspace(record)
             changed = self._migrate_provisional_special_defaults(
                 record,
@@ -963,12 +1001,18 @@ class BridgeStorage:
                 default_thinking_level=default_thinking_level,
                 defaults_provisional=defaults_provisional,
             )
-            changed = self._migrate_legacy_special_defaults(
-                record,
-                default_model=default_model,
-                default_thinking_level=default_thinking_level,
-            ) or changed
-            if record.kind is not ProjectKind.DIRECT or record.name != self.direct_project_name:
+            changed = (
+                self._migrate_legacy_special_defaults(
+                    record,
+                    default_model=default_model,
+                    default_thinking_level=default_thinking_level,
+                )
+                or changed
+            )
+            if (
+                record.kind is not ProjectKind.DIRECT
+                or record.name != self.direct_project_name
+            ):
                 record.kind = ProjectKind.DIRECT
                 record.name = self.direct_project_name
                 changed = True
@@ -1009,11 +1053,17 @@ class BridgeStorage:
         record = ProjectRecord.model_validate_json(target.read_text(encoding="utf-8"))
         record = self._ensure_project_workspace(record)
         record = self._ensure_project_defaults(record)
-        if project_id == self._imported_project_id() and record.kind is not ProjectKind.IMPORTED:
+        if (
+            project_id == self._imported_project_id()
+            and record.kind is not ProjectKind.IMPORTED
+        ):
             record.kind = ProjectKind.IMPORTED
             record.name = self.imported_project_name
             self.save_project(record)
-        if project_id == self._direct_project_id() and record.kind is not ProjectKind.DIRECT:
+        if (
+            project_id == self._direct_project_id()
+            and record.kind is not ProjectKind.DIRECT
+        ):
             record.kind = ProjectKind.DIRECT
             record.name = self.direct_project_name
             self.save_project(record)
@@ -1039,7 +1089,9 @@ class BridgeStorage:
             for record in [
                 self._ensure_project_defaults(
                     self._ensure_project_workspace(
-                        ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                        ProjectRecord.model_validate_json(
+                            path.read_text(encoding="utf-8")
+                        )
                     )
                 )
                 for path in self.projects_dir.glob("*.json")
@@ -1051,14 +1103,19 @@ class BridgeStorage:
             defaults_provisional=defaults_provisional,
         )
         records[direct.project_id] = direct
-        if self._project_path(self._imported_project_id()).exists() or self._has_legacy_threads():
+        if (
+            self._project_path(self._imported_project_id()).exists()
+            or self._has_legacy_threads()
+        ):
             imported = self.ensure_imported_project(
                 default_model=default_model,
                 default_thinking_level=default_thinking_level,
                 defaults_provisional=defaults_provisional,
             )
             records[imported.project_id] = imported
-        ordered = sorted(records.values(), key=lambda record: record.updated_at, reverse=True)
+        ordered = sorted(
+            records.values(), key=lambda record: record.updated_at, reverse=True
+        )
         ordered.sort(key=self._project_rank)
         return ordered
 
@@ -1146,7 +1203,9 @@ class BridgeStorage:
                 self.runtime_profile is RuntimeProfile.HOME_ASSISTANT
                 and record.kind is not ProjectKind.PROJECT
             ):
-                raise ProjectMutationError("special project workspaces cannot be changed")
+                raise ProjectMutationError(
+                    "special project workspaces cannot be changed"
+                )
             if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                 boundary = self._home_assistant_boundary()
                 normalized_root = boundary.normalize(root_path)
@@ -1163,7 +1222,9 @@ class BridgeStorage:
         if default_model is not None:
             record.default_model = normalize_model(default_model)
         if default_thinking_level is not None:
-            record.default_thinking_level = default_thinking_level or DEFAULT_THINKING_LEVEL
+            record.default_thinking_level = (
+                default_thinking_level or DEFAULT_THINKING_LEVEL
+            )
         if default_model is not None or default_thinking_level is not None:
             record.defaults_origin = ProjectDefaultsOrigin.EXPLICIT
         record.updated_at = self._now()
@@ -1181,28 +1242,38 @@ class BridgeStorage:
                     raise WorkspaceInputError()
             else:
                 record.root_path = boundary.normalize(record.root_path)
-                boundary.resolve_relative(record.root_path, must_exist=True, kind="directory")
-        self._atomic_write_json(self._project_path(record.project_id), record.model_dump())
+                boundary.resolve_relative(
+                    record.root_path, must_exist=True, kind="directory"
+                )
+        self._atomic_write_json(
+            self._project_path(record.project_id), record.model_dump()
+        )
 
     def archive_project(self, project_id: str) -> ProjectRecord:
-        record = self.load_project(project_id)
-        if record.kind is not ProjectKind.PROJECT:
-            raise ProjectMutationError("only normal projects can be archived")
-        record.archived_at = self._now()
-        record.updated_at = record.archived_at
-        self.save_project(record)
-        return record
+        with self._project_mutation_lock:
+            record = self.load_project(project_id)
+            if record.kind is not ProjectKind.PROJECT:
+                raise ProjectMutationError("only normal projects can be archived")
+            record.archived_at = self._now()
+            record.updated_at = record.archived_at
+            self.save_project(record)
+            return record
 
     def restore_project(self, project_id: str) -> ProjectRecord:
-        record = self.load_project(project_id)
-        if record.kind is not ProjectKind.PROJECT:
-            raise ProjectMutationError("only normal projects can be restored")
-        record.archived_at = None
-        record.updated_at = self._now()
-        self.save_project(record)
-        return record
+        with self._project_mutation_lock:
+            record = self.load_project(project_id)
+            if record.kind is not ProjectKind.PROJECT:
+                raise ProjectMutationError("only normal projects can be restored")
+            record.archived_at = None
+            record.updated_at = self._now()
+            self.save_project(record)
+            return record
 
     def delete_project(self, project_id: str) -> None:
+        with self._project_mutation_lock:
+            self._delete_project_locked(project_id)
+
+    def _delete_project_locked(self, project_id: str) -> None:
         record = self.load_project(project_id)
         if record.kind is not ProjectKind.PROJECT:
             raise ProjectMutationError("only normal projects can be deleted")
@@ -1216,9 +1287,13 @@ class BridgeStorage:
     def browse_paths(self, path: str | None = None) -> PathBrowseRecord:
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             boundary = self._home_assistant_boundary()
-            relative = "." if path is None or not str(path).strip() else boundary.normalize(
-                path,
-                allow_root=True,
+            relative = (
+                "."
+                if path is None or not str(path).strip()
+                else boundary.normalize(
+                    path,
+                    allow_root=True,
+                )
             )
             directories = [
                 PathBrowseEntryRecord(
@@ -1248,7 +1323,9 @@ class BridgeStorage:
                             name=str(drive),
                         )
                     )
-            return PathBrowseRecord(path=None, parent_path=None, directories=directories)
+            return PathBrowseRecord(
+                path=None, parent_path=None, directories=directories
+            )
 
         target = self._normalize_root_path(path)
         if target.is_file():
@@ -1268,7 +1345,9 @@ class BridgeStorage:
             directories=directories,
         )
 
-    def create_folder(self, *, parent_path: str, folder_name: str) -> PathBrowseEntryRecord:
+    def create_folder(
+        self, *, parent_path: str, folder_name: str
+    ) -> PathBrowseEntryRecord:
         if not parent_path.strip():
             raise ValueError("parent_path must not be blank")
         if not folder_name.strip():
@@ -1293,7 +1372,9 @@ class BridgeStorage:
             target = self._thread_path(thread_id)
             if not target.exists():
                 raise ThreadNotFoundError(thread_id)
-            record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ThreadRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
             record = self._ensure_thread_workspace(record)
             record = self._ensure_thread_project(record)
             record = self._ensure_thread_model(record)
@@ -1309,7 +1390,9 @@ class BridgeStorage:
             records = [
                 self._ensure_thread_project(
                     self._ensure_thread_workspace(
-                        ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                        ThreadRecord.model_validate_json(
+                            path.read_text(encoding="utf-8")
+                        )
                     )
                 )
                 for path in self.threads_dir.glob("*.json")
@@ -1386,7 +1469,9 @@ class BridgeStorage:
             if project.kind in (ProjectKind.DIRECT, ProjectKind.IMPORTED):
                 workspace_path = boundary.create_directory(workspace_id)
             else:
-                workspace_path = boundary.create_directory(boundary.normalize(project.root_path))
+                workspace_path = boundary.create_directory(
+                    boundary.normalize(project.root_path)
+                )
         else:
             workspace_root = Path(project.root_path)
             workspace_path = (
@@ -1438,54 +1523,62 @@ class BridgeStorage:
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
     ) -> ThreadViewRecord:
-        record = self.load_thread(thread_id)
-        if title is not None:
-            if not title.strip():
-                raise ValueError("title must not be blank")
-            record.title = title.strip()
-        if mode is not None:
-            record.mode = mode
-        if model_override is not _UNSET:
-            record.model_override = normalize_model(model_override) if model_override else None
-        if thinking_override is not _UNSET:
-            record.thinking_override = thinking_override
-        self._touch_thread(record)
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="thread.updated",
-            payload={
-                "title": record.title,
-                "mode": record.mode.value,
-                "model_override": record.model_override,
-                "thinking_override": record.thinking_override,
-            },
-        )
-        return self._resolve_thread(record)
+        with self._project_mutation_lock:
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                if title is not None:
+                    if not title.strip():
+                        raise ValueError("title must not be blank")
+                    record.title = title.strip()
+                if mode is not None:
+                    record.mode = mode
+                if model_override is not _UNSET:
+                    record.model_override = (
+                        normalize_model(model_override) if model_override else None
+                    )
+                if thinking_override is not _UNSET:
+                    record.thinking_override = thinking_override
+                self._touch_thread(record)
+                self.save_thread(record)
+                self.append_thread_event(
+                    thread_id=record.thread_id,
+                    event_type="thread.updated",
+                    payload={
+                        "title": record.title,
+                        "mode": record.mode.value,
+                        "model_override": record.model_override,
+                        "thinking_override": record.thinking_override,
+                    },
+                )
+                return self._resolve_thread(record)
 
     def archive_thread(self, thread_id: str) -> ThreadViewRecord:
-        record = self.load_thread(thread_id)
-        record.archived_at = self._now()
-        self._touch_thread(record)
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=thread_id,
-            event_type="thread.archived",
-            payload={"archived_at": record.archived_at},
-        )
-        return self._resolve_thread(record)
+        with self._project_mutation_lock:
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                record.archived_at = self._now()
+                self._touch_thread(record)
+                self.save_thread(record)
+                self.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="thread.archived",
+                    payload={"archived_at": record.archived_at},
+                )
+                return self._resolve_thread(record)
 
     def restore_thread(self, thread_id: str) -> ThreadViewRecord:
-        record = self.load_thread(thread_id)
-        record.archived_at = None
-        self._touch_thread(record)
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=thread_id,
-            event_type="thread.restored",
-            payload={"restored_at": record.updated_at},
-        )
-        return self._resolve_thread(record)
+        with self._project_mutation_lock:
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                record.archived_at = None
+                self._touch_thread(record)
+                self.save_thread(record)
+                self.append_thread_event(
+                    thread_id=thread_id,
+                    event_type="thread.restored",
+                    payload={"restored_at": record.updated_at},
+                )
+                return self._resolve_thread(record)
 
     def delete_thread(self, thread_id: str) -> None:
         with self._thread_mutation_lock:
@@ -1505,6 +1598,7 @@ class BridgeStorage:
             event_path = self._event_log_path(thread_id)
             if event_path.exists():
                 event_path.unlink()
+            self._event_next_sequences.pop(thread_id, None)
 
             upload_dir = self.uploads_dir / thread_id
             if upload_dir.exists():
@@ -1520,7 +1614,9 @@ class BridgeStorage:
             if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                 boundary = self._home_assistant_boundary()
                 record.workspace_path = boundary.normalize(record.workspace_path)
-                boundary.resolve_relative(record.workspace_path, must_exist=True, kind="directory")
+                boundary.resolve_relative(
+                    record.workspace_path, must_exist=True, kind="directory"
+                )
                 if record.project_id is None:
                     raise WorkspaceInputError()
                 self._validate_thread_project_workspace(
@@ -1537,13 +1633,17 @@ class BridgeStorage:
                 record.created_at = self._now()
             if not record.updated_at:
                 record.updated_at = record.created_at
-            self._atomic_write_json(self._thread_path(record.thread_id), record.model_dump())
+            self._atomic_write_json(
+                self._thread_path(record.thread_id), record.model_dump()
+            )
 
     def _merge_persisted_home_assistant_attachments(self, record: ThreadRecord) -> None:
         """Preserve append-only attachment metadata across stale thread writers."""
         target = self._thread_path(record.thread_id)
         try:
-            persisted = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            persisted = ThreadRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
         except FileNotFoundError:
             return
         if persisted.thread_id != record.thread_id:
@@ -1574,7 +1674,9 @@ class BridgeStorage:
         """Preserve append-only artifact metadata across stale thread writers."""
         target = self._thread_path(record.thread_id)
         try:
-            persisted = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            persisted = ThreadRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
         except FileNotFoundError:
             return
         if persisted.thread_id != record.thread_id:
@@ -1608,12 +1710,16 @@ class BridgeStorage:
         the emitted payload is selected from fixed path-free messages.
         """
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
-            raise RuntimeError("terminal metadata fallback requires the home_assistant profile")
+            raise RuntimeError(
+                "terminal metadata fallback requires the home_assistant profile"
+            )
         with self._thread_mutation_lock:
             target = self._thread_path(thread_id)
             if not target.exists():
                 raise ThreadNotFoundError(thread_id)
-            record = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            record = ThreadRecord.model_validate_json(
+                target.read_text(encoding="utf-8")
+            )
             if record.thread_id != thread_id or record.active_run_id != run_id:
                 return False
 
@@ -1712,10 +1818,16 @@ class BridgeStorage:
         return record
 
     def _resolve_thread(self, record: ThreadRecord) -> ThreadViewRecord:
-        project = self.load_project(record.project_id or self.ensure_imported_project().project_id)
+        project = self.load_project(
+            record.project_id or self.ensure_imported_project().project_id
+        )
         self._validate_thread_project_workspace(record, project)
-        effective_model = normalize_model(record.model_override or project.default_model)
-        effective_thinking_level = record.thinking_override or project.default_thinking_level
+        effective_model = normalize_model(
+            record.model_override or project.default_model
+        )
+        effective_thinking_level = (
+            record.thinking_override or project.default_thinking_level
+        )
         return ThreadViewRecord(
             **record.model_dump(),
             project_name=project.name,
@@ -1748,9 +1860,12 @@ class BridgeStorage:
             with target.open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(record.model_dump()))
                 stream.write("\n")
+            self._event_next_sequences[thread_id] = sequence + 1
             return record
 
-    def list_thread_events(self, thread_id: str, *, after: int | None = None) -> list[ThreadEventRecord]:
+    def list_thread_events(
+        self, thread_id: str, *, after: int | None = None
+    ) -> list[ThreadEventRecord]:
         target = self._event_log_path(thread_id)
         if not target.exists():
             return []
@@ -1766,6 +1881,9 @@ class BridgeStorage:
         return events
 
     def _next_thread_event_sequence(self, thread_id: str) -> int:
+        cached = self._event_next_sequences.get(thread_id)
+        if cached is not None:
+            return cached
         target = self._event_log_path(thread_id)
         if not target.exists():
             return 1
@@ -1997,10 +2115,14 @@ class BridgeStorage:
 
         record = self.load_thread(thread_id)
         workspace_path = Path(record.workspace_path)
-        known_by_path = {artifact.stored_path: artifact for artifact in record.artifacts}
+        known_by_path = {
+            artifact.stored_path: artifact for artifact in record.artifacts
+        }
         added_any = False
 
-        for target in sorted(path for path in workspace_path.rglob("*") if path.is_file()):
+        for target in sorted(
+            path for path in workspace_path.rglob("*") if path.is_file()
+        ):
             stored_path = str(target)
             if stored_path in known_by_path:
                 continue
@@ -2008,9 +2130,12 @@ class BridgeStorage:
             artifact = ArtifactRecord(
                 artifact_id=f"art_{uuid4().hex[:12]}",
                 filename=target.name,
-                mime_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+                mime_type=mimetypes.guess_type(target.name)[0]
+                or "application/octet-stream",
                 stored_path=stored_path,
-                relative_path=str(target.relative_to(workspace_path)).replace("\\", "/"),
+                relative_path=str(target.relative_to(workspace_path)).replace(
+                    "\\", "/"
+                ),
                 size_bytes=target.stat().st_size,
             )
             record.artifacts.append(artifact)
@@ -2056,12 +2181,17 @@ class BridgeStorage:
                 relative = stored
             else:
                 try:
-                    relative = PurePosixPath(stored).relative_to(workspace_parts).as_posix()
+                    relative = (
+                        PurePosixPath(stored).relative_to(workspace_parts).as_posix()
+                    )
                 except ValueError:
                     raise WorkspaceEscapeError() from None
             relative = boundary.normalize(relative)
             file_stat = boundary.regular_file_stat(stored)
-            if file_stat.size_bytes > self._resource_limits().max_transient_snapshot_bytes:
+            if (
+                file_stat.size_bytes
+                > self._resource_limits().max_transient_snapshot_bytes
+            ):
                 raise QuotaExceededError("artifact_snapshot")
             scanned.append((stored, relative, file_stat.identity, file_stat.size_bytes))
 
@@ -2073,8 +2203,7 @@ class BridgeStorage:
             self._disk_quota().check("workspace")
             record = self.load_thread(thread_id)
             known = {
-                (artifact.source, artifact.stored_path)
-                for artifact in record.artifacts
+                (artifact.source, artifact.stored_path) for artifact in record.artifacts
             }
             added: list[ArtifactRecord] = []
             for stored, relative, _identity, size_bytes in scanned:
@@ -2123,7 +2252,9 @@ class BridgeStorage:
     ) -> tuple[ArtifactRecord, BinaryIO, int]:
         """Open one HA artifact through its owning retained boundary."""
         if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
-            raise RuntimeError("descriptor artifact opens require the home_assistant profile")
+            raise RuntimeError(
+                "descriptor artifact opens require the home_assistant profile"
+            )
         artifact = self.get_artifact(thread_id, artifact_id)
         if artifact.source is ArtifactSource.WORKSPACE:
             boundary = self._home_assistant_boundary()
@@ -2170,13 +2301,29 @@ class BridgeStorage:
             compresslevel=6,
         ) as archive:
             if workspace_root.exists():
-                for path in sorted(candidate for candidate in workspace_root.rglob("*") if candidate.is_file()):
-                    archive.write(path, arcname=str(Path("workspace") / path.relative_to(workspace_root)))
+                for path in sorted(
+                    candidate
+                    for candidate in workspace_root.rglob("*")
+                    if candidate.is_file()
+                ):
+                    archive.write(
+                        path,
+                        arcname=str(
+                            Path("workspace") / path.relative_to(workspace_root)
+                        ),
+                    )
                     included_files += 1
 
             if uploads_root.exists():
-                for path in sorted(candidate for candidate in uploads_root.rglob("*") if candidate.is_file()):
-                    archive.write(path, arcname=str(Path("uploads") / path.relative_to(uploads_root)))
+                for path in sorted(
+                    candidate
+                    for candidate in uploads_root.rglob("*")
+                    if candidate.is_file()
+                ):
+                    archive.write(
+                        path,
+                        arcname=str(Path("uploads") / path.relative_to(uploads_root)),
+                    )
                     included_files += 1
 
             if included_files == 0:
@@ -2305,9 +2452,11 @@ class BridgeStorage:
                         relative = stored
                     else:
                         try:
-                            relative = PurePosixPath(stored).relative_to(
-                                workspace_parts
-                            ).as_posix()
+                            relative = (
+                                PurePosixPath(stored)
+                                .relative_to(workspace_parts)
+                                .as_posix()
+                            )
                         except ValueError:
                             raise WorkspaceEscapeError() from None
                     relative = workspace_boundary.normalize(relative)
@@ -2336,9 +2485,7 @@ class BridgeStorage:
                     included_files += 1
 
                 if included_files == 0:
-                    readme = (
-                        "This chat did not have any workspace files or uploaded files yet.\n"
-                    )
+                    readme = "This chat did not have any workspace files or uploaded files yet.\n"
                     expanded.consume(len(readme.encode("utf-8")))
                     archive.writestr(
                         "README.txt",
@@ -2495,15 +2642,21 @@ class BridgeStorage:
     def save_limits_status(self, status: LimitsStatusRecord) -> None:
         self._atomic_write_json(self.limits_status_path, status.model_dump())
 
-    def update_limits_from_rate_data(self, rate_limits: dict[str, object]) -> LimitsStatusRecord:
+    def update_limits_from_rate_data(
+        self, rate_limits: dict[str, object]
+    ) -> LimitsStatusRecord:
         status = LimitsStatusRecord(
             available=True,
             blocked=False,
             message=None,
             primary=self._limits_window(rate_limits.get("primary")),
             secondary=self._limits_window(rate_limits.get("secondary")),
-            credits=rate_limits.get("credits") if isinstance(rate_limits.get("credits"), dict) else None,
-            plan_type=str(rate_limits.get("plan_type")) if rate_limits.get("plan_type") is not None else None,
+            credits=rate_limits.get("credits")
+            if isinstance(rate_limits.get("credits"), dict)
+            else None,
+            plan_type=str(rate_limits.get("plan_type"))
+            if rate_limits.get("plan_type") is not None
+            else None,
             updated_at=self._now(),
         )
         self.save_limits_status(status)
@@ -2535,7 +2688,9 @@ class BridgeStorage:
         snapshot.blocked = snapshot.blocked or current.blocked
         if current.blocked and current.message:
             snapshot.message = current.message
-        if current.updated_at and (snapshot.updated_at is None or current.updated_at > snapshot.updated_at):
+        if current.updated_at and (
+            snapshot.updated_at is None or current.updated_at > snapshot.updated_at
+        ):
             snapshot.updated_at = current.updated_at
         return snapshot
 
@@ -2554,6 +2709,8 @@ class BridgeStorage:
         return LimitsWindowRecord(
             used_percent=used_percent,
             remaining_percent=remaining_percent,
-            window_minutes=int(window_minutes) if isinstance(window_minutes, (int, float)) else None,
+            window_minutes=int(window_minutes)
+            if isinstance(window_minutes, (int, float))
+            else None,
             resets_at=int(resets_at) if isinstance(resets_at, (int, float)) else None,
         )

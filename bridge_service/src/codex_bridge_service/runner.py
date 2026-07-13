@@ -34,6 +34,12 @@ class CodexChildFailure(RuntimeError):
 
 
 class BridgeRunner:
+    """Deprecated ``codex exec`` adapter for the external rollback profile.
+
+    Home Assistant application composition rejects this class as a runtime
+    owner; supervised HA turns belong exclusively to ``RuntimeBroker``.
+    """
+
     def __init__(
         self,
         storage: BridgeStorage,
@@ -45,6 +51,10 @@ class BridgeRunner:
         idle_timeout_seconds: float | None = 1800.0,
         recover_stale_runs: bool = True,
     ) -> None:
+        if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            raise ValueError(
+                "BridgeRunner is unavailable in the Home Assistant runtime profile."
+            )
         self.storage = storage
         self.codex_command = codex_command
         self.codex_home = codex_home
@@ -150,9 +160,13 @@ class BridgeRunner:
                 "pending_count": len(record.pending_prompts),
             },
         )
-        return RunRecord(run_id=pending.run_id, thread_id=record.thread_id, status="queued")
+        return RunRecord(
+            run_id=pending.run_id, thread_id=record.thread_id, status="queued"
+        )
 
-    def _start_worker(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+    def _start_worker(
+        self, record: ThreadViewRecord, run: RunRecord, prompt: str
+    ) -> None:
         worker = Thread(
             target=self._run_prompt,
             args=(record, run, prompt),
@@ -160,7 +174,9 @@ class BridgeRunner:
         )
         worker.start()
 
-    def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+    def _run_prompt(
+        self, record: ThreadViewRecord, run: RunRecord, prompt: str
+    ) -> None:
         home_assistant_run_lock_acquired = False
         if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             self._home_assistant_run_lock.acquire()
@@ -221,7 +237,9 @@ class BridgeRunner:
                     if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                         # Never serialize a private process path from a
                         # platform-specific process-start failure.
-                        raise RuntimeError("Codex process could not be started.") from None
+                        raise RuntimeError(
+                            "Codex process could not be started."
+                        ) from None
                     raise
                 self._processes[record.thread_id] = process
             assert process.stdout is not None
@@ -303,7 +321,11 @@ class BridgeRunner:
             if return_code != 0:
                 raise CodexChildFailure(
                     codex_error
-                    or (stderr_lines[-1] if stderr_lines else f"codex exited with code {return_code}")
+                    or (
+                        stderr_lines[-1]
+                        if stderr_lines
+                        else f"codex exited with code {return_code}"
+                    )
                 )
             self.storage.sync_thread_artifacts(record.thread_id)
         except Exception as exc:
@@ -421,7 +443,9 @@ class BridgeRunner:
         if record.effective_model:
             command.extend(["-m", record.effective_model])
         if record.effective_thinking_level:
-            command.extend(["-c", f"model_reasoning_effort={record.effective_thinking_level}"])
+            command.extend(
+                ["-c", f"model_reasoning_effort={record.effective_thinking_level}"]
+            )
 
         command.extend(
             [
@@ -489,7 +513,9 @@ class BridgeRunner:
             f"{prompt}"
         )
 
-    def _handle_codex_event(self, thread_id: str, run_id: str, event: dict[str, object]) -> bool:
+    def _handle_codex_event(
+        self, thread_id: str, run_id: str, event: dict[str, object]
+    ) -> bool:
         event_type = str(event.get("type", "codex.event"))
         if (
             self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
@@ -598,7 +624,10 @@ class BridgeRunner:
         *,
         child_failure: bool = False,
     ) -> dict[str, object]:
-        if child_failure and self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        if (
+            child_failure
+            and self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        ):
             return self._home_assistant_child_failure_payload(message)
 
         if is_codex_auth_failure(message):

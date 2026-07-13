@@ -16,8 +16,10 @@ from codex_bridge_service.models import (
     CodexModelRecord,
     RunMode,
     RunRecord,
+    RuntimeProfile,
 )
 from codex_bridge_service.runner import BridgeRunner
+from codex_bridge_service.runtime_broker import RuntimeThreadBusyError
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -60,6 +62,14 @@ class FakeRunner:
             payload={"run_id": run_id},
         )
         return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
+
+
+class BusyDeleteRunner(FakeRunner):
+    def delete_thread(self, _thread_id: str) -> None:
+        raise RuntimeThreadBusyError()
+
+    def delete_project(self, _project_id: str) -> None:
+        raise RuntimeThreadBusyError()
 
 
 class FakeAccountProbe:
@@ -185,7 +195,9 @@ class FakeAuthManager:
 
     def logout(self) -> CodexAuthStatusRecord:
         self.logged_out = True
-        return CodexAuthStatusRecord(state="logged_out", auth_required=True, message="Logged out.")
+        return CodexAuthStatusRecord(
+            state="logged_out", auth_required=True, message="Logged out."
+        )
 
 
 def test_health_project_create_and_status_require_token(tmp_path) -> None:
@@ -199,7 +211,12 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
 
     assert client.get("/health").status_code == 200
     assert client.get("/ready").status_code == 401
-    assert client.post("/projects", json={"name": "No token", "root_path": str(tmp_path / "nope")}).status_code == 401
+    assert (
+        client.post(
+            "/projects", json={"name": "No token", "root_path": str(tmp_path / "nope")}
+        ).status_code
+        == 401
+    )
     assert client.get("/status").status_code == 401
 
     response = client.post(
@@ -238,14 +255,23 @@ def test_health_project_create_and_status_require_token(tmp_path) -> None:
     assert status_response.status_code == 200
     status = status_response.json()
     assert status["models"] == ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.4-mini"]
-    assert status["thinking_levels"] == ["low", "medium", "high", "xhigh", "max", "ultra"]
+    assert status["thinking_levels"] == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+    ]
     assert status["model_catalog"]["default_model"] == "gpt-5.6-sol"
     assert status["model_catalog"]["configured_thinking_level"] == "ultra"
     assert status["account"]["email"] == "person@example.com"
     assert status["account"]["plan_type"] == "pro"
 
 
-def test_project_without_explicit_settings_uses_configured_codex_defaults(tmp_path) -> None:
+def test_project_without_explicit_settings_uses_configured_codex_defaults(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -290,7 +316,9 @@ def test_startup_seeds_special_projects_from_fresh_catalog(tmp_path) -> None:
     assert direct["default_thinking_level"] == "ultra"
 
 
-def test_special_project_provisional_defaults_recover_with_fresh_catalog(tmp_path) -> None:
+def test_special_project_provisional_defaults_recover_with_fresh_catalog(
+    tmp_path,
+) -> None:
     probe = RecoveringModelCatalogProbe()
     app = create_app(
         root_path=tmp_path,
@@ -391,7 +419,9 @@ def test_existing_special_project_reconciles_before_first_post_recovery_chat(
     assert preserved_thread["thinking_override"] == DEFAULT_THINKING_LEVEL
 
 
-def test_ordinary_project_thread_does_not_probe_catalog_without_overrides(tmp_path) -> None:
+def test_ordinary_project_thread_does_not_probe_catalog_without_overrides(
+    tmp_path,
+) -> None:
     probe = RecoveringModelCatalogProbe(fallback_calls=0)
     app = create_app(
         root_path=tmp_path,
@@ -448,7 +478,9 @@ def test_legacy_special_defaults_defer_until_catalog_recovers(tmp_path) -> None:
     assert preserved_thread["effective_thinking_level"] == DEFAULT_THINKING_LEVEL
 
 
-def test_project_with_only_model_uses_that_models_default_thinking_level(tmp_path) -> None:
+def test_project_with_only_model_uses_that_models_default_thinking_level(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -506,7 +538,9 @@ def test_project_rejects_blank_model_defaults(tmp_path) -> None:
     assert response.status_code == 422
 
 
-def test_project_model_update_repairs_incompatible_existing_thinking_level(tmp_path) -> None:
+def test_project_model_update_repairs_incompatible_existing_thinking_level(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -590,7 +624,9 @@ def test_thread_create_repairs_inherited_effort_for_explicit_model(tmp_path) -> 
     assert response.json()["effective_thinking_level"] == "medium"
 
 
-def test_thread_update_repairs_or_rejects_incompatible_model_effort_pair(tmp_path) -> None:
+def test_thread_update_repairs_or_rejects_incompatible_model_effort_pair(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -702,14 +738,19 @@ def test_auth_routes_start_device_login_and_logout_require_token(tmp_path) -> No
     app = create_app(root_path=tmp_path, auth_token="secret", auth_manager=auth_manager)
     client = TestClient(app)
 
-    assert client.post("/auth/device-login", json={"force_logout": True}).status_code == 401
+    assert (
+        client.post("/auth/device-login", json={"force_logout": True}).status_code
+        == 401
+    )
 
     start_response = client.post(
         "/auth/device-login",
         headers={"Authorization": "Bearer secret"},
         json={"force_logout": True},
     )
-    logout_response = client.post("/auth/logout", headers={"Authorization": "Bearer secret"})
+    logout_response = client.post(
+        "/auth/logout", headers={"Authorization": "Bearer secret"}
+    )
 
     assert start_response.status_code == 202
     assert start_response.json()["state"] == "login_running"
@@ -851,7 +892,120 @@ def test_project_archive_restore_and_delete_routes(tmp_path) -> None:
     assert deleted_thread_response.status_code == 404
 
 
-def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_path) -> None:
+def test_runtime_owned_thread_and_project_deletes_return_typed_conflicts(
+    tmp_path,
+) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=BusyDeleteRunner,
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+    project = client.post(
+        "/projects",
+        headers=headers,
+        json={
+            "name": "Busy project",
+            "root_path": str(tmp_path / "busy"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    ).json()
+    thread = client.post(
+        "/threads",
+        headers=headers,
+        json={
+            "title": "Busy chat",
+            "project_id": project["project_id"],
+            "mode": "full-auto",
+        },
+    ).json()
+    app.state.storage.runtime_profile = RuntimeProfile.HOME_ASSISTANT
+
+    thread_delete = client.delete(
+        f"/threads/{thread['thread_id']}",
+        headers=headers,
+    )
+    project_delete = client.delete(
+        f"/projects/{project['project_id']}",
+        headers=headers,
+    )
+
+    expected = {
+        "detail": {
+            "code": "runtime_thread_busy",
+            "retryable": True,
+        }
+    }
+    assert thread_delete.status_code == 409
+    assert thread_delete.json() == expected
+    assert project_delete.status_code == 409
+    assert project_delete.json() == expected
+
+
+def test_home_assistant_delete_requires_runtime_owner(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        runner_factory=FakeRunner,
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+    project = client.post(
+        "/projects",
+        headers=headers,
+        json={
+            "name": "Owned project",
+            "root_path": str(tmp_path / "owned"),
+            "default_model": DEFAULT_MODEL,
+            "default_thinking_level": DEFAULT_THINKING_LEVEL,
+        },
+    ).json()
+    thread = client.post(
+        "/threads",
+        headers=headers,
+        json={
+            "title": "Owned chat",
+            "project_id": project["project_id"],
+            "mode": "edit",
+        },
+    ).json()
+    app.state.storage.runtime_profile = RuntimeProfile.HOME_ASSISTANT
+
+    thread_delete = client.delete(
+        f"/threads/{thread['thread_id']}",
+        headers=headers,
+    )
+    project_delete = client.delete(
+        f"/projects/{project['project_id']}",
+        headers=headers,
+    )
+    app.state.storage.runtime_profile = RuntimeProfile.EXTERNAL_LEGACY
+
+    expected = {
+        "detail": {
+            "code": "app_server_unavailable",
+            "retryable": True,
+        }
+    }
+    assert thread_delete.status_code == 503
+    assert thread_delete.json() == expected
+    assert project_delete.status_code == 503
+    assert project_delete.json() == expected
+    assert (
+        app.state.storage.load_thread(thread["thread_id"]).thread_id
+        == thread["thread_id"]
+    )
+    assert (
+        app.state.storage.load_project(project["project_id"]).project_id
+        == project["project_id"]
+    )
+
+
+def test_thread_create_upload_and_event_stream_require_token_and_persist(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -910,7 +1064,10 @@ def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_pat
     assert upload_payload["mime_type"] == "text/plain"
     assert upload_payload["stored_path"] == str(attachment_path)
     assert attachment_path.read_bytes() == b"hello from api"
-    assert saved_payload["attachments"][0]["attachment_id"] == upload_payload["attachment_id"]
+    assert (
+        saved_payload["attachments"][0]["attachment_id"]
+        == upload_payload["attachment_id"]
+    )
     assert saved_payload["attachments"][0]["stored_path"] == str(attachment_path)
 
     events_response = client.get(
@@ -934,7 +1091,9 @@ def test_thread_create_upload_and_event_stream_require_token_and_persist(tmp_pat
     assert "event: attachment.added" in replay_response.text
 
 
-def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_path) -> None:
+def test_thread_listing_update_prompt_replay_and_artifact_download_routes(
+    tmp_path,
+) -> None:
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
@@ -989,10 +1148,13 @@ def test_thread_listing_update_prompt_replay_and_artifact_download_routes(tmp_pa
     assert update_response.json()["effective_model"] == "gpt-5.5"
     assert update_response.json()["effective_thinking_level"] == "high"
 
-    assert client.post(
-        f"/threads/{thread_id}/prompts",
-        json={"prompt": "No token"},
-    ).status_code == 401
+    assert (
+        client.post(
+            f"/threads/{thread_id}/prompts",
+            json={"prompt": "No token"},
+        ).status_code
+        == 401
+    )
 
     prompt_response = client.post(
         f"/threads/{thread_id}/prompts",
@@ -1081,7 +1243,9 @@ def test_cancel_active_run_route_marks_thread_idle(tmp_path) -> None:
     assert events_response.json()[-1]["event_type"] == "run.cancelled"
 
 
-def test_prompt_route_accepts_steer_message_while_thread_is_running(tmp_path, monkeypatch) -> None:
+def test_prompt_route_accepts_steer_message_while_thread_is_running(
+    tmp_path, monkeypatch
+) -> None:
     class BlockingProcess:
         instances = []
 
@@ -1094,15 +1258,30 @@ def test_prompt_route_accepts_steer_message_while_thread_is_running(tmp_path, mo
 
         def _stdout(self):
             prompt = self.command[self.command.index("--json") - 1]
-            yield json.dumps({"type": "thread.started", "thread_id": "019e08fb-92dc-7920-88f3-9fc949d1aef8"}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "type": "thread.started",
+                        "thread_id": "019e08fb-92dc-7920-88f3-9fc949d1aef8",
+                    }
+                )
+                + "\n"
+            )
             yield json.dumps({"type": "turn.started"}) + "\n"
             assert self.released.wait(2), "fake codex process was not released"
-            yield json.dumps(
-                {
-                    "type": "item.completed",
-                    "item": {"id": "item_1", "type": "agent_message", "text": f"Echo: {prompt}"},
-                }
-            ) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "item_1",
+                            "type": "agent_message",
+                            "text": f"Echo: {prompt}",
+                        },
+                    }
+                )
+                + "\n"
+            )
             yield json.dumps({"type": "turn.completed", "usage": {}}) + "\n"
 
         def wait(self) -> int:
@@ -1116,7 +1295,9 @@ def test_prompt_route_accepts_steer_message_while_thread_is_running(tmp_path, mo
     app = create_app(
         root_path=tmp_path,
         auth_token="secret",
-        runner_factory=lambda storage: BridgeRunner(storage=storage, codex_command="codex"),
+        runner_factory=lambda storage: BridgeRunner(
+            storage=storage, codex_command="codex"
+        ),
         model_catalog_probe=FakeModelCatalogProbe(),
     )
     client = TestClient(app)
@@ -1252,7 +1433,7 @@ def test_thread_attachment_upload_accepts_relative_path(tmp_path) -> None:
         f"/threads/{thread_id}/attachments",
         headers={"Authorization": "Bearer secret"},
         data={"relative_path": "src/vba/Module1.bas"},
-        files={"file": ("Module1.bas", b"Attribute VB_Name = \"Module1\"", "text/plain")},
+        files={"file": ("Module1.bas", b'Attribute VB_Name = "Module1"', "text/plain")},
     )
 
     assert upload_response.status_code == 201

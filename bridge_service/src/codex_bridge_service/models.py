@@ -1,10 +1,11 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .api_contract import API_CONTRACT, ApiContractRecord
+from .workspace import normalize_portable_relative_path
 
 DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_THINKING_LEVEL = "medium"
@@ -111,7 +112,12 @@ class ThreadRecord(BaseModel):
     workspace_path: str
     status: str
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    # ``codex_session_id`` belongs to the deprecated ``codex exec`` adapter.
+    # The app-server thread identifier is deliberately separate so a fresh HA
+    # runtime can never import or resume a legacy VM session by accident.
     codex_session_id: str | None = None
+    codex_thread_id: str | None = None
+    active_turn_id: str | None = None
     active_run_id: str | None = None
     last_error: str | None = None
     pending_prompts: list[PendingPromptRecord] = Field(default_factory=list)
@@ -184,6 +190,112 @@ class CodexAuthStatusRecord(BaseModel):
     user_code: str | None = None
     output_tail: list[str] = Field(default_factory=list)
     updated_at: str | None = None
+
+
+BoundedAnswerValue = Annotated[str, Field(min_length=1, max_length=4096)]
+
+
+class InteractionOptionRecord(BaseModel):
+    label: str = Field(min_length=1, max_length=160)
+    description: str = Field(min_length=1, max_length=512)
+
+
+class InteractionQuestionRecord(BaseModel):
+    question_id: str = Field(min_length=1, max_length=128)
+    header: str = Field(min_length=1, max_length=160)
+    prompt: str = Field(min_length=1, max_length=2048)
+    options: list[InteractionOptionRecord] = Field(default_factory=list, max_length=32)
+    multiple: bool = False
+    allow_free_text: bool = False
+
+
+class InteractionDisplayRecord(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    summary: str = Field(min_length=1, max_length=512)
+    command: str | None = Field(default=None, max_length=512)
+    workspace_paths: list[str] = Field(default_factory=list, max_length=128)
+    questions: list[InteractionQuestionRecord] = Field(
+        default_factory=list, max_length=32
+    )
+
+    @field_validator("workspace_paths")
+    @classmethod
+    def validate_workspace_paths(cls, values: list[str]) -> list[str]:
+        for value in values:
+            try:
+                normalized = normalize_portable_relative_path(value)
+            except ValueError:
+                raise ValueError(
+                    "interaction workspace paths must be safe and relative"
+                )
+            if len(value) > 240 or normalized != value:
+                raise ValueError(
+                    "interaction workspace paths must be safe and relative"
+                )
+        return values
+
+
+class PendingInteractionRecord(BaseModel):
+    interaction_id: str = Field(min_length=1, max_length=128)
+    kind: Literal["command_approval", "file_change_approval", "user_input"]
+    thread_id: str = Field(min_length=1, max_length=128)
+    run_id: str = Field(min_length=1, max_length=128)
+    turn_id: str = Field(min_length=1, max_length=256)
+    item_id: str = Field(min_length=1, max_length=256)
+    event_id: int = Field(ge=0)
+    status: Literal["pending"] = "pending"
+    expires_at: str = Field(min_length=1, max_length=64)
+    display: InteractionDisplayRecord
+    allowed_actions: list[Literal["accept", "decline", "cancel", "answer"]] = Field(
+        max_length=4
+    )
+
+
+class PendingInteractionCollectionRecord(BaseModel):
+    items: list[PendingInteractionRecord]
+    count: int = Field(ge=0)
+    thread_id: str | None = Field(default=None, max_length=128)
+
+
+class InteractionDecisionRequest(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=128)
+    run_id: str = Field(min_length=1, max_length=128)
+    turn_id: str = Field(min_length=1, max_length=256)
+    item_id: str = Field(min_length=1, max_length=256)
+    decision: Literal["accept", "decline", "cancel"]
+    client_request_id: str = Field(min_length=1, max_length=256)
+
+
+class InteractionAnswerRecord(BaseModel):
+    question_id: str = Field(min_length=1, max_length=128)
+    values: list[BoundedAnswerValue] = Field(min_length=1, max_length=32)
+
+
+class InteractionAnswerRequest(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=128)
+    run_id: str = Field(min_length=1, max_length=128)
+    turn_id: str = Field(min_length=1, max_length=256)
+    item_id: str = Field(min_length=1, max_length=256)
+    answers: list[InteractionAnswerRecord] = Field(min_length=1, max_length=32)
+    client_request_id: str = Field(min_length=1, max_length=256)
+
+    @field_validator("answers")
+    @classmethod
+    def validate_unique_question_ids(
+        cls,
+        values: list[InteractionAnswerRecord],
+    ) -> list[InteractionAnswerRecord]:
+        question_ids = [answer.question_id for answer in values]
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("question ids must be unique")
+        return values
+
+
+class InteractionResultRecord(BaseModel):
+    interaction_id: str = Field(min_length=1, max_length=128)
+    thread_id: str = Field(min_length=1, max_length=128)
+    status: Literal["accepted", "declined", "cancelled", "answered"]
+    client_request_id: str = Field(min_length=1, max_length=256)
 
 
 class CodexModelRecord(BaseModel):
@@ -277,12 +389,18 @@ class BridgeDiagnosticsRecord(BaseModel):
 
 class BridgeStatusRecord(BaseModel):
     models: list[str] = Field(default_factory=lambda: list(SUPPORTED_MODELS))
-    thinking_levels: list[str] = Field(default_factory=lambda: list(SUPPORTED_THINKING_LEVELS))
-    model_catalog: CodexModelCatalogRecord = Field(default_factory=CodexModelCatalogRecord)
+    thinking_levels: list[str] = Field(
+        default_factory=lambda: list(SUPPORTED_THINKING_LEVELS)
+    )
+    model_catalog: CodexModelCatalogRecord = Field(
+        default_factory=CodexModelCatalogRecord
+    )
     limits: LimitsStatusRecord = Field(default_factory=LimitsStatusRecord)
     account: CodexAccountRecord = Field(default_factory=CodexAccountRecord)
     auth: CodexAuthStatusRecord = Field(default_factory=CodexAuthStatusRecord)
-    diagnostics: BridgeDiagnosticsRecord = Field(default_factory=BridgeDiagnosticsRecord)
+    diagnostics: BridgeDiagnosticsRecord = Field(
+        default_factory=BridgeDiagnosticsRecord
+    )
 
 
 class PathBrowseEntryRecord(BaseModel):

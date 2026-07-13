@@ -2,6 +2,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
+from threading import Event, RLock
 import zipfile
 
 import pytest
@@ -14,6 +15,26 @@ from codex_bridge_service.models import (
     RunMode,
 )
 from codex_bridge_service.storage import BridgeStorage
+
+
+class _ContentionTrackingRLock:
+    def __init__(self) -> None:
+        self._lock = RLock()
+        self.contended = Event()
+
+    def __enter__(self) -> "_ContentionTrackingRLock":
+        if not self._lock.acquire(blocking=False):
+            self.contended.set()
+            self._lock.acquire()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: object | None,
+        exc_value: object | None,
+        traceback: object | None,
+    ) -> None:
+        self._lock.release()
 
 
 def test_create_project_persists_defaults_and_root_path(tmp_path) -> None:
@@ -104,7 +125,9 @@ def test_create_thread_rejects_blank_title(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="title must not be blank"):
-        storage.create_thread(title="   ", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+        storage.create_thread(
+            title="   ", mode=RunMode.FULL_AUTO, project_id=project.project_id
+        )
 
 
 def test_create_thread_without_project_uses_direct_chat_workspace(tmp_path) -> None:
@@ -118,17 +141,28 @@ def test_create_thread_without_project_uses_direct_chat_workspace(tmp_path) -> N
     assert Path(record.workspace_path).name.startswith("ws_")
 
 
-def test_thread_events_can_be_read_after_sequence_without_reloading_history(tmp_path) -> None:
+def test_thread_events_can_be_read_after_sequence_without_reloading_history(
+    tmp_path,
+) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     record = storage.create_thread(title="Event stream", mode=RunMode.FULL_AUTO)
 
-    storage.append_thread_event(thread_id=record.thread_id, event_type="run.started", payload={})
-    storage.append_thread_event(thread_id=record.thread_id, event_type="message.completed", payload={"text": "done"})
+    storage.append_thread_event(
+        thread_id=record.thread_id, event_type="run.started", payload={}
+    )
+    storage.append_thread_event(
+        thread_id=record.thread_id,
+        event_type="message.completed",
+        payload={"text": "done"},
+    )
 
     later_events = storage.list_thread_events(record.thread_id, after=1)
 
     assert [event.sequence for event in later_events] == [2, 3]
-    assert [event.event_type for event in later_events] == ["run.started", "message.completed"]
+    assert [event.event_type for event in later_events] == [
+        "run.started",
+        "message.completed",
+    ]
 
 
 def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
@@ -139,7 +173,9 @@ def test_attach_file_persists_content_metadata_and_event(tmp_path) -> None:
         default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
-    record = storage.create_thread(title="Bridge MVP", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+    record = storage.create_thread(
+        title="Bridge MVP", mode=RunMode.FULL_AUTO, project_id=project.project_id
+    )
 
     attachment = storage.attach_file(
         thread_id=record.thread_id,
@@ -177,7 +213,9 @@ def test_attach_file_accepts_stream_content_for_large_uploads(tmp_path) -> None:
         default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
-    record = storage.create_thread(title="Large uploads", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+    record = storage.create_thread(
+        title="Large uploads", mode=RunMode.FULL_AUTO, project_id=project.project_id
+    )
     payload = b"module Option Explicit\n" * 70000
 
     attachment = storage.attach_file(
@@ -202,22 +240,28 @@ def test_attach_file_preserves_relative_path_for_folder_uploads(tmp_path) -> Non
         default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
-    record = storage.create_thread(title="Folder target", mode=RunMode.FULL_AUTO, project_id=project.project_id)
+    record = storage.create_thread(
+        title="Folder target", mode=RunMode.FULL_AUTO, project_id=project.project_id
+    )
 
     attachment = storage.attach_file(
         thread_id=record.thread_id,
         filename="Module1.bas",
         mime_type="text/plain",
-        content=b"Attribute VB_Name = \"Module1\"",
+        content=b'Attribute VB_Name = "Module1"',
         relative_path="src/vba/Module1.bas",
     )
 
-    attachment_path = tmp_path / "uploads" / record.thread_id / "src" / "vba" / "Module1.bas"
+    attachment_path = (
+        tmp_path / "uploads" / record.thread_id / "src" / "vba" / "Module1.bas"
+    )
 
     assert attachment.relative_path == "src/vba/Module1.bas"
     assert attachment.stored_path == str(attachment_path)
-    assert attachment.size_bytes == len(b"Attribute VB_Name = \"Module1\"")
-    assert attachment_path.read_text(encoding="utf-8") == 'Attribute VB_Name = "Module1"'
+    assert attachment.size_bytes == len(b'Attribute VB_Name = "Module1"')
+    assert (
+        attachment_path.read_text(encoding="utf-8") == 'Attribute VB_Name = "Module1"'
+    )
 
 
 def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
@@ -228,8 +272,12 @@ def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
         default_model=DEFAULT_MODEL,
         default_thinking_level="medium",
     )
-    first = storage.create_thread(title="First", mode=RunMode.FULL_AUTO, project_id=project.project_id)
-    second = storage.create_thread(title="Second", mode=RunMode.EDIT, project_id=project.project_id)
+    first = storage.create_thread(
+        title="First", mode=RunMode.FULL_AUTO, project_id=project.project_id
+    )
+    second = storage.create_thread(
+        title="Second", mode=RunMode.EDIT, project_id=project.project_id
+    )
 
     artifact_path = tmp_path / "projects" / "second" / "report.md"
     artifact_path.write_text("# Report\n", encoding="utf-8")
@@ -244,7 +292,10 @@ def test_list_threads_sync_artifacts_and_update_overrides(tmp_path) -> None:
     events = storage.list_thread_events(second.thread_id)
     resolved_second = storage.get_thread(second.thread_id)
 
-    assert [thread.thread_id for thread in listed_threads] == [second.thread_id, first.thread_id]
+    assert [thread.thread_id for thread in listed_threads] == [
+        second.thread_id,
+        first.thread_id,
+    ]
     assert len(artifacts) == 1
     assert artifacts[0].filename == "report.md"
     assert artifacts[0].stored_path == str(artifact_path)
@@ -269,7 +320,7 @@ def test_create_workspace_archive_packages_workspace_and_uploads(tmp_path) -> No
     )
     workspace_file = Path(thread.workspace_path) / "src" / "Module1.bas"
     workspace_file.parent.mkdir(parents=True, exist_ok=True)
-    workspace_file.write_text("Attribute VB_Name = \"Module1\"\n", encoding="utf-8")
+    workspace_file.write_text('Attribute VB_Name = "Module1"\n', encoding="utf-8")
     storage.attach_file(
         thread_id=thread.thread_id,
         filename="requirements.txt",
@@ -313,7 +364,9 @@ def test_legacy_thread_records_are_assigned_to_imported_project(tmp_path) -> Non
 
     record = storage.get_thread("thr_legacy")
     projects = storage.list_projects()
-    imported = next(project for project in projects if project.project_id == record.project_id)
+    imported = next(
+        project for project in projects if project.project_id == record.project_id
+    )
 
     assert record.project_name == "Imported Threads"
     assert imported.kind is ProjectKind.IMPORTED
@@ -342,8 +395,12 @@ def test_existing_special_projects_are_migrated_to_correct_kind(tmp_path) -> Non
         "created_at": "2026-05-09T00:00:00Z",
         "updated_at": "2026-05-09T00:00:00Z",
     }
-    (tmp_path / "projects" / "prj_imported.json").write_text(json.dumps(stale_imported), encoding="utf-8")
-    (tmp_path / "projects" / "prj_direct.json").write_text(json.dumps(stale_direct), encoding="utf-8")
+    (tmp_path / "projects" / "prj_imported.json").write_text(
+        json.dumps(stale_imported), encoding="utf-8"
+    )
+    (tmp_path / "projects" / "prj_direct.json").write_text(
+        json.dumps(stale_direct), encoding="utf-8"
+    )
 
     imported = storage.load_project("prj_imported")
     direct = storage.load_project("prj_direct")
@@ -354,10 +411,14 @@ def test_existing_special_projects_are_migrated_to_correct_kind(tmp_path) -> Non
     assert direct.default_model == "gpt-5.4"
 
 
-def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(tmp_path) -> None:
+def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(
+    tmp_path,
+) -> None:
     initial_storage = BridgeStorage(root_path=tmp_path)
     original = initial_storage.ensure_direct_project()
-    existing_thread = initial_storage.create_thread(title="Existing direct", mode=RunMode.FULL_AUTO)
+    existing_thread = initial_storage.create_thread(
+        title="Existing direct", mode=RunMode.FULL_AUTO
+    )
     assert original.default_model == DEFAULT_MODEL
     project_path = tmp_path / "projects" / "prj_direct.json"
     legacy_payload = json.loads(project_path.read_text(encoding="utf-8"))
@@ -380,7 +441,9 @@ def test_legacy_static_special_defaults_migrate_to_discovered_codex_defaults(tmp
     assert preserved.effective_thinking_level == "medium"
 
 
-def test_explicit_special_project_defaults_replace_provisional_catalog_defaults(tmp_path) -> None:
+def test_explicit_special_project_defaults_replace_provisional_catalog_defaults(
+    tmp_path,
+) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     provisional = storage.ensure_direct_project(
         default_model=DEFAULT_MODEL,
@@ -483,7 +546,9 @@ def test_deferred_legacy_migration_recovers_imported_project(tmp_path) -> None:
     assert preserved.thinking_override == DEFAULT_THINKING_LEVEL
 
 
-def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(tmp_path) -> None:
+def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(
+    tmp_path,
+) -> None:
     initial_storage = BridgeStorage(root_path=tmp_path)
     original = initial_storage.ensure_imported_project()
     assert original.default_model == DEFAULT_MODEL
@@ -503,7 +568,9 @@ def test_empty_imported_project_migrates_to_discovered_defaults_at_startup(tmp_p
     assert migrated.default_thinking_level == "ultra"
 
 
-def test_legacy_thread_resolution_uses_discovered_special_project_defaults(tmp_path) -> None:
+def test_legacy_thread_resolution_uses_discovered_special_project_defaults(
+    tmp_path,
+) -> None:
     storage = BridgeStorage(
         root_path=tmp_path,
         special_project_defaults_provider=lambda: ("gpt-5.6-sol", "ultra", False),
@@ -572,6 +639,98 @@ def test_archive_restore_and_delete_project_metadata(tmp_path) -> None:
     assert project_root.exists()
 
 
+@pytest.mark.parametrize("mutation", ["archive", "restore"])
+def test_project_metadata_mutation_cannot_resurrect_concurrent_delete(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(name="Project mutation race")
+    if mutation == "restore":
+        storage.archive_project(project.project_id)
+
+    mutation_lock = _ContentionTrackingRLock()
+    storage._project_mutation_lock = mutation_lock
+    save_entered = Event()
+    release_save = Event()
+    original_save_project = storage.save_project
+
+    def blocked_save_project(record) -> None:
+        save_entered.set()
+        assert release_save.wait(2)
+        original_save_project(record)
+
+    monkeypatch.setattr(storage, "save_project", blocked_save_project)
+    mutate = (
+        storage.archive_project if mutation == "archive" else storage.restore_project
+    )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            mutation_future = pool.submit(mutate, project.project_id)
+            assert save_entered.wait(1)
+            deletion_future = pool.submit(storage.delete_project, project.project_id)
+            delete_was_serialized = mutation_lock.contended.wait(1)
+            release_save.set()
+            mutation_future.result(timeout=2)
+            deletion_future.result(timeout=2)
+    finally:
+        release_save.set()
+
+    assert delete_was_serialized
+    assert not storage._project_path(project.project_id).exists()
+
+
+@pytest.mark.parametrize("mutation", ["update", "archive", "restore"])
+def test_thread_metadata_mutation_cannot_resurrect_concurrent_delete(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Thread mutation race", mode=RunMode.EDIT)
+    if mutation == "restore":
+        storage.archive_thread(thread.thread_id)
+
+    mutation_lock = _ContentionTrackingRLock()
+    storage._thread_mutation_lock = mutation_lock
+    save_entered = Event()
+    release_save = Event()
+    original_save_thread = storage.save_thread
+
+    def blocked_save_thread(record) -> None:
+        save_entered.set()
+        assert release_save.wait(2)
+        original_save_thread(record)
+
+    monkeypatch.setattr(storage, "save_thread", blocked_save_thread)
+    mutate = {
+        "update": lambda thread_id: storage.update_thread(
+            thread_id,
+            title="Updated during race",
+        ),
+        "archive": storage.archive_thread,
+        "restore": storage.restore_thread,
+    }[mutation]
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            mutation_future = pool.submit(mutate, thread.thread_id)
+            assert save_entered.wait(1)
+            deletion_future = pool.submit(storage.delete_thread, thread.thread_id)
+            delete_was_serialized = mutation_lock.contended.wait(1)
+            release_save.set()
+            mutation_future.result(timeout=2)
+            deletion_future.result(timeout=2)
+    finally:
+        release_save.set()
+
+    assert delete_was_serialized
+    assert not storage._thread_path(thread.thread_id).exists()
+    assert not storage._event_log_path(thread.thread_id).exists()
+
+
 def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
     codex_home = tmp_path / ".codex"
     session_dir = codex_home / "sessions" / "2026" / "05" / "09"
@@ -580,7 +739,13 @@ def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
     session_path.write_text(
         "\n".join(
             [
-                json.dumps({"timestamp": "2026-05-09T09:59:00Z", "type": "session_meta", "payload": {}}),
+                json.dumps(
+                    {
+                        "timestamp": "2026-05-09T09:59:00Z",
+                        "type": "session_meta",
+                        "payload": {},
+                    }
+                ),
                 json.dumps(
                     {
                         "timestamp": "2026-05-09T10:00:00Z",
@@ -609,7 +774,9 @@ def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    storage = BridgeStorage(root_path=tmp_path / "bridge", limits_probe=CodexLimitsProbe(codex_home))
+    storage = BridgeStorage(
+        root_path=tmp_path / "bridge", limits_probe=CodexLimitsProbe(codex_home)
+    )
     status = storage.get_limits_status(refresh=True)
 
     assert status.available is True
@@ -619,14 +786,12 @@ def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
     assert status.secondary.remaining_percent == 50.0
 
 
-def test_limits_probe_uses_live_backend_snapshot_when_auth_is_available(tmp_path, monkeypatch) -> None:
+def test_limits_probe_uses_live_backend_snapshot_when_auth_is_available(
+    tmp_path, monkeypatch
+) -> None:
     codex_home = tmp_path / ".codex"
     codex_home.mkdir(parents=True, exist_ok=True)
-    token = (
-        "eyJhbGciOiJub25lIn0."
-        "eyJleHAiIjo0MTAyNDQ0ODAwfQ."
-        "sig"
-    )
+    token = "eyJhbGciOiJub25lIn0.eyJleHAiIjo0MTAyNDQ0ODAwfQ.sig"
     (codex_home / "auth.json").write_text(
         json.dumps(
             {

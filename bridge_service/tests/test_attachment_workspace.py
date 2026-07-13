@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.models import RunMode, RunRecord, RuntimeProfile, ThreadRecord
-from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
 from codex_bridge_service.workspace import (
     WorkspaceBoundaryError,
@@ -20,6 +19,7 @@ from codex_bridge_service.workspace import (
     WorkspaceInputError,
     WorkspaceTypeError,
 )
+from legacy_runner_harness import legacy_ha_runner
 
 
 pytestmark = pytest.mark.skipif(
@@ -45,7 +45,9 @@ def _home_assistant_thread(tmp_path: Path):
     return storage, thread, state_root, workspace_root
 
 
-def test_home_assistant_attachment_is_persisted_as_owned_relative_locators(tmp_path) -> None:
+def test_home_assistant_attachment_is_persisted_as_owned_relative_locators(
+    tmp_path,
+) -> None:
     storage, thread, state_root, workspace_root = _home_assistant_thread(tmp_path)
 
     attachment = storage.attach_file(
@@ -58,16 +60,24 @@ def test_home_assistant_attachment_is_persisted_as_owned_relative_locators(tmp_p
 
     expected_relative = "src/vba/Module1.bas"
     expected_stored = f"{thread.thread_id}/{expected_relative}"
-    persisted = json.loads(storage._thread_path(thread.thread_id).read_text(encoding="utf-8"))
+    persisted = json.loads(
+        storage._thread_path(thread.thread_id).read_text(encoding="utf-8")
+    )
     event = storage.list_thread_events(thread.thread_id)[-1]
     serialized_public_data = json.dumps(
-        {"attachment": attachment.model_dump(), "thread": persisted, "event": event.model_dump()}
+        {
+            "attachment": attachment.model_dump(),
+            "thread": persisted,
+            "event": event.model_dump(),
+        }
     )
 
     assert attachment.filename == "Module1.bas"
     assert attachment.relative_path == expected_relative
     assert attachment.stored_path == expected_stored
-    assert (storage.uploads_dir / expected_stored).read_bytes() == b'Attribute VB_Name = "Module1"'
+    assert (
+        storage.uploads_dir / expected_stored
+    ).read_bytes() == b'Attribute VB_Name = "Module1"'
     assert str(state_root) not in serialized_public_data
     assert str(workspace_root) not in serialized_public_data
     assert "/data/" not in serialized_public_data
@@ -110,11 +120,13 @@ def test_home_assistant_load_rejects_unowned_attachment_locators(
     with pytest.raises(expected_error) as error:
         storage.load_thread(thread.thread_id)
 
-    assert str(state_root := storage.root) not in str(error.value)
+    assert str(storage.root) not in str(error.value)
     assert "notes.txt" not in str(error.value)
 
 
-def test_home_assistant_load_rejects_symlink_and_special_attachment_entries(tmp_path) -> None:
+def test_home_assistant_load_rejects_symlink_and_special_attachment_entries(
+    tmp_path,
+) -> None:
     storage, thread, _, _ = _home_assistant_thread(tmp_path)
     thread_dir = storage.uploads_dir / thread.thread_id
     thread_dir.mkdir()
@@ -174,7 +186,9 @@ def test_home_assistant_failed_stream_removes_partial_attachment(tmp_path) -> No
     assert raw.attachments == []
 
 
-def test_home_assistant_collision_uses_exclusive_create_without_overwrite(tmp_path) -> None:
+def test_home_assistant_collision_uses_exclusive_create_without_overwrite(
+    tmp_path,
+) -> None:
     storage, thread, _, _ = _home_assistant_thread(tmp_path)
 
     first = storage.attach_file(
@@ -231,7 +245,9 @@ def test_home_assistant_concurrent_uploads_merge_attachment_metadata(tmp_path) -
 
     persisted = storage.load_thread(thread.thread_id)
     expected_ids = {attachment.attachment_id for attachment in uploaded}
-    assert {attachment.attachment_id for attachment in persisted.attachments} == expected_ids
+    assert {
+        attachment.attachment_id for attachment in persisted.attachments
+    } == expected_ids
     assert {
         (storage.uploads_dir / attachment.stored_path).read_bytes()
         for attachment in persisted.attachments
@@ -241,10 +257,14 @@ def test_home_assistant_concurrent_uploads_merge_attachment_metadata(tmp_path) -
         for event in storage.list_thread_events(thread.thread_id)
         if event.event_type == "attachment.added"
     ]
-    assert {event.payload["attachment_id"] for event in attachment_events} == expected_ids
+    assert {
+        event.payload["attachment_id"] for event in attachment_events
+    } == expected_ids
 
 
-def test_home_assistant_stale_thread_save_preserves_published_attachment(tmp_path) -> None:
+def test_home_assistant_stale_thread_save_preserves_published_attachment(
+    tmp_path,
+) -> None:
     storage, thread, _, _ = _home_assistant_thread(tmp_path)
     stale = storage.load_thread(thread.thread_id)
     attachment = storage.attach_file(
@@ -417,7 +437,7 @@ def test_home_assistant_runner_uses_sealed_attachment_fd_without_private_path(
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
         storage.get_thread(thread.thread_id),
         run,
         "Inspect it",
@@ -446,7 +466,9 @@ def test_home_assistant_runner_uses_sealed_attachment_fd_without_private_path(
             os.fstat(descriptor)
 
 
-def test_home_assistant_child_receives_only_selected_sealed_attachment_fd(tmp_path) -> None:
+def test_home_assistant_child_receives_only_selected_sealed_attachment_fd(
+    tmp_path,
+) -> None:
     storage, thread, state_root, _ = _home_assistant_thread(tmp_path)
     attachment = storage.attach_file(
         thread_id=thread.thread_id,
@@ -569,7 +591,7 @@ def test_home_assistant_runner_fd_ignores_private_source_replacement(
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
         storage.get_thread(thread.thread_id),
         run,
         "Read it",
@@ -640,7 +662,7 @@ def test_home_assistant_runs_are_serialized_while_inputs_share_workspace(
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
-    runner = BridgeRunner(storage=storage, recover_stale_runs=False)
+    runner = legacy_ha_runner(storage=storage, recover_stale_runs=False)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         first_future = executor.submit(
@@ -686,7 +708,7 @@ def test_home_assistant_runner_without_attachments_skips_attachment_leases(
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
         storage.get_thread(thread.thread_id),
         run,
         "Run",
@@ -725,7 +747,7 @@ def test_home_assistant_cancel_during_attachment_copy_prevents_process_start(
 
     monkeypatch.setattr(storage, "lease_run_attachments", blocking_lease)
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fail_if_called)
-    runner = BridgeRunner(storage=storage, recover_stale_runs=False)
+    runner = legacy_ha_runner(storage=storage, recover_stale_runs=False)
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         worker = executor.submit(
@@ -768,7 +790,7 @@ def test_home_assistant_missing_attachment_prevents_process_start(
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fail_if_called)
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
         storage.get_thread(thread.thread_id),
         run,
         "Read it",
@@ -812,7 +834,9 @@ def test_home_assistant_attachment_api_returns_only_relative_locators(tmp_path) 
 
     assert response.status_code == 201
     payload = response.json()
-    serialized = response.text + storage._thread_path(thread.thread_id).read_text(encoding="utf-8")
+    serialized = response.text + storage._thread_path(thread.thread_id).read_text(
+        encoding="utf-8"
+    )
     assert payload["stored_path"] == f"{thread.thread_id}/docs/notes.txt"
     assert payload["relative_path"] == "docs/notes.txt"
     assert str(state_root) not in serialized
@@ -830,7 +854,9 @@ def test_home_assistant_attachment_api_returns_only_relative_locators(tmp_path) 
     assert invalid.json() == {"detail": "invalid attachment location"}
 
 
-def test_attachment_api_maps_boundary_not_found_to_generic_404(tmp_path, monkeypatch) -> None:
+def test_attachment_api_maps_boundary_not_found_to_generic_404(
+    tmp_path, monkeypatch
+) -> None:
     state_root = tmp_path / "data" / "bridge"
     workspace_root = tmp_path / "config" / "workspaces"
     app = create_app(

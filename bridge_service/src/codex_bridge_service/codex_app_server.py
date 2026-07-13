@@ -219,7 +219,8 @@ class CodexAppServerClient:
         restart_stable_seconds: float = 60.0,
         shutdown_grace_seconds: float = 5.0,
         stderr_diagnostic_sink: Callable[[str], None] | None = None,
-        protocol_contract: AppServerProtocolContract | None = _DEFAULT_PROTOCOL_CONTRACT,
+        protocol_contract: AppServerProtocolContract
+        | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
         self.codex_command = codex_command
         self.codex_home = resolve_codex_home(codex_home, codex_command)
@@ -320,7 +321,9 @@ class CodexAppServerClient:
     def process_id(self) -> int | None:
         with self._state_lock:
             process = self._process
-            return process.pid if process is not None and process.poll() is None else None
+            return (
+                process.pid if process is not None and process.poll() is None else None
+            )
 
     def start(self) -> None:
         with self._lifecycle_lock:
@@ -457,6 +460,60 @@ class CodexAppServerClient:
             # The response token is single-use even if the generation disappears
             # during the write. Replaying it into a restart would be unsafe.
             raise
+
+    def discard_server_request(
+        self,
+        request_id: RequestId,
+        expected_generation: int,
+    ) -> bool:
+        """Invalidate one retained server-request token if its generation matches."""
+        request_id = _validate_request_id(request_id)
+        expected_generation = _validate_expected_generation(expected_generation)
+        key = (expected_generation, request_id)
+        with self._state_lock:
+            if (
+                self._closed
+                or self._closing.is_set()
+                or expected_generation != self._generation
+                or key not in self._server_requests
+            ):
+                return False
+            self._server_requests.remove(key)
+            return True
+
+    def abort_generation(self, expected_generation: int) -> bool:
+        """Fail and restart only the currently matching app-server generation."""
+        expected_generation = _validate_expected_generation(expected_generation)
+        error = AppServerUnavailableError()
+        with self._state_lock:
+            process = self._process
+            if (
+                self._closed
+                or self._closing.is_set()
+                or expected_generation != self._generation
+                or expected_generation in self._generation_failures
+                or process is None
+                or process.poll() is not None
+            ):
+                return False
+            self._generation_failures[expected_generation] = error
+            self._ready.clear()
+            if self._dispatch_generation == expected_generation:
+                self._dispatch_generation = None
+            self._server_requests = {
+                key for key in self._server_requests if key[0] != expected_generation
+            }
+        self._fail_generation_pending(expected_generation, type(error))
+        _close_stdin(process)
+        _terminate_process_group(process)
+        stopper = threading.Thread(
+            target=_force_stop_aborted_process,
+            args=(process, self.shutdown_grace_seconds),
+            name=f"CodexAppServerAbort-{expected_generation}",
+            daemon=True,
+        )
+        stopper.start()
+        return True
 
     def close(self) -> None:
         with self._lifecycle_lock:
@@ -1111,11 +1168,9 @@ class CodexAppServerClient:
         assert isinstance(codex_home, str)
         try:
             reported_home = Path(codex_home)
-            if (
-                not reported_home.is_absolute()
-                or reported_home.resolve(strict=False)
-                != self.codex_home.resolve(strict=False)
-            ):
+            if not reported_home.is_absolute() or reported_home.resolve(
+                strict=False
+            ) != self.codex_home.resolve(strict=False):
                 raise AppServerProtocolError()
         except OSError:
             raise AppServerProtocolError() from None
@@ -1129,9 +1184,9 @@ class CodexAppServerClient:
             if not content:
                 return
             with self._state_lock:
-                self._stderr_bytes[generation] = (
-                    self._stderr_bytes.get(generation, 0) + len(content)
-                )
+                self._stderr_bytes[generation] = self._stderr_bytes.get(
+                    generation, 0
+                ) + len(content)
                 self._stderr_chunks[generation] = (
                     self._stderr_chunks.get(generation, 0) + 1
                 )
@@ -1312,6 +1367,12 @@ def _validate_request_id(value: object) -> RequestId:
     return value
 
 
+def _validate_expected_generation(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("expected generation must be a positive integer")
+    return value
+
+
 def _validate_method(value: object) -> str:
     if (
         not isinstance(value, str)
@@ -1419,6 +1480,34 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
             process.kill()
         except OSError:
             pass
+
+
+def _force_stop_aborted_process(
+    process: subprocess.Popen[bytes],
+    grace_seconds: float,
+) -> None:
+    grace_seconds = max(0.01, grace_seconds)
+    if os.name == "posix":
+        deadline = monotonic() + grace_seconds
+        if process.poll() is None:
+            try:
+                process.wait(timeout=grace_seconds)
+            except subprocess.TimeoutExpired:
+                pass
+        remaining = deadline - monotonic()
+        if remaining > 0:
+            threading.Event().wait(remaining)
+        # The process-group leader can exit while a descendant that inherited
+        # its streams ignores SIGTERM. Always target the original group after
+        # the grace period instead of using leader liveness as a proxy.
+        _kill_process_group(process)
+        return
+    if process.poll() is not None:
+        return
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(process)
 
 
 def _send_posix_group_signal(process_group_id: int, sig: signal.Signals) -> None:

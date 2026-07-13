@@ -22,8 +22,27 @@ from .resource_limits import (
     ResourceLimitError,
     ResourceLimits,
 )
-from .routes import artifacts, attachments, codex_auth, events, health, projects, prompts, status, threads
+from .routes import (
+    approvals,
+    artifacts,
+    attachments,
+    codex_auth,
+    events,
+    health,
+    projects,
+    prompts,
+    status,
+    threads,
+)
 from .runner import BridgeRunner
+from .runtime_broker import RuntimeBroker, RuntimeBrokerError
+from .runtime_gate import (
+    RuntimeGate,
+    RuntimeGateClosedError,
+    RuntimeGateError,
+    RuntimeMutationConflictError,
+    RuntimeQueueFullError,
+)
 from .storage import BridgeStorage
 
 
@@ -65,6 +84,23 @@ def create_app(
     resolved_build_info = (
         build_info if build_info is not None else BuildInfo.from_environment()
     )
+    resolved_resource_limits = (
+        resource_limits or ResourceLimits()
+        if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        else resource_limits
+    )
+    if (
+        resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        and resolved_resource_limits is not None
+        and resolved_resource_limits.max_active_turns != 1
+    ):
+        raise ValueError("The Home Assistant runtime requires exactly one active turn.")
+    resolved_runtime_gate = (
+        RuntimeGate(limits=resolved_resource_limits)
+        if resolved_resource_limits is not None
+        and resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        else None
+    )
     resolved_app_server: _AppServerLifecycle | None = None
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         resolved_app_server = (
@@ -78,6 +114,9 @@ def create_app(
                     or resolved_build_info.bridge_version
                     or "0.6.0"
                 ),
+                # RuntimeBroker state transitions are ordered protocol events.
+                # One bounded callback worker preserves app-server FIFO order.
+                callback_workers=1,
             )
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
@@ -85,8 +124,12 @@ def create_app(
         resolved_auth_coordinator = (
             auth_coordinator_factory(resolved_app_server)
             if auth_coordinator_factory is not None
-            else CodexAuthCoordinator(cast(Any, resolved_app_server))
+            else CodexAuthCoordinator(
+                cast(Any, resolved_app_server),
+                runtime_gate=resolved_runtime_gate,
+            )
         )
+    resolved_runner: Any = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -97,18 +140,32 @@ def create_app(
             await asyncio.to_thread(resolved_app_server.start)
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
+            runner_start = getattr(resolved_runner, "start", None)
+            if callable(runner_start):
+                await asyncio.to_thread(runner_start)
             yield
         finally:
             try:
-                if resolved_auth_coordinator is not None:
-                    await asyncio.to_thread(resolved_auth_coordinator.close)
+                runner_close = getattr(resolved_runner, "close", None)
+                if callable(runner_close):
+                    await asyncio.to_thread(runner_close)
             finally:
-                await asyncio.to_thread(resolved_app_server.close)
+                try:
+                    if resolved_auth_coordinator is not None:
+                        await asyncio.to_thread(resolved_auth_coordinator.close)
+                finally:
+                    try:
+                        if resolved_runtime_gate is not None:
+                            await asyncio.to_thread(resolved_runtime_gate.close)
+                    finally:
+                        await asyncio.to_thread(resolved_app_server.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
 
     @app.exception_handler(ResourceLimitError)
-    async def resource_limit_handler(_request, error: ResourceLimitError) -> JSONResponse:
+    async def resource_limit_handler(
+        _request, error: ResourceLimitError
+    ) -> JSONResponse:
         status_code = 413 if isinstance(error, QuotaExceededError) else 409
         return JSONResponse(
             status_code=status_code,
@@ -120,6 +177,40 @@ def create_app(
                 }
             },
         )
+
+    @app.exception_handler(RuntimeBrokerError)
+    async def runtime_broker_handler(
+        _request, error: RuntimeBrokerError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"detail": error.public_detail()},
+        )
+
+    @app.exception_handler(RuntimeGateError)
+    async def runtime_gate_handler(_request, error: RuntimeGateError) -> JSONResponse:
+        if isinstance(error, RuntimeQueueFullError):
+            status_code = 429
+            code = "runtime_queue_full"
+        elif isinstance(error, RuntimeMutationConflictError):
+            status_code = 409
+            code = "runtime_mutation_conflict"
+        elif isinstance(error, RuntimeGateClosedError):
+            status_code = 503
+            code = "runtime_closed"
+        else:
+            status_code = 409
+            code = "runtime_conflict"
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "detail": {
+                    "code": code,
+                    "retryable": status_code in {429, 503},
+                }
+            },
+        )
+
     resolved_model_catalog_probe = model_catalog_probe or CodexModelCatalogProbe(
         codex_command=codex_command,
         codex_home=codex_home,
@@ -145,7 +236,7 @@ def create_app(
         special_project_defaults_provider=special_project_defaults,
         runtime_profile=resolved_runtime_profile,
         workspace_root=workspace_root,
-        resource_limits=resource_limits,
+        resource_limits=resolved_resource_limits,
     )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
@@ -154,8 +245,7 @@ def create_app(
             AttachmentIngressMiddleware,
             expected_token=auth_token,
             max_body_bytes=(
-                limits.max_upload_file_bytes
-                + limits.max_upload_request_overhead_bytes
+                limits.max_upload_file_bytes + limits.max_upload_request_overhead_bytes
             ),
         )
     if initialize_special_projects:
@@ -175,6 +265,7 @@ def create_app(
     app.state.auth_token = auth_token
     app.state.build_info = resolved_build_info
     app.state.codex_app_server = resolved_app_server
+    app.state.runtime_gate = resolved_runtime_gate
     app.state.auth_coordinator = resolved_auth_coordinator
     app.state.account_probe = resolved_account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
@@ -193,9 +284,16 @@ def create_app(
             codex_home=codex_home,
         )
     )
-    app.state.runner = (
+    resolved_runner = (
         runner_factory(storage)
         if runner_factory is not None
+        else RuntimeBroker(
+            storage,
+            cast(Any, resolved_app_server),
+            cast(RuntimeGate, resolved_runtime_gate),
+            resource_limits=resolved_resource_limits,
+        )
+        if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(
             storage,
             codex_command=codex_command,
@@ -203,7 +301,17 @@ def create_app(
             idle_timeout_seconds=run_idle_timeout_seconds,
         )
     )
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT and isinstance(
+        resolved_runner, BridgeRunner
+    ):
+        raise ValueError(
+            "BridgeRunner is an external-legacy adapter and cannot own the "
+            "Home Assistant runtime."
+        )
+    app.state.runner = resolved_runner
     app.include_router(artifacts.router)
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        app.include_router(approvals.router)
     app.include_router(attachments.router)
     app.include_router(codex_auth.router)
     app.include_router(events.router)

@@ -7,6 +7,12 @@ from typing import Any, Protocol
 
 from .codex_app_server import AppServerNotification
 from .models import CodexAuthStatusRecord
+from .runtime_gate import (
+    RuntimeGate,
+    RuntimeGateClosedError,
+    RuntimeLease,
+    RuntimeMutationConflictError,
+)
 from .auth_state import (
     MESSAGE_CHECKING,
     MESSAGE_CLOSED,
@@ -72,9 +78,11 @@ class CodexAuthCoordinator:
         client: _AuthAppServerClient,
         *,
         state_listener: Callable[[CodexAuthStatusRecord], None] | None = None,
+        runtime_gate: RuntimeGate | None = None,
     ) -> None:
         self._client = client
         self._state_listener = state_listener
+        self._runtime_gate = runtime_gate
         self._lock = Lock()
         self._status = CodexAuthStatusRecord(
             message=MESSAGE_UNKNOWN,
@@ -90,6 +98,7 @@ class CodexAuthCoordinator:
         self._handlers_registered = False
         self._observed_generation: int | None = None
         self._closed = False
+        self._runtime_auth_lease: RuntimeLease | None = None
         self._notification_queue: deque[CodexAuthStatusRecord] = deque()
         self._notifying = False
 
@@ -199,6 +208,7 @@ class CodexAuthCoordinator:
                 raise AuthOperationConflictError()
             if self._status.state in {"ok", "unsupported"}:
                 raise AuthOperationConflictError()
+            self._acquire_runtime_auth_locked()
             operation = self._begin_operation_locked("login_start")
             self._cancel_requested = False
             request_generation = self._client.generation
@@ -231,6 +241,7 @@ class CodexAuthCoordinator:
             if not generation_is_current:
                 self._operation = None
                 self._cancel_requested = False
+                runtime_lease = self._take_runtime_auth_lease_locked()
                 failed = self._set_status_locked(
                     state="login_failed",
                     busy=False,
@@ -247,6 +258,7 @@ class CodexAuthCoordinator:
                 self._operation = (operation[0], "cancel")
                 next_action = "cancel"
                 failed = None
+                runtime_lease = None
             else:
                 self._active_login_id = login_id
                 self._active_login_generation = request_generation
@@ -265,9 +277,12 @@ class CodexAuthCoordinator:
                 )
                 next_action = "running"
                 failed = None
+                runtime_lease = None
 
         if next_action == "failed":
             assert failed is not None
+            if runtime_lease is not None:
+                runtime_lease.release()
             self._notify(failed)
             return failed.model_copy(deep=True)
         if next_action == "running":
@@ -296,7 +311,10 @@ class CodexAuthCoordinator:
                 login_id = None
                 generation = None
             else:
-                if self._active_login_id is None or self._active_login_generation is None:
+                if (
+                    self._active_login_id is None
+                    or self._active_login_generation is None
+                ):
                     return self._copy_status_locked()
                 operation = self._begin_operation_locked("cancel")
                 login_id = self._active_login_id
@@ -323,6 +341,7 @@ class CodexAuthCoordinator:
             self._require_idle_mutation_locked()
             if self._active_login_id is not None:
                 raise AuthOperationConflictError()
+            self._acquire_runtime_auth_locked()
             operation = self._begin_operation_locked("logout")
             logging_out = self._set_status_locked(
                 state="logout_running",
@@ -410,6 +429,9 @@ class CodexAuthCoordinator:
                 message=MESSAGE_CLOSED,
                 **cleared_device_fields(),
             )
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
         self._notify(closed)
 
     def _handle_login_completed(self, notification: AppServerNotification) -> None:
@@ -433,6 +455,7 @@ class CodexAuthCoordinator:
             self._clear_active_login_locked()
             if not success:
                 self._operation = None
+                runtime_lease = self._take_runtime_auth_lease_locked()
                 failed = self._set_status_locked(
                     state="login_failed",
                     busy=False,
@@ -452,8 +475,11 @@ class CodexAuthCoordinator:
                     **cleared_device_fields(),
                 )
                 failed = None
+                runtime_lease = None
 
         if failed is not None:
+            if runtime_lease is not None:
+                runtime_lease.release()
             self._notify(failed)
             return
         assert completing is not None
@@ -569,6 +595,9 @@ class CodexAuthCoordinator:
                 if message_override is not None:
                     normalized["message"] = message_override
                 published = self._set_status_locked(**normalized)
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
         self._notify(published)
         if generation_changed:
             return published.model_copy(deep=True)
@@ -602,6 +631,9 @@ class CodexAuthCoordinator:
                 message=message,
                 **cleared_device_fields(),
             )
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
         self._notify(published)
         return published.model_copy(deep=True)
 
@@ -630,6 +662,9 @@ class CodexAuthCoordinator:
                 message=MESSAGE_LOGOUT_FAILED,
                 **cleared_device_fields(),
             )
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
         self._notify(published)
         return published.model_copy(deep=True)
 
@@ -649,6 +684,21 @@ class CodexAuthCoordinator:
     def _require_open_locked(self) -> None:
         if self._closed:
             raise AuthCoordinatorClosedError()
+
+    def _acquire_runtime_auth_locked(self) -> None:
+        if self._runtime_gate is None:
+            return
+        if self._runtime_auth_lease is not None:
+            raise AuthOperationConflictError()
+        try:
+            self._runtime_auth_lease = self._runtime_gate.acquire_auth_mutation()
+        except (RuntimeGateClosedError, RuntimeMutationConflictError):
+            raise AuthOperationConflictError() from None
+
+    def _take_runtime_auth_lease_locked(self) -> RuntimeLease | None:
+        lease = self._runtime_auth_lease
+        self._runtime_auth_lease = None
+        return lease
 
     def _clear_active_login_locked(self) -> None:
         self._active_login_id = None

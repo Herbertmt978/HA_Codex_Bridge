@@ -4,6 +4,8 @@ import pytest
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.models import RuntimeProfile
+from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
 
 
@@ -17,7 +19,9 @@ def test_external_legacy_storage_keeps_existing_root_layout(tmp_path) -> None:
     assert storage.project_workspaces_dir == tmp_path / "project-workspaces"
 
 
-def test_home_assistant_storage_separates_private_state_and_workspace_roots(tmp_path) -> None:
+def test_home_assistant_storage_separates_private_state_and_workspace_roots(
+    tmp_path,
+) -> None:
     state_root = tmp_path / "private-state"
     workspace_root = tmp_path / "public-workspaces"
     workspace_root.mkdir()
@@ -44,7 +48,9 @@ def test_home_assistant_storage_separates_private_state_and_workspace_roots(tmp_
     assert not (workspace_root / "logs").exists()
 
 
-def test_home_assistant_storage_rejects_missing_or_shared_workspace_root(tmp_path) -> None:
+def test_home_assistant_storage_rejects_missing_or_shared_workspace_root(
+    tmp_path,
+) -> None:
     private_marker = tmp_path / "private-marker"
 
     with pytest.raises(ValueError) as missing:
@@ -94,7 +100,9 @@ def test_invalid_home_assistant_workspace_root_has_no_private_state_side_effect(
     assert not state_root.exists()
 
 
-def test_home_assistant_storage_rejects_symlink_alias_of_private_state(tmp_path) -> None:
+def test_home_assistant_storage_rejects_symlink_alias_of_private_state(
+    tmp_path,
+) -> None:
     state_root = tmp_path / "state"
     state_root.mkdir()
     workspace_alias = tmp_path / "workspace-alias"
@@ -111,7 +119,9 @@ def test_home_assistant_storage_rejects_symlink_alias_of_private_state(tmp_path)
         )
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows case-insensitive paths are unavailable")
+@pytest.mark.skipif(
+    os.name != "nt", reason="Windows case-insensitive paths are unavailable"
+)
 def test_home_assistant_storage_rejects_case_alias_of_private_state(tmp_path) -> None:
     state_root = tmp_path / "MixedCaseState"
     state_root.mkdir()
@@ -124,8 +134,12 @@ def test_home_assistant_storage_rejects_case_alias_of_private_state(tmp_path) ->
         )
 
 
-@pytest.mark.skipif(os.name == "nt", reason="secure dir_fd root creation is unavailable")
-def test_home_assistant_storage_securely_creates_missing_workspace_root(tmp_path) -> None:
+@pytest.mark.skipif(
+    os.name == "nt", reason="secure dir_fd root creation is unavailable"
+)
+def test_home_assistant_storage_securely_creates_missing_workspace_root(
+    tmp_path,
+) -> None:
     workspace_root = tmp_path / "new" / "workspaces"
 
     storage = BridgeStorage(
@@ -151,3 +165,33 @@ def test_create_app_passes_runtime_profile_to_storage(tmp_path) -> None:
 
     assert app.state.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
     assert app.state.storage.workspace_root == workspace_root.resolve()
+
+
+def test_home_assistant_profile_rejects_legacy_exec_runner_before_composition(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+
+    with pytest.raises(ValueError, match="unavailable in the Home Assistant"):
+        create_app(
+            root_path=tmp_path / "state",
+            auth_token="secret",
+            runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+            workspace_root=workspace_root,
+            runner_factory=lambda storage: BridgeRunner(storage),
+        )
+
+
+def test_home_assistant_profile_rejects_multiple_active_turns(tmp_path) -> None:
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+
+    with pytest.raises(ValueError, match="exactly one active turn"):
+        create_app(
+            root_path=tmp_path / "state",
+            auth_token="secret",
+            runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+            workspace_root=workspace_root,
+            resource_limits=ResourceLimits(max_active_turns=2),
+        )

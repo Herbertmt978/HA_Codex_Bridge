@@ -14,6 +14,7 @@ from codex_bridge_service.models import (
 )
 from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
+from legacy_runner_harness import legacy_ha_runner
 
 
 class _CompletedProcess:
@@ -50,7 +51,9 @@ def _wait_for_finished(storage: BridgeStorage, thread_id: str) -> None:
 
 def _home_assistant_thread(tmp_path: Path):
     if os.name == "nt":
-        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd support")
+        pytest.skip(
+            "secure Home Assistant workspace operations require POSIX dir_fd support"
+        )
     state_root = tmp_path / "data" / "bridge"
     workspace_root = tmp_path / "config" / "workspaces"
     storage = BridgeStorage(
@@ -93,7 +96,9 @@ def test_home_assistant_initial_run_resolves_one_private_process_workspace(
     # the process-facing workspace boundary.
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Inspect the upload")
+    legacy_ha_runner(storage=storage).submit_prompt(
+        thread.thread_id, "Inspect the upload"
+    )
     _wait_for_finished(storage, thread.thread_id)
 
     command = captured["command"]
@@ -101,7 +106,10 @@ def test_home_assistant_initial_run_resolves_one_private_process_workspace(
     prompt = command[command.index("--json") - 1]
 
     assert trusted_workspace.startswith("/proc/self/fd/")
-    assert captured["leased_inode"] == os.stat(workspace_root / "projects" / "runner").st_ino
+    assert (
+        captured["leased_inode"]
+        == os.stat(workspace_root / "projects" / "runner").st_ino
+    )
     assert captured["cwd_inode"] == captured["leased_inode"]
     assert command[command.index("-C") + 1] == trusted_workspace
     assert f"Working directory: {trusted_workspace}" in prompt
@@ -129,13 +137,16 @@ def test_home_assistant_resumed_run_uses_absolute_cwd_without_initial_c_flag(
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr(storage, "sync_thread_artifacts", lambda _thread_id: [])
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Continue")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Continue")
     _wait_for_finished(storage, thread.thread_id)
 
     command = captured["command"]
     assert captured["cwd"].startswith("/proc/self/fd/")
     assert captured["cwd_inode"] == captured["leased_inode"]
-    assert captured["leased_inode"] == os.stat(workspace_root / "projects" / "runner").st_ino
+    assert (
+        captured["leased_inode"]
+        == os.stat(workspace_root / "projects" / "runner").st_ino
+    )
     exec_index = command.index("exec")
     assert command[exec_index + 1 : exec_index + 3] == ["resume", "session-existing"]
     assert "-C" not in command
@@ -177,7 +188,9 @@ def test_home_assistant_workspace_swap_before_popen_keeps_original_directory_ino
     persisted.active_run_id = run.run_id
     storage.save_thread(persisted)
     view = storage.get_thread(thread.thread_id)
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(view, run, "Run")
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
+        view, run, "Run"
+    )
 
     command = captured["command"]
     assert captured["cwd"].startswith("/proc/self/fd/")
@@ -226,7 +239,9 @@ def test_external_legacy_missing_workspace_is_still_delegated_to_popen(
     monkeypatch,
 ) -> None:
     storage = BridgeStorage(root_path=tmp_path / "state")
-    project = storage.create_project(name="Runner", root_path=str(tmp_path / "workspace"))
+    project = storage.create_project(
+        name="Runner", root_path=str(tmp_path / "workspace")
+    )
     thread = storage.create_thread(
         title="Runner",
         project_id=project.project_id,
@@ -264,7 +279,9 @@ def test_home_assistant_tampered_run_workspace_fails_before_popen_without_path_l
     tampered_path: str,
 ) -> None:
     storage, thread, state_root, workspace_root = _home_assistant_thread(tmp_path)
-    (workspace_root / "projects" / "file").write_text("not a directory", encoding="utf-8")
+    (workspace_root / "projects" / "file").write_text(
+        "not a directory", encoding="utf-8"
+    )
     outside = tmp_path / "private-outside"
     outside.mkdir()
     (workspace_root / "projects" / "link").symlink_to(outside, target_is_directory=True)
@@ -289,7 +306,9 @@ def test_home_assistant_tampered_run_workspace_fails_before_popen_without_path_l
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fail_if_called)
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(view, run, "Run")
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
+        view, run, "Run"
+    )
 
     failure = storage.list_thread_events(thread.thread_id)[-1]
     serialized = json.dumps(failure.payload)
@@ -314,7 +333,7 @@ def test_home_assistant_popen_error_cannot_leak_private_workspace_paths(
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fail_to_start)
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     _wait_for_finished(storage, thread.thread_id)
 
     failure = storage.list_thread_events(thread.thread_id)[-1]
@@ -342,7 +361,7 @@ def test_home_assistant_structured_child_failure_is_classified_without_echoing_p
         lambda *args, **kwargs: process,
     )
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     _wait_for_finished(storage, thread.thread_id)
 
     events = storage.list_thread_events(thread.thread_id)
@@ -372,7 +391,7 @@ def test_home_assistant_stderr_limit_failure_uses_safe_event_and_limits_message(
         lambda *args, **kwargs: process,
     )
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     _wait_for_finished(storage, thread.thread_id)
 
     failure = storage.list_thread_events(thread.thread_id)[-1]
@@ -419,13 +438,17 @@ def test_home_assistant_workspace_deleted_after_popen_terminalizes_and_clears_qu
 
     monkeypatch.setattr("codex_bridge_service.runner.subprocess.Popen", fake_popen)
 
-    BridgeRunner(storage=storage, recover_stale_runs=False)._run_prompt(view, run, "Run")
+    legacy_ha_runner(storage=storage, recover_stale_runs=False)._run_prompt(
+        view, run, "Run"
+    )
 
     raw_record = ThreadRecord.model_validate_json(
         (storage.threads_dir / f"{thread.thread_id}.json").read_text(encoding="utf-8")
     )
     events = storage.list_thread_events(thread.thread_id)
-    failure = next(event for event in reversed(events) if event.event_type == "run.failed")
+    failure = next(
+        event for event in reversed(events) if event.event_type == "run.failed"
+    )
     queue_cleared = events[-1]
     terminal_events = [
         event
@@ -463,11 +486,13 @@ def test_home_assistant_workspace_deleted_after_sync_terminalizes_success_branch
 
     monkeypatch.setattr(storage, "sync_thread_artifacts", delete_during_sync)
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     deadline = time.time() + 5
     thread_path = storage.threads_dir / f"{thread.thread_id}.json"
     while time.time() < deadline:
-        raw_record = ThreadRecord.model_validate_json(thread_path.read_text(encoding="utf-8"))
+        raw_record = ThreadRecord.model_validate_json(
+            thread_path.read_text(encoding="utf-8")
+        )
         if raw_record.status != "running":
             break
         time.sleep(0.02)
@@ -509,11 +534,13 @@ def test_home_assistant_workspace_deleted_between_final_load_and_save_terminaliz
 
     monkeypatch.setattr(storage, "save_thread", delete_before_terminal_save)
 
-    BridgeRunner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     deadline = time.time() + 5
     thread_path = storage.threads_dir / f"{thread.thread_id}.json"
     while time.time() < deadline:
-        raw_record = ThreadRecord.model_validate_json(thread_path.read_text(encoding="utf-8"))
+        raw_record = ThreadRecord.model_validate_json(
+            thread_path.read_text(encoding="utf-8")
+        )
         if raw_record.status != "running":
             break
         time.sleep(0.02)

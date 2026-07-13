@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
 from ..models import RunRecord
@@ -11,12 +11,24 @@ router = APIRouter()
 
 class PromptRequest(BaseModel):
     prompt: str
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=256)
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("prompt must not be blank")
+        if len(value.encode("utf-8")) > 1024 * 1024:
+            raise ValueError("prompt exceeds its limit")
+        return value
+
+    @field_validator("client_request_id")
+    @classmethod
+    def validate_client_request_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value != value.strip() or len(value.encode("utf-8")) > 256:
+            raise ValueError("client request id is invalid")
         return value
 
 
@@ -36,6 +48,12 @@ def submit_prompt(
         expected_token=request.app.state.auth_token,
     )
     try:
+        if request.app.state.storage.runtime_profile.value == "home_assistant":
+            return request.app.state.runner.submit_prompt(
+                thread_id,
+                payload.prompt,
+                client_request_id=payload.client_request_id,
+            )
         return request.app.state.runner.submit_prompt(thread_id, payload.prompt)
     except ThreadBusyError as exc:
         raise HTTPException(status_code=409, detail="thread already running") from exc
