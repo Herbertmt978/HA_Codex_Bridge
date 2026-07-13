@@ -1,5 +1,26 @@
 DOMAIN = "codex_bridge"
 
+# Integration-to-Bridge protocol contract. Keep this independent from component
+# release versions so Supervisor discovery can reject incompatible updates.
+API_CURRENT = 1
+API_MINIMUM = 1
+API_MAXIMUM = 1
+LEGACY_API_VERSION = 0
+BRIDGE_API_HEADER = "X-Codex-Bridge-Api"
+BRIDGE_PROBLEM_BODY_MAX_BYTES = 16 * 1024
+
+DISCOVERY_SOURCE = "hassio"
+DISCOVERY_SERVICE = "codex_bridge"
+DISCOVERY_SLUG_SUFFIX = "codex_bridge"
+BRIDGE_TOKEN_MIN_LENGTH = 32
+BRIDGE_TOKEN_MAX_LENGTH = 512
+
+BRIDGE_TIMEOUT_TOTAL_SECONDS = 30
+BRIDGE_TIMEOUT_POOL_SECONDS = 10
+BRIDGE_TIMEOUT_CONNECT_SECONDS = 10
+BRIDGE_TIMEOUT_READ_SECONDS = 20
+BRIDGE_TIMEOUT_WRITE_SECONDS = 30
+
 CONF_BRIDGE_URL = "bridge_url"
 CONF_BRIDGE_TOKEN = "bridge_token"
 CONF_PANEL_TITLE = "panel_title"
