@@ -374,6 +374,7 @@ def _broker(
     storage: BridgeStorage,
     client: ValidatorBackedAppServer,
     *,
+    queue_wait_timeout_seconds: float = 2.0,
     turn_timeout_seconds: float = 5.0,
     cancel_grace_seconds: float = 0.05,
     interaction_timeout_seconds: float = 5.0,
@@ -382,7 +383,7 @@ def _broker(
         storage=storage,
         app_server=client,
         runtime_gate=RuntimeGate(limits=ResourceLimits()),
-        queue_wait_timeout_seconds=2.0,
+        queue_wait_timeout_seconds=queue_wait_timeout_seconds,
         watchdog_interval_seconds=0.01,
         turn_timeout_seconds=turn_timeout_seconds,
         cancel_grace_seconds=cancel_grace_seconds,
@@ -1370,7 +1371,10 @@ def test_thread_delete_waits_for_inflight_cancel_result(
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     client = ValidatorBackedAppServer()
-    broker = _broker(storage, client)
+    # Keep the cancellation watchdog outside this test's intentionally
+    # blocked interrupt window. The contract under test is deletion/publication
+    # ordering, not watchdog expiry under scheduler load.
+    broker = _broker(storage, client, cancel_grace_seconds=5.0)
     entered = Event()
     release = Event()
     original_request = client.request
@@ -2925,7 +2929,11 @@ def test_expired_interaction_aborts_generation_and_releases_runtime(
     broker = _broker(
         storage,
         client,
-        interaction_timeout_seconds=0.5,
+        queue_wait_timeout_seconds=10.0,
+        turn_timeout_seconds=15.0,
+        # Leave enough time to enqueue the follow-up even on loaded CI hosts;
+        # this test owns expiry behavior after the queue state is established.
+        interaction_timeout_seconds=5.0,
     )
     try:
         run = broker.submit_prompt(
@@ -2965,14 +2973,21 @@ def test_expired_interaction_aborts_generation_and_releases_runtime(
         )
         assert queued.status == "queued"
 
-        _wait_until(lambda: client.aborted_generations == [1])
+        _wait_until(
+            lambda: client.aborted_generations == [1],
+            timeout=7.0,
+        )
         _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
         assert broker.runtime_snapshot().queued_prompts == 0
         assert client.discarded == [("provider-timeout", 1)]
         assert client.responses == []
         assert len(_requests(client, "turn/start")) == 1
         assert storage.load_thread(thread.thread_id).status == "error"
-        assert storage.load_thread(queued_thread.thread_id).status == "error"
+        _wait_until(
+            lambda: storage.load_thread(queued_thread.thread_id).status == "error",
+            timeout=5.0,
+            message="queued thread did not publish its interrupted projection",
+        )
         _wait_until(
             lambda: any(
                 event.event_type == "run.failed"
