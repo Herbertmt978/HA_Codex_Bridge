@@ -479,11 +479,13 @@ npm run build
 git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js
 ```
 
-- [ ] Add failing Vitest/jsdom tests for protocol/state utilities and an XSS corpus containing closing tags, quote-breaking IDs, SVG/script/srcdoc, event handlers, `javascript:`/`data:` links, hostile models/errors/diffs/filenames, and remote embeds. Add a build-integrity test that imports the shipped custom element.
-- [ ] Run unit/build commands and confirm the missing toolchain/source modules fail.
-- [ ] Move canonical source under `frontend/src`, configure esbuild to emit one deterministic HACS asset, construct untrusted nodes with `textContent`, restrict links to explicit safe schemes, disable HTML/SVG/PDF iframe preview, and allow safe text/raster Blob previews only.
-- [ ] Run lint/unit/build; inspect the generated asset for remote imports and run Playwright to assert no script/handler execution or non-HA-origin request.
-- [ ] Commit with message `Add secure frontend build and tests`.
+- [x] Add failing Vitest/jsdom tests for protocol/state utilities and an XSS corpus containing closing tags, quote-breaking IDs, SVG/script/srcdoc, event handlers, `javascript:`/`data:` links, hostile models/errors/diffs/filenames, and remote embeds. Add a build-integrity test that imports the shipped custom element.
+- [x] Run unit/build commands and confirm the missing toolchain/source modules fail.
+- [x] Move canonical source under `frontend/src`, configure esbuild to emit one deterministic HACS asset, construct untrusted nodes with `textContent`, restrict links to explicit safe schemes, disable HTML/SVG/PDF iframe preview, and allow safe text/raster Blob previews only.
+- [x] Run lint/unit/build; inspect the generated asset for remote imports and run Playwright to assert no script/handler execution or non-HA-origin request.
+- [x] Commit with message `Add secure frontend build and tests`.
+
+**Completed:** `35ff1d0` establishes the canonical vanilla-module source tree, exact npm lock, ESLint security gate, deterministic local esbuild bundle, v1 resumable upload client, replay-safe event state, and a DOM-only untrusted-content boundary. A clean isolated `npm ci` reported zero vulnerabilities; lint passed; Vitest passed 48 tests across seven files; Playwright passed the hostile-content, same-origin, and resumable-upload flow; the generated bundle was byte-stable with no runtime imports or legacy multipart route; and the Linux Home Assistant panel-registration check passed 9 tests. Independent Luna/Terra reviews found and drove fixes for encoded artifact path segments, polling snapshot/error controls, and the final dynamic `innerHTML` maintenance boundary before the commit.
 
 ## Task 16: Build cohesive onboarding and ChatGPT account management
 
