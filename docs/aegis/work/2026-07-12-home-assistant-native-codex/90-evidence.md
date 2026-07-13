@@ -135,6 +135,24 @@ The external legacy profile remains outside the HA quota and ingress middleware 
 
 The HA profile constructs and owns exactly one app-server client through FastAPI lifespan. The transport rejects unlocked directions, malformed or oversized JSONL, invalid payload/results, stale generations, response-ID misuse, callback overload, and runtime/schema version mismatches without emitting raw server content. The remaining direct legacy auth, model, and run consumers are intentionally migrated in Tasks 6, 7, and 10; Task 5 does not claim repository-wide single-process ownership yet.
 
+## Task 6 — structured ChatGPT account flow
+
+| Evidence | Result |
+|----------|--------|
+| RED contracts | Coordinator, HA lifecycle/routes, and shared-client account/limits suites failed at the missing production boundaries |
+| Auth protocol | Exact `account/read`, `account/login/start` with `chatgptDeviceCode`, cancel, logout, completion, and account-update handling |
+| Race/recovery coverage | Operation revision, app-server generation and `loginId` correlation, cancel-during-start, concurrent polls, sparse updates, restart recovery, close/late-event rejection, and authoritative logout read |
+| Privacy boundary | HA account projection retains only safe auth/plan fields; raw errors, email, IDs, tokens, auth files, and private backend calls are excluded |
+| Lifecycle/API | One app-server owns the coordinator and safe probes; reverse shutdown is exception-safe; cancel plus typed 409/503 responses are bearer protected |
+| Focused GREEN | 148 passed before final reentrant-listener addition; independent final review also passed 95 focused tests |
+| Windows full suite | 570 passed, 136 skipped |
+| Linux full suite | 695 passed, 1 skipped in Python 3.13 container with the Windows-only updater module excluded |
+| Static verification | Ruff, focused mypy, `compileall`, and `git diff --check` passed |
+| Independent review | APPROVED after startup retry, sparse-update, logout-authority, restart-poll, concurrent-status, and bounded-close fixes |
+| Commit | `0480f38` |
+
+The external profile retains its deprecated CLI parser, auth-file account probe, and token-backed limit probe for the 0.6.x rollback window. HA mode constructs none of those credential owners. The Task 6 auth/run mutual-exclusion acceptance remains open only until Task 7 installs the shared runtime lease; a status-based compatibility check was deliberately not added.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource ceilings, safe archives, and the bounded app-server transport, but not yet the HA App image, target sandbox, proxy deployment, release, or cutover.

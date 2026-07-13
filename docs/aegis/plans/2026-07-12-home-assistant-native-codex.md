@@ -231,10 +231,12 @@ Runtime queue/turn enforcement consumes these immutable limits in Task 7; event 
 **Verification:** `python -m pytest -q bridge_service/tests/test_auth_coordinator.py bridge_service/tests/test_codex_auth.py bridge_service/tests/test_account.py`
 
 - [ ] Write failing tests for startup `account/read`, `chatgptDeviceCode` login, live code event, matching generation+`loginId`, stale completion rejection, cancel, explicit logout+final read, restart persistence, terminal code clearing, repeated identical expiry revision, zero-chat auth events, wrong auth modes, missing device authorization, and auth/run conflicts.
-- [ ] Run focused tests and capture failures from the stdout parser/race behavior.
-- [ ] Implement a lock-protected coordinator with monotonic revision, operation generation, `loginId`, normalized safe states, `busy`, `account/read`, `account/login/start`, `account/login/cancel`, and `account/logout`. Replace direct `auth.json` token decoding/rate-limit HTTP with `account/read` and `account/rateLimits/read` for HA mode.
-- [ ] Run focused/full tests. Assert no raw app-server error, reusable token, email, or auth file contents enters events/logs.
-- [ ] Commit with message `Add structured ChatGPT account flow`.
+- [x] Run focused tests and capture failures from the stdout parser/race behavior.
+- [x] Implement a lock-protected coordinator with monotonic revision, operation generation, `loginId`, normalized safe states, `busy`, `account/read`, `account/login/start`, `account/login/cancel`, and `account/logout`. Replace direct `auth.json` token decoding/rate-limit HTTP with `account/read` and `account/rateLimits/read` for HA mode.
+- [x] Run focused/full tests. Assert no raw app-server error, reusable token, email, or auth file contents enters events/logs.
+- [x] Commit as `0480f38` with message `Add structured ChatGPT account flow`.
+
+All Task 6 cases except the shared auth/run exclusion are complete. That remaining test is intentionally carried into Task 7, which owns the global runtime lease and app-server turn broker; duplicating a storage-status check here would introduce a TOCTOU path.
 
 ## Task 7: Add the global runtime gate, app-server turns, approvals, and questions
 
