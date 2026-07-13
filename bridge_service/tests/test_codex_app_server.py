@@ -158,6 +158,10 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert client.ready is True
         assert client.generation == 1
         assert client.process_id == fake_server.process()["pid"]
+        _wait_for_client_message(
+            fake_server,
+            lambda message: message.get("method") == "initialized",
+        )
         messages = fake_server.client_messages()
         assert [message.get("method") for message in messages[:2]] == [
             "initialize",
@@ -290,6 +294,31 @@ def test_notification_handler_is_immutable_and_never_blocks_response_reader(
             notification.method = "mutated"
     finally:
         release.set()
+        client.close()
+
+
+def test_notification_handler_failure_restarts_generation_for_reconciliation(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        on_initialized=[
+            {"kind": "notification", "method": "account/updated", "params": {}}
+        ]
+    )
+    client = _client(module, fake_server, callback_workers=1)
+
+    def fail_durable_projection(_notification: Any) -> None:
+        raise RuntimeError("private durable auth failure")
+
+    client.register_notification_handler("account/updated", fail_durable_projection)
+    client.start()
+    try:
+        _wait_until(lambda: client.ready and client.generation == 2)
+        assert client.request("ping", {"generation": 2}) == {
+            "echo": {"generation": 2}
+        }
+    finally:
         client.close()
 
 

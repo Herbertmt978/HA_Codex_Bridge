@@ -43,8 +43,20 @@ class _FailedProcess:
 def _wait_for_finished(storage: BridgeStorage, thread_id: str) -> None:
     deadline = time.time() + 5
     while time.time() < deadline:
-        if storage.load_thread(thread_id).status != "running":
-            return
+        events = storage.list_thread_events(thread_id)
+        submitted_run_ids = [
+            event.payload.get("run_id")
+            for event in events
+            if event.event_type == "message.created"
+        ]
+        if submitted_run_ids and storage.load_thread(thread_id).status != "running":
+            current_run_id = submitted_run_ids[-1]
+            if any(
+                event.event_type in {"run.completed", "run.failed", "run.cancelled"}
+                and event.payload.get("run_id") == current_run_id
+                for event in events
+            ):
+                return
         time.sleep(0.02)
     raise AssertionError("thread did not finish")
 
@@ -486,20 +498,24 @@ def test_home_assistant_workspace_deleted_after_sync_terminalizes_success_branch
 
     monkeypatch.setattr(storage, "sync_thread_artifacts", delete_during_sync)
 
-    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    run = legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     deadline = time.time() + 5
     thread_path = storage.threads_dir / f"{thread.thread_id}.json"
     while time.time() < deadline:
         raw_record = ThreadRecord.model_validate_json(
             thread_path.read_text(encoding="utf-8")
         )
-        if raw_record.status != "running":
+        events = storage.list_thread_events(thread.thread_id)
+        if raw_record.status != "running" and any(
+            event.event_type == "run.failed"
+            and event.payload.get("run_id") == run.run_id
+            for event in events
+        ):
             break
         time.sleep(0.02)
     else:
         raise AssertionError("thread did not terminalize")
 
-    events = storage.list_thread_events(thread.thread_id)
     failure = events[-1]
     terminal_events = [
         event
@@ -525,29 +541,37 @@ def test_home_assistant_workspace_deleted_between_final_load_and_save_terminaliz
         "codex_bridge_service.runner.subprocess.Popen",
         lambda *args, **kwargs: _CompletedProcess(),
     )
-    original_save_thread = storage.save_thread
+    original_save_thread_with_events = storage._save_thread_with_events
 
-    def delete_before_terminal_save(record: ThreadRecord) -> None:
+    def delete_before_terminal_save(record: ThreadRecord, *events: object) -> None:
         if record.thread_id == thread.thread_id and record.status == "idle":
             workspace.rmdir()
-        original_save_thread(record)
+        original_save_thread_with_events(record, *events)
 
-    monkeypatch.setattr(storage, "save_thread", delete_before_terminal_save)
+    monkeypatch.setattr(
+        storage,
+        "_save_thread_with_events",
+        delete_before_terminal_save,
+    )
 
-    legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
+    run = legacy_ha_runner(storage=storage).submit_prompt(thread.thread_id, "Run")
     deadline = time.time() + 5
     thread_path = storage.threads_dir / f"{thread.thread_id}.json"
     while time.time() < deadline:
         raw_record = ThreadRecord.model_validate_json(
             thread_path.read_text(encoding="utf-8")
         )
-        if raw_record.status != "running":
+        events = storage.list_thread_events(thread.thread_id)
+        if raw_record.status != "running" and any(
+            event.event_type == "run.failed"
+            and event.payload.get("run_id") == run.run_id
+            for event in events
+        ):
             break
         time.sleep(0.02)
     else:
         raise AssertionError("thread did not terminalize")
 
-    events = storage.list_thread_events(thread.thread_id)
     failure = events[-1]
     terminal_events = [
         event

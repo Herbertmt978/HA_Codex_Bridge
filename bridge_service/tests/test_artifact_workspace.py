@@ -596,10 +596,14 @@ def test_home_assistant_archive_metadata_failure_removes_completed_output(
     storage, thread, _, _, workspace = _home_assistant_thread(tmp_path)
     (workspace / "result.txt").write_text("result", encoding="utf-8")
 
-    def fail_save(_record):
+    def fail_commit(_record, _events):
         raise RuntimeError("metadata unavailable")
 
-    monkeypatch.setattr(storage, "save_thread", fail_save)
+    monkeypatch.setattr(
+        storage,
+        "_commit_prepared_thread_with_events_locked",
+        fail_commit,
+    )
     with pytest.raises(RuntimeError, match="metadata unavailable"):
         storage.create_workspace_archive(thread.thread_id)
 

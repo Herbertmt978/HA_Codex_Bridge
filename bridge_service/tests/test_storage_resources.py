@@ -289,12 +289,16 @@ def test_upload_metadata_failure_removes_completed_file_and_allows_retry(
         tmp_path,
         _limits(max_upload_file_bytes=10, max_private_bytes=10),
     )
-    original_save = storage.save_thread
+    original_commit = storage._commit_prepared_thread_with_events_locked
 
-    def fail_save(_record):
+    def fail_commit(_record, _events):
         raise RuntimeError("metadata failed")
 
-    monkeypatch.setattr(storage, "save_thread", fail_save)
+    monkeypatch.setattr(
+        storage,
+        "_commit_prepared_thread_with_events_locked",
+        fail_commit,
+    )
     with pytest.raises(RuntimeError, match="metadata failed"):
         storage.attach_file(
             thread_id=thread.thread_id,
@@ -305,7 +309,11 @@ def test_upload_metadata_failure_removes_completed_file_and_allows_retry(
 
     assert storage._home_assistant_uploads_boundary().walk_regular_files(".") == ()
     assert storage.quota_manager.active_reservations == 0
-    monkeypatch.setattr(storage, "save_thread", original_save)
+    monkeypatch.setattr(
+        storage,
+        "_commit_prepared_thread_with_events_locked",
+        original_commit,
+    )
     attachment = storage.attach_file(
         thread_id=thread.thread_id,
         filename="retry.bin",

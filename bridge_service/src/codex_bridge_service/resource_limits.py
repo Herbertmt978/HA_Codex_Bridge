@@ -44,6 +44,7 @@ class ResourceLimits:
     max_events_per_thread: int = 25_000
     max_event_log_bytes: int = 50 * MIB
     max_event_payload_bytes: int = 1 * MIB
+    max_event_journal_bytes: int = 512 * MIB
     service_log_file_bytes: int = 10 * MIB
     service_log_backups: int = 10
     minimum_free_bytes: int = 1 * GIB
@@ -63,6 +64,7 @@ class ResourceLimits:
             "max_events_per_thread",
             "max_event_log_bytes",
             "max_event_payload_bytes",
+            "max_event_journal_bytes",
             "service_log_file_bytes",
             "max_transient_snapshot_bytes",
         )

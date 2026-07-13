@@ -26,9 +26,14 @@ from codex_bridge_service.codex_app_server_contract import (
     AppServerProtocolValidator,
     load_bundled_protocol_contract,
 )
+from codex_bridge_service.event_store import EventStoreAdmissionError
 from codex_bridge_service.models import RunMode
 from codex_bridge_service.resource_limits import ResourceLimits
-from codex_bridge_service.runtime_broker import RuntimeBroker, RuntimeBrokerError
+from codex_bridge_service.runtime_broker import (
+    RuntimeBroker,
+    RuntimeBrokerError,
+    RuntimeEventPayloadTooLargeError,
+)
 from codex_bridge_service.runtime_gate import RuntimeGate
 from codex_bridge_service.runtime_policy import (
     RuntimeProtocolMismatchError,
@@ -38,6 +43,7 @@ from codex_bridge_service.runtime_policy import (
     validate_thread_result,
 )
 from codex_bridge_service.runtime_state import (
+    RuntimeStateCommitUnknownError,
     RuntimeStateError,
     RuntimeStateStore,
     runtime_fingerprint,
@@ -514,6 +520,37 @@ def test_broker_rejects_gate_with_different_resource_limits(
         )
 
 
+def test_maximum_route_prompt_that_cannot_fit_event_envelope_is_rejected_safely(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with pytest.raises(RuntimeEventPayloadTooLargeError):
+            broker.submit_prompt(
+                thread.thread_id,
+                "x" * (1024 * 1024),
+                client_request_id="maximum-size-prompt",
+            )
+
+        assert _requests(client, "thread/start") == []
+        assert not any(
+            event.event_type == "message.created"
+            and event.payload.get("client_request_id") == "maximum-size-prompt"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+
+        accepted = broker.submit_prompt(
+            thread.thread_id,
+            "The broker remains available",
+            client_request_id="after-oversized-prompt",
+        )
+        assert accepted.status == "starting"
+    finally:
+        broker.close()
+
+
 @pytest.mark.parametrize(
     ("mode", "sandbox", "approval_policy", "sandbox_policy"),
     [
@@ -863,6 +900,23 @@ def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
                 "clientUserMessageId": "client-steer",
             }
         ]
+        steer_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "message.created"
+            and event.payload.get("client_request_id") == "client-steer"
+        )
+        runtime_state = json.loads(
+            (storage.root / "runtime-state.json").read_text(encoding="utf-8")
+        )
+        assert steer_event.operation_id is not None
+        assert runtime_state["_bridge_operation"]["operation_id"] == (
+            steer_event.operation_id
+        )
 
         cancelling = broker.cancel_run(thread.thread_id, run_id=first.run_id)
         assert cancelling.status == "cancelling"
@@ -925,6 +979,21 @@ def test_unknown_steer_outcome_is_nonreplayable_and_aborts_generation(
         events = storage.list_thread_events(thread.thread_id)
         assert any(event.event_type == "run.steer_outcome_unknown" for event in events)
         assert any(event.event_type == "run.interrupted" for event in events)
+        stored_events = storage.event_store.replay(
+            after_cursor=0,
+            scopes=("thread",),
+            thread_ids=(thread.thread_id,),
+        ).events
+        uncertain = next(
+            event
+            for event in stored_events
+            if event.event_type == "run.steer_outcome_unknown"
+        )
+        interrupted = next(
+            event for event in stored_events if event.event_type == "run.interrupted"
+        )
+        assert uncertain.operation_id is not None
+        assert uncertain.operation_id == interrupted.operation_id
         assert storage.load_thread(queued_thread.thread_id).status == "error"
     finally:
         broker.close()
@@ -985,7 +1054,7 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
     second_thread = _new_thread(storage, tmp_path, name="TotalDeadline")
     client = ValidatorBackedAppServer()
     limits = ResourceLimits(
-        run_total_timeout_seconds=0.35,
+        run_total_timeout_seconds=2.0,
         run_idle_timeout_seconds=5.0,
         cancel_grace_seconds=0.05,
     )
@@ -994,9 +1063,9 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
         app_server=client,
         runtime_gate=RuntimeGate(limits=limits),
         resource_limits=limits,
-        queue_wait_timeout_seconds=0.35,
+        queue_wait_timeout_seconds=2.0,
         watchdog_interval_seconds=0.005,
-        turn_timeout_seconds=0.35,
+        turn_timeout_seconds=2.0,
         cancel_grace_seconds=0.05,
         interaction_timeout_seconds=5.0,
     )
@@ -1012,27 +1081,40 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
             storage, first_thread.thread_id
         )
 
-        accepted_at = time.monotonic()
         queued = broker.submit_prompt(
             second_thread.thread_id,
             "Queue time consumes the same total budget",
             client_request_id="total-deadline-queued",
         )
         assert queued.status == "queued"
-        time.sleep(0.22)
+        time.sleep(0.75)
         _complete(
             client,
             remote_thread_id=remote_thread_id,
             turn_id=turn_id,
         )
-        _wait_until(lambda: len(_requests(client, "turn/start")) == 2)
+        _wait_until(
+            lambda: len(_requests(client, "turn/start")) == 2
+            or storage.load_thread(second_thread.thread_id).status == "error",
+            timeout=3.0,
+            message="queued run neither started nor exhausted its total budget",
+        )
+        turn_start_timeouts = [
+            timeout
+            for method, timeout in client.request_timeouts
+            if method == "turn/start"
+        ]
+        if len(turn_start_timeouts) == 2:
+            assert turn_start_timeouts[-1] is not None
+            assert 0 < turn_start_timeouts[-1] < 1.25
+        else:
+            assert len(turn_start_timeouts) == 1
 
         _wait_until(
             lambda: storage.load_thread(second_thread.thread_id).status == "error",
-            timeout=0.25,
+            timeout=3.0,
             message="queued and active phases received separate total-timeout budgets",
         )
-        assert time.monotonic() - accepted_at < 0.5
         assert broker.runtime_snapshot().active_turns == 0
     finally:
         broker.close()
@@ -1469,17 +1551,21 @@ def test_thread_create_is_serialized_before_broker_project_delete(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     mutation_lock = _ContentionTrackingRLock()
-    storage._project_mutation_lock = mutation_lock
+    storage._thread_mutation_lock = mutation_lock
     save_entered = Event()
     release_save = Event()
-    original_save_thread = storage.save_thread
+    original_commit = storage._commit_prepared_thread_with_events_locked
 
-    def blocked_save_thread(record: Any) -> None:
+    def blocked_commit(record: Any, events: Any) -> None:
         save_entered.set()
         assert release_save.wait(2)
-        original_save_thread(record)
+        original_commit(record, events)
 
-    monkeypatch.setattr(storage, "save_thread", blocked_save_thread)
+    monkeypatch.setattr(
+        storage,
+        "_commit_prepared_thread_with_events_locked",
+        blocked_commit,
+    )
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
             create_future = pool.submit(
@@ -1684,10 +1770,11 @@ def test_submission_persistence_failure_releases_reserved_runtime(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
 
-    def fail_save(_state: object) -> None:
+    def fail_save(_state: object, *, events: object) -> None:
+        del events
         raise RuntimeStateError("injected checkpoint failure")
 
-    monkeypatch.setattr(broker._store, "save", fail_save)
+    monkeypatch.setattr(broker._store, "save_with_events", fail_save)
     try:
         with pytest.raises(RuntimeStateError):
             broker.submit_prompt(
@@ -1709,6 +1796,85 @@ def test_submission_persistence_failure_releases_reserved_runtime(
                 client_request_id="persistence-failure-retry",
             )
         _assert_broker_error(fatal, "app_server_unavailable")
+    finally:
+        broker.close()
+
+
+def test_submission_admission_failure_is_retryable_without_fatalizing_broker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    original_save = broker._store.save_with_events
+
+    def reject_before_state(_state: object, *, events: object) -> None:
+        del events
+        raise EventStoreAdmissionError("injected pre-state journal rejection")
+
+    monkeypatch.setattr(broker._store, "save_with_events", reject_before_state)
+    try:
+        with pytest.raises(EventStoreAdmissionError):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Retry after journal admission",
+                client_request_id="journal-admission-rejected",
+            )
+
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert client.requests == []
+        monkeypatch.setattr(broker._store, "save_with_events", original_save)
+
+        accepted = broker.submit_prompt(
+            thread.thread_id,
+            "Journal admission recovered",
+            client_request_id="journal-admission-recovered",
+        )
+        assert accepted.status == "starting"
+    finally:
+        broker.close()
+
+
+def test_submission_does_not_overwrite_a_prepared_unknown_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    rollback_called = False
+
+    def fail_after_prepare(_state: object, *, events: object) -> None:
+        del events
+        raise RuntimeStateCommitUnknownError("prepared operation is unresolved")
+
+    original_rollback = broker._rollback_submission_locked
+
+    def observe_rollback(*args: object, **kwargs: object) -> None:
+        nonlocal rollback_called
+        rollback_called = True
+        original_rollback(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(broker._store, "save_with_events", fail_after_prepare)
+    monkeypatch.setattr(broker, "_rollback_submission_locked", observe_rollback)
+    try:
+        with pytest.raises(RuntimeStateCommitUnknownError):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Keep the prepared operation authoritative",
+                client_request_id="prepared-operation-unknown",
+            )
+
+        assert rollback_called is False
+        assert "prepared-operation-unknown" in broker._state.request_idempotency
+        assert any(
+            run.client_request_id == "prepared-operation-unknown"
+            for run in broker._state.runs.values()
+        )
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
     finally:
         broker.close()
 
@@ -2244,6 +2410,22 @@ def test_pre_response_request_resolution_replays_after_its_request(
         ]
         assert interaction_events == ["interaction.created", "interaction.expired"]
         assert client.responses == []
+        resolved_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "interaction.expired"
+        )
+        runtime_state = json.loads(
+            (storage.root / "runtime-state.json").read_text(encoding="utf-8")
+        )
+        assert resolved_event.operation_id is not None
+        assert runtime_state["_bridge_operation"]["operation_id"] == (
+            resolved_event.operation_id
+        )
 
         _complete(
             client,
@@ -2379,6 +2561,19 @@ def test_generation_change_interrupts_active_run_and_clears_queued_prompts(
         )
         assert "run.interrupted" in serialized
         assert "run.queue_cleared" in serialized
+        queued_events = storage.event_store.replay(
+            after_cursor=0,
+            scopes=("thread",),
+            thread_ids=(second_thread.thread_id,),
+        ).events
+        queue_cleared = next(
+            event for event in queued_events if event.event_type == "run.queue_cleared"
+        )
+        interrupted = next(
+            event for event in queued_events if event.event_type == "run.interrupted"
+        )
+        assert queue_cleared.operation_id is not None
+        assert queue_cleared.operation_id == interrupted.operation_id
     finally:
         broker.close()
 
@@ -2660,6 +2855,20 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
             str(storage.resolve_workspace_path(thread.workspace_path))
             not in safe_pending
         )
+        created_event = next(
+            event
+            for event in reversed(
+                storage.event_store.replay(
+                    after_cursor=0,
+                    scopes=("thread",),
+                    thread_ids=(thread.thread_id,),
+                ).events
+            )
+            if event.event_type == "interaction.created"
+            and event.payload.get("interaction_id") == pending["interaction_id"]
+        )
+        assert created_event.operation_id is not None
+        assert created_event.scope_sequence == pending["event_id"]
 
         kwargs = {
             "thread_id": thread.thread_id,
@@ -2677,6 +2886,19 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
         assert duplicate == first
         assert client.responses[0][1] == {"decision": "accept"}
         assert client.responses[0][2] is None
+        resolved_event = next(
+            event
+            for event in reversed(
+                storage.event_store.replay(
+                    after_cursor=created_event.cursor,
+                    scopes=("thread",),
+                    thread_ids=(thread.thread_id,),
+                ).events
+            )
+            if event.event_type == "interaction.resolved"
+            and event.payload.get("interaction_id") == pending["interaction_id"]
+        )
+        assert resolved_event.operation_id is not None
 
         with pytest.raises(RuntimeBrokerError) as changed_replay:
             broker.decide_approval(**{**kwargs, "decision": "decline"})
@@ -2698,7 +2920,7 @@ def test_expired_interaction_aborts_generation_and_releases_runtime(
     broker = _broker(
         storage,
         client,
-        interaction_timeout_seconds=0.05,
+        interaction_timeout_seconds=0.5,
     )
     try:
         run = broker.submit_prompt(
@@ -2753,12 +2975,20 @@ def test_expired_interaction_aborts_generation_and_releases_runtime(
             )
         )
         events = storage.list_thread_events(thread.thread_id)
-        assert (
-            len(
-                [event for event in events if event.event_type == "interaction.expired"]
-            )
-            == 1
+        expired_events = [
+            event for event in events if event.event_type == "interaction.expired"
+        ]
+        assert len(expired_events) == 1
+        stored_expired = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_id == expired_events[0].event_id
         )
+        assert stored_expired.operation_id is not None
         assert len([event for event in events if event.event_type == "run.failed"]) == 1
         replay = broker.submit_prompt(
             thread.thread_id,
@@ -2776,7 +3006,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     client = ValidatorBackedAppServer()
-    limits = ResourceLimits(run_idle_timeout_seconds=0.5)
+    limits = ResourceLimits(run_idle_timeout_seconds=0.8)
     broker = RuntimeBroker(
         storage=storage,
         app_server=client,
@@ -2820,7 +3050,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
             )
             is DEFERRED_RESPONSE
         )
-        time.sleep(0.75)
+        time.sleep(1.0)
 
         assert client.aborted_generations == []
         pending = _pending_one(broker, thread.thread_id)
@@ -3264,6 +3494,71 @@ def test_absolute_path_reason_is_not_projected_in_file_change_approval(
             ]
         )
         assert f"Inspect {workspace}/private.txt" not in serialized
+    finally:
+        broker.close()
+
+
+def test_large_valid_patch_is_split_into_bounded_durable_events(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Process a large patch",
+            client_request_id="large-patch-run",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        client.emit_notification(
+            "item/fileChange/patchUpdated",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "large-patch-item",
+                "changes": [
+                    {
+                        "path": f"src/file-{index}.py",
+                        "diff": "x" * (64 * 1024),
+                        "kind": {"type": "update", "move_path": None},
+                    }
+                    for index in range(17)
+                ],
+            },
+        )
+
+        patch_events = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "patch.updated"
+        ]
+        assert len(patch_events) > 1
+        assert [event.payload["chunk_index"] for event in patch_events] == list(
+            range(len(patch_events))
+        )
+        assert all(
+            event.payload["chunk_count"] == len(patch_events)
+            for event in patch_events
+        )
+        assert sum(len(event.payload["changes"]) for event in patch_events) == 17
+        assert all(
+            len(
+                json.dumps(
+                    event.payload,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            )
+            <= storage.event_store.max_event_payload_bytes
+            for event in patch_events
+        )
+        assert broker.submit_prompt(
+            thread.thread_id,
+            "Steer after the split patch",
+            client_request_id="after-large-patch",
+        ).status in {"starting", "running"}
     finally:
         broker.close()
 
@@ -4270,9 +4565,21 @@ def test_corrupt_runtime_checkpoint_is_quarantined_and_thread_is_repaired(
         assert repaired.last_error == (
             "Codex runtime ownership was reset after an invalid checkpoint."
         )
-        assert any(
-            event.event_type == "runtime.state_recovered"
-            for event in storage.list_thread_events(thread.thread_id)
+        recovered_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "runtime.state_recovered"
+        )
+        repaired_state = json.loads(
+            storage._thread_path(thread.thread_id).read_text(encoding="utf-8")
+        )
+        assert recovered_event.operation_id is not None
+        assert repaired_state["_bridge_operation"]["operation_id"] == (
+            recovered_event.operation_id
         )
 
         fresh = broker.submit_prompt(

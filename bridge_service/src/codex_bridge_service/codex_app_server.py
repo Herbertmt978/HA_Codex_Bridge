@@ -989,6 +989,14 @@ class CodexAppServerClient:
             try:
                 handler(notification)
             except BaseException:
+                # A handler may own durable auth/runtime publication. Silently
+                # dropping its failure would leave the in-memory projection
+                # ahead of replayable state, so retire this generation and let
+                # the normal restart/reconciliation path restore consistency.
+                self._mark_generation_failed(
+                    notification.generation,
+                    AppServerProtocolError(),
+                )
                 return
 
         if not self._dispatcher.submit(invoke):

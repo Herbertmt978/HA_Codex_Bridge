@@ -13,12 +13,22 @@ from .codex_app_server import (
     AppServerNotification,
     AppServerRequest,
 )
+from .event_store import (
+    DurableOperationTooLargeError,
+    EventDraft,
+    EventPayloadTooLargeError,
+    EventStoreAdmissionError,
+    EventStoreError,
+    OutboxWrite,
+    StoredEventRecord,
+)
 from .models import (
     InteractionResultRecord,
     PendingInteractionRecord,
     ProjectKind,
     RunMode,
     RunRecord,
+    ThreadRecord,
 )
 from .resource_limits import ResourceLimits
 from .runtime_gate import (
@@ -46,6 +56,7 @@ from .runtime_state import (
     RuntimeInteractionState,
     RuntimeRequestOutcome,
     RuntimeRunState,
+    RuntimeStateCommitUnknownError,
     RuntimeStateCorruptError,
     RuntimeStateError,
     RuntimeStateRecord,
@@ -216,6 +227,14 @@ class RuntimeStateCapacityError(RuntimeBrokerError):
         )
 
 
+class RuntimeEventPayloadTooLargeError(RuntimeBrokerError):
+    code = "runtime_event_payload_too_large"
+    status_code = 413
+
+    def __init__(self) -> None:
+        super().__init__("The prompt is too large for the durable event journal.")
+
+
 class _RuntimeTotalDeadlineExceeded(RuntimeError):
     pass
 
@@ -303,7 +322,10 @@ class RuntimeBroker:
             if interaction_timeout_seconds is None
             else _positive_timeout(interaction_timeout_seconds)
         )
-        self._store = RuntimeStateStore(storage.root)
+        self._store = RuntimeStateStore(
+            storage.root,
+            durable_outbox=storage.durable_outbox,
+        )
         self._recovered_corrupt_state = False
         try:
             self._state = self._store.load()
@@ -379,6 +401,11 @@ class RuntimeBroker:
         request_id = client_request_id or f"req_{uuid4().hex}"
         prompt = _prompt(prompt)
         request_id = _identifier(request_id, limit=256, label="client request id")
+        _require_message_event_capacity(
+            prompt=prompt,
+            client_request_id=request_id,
+            maximum_bytes=self.limits.max_event_payload_bytes,
+        )
         thread = self.storage.get_thread(thread_id)
         self.storage.resolve_workspace_path(thread.workspace_path)
 
@@ -486,25 +513,36 @@ class RuntimeBroker:
                 self._leases[run.run_id] = lease
                 self._completion_events[run.run_id] = Event()
                 try:
-                    self._persist_locked()
-                    self._set_thread_projection_locked(run)
-                    self.storage.append_thread_event(
-                        thread_id=thread_id,
-                        event_type="message.created",
-                        payload={
-                            "run_id": run.run_id,
-                            "role": "user",
-                            "text": prompt,
-                            "client_request_id": request_id,
-                        },
-                    )
-                    if lease.state == "queued":
-                        self.storage.append_thread_event(
+                    initial_events = [
+                        EventDraft(
+                            scope="thread",
                             thread_id=thread_id,
-                            event_type="run.queued",
-                            payload={"run_id": run.run_id},
+                            event_type="message.created",
+                            payload={
+                                "run_id": run.run_id,
+                                "role": "user",
+                                "text": prompt,
+                                "client_request_id": request_id,
+                            },
                         )
+                    ]
+                    if lease.state == "queued":
+                        initial_events.append(
+                            EventDraft(
+                                scope="thread",
+                                thread_id=thread_id,
+                                event_type="run.queued",
+                                payload={"run_id": run.run_id},
+                            )
+                        )
+                    self._persist_locked(events=tuple(initial_events))
+                    self._set_thread_projection_locked(run)
                     self._spawn_worker_locked(run.run_id)
+                except RuntimeStateCommitUnknownError:
+                    # The outbox may already own the accepted run and events.
+                    # Fatal-state handling has released local capacity; a
+                    # rollback write here could overwrite recoverable truth.
+                    raise
                 except BaseException:
                     self._rollback_submission_locked(run, lease)
                     raise
@@ -525,10 +563,15 @@ class RuntimeBroker:
                 )
                 validate_steer_result(result, turn_id)
             except Exception as exc:
-                if generation is not None:
-                    self.app_server.abort_generation(generation)
                 with self._lock:
-                    self.storage.append_thread_event(
+                    # Serialize the generation abort with terminal persistence.
+                    # Otherwise the watchdog can observe the new generation and
+                    # publish run.interrupted before this path can pair it with
+                    # run.steer_outcome_unknown in the same durable operation.
+                    if generation is not None:
+                        self.app_server.abort_generation(generation)
+                    uncertain_event = EventDraft(
+                        scope="thread",
                         thread_id=thread_id,
                         event_type="run.steer_outcome_unknown",
                         payload={
@@ -549,7 +592,10 @@ class RuntimeBroker:
                             current,
                             "interrupted",
                             "The Codex runtime restarted after a follow-up outcome became unknown.",
+                            preceding_events=(uncertain_event,),
                         )
+                    else:
+                        self._persist_locked(events=(uncertain_event,))
                 raise RuntimeSteerOutcomeUnknownError() from exc
             with self._lock:
                 outcome = self._state.request_idempotency.get(request_id)
@@ -559,17 +605,21 @@ class RuntimeBroker:
                 current = self._state.runs.get(run_id)
                 if current is not None:
                     outcome.run_status = current.status
-                self._persist_locked()
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="message.created",
-                    payload={
-                        "run_id": run_id,
-                        "role": "user",
-                        "text": prompt,
-                        "client_request_id": request_id,
-                        "steered": True,
-                    },
+                self._persist_locked(
+                    events=(
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="message.created",
+                            payload={
+                                "run_id": run_id,
+                                "role": "user",
+                                "text": prompt,
+                                "client_request_id": request_id,
+                                "steered": True,
+                            },
+                        ),
+                    )
                 )
                 return (
                     _run_record(current)
@@ -603,10 +653,10 @@ class RuntimeBroker:
             self._cancel_queued_for_thread_locked(thread_id, except_run_id=run.run_id)
             run.status = "cancelling"
             run.cancellation_requested_at = _now()
-            self._expire_run_interactions_locked(run)
+            interaction_events = self._expire_run_interactions_locked(run)
             if not run.codex_thread_id or not run.codex_turn_id:
                 generation = run.generation
-                self._persist_locked()
+                self._persist_locked(events=interaction_events)
                 if generation is None:
                     return _run_record(run)
                 abort_without_turn = True
@@ -616,7 +666,7 @@ class RuntimeBroker:
                 generation = run.generation
                 codex_thread_id = run.codex_thread_id
                 turn_id = run.codex_turn_id
-                self._persist_locked()
+                self._persist_locked(events=interaction_events)
             self._begin_publication_locked(thread_id)
         try:
             if abort_without_turn:
@@ -752,10 +802,9 @@ class RuntimeBroker:
                     self._mark_run_cancelling_for_interaction_locked(interaction)
                 self._compact_terminal_state_locked()
                 try:
-                    self._persist_locked()
+                    self._emit_interaction_resolved_locked(interaction)
                 except RuntimeStateError as exc:
                     raise InteractionOutcomeUnknownError() from exc
-                self._emit_interaction_resolved_locked(interaction)
                 return _interaction_result(interaction, request_id)
         finally:
             with self._lock:
@@ -831,10 +880,9 @@ class RuntimeBroker:
                 self._server_requests.pop(interaction_id, None)
                 self._compact_terminal_state_locked()
                 try:
-                    self._persist_locked()
+                    self._emit_interaction_resolved_locked(interaction)
                 except RuntimeStateError as exc:
                     raise InteractionOutcomeUnknownError() from exc
-                self._emit_interaction_resolved_locked(interaction)
                 return _interaction_result(interaction, request_id)
         finally:
             with self._lock:
@@ -1651,13 +1699,17 @@ class RuntimeBroker:
             )
             self._state.interactions[interaction.interaction_id] = interaction
             self._server_requests[interaction.interaction_id] = request
-            self._persist_locked()
-            event = self.storage.append_thread_event(
-                thread_id=run.thread_id,
-                event_type="interaction.created",
-                payload=_public_interaction(interaction).model_dump(mode="json"),
+            events = self._persist_locked(
+                events=(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=run.thread_id,
+                        event_type="interaction.created",
+                        payload=_public_interaction(interaction).model_dump(mode="json"),
+                    ),
+                )
             )
-            interaction.event_id = event.sequence
+            interaction.event_id = events[0].scope_sequence
             self._persist_locked()
             return DEFERRED_RESPONSE
 
@@ -1690,15 +1742,21 @@ class RuntimeBroker:
                         request_id,
                         notification.generation,
                     )
-                    self._persist_locked()
-                    self.storage.append_thread_event(
-                        thread_id=interaction.thread_id,
-                        event_type=(
-                            "interaction.outcome_unknown"
-                            if interaction.status == "outcome_unknown"
-                            else "interaction.expired"
-                        ),
-                        payload={"interaction_id": interaction.interaction_id},
+                    self._persist_locked(
+                        events=(
+                            EventDraft(
+                                scope="thread",
+                                thread_id=interaction.thread_id,
+                                event_type=(
+                                    "interaction.outcome_unknown"
+                                    if interaction.status == "outcome_unknown"
+                                    else "interaction.expired"
+                                ),
+                                payload={
+                                    "interaction_id": interaction.interaction_id
+                                },
+                            ),
+                        )
                     )
                     return
 
@@ -1814,16 +1872,23 @@ class RuntimeBroker:
         for run in interrupted:
             was_queued = run.status == "queued"
             if run.status not in _TERMINAL_RUN_STATES:
-                if was_queued:
-                    self.storage.append_thread_event(
-                        thread_id=run.thread_id,
-                        event_type="run.queue_cleared",
-                        payload={"run_id": run.run_id, "reason": reason},
+                preceding_events = (
+                    (
+                        EventDraft(
+                            scope="thread",
+                            thread_id=run.thread_id,
+                            event_type="run.queue_cleared",
+                            payload={"run_id": run.run_id, "reason": reason},
+                        ),
                     )
+                    if was_queued
+                    else ()
+                )
                 self._terminalize_locked(
                     run,
                     "interrupted",
                     "The Codex runtime restarted before the turn completed.",
+                    preceding_events=preceding_events,
                 )
         self._persist_locked()
 
@@ -1853,6 +1918,8 @@ class RuntimeBroker:
         run: RuntimeRunState,
         status: str,
         message: str | None,
+        *,
+        preceding_events: tuple[EventDraft, ...] = (),
     ) -> None:
         if run.status in _TERMINAL_RUN_STATES:
             return
@@ -1880,11 +1947,39 @@ class RuntimeBroker:
                         request.request_id,
                         request.generation,
                     )
+        event_type = {
+            "completed": "run.completed",
+            "cancelled": "run.cancelled",
+            "interrupted": "run.interrupted",
+            "failed": "run.failed",
+        }[status]
+        payload: dict[str, object] = {"run_id": run.run_id}
+        if message:
+            payload["error" if status == "failed" else "message"] = message
+        run.emitted_signatures = []
+        run.completed_item_ids = []
+        self._compact_terminal_state_locked()
         persistence_error: RuntimeStateError | None = None
-        try:
-            self._persist_locked()
-        except RuntimeStateError as exc:
-            persistence_error = exc
+        with self.storage._thread_mutation_lock:
+            projection = self._thread_projection_record_locked(run)
+            projection_payloads = (
+                (
+                    f"threads/{projection.thread_id}.json",
+                    projection.model_dump(mode="json"),
+                ),
+            ) if projection is not None else ()
+            try:
+                # Runtime ownership, the terminal UI projection, and the
+                # public event recover as one operation after a crash.
+                self._emit_once_locked(
+                    run,
+                    event_type,
+                    payload,
+                    preceding_events=preceding_events,
+                    state_payloads=projection_payloads,
+                )
+            except RuntimeStateError as exc:
+                persistence_error = exc
         # Capacity becomes observable as free before the terminal thread
         # projection is published. Consumers must never see a terminal run
         # while the global gate still counts it as active.
@@ -1903,27 +1998,14 @@ class RuntimeBroker:
             if run.generation is not None:
                 self.app_server.abort_generation(run.generation)
             raise RuntimeUnavailableError() from persistence_error
-        self._set_thread_projection_locked(run)
-        event_type = {
-            "completed": "run.completed",
-            "cancelled": "run.cancelled",
-            "interrupted": "run.interrupted",
-            "failed": "run.failed",
-        }[status]
-        payload: dict[str, object] = {"run_id": run.run_id}
-        if message:
-            payload["error" if status == "failed" else "message"] = message
-        self._emit_once_locked(run, event_type, payload)
-        run.emitted_signatures = []
-        run.completed_item_ids = []
-        self._compact_terminal_state_locked()
-        self._persist_locked()
-
-    def _set_thread_projection_locked(self, run: RuntimeRunState) -> None:
+    def _thread_projection_record_locked(
+        self,
+        run: RuntimeRunState,
+    ) -> ThreadRecord | None:
         try:
             record = self.storage.load_thread(run.thread_id)
         except (ThreadNotFoundError, WorkspaceBoundaryError):
-            return
+            return None
         record.codex_thread_id = run.codex_thread_id
         record.active_turn_id = (
             run.codex_turn_id if run.status not in _TERMINAL_RUN_STATES else None
@@ -1943,6 +2025,12 @@ class RuntimeBroker:
             record.status = "idle"
             record.active_run_id = None
             record.last_error = None
+        return record
+
+    def _set_thread_projection_locked(self, run: RuntimeRunState) -> None:
+        record = self._thread_projection_record_locked(run)
+        if record is None:
+            return
         self.storage.save_thread(record)
 
     def _emit_once_locked(
@@ -1953,7 +2041,10 @@ class RuntimeBroker:
         *,
         source: object | None = None,
         deduplicate: bool = True,
+        preceding_events: tuple[EventDraft, ...] = (),
+        state_payloads: tuple[tuple[str, dict[str, object]], ...] = (),
     ) -> None:
+        signature: str | None = None
         if deduplicate:
             signature_payload = source if source is not None else payload
             signature = hashlib.sha256(
@@ -1969,12 +2060,22 @@ class RuntimeBroker:
             run.emitted_signatures.append(signature)
             if len(run.emitted_signatures) > 2048:
                 del run.emitted_signatures[: len(run.emitted_signatures) - 2048]
-            self._persist_locked()
-        self.storage.append_thread_event(
-            thread_id=run.thread_id,
-            event_type=event_type,
-            payload=payload,
-        )
+        try:
+            self._persist_locked(
+                events=(*preceding_events,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=run.thread_id,
+                        event_type=event_type,
+                        payload=payload,
+                    ),
+                ),
+                state_payloads=state_payloads,
+            )
+        except BaseException:
+            if signature is not None and signature in run.emitted_signatures:
+                run.emitted_signatures.remove(signature)
+            raise
 
     def _emit_safe_patch_locked(
         self,
@@ -2025,12 +2126,42 @@ class RuntimeBroker:
                     if isinstance(path, str) and path not in approval_paths:
                         approval_paths.append(path)
             self._item_paths[(run.run_id, item_id)] = approval_paths
-        self._emit_once_locked(
-            run,
-            "patch.updated",
-            {"run_id": run.run_id, "changes": safe},
-            source=params,
+        payloads = _partition_patch_payloads(
+            run_id=run.run_id,
+            changes=safe,
+            maximum_bytes=self.limits.max_event_payload_bytes,
         )
+        if not payloads:
+            return
+        signature = hashlib.sha256(
+            json.dumps(
+                ["patch.updated", params],
+                sort_keys=True,
+                default=str,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if signature in run.emitted_signatures:
+            return
+        run.emitted_signatures.append(signature)
+        try:
+            self._persist_locked(
+                events=tuple(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=run.thread_id,
+                        event_type="patch.updated",
+                        payload=payload,
+                    )
+                    for payload in payloads
+                )
+            )
+        except BaseException:
+            if signature in run.emitted_signatures:
+                run.emitted_signatures.remove(signature)
+            raise
+        if len(run.emitted_signatures) > 2048:
+            del run.emitted_signatures[: len(run.emitted_signatures) - 2048]
 
     def _emit_safe_item_locked(
         self,
@@ -2080,13 +2211,18 @@ class RuntimeBroker:
         self,
         interaction: RuntimeInteractionState,
     ) -> None:
-        self.storage.append_thread_event(
-            thread_id=interaction.thread_id,
-            event_type="interaction.resolved",
-            payload={
-                "interaction_id": interaction.interaction_id,
-                "status": interaction.status,
-            },
+        self._persist_locked(
+            events=(
+                EventDraft(
+                    scope="thread",
+                    thread_id=interaction.thread_id,
+                    event_type="interaction.resolved",
+                    payload={
+                        "interaction_id": interaction.interaction_id,
+                        "status": interaction.status,
+                    },
+                ),
+            )
         )
 
     def _turn_input(
@@ -2226,7 +2362,11 @@ class RuntimeBroker:
             candidates[-1] if candidates else None,
         )
 
-    def _expire_run_interactions_locked(self, run: RuntimeRunState) -> None:
+    def _expire_run_interactions_locked(
+        self,
+        run: RuntimeRunState,
+    ) -> tuple[EventDraft, ...]:
+        events: list[EventDraft] = []
         for interaction in self._state.interactions.values():
             if (
                 interaction.run_id != run.run_id
@@ -2243,18 +2383,22 @@ class RuntimeBroker:
                 "outcome_unknown" if interaction.status == "responding" else "expired"
             )
             interaction.display = None
-            self.storage.append_thread_event(
-                thread_id=interaction.thread_id,
-                event_type=(
-                    "interaction.outcome_unknown"
-                    if interaction.status == "outcome_unknown"
-                    else "interaction.expired"
-                ),
-                payload={
-                    "interaction_id": interaction.interaction_id,
-                    "reason": "turn cancelling",
-                },
+            events.append(
+                EventDraft(
+                    scope="thread",
+                    thread_id=interaction.thread_id,
+                    event_type=(
+                        "interaction.outcome_unknown"
+                        if interaction.status == "outcome_unknown"
+                        else "interaction.expired"
+                    ),
+                    payload={
+                        "interaction_id": interaction.interaction_id,
+                        "reason": "turn cancelling",
+                    },
+                )
             )
+        return tuple(events)
 
     def _clear_queued_locked(self, reason: str) -> None:
         queued = [run for run in self._state.runs.values() if run.status == "queued"]
@@ -2262,15 +2406,18 @@ class RuntimeBroker:
             lease = self._leases.get(run.run_id)
             if lease is not None:
                 lease.cancel()
-            self.storage.append_thread_event(
-                thread_id=run.thread_id,
-                event_type="run.queue_cleared",
-                payload={"run_id": run.run_id, "reason": reason},
-            )
             self._terminalize_locked(
                 run,
                 "interrupted",
                 "The Codex runtime restarted before the queued turn began.",
+                preceding_events=(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=run.thread_id,
+                        event_type="run.queue_cleared",
+                        payload={"run_id": run.run_id, "reason": reason},
+                    ),
+                ),
             )
 
     def _cancel_queued_for_thread_locked(
@@ -2299,6 +2446,7 @@ class RuntimeBroker:
     def _expire_all_interactions_locked(
         self, *, reason: str = "runtime stopped"
     ) -> None:
+        events: list[EventDraft] = []
         for interaction in self._state.interactions.values():
             if interaction.status not in _PENDING_INTERACTION_STATES:
                 continue
@@ -2312,24 +2460,31 @@ class RuntimeBroker:
                     request.request_id,
                     request.generation,
                 )
-            self.storage.append_thread_event(
-                thread_id=interaction.thread_id,
-                event_type=(
-                    "interaction.outcome_unknown"
-                    if interaction.status == "outcome_unknown"
-                    else "interaction.expired"
-                ),
-                payload={
-                    "interaction_id": interaction.interaction_id,
-                    "reason": reason,
-                },
+            events.append(
+                EventDraft(
+                    scope="thread",
+                    thread_id=interaction.thread_id,
+                    event_type=(
+                        "interaction.outcome_unknown"
+                        if interaction.status == "outcome_unknown"
+                        else "interaction.expired"
+                    ),
+                    payload={
+                        "interaction_id": interaction.interaction_id,
+                        "reason": reason,
+                    },
+                )
             )
+        if events:
+            self._compact_terminal_state_locked()
+            self._persist_locked(events=tuple(events))
 
     def _expire_due_interactions_locked(self) -> None:
         now = datetime.now(UTC)
         changed = False
         affected_runs: set[str] = set()
         affected_generations: set[int] = set()
+        events: list[EventDraft] = []
         for interaction in self._state.interactions.values():
             if interaction.status not in _PENDING_INTERACTION_STATES:
                 continue
@@ -2348,19 +2503,22 @@ class RuntimeBroker:
             interaction.display = None
             affected_runs.add(interaction.run_id)
             affected_generations.add(interaction.generation)
-            self.storage.append_thread_event(
-                thread_id=interaction.thread_id,
-                event_type=(
-                    "interaction.outcome_unknown"
-                    if interaction.status == "outcome_unknown"
-                    else "interaction.expired"
-                ),
-                payload={"interaction_id": interaction.interaction_id},
+            events.append(
+                EventDraft(
+                    scope="thread",
+                    thread_id=interaction.thread_id,
+                    event_type=(
+                        "interaction.outcome_unknown"
+                        if interaction.status == "outcome_unknown"
+                        else "interaction.expired"
+                    ),
+                    payload={"interaction_id": interaction.interaction_id},
+                )
             )
             changed = True
         if changed:
             self._compact_terminal_state_locked()
-            self._persist_locked()
+            self._persist_locked(events=tuple(events))
             for generation in affected_generations:
                 self.app_server.abort_generation(generation)
             self._clear_queued_locked("interaction timeout aborted the app-server")
@@ -2384,8 +2542,8 @@ class RuntimeBroker:
         run.status = "cancelling"
         if run.cancellation_requested_at is None:
             run.cancellation_requested_at = _now()
-        self._expire_run_interactions_locked(run)
-        self._persist_locked()
+        interaction_events = self._expire_run_interactions_locked(run)
+        self._persist_locked(events=interaction_events)
         self._set_thread_projection_locked(run)
 
     def _spawn_worker_locked(self, run_id: str) -> None:
@@ -2510,18 +2668,62 @@ class RuntimeBroker:
             record.last_error = (
                 "Codex runtime ownership was reset after an invalid checkpoint."
             )
-            self.storage.save_thread(record)
-            self.storage.append_thread_event(
-                thread_id=record.thread_id,
-                event_type="runtime.state_recovered",
-                payload={"reason": "invalid private runtime checkpoint"},
+            self.storage._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread",
+                    thread_id=record.thread_id,
+                    event_type="runtime.state_recovered",
+                    payload={"reason": "invalid private runtime checkpoint"},
+                ),
             )
         self._recovered_corrupt_state = False
 
-    def _persist_locked(self) -> None:
+    def _persist_locked(
+        self,
+        *,
+        events: tuple[EventDraft, ...] = (),
+        state_payloads: tuple[tuple[str, dict[str, object]], ...] = (),
+    ) -> tuple[StoredEventRecord, ...]:
         self._state.revision += 1
         try:
+            if events or state_payloads:
+                additional_writes = tuple(
+                    OutboxWrite(
+                        relative_path=relative_path,
+                        state_revision=(
+                            self.storage.durable_outbox.next_state_revision(
+                                relative_path
+                            )
+                        ),
+                        state_payload=payload,
+                    )
+                    for relative_path, payload in state_payloads
+                )
+                if additional_writes:
+                    return self._store.save_with_events(
+                        self._state,
+                        events=events,
+                        additional_writes=additional_writes,
+                    )
+                return self._store.save_with_events(self._state, events=events)
             self._store.save(self._state)
+            return ()
+        except (
+            DurableOperationTooLargeError,
+            EventPayloadTooLargeError,
+            EventStoreAdmissionError,
+        ):
+            # These failures occur before the outbox can replace canonical
+            # state. Keep the broker available and let the public resource
+            # handler report a safe 413/507 response.
+            self._state.revision -= 1
+            raise
+        except EventStoreError:
+            self._enter_fatal_state_locked()
+            raise RuntimeStateError(
+                "The private Codex runtime state could not be saved."
+            ) from None
         except RuntimeStateError:
             self._enter_fatal_state_locked()
             raise
@@ -2778,6 +2980,92 @@ def _prompt(value: object) -> str:
     if len(value.encode("utf-8")) > 1024 * 1024:
         raise ValueError("prompt exceeds its limit")
     return value
+
+
+def _require_message_event_capacity(
+    *,
+    prompt: str,
+    client_request_id: str,
+    maximum_bytes: int,
+) -> None:
+    # Reserve for the longest accepted runtime identifier and the steer marker.
+    # This preflight runs before either a runtime lease or remote turn is mutated.
+    payload = {
+        "run_id": "r" * 128,
+        "role": "user",
+        "text": prompt,
+        "client_request_id": client_request_id,
+        "steered": True,
+    }
+    if _event_payload_bytes(payload) > maximum_bytes:
+        raise RuntimeEventPayloadTooLargeError()
+
+
+def _partition_patch_payloads(
+    *,
+    run_id: str,
+    changes: list[dict[str, object]],
+    maximum_bytes: int,
+) -> tuple[dict[str, object], ...]:
+    if not changes:
+        payload = {"run_id": run_id, "changes": []}
+        return (payload,) if _event_payload_bytes(payload) <= maximum_bytes else ()
+
+    groups: list[list[dict[str, object]]] = []
+    current: list[dict[str, object]] = []
+    # Use the largest possible chunk metadata while grouping so replacing it
+    # with the real values can never push a serialized event over the limit.
+    reserved_metadata = {"chunk_index": 255, "chunk_count": 256}
+    for change in changes:
+        candidate = [*current, change]
+        payload = {
+            "run_id": run_id,
+            "changes": candidate,
+            **reserved_metadata,
+        }
+        if _event_payload_bytes(payload) <= maximum_bytes:
+            current = candidate
+            continue
+        if not current:
+            # A protocol update that cannot fit even one bounded change is
+            # ignored rather than converting a notification into fatal state.
+            return ()
+        groups.append(current)
+        current = [change]
+        payload = {
+            "run_id": run_id,
+            "changes": current,
+            **reserved_metadata,
+        }
+        if _event_payload_bytes(payload) > maximum_bytes:
+            return ()
+    groups.append(current)
+
+    if len(groups) == 1:
+        payload = {"run_id": run_id, "changes": groups[0]}
+        return (payload,) if _event_payload_bytes(payload) <= maximum_bytes else ()
+    chunk_count = len(groups)
+    return tuple(
+        {
+            "run_id": run_id,
+            "changes": group,
+            "chunk_index": index,
+            "chunk_count": chunk_count,
+        }
+        for index, group in enumerate(groups)
+    )
+
+
+def _event_payload_bytes(payload: dict[str, object]) -> int:
+    return len(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
 
 
 def _identifier(value: object, *, limit: int, label: str) -> str:

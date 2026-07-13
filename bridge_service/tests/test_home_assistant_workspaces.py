@@ -118,7 +118,9 @@ def test_home_assistant_threads_and_events_keep_workspace_paths_relative(tmp_pat
     assert direct_thread.workspace_path.startswith("ws_")
     assert "/" not in direct_thread.workspace_path
     assert direct_thread.project_root_path == "."
-    assert event.payload["workspace_path"] == direct_thread.workspace_path
+    assert event.payload["workspace_id"] == direct_thread.workspace_id
+    assert "workspace_path" not in event.payload
+    assert str(workspace_root) not in json.dumps(event.payload)
     assert storage.resolve_workspace_path(project_thread.workspace_path) == (
         workspace_root / "projects" / "bridge"
     )

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..auth import require_bridge_token
+from ..event_store import ThreadEventSequenceExpiredError
 from ..models import ThreadEventRecord
 from ..storage import ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
@@ -30,6 +31,8 @@ def stream_thread_events(
             status_code=404,
             detail="thread not found",
         ) from exc
+    except ThreadEventSequenceExpiredError as exc:
+        raise _thread_cursor_expired(exc) from None
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workspace path not found") from exc
     except WorkspaceBoundaryError as exc:
@@ -60,7 +63,25 @@ def replay_thread_events(
         return request.app.state.storage.list_thread_events(thread_id, after=after)
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except ThreadEventSequenceExpiredError as exc:
+        raise _thread_cursor_expired(exc) from None
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workspace path not found") from exc
     except WorkspaceBoundaryError as exc:
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
+
+
+def _thread_cursor_expired(error: ThreadEventSequenceExpiredError) -> HTTPException:
+    return HTTPException(
+        status_code=410,
+        detail={
+            "code": "thread_event_cursor_expired",
+            "retryable": False,
+            "minimum_sequence": error.minimum_sequence,
+            "snapshot": {
+                "required": True,
+                "cursor": error.snapshot_cursor,
+                "thread_id": error.thread_id,
+            },
+        },
+    )

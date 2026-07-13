@@ -43,6 +43,8 @@ def test_resource_limit_defaults_match_the_home_assistant_host_budget() -> None:
     assert limits.max_archive_metadata_bytes == 16 * MIB
     assert limits.max_events_per_thread == 25_000
     assert limits.max_event_log_bytes == 50 * MIB
+    assert limits.max_event_payload_bytes == MIB
+    assert limits.max_event_journal_bytes == 512 * MIB
     assert limits.service_log_file_bytes == 10 * MIB
     assert limits.service_log_backups == 10
 

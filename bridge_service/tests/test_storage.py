@@ -697,14 +697,18 @@ def test_thread_metadata_mutation_cannot_resurrect_concurrent_delete(
     storage._thread_mutation_lock = mutation_lock
     save_entered = Event()
     release_save = Event()
-    original_save_thread = storage.save_thread
+    original_commit = storage._commit_prepared_thread_with_events_locked
 
-    def blocked_save_thread(record) -> None:
+    def blocked_commit(record, events) -> None:
         save_entered.set()
         assert release_save.wait(2)
-        original_save_thread(record)
+        original_commit(record, events)
 
-    monkeypatch.setattr(storage, "save_thread", blocked_save_thread)
+    monkeypatch.setattr(
+        storage,
+        "_commit_prepared_thread_with_events_locked",
+        blocked_commit,
+    )
     mutate = {
         "update": lambda thread_id: storage.update_thread(
             thread_id,

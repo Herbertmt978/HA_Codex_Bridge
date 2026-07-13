@@ -4,8 +4,16 @@ import subprocess
 import time
 from threading import Event
 
+import pytest
+
 from codex_bridge_service.codex_process import codex_subprocess_environment
-from codex_bridge_service.models import DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, RunMode
+from codex_bridge_service.event_store import InjectedOutboxCrash
+from codex_bridge_service.models import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING_LEVEL,
+    PendingPromptRecord,
+    RunMode,
+)
 from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
 
@@ -39,8 +47,20 @@ print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "outpu
 def _wait_for_idle(storage: BridgeStorage, thread_id: str) -> None:
     deadline = time.time() + 5
     while time.time() < deadline:
-        if storage.load_thread(thread_id).status != "running":
-            return
+        events = storage.list_thread_events(thread_id)
+        submitted_run_ids = [
+            event.payload.get("run_id")
+            for event in events
+            if event.event_type == "message.created"
+        ]
+        if submitted_run_ids and storage.load_thread(thread_id).status != "running":
+            current_run_id = submitted_run_ids[-1]
+            if any(
+                event.event_type in {"run.completed", "run.failed", "run.cancelled"}
+                and event.payload.get("run_id") == current_run_id
+                for event in events
+            ):
+                return
         time.sleep(0.05)
     raise AssertionError("thread did not return to idle in time")
 
@@ -235,6 +255,105 @@ def test_runner_queues_steer_prompt_submitted_while_run_is_active(tmp_path, monk
     assert [event.event_type for event in events].count("message.created") == 2
     assert any(event.event_type == "run.queued" for event in events)
     assert [event.event_type for event in events].count("run.completed") == 2
+
+
+def test_runner_prompt_submission_recovers_its_state_and_event_after_outbox_crash(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+
+    def crash_after_prepare(point: str) -> None:
+        if point == "after_outbox_commit":
+            raise InjectedOutboxCrash()
+
+    storage.durable_outbox.failure_injector = crash_after_prepare
+    runner = BridgeRunner(storage=storage, codex_command="codex")
+    monkeypatch.setattr(
+        runner,
+        "_start_worker",
+        lambda *_args: pytest.fail("the worker must not start before durable acceptance"),
+    )
+
+    with pytest.raises(InjectedOutboxCrash):
+        runner.submit_prompt(thread.thread_id, "Persist this prompt atomically")
+
+    storage.event_store.close()
+    recovered = BridgeStorage(root_path=tmp_path)
+    try:
+        saved = recovered.load_thread(thread.thread_id)
+        message_events = [
+            event
+            for event in recovered.event_store.replay_thread(thread.thread_id)
+            if event.event_type == "message.created"
+        ]
+
+        assert saved.status == "running"
+        assert saved.active_run_id == message_events[0].payload["run_id"]
+        assert [event.payload["text"] for event in message_events] == [
+            "Persist this prompt atomically"
+        ]
+    finally:
+        recovered.event_store.close()
+
+
+def test_runner_cancellation_recovers_state_and_queue_events_after_outbox_crash(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = _create_project_thread(storage, tmp_path)
+    record = storage.load_thread(thread.thread_id)
+    record.status = "running"
+    record.active_run_id = "run_active"
+    record.pending_prompts.append(
+        PendingPromptRecord(
+            run_id="run_queued",
+            prompt="Queued follow-up",
+            created_at=storage._now(),
+        )
+    )
+    storage.save_thread(record)
+
+    def crash_after_prepare(point: str) -> None:
+        if point == "after_outbox_commit":
+            raise InjectedOutboxCrash()
+
+    storage.durable_outbox.failure_injector = crash_after_prepare
+    runner = BridgeRunner(
+        storage=storage,
+        codex_command="codex",
+        recover_stale_runs=False,
+    )
+
+    with pytest.raises(InjectedOutboxCrash):
+        runner.cancel_run(thread.thread_id)
+
+    storage.event_store.close()
+    recovered = BridgeStorage(root_path=tmp_path)
+    try:
+        saved = recovered.load_thread(thread.thread_id)
+        raw = json.loads(
+            recovered._thread_path(thread.thread_id).read_text(encoding="utf-8")
+        )
+        terminal_events = [
+            event
+            for event in recovered.event_store.replay_thread(thread.thread_id)
+            if event.event_type in {"run.cancelled", "run.queue_cleared"}
+        ]
+
+        assert saved.status == "idle"
+        assert saved.active_run_id is None
+        assert saved.pending_prompts == []
+        assert [event.event_type for event in terminal_events] == [
+            "run.cancelled",
+            "run.queue_cleared",
+        ]
+        assert {event.operation_id for event in terminal_events} == {
+            raw["_bridge_operation"]["operation_id"]
+        }
+    finally:
+        recovered.event_store.close()
 
 
 def test_runner_marks_thread_error_and_limits_blocked_after_credit_failure(tmp_path, monkeypatch) -> None:

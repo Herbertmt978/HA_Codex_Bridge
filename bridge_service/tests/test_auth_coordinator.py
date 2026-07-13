@@ -16,6 +16,7 @@ from codex_bridge_service.auth_coordinator import (
     CodexAuthCoordinator,
 )
 from codex_bridge_service.codex_app_server import AppServerNotification
+from codex_bridge_service.models import CodexAuthStatusRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,9 +55,7 @@ class FakeAppServerClient:
         timeout_seconds: float | None = None,
     ) -> Any:
         with self._lock:
-            self.calls.append(
-                AppServerCall(method, deepcopy(params), timeout_seconds)
-            )
+            self.calls.append(AppServerCall(method, deepcopy(params), timeout_seconds))
             if not self._replies[method]:
                 raise AssertionError(f"no scripted reply for {method}")
             reply = self._replies[method].popleft()
@@ -304,7 +303,9 @@ def test_device_login_rejects_unsafe_verification_urls(
 
 def test_matching_generation_and_login_id_complete_login_with_final_read() -> None:
     client = FakeAppServerClient(generation=7)
-    client.script("account/read", _signed_out_account(), _chatgpt_account(plan_type="pro"))
+    client.script(
+        "account/read", _signed_out_account(), _chatgpt_account(plan_type="pro")
+    )
     client.script("account/login/start", _device_login("login-correct"))
     states: list[Any] = []
     coordinator = _coordinator(client, states)
@@ -327,9 +328,7 @@ def test_matching_generation_and_login_id_complete_login_with_final_read() -> No
     assert status.verification_uri is None
     assert status.login_url is None
     assert status.user_code is None
-    assert client.calls[-1] == AppServerCall(
-        "account/read", {"refreshToken": False}
-    )
+    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
     _assert_monotonic(states)
 
 
@@ -480,7 +479,9 @@ def test_failed_logout_retains_the_known_account_and_blocks_login(
 
 def test_restart_reconciles_persisted_login_with_account_read() -> None:
     client = FakeAppServerClient(generation=1)
-    client.script("account/read", _signed_out_account(), _chatgpt_account(plan_type="team"))
+    client.script(
+        "account/read", _signed_out_account(), _chatgpt_account(plan_type="team")
+    )
     coordinator = _coordinator(client)
     first = coordinator.start()
     client.generation = 2
@@ -491,9 +492,7 @@ def test_restart_reconciles_persisted_login_with_account_read() -> None:
     assert recovered.state == "ok"
     assert recovered.auth_mode == "chatgpt"
     assert recovered.plan_type == "team"
-    assert client.calls[-1] == AppServerCall(
-        "account/read", {"refreshToken": False}
-    )
+    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
 
 
 def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None:
@@ -512,9 +511,7 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     assert recovered.revision > active.revision
     assert recovered.verification_uri is None
     assert recovered.user_code is None
-    assert client.calls[-1] == AppServerCall(
-        "account/read", {"refreshToken": False}
-    )
+    assert client.calls[-1] == AppServerCall("account/read", {"refreshToken": False})
 
 
 def test_repeated_identical_failures_each_advance_revision_and_clear_codes() -> None:
@@ -646,7 +643,9 @@ def test_missing_device_authorization_reports_safe_recovery_guidance() -> None:
     assert "admin@example.test" not in status.message
 
 
-def test_auth_state_changes_publish_without_chat_context_and_repeat_occurrences() -> None:
+def test_auth_state_changes_publish_without_chat_context_and_repeat_occurrences() -> (
+    None
+):
     client = FakeAppServerClient()
     client.script("account/read", _signed_out_account())
     states: list[Any] = []
@@ -679,6 +678,46 @@ def test_state_listener_can_reenter_status_without_the_coordinator_lock() -> Non
     status = coordinator.start()
 
     assert observed == [status.revision]
+
+
+def test_durable_initial_auth_revision_continues_monotonically() -> None:
+    client = FakeAppServerClient()
+    client.script("account/read", _signed_out_account())
+    states: list[CodexAuthStatusRecord] = []
+    initial = CodexAuthStatusRecord(
+        revision=7,
+        state="unavailable",
+        auth_required=True,
+        message="Previous safe status.",
+        updated_at="2026-07-12T10:00:00Z",
+    )
+    coordinator = CodexAuthCoordinator(
+        client,
+        initial_status=initial,
+        state_listener=states.append,
+    )
+
+    status = coordinator.start()
+
+    assert status.revision == 8
+    assert [state.revision for state in states] == [8]
+
+
+def test_fatal_durable_listener_failure_propagates_to_the_owner() -> None:
+    client = FakeAppServerClient()
+    client.script("account/read", _signed_out_account())
+
+    def fail(_status: CodexAuthStatusRecord) -> None:
+        raise RuntimeError("durable sink unavailable")
+
+    coordinator = CodexAuthCoordinator(
+        client,
+        state_listener=fail,
+        state_listener_fatal=True,
+    )
+
+    with pytest.raises(RuntimeError, match="durable sink unavailable"):
+        coordinator.start()
 
 
 def test_sparse_account_updates_preserve_auth_and_merge_plan_fields() -> None:

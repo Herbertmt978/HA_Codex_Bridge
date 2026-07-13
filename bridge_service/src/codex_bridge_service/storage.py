@@ -12,6 +12,7 @@ from uuid import uuid4
 import zipfile
 
 from .codex_auth import AUTH_EXPIRED_MESSAGE
+from .event_store import BridgeEventStore, DurableOutbox, EventDraft, OutboxWrite
 from .limits import CodexLimitsProbe
 from .models import (
     DEFAULT_MODEL,
@@ -154,6 +155,9 @@ class BridgeStorage:
         runtime_profile: RuntimeProfile | str = RuntimeProfile.EXTERNAL_LEGACY,
         workspace_root: Path | str | None = None,
         resource_limits: ResourceLimits | None = None,
+        event_store: BridgeEventStore | None = None,
+        durable_outbox: DurableOutbox | None = None,
+        outbox_failure_injector: Callable[[str], None] | None = None,
     ) -> None:
         try:
             self.runtime_profile = RuntimeProfile(runtime_profile)
@@ -267,6 +271,35 @@ class BridgeStorage:
             self.workspaces_dir.mkdir(parents=True, exist_ok=True)
             self.project_workspaces_dir.mkdir(parents=True, exist_ok=True)
 
+        if durable_outbox is not None:
+            if outbox_failure_injector is not None:
+                raise ValueError(
+                    "an outbox failure injector requires storage-owned outbox setup"
+                )
+            resolved_event_store = event_store or durable_outbox.event_store
+            if durable_outbox.event_store is not resolved_event_store:
+                raise ValueError("event store and durable outbox do not match")
+            self.event_store = resolved_event_store
+            self.durable_outbox = durable_outbox
+        else:
+            limits = self.resource_limits or resource_limits or ResourceLimits()
+            self.event_store = event_store or BridgeEventStore(
+                self.root / "events.sqlite3",
+                max_event_payload_bytes=limits.max_event_payload_bytes,
+                max_events_per_thread=limits.max_events_per_thread,
+                max_thread_event_bytes=limits.max_event_log_bytes,
+                max_events_per_non_thread_scope=limits.max_events_per_thread,
+                max_non_thread_event_bytes=limits.max_event_log_bytes,
+                max_journal_bytes=limits.max_event_journal_bytes,
+            )
+            self.durable_outbox = DurableOutbox(
+                self.event_store,
+                state_root=self.root,
+                failure_injector=outbox_failure_injector,
+            )
+        self._import_legacy_event_logs()
+        self.durable_outbox.reconcile()
+
     def _now(self) -> str:
         return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -278,6 +311,16 @@ class BridgeStorage:
 
     def _event_log_path(self, thread_id: str) -> Path:
         return self.logs_dir / f"{thread_id}.events.jsonl"
+
+    def _import_legacy_event_logs(self) -> None:
+        suffix = ".events.jsonl"
+        for path in sorted(
+            self.logs_dir.glob(f"*{suffix}"), key=lambda item: item.name
+        ):
+            thread_id = path.name[: -len(suffix)]
+            if not thread_id:
+                continue
+            self.event_store.import_legacy_jsonl(path, thread_id=thread_id)
 
     def _atomic_write_json(self, target: Path, payload: dict[str, object]) -> None:
         temp_target = target.with_name(f"{target.name}.{uuid4().hex}.tmp")
@@ -1496,11 +1539,13 @@ class BridgeStorage:
             updated_at=now,
             archived_at=None,
         )
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="thread.created",
-            payload={
+        self._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="thread.created",
+                payload={
                 "title": record.title,
                 "project_id": project.project_id,
                 "project_name": project.name,
@@ -1510,7 +1555,8 @@ class BridgeStorage:
                 "model_override": record.model_override,
                 "thinking_override": record.thinking_override,
                 "created_at": record.created_at,
-            },
+                },
+            ),
         )
         return self._resolve_thread(record)
 
@@ -1539,16 +1585,19 @@ class BridgeStorage:
                 if thinking_override is not _UNSET:
                     record.thinking_override = thinking_override
                 self._touch_thread(record)
-                self.save_thread(record)
-                self.append_thread_event(
-                    thread_id=record.thread_id,
-                    event_type="thread.updated",
-                    payload={
+                self._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=record.thread_id,
+                        event_type="thread.updated",
+                        payload={
                         "title": record.title,
                         "mode": record.mode.value,
                         "model_override": record.model_override,
                         "thinking_override": record.thinking_override,
-                    },
+                        },
+                    ),
                 )
                 return self._resolve_thread(record)
 
@@ -1558,11 +1607,14 @@ class BridgeStorage:
                 record = self.load_thread(thread_id)
                 record.archived_at = self._now()
                 self._touch_thread(record)
-                self.save_thread(record)
-                self.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="thread.archived",
-                    payload={"archived_at": record.archived_at},
+                self._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="thread.archived",
+                        payload={"archived_at": record.archived_at},
+                    ),
                 )
                 return self._resolve_thread(record)
 
@@ -1572,17 +1624,24 @@ class BridgeStorage:
                 record = self.load_thread(thread_id)
                 record.archived_at = None
                 self._touch_thread(record)
-                self.save_thread(record)
-                self.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="thread.restored",
-                    payload={"restored_at": record.updated_at},
+                self._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="thread.restored",
+                        payload={"restored_at": record.updated_at},
+                    ),
                 )
                 return self._resolve_thread(record)
 
     def delete_thread(self, thread_id: str) -> None:
         with self._thread_mutation_lock:
             record = self.load_thread(thread_id)
+            # Remove replayable prompts/deltas before deleting metadata. If a
+            # later filesystem cleanup fails, privacy fails closed and a retry
+            # can finish the remaining idempotent deletion work.
+            self.event_store.purge_thread(thread_id)
             if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                 artifacts_boundary = self._home_assistant_artifacts_boundary()
                 for artifact in record.artifacts:
@@ -1611,31 +1670,63 @@ class BridgeStorage:
 
     def save_thread(self, record: ThreadRecord) -> None:
         with self._thread_mutation_lock:
-            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
-                boundary = self._home_assistant_boundary()
-                record.workspace_path = boundary.normalize(record.workspace_path)
-                boundary.resolve_relative(
-                    record.workspace_path, must_exist=True, kind="directory"
-                )
-                if record.project_id is None:
-                    raise WorkspaceInputError()
-                self._validate_thread_project_workspace(
-                    record,
-                    self.load_project(record.project_id),
-                )
-                self._validate_thread_attachments(record)
-                self._validate_thread_artifacts(record)
-                self._merge_persisted_home_assistant_attachments(record)
-                self._merge_persisted_home_assistant_artifacts(record)
-                self._validate_thread_attachments(record)
-                self._validate_thread_artifacts(record)
-            if not record.created_at:
-                record.created_at = self._now()
-            if not record.updated_at:
-                record.updated_at = record.created_at
+            self._prepare_thread_for_save_locked(record)
             self._atomic_write_json(
                 self._thread_path(record.thread_id), record.model_dump()
             )
+
+    def _save_thread_with_events(
+        self,
+        record: ThreadRecord,
+        *events: EventDraft,
+    ) -> None:
+        """Commit canonical thread metadata and its public events together."""
+        with self._thread_mutation_lock:
+            self._prepare_thread_for_save_locked(record)
+            self._commit_prepared_thread_with_events_locked(record, events)
+
+    def _commit_prepared_thread_with_events_locked(
+        self,
+        record: ThreadRecord,
+        events: tuple[EventDraft, ...],
+    ) -> None:
+        relative_path = f"threads/{record.thread_id}.json"
+        revision = self.durable_outbox.next_state_revision(relative_path)
+        self.durable_outbox.commit_operation(
+            operation_id=f"thread-state:{record.thread_id}:{revision}:{uuid4().hex}",
+            writes=(
+                OutboxWrite(
+                    relative_path=relative_path,
+                    state_revision=revision,
+                    state_payload=record.model_dump(mode="json"),
+                ),
+            ),
+            events=events,
+        )
+
+    def _prepare_thread_for_save_locked(self, record: ThreadRecord) -> None:
+        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            boundary = self._home_assistant_boundary()
+            record.workspace_path = boundary.normalize(record.workspace_path)
+            boundary.resolve_relative(
+                record.workspace_path, must_exist=True, kind="directory"
+            )
+            if record.project_id is None:
+                raise WorkspaceInputError()
+            self._validate_thread_project_workspace(
+                record,
+                self.load_project(record.project_id),
+            )
+            self._validate_thread_attachments(record)
+            self._validate_thread_artifacts(record)
+            self._merge_persisted_home_assistant_attachments(record)
+            self._merge_persisted_home_assistant_artifacts(record)
+            self._validate_thread_attachments(record)
+            self._validate_thread_artifacts(record)
+        if not record.created_at:
+            record.created_at = self._now()
+        if not record.updated_at:
+            record.updated_at = record.created_at
 
     def _merge_persisted_home_assistant_attachments(self, record: ThreadRecord) -> None:
         """Preserve append-only attachment metadata across stale thread writers."""
@@ -1751,8 +1842,6 @@ class BridgeStorage:
             record.last_error = message
             record.pending_prompts.clear()
             self._touch_thread(record)
-            self._atomic_write_json(target, record.model_dump())
-
             payload: dict[str, object] = {
                 "run_id": run_id,
                 "error": message,
@@ -1761,20 +1850,30 @@ class BridgeStorage:
             }
             if auth_required:
                 payload["auth_required"] = True
-            self.append_thread_event(
-                thread_id=thread_id,
-                event_type="run.failed",
-                payload=payload,
-            )
-            if queued_count:
-                self.append_thread_event(
+            events = [
+                EventDraft(
+                    scope="thread",
                     thread_id=thread_id,
-                    event_type="run.queue_cleared",
-                    payload={
-                        "reason": "active run failed",
-                        "queued_count": queued_count,
-                    },
+                    event_type="run.failed",
+                    payload=payload,
                 )
+            ]
+            if queued_count:
+                events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "active run failed",
+                            "queued_count": queued_count,
+                        },
+                    )
+                )
+            # This fallback intentionally bypasses workspace validation, but
+            # the validated private record and its public terminal events must
+            # still cross the durability boundary as one operation.
+            self._commit_prepared_thread_with_events_locked(record, tuple(events))
             return True
 
     def _ensure_thread_project(self, record: ThreadRecord) -> ThreadRecord:
@@ -1846,39 +1945,39 @@ class BridgeStorage:
         event_type: str,
         payload: dict[str, object],
     ) -> ThreadEventRecord:
-        with self._event_lock:
-            sequence = self._next_thread_event_sequence(thread_id)
-            record = ThreadEventRecord(
-                event_id=f"evt_{uuid4().hex[:12]}",
-                thread_id=thread_id,
-                sequence=sequence,
-                event_type=event_type,
-                payload=payload,
-                timestamp=self._now(),
-            )
-            target = self._event_log_path(thread_id)
-            with target.open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(record.model_dump()))
-                stream.write("\n")
-            self._event_next_sequences[thread_id] = sequence + 1
-            return record
+        stored = self.event_store.append(
+            operation_key=f"thread:{thread_id}:{uuid4().hex}",
+            scope="thread",
+            thread_id=thread_id,
+            event_type=event_type,
+            payload=payload,
+        )
+        return ThreadEventRecord(
+            event_id=stored.event_id,
+            thread_id=thread_id,
+            sequence=stored.scope_sequence,
+            event_type=stored.event_type,
+            payload=stored.payload,
+            timestamp=stored.timestamp,
+        )
 
     def list_thread_events(
         self, thread_id: str, *, after: int | None = None
     ) -> list[ThreadEventRecord]:
-        target = self._event_log_path(thread_id)
-        if not target.exists():
-            return []
-
-        events: list[ThreadEventRecord] = []
-        with target.open("r", encoding="utf-8") as stream:
-            for line in stream:
-                if not line.strip():
-                    continue
-                event = ThreadEventRecord.model_validate_json(line)
-                if after is None or event.sequence > after:
-                    events.append(event)
-        return events
+        return [
+            ThreadEventRecord(
+                event_id=event.event_id,
+                thread_id=thread_id,
+                sequence=event.scope_sequence,
+                event_type=event.event_type,
+                payload=event.payload,
+                timestamp=event.timestamp,
+            )
+            for event in self.event_store.replay_thread(
+                thread_id,
+                after_sequence=after,
+            )
+        ]
 
     def _next_thread_event_sequence(self, thread_id: str) -> int:
         cached = self._event_next_sequences.get(thread_id)
@@ -1958,18 +2057,21 @@ class BridgeStorage:
         )
         record.attachments.append(attachment)
         self._touch_thread(record)
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=thread_id,
-            event_type="attachment.added",
-            payload={
-                "attachment_id": attachment.attachment_id,
-                "filename": attachment.filename,
-                "mime_type": attachment.mime_type,
-                "stored_path": attachment.stored_path,
-                "relative_path": attachment.relative_path,
-                "size_bytes": attachment.size_bytes,
-            },
+        self._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=thread_id,
+                event_type="attachment.added",
+                payload={
+                    "attachment_id": attachment.attachment_id,
+                    "filename": attachment.filename,
+                    "mime_type": attachment.mime_type,
+                    "stored_path": attachment.stored_path,
+                    "relative_path": attachment.relative_path,
+                    "size_bytes": attachment.size_bytes,
+                },
+            ),
         )
         return attachment
 
@@ -2068,21 +2170,23 @@ class BridgeStorage:
                 record = self.load_thread(thread_id)
                 record.attachments.append(attachment)
                 self._touch_thread(record)
-                self.save_thread(record)
-                metadata_saved = True
-
-                self.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="attachment.added",
-                    payload={
-                        "attachment_id": attachment.attachment_id,
-                        "filename": attachment.filename,
-                        "mime_type": attachment.mime_type,
-                        "stored_path": attachment.stored_path,
-                        "relative_path": attachment.relative_path,
-                        "size_bytes": attachment.size_bytes,
-                    },
+                self._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="attachment.added",
+                        payload={
+                            "attachment_id": attachment.attachment_id,
+                            "filename": attachment.filename,
+                            "mime_type": attachment.mime_type,
+                            "stored_path": attachment.stored_path,
+                            "relative_path": attachment.relative_path,
+                            "size_bytes": attachment.size_bytes,
+                        },
+                    ),
                 )
+                metadata_saved = True
             return attachment
         except BaseException:
             cleanup_succeeded = False
@@ -2118,7 +2222,7 @@ class BridgeStorage:
         known_by_path = {
             artifact.stored_path: artifact for artifact in record.artifacts
         }
-        added_any = False
+        events: list[EventDraft] = []
 
         for target in sorted(
             path for path in workspace_path.rglob("*") if path.is_file()
@@ -2139,23 +2243,27 @@ class BridgeStorage:
                 size_bytes=target.stat().st_size,
             )
             record.artifacts.append(artifact)
-            self.append_thread_event(
-                thread_id=thread_id,
-                event_type="artifact.added",
-                payload={
-                    "artifact_id": artifact.artifact_id,
-                    "filename": artifact.filename,
-                    "mime_type": artifact.mime_type,
-                    "stored_path": artifact.stored_path,
-                    "relative_path": artifact.relative_path,
-                    "size_bytes": artifact.size_bytes,
-                },
+            events.append(
+                EventDraft(
+                    scope="thread",
+                    thread_id=thread_id,
+                    event_type="artifact.added",
+                    payload={
+                        "artifact_id": artifact.artifact_id,
+                        "filename": artifact.filename,
+                        "mime_type": artifact.mime_type,
+                        "stored_path": artifact.stored_path,
+                        "relative_path": artifact.relative_path,
+                        "size_bytes": artifact.size_bytes,
+                    },
+                )
             )
-            added_any = True
 
-        if added_any:
+        if events:
             self._touch_thread(record)
-        self.save_thread(record)
+            self._save_thread_with_events(record, *events)
+        else:
+            self.save_thread(record)
         return record.artifacts
 
     def _sync_thread_artifacts_home_assistant(
@@ -2228,21 +2336,26 @@ class BridgeStorage:
 
             if added:
                 self._touch_thread(record)
-                self.save_thread(record)
-                for artifact in added:
-                    self.append_thread_event(
-                        thread_id=thread_id,
-                        event_type="artifact.added",
-                        payload={
-                            "artifact_id": artifact.artifact_id,
-                            "filename": artifact.filename,
-                            "mime_type": artifact.mime_type,
-                            "source": artifact.source.value,
-                            "stored_path": artifact.stored_path,
-                            "relative_path": artifact.relative_path,
-                            "size_bytes": artifact.size_bytes,
-                        },
-                    )
+                self._save_thread_with_events(
+                    record,
+                    *(
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="artifact.added",
+                            payload={
+                                "artifact_id": artifact.artifact_id,
+                                "filename": artifact.filename,
+                                "mime_type": artifact.mime_type,
+                                "source": artifact.source.value,
+                                "stored_path": artifact.stored_path,
+                                "relative_path": artifact.relative_path,
+                                "size_bytes": artifact.size_bytes,
+                            },
+                        )
+                        for artifact in added
+                    ),
+                )
             return record.artifacts
 
     def open_artifact(
@@ -2343,19 +2456,22 @@ class BridgeStorage:
         )
         record.artifacts.append(artifact)
         self._touch_thread(record)
-        self.save_thread(record)
-        self.append_thread_event(
-            thread_id=thread_id,
-            event_type="artifact.added",
-            payload={
-                "artifact_id": artifact.artifact_id,
-                "filename": artifact.filename,
-                "mime_type": artifact.mime_type,
-                "stored_path": artifact.stored_path,
-                "relative_path": artifact.relative_path,
-                "size_bytes": artifact.size_bytes,
-                "source": "workspace_archive",
-            },
+        self._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=thread_id,
+                event_type="artifact.added",
+                payload={
+                    "artifact_id": artifact.artifact_id,
+                    "filename": artifact.filename,
+                    "mime_type": artifact.mime_type,
+                    "stored_path": artifact.stored_path,
+                    "relative_path": artifact.relative_path,
+                    "size_bytes": artifact.size_bytes,
+                    "source": "workspace_archive",
+                },
+            ),
         )
         return artifact
 
@@ -2528,21 +2644,24 @@ class BridgeStorage:
                 record = self.load_thread(thread_id)
                 record.artifacts.append(artifact)
                 self._touch_thread(record)
-                self.save_thread(record)
-                metadata_saved = True
-                self.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="artifact.added",
-                    payload={
-                        "artifact_id": artifact.artifact_id,
-                        "filename": artifact.filename,
-                        "mime_type": artifact.mime_type,
-                        "source": artifact.source.value,
-                        "stored_path": artifact.stored_path,
-                        "relative_path": artifact.relative_path,
-                        "size_bytes": artifact.size_bytes,
-                    },
+                self._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="artifact.added",
+                        payload={
+                            "artifact_id": artifact.artifact_id,
+                            "filename": artifact.filename,
+                            "mime_type": artifact.mime_type,
+                            "source": artifact.source.value,
+                            "stored_path": artifact.stored_path,
+                            "relative_path": artifact.relative_path,
+                            "size_bytes": artifact.size_bytes,
+                        },
+                    ),
                 )
+                metadata_saved = True
             return artifact
         except BaseException:
             cleanup_succeeded = stored_locator is None

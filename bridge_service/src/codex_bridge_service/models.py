@@ -1,8 +1,8 @@
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .api_contract import API_CONTRACT, ApiContractRecord
 from .workspace import normalize_portable_relative_path
@@ -57,6 +57,12 @@ class ArtifactSource(StrEnum):
     WORKSPACE_ARCHIVE = "workspace_archive"
 
 
+class EventScope(StrEnum):
+    AUTH = "auth"
+    RUNTIME = "runtime"
+    THREAD = "thread"
+
+
 class AttachmentRecord(BaseModel):
     attachment_id: str
     filename: str
@@ -96,6 +102,51 @@ class ThreadEventRecord(BaseModel):
     event_type: str
     payload: dict[str, Any] = Field(default_factory=dict)
     timestamp: str
+
+
+class EventRecord(BaseModel):
+    """Safe API v1 projection of one globally ordered Bridge event."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cursor: int = Field(ge=1)
+    event_id: str = Field(min_length=1, max_length=128)
+    scope: EventScope
+    thread_id: str | None = Field(default=None, min_length=1, max_length=128)
+    event_type: str = Field(min_length=1, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_thread_scope(self) -> Self:
+        if self.scope is EventScope.THREAD and self.thread_id is None:
+            raise ValueError("thread events require a thread identifier")
+        if self.scope is not EventScope.THREAD and self.thread_id is not None:
+            raise ValueError("only thread events may include a thread identifier")
+        return self
+
+
+class EventBatchRecord(BaseModel):
+    """Bounded replay/wait result addressed by a global cursor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    events: list[EventRecord] = Field(default_factory=list)
+    next_cursor: int = Field(ge=0)
+    minimum_cursor: int = Field(ge=0)
+    has_more: bool = False
+    heartbeat: bool = False
+
+    @model_validator(mode="after")
+    def validate_cursor_order(self) -> Self:
+        cursors = [event.cursor for event in self.events]
+        if any(current <= previous for previous, current in zip(cursors, cursors[1:])):
+            raise ValueError("event cursors must be strictly increasing")
+        if cursors and self.next_cursor < cursors[-1]:
+            raise ValueError("next cursor cannot precede the last event")
+        if self.heartbeat and (self.events or self.has_more):
+            raise ValueError("heartbeat batches cannot include events or more pages")
+        return self
 
 
 class PendingPromptRecord(BaseModel):

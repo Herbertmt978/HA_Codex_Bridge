@@ -6,6 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
+from codex_bridge_service.event_store import (
+    DurableOperationTooLargeError,
+    EventPayloadTooLargeError,
+    EventStoreCapacityError,
+)
 from codex_bridge_service.models import (
     DEFAULT_MODEL,
     DEFAULT_THINKING_LEVEL,
@@ -70,6 +75,106 @@ class BusyDeleteRunner(FakeRunner):
 
     def delete_project(self, _project_id: str) -> None:
         raise RuntimeThreadBusyError()
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected_status", "expected_detail"),
+    [
+        (
+            EventStoreCapacityError,
+            507,
+            {
+                "code": "event_store_capacity_exhausted",
+                "resource": "event_store",
+                "retryable": True,
+            },
+        ),
+        (
+            DurableOperationTooLargeError,
+            413,
+            {
+                "code": "durable_operation_too_large",
+                "resource": "durable_operation",
+                "retryable": False,
+            },
+        ),
+        (
+            EventPayloadTooLargeError,
+            413,
+            {
+                "code": "event_payload_too_large",
+                "resource": "event_payload",
+                "retryable": False,
+            },
+        ),
+    ],
+)
+def test_durable_event_errors_have_stable_resource_responses_for_mutations(
+    tmp_path,
+    monkeypatch,
+    error_type,
+    expected_status: int,
+    expected_detail: dict[str, object],
+) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+    project = app.state.storage.create_project(
+        name="Thread project",
+        root_path=str(tmp_path / "thread-project"),
+    )
+    thread = app.state.storage.create_thread(
+        title="Attachment thread",
+        project_id=project.project_id,
+        mode=RunMode.EDIT,
+    )
+
+    def fail_project(**_kwargs):
+        raise error_type("durable event write failed")
+
+    monkeypatch.setattr(app.state.storage, "create_project", fail_project)
+    project_response = client.post(
+        "/projects",
+        headers=headers,
+        json={"name": "Event failure", "root_path": str(tmp_path / "project")},
+    )
+
+    assert project_response.status_code == expected_status
+    assert project_response.json() == {"detail": expected_detail}
+
+    def fail_thread(**_kwargs):
+        raise error_type("durable event write failed")
+
+    monkeypatch.setattr(app.state.storage, "create_thread", fail_thread)
+    thread_response = client.post(
+        "/threads",
+        headers=headers,
+        json={
+            "title": "Event failure",
+            "project_id": project.project_id,
+            "mode": "edit",
+        },
+    )
+
+    assert thread_response.status_code == expected_status
+    assert thread_response.json() == {"detail": expected_detail}
+
+    def fail_attachment(**_kwargs):
+        raise error_type("durable event write failed")
+
+    monkeypatch.setattr(app.state.storage, "attach_file", fail_attachment)
+    attachment_response = client.post(
+        f"/threads/{thread.thread_id}/attachments",
+        headers=headers,
+        files={"file": ("event.bin", b"event", "application/octet-stream")},
+    )
+
+    assert attachment_response.status_code == expected_status
+    assert attachment_response.json() == {"detail": expected_detail}
 
 
 class FakeAccountProbe:

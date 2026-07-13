@@ -78,17 +78,24 @@ class CodexAuthCoordinator:
         client: _AuthAppServerClient,
         *,
         state_listener: Callable[[CodexAuthStatusRecord], None] | None = None,
+        initial_status: CodexAuthStatusRecord | None = None,
+        state_listener_fatal: bool = False,
         runtime_gate: RuntimeGate | None = None,
     ) -> None:
         self._client = client
         self._state_listener = state_listener
+        self._state_listener_fatal = state_listener_fatal
         self._runtime_gate = runtime_gate
         self._lock = Lock()
-        self._status = CodexAuthStatusRecord(
-            message=MESSAGE_UNKNOWN,
-            updated_at=now(),
+        self._status = (
+            initial_status.model_copy(deep=True)
+            if initial_status is not None
+            else CodexAuthStatusRecord(
+                message=MESSAGE_UNKNOWN,
+                updated_at=now(),
+            )
         )
-        self._revision = 0
+        self._revision = self._status.revision
         self._operation_sequence = 0
         self._operation: tuple[int, str] | None = None
         self._active_login_id: str | None = None
@@ -735,4 +742,9 @@ class CodexAuthCoordinator:
             try:
                 listener(pending)
             except Exception:
-                pass
+                if not self._state_listener_fatal:
+                    continue
+                with self._lock:
+                    self._notification_queue.clear()
+                    self._notifying = False
+                raise

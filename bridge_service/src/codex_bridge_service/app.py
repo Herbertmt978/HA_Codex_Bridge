@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -6,6 +7,7 @@ from typing import Any, Protocol, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
 from .auth_coordinator import CodexAuthCoordinator
@@ -13,10 +15,16 @@ from .build_info import BuildInfo
 from .codex_app_server import CodexAppServerClient
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
+from .event_store import (
+    DurableOperationTooLargeError,
+    EventDraft,
+    EventPayloadTooLargeError,
+    EventStoreCapacityError,
+)
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
-from .models import RuntimeProfile
+from .models import CodexAuthStatusRecord, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
     ResourceLimitError,
@@ -31,6 +39,7 @@ from .routes import (
     health,
     projects,
     prompts,
+    runtime_events,
     status,
     threads,
 )
@@ -56,6 +65,46 @@ class _AuthCoordinatorLifecycle(Protocol):
     def start(self) -> object: ...
 
     def close(self) -> None: ...
+
+
+_AUTH_STATE_FILENAME = "auth-state.json"
+_OUTBOX_MARKER_FIELD = "_bridge_operation"
+
+
+def _load_durable_auth_status(path: Path) -> CodexAuthStatusRecord | None:
+    """Load the safe auth projection without trusting outbox metadata."""
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise ValueError("The durable authentication state is invalid.") from None
+    if not isinstance(raw, dict):
+        raise ValueError("The durable authentication state is invalid.")
+
+    payload = dict(raw)
+    marker = payload.pop(_OUTBOX_MARKER_FIELD, None)
+    try:
+        status = CodexAuthStatusRecord.model_validate(payload)
+    except ValidationError:
+        raise ValueError("The durable authentication state is invalid.") from None
+    if marker is None:
+        return status
+    if not isinstance(marker, dict) or set(marker) != {"operation_id", "revision"}:
+        raise ValueError("The durable authentication state marker is invalid.")
+    operation_id = marker.get("operation_id")
+    marker_revision = marker.get("revision")
+    if (
+        not isinstance(operation_id, str)
+        or not operation_id
+        or len(operation_id) > 256
+        or type(marker_revision) is not int
+        or marker_revision < 1
+        or marker_revision != status.revision
+    ):
+        raise ValueError("The durable authentication state marker is invalid.")
+    return status
 
 
 def create_app(
@@ -120,21 +169,15 @@ def create_app(
             )
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
-    if resolved_app_server is not None:
-        resolved_auth_coordinator = (
-            auth_coordinator_factory(resolved_app_server)
-            if auth_coordinator_factory is not None
-            else CodexAuthCoordinator(
-                cast(Any, resolved_app_server),
-                runtime_gate=resolved_runtime_gate,
-            )
-        )
     resolved_runner: Any = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if resolved_app_server is None:
-            yield
+            try:
+                yield
+            finally:
+                await asyncio.to_thread(storage.event_store.close)
             return
         try:
             await asyncio.to_thread(resolved_app_server.start)
@@ -146,21 +189,69 @@ def create_app(
             yield
         finally:
             try:
-                runner_close = getattr(resolved_runner, "close", None)
-                if callable(runner_close):
-                    await asyncio.to_thread(runner_close)
-            finally:
                 try:
-                    if resolved_auth_coordinator is not None:
-                        await asyncio.to_thread(resolved_auth_coordinator.close)
+                    runner_close = getattr(resolved_runner, "close", None)
+                    if callable(runner_close):
+                        await asyncio.to_thread(runner_close)
                 finally:
                     try:
-                        if resolved_runtime_gate is not None:
-                            await asyncio.to_thread(resolved_runtime_gate.close)
+                        if resolved_auth_coordinator is not None:
+                            await asyncio.to_thread(resolved_auth_coordinator.close)
                     finally:
-                        await asyncio.to_thread(resolved_app_server.close)
+                        try:
+                            if resolved_runtime_gate is not None:
+                                await asyncio.to_thread(resolved_runtime_gate.close)
+                        finally:
+                            await asyncio.to_thread(resolved_app_server.close)
+            finally:
+                await asyncio.to_thread(storage.event_store.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
+
+    @app.exception_handler(EventStoreCapacityError)
+    async def event_store_capacity_handler(
+        _request, _error: EventStoreCapacityError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=507,
+            content={
+                "detail": {
+                    "code": "event_store_capacity_exhausted",
+                    "resource": "event_store",
+                    "retryable": True,
+                }
+            },
+        )
+
+    @app.exception_handler(DurableOperationTooLargeError)
+    async def durable_operation_size_handler(
+        _request, _error: DurableOperationTooLargeError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=413,
+            content={
+                "detail": {
+                    "code": "durable_operation_too_large",
+                    "resource": "durable_operation",
+                    "retryable": False,
+                }
+            },
+        )
+
+    @app.exception_handler(EventPayloadTooLargeError)
+    async def event_payload_size_handler(
+        _request, _error: EventPayloadTooLargeError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=413,
+            content={
+                "detail": {
+                    "code": "event_payload_too_large",
+                    "resource": "event_payload",
+                    "retryable": False,
+                }
+            },
+        )
 
     @app.exception_handler(ResourceLimitError)
     async def resource_limit_handler(
@@ -238,6 +329,35 @@ def create_app(
         workspace_root=workspace_root,
         resource_limits=resolved_resource_limits,
     )
+    if resolved_app_server is not None:
+        if auth_coordinator_factory is not None:
+            resolved_auth_coordinator = auth_coordinator_factory(resolved_app_server)
+        else:
+            initial_auth_status = _load_durable_auth_status(
+                storage.root / _AUTH_STATE_FILENAME
+            )
+
+            def persist_auth_status(status: CodexAuthStatusRecord) -> None:
+                payload = status.model_dump(mode="json")
+                storage.durable_outbox.commit_json(
+                    operation_id=f"auth-status:{status.revision}",
+                    relative_path=_AUTH_STATE_FILENAME,
+                    state_revision=status.revision,
+                    state_payload=payload,
+                    event=EventDraft(
+                        scope="auth",
+                        event_type="auth.status_changed",
+                        payload=payload,
+                    ),
+                )
+
+            resolved_auth_coordinator = CodexAuthCoordinator(
+                cast(Any, resolved_app_server),
+                state_listener=persist_auth_status,
+                initial_status=initial_auth_status,
+                state_listener_fatal=True,
+                runtime_gate=resolved_runtime_gate,
+            )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
         assert limits is not None
@@ -262,6 +382,7 @@ def create_app(
                     defaults_provisional=False,
                 )
     app.state.storage = storage
+    app.state.event_store = storage.event_store
     app.state.auth_token = auth_token
     app.state.build_info = resolved_build_info
     app.state.codex_app_server = resolved_app_server
@@ -318,6 +439,7 @@ def create_app(
     app.include_router(health.router)
     app.include_router(projects.router)
     app.include_router(prompts.router)
+    app.include_router(runtime_events.router)
     app.include_router(status.router)
     app.include_router(threads.router)
     return app

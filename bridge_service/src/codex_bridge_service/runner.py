@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .codex_auth import AUTH_EXPIRED_MESSAGE, is_codex_auth_failure
 from .codex_process import codex_command_prefix, codex_subprocess_environment
+from .event_store import EventDraft
 from .models import (
     PendingPromptRecord,
     RunMode,
@@ -82,17 +83,20 @@ class BridgeRunner:
             record.status = "running"
             record.active_run_id = run.run_id
             record.last_error = None
-            self.storage.save_thread(record)
-            self.storage.clear_limits_blocked()
-            self.storage.append_thread_event(
-                thread_id=thread_id,
-                event_type="message.created",
-                payload={
-                    "run_id": run.run_id,
-                    "role": "user",
-                    "text": prompt,
-                },
+            self.storage._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread",
+                    thread_id=thread_id,
+                    event_type="message.created",
+                    payload={
+                        "run_id": run.run_id,
+                        "role": "user",
+                        "text": prompt,
+                    },
+                ),
             )
+            self.storage.clear_limits_blocked()
             self._start_worker(self.storage.get_thread(thread_id), run, prompt)
             return run
 
@@ -113,24 +117,30 @@ class BridgeRunner:
             record.last_error = "Run cancelled"
             queued_count = len(record.pending_prompts)
             record.pending_prompts.clear()
-            self.storage.save_thread(record)
-            self.storage.append_thread_event(
-                thread_id=thread_id,
-                event_type="run.cancelled",
-                payload={
-                    "run_id": run_id,
-                    "reason": "cancelled by user",
-                },
-            )
-            if queued_count:
-                self.storage.append_thread_event(
+            events = [
+                EventDraft(
+                    scope="thread",
                     thread_id=thread_id,
-                    event_type="run.queue_cleared",
+                    event_type="run.cancelled",
                     payload={
-                        "reason": "active run cancelled",
-                        "queued_count": queued_count,
+                        "run_id": run_id,
+                        "reason": "cancelled by user",
                     },
                 )
+            ]
+            if queued_count:
+                events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "active run cancelled",
+                            "queued_count": queued_count,
+                        },
+                    )
+                )
+            self.storage._save_thread_with_events(record, *events)
             return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
 
     def _queue_prompt(self, record: ThreadRecord, prompt: str) -> RunRecord:
@@ -141,24 +151,28 @@ class BridgeRunner:
         )
         record.pending_prompts.append(pending)
         self.storage._touch_thread(record)
-        self.storage.save_thread(record)
-        self.storage.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="message.created",
-            payload={
-                "run_id": pending.run_id,
-                "role": "user",
-                "text": prompt,
-                "queued": True,
-            },
-        )
-        self.storage.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="run.queued",
-            payload={
-                "run_id": pending.run_id,
-                "pending_count": len(record.pending_prompts),
-            },
+        self.storage._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="message.created",
+                payload={
+                    "run_id": pending.run_id,
+                    "role": "user",
+                    "text": prompt,
+                    "queued": True,
+                },
+            ),
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="run.queued",
+                payload={
+                    "run_id": pending.run_id,
+                    "pending_count": len(record.pending_prompts),
+                },
+            ),
         )
         return RunRecord(
             run_id=pending.run_id, thread_id=record.thread_id, status="queued"
@@ -387,26 +401,32 @@ class BridgeRunner:
             record.active_run_id = None
             record.last_error = message
             record.pending_prompts.clear()
-            self.storage.save_thread(record)
-            self.storage.append_thread_event(
-                thread_id=record.thread_id,
-                event_type="run.failed",
-                payload={
-                    "run_id": run_id,
-                    "error": message,
-                    "blocked": False,
-                    "failure_type": "run.orphaned",
-                },
-            )
-            if queued_count:
-                self.storage.append_thread_event(
+            events = [
+                EventDraft(
+                    scope="thread",
                     thread_id=record.thread_id,
-                    event_type="run.queue_cleared",
+                    event_type="run.failed",
                     payload={
-                        "reason": "bridge restarted",
-                        "queued_count": queued_count,
+                        "run_id": run_id,
+                        "error": message,
+                        "blocked": False,
+                        "failure_type": "run.orphaned",
                     },
                 )
+            ]
+            if queued_count:
+                events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=record.thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "bridge restarted",
+                            "queued_count": queued_count,
+                        },
+                    )
+                )
+            self.storage._save_thread_with_events(record, *events)
 
     def _lease_process_workspace(
         self,
@@ -529,14 +549,17 @@ class BridgeRunner:
             if session_id:
                 record = self.storage.load_thread(thread_id)
                 record.codex_session_id = session_id
-                self.storage.save_thread(record)
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="session.bound",
-                    payload={
-                        "run_id": run_id,
-                        "codex_session_id": session_id,
-                    },
+                self.storage._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="session.bound",
+                        payload={
+                            "run_id": run_id,
+                            "codex_session_id": session_id,
+                        },
+                    ),
                 )
             return False
 
@@ -573,12 +596,32 @@ class BridgeRunner:
             # thread metadata succeed, preventing completed+failed replays.
             return True
 
+        safe_provider_type = (
+            event_type
+            if len(event_type.encode("utf-8")) <= 128
+            and event_type == event_type.strip()
+            and all(
+                ord(character) >= 0x20 and ord(character) != 0x7F
+                for character in event_type
+            )
+            else "unknown"
+        )
+        public_event: dict[str, object]
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            # The deprecated exec adapter may receive provider fields such as
+            # cwd or absolute paths. HA mode exposes only a notification hint;
+            # the canonical RuntimeBroker has typed projections for real UI
+            # events.
+            public_event = {"provider_event_type": safe_provider_type}
+        else:
+            public_event = event
         self.storage.append_thread_event(
             thread_id=thread_id,
             event_type="codex.event",
             payload={
                 "run_id": run_id,
-                "event": event,
+                "provider_event_type": safe_provider_type,
+                "event": public_event,
             },
         )
         return False
@@ -723,7 +766,30 @@ class BridgeRunner:
                     record.active_run_id = None
                     record.last_error = error
                     record.pending_prompts.clear()
-                    self.storage.save_thread(record)
+                    events = [
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.failed",
+                            payload={
+                                "run_id": run_id,
+                                **payload,
+                            },
+                        )
+                    ]
+                    if queued_count:
+                        events.append(
+                            EventDraft(
+                                scope="thread",
+                                thread_id=thread_id,
+                                event_type="run.queue_cleared",
+                                payload={
+                                    "reason": "active run failed",
+                                    "queued_count": queued_count,
+                                },
+                            )
+                        )
+                    self.storage._save_thread_with_events(record, *events)
                 except WorkspaceBoundaryError:
                     self.storage.fail_home_assistant_run_without_workspace_validation(
                         thread_id=thread_id,
@@ -731,23 +797,6 @@ class BridgeRunner:
                         failure_type=str(payload.get("failure_type", "run.failed")),
                     )
                     return
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="run.failed",
-                    payload={
-                        "run_id": run_id,
-                        **payload,
-                    },
-                )
-                if queued_count:
-                    self.storage.append_thread_event(
-                        thread_id=thread_id,
-                        event_type="run.queue_cleared",
-                        payload={
-                            "reason": "active run failed",
-                            "queued_count": queued_count,
-                        },
-                    )
                 return
 
             fallback_run_id = run_id
@@ -763,24 +812,28 @@ class BridgeRunner:
                     record.status = "running"
                     record.active_run_id = pending.run_id
                     record.last_error = None
-                    self.storage.save_thread(record)
+                    self.storage._save_thread_with_events(
+                        record,
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.completed",
+                            payload={
+                                "run_id": run_id,
+                                "usage": completion_usage or {},
+                            },
+                        ),
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.dequeued",
+                            payload={
+                                "run_id": pending.run_id,
+                                "pending_count": len(record.pending_prompts),
+                            },
+                        ),
+                    )
                     fallback_run_id = pending.run_id
-                    self.storage.append_thread_event(
-                        thread_id=thread_id,
-                        event_type="run.completed",
-                        payload={
-                            "run_id": run_id,
-                            "usage": completion_usage or {},
-                        },
-                    )
-                    self.storage.append_thread_event(
-                        thread_id=thread_id,
-                        event_type="run.dequeued",
-                        payload={
-                            "run_id": pending.run_id,
-                            "pending_count": len(record.pending_prompts),
-                        },
-                    )
                     next_record = self.storage.get_thread(thread_id)
                     self._start_worker(next_record, next_run, pending.prompt)
                     return
@@ -788,14 +841,17 @@ class BridgeRunner:
                 record.status = "idle"
                 record.active_run_id = None
                 record.last_error = None
-                self.storage.save_thread(record)
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="run.completed",
-                    payload={
-                        "run_id": run_id,
-                        "usage": completion_usage or {},
-                    },
+                self.storage._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="run.completed",
+                        payload={
+                            "run_id": run_id,
+                            "usage": completion_usage or {},
+                        },
+                    ),
                 )
             except WorkspaceBoundaryError:
                 self.storage.fail_home_assistant_run_without_workspace_validation(

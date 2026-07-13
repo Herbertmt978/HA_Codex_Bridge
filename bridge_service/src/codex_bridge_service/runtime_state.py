@@ -10,6 +10,16 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from .event_store import (
+    DurableOutbox,
+    DurableOperationTooLargeError,
+    EventDraft,
+    EventPayloadTooLargeError,
+    EventStoreAdmissionError,
+    EventStoreError,
+    OutboxWrite,
+    StoredEventRecord,
+)
 from .models import InteractionDisplayRecord, RunMode
 
 RunStatus = Literal[
@@ -44,6 +54,10 @@ def runtime_fingerprint(value: object) -> str:
 
 class RuntimeStateError(RuntimeError):
     pass
+
+
+class RuntimeStateCommitUnknownError(RuntimeStateError):
+    """A prepared state/event operation may still be recovered on restart."""
 
 
 class RuntimeStateCorruptError(RuntimeStateError):
@@ -138,8 +152,14 @@ class RuntimeStateRecord(BaseModel):
 class RuntimeStateStore:
     """Atomic private persistence for the global app-server runtime owner."""
 
-    def __init__(self, state_root: Path | str) -> None:
+    def __init__(
+        self,
+        state_root: Path | str,
+        *,
+        durable_outbox: DurableOutbox | None = None,
+    ) -> None:
         self.path = Path(state_root) / "runtime-state.json"
+        self._durable_outbox = durable_outbox
         self._lock = Lock()
 
     def load(self) -> RuntimeStateRecord:
@@ -156,6 +176,18 @@ class RuntimeStateStore:
                 raw = json.loads(payload)
                 if not isinstance(raw, dict):
                     raise RuntimeStateCorruptError()
+                marker = raw.pop("_bridge_operation", None)
+                if marker is not None:
+                    if (
+                        not isinstance(marker, dict)
+                        or set(marker) != {"operation_id", "revision"}
+                        or not isinstance(marker.get("operation_id"), str)
+                        or not marker["operation_id"]
+                        or type(marker.get("revision")) is not int
+                        or marker["revision"] < 1
+                        or marker["revision"] != raw.get("revision")
+                    ):
+                        raise RuntimeStateCorruptError()
                 # Pre-release Task 7 state had the same v1 shape without an
                 # explicit marker. This is the sole legacy migration; future
                 # versions must add a deliberate migration here.
@@ -229,12 +261,68 @@ class RuntimeStateStore:
             return target
 
     def save(self, state: RuntimeStateRecord) -> None:
+        _validated, _state_payload, payload = self._validated_payload(state)
+        self._atomic_save(payload)
+
+    def save_with_events(
+        self,
+        state: RuntimeStateRecord,
+        *,
+        events: tuple[EventDraft, ...] = (),
+        additional_writes: tuple[OutboxWrite, ...] = (),
+    ) -> tuple[StoredEventRecord, ...]:
+        validated, state_payload, _payload = self._validated_payload(state)
+        if not events and not additional_writes:
+            self.save(validated)
+            return ()
+        if self._durable_outbox is None:
+            self.save(validated)
+            raise RuntimeStateError(
+                "Durable runtime events require an event outbox."
+            )
+        if validated.revision < 1:
+            raise RuntimeStateError(
+                "The private Codex runtime state revision is invalid."
+            )
+        with self._lock:
+            try:
+                return self._durable_outbox.commit_operation(
+                    operation_id=(f"runtime-state:{validated.revision}:{uuid4().hex}"),
+                    writes=(
+                        OutboxWrite(
+                            relative_path=self.path.name,
+                            state_revision=validated.revision,
+                            state_payload=state_payload,
+                        ),
+                        *additional_writes,
+                    ),
+                    events=events,
+                )
+            except (
+                DurableOperationTooLargeError,
+                EventPayloadTooLargeError,
+                EventStoreAdmissionError,
+            ):
+                # These are admission failures raised before canonical state
+                # is replaced. Callers may safely roll back and return the
+                # bounded resource response.
+                raise
+            except EventStoreError:
+                raise RuntimeStateCommitUnknownError(
+                    "The private Codex runtime state could not be saved."
+                ) from None
+
+    def _validated_payload(
+        self,
+        state: RuntimeStateRecord,
+    ) -> tuple[RuntimeStateRecord, dict[str, object], bytes]:
         try:
             validated = RuntimeStateRecord.model_validate(
                 state.model_dump(mode="python")
             )
+            state_payload = validated.model_dump(mode="json")
             payload = json.dumps(
-                validated.model_dump(mode="json"),
+                state_payload,
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode("utf-8")
@@ -246,6 +334,9 @@ class RuntimeStateStore:
             raise RuntimeStateError(
                 "The private Codex runtime state exceeds its limit."
             )
+        return validated, state_payload, payload
+
+    def _atomic_save(self, payload: bytes) -> None:
         temporary = self.path.with_name(f".{self.path.name}.{uuid4().hex}.tmp")
         with self._lock:
             try:
