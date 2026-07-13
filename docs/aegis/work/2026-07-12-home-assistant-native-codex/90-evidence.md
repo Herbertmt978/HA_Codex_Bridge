@@ -153,6 +153,41 @@ The HA profile constructs and owns exactly one app-server client through FastAPI
 
 The external profile retains its deprecated CLI parser, auth-file account probe, and token-backed limit probe for the 0.6.x rollback window. HA mode constructs none of those credential owners. The Task 6 auth/run mutual-exclusion acceptance remains open only until Task 7 installs the shared runtime lease; a status-based compatibility check was deliberately not added.
 
+## Task 7 — global runtime gate, app-server turns, approvals, and questions
+
+| Evidence | Result |
+|----------|--------|
+| Global ownership | One active turn, eight queued prompts, and auth mutation exclusion are enforced by one immutable `RuntimeGate` |
+| Structured runtime | HA prompt, steer, interrupt, thread start/resume, turn start, and terminal handling use the locked app-server protocol; HA app composition rejects the legacy `BridgeRunner` owner |
+| Prompt ownership | Each chat can own at most one queued prompt; a second submission fails with retryable `thread_prompt_pending`, while the immutable global gate still caps the queue at eight |
+| Mode and path policy | Observe is read-only/on-request; Edit is workspace-write/on-request; Full auto is workspace-write/never; all deny network access, require exact nested sandbox/workspace metadata, and reject nonportable, private, or outside-workspace approval paths |
+| Interaction boundary | Command/file approvals and `request_user_input` are bearer protected, strictly correlated, redacted, expiring, idempotent, and never expose provider request tokens or private paths |
+| Opaque command boundary | Schema-valid command requests without parsed `commandActions` are declined; only contained, parsed actions are surfaced until Task 21 proves target sandbox confinement |
+| Callback ordering | Pre-response notifications and server requests drain FIFO; callbacks arriving during replay append behind the active batch, and early `serverRequest/resolved` notifications retain generation/request ownership until the interaction is created and expired |
+| Steer uncertainty | A timeout or mismatched steer response persists `steer_outcome_unknown`, rejects replay of the same request ID, aborts the owning app-server generation, and clears queued work |
+| Deletion/storage atomicity | Active, queued, interacting, or publishing chats block deletion; project/thread create and metadata mutations serialize with deletion; runtime history is persisted before public metadata removal, and injected checkpoint failures preserve that metadata |
+| Failure/recovery | Active and queued work is interrupted on cold restart; pending interactions expire; claimed responses recover as `outcome_unknown`; corrupt v1 checkpoints are quarantined and thread projections repaired |
+| Bounded state | Terminal runs/interactions compact to fixed recent windows; request tombstones are capped at 50,000 and fail closed before accepting more work; checkpoint writes are private, validated, atomic, and fsynced on POSIX |
+| Race/adversarial coverage | Concurrent duplicate submissions, cancellation, stale generations, randomized callback reordering, blocked/failed response writes, provider resolution, deletion/mutation, and cross-thread decisions are covered |
+| Process termination | POSIX test proves a SIGTERM-resistant app-server parent and child process group are force-killed before a clean next generation |
+| Focused GREEN | 251 passed, 6 skipped |
+| Windows full suite | 723 passed, 139 skipped on Python 3.14.4 |
+| Linux full suite | 851 passed, 1 skipped, and 1 Starlette deprecation warning in the Python 3.13 container; the Windows-only updater test was excluded |
+| Static verification | Changed-file Ruff, `compileall`, protocol validators, and `git diff --check` passed |
+| Independent review | Protocol payload review passed; final broker/storage review found no remaining ordering or cleanup blocker after exact sandbox metadata, opaque-command denial, callback replay ownership, deletion lock ordering, legacy-owner rejection, and seeded reorder fixes |
+| Implementation commit | `6583d9f` (`Broker Codex turns and approvals`) |
+
+Task 7 provides in-process notification dedupe and truthful restart interruption;
+it does not claim cross-file crash atomicity between runtime JSON and thread JSONL.
+Task 8 owns that SQLite outbox contract. Attachment-backed turns deliberately
+return `runtime_attachments_not_ready` until Task 9 supplies a checksum-bound
+transport that cannot leak private copies into a user workspace or source
+control. Real filesystem/network sandbox enforcement remains a protected-HA
+acceptance condition, and the VM rollback path is unchanged.
+
 ## Evidence status
 
-This is draft evidence for continuation. It now proves host/container resource ceilings, safe archives, and the bounded app-server transport, but not yet the HA App image, target sandbox, proxy deployment, release, or cutover.
+This is draft evidence for continuation. It now proves host/container resource
+ceilings, safe archives, bounded app-server transport, structured ChatGPT auth,
+and the single HA runtime broker, but not yet the durable global outbox, HA App
+image, target sandbox, proxy deployment, release, or cutover.

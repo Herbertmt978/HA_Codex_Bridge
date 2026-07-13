@@ -257,11 +257,30 @@ All Task 6 cases except the shared auth/run exclusion are complete. That remaini
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_runtime_gate.py bridge_service/tests/test_runtime_broker.py bridge_service/tests/test_approvals_api.py bridge_service/tests/test_runner.py`
 
-- [ ] Write failing tests for one global lease, eight queued prompts, stable `client_request_id` idempotency, thread start/resume, turn start/steer/interrupt, mode policies, exact-once deltas, restart interruption, queue cleanup, command/patch approvals, `request_user_input`, stale/duplicate/cross-thread decisions, and auth mutation conflicts.
-- [ ] Run focused tests and confirm the `codex exec` runner cannot satisfy server requests or global concurrency.
-- [ ] Implement broker methods `submit_prompt`, `cancel_run`, `decide_approval`, `answer_user_input`, and `close`. Correlate thread/turn/item/event IDs; never block the app-server reader. Automatically deny network/private-host/out-of-workspace permission escalation. Map Observe=`read-only/on-request`, Edit=`workspace-write/on-request`, Full auto=`workspace-write/never`.
-- [ ] Run focused/full tests, including randomized duplicate/reorder sequences. Confirm no process waits on stdin and late decisions return typed 409/410 errors.
-- [ ] Commit with message `Broker Codex turns and approvals`.
+- [x] Write failing tests for one global lease, eight queued prompts, one queued prompt per chat, stable `client_request_id` idempotency, thread start/resume, turn start/steer/interrupt, mode policies, exact sandbox/path rejection, callback FIFO and early provider resolution, restart interruption, queue cleanup, deletion/storage races, command/patch approvals, `request_user_input`, stale/duplicate/cross-thread decisions, steer outcome uncertainty, and auth mutation conflicts.
+- [x] Run focused tests and confirm the `codex exec` runner cannot satisfy server requests or global concurrency.
+- [x] Implement broker methods `submit_prompt`, `cancel_run`, `decide_approval`, `answer_user_input`, and `close`. Correlate thread/turn/item/event IDs; never block the app-server reader. Automatically deny network/private-host/out-of-workspace permission escalation. Map Observe=`read-only/on-request`, Edit=`workspace-write/on-request`, Full auto=`workspace-write/never`.
+- [x] Run focused/full tests, including randomized duplicate/reorder sequences. Confirm no process waits on stdin and late decisions return typed 409/410 errors.
+- [x] Commit as `6583d9f` with message `Broker Codex turns and approvals`.
+
+Settled Task 7 verification is 251 passed/6 skipped focused; 723 passed/139
+skipped on Windows Python 3.14.4; and 851 passed/1 skipped with one
+Starlette deprecation warning in the Linux Python 3.13 container, excluding the
+Windows-only updater test. The accepted behavior rejects mismatched sandbox and
+workspace-path echoes, preserves callback and early-resolution FIFO, permits at
+most one queued prompt per chat, serializes storage mutation/deletion, and marks
+uncertain steer outcomes non-replayable before aborting the owning generation.
+
+Task 7 intentionally fails attachment-backed turns closed with
+`runtime_attachments_not_ready`. Task 9 owns the checksum-bound upload/runtime
+transport; placing private attachment copies in a user workspace was rejected
+because it could leak them into source control and leave crash orphans. Durable
+cross-file state/event exactly-once delivery remains a Task 8 dependency, and
+real sandbox confinement remains a target-system acceptance gate. Schema-valid
+command approvals that omit `commandActions` are automatically declined: Task 7
+only surfaces parsed actions whose paths pass workspace containment checks. This
+deliberately narrows command approval until Task 21 proves real sandbox
+confinement on the target Home Assistant system.
 
 ## Task 8: Add a durable global event journal and replay contract
 
