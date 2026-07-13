@@ -372,11 +372,13 @@ an unsupported runtime field or copying private files into source-controlled wor
 
 **Verification:** `python -m pytest -q tests/custom_components/codex_bridge/test_protocol.py tests/custom_components/codex_bridge/test_bridge_api.py`
 
-- [ ] Pin Home Assistant/pytest integration dependencies to the current target minor; write failing tests for range overlap/mismatch, authenticated `/ready` verification, discovery/ready mismatch, malformed/public endpoints, redirect refusal, connect/read/total timeouts, 409/410/413/416 mapping, streaming response ownership, and secret-free repr/log errors.
-- [ ] Install test requirements and run focused tests; confirm missing protocol and current client behavior fail.
-- [ ] Implement immutable discovery/ready records, API negotiation, explicit `aiohttp.ClientTimeout`, `allow_redirects=False`, typed problems, `X-Codex-Bridge-Api: 1`, streaming context managers, and redacted error types.
-- [ ] Run Integration and Bridge suites together; confirm no global event loop/session leak.
-- [ ] Commit with message `Add tested Home Assistant Bridge client`.
+- [x] Pin Home Assistant/pytest integration dependencies to the current target minor; write failing tests for range overlap/mismatch, authenticated `/ready` verification, discovery/ready mismatch, malformed/public endpoints, redirect refusal, connect/read/total timeouts, 409/410/413/416 mapping, streaming response ownership, and secret-free repr/log errors.
+- [x] Install test requirements and run focused tests; confirm missing protocol and current client behavior fail.
+- [x] Implement immutable discovery/ready records, API negotiation, explicit `aiohttp.ClientTimeout`, `allow_redirects=False`, typed problems, `X-Codex-Bridge-Api: 1`, streaming context managers, and redacted error types.
+- [x] Run Integration and Bridge suites in the same pinned Linux environment with separate pytest lifecycles; confirm the HA client has no global event loop/session/socket leak and the legacy Bridge suite remains green without the HA plugin's unrelated daemon-thread policy.
+- [x] Commit with message `Add tested Home Assistant Bridge client`.
+
+**Completed:** `c3749bf` adds the immutable/redacted protocol authority and bounded HA client. Final verification passed 59 Integration tests on Linux and Windows, plus 996 passed/1 skipped Bridge tests on Linux. The suites intentionally run as separate pytest processes because the HA plugin's global thread fixture races with the deprecated external `BridgeRunner`; HA application composition does not use that runner.
 
 ## Task 12: Implement Supervisor discovery, stable identity, and token rotation
 

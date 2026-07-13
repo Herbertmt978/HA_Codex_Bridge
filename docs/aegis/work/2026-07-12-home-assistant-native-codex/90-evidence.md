@@ -254,6 +254,26 @@ remain separate deterministic tests rather than one timing-sensitive end-to-end
 fixture. Together they prove stale requests cannot cross generations and active
 or queued work is interrupted before the recovered runtime accepts new work.
 
+## Task 11 — tested Home Assistant protocol client
+
+| Evidence | Result |
+|----------|--------|
+| Protocol authority | Frozen API, discovery, readiness, and problem records validate only private App origins, strict Supervisor identity, opaque tokens, negotiated v1, and allowlisted recovery metadata. |
+| Transport security | Authenticated readiness, `X-Codex-Bridge-Api`, redirect refusal, bounded connect/pool/read/write/total timing, validated path segments, bounded problem bodies, and suppressed upstream exception details. |
+| Compatibility | Supervisor-discovered Apps require API v1; legacy v0 is explicit and capability-limited, with buffered file/event adapters unavailable after v1 negotiation. |
+| Streaming ownership | Caller-owned response contexts close deterministically on success, failure, and cancellation; bounded reads and iteration map timeout, incomplete-read, and connection failures to redacted typed errors. |
+| Focused verification | 59 passed on Linux with the Home Assistant plugin's socket/task/timer/thread cleanup; 59 passed on Windows with equivalent focused plugins. |
+| Bridge regression | 996 passed, 1 skipped on Linux in the same pinned environment, excluding the PowerShell-only updater module; one known Starlette deprecation warning remains. |
+| Harness isolation | Root pytest is Integration-only. The deprecated external `BridgeRunner` suite uses its own pytest lifecycle because immediate cancellation can leave a daemon worker briefly draining; HA application composition rejects that owner. |
+| Static verification | Ruff, `compileall`, staged diff check, and final diff hygiene passed. |
+| Independent review | Luna found no remaining security or lifecycle blocker after typed error-body timeouts, incomplete-stream mapping, fail-closed renegotiation, and endpoint traceback suppression. |
+| Implementation commit | `c3749bf` (`Add tested Home Assistant Bridge client`) |
+
+Task 11 does not register Supervisor discovery or expose v1 event/file routes
+through Home Assistant. Those consumers remain deliberately gated until Tasks
+12–14 establish stable entry identity, one event broker, and bounded streaming
+views.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
