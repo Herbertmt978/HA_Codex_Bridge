@@ -319,11 +319,18 @@ confinement on the target Home Assistant system.
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_uploads_api.py bridge_service/tests/test_storage.py`
 
-- [ ] Write failing tests for 8 MiB chunk negotiation, idempotent same-index retry, offset/order errors, per-chunk/final SHA-256, resume after restart, cancel cleanup, quota conflict, client disconnect, malicious names, 206/416 ranges, ETag/If-Range, and attachment-safe headers.
-- [ ] Run tests and confirm the existing multipart/download path cannot resume and lacks typed range behavior.
-- [ ] Implement upload-session manifests under private Bridge state, atomic chunk writes, streaming final assembly into the confined workspace, checksums, crash recovery, cancellation, and ranged streaming. Force sanitized `attachment`, `application/octet-stream`, and `nosniff` headers.
-- [ ] Run focused/full tests and a memory-bounded large-file smoke test; verify HA Core is not involved in this Bridge-only stage.
-- [ ] Commit with message `Add resumable Bridge file transport`.
+- [x] Write failing tests for 8 MiB chunk negotiation, idempotent same-index retry, offset/order errors, per-chunk/final SHA-256, resume after restart, cancel cleanup, quota conflict, client disconnect, malicious names, 206/416 ranges, ETag/If-Range, and attachment-safe headers.
+- [x] Run tests and confirm the existing multipart/download path cannot resume and lacks typed range behavior.
+- [x] Implement upload-session manifests under private Bridge state, atomic chunk writes, streaming final assembly into the confined private attachment store, checksums, crash recovery, cancellation, and ranged streaming. Force sanitized `attachment`, `application/octet-stream`, and `nosniff` headers.
+- [x] Run focused/full tests and a memory-bounded large-file smoke test; verify HA Core is not involved in this Bridge-only stage.
+- [x] Commit as `ed9e6f9` with message `Add resumable Bridge file transport`.
+
+Task 9 deliberately keeps completed uploads private and available-but-unselected.
+Text-only prompts therefore continue without implicitly exposing stored files. The
+locked app-server `UserInput` schema has no generic-file variant, so explicit
+attachment selection, bounded supported representations, capability negotiation,
+and consented workspace import remain owned by Tasks 10-17 rather than inventing
+an unsupported runtime field or copying private files into source-controlled workspaces.
 
 ## Task 10: Share app-server models, account data, and fatal readiness
 

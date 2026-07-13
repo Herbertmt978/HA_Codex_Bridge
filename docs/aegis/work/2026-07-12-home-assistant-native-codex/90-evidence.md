@@ -207,9 +207,32 @@ logbook payload. The future Integration may forward only these normalized
 records over administrator-authorized HA WebSockets. Task 9 owns binary
 transport; Task 10 and later own the Integration consumer and panel resume flow.
 
+## Task 9 — resumable private uploads and ranged artifacts
+
+| Evidence | Result |
+|----------|--------|
+| Upload protocol | HA-only API v1 supports create/status, fixed 8 MiB ordered chunks, idempotent same-index retry, completion, and cancellation; external v0 alone retains multipart compatibility |
+| Integrity and recovery | Per-chunk and final SHA-256, strict manifests, descriptor-rooted atomic writes, exact-inode cleanup, restart resume, durable publishing reconciliation, completed-tombstone cleanup, and recoverable session-owned final assembly |
+| Concurrency and capacity | Upload/thread lock ordering covers deletion races; live-part leases protect unlocked request streams; private quota/free-space checks, 64 KiB metadata ingress, strict path/depth limits, bounded sessions/tombstones, and safe orphan reaping prevent byte and inode bypasses |
+| Runtime privacy | Completed uploads remain private and available-but-unselected; text-only turns select no attachments, and no unsupported generic app-server input or automatic workspace copy is introduced |
+| Artifact downloads | One byte range, 206/416, strong SHA-256 ETag, If-Range, bounded 1 MiB descriptor-pinned iteration, and forced sanitized attachment/octet-stream/nosniff/no-store headers |
+| Focused verification | Final Linux upload suite 28 passed; broader Task 9 transport/storage regression passed after the review fixes |
+| Windows full suite | 816 passed, 172 skipped on Python 3.14.4 |
+| Linux full suite | 977 passed, 1 skipped, and 1 known Starlette TestClient deprecation warning in a Python 3.13 container; the Windows-only updater test was excluded |
+| Memory smoke | A 32 MiB four-chunk upload plus final assembly peaked at 2.04 MiB traced Python memory and increased process RSS by 2.00 MiB |
+| Static verification | Repository Ruff, `compileall`, staged diff check, and final diff hygiene passed |
+| Independent review | Luna spec/security and Terra quality passes found no remaining P0/P1/P2 after recovery, quota, deletion, live-stream reaper, manifest strictness, and platform-construction fixes |
+| Implementation commit | `ed9e6f9` (`Add resumable Bridge file transport`) |
+
+The Bridge-only transport does not claim that generic files are representable by
+the current locked Codex app-server schema. Tasks 10-17 own truthful capability
+discovery, explicit attachment selection, bounded text/image representations,
+consented workspace import, Integration forwarding, and the panel experience.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
 ceilings, safe archives, bounded app-server transport, structured ChatGPT auth,
-and the single HA runtime broker plus durable global outbox, but not yet the HA App
-image, target sandbox, proxy deployment, release, or cutover.
+the single HA runtime broker plus durable global outbox, and private resumable
+binary transport, but not yet the HA App image, target sandbox, proxy deployment,
+runtime attachment representation, release, or cutover.
