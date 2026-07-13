@@ -345,11 +345,13 @@ an unsupported runtime field or copying private files into source-controlled wor
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_runtime_lifecycle.py bridge_service/tests/test_model_catalog.py bridge_service/tests/test_threads_api.py bridge_service/tests/test_diagnostics.py`
 
-- [ ] Write failing tests proving one shared app-server client serves `model/list`, `account/read`, rate limits, and turns; add lifecycle shutdown, crash/reconcile, stale catalogue recovery before direct chat creation, build-version mismatch, and fatal sandbox cases.
-- [ ] Run focused tests and confirm current probes spawn independently and readiness always says ok.
-- [ ] Inject the shared client into probes/coordinators/broker through FastAPI lifespan, reconcile on restart, implement sandbox self-test state, preserve provisional catalogue rules, and close resources in reverse ownership order.
-- [ ] Run focused/full suites and assert one fake app-server process per application instance and no leaked worker/thread.
-- [ ] Commit with message `Unify Codex runtime lifecycle`.
+- [x] Write failing tests proving one shared app-server client serves `model/list`, `account/read`, rate limits, and turns; add lifecycle shutdown, crash/reconcile, stale catalogue recovery before direct chat creation, build-version mismatch, and fatal sandbox cases.
+- [x] Run focused tests and confirm current probes spawn independently and readiness always says ok.
+- [x] Inject the shared client into probes/coordinators/broker through FastAPI lifespan, reconcile on restart, implement sandbox self-test state, preserve provisional catalogue rules, and close resources in reverse ownership order.
+- [x] Run focused/full suites and assert one fake app-server process per application instance and no leaked worker/thread.
+- [x] Commit with message `Unify Codex runtime lifecycle`.
+
+**Completed:** `f6faa5d` stabilizes two pre-existing broker timing contracts exposed by loaded Linux verification; `d4c786d` implements the shared runtime lifecycle. The sandbox signal is deliberately fail-closed until Task 21 supplies and proves the real AppArmor/bubblewrap self-test; this task does not claim HA release readiness.
 
 ## Task 11: Add the Home Assistant Integration test foundation and protocol client
 

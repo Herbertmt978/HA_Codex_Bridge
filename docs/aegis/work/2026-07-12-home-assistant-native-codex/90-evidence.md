@@ -229,10 +229,36 @@ the current locked Codex app-server schema. Tasks 10-17 own truthful capability
 discovery, explicit attachment selection, bounded text/image representations,
 consented workspace import, Integration forwarding, and the panel experience.
 
+## Task 10 — shared app-server lifecycle and truthful readiness
+
+| Evidence | Result |
+|----------|--------|
+| Single HA runtime owner | Production HA composition creates one `CodexAppServerClient`; its catalogue, account, limits, auth coordinator, and `RuntimeBroker` all share that identity. External legacy mode alone retains subprocess probes and `BridgeRunner`. |
+| Dynamic model catalogue | Shared `config/read` plus paged `model/list` discovery uses one total deadline, a 100-page ceiling, generation-aware caching, configured timeout/TTL values, last-known-good fallback, and stable redacted errors. |
+| Direct-chat recovery | A stale fallback direct project is reconciled from the recovered shared catalogue before the first new direct chat, so provisional defaults are never materialized as permanent per-chat overrides. |
+| Lifecycle and recovery | Startup, normal shutdown, partial-start failure, generation interruption, active/queued cleanup, rate-limit cache invalidation, and reverse owner close order are covered. Initial known app-server failures keep the bearer-protected fatal diagnostic surface alive. |
+| Readiness and admission | HA reports `ready`, `auth_required`, `degraded_catalogue`, or redacted `fatal` reasons. Fatal runtime/version/sandbox state returns 503 for prompts; expired auth returns 409; stale catalogue alone does not block text prompts. |
+| Version and diagnostics | The initialized app-server user agent supplies a validated live Codex semver; HA diagnostics compare it with the immutable build version while redacting executable paths, repository metadata, tool versions, and raw run errors. |
+| Bounded health reads | Catalogue, account projection, rate limits, and auth reconciliation use explicit five-second request bounds rather than the transport's longer general default. |
+| Sandbox honesty | Task 10 accepts only literal `sandbox_ready=True` from a trusted future verifier. The production branch therefore stays fatal until Task 21 installs and proves the real AppArmor/bubblewrap filesystem/network self-test; no environment flag or unsafe bypass fabricates readiness. |
+| Focused verification | Final independent focused run: 151 passed, 3 platform skips. |
+| Windows verification | Full suite: 832 passed, 175 skipped on Python 3.14.4; the subsequently hardened runtime-broker file passed 98/98. |
+| Linux verification | All applicable Python 3.13 tests passed in two auditable shards: 898 passed/1 skipped outside the broker stress file, plus 98/98 broker tests. The two PowerShell-only updater files were excluded; one known Starlette TestClient deprecation warning remains. |
+| Timing falsification | Loaded Linux runs exposed two pre-existing overlapping test deadlines. `f6faa5d` separates the cancellation, interaction, queue, and turn timers without changing broker production behavior; ten repeated cancellation runs plus both platform broker suites passed. |
+| Static verification | Repository Ruff, `compileall`, and staged/final diff checks passed. |
+| Independent review | Luna and Terra found no remaining P0/P1 after the production composition, bounded-read, sticky-startup-failure, and settings-propagation fixes; Terra granted the final seal. |
+| Implementation commit | `d4c786d` (`Unify Codex runtime lifecycle`) |
+
+Transport-level process crash/restart and broker-level generation reconciliation
+remain separate deterministic tests rather than one timing-sensitive end-to-end
+fixture. Together they prove stale requests cannot cross generations and active
+or queued work is interrupted before the recovered runtime accepts new work.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
 ceilings, safe archives, bounded app-server transport, structured ChatGPT auth,
-the single HA runtime broker plus durable global outbox, and private resumable
-binary transport, but not yet the HA App image, target sandbox, proxy deployment,
-runtime attachment representation, release, or cutover.
+the single HA app-server owner plus durable global outbox, private resumable
+binary transport, dynamic model recovery, and fail-closed runtime readiness, but
+not yet the HA App image, target sandbox, proxy deployment, runtime attachment
+representation, release, or cutover.
