@@ -1,12 +1,90 @@
 import base64
 import json
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, Protocol
 
 from .models import CodexAccountRecord
 
 AUTH_CLAIMS_KEY = "https://api.openai.com/auth"
 PROFILE_CLAIMS_KEY = "https://api.openai.com/profile"
+
+SAFE_CHATGPT_PLAN_TYPES = frozenset(
+    {
+        "free",
+        "go",
+        "plus",
+        "pro",
+        "prolite",
+        "team",
+        "self_serve_business_usage_based",
+        "business",
+        "enterprise_cbp_usage_based",
+        "enterprise",
+        "edu",
+        "unknown",
+    }
+)
+
+
+def normalize_chatgpt_plan_type(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in SAFE_CHATGPT_PLAN_TYPES else None
+
+
+class _AppServerClient(Protocol):
+    def request(
+        self,
+        method: str,
+        params: Any = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Any: ...
+
+
+class AppServerAccountProbe:
+    """Read a privacy-preserving account projection from the shared app-server."""
+
+    def __init__(self, client: _AppServerClient) -> None:
+        self._client = client
+        self._probe_lock = Lock()
+
+    def probe(self) -> CodexAccountRecord:
+        with self._probe_lock:
+            try:
+                response = self._client.request(
+                    "account/read",
+                    {"refreshToken": False},
+                )
+            except Exception:
+                return CodexAccountRecord()
+
+        if not isinstance(response, dict):
+            return CodexAccountRecord()
+        account = response.get("account")
+        if account is None:
+            return CodexAccountRecord()
+        if not isinstance(account, dict):
+            return CodexAccountRecord()
+
+        account_type = account.get("type")
+        if account_type == "apiKey":
+            return CodexAccountRecord(auth_mode="apikey")
+        if account_type != "chatgpt":
+            return CodexAccountRecord(
+                auth_mode="unsupported" if isinstance(account_type, str) else None
+            )
+
+        plan_type = normalize_chatgpt_plan_type(account.get("planType"))
+        if plan_type is None:
+            return CodexAccountRecord(auth_mode="unsupported")
+        return CodexAccountRecord(
+            available=True,
+            auth_mode="chatgpt",
+            plan_type=plan_type,
+        )
 
 
 class CodexAccountProbe:
@@ -34,7 +112,8 @@ class CodexAccountProbe:
             return CodexAccountRecord()
 
     def _account_from_auth(self, auth: dict[str, Any]) -> CodexAccountRecord:
-        tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
+        tokens_value = auth.get("tokens")
+        tokens: dict[str, Any] = tokens_value if isinstance(tokens_value, dict) else {}
         id_claims = self._decode_claims(str(tokens.get("id_token") or ""))
         access_claims = self._decode_claims(str(tokens.get("access_token") or ""))
 

@@ -1,14 +1,155 @@
 import base64
 import json
+from math import isfinite
 from pathlib import Path
 from threading import Lock
 import time
-from typing import Any
+from typing import Any, Protocol
 from urllib import request
 
+from .account import normalize_chatgpt_plan_type
 from .models import LimitsStatusRecord, LimitsWindowRecord
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+
+_MAX_SIGNED_64 = (1 << 63) - 1
+class _AppServerClient(Protocol):
+    def request(
+        self,
+        method: str,
+        params: Any = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Any: ...
+
+
+class AppServerLimitsProbe:
+    """Read normalized usage limits from the shared app-server transport."""
+
+    def __init__(
+        self,
+        client: _AppServerClient,
+        *,
+        min_fetch_interval_seconds: int = 45,
+    ) -> None:
+        self._client = client
+        self._min_fetch_interval_seconds = max(0, min_fetch_interval_seconds)
+        self._last_fetch_at = 0.0
+        self._cached_status: LimitsStatusRecord | None = None
+        self._probe_lock = Lock()
+
+    def probe(self) -> LimitsStatusRecord | None:
+        with self._probe_lock:
+            now = time.monotonic()
+            if (
+                self._cached_status is not None
+                and now - self._last_fetch_at < self._min_fetch_interval_seconds
+            ):
+                return self._cached_status.model_copy(deep=True)
+
+            try:
+                response = self._client.request("account/rateLimits/read", None)
+            except Exception:
+                return (
+                    self._cached_status.model_copy(deep=True)
+                    if self._cached_status is not None
+                    else None
+                )
+            status = _app_server_limits_status(response)
+            if status is None:
+                return (
+                    self._cached_status.model_copy(deep=True)
+                    if self._cached_status is not None
+                    else None
+                )
+            self._last_fetch_at = now
+            self._cached_status = status.model_copy(deep=True)
+            return status.model_copy(deep=True)
+
+
+def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
+    if not isinstance(response, dict):
+        return None
+    snapshot = response.get("rateLimits")
+    if not isinstance(snapshot, dict):
+        return None
+
+    primary = _app_server_limits_window(snapshot.get("primary"))
+    secondary = _app_server_limits_window(snapshot.get("secondary"))
+    reached_type = snapshot.get("rateLimitReachedType")
+    blocked = reached_type is not None or any(
+        window is not None and window.used_percent == 100.0
+        for window in (primary, secondary)
+    )
+    plan_type = snapshot.get("planType")
+    return LimitsStatusRecord(
+        available=True,
+        blocked=blocked,
+        message="Usage limit reached" if blocked else None,
+        primary=primary,
+        secondary=secondary,
+        credits=_app_server_credits(snapshot.get("credits")),
+        plan_type=normalize_chatgpt_plan_type(plan_type),
+        updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    )
+
+
+def _app_server_limits_window(payload: object) -> LimitsWindowRecord | None:
+    if not isinstance(payload, dict):
+        return None
+    used_percent = _safe_percentage(payload.get("usedPercent"))
+    return LimitsWindowRecord(
+        used_percent=used_percent,
+        remaining_percent=(100.0 - used_percent if used_percent is not None else None),
+        window_minutes=_safe_nonnegative_integer(payload.get("windowDurationMins")),
+        resets_at=_safe_nonnegative_integer(payload.get("resetsAt")),
+    )
+
+
+def _safe_percentage(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    result = float(value)
+    if not isfinite(result):
+        return None
+    if not 0.0 <= result <= 100.0:
+        result = min(100.0, max(0.0, result))
+    return result
+
+
+def _safe_nonnegative_integer(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and (not value.is_integer() or not value == value):
+        return None
+    result = int(value)
+    return result if 0 <= result <= _MAX_SIGNED_64 else None
+
+
+def _app_server_credits(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    has_credits = value.get("hasCredits")
+    unlimited = value.get("unlimited")
+    if not isinstance(has_credits, bool) or not isinstance(unlimited, bool):
+        return None
+    balance = value.get("balance")
+    if balance is not None and not _is_safe_balance(balance):
+        return None
+    return {
+        "hasCredits": has_credits,
+        "unlimited": unlimited,
+        "balance": balance,
+    }
+
+
+def _is_safe_balance(value: object) -> bool:
+    if not isinstance(value, str) or not value or len(value) > 64:
+        return False
+    if value.count(".") > 1:
+        return False
+    whole, separator, fraction = value.partition(".")
+    return whole.isdigit() and (not separator or bool(fraction) and fraction.isdigit())
 
 
 class CodexLimitsProbe:

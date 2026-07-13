@@ -2,18 +2,19 @@ import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from .account import CodexAccountProbe
+from .account import AppServerAccountProbe, CodexAccountProbe
+from .auth_coordinator import CodexAuthCoordinator
 from .build_info import BuildInfo
 from .codex_app_server import CodexAppServerClient
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
 from .http_limits import AttachmentIngressMiddleware
-from .limits import CodexLimitsProbe
+from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
 from .models import RuntimeProfile
 from .resource_limits import (
@@ -28,6 +29,12 @@ from .storage import BridgeStorage
 
 class _AppServerLifecycle(Protocol):
     def start(self) -> None: ...
+
+    def close(self) -> None: ...
+
+
+class _AuthCoordinatorLifecycle(Protocol):
+    def start(self) -> object: ...
 
     def close(self) -> None: ...
 
@@ -50,6 +57,9 @@ def create_app(
     workspace_root: Path | str | None = None,
     resource_limits: ResourceLimits | None = None,
     app_server_factory: Callable[[], _AppServerLifecycle] | None = None,
+    auth_coordinator_factory: (
+        Callable[[Any], _AuthCoordinatorLifecycle] | None
+    ) = None,
 ) -> FastAPI:
     resolved_runtime_profile = RuntimeProfile(runtime_profile)
     resolved_build_info = (
@@ -70,6 +80,13 @@ def create_app(
                 ),
             )
         )
+    resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
+    if resolved_app_server is not None:
+        resolved_auth_coordinator = (
+            auth_coordinator_factory(resolved_app_server)
+            if auth_coordinator_factory is not None
+            else CodexAuthCoordinator(cast(Any, resolved_app_server))
+        )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -78,9 +95,15 @@ def create_app(
             return
         try:
             await asyncio.to_thread(resolved_app_server.start)
+            if resolved_auth_coordinator is not None:
+                await asyncio.to_thread(resolved_auth_coordinator.start)
             yield
         finally:
-            await asyncio.to_thread(resolved_app_server.close)
+            try:
+                if resolved_auth_coordinator is not None:
+                    await asyncio.to_thread(resolved_auth_coordinator.close)
+            finally:
+                await asyncio.to_thread(resolved_app_server.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
 
@@ -106,9 +129,19 @@ def create_app(
         catalog = resolved_model_catalog_probe.probe()
         return catalog.default_model, catalog.default_thinking_level, catalog.stale
 
+    resolved_limits_probe = (
+        AppServerLimitsProbe(cast(Any, resolved_app_server))
+        if resolved_app_server is not None
+        else limits_probe
+    )
+    resolved_account_probe = (
+        AppServerAccountProbe(cast(Any, resolved_app_server))
+        if resolved_app_server is not None
+        else account_probe
+    )
     storage = BridgeStorage(
         root_path=root_path,
-        limits_probe=limits_probe,
+        limits_probe=resolved_limits_probe,
         special_project_defaults_provider=special_project_defaults,
         runtime_profile=resolved_runtime_profile,
         workspace_root=workspace_root,
@@ -142,7 +175,8 @@ def create_app(
     app.state.auth_token = auth_token
     app.state.build_info = resolved_build_info
     app.state.codex_app_server = resolved_app_server
-    app.state.account_probe = account_probe
+    app.state.auth_coordinator = resolved_auth_coordinator
+    app.state.account_probe = resolved_account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,
         build_info=resolved_build_info,
@@ -150,9 +184,14 @@ def create_app(
         codex_home=codex_home,
     )
     app.state.model_catalog_probe = resolved_model_catalog_probe
-    app.state.auth_manager = auth_manager or CodexAuthManager(
-        codex_command=codex_command,
-        codex_home=codex_home,
+    app.state.auth_manager = (
+        None
+        if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        else auth_manager
+        or CodexAuthManager(
+            codex_command=codex_command,
+            codex_home=codex_home,
+        )
     )
     app.state.runner = (
         runner_factory(storage)

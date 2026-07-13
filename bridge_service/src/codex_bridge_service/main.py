@@ -5,20 +5,30 @@ from .app import create_app
 from .codex_process import resolve_codex_home
 from .limits import CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
+from .models import RuntimeProfile
 from .runner import BridgeRunner
 from .settings import Settings
 
 def build_app() -> FastAPI:
     settings = Settings()
     codex_home = resolve_codex_home(settings.codex_home, settings.codex_wrapper_path)
+    external_legacy = settings.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY
     return create_app(
         root_path=settings.root_path,
         runtime_profile=settings.runtime_profile,
         workspace_root=settings.workspace_root,
         resource_limits=settings.to_resource_limits(),
         auth_token=settings.auth_token,
-        limits_probe=CodexLimitsProbe(codex_home) if codex_home else None,
-        account_probe=CodexAccountProbe(codex_home) if codex_home else None,
+        limits_probe=(
+            CodexLimitsProbe(codex_home)
+            if external_legacy and codex_home
+            else None
+        ),
+        account_probe=(
+            CodexAccountProbe(codex_home)
+            if external_legacy and codex_home
+            else None
+        ),
         model_catalog_probe=CodexModelCatalogProbe(
             codex_command=settings.codex_wrapper_path,
             codex_home=codex_home,

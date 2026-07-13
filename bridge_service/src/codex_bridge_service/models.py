@@ -172,8 +172,12 @@ class CodexAccountRecord(BaseModel):
 
 
 class CodexAuthStatusRecord(BaseModel):
+    revision: int = Field(default=0, ge=0)
     state: str = "unknown"
+    busy: bool = False
     auth_required: bool = False
+    auth_mode: str | None = None
+    plan_type: str | None = None
     message: str | None = None
     verification_uri: str | None = None
     login_url: str | None = None

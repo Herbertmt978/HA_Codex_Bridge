@@ -49,10 +49,16 @@ def get_status(
             if getattr(request.app.state, "account_probe", None) is not None
             else CodexAccountRecord()
         ),
-        auth=(
-            request.app.state.auth_manager.status(last_error=diagnostics.last_error)
-            if getattr(request.app.state, "auth_manager", None) is not None
-            else CodexAuthStatusRecord()
-        ),
+        auth=_auth_status(request, diagnostics.last_error),
         diagnostics=diagnostics,
     )
+
+
+def _auth_status(request: Request, last_error: str | None) -> CodexAuthStatusRecord:
+    coordinator = getattr(request.app.state, "auth_coordinator", None)
+    if coordinator is not None:
+        return coordinator.status()
+    manager = getattr(request.app.state, "auth_manager", None)
+    if manager is not None:
+        return manager.status(last_error=last_error)
+    return CodexAuthStatusRecord()
