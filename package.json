@@ -1,0 +1,28 @@
+{
+  "name": "ha-codex-bridge",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Build and security checks for the Home Assistant Codex Bridge panel.",
+  "license": "MIT",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "esbuild frontend/src/codex-bridge-panel.js --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --legal-comments=none --outfile=custom_components/codex_bridge/frontend/codex-bridge-panel.js",
+    "lint": "eslint frontend/src frontend/test frontend/e2e/*.js",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "vitest run frontend/test --environment jsdom",
+    "test:e2e": "playwright test frontend/e2e/panel.spec.js",
+    "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.61.1",
+    "esbuild": "0.28.1",
+    "eslint": "10.7.0",
+    "globals": "17.7.0",
+    "jsdom": "29.1.1",
+    "vitest": "4.1.10"
+  }
+}

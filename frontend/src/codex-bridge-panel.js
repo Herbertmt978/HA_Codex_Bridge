@@ -1,714 +1,15 @@
-// frontend/src/safe-dom.js
-var RASTER_MIME_TYPES = /* @__PURE__ */ new Set([
-  "image/avif",
-  "image/bmp",
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp"
-]);
-var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
-  "c",
-  "cfg",
-  "conf",
-  "cpp",
-  "css",
-  "csv",
-  "diff",
-  "env",
-  "h",
-  "ini",
-  "js",
-  "json",
-  "log",
-  "md",
-  "py",
-  "rst",
-  "sh",
-  "sql",
-  "text",
-  "toml",
-  "ts",
-  "tsx",
-  "txt",
-  "yaml",
-  "yml"
-]);
-function removeControlChars(value) {
-  return [...value].filter((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint > 31 && codePoint !== 127;
-  }).join("");
-}
-function sanitizeId(value, fallback = "") {
-  const text = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
-  return text.slice(0, 200) || fallback;
-}
-function sanitizeFilename(value, fallback = "download") {
-  const text = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
-  return (text || fallback).slice(0, 255);
-}
-function sanitizeBlobUrl(value, { origin } = {}) {
-  if (typeof value !== "string" || !value.startsWith("blob:")) return null;
-  try {
-    const parsed = new URL(value);
-    if (origin && parsed.origin !== origin) return null;
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
-function extensionOf(filename) {
-  const name = String(filename ?? "").toLowerCase();
-  const dot = name.lastIndexOf(".");
-  return dot >= 0 ? name.slice(dot + 1) : "";
-}
-function previewDescriptor(artifact = {}, blob = {}) {
-  const mime = String(blob?.type || artifact?.mime_type || "").toLowerCase().split(";", 1)[0].trim();
-  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
-  const base = { artifactId: sanitizeId(artifact?.artifact_id), filename, contentType: mime || "application/octet-stream" };
-  if (RASTER_MIME_TYPES.has(mime)) return { ...base, kind: "image", url: null };
-  if (mime.startsWith("text/") && mime !== "text/html" && mime !== "text/xml") return { ...base, kind: "text", text: "" };
-  if (TEXT_EXTENSIONS.has(extensionOf(filename)) && !mime.includes("html") && !mime.includes("svg") && !mime.includes("xml")) {
-    return { ...base, kind: "text", text: "" };
-  }
-  return { ...base, kind: "binary" };
-}
-function createPreviewElement(document2, descriptor, { blobUrl } = {}) {
-  if (!document2 || !descriptor) return null;
-  if (descriptor.kind === "text") {
-    const pre = document2.createElement("pre");
-    pre.textContent = String(descriptor.text ?? "");
-    return pre;
-  }
-  if (descriptor.kind === "image") {
-    const url = sanitizeBlobUrl(blobUrl || descriptor.url, { origin: document2.defaultView?.location?.origin });
-    if (!url || !RASTER_MIME_TYPES.has(descriptor.contentType)) return null;
-    const image = document2.createElement("img");
-    image.src = url;
-    image.alt = descriptor.filename || "artifact preview";
-    return image;
-  }
-  const empty = document2.createElement("div");
-  empty.textContent = `${descriptor.filename || "Artifact"} preview unavailable`;
-  return empty;
-}
+import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
+import { parseEvents } from "./protocol.js";
+import { createPreviewElement, previewDescriptor, sanitizeFilename } from "./safe-dom.js";
+import { uploadResumableFile } from "./uploads.js";
 
-// frontend/src/protocol.js
-var EVENT_TYPES = /* @__PURE__ */ new Set([
-  "message.created",
-  "message.completed",
-  "run.started",
-  "run.completed",
-  "run.failed",
-  "run.cancelled",
-  "run.queued",
-  "run.dequeued",
-  "run.queue_cleared",
-  "attachment.added",
-  "artifact.added",
-  "thread.updated",
-  "thread.archived",
-  "thread.restored",
-  "session.bound",
-  "bridge.snapshot_required",
-  "bridge.error"
-]);
-var isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-function parseEvent(value, { allowUnknownType = true } = {}) {
-  if (!isRecord(value)) return null;
-  if (!Number.isSafeInteger(value.sequence) || value.sequence <= 0) return null;
-  if (typeof value.event_type !== "string" || !value.event_type || value.event_type.length > 120) return null;
-  if (!allowUnknownType && !EVENT_TYPES.has(value.event_type)) return null;
-  if (!isRecord(value.payload)) return null;
-  if (value.event_id !== void 0 && (typeof value.event_id !== "string" || !/^[A-Za-z0-9_.:-]{1,200}$/.test(value.event_id))) return null;
-  if (value.thread_id !== void 0 && (typeof value.thread_id !== "string" || !/^[A-Za-z0-9_.:-]{1,200}$/.test(value.thread_id))) return null;
-  return {
-    ...value,
-    event_id: value.event_id === void 0 ? void 0 : sanitizeId(value.event_id),
-    thread_id: value.thread_id === void 0 ? void 0 : sanitizeId(value.thread_id),
-    event_type: value.event_type,
-    sequence: value.sequence,
-    payload: { ...value.payload }
-  };
-}
-function parseEvents(value, options) {
-  if (!Array.isArray(value)) return [];
-  return normalizeEvents(value.map((item) => parseEvent(item, options)).filter(Boolean));
-}
-function normalizeEvents(events, { maxEvents = 1e4 } = {}) {
-  const seenSequences = /* @__PURE__ */ new Set();
-  const seenIds = /* @__PURE__ */ new Set();
-  const valid = [];
-  const candidates = [];
-  for (const item of Array.isArray(events) ? events : []) {
-    const event = item?.sequence ? parseEvent(item) : null;
-    if (event) candidates.push(event);
-  }
-  candidates.sort((left, right) => left.sequence - right.sequence);
-  for (const event of candidates) {
-    if (seenSequences.has(event.sequence) || event.event_id && seenIds.has(event.event_id)) continue;
-    seenSequences.add(event.sequence);
-    if (event.event_id) seenIds.add(event.event_id);
-    valid.push(event);
-  }
-  const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(1e4, Math.floor(maxEvents))) : 1e4;
-  return valid.slice(-limit);
-}
-
-// frontend/src/event-stream.js
-function createEventStreamState({ cursor = 0, maxEvents = 1e4 } = {}) {
-  return {
-    cursor: Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0,
-    events: [],
-    maxEvents: Math.max(1, Math.min(1e4, Number(maxEvents) || 1e4)),
-    needsSnapshot: false,
-    error: null
-  };
-}
-function acceptEvent(state, value) {
-  const current = state || createEventStreamState();
-  const event = parseEvent(value);
-  if (!event) return { state: current, accepted: false, reason: "invalid" };
-  if (event.sequence <= current.cursor) return { state: current, accepted: false, reason: "replay" };
-  if (event.event_type === "bridge.snapshot_required") {
-    return {
-      state: { ...current, cursor: event.sequence, needsSnapshot: true },
-      accepted: true,
-      control: "snapshot",
-      event
-    };
-  }
-  if (event.event_type === "bridge.error") {
-    const message = typeof event.payload?.error === "string" ? event.payload.error.slice(0, 1e3) : "Bridge event stream failed";
-    return {
-      state: { ...current, cursor: event.sequence, error: message },
-      accepted: true,
-      control: "error",
-      event
-    };
-  }
-  if (event.event_id && current.events.some((item) => item.event_id === event.event_id)) {
-    return { state: current, accepted: false, reason: "duplicate" };
-  }
-  const events = normalizeEvents([...current.events, event], { maxEvents: current.maxEvents });
-  return {
-    state: { ...current, cursor: event.sequence, events, needsSnapshot: false, error: null },
-    accepted: true,
-    event
-  };
-}
-function acceptEvents(state, values) {
-  let next = state || createEventStreamState();
-  const accepted = [];
-  const controls = [];
-  for (const value of normalizeEvents(values)) {
-    const result = acceptEvent(next, value);
-    next = result.state;
-    if (result.accepted) {
-      accepted.push(result.event);
-      if (result.control) {
-        controls.push(result.control);
-        break;
-      }
-    }
-  }
-  return { state: next, accepted, controls };
-}
-
-// frontend/src/uploads.js
-var UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
-var SHA256_WORDS = new Uint32Array([
-  1116352408,
-  1899447441,
-  3049323471,
-  3921009573,
-  961987163,
-  1508970993,
-  2453635748,
-  2870763221,
-  3624381080,
-  310598401,
-  607225278,
-  1426881987,
-  1925078388,
-  2162078206,
-  2614888103,
-  3248222580,
-  3835390401,
-  4022224774,
-  264347078,
-  604807628,
-  770255983,
-  1249150122,
-  1555081692,
-  1996064986,
-  2554220882,
-  2821834349,
-  2952996808,
-  3210313671,
-  3336571891,
-  3584528711,
-  113926993,
-  338241895,
-  666307205,
-  773529912,
-  1294757372,
-  1396182291,
-  1695183700,
-  1986661051,
-  2177026350,
-  2456956037,
-  2730485921,
-  2820302411,
-  3259730800,
-  3345764771,
-  3516065817,
-  3600352804,
-  4094571909,
-  275423344,
-  430227734,
-  506948616,
-  659060556,
-  883997877,
-  958139571,
-  1322822218,
-  1537002063,
-  1747873779,
-  1955562222,
-  2024104815,
-  2227730452,
-  2361852424,
-  2428436474,
-  2756734187,
-  3204031479,
-  3329325298
-]);
-var UploadError = class extends Error {
-  constructor(code, { status = null, retryable = false } = {}) {
-    super(status === null ? `Upload ${code.replaceAll("_", " ")}` : `Upload failed (HTTP ${status})`);
-    this.name = "UploadError";
-    this.code = code;
-    this.status = status;
-    this.retryable = retryable;
-  }
-};
-var IncrementalSha256 = class {
-  constructor() {
-    this._state = new Uint32Array([
-      1779033703,
-      3144134277,
-      1013904242,
-      2773480762,
-      1359893119,
-      2600822924,
-      528734635,
-      1541459225
-    ]);
-    this._tail = new Uint8Array(0);
-    this._length = 0;
-    this._workspace = new Uint32Array(64);
-  }
-  update(input) {
-    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-    this._length += bytes.byteLength;
-    let position = 0;
-    if (this._tail.length) {
-      const missing = 64 - this._tail.length;
-      if (bytes.length < missing) {
-        this._tail = appendBytes(this._tail, bytes);
-        return;
-      }
-      const block = new Uint8Array(64);
-      block.set(this._tail);
-      block.set(bytes.subarray(0, missing), this._tail.length);
-      this._compress(block);
-      this._tail = new Uint8Array(0);
-      position = missing;
-    }
-    while (position + 64 <= bytes.length) {
-      this._compress(bytes.subarray(position, position + 64));
-      position += 64;
-    }
-    if (position < bytes.length) {
-      this._tail = bytes.slice(position);
-    }
-  }
-  hexDigest() {
-    const totalBits = BigInt(this._length) * 8n;
-    const paddingLength = this._tail.length < 56 ? 64 : 128;
-    const finalBlock = new Uint8Array(paddingLength);
-    finalBlock.set(this._tail);
-    finalBlock[this._tail.length] = 128;
-    for (let index = 0; index < 8; index += 1) {
-      finalBlock[finalBlock.length - 1 - index] = Number(totalBits >> BigInt(index * 8) & 0xffn);
-    }
-    for (let position = 0; position < finalBlock.length; position += 64) {
-      this._compress(finalBlock.subarray(position, position + 64));
-    }
-    return Array.from(this._state, (word) => word.toString(16).padStart(8, "0")).join("");
-  }
-  _compress(block) {
-    const words = this._workspace;
-    for (let index = 0; index < 16; index += 1) {
-      const offset = index * 4;
-      words[index] = (block[offset] << 24 | block[offset + 1] << 16 | block[offset + 2] << 8 | block[offset + 3]) >>> 0;
-    }
-    for (let index = 16; index < 64; index += 1) {
-      const gamma0 = rightRotate(words[index - 15], 7) ^ rightRotate(words[index - 15], 18) ^ words[index - 15] >>> 3;
-      const gamma1 = rightRotate(words[index - 2], 17) ^ rightRotate(words[index - 2], 19) ^ words[index - 2] >>> 10;
-      words[index] = words[index - 16] + gamma0 + words[index - 7] + gamma1 >>> 0;
-    }
-    let [a, b, c, d, e, f, g, h] = this._state;
-    for (let index = 0; index < 64; index += 1) {
-      const sigma1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
-      const choose = e & f ^ ~e & g;
-      const temp1 = h + sigma1 + choose + SHA256_WORDS[index] + words[index] >>> 0;
-      const sigma0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
-      const majority = a & b ^ a & c ^ b & c;
-      const temp2 = sigma0 + majority >>> 0;
-      h = g;
-      g = f;
-      f = e;
-      e = d + temp1 >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = temp1 + temp2 >>> 0;
-    }
-    this._state[0] = this._state[0] + a >>> 0;
-    this._state[1] = this._state[1] + b >>> 0;
-    this._state[2] = this._state[2] + c >>> 0;
-    this._state[3] = this._state[3] + d >>> 0;
-    this._state[4] = this._state[4] + e >>> 0;
-    this._state[5] = this._state[5] + f >>> 0;
-    this._state[6] = this._state[6] + g >>> 0;
-    this._state[7] = this._state[7] + h >>> 0;
-  }
-};
-async function sha256File(file, { chunkSize = UPLOAD_CHUNK_BYTES, signal } = {}) {
-  if (!Number.isSafeInteger(chunkSize) || chunkSize < 1 || chunkSize > UPLOAD_CHUNK_BYTES) {
-    throw new UploadError("invalid_chunk_size");
-  }
-  const hasher = new IncrementalSha256();
-  for (let offset = 0; offset < file.size; offset += chunkSize) {
-    throwIfAborted(signal);
-    hasher.update(await blobBytes(file.slice(offset, Math.min(file.size, offset + chunkSize)), signal));
-  }
-  return hasher.hexDigest();
-}
-async function uploadResumableFile({
-  file,
-  threadId,
-  relativePath,
-  uploadId = null,
-  accessToken = "",
-  fetchImpl = fetch,
-  signal,
-  onProgress = () => {
-  },
-  retryAttempts = 2,
-  retryDelay = 250
-} = {}) {
-  const safeFile = validateFile(file);
-  const safeThreadId = validateIdentifier(threadId, "invalid_thread");
-  const safePath = normaliseRelativePath(relativePath ?? safeFile.name, safeFile.name);
-  if (!Number.isSafeInteger(retryAttempts) || retryAttempts < 0 || retryAttempts > 5) {
-    throw new UploadError("invalid_retry_attempts");
-  }
-  const report = (value) => onProgress({ totalBytes: safeFile.size, ...value });
-  report({ status: "hashing", completedBytes: 0 });
-  const fileDigest = await sha256File(safeFile, { signal });
-  throwIfAborted(signal);
-  let session;
-  if (uploadId) {
-    session = await getUploadSession(fetchImpl, safeThreadId, uploadId, accessToken, signal);
-    assertSessionMatchesFile(session, safeFile, safePath, fileDigest);
-  } else {
-    session = await requestJson(fetchImpl, uploadUrl(safeThreadId), {
-      method: "POST",
-      headers: {
-        ...authorizationHeaders(accessToken),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        filename: safeFile.name,
-        mime_type: safeFile.type || "application/octet-stream",
-        relative_path: safePath,
-        size_bytes: safeFile.size,
-        sha256: fileDigest
-      }),
-      signal
-    }, [201]);
-  }
-  session = validateSession(session, safeFile.size);
-  if (session.status === "cancelled") {
-    throw new UploadError("session_cancelled");
-  }
-  if (session.status === "completed") {
-    report({ status: "completed", completedBytes: safeFile.size, uploadId: session.upload_id });
-    return { upload: session, attachment: null };
-  }
-  while (session.status === "active") {
-    const index = firstMissingIndex(session);
-    if (index === session.total_chunks) {
-      break;
-    }
-    const offset = index * session.chunk_size;
-    const chunk = safeFile.slice(offset, Math.min(safeFile.size, offset + session.chunk_size));
-    const chunkDigest = await sha256File(chunk, { chunkSize: Math.min(chunk.size, UPLOAD_CHUNK_BYTES), signal });
-    report({ status: "uploading", completedBytes: Math.min(offset, safeFile.size), uploadId: session.upload_id });
-    session = await putChunkWithReconcile({
-      fetchImpl,
-      threadId: safeThreadId,
-      session,
-      index,
-      offset,
-      chunk,
-      chunkDigest,
-      accessToken,
-      signal,
-      retryAttempts,
-      retryDelay,
-      fileSize: safeFile.size
-    });
-    report({
-      status: "uploading",
-      completedBytes: Math.min(firstMissingIndex(session) * session.chunk_size, safeFile.size),
-      uploadId: session.upload_id
-    });
-  }
-  if (session.status === "completed") {
-    report({ status: "completed", completedBytes: safeFile.size, uploadId: session.upload_id });
-    return { upload: session, attachment: null };
-  }
-  if (session.status === "cancelled") {
-    throw new UploadError("session_cancelled");
-  }
-  let attachment;
-  try {
-    attachment = await requestJson(fetchImpl, `${uploadUrl(safeThreadId, session.upload_id)}/complete`, {
-      method: "POST",
-      headers: authorizationHeaders(accessToken),
-      signal
-    }, [201]);
-  } catch (error) {
-    if (!isReconciliable(error)) {
-      throw error;
-    }
-    session = await getUploadSession(fetchImpl, safeThreadId, session.upload_id, accessToken, signal);
-    if (session.status !== "completed") {
-      throw error;
-    }
-    attachment = null;
-  }
-  report({ status: "completed", completedBytes: safeFile.size, uploadId: session.upload_id });
-  return { upload: session, attachment };
-}
-async function putChunkWithReconcile(options) {
-  const {
-    fetchImpl,
-    threadId,
-    session,
-    index,
-    offset,
-    chunk,
-    chunkDigest,
-    accessToken,
-    signal,
-    retryAttempts,
-    retryDelay,
-    fileSize
-  } = options;
-  let latest = session;
-  let lastError;
-  for (let attempt = 0; attempt <= retryAttempts; attempt += 1) {
-    throwIfAborted(signal);
-    try {
-      return validateSession(await requestJson(fetchImpl, `${uploadUrl(threadId, latest.upload_id)}/chunks/${index}`, {
-        method: "PUT",
-        headers: {
-          ...authorizationHeaders(accessToken),
-          "Content-Type": "application/octet-stream",
-          "Upload-Offset": String(offset),
-          "X-Chunk-SHA256": chunkDigest
-        },
-        body: chunk,
-        signal
-      }, [200]), fileSize);
-    } catch (error) {
-      lastError = error;
-      if (!isReconciliable(error)) {
-        throw error;
-      }
-      try {
-        latest = await getUploadSession(fetchImpl, threadId, latest.upload_id, accessToken, signal);
-      } catch (statusError) {
-        if (attempt === retryAttempts || !isReconciliable(statusError)) {
-          throw lastError;
-        }
-      }
-      if (latest.status === "completed" || receivedIndices(latest).includes(index)) {
-        return latest;
-      }
-      if (attempt === retryAttempts) {
-        throw lastError;
-      }
-      await delay(retryDelay, signal);
-    }
-  }
-  throw lastError || new UploadError("network_error", { retryable: true });
-}
-async function getUploadSession(fetchImpl, threadId, uploadId, accessToken, signal) {
-  return validateSession(await requestJson(fetchImpl, uploadUrl(threadId, uploadId), {
-    method: "GET",
-    headers: authorizationHeaders(accessToken),
-    signal
-  }, [200]));
-}
-function validateSession(session, expectedSize = null) {
-  if (!session || typeof session !== "object" || typeof session.upload_id !== "string" || !session.upload_id) {
-    throw new UploadError("invalid_session");
-  }
-  if (!Number.isSafeInteger(session.chunk_size) || session.chunk_size < 1 || session.chunk_size > UPLOAD_CHUNK_BYTES || !Number.isSafeInteger(session.total_chunks) || session.total_chunks < 1 || !Array.isArray(session.received_indices) || !["active", "completed", "cancelled"].includes(session.status)) {
-    throw new UploadError("invalid_session");
-  }
-  if (expectedSize !== null && session.size_bytes !== void 0 && session.size_bytes !== expectedSize) {
-    throw new UploadError("session_mismatch");
-  }
-  const indices = receivedIndices(session);
-  if (indices.some((index, position) => index !== position || index >= session.total_chunks)) {
-    throw new UploadError("invalid_session");
-  }
-  return session;
-}
-function assertSessionMatchesFile(session, file, relativePath, sha256) {
-  validateSession(session, file.size);
-  if (session.filename !== file.name || session.relative_path !== relativePath || session.sha256 !== sha256) {
-    throw new UploadError("session_mismatch");
-  }
-}
-function firstMissingIndex(session) {
-  return receivedIndices(session).length;
-}
-function receivedIndices(session) {
-  return [...session.received_indices].sort((left, right) => left - right);
-}
-function validateFile(file) {
-  if (!file || typeof file.name !== "string" || !Number.isSafeInteger(file.size) || file.size < 1 || typeof file.slice !== "function") {
-    throw new UploadError("invalid_file");
-  }
-  if (file.name.includes("/") || file.name.includes("\\") || containsControl(file.name)) {
-    throw new UploadError("invalid_path");
-  }
-  return file;
-}
-function normaliseRelativePath(value, filename) {
-  if (typeof value !== "string" || !value || containsControl(value)) {
-    throw new UploadError("invalid_path");
-  }
-  const path = value.replaceAll("\\", "/");
-  if (path.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
-    throw new UploadError("invalid_path");
-  }
-  const parts = path.split("/");
-  if (parts.length > 16 || parts.some((part) => !part || part === "." || part === "..") || parts.at(-1) !== filename) {
-    throw new UploadError("invalid_path");
-  }
-  return path;
-}
-function validateIdentifier(value, code) {
-  if (typeof value !== "string" || !value || containsControl(value)) {
-    throw new UploadError(code);
-  }
-  return value;
-}
-function uploadUrl(threadId, uploadId = null) {
-  const root = `/api/codex_bridge/threads/${encodeURIComponent(threadId)}/uploads`;
-  return uploadId ? `${root}/${encodeURIComponent(validateIdentifier(uploadId, "invalid_upload"))}` : root;
-}
-function authorizationHeaders(accessToken) {
-  return typeof accessToken === "string" && accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
-}
-async function requestJson(fetchImpl, url, init, expectedStatuses) {
-  throwIfAborted(init.signal);
-  let response;
-  try {
-    response = await fetchImpl(url, init);
-  } catch (error) {
-    if (init.signal?.aborted || error?.name === "AbortError") {
-      throw new UploadError("aborted");
-    }
-    throw new UploadError("network_error", { retryable: true });
-  }
-  if (!expectedStatuses.includes(response.status)) {
-    throw new UploadError("http_error", { status: response.status, retryable: response.status >= 500 || response.status === 409 });
-  }
-  try {
-    return await response.json();
-  } catch {
-    throw new UploadError("invalid_response");
-  }
-}
-function isReconciliable(error) {
-  return error instanceof UploadError && error.retryable;
-}
-function throwIfAborted(signal) {
-  if (signal?.aborted) {
-    throw new UploadError("aborted");
-  }
-}
-function delay(milliseconds, signal) {
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
-    throwIfAborted(signal);
-    return Promise.resolve();
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", aborted);
-      resolve();
-    }, milliseconds);
-    const aborted = () => {
-      clearTimeout(timer);
-      reject(new UploadError("aborted"));
-    };
-    signal?.addEventListener("abort", aborted, { once: true });
-  });
-}
-async function blobBytes(blob, signal) {
-  throwIfAborted(signal);
-  try {
-    return new Uint8Array(await blob.arrayBuffer());
-  } catch (error) {
-    if (signal?.aborted || error?.name === "AbortError") {
-      throw new UploadError("aborted");
-    }
-    throw new UploadError("invalid_file");
-  }
-}
-function appendBytes(left, right) {
-  const combined = new Uint8Array(left.length + right.length);
-  combined.set(left);
-  combined.set(right, left.length);
-  return combined;
-}
-function rightRotate(value, amount) {
-  return value >>> amount | value << 32 - amount;
-}
-function containsControl(value) {
-  return [...value].some((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint <= 31 || codePoint === 127;
-  });
-}
-
-// frontend/src/codex-bridge-panel.js
-var MODE_OPTIONS = [
+const MODE_OPTIONS = [
   { value: "observe", label: "Observe" },
   { value: "edit", label: "Edit" },
-  { value: "full-auto", label: "Full auto" }
+  { value: "full-auto", label: "Full auto" },
 ];
-var template = document.createElement("template");
+
+const template = document.createElement("template");
 template.innerHTML = `
   <style>
     :host {
@@ -2063,12 +1364,14 @@ template.innerHTML = `
     </aside>
   </div>
 `;
-var iconSvg = (path) => `
+
+const iconSvg = (path) => `
   <svg viewBox="0 0 24 24" aria-hidden="true">
     ${path}
   </svg>
 `;
-var icons = {
+
+const icons = {
   plus: iconSvg('<path d="M12 5v14"></path><path d="M5 12h14"></path>'),
   refresh: iconSvg('<path d="M20 11a8 8 0 1 0 2 5.3"></path><path d="M20 4v7h-7"></path>'),
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
@@ -2090,9 +1393,10 @@ var icons = {
   archive: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="M9 11h6"></path><path d="M4 4h16v3H4z"></path>'),
   restore: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="m9 14 3-3 3 3"></path><path d="M12 11v7"></path><path d="M4 4h16v3H4z"></path>'),
   trash: iconSvg('<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path>'),
-  package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>')
+  package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>'),
 };
-var CodexBridgePanel = class extends HTMLElement {
+
+class CodexBridgePanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -2122,12 +1426,12 @@ var CodexBridgePanel = class extends HTMLElement {
       name: "",
       rootPath: "",
       defaultModel: "",
-      defaultThinkingLevel: "medium"
+      defaultThinkingLevel: "medium",
     };
     this._threadForm = {
       title: "",
       mode: "full-auto",
-      projectId: null
+      projectId: null,
     };
     this._folderDraft = "";
     this._browseState = null;
@@ -2159,13 +1463,15 @@ var CodexBridgePanel = class extends HTMLElement {
     this._collapsedProjects = {};
     this._collapsedSections = {
       direct: false,
-      archived: true
+      archived: true,
     };
   }
+
   connectedCallback() {
     this._installStaticUi();
     this._render();
   }
+
   disconnectedCallback() {
     this._stopPolling();
     this._stopEventSubscription();
@@ -2173,6 +1479,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._uploadAbortController = null;
     this._revokePreviewUrl();
   }
+
   set hass(value) {
     this._hass = value;
     if (!this._config) {
@@ -2181,16 +1488,20 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._render();
   }
+
   get hass() {
     return this._hass;
   }
+
   set panel(value) {
     this._panel = value;
     this._render();
   }
+
   get panel() {
     return this._panel;
   }
+
   async _bootstrap() {
     if (!this._hass || this._isLoading) {
       return;
@@ -2207,15 +1518,24 @@ var CodexBridgePanel = class extends HTMLElement {
       this._render();
     }
   }
+
   async _callWS(action, payload = {}) {
     return this._hass.connection.sendMessagePromise({
       type: `codex_bridge/${action}`,
-      ...payload
+      ...payload,
     });
   }
+
   _accessToken() {
-    return this._hass?.auth?.data?.access_token || this._hass?.auth?.data?.accessToken || this._hass?.auth?.accessToken || this._hass?.connection?.options?.auth?.accessToken || "";
+    return (
+      this._hass?.auth?.data?.access_token ||
+      this._hass?.auth?.data?.accessToken ||
+      this._hass?.auth?.accessToken ||
+      this._hass?.connection?.options?.auth?.accessToken ||
+      ""
+    );
   }
+
   _installStaticUi() {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.chat, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-project-button"), icons.plus, "New project");
@@ -2226,12 +1546,14 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
+
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
     this.shadowRoot.addEventListener("paste", (event) => this._handlePaste(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
+
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
       if (files.length) {
@@ -2239,6 +1561,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       event.target.value = "";
     });
+
     this.shadowRoot.getElementById("folder-input").addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
       if (files.length) {
@@ -2247,11 +1570,13 @@ var CodexBridgePanel = class extends HTMLElement {
       event.target.value = "";
     });
   }
+
   _handleClick(event) {
     const actionTarget = event.target.closest("[data-action]");
     if (!actionTarget) {
       return;
     }
+
     const action = actionTarget.dataset.action;
     switch (action) {
       case "new-direct-chat":
@@ -2370,11 +1695,13 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
     }
   }
+
   _handleInput(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
       return;
     }
+
     if (target.id === "prompt-input") {
       this._draft = target.value;
       return;
@@ -2400,6 +1727,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._folderDraft = target.value;
     }
   }
+
   _handleChange(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
@@ -2432,10 +1760,16 @@ var CodexBridgePanel = class extends HTMLElement {
       const modelOverride = target.value || null;
       const project = this._activeProject();
       const effectiveModel = modelOverride || project?.default_model || this._defaultModel();
-      const effectiveThinkingLevel = this._activeThread?.thinking_override || this._activeThread?.effective_thinking_level || project?.default_thinking_level || this._defaultThinkingLevel(effectiveModel);
+      const effectiveThinkingLevel =
+        this._activeThread?.thinking_override ||
+        this._activeThread?.effective_thinking_level ||
+        project?.default_thinking_level ||
+        this._defaultThinkingLevel(effectiveModel);
       const updates = { model_override: modelOverride };
       const modelRecord = this._modelRecords().find((item) => item.model === effectiveModel);
-      const advertisedLevels = Array.isArray(modelRecord?.thinking_levels) ? modelRecord.thinking_levels : [];
+      const advertisedLevels = Array.isArray(modelRecord?.thinking_levels)
+        ? modelRecord.thinking_levels
+        : [];
       if (advertisedLevels.length && !advertisedLevels.includes(effectiveThinkingLevel)) {
         updates.thinking_override = this._defaultThinkingLevel(effectiveModel);
       }
@@ -2446,6 +1780,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._updateThreadSettings({ thinking_override: target.value || null });
     }
   }
+
   _handlePaste(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement) || target.id !== "prompt-input") {
@@ -2462,6 +1797,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._uploadFiles(files, { useRelativePaths: false });
   }
+
   _handleFocusIn(event) {
     const target = event.target;
     if (!this._isRefreshLockTarget(target)) {
@@ -2469,6 +1805,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._suspendUiRefresh = true;
   }
+
   _handleFocusOut(event) {
     if (!this._isRefreshLockTarget(event.target)) {
       return;
@@ -2484,15 +1821,18 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }, 0);
   }
+
   _render(force = false) {
     if (!force && this._suspendUiRefresh) {
       this._queuedRender = true;
       return;
     }
     this._queuedRender = false;
+
     const activeThread = this._activeThread;
     const activeProject = this._activeProject();
     const contextName = activeProject?.kind === "direct" ? "Direct chat" : activeProject?.name || "Ready";
+
     this.shadowRoot.getElementById("panel-title").textContent = this._config?.panel_title || "Codex Bridge";
     const accountPill = this.shadowRoot.getElementById("account-pill");
     const account = this._status?.account;
@@ -2500,18 +1840,27 @@ var CodexBridgePanel = class extends HTMLElement {
     accountPill.title = this._accountTitle(account);
     accountPill.classList.toggle("unavailable", !account?.available);
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
-    this.shadowRoot.getElementById("thread-title-label").textContent = activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
-    this.shadowRoot.getElementById("thread-path-label").textContent = activeThread?.workspace_path || activeProject?.root_path || "";
-    this.shadowRoot.getElementById("thread-status-text").textContent = activeThread ? `Status: ${activeThread.status}` : "";
+    this.shadowRoot.getElementById("thread-title-label").textContent =
+      activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
+    this.shadowRoot.getElementById("thread-path-label").textContent =
+      activeThread?.workspace_path || activeProject?.root_path || "";
+    this.shadowRoot.getElementById("thread-status-text").textContent =
+      activeThread ? `Status: ${activeThread.status}` : "";
     this.shadowRoot.getElementById("stop-run-button").classList.toggle(
       "hidden",
       !activeThread || activeThread.status !== "running"
     );
-    this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads ? this._uploadProgressText() : activeThread ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - paste screenshot` : "No chat selected";
+    this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
+      ? this._uploadProgressText()
+      : activeThread
+        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - paste screenshot`
+        : "No chat selected";
     this._renderComposerState(activeThread);
+
     const errorStrip = this.shadowRoot.getElementById("error-strip");
     errorStrip.textContent = this._error;
     errorStrip.classList.toggle("visible", Boolean(this._error));
+
     this._renderProjectForm();
     this._renderStatusBanner();
     this._renderThreadForm();
@@ -2527,14 +1876,20 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderContext();
     this._renderDiagnostics();
   }
+
   _renderComposerState(activeThread) {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
     const isRunning = activeThread?.status === "running";
-    promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
+    promptInput.placeholder = isRunning
+      ? "Steer the running Codex turn"
+      : "Message Codex through Home Assistant";
     this._setTrustedButtonContent(sendButton, icons.send, isRunning ? "Steer" : "Send");
-    sendButton.title = isRunning ? "Queue steering for this running Codex turn" : "Send message to Codex";
+    sendButton.title = isRunning
+      ? "Queue steering for this running Codex turn"
+      : "Send message to Codex";
   }
+
   _projectFormRenderKey() {
     return JSON.stringify({
       mode: this._projectFormMode,
@@ -2544,9 +1899,10 @@ var CodexBridgePanel = class extends HTMLElement {
       browseDirectories: (this._browseState?.directories || []).map((entry) => [entry.name, entry.path]),
       model: this._projectForm.defaultModel,
       thinking: this._projectForm.defaultThinkingLevel,
-      models: this._modelRecords()
+      models: this._modelRecords(),
     });
   }
+
   _renderProjectForm() {
     const panel = this.shadowRoot.getElementById("project-form-panel");
     panel.classList.toggle("visible", this._showProjectForm);
@@ -2555,11 +1911,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderedProjectFormKey = "";
       return;
     }
+
     const isEditMode = this._projectFormMode === "edit";
     const formKey = this._projectFormRenderKey();
     if (formKey === this._renderedProjectFormKey && panel.childElementCount) {
       return;
     }
+
     panel.replaceChildren();
     const titleBlock = document.createElement("div");
     titleBlock.className = "title-block";
@@ -2569,6 +1927,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     const nameInput = this._input("field", "project-name-input", "Project name", this._projectForm.name);
     panel.append(titleBlock, nameInput);
+
     if (isEditMode) {
       const rootInput = this._input("field", "project-root-input", "C:\\Projects\\My Work", this._projectForm.rootPath);
       const fieldGrid = document.createElement("div");
@@ -2578,6 +1937,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const thinkingSelect = this._select("field-select stable-select", "project-thinking-select");
       this._appendThinkingOptions(thinkingSelect, this._projectForm.defaultThinkingLevel, this._projectForm.defaultModel);
       fieldGrid.append(modelSelect, thinkingSelect);
+
       const browserCard = document.createElement("div");
       browserCard.className = "browser-card";
       const browseActions = document.createElement("div");
@@ -2615,6 +1975,7 @@ var CodexBridgePanel = class extends HTMLElement {
       );
       panel.append(rootInput, fieldGrid, browserCard);
     }
+
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
     const save = this._actionButton("send-button", "save-project");
@@ -2625,6 +1986,7 @@ var CodexBridgePanel = class extends HTMLElement {
     panel.append(formActions);
     this._renderedProjectFormKey = formKey;
   }
+
   _renderThreadForm() {
     const panel = this.shadowRoot.getElementById("thread-form-panel");
     panel.classList.toggle("visible", this._showThreadForm);
@@ -2633,14 +1995,17 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderedThreadFormKey = "";
       return;
     }
-    const targetProject = this._threadForm.projectId ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null : this._directProject();
+
+    const targetProject = this._threadForm.projectId
+      ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null
+      : this._directProject();
     const isDirect = !this._threadForm.projectId || targetProject?.kind === "direct";
     const formKey = JSON.stringify({
       projectId: this._threadForm.projectId || "",
       targetProjectId: targetProject?.project_id || "",
       targetProjectName: targetProject?.name || "",
       targetProjectPath: targetProject?.root_path || "",
-      isDirect
+      isDirect,
     });
     if (formKey === this._renderedThreadFormKey && panel.childElementCount) {
       return;
@@ -2673,6 +2038,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     this._renderedThreadFormKey = formKey;
   }
+
   _isRefreshLockTarget(target) {
     if (!(target instanceof HTMLElement)) {
       return false;
@@ -2685,6 +2051,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return Boolean(target.closest("#thread-form-panel, #project-form-panel"));
   }
+
   _clipboardFiles(clipboardData) {
     if (!clipboardData?.items?.length) {
       return [];
@@ -2702,38 +2069,43 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return files;
   }
+
   _normalizeClipboardFile(file, index = 0) {
     if (file.name) {
       return file;
     }
     const extension = this._extensionFromMime(file.type);
-    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `clipboard-${stamp}${index ? `-${index + 1}` : ""}.${extension}`;
     return new File([file], filename, {
       type: file.type || "application/octet-stream",
-      lastModified: Date.now()
+      lastModified: Date.now(),
     });
   }
+
   _extensionFromMime(mimeType) {
     const map = {
       "image/png": "png",
       "image/jpeg": "jpg",
       "image/webp": "webp",
       "image/gif": "gif",
-      "image/bmp": "bmp"
+      "image/bmp": "bmp",
     };
     return map[mimeType] || "bin";
   }
+
   _renderDirectSection() {
     const section = this.shadowRoot.getElementById("direct-section");
     const directThreads = this._directThreads(false);
     const collapsed = Boolean(this._collapsedSections.direct);
     const directProject = this._directProject();
     const hasMatches = directThreads.length || !this._searchQuery.trim();
+
     if (!directProject && !hasMatches) {
       section.replaceChildren();
       return;
     }
+
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
@@ -2760,10 +2132,12 @@ var CodexBridgePanel = class extends HTMLElement {
       section.append(chatList);
     }
   }
+
   _renderProjectList() {
     const section = this.shadowRoot.getElementById("project-section");
     const projects = this._projects.filter((project) => project.kind !== "direct" && !project.archived_at);
     const visibleProjects = projects.filter((project) => this._projectIsVisible(project));
+
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = "section-head compact";
@@ -2773,6 +2147,7 @@ var CodexBridgePanel = class extends HTMLElement {
       section.append(this._emptyStateNode("No projects yet", "Create a project and point it at a real folder on the VM."));
       return;
     }
+
     const projectList = document.createElement("div");
     projectList.className = "project-list";
     if (visibleProjects.length) {
@@ -2784,6 +2159,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     section.append(projectList);
   }
+
   _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
     const threads = this._projectThreads(project.project_id, includeArchivedThreads);
     const collapsed = Boolean(this._collapsedProjects[project.project_id]);
@@ -2812,7 +2188,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const projectActions = document.createElement("div");
     projectActions.className = "project-actions";
     if (project.kind === "project") {
-      const actions = archived ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]] : [["new-chat", "New chat", icons.plus], ["edit-project", "Edit project", icons.edit], ["archive-project", "Archive project", icons.archive], ["delete-project", "Delete project", icons.trash]];
+      const actions = archived
+        ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]]
+        : [["new-chat", "New chat", icons.plus], ["edit-project", "Edit project", icons.edit], ["archive-project", "Archive project", icons.archive], ["delete-project", "Delete project", icons.trash]];
       for (const [action, label, icon] of actions) {
         const button = this._actionButton("icon-button small", action, label);
         button.dataset.projectId = String(project.project_id || "");
@@ -2836,18 +2214,24 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return shell;
   }
+
   _renderArchivedSection() {
     const section = this.shadowRoot.getElementById("archived-section");
     const archivedProjects = this._projects.filter((project) => Boolean(project.archived_at) && this._projectMatchesQuery(project));
     const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
     const archivedThreads = this._threads.filter(
-      (thread) => Boolean(thread.archived_at) && !archivedProjectIds.has(thread.project_id) && this._threadMatchesQuery(thread)
+      (thread) =>
+        Boolean(thread.archived_at) &&
+        !archivedProjectIds.has(thread.project_id) &&
+        this._threadMatchesQuery(thread)
     );
     const collapsed = Boolean(this._collapsedSections.archived);
+
     if (!archivedProjects.length && !archivedThreads.length) {
       section.replaceChildren();
       return;
     }
+
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
@@ -2868,6 +2252,7 @@ var CodexBridgePanel = class extends HTMLElement {
       section.append(chatList);
     }
   }
+
   _threadRow(thread, { archived = false } = {}) {
     const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
     const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
@@ -2906,6 +2291,7 @@ var CodexBridgePanel = class extends HTMLElement {
     row.append(select, rowActions);
     return row;
   }
+
   _renderToolbar() {
     const container = this.shadowRoot.getElementById("compact-toolbar");
     const focused = this.shadowRoot.activeElement;
@@ -2927,11 +2313,12 @@ var CodexBridgePanel = class extends HTMLElement {
       effectiveThinking: thread?.effective_thinking_level || null,
       limits,
       modelRecords,
-      thinkingLevels
+      thinkingLevels,
     });
     if (toolbarKey === this._renderedToolbarKey) {
       return;
     }
+
     const modelValue = thread?.model_override || "";
     const thinkingValue = thread?.thinking_override || "";
     container.replaceChildren();
@@ -2945,6 +2332,7 @@ var CodexBridgePanel = class extends HTMLElement {
       limitPair,
       this._textElement("span", "setting-foot", this._limitsFootnote(limits))
     );
+
     const controlsCard = document.createElement("div");
     controlsCard.className = "toolbar-card controls";
     controlsCard.append(
@@ -2966,6 +2354,7 @@ var CodexBridgePanel = class extends HTMLElement {
     container.append(limitsCard, controlsCard);
     this._renderedToolbarKey = toolbarKey;
   }
+
   _compactLimitCard(label, windowInfo) {
     const card = document.createElement("div");
     card.className = "mini-limit";
@@ -2984,7 +2373,12 @@ var CodexBridgePanel = class extends HTMLElement {
       return card;
     }
     const remaining = typeof windowInfo.remaining_percent === "number" ? Math.max(0, Math.min(100, windowInfo.remaining_percent)) : 0;
-    const limitColor = remaining <= 15 ? "var(--danger-color)" : remaining <= 35 ? "var(--brand-amber)" : "var(--brand-emerald)";
+    const limitColor =
+      remaining <= 15
+        ? "var(--danger-color)"
+        : remaining <= 35
+          ? "var(--brand-amber)"
+          : "var(--brand-emerald)";
     fill.style.setProperty("--limit-width", `${remaining.toFixed(0)}%`);
     fill.style.setProperty("--limit-color", limitColor);
     head.append(
@@ -2994,6 +2388,7 @@ var CodexBridgePanel = class extends HTMLElement {
     card.append(head, bar, this._textElement("span", "limit-subline", this._formatReset(windowInfo.resets_at)));
     return card;
   }
+
   _limitsFootnote(limits) {
     if (!limits) {
       return "No limit snapshot yet.";
@@ -3005,6 +2400,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const updated = limits.updated_at ? this._timeAgo(limits.updated_at) : "now";
     return `${plan} usage snapshot ${updated}`;
   }
+
   _renderStatusBanner() {
     const banner = this.shadowRoot.getElementById("status-banner");
     const state = this._statusBannerState();
@@ -3033,13 +2429,14 @@ var CodexBridgePanel = class extends HTMLElement {
     dismiss.textContent = "x";
     banner.append(content, dismiss);
   }
+
   _statusBannerState() {
     const auth = this._status?.auth;
     if (auth?.auth_required || ["expired", "login_failed", "login_running", "login_starting"].includes(auth?.state)) {
       const message = this._authBannerMessage(auth);
       const actions = [
         { action: "start-auth-login", label: auth?.state === "login_running" ? "Restart VM sign-in" : "Start VM sign-in", primary: true },
-        { action: "refresh-auth-status", label: "Check again" }
+        { action: "refresh-auth-status", label: "Check again" },
       ];
       if (auth?.user_code) {
         actions.push({ action: "copy-auth-code", label: "Copy code" });
@@ -3048,7 +2445,7 @@ var CodexBridgePanel = class extends HTMLElement {
         key: `auth:${auth?.state || "unknown"}:${message}:${auth?.user_code || ""}`,
         tone: "error",
         message,
-        actions
+        actions,
       };
     }
     const limits = this._status?.limits;
@@ -3057,7 +2454,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `limits:${message}`,
         tone: "error",
-        message
+        message,
       };
     }
     if (this._activeThread?.last_error) {
@@ -3067,7 +2464,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `thread:${this._selectedThreadId}:${this._activeThread.last_error}`,
         tone: "error",
-        message: `Last Codex error: ${this._activeThread.last_error}`
+        message: `Last Codex error: ${this._activeThread.last_error}`,
       };
     }
     const diagnosticsError = this._status?.diagnostics?.last_error;
@@ -3078,11 +2475,12 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `diagnostics:${diagnosticsError}`,
         tone: "error",
-        message: `Latest bridge error: ${diagnosticsError}`
+        message: `Latest bridge error: ${diagnosticsError}`,
       };
     }
     return null;
   }
+
   _authBannerMessage(auth) {
     const base = auth?.message || "Codex needs a fresh sign-in on the VM.";
     if (auth?.state === "login_running") {
@@ -3096,13 +2494,19 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return `${base} HA can start the VM sign-in and show the device code, but an invalid refresh token still needs approval from a device that can reach ChatGPT.`;
   }
+
   _isResolvedAuthError(message) {
     if (!this._authLooksRecovered()) {
       return false;
     }
     const lowered = String(message || "").toLowerCase();
-    return lowered.includes("codex login expired") || lowered.includes("401 unauthorized") || lowered.includes("refresh token");
+    return (
+      lowered.includes("codex login expired") ||
+      lowered.includes("401 unauthorized") ||
+      lowered.includes("refresh token")
+    );
   }
+
   _authLooksRecovered() {
     const auth = this._status?.auth;
     if (auth?.auth_required) {
@@ -3113,11 +2517,13 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return Boolean(this._status?.account?.available && this._status?.limits?.available);
   }
+
   _dismissStatusBanner() {
     const state = this._statusBannerState();
     this._dismissedBannerKey = state?.key || "";
     this._render();
   }
+
   _renderAttachmentChips() {
     const container = this.shadowRoot.getElementById("attachment-chip-list");
     const attachments = this._activeThread?.attachments || [];
@@ -3125,6 +2531,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!attachments.length) {
       return;
     }
+
     const visible = attachments.slice(-6);
     for (const attachment of visible) {
       const chip = document.createElement("span");
@@ -3141,6 +2548,7 @@ var CodexBridgePanel = class extends HTMLElement {
       );
     }
   }
+
   _renderMessages() {
     const messageList = this.shadowRoot.getElementById("message-list");
     if (!this._selectedThreadId) {
@@ -3153,6 +2561,7 @@ var CodexBridgePanel = class extends HTMLElement {
       );
       return;
     }
+
     const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
@@ -3160,15 +2569,23 @@ var CodexBridgePanel = class extends HTMLElement {
       this._forceMessageRebuild = false;
       messageList.replaceChildren();
     }
-    const shouldStick = shouldRebuild || messageList.scrollHeight - messageList.clientHeight - messageList.scrollTop < 80;
-    const eventsToRender = this._renderedSequence === 0 ? this._events : this._events.filter((item) => item.sequence > this._renderedSequence);
+
+    const shouldStick =
+      shouldRebuild || messageList.scrollHeight - messageList.clientHeight - messageList.scrollTop < 80;
+    const eventsToRender =
+      this._renderedSequence === 0
+        ? this._events
+        : this._events.filter((item) => item.sequence > this._renderedSequence);
+
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
       return;
     }
+
     if (eventsToRender.length && messageList.querySelector(".empty-state")) {
       messageList.replaceChildren();
     }
+
     for (const event of eventsToRender) {
       const node = this._renderEvent(event);
       if (!node) {
@@ -3178,10 +2595,12 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.append(node);
       this._renderedSequence = event.sequence;
     }
+
     if (shouldStick) {
       this._scrollMessagesToBottom();
     }
   }
+
   _scrollMessagesToBottom() {
     const messageList = this.shadowRoot.getElementById("message-list");
     messageList.scrollTop = messageList.scrollHeight;
@@ -3189,6 +2608,7 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.scrollTop = messageList.scrollHeight;
     });
   }
+
   _renderEvent(event) {
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     if (event.event_type === "message.created") {
@@ -3245,13 +2665,16 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return null;
   }
+
   _renderMessage(role, text, key, canCopy, label = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
+
     const avatar = this._textElement("span", "avatar", "");
     this._appendTrustedIcon(avatar, role === "user" ? icons.user : icons.bot);
     article.append(avatar);
+
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     if (canCopy || label) {
@@ -3271,6 +2694,7 @@ var CodexBridgePanel = class extends HTMLElement {
     article.append(bubble);
     return article;
   }
+
   _renderMessageBody(container, text) {
     const fencePattern = /```([^\n`]*)\n([\s\S]*?)```/g;
     let lastIndex = 0;
@@ -3299,6 +2723,7 @@ var CodexBridgePanel = class extends HTMLElement {
       container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex)));
     }
   }
+
   _renderProgress() {
     const container = this.shadowRoot.getElementById("progress-list");
     const items = this._progressItems();
@@ -3322,122 +2747,133 @@ var CodexBridgePanel = class extends HTMLElement {
       container.append(row);
     }
   }
+
   _progressItems() {
     const items = [];
     if (this._config?.bridge_url) {
       items.push({
         title: "Bridge connected",
         meta: this._config.bridge_url,
-        state: "complete"
+        state: "complete",
       });
     }
     if (this._activeThread) {
       items.push({
         title: this._activeThread.status === "running" ? "Run in progress" : "Chat selected",
         meta: this._activeThread.title,
-        state: this._activeThread.status === "running" ? "active" : this._activeThread.status === "error" ? "error" : "complete"
+        state: this._activeThread.status === "running" ? "active" : this._activeThread.status === "error" ? "error" : "complete",
       });
     }
     if (this._pendingUploads) {
       items.push({
         title: "Uploading files",
         meta: this._uploadProgressText(),
-        state: "active"
+        state: "active",
       });
     } else if ((this._activeThread?.attachments || []).length) {
       items.push({
         title: "Attachments available",
         meta: `${this._activeThread.attachments.length} uploaded`,
-        state: "complete"
+        state: "complete",
       });
     }
-    const notable = this._events.filter(
-      (event) => [
-        "run.failed",
-        "run.completed",
-        "run.queued",
-        "run.dequeued",
-        "run.queue_cleared",
-        "artifact.added",
-        "thread.updated",
-        "thread.archived",
-        "thread.restored"
-      ].includes(event.event_type)
-    ).slice(-4).reverse().map((event) => this._progressItemFromEvent(event));
+
+    const notable = this._events
+      .filter((event) =>
+        [
+          "run.failed",
+          "run.completed",
+          "run.queued",
+          "run.dequeued",
+          "run.queue_cleared",
+          "artifact.added",
+          "thread.updated",
+          "thread.archived",
+          "thread.restored",
+        ].includes(event.event_type)
+      )
+      .slice(-4)
+      .reverse()
+      .map((event) => this._progressItemFromEvent(event));
+
     return [...items, ...notable].slice(0, 8);
   }
+
   _progressItemFromEvent(event) {
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     if (event.event_type === "run.failed") {
       return {
         title: "Run failed",
         meta: payload.error || "Unknown error",
-        state: "error"
+        state: "error",
       };
     }
     if (event.event_type === "run.completed") {
       return {
         title: "Run completed",
         meta: this._timeAgo(event.timestamp),
-        state: "complete"
+        state: "complete",
       };
     }
     if (event.event_type === "run.queued") {
       return {
         title: "Steer queued",
         meta: `${payload.pending_count || 1} pending`,
-        state: "active"
+        state: "active",
       };
     }
     if (event.event_type === "run.dequeued") {
       return {
         title: "Steer applied",
         meta: this._timeAgo(event.timestamp),
-        state: "active"
+        state: "active",
       };
     }
     if (event.event_type === "run.queue_cleared") {
       return {
         title: "Steer queue cleared",
         meta: payload.reason || "Run stopped",
-        state: "error"
+        state: "error",
       };
     }
     if (event.event_type === "artifact.added") {
       return {
         title: "Artifact ready",
         meta: payload.relative_path || payload.filename || "artifact",
-        state: "complete"
+        state: "complete",
       };
     }
     if (event.event_type === "thread.updated") {
       return {
         title: "Chat settings updated",
         meta: this._timeAgo(event.timestamp),
-        state: "complete"
+        state: "complete",
       };
     }
     if (event.event_type === "thread.archived") {
       return {
         title: "Chat archived",
         meta: this._timeAgo(event.timestamp),
-        state: "complete"
+        state: "complete",
       };
     }
     return {
       title: "Chat restored",
       meta: this._timeAgo(event.timestamp),
-      state: "complete"
+      state: "complete",
     };
   }
+
   _renderArtifacts() {
     const container = this.shadowRoot.getElementById("artifact-list");
     this._syncSelectedArtifact();
     container.replaceChildren();
+
     if (!this._artifacts.length) {
       container.append(this._textElement("div", "empty-note", "No files yet."));
       return;
     }
+
     for (const artifact of this._artifacts) {
       const active = artifact.artifact_id === this._selectedArtifactId;
       const row = document.createElement("div");
@@ -3467,6 +2903,7 @@ var CodexBridgePanel = class extends HTMLElement {
       container.append(row);
     }
   }
+
   _renderArtifactPreview() {
     const container = this.shadowRoot.getElementById("artifact-preview");
     container.replaceChildren();
@@ -3484,6 +2921,7 @@ var CodexBridgePanel = class extends HTMLElement {
       container.append(loading);
       return;
     }
+
     const preview = this._artifactPreview;
     if (preview.kind === "text" || preview.kind === "image") {
       const previewElement = createPreviewElement(document, preview, { blobUrl: preview.url });
@@ -3492,6 +2930,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return;
       }
     }
+
     const binary = document.createElement("div");
     binary.className = "preview-binary";
     binary.append(
@@ -3500,6 +2939,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     container.append(binary);
   }
+
   _renderContext() {
     const container = this.shadowRoot.getElementById("context-list");
     const thread = this._activeThread;
@@ -3516,10 +2956,12 @@ var CodexBridgePanel = class extends HTMLElement {
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
       ["Queued steer", String(thread?.pending_prompts?.length || 0)],
-      ["Files", String(this._artifacts.length)]
+      ["Files", String(this._artifacts.length)],
     ];
+
     this._renderKeyValueRows(container, rows, "context-row");
   }
+
   _renderDiagnostics() {
     const container = this.shadowRoot.getElementById("diagnostics-list");
     const diagnostics = this._status?.diagnostics;
@@ -3544,7 +2986,7 @@ var CodexBridgePanel = class extends HTMLElement {
       ["Device code", auth?.user_code || "None"],
       ["Login URL", auth?.verification_uri || auth?.login_url || "None"],
       ["Uptime", this._formatDuration(diagnostics.service_uptime_seconds)],
-      ["Last error", diagnostics.last_error || "None"]
+      ["Last error", diagnostics.last_error || "None"],
     ];
     this._renderKeyValueRows(container, rows, "diagnostics-row");
     const toolList = document.createElement("div");
@@ -3560,9 +3002,11 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     container.append(toolList);
   }
+
   async _loadStatus() {
     this._status = await this._callWS("get_status");
   }
+
   async _loadProjects() {
     this._projects = await this._callWS("list_projects");
     if (this._selectedProjectId && !this._projects.some((project) => project.project_id === this._selectedProjectId)) {
@@ -3572,9 +3016,10 @@ var CodexBridgePanel = class extends HTMLElement {
       this._selectedProjectId = this._directProject()?.project_id || this._projects[0]?.project_id || null;
     }
   }
+
   async _loadThreads() {
     this._threads = await this._callWS("list_threads", {
-      include_archived: true
+      include_archived: true,
     });
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
       this._selectedThreadId = null;
@@ -3591,6 +3036,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._startPolling();
     }
   }
+
   async _refreshActiveThread() {
     if (!this._selectedThreadId) {
       this._stopEventSubscription();
@@ -3603,13 +3049,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._render();
       return;
     }
+
     try {
       const threadId = this._selectedThreadId;
       const [thread, events, artifacts, status] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
         this._callWS("get_events", { thread_id: threadId, after: 0 }),
         this._callWS("list_artifacts", { thread_id: threadId }),
-        this._callWS("get_status")
+        this._callWS("get_status"),
       ]);
       this._activeThread = thread;
       this._selectedProjectId = thread.project_id;
@@ -3629,6 +3076,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   _openProjectFormForCreate() {
     const wasCreateMode = this._projectFormMode === "create";
     const wasVisible = this._showProjectForm;
@@ -3641,12 +3089,13 @@ var CodexBridgePanel = class extends HTMLElement {
       name: "",
       rootPath: "",
       defaultModel,
-      defaultThinkingLevel: this._defaultThinkingLevel(defaultModel)
+      defaultThinkingLevel: this._defaultThinkingLevel(defaultModel),
     };
     this._folderDraft = "";
     this._browseState = null;
     this._render();
   }
+
   _openProjectFormForEdit(projectId) {
     const project = this._projects.find((item) => item.project_id === projectId);
     if (!project || project.kind !== "project") {
@@ -3660,30 +3109,33 @@ var CodexBridgePanel = class extends HTMLElement {
       name: project.name,
       rootPath: project.root_path,
       defaultModel: project.default_model,
-      defaultThinkingLevel: project.default_thinking_level
+      defaultThinkingLevel: project.default_thinking_level,
     };
     this._folderDraft = "";
     this._browseState = null;
     this._selectedProjectId = projectId;
     this._render();
   }
+
   _closeProjectForm() {
     this._showProjectForm = false;
     this._folderDraft = "";
     this._browseState = null;
     this._render();
   }
+
   _openThreadFormForProject(projectId) {
     this._showThreadForm = true;
     this._showProjectForm = false;
     this._threadForm = {
       title: "",
       mode: "full-auto",
-      projectId
+      projectId,
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
     this._render();
   }
+
   _toggleSection(section) {
     if (!section) {
       return;
@@ -3691,6 +3143,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._collapsedSections[section] = !this._collapsedSections[section];
     this._render();
   }
+
   _toggleProjectCollapse(projectId) {
     if (!projectId) {
       return;
@@ -3698,11 +3151,15 @@ var CodexBridgePanel = class extends HTMLElement {
     this._collapsedProjects[projectId] = !this._collapsedProjects[projectId];
     this._render();
   }
+
   _selectProject(projectId) {
     this._selectedProjectId = projectId;
     const project = this._projects.find((item) => item.project_id === projectId) || null;
     const visibleThread = this._threads.find(
-      (thread) => thread.project_id === projectId && this._threadMatchesQuery(thread) && (project?.archived_at ? true : !thread.archived_at)
+      (thread) =>
+        thread.project_id === projectId &&
+        this._threadMatchesQuery(thread) &&
+        (project?.archived_at ? true : !thread.archived_at)
     );
     if (visibleThread && visibleThread.thread_id !== this._selectedThreadId) {
       this._selectThread(visibleThread.thread_id);
@@ -3721,6 +3178,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._render();
   }
+
   async _selectThread(threadId) {
     if (!threadId) {
       return;
@@ -3737,12 +3195,14 @@ var CodexBridgePanel = class extends HTMLElement {
     await this._refreshActiveThread();
     this._startPolling();
   }
+
   async _saveProject() {
     try {
       const isEditMode = this._projectFormMode === "edit" && this._editingProjectId;
-      if (!this._projectForm.name.trim() || isEditMode && !this._projectForm.rootPath.trim()) {
+      if (!this._projectForm.name.trim() || (isEditMode && !this._projectForm.rootPath.trim())) {
         return;
       }
+
       let project;
       if (isEditMode) {
         project = await this._callWS("update_project", {
@@ -3750,13 +3210,14 @@ var CodexBridgePanel = class extends HTMLElement {
           name: this._projectForm.name.trim(),
           root_path: this._projectForm.rootPath.trim(),
           default_model: this._projectForm.defaultModel,
-          default_thinking_level: this._projectForm.defaultThinkingLevel
+          default_thinking_level: this._projectForm.defaultThinkingLevel,
         });
       } else {
         project = await this._callWS("create_project", {
-          name: this._projectForm.name.trim()
+          name: this._projectForm.name.trim(),
         });
       }
+
       this._selectedProjectId = project.project_id;
       this._showProjectForm = false;
       this._clearError();
@@ -3767,6 +3228,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _browseProjectPath(path) {
     try {
       this._browseState = await this._callWS("browse_paths", { path });
@@ -3776,10 +3238,12 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   _selectBrowseEntry(path) {
     this._projectForm.rootPath = path;
     this._browseProjectPath(path);
   }
+
   async _createFolder() {
     try {
       const parentPath = this._browseState?.path || this._projectForm.rootPath;
@@ -3788,7 +3252,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       const created = await this._callWS("create_folder", {
         parent_path: parentPath,
-        folder_name: this._folderDraft.trim()
+        folder_name: this._folderDraft.trim(),
       });
       this._projectForm.rootPath = created.path;
       this._folderDraft = "";
@@ -3798,6 +3262,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _createThread() {
     try {
       const title = this._threadForm.title.trim();
@@ -3806,7 +3271,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       const payload = {
         title,
-        mode: this._threadForm.mode
+        mode: this._threadForm.mode,
       };
       if (this._threadForm.projectId) {
         payload.project_id = this._threadForm.projectId;
@@ -3823,6 +3288,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _updateThreadSettings(updates) {
     if (!this._selectedThreadId) {
       return;
@@ -3830,7 +3296,7 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       this._activeThread = await this._callWS("update_thread", {
         thread_id: this._selectedThreadId,
-        ...updates
+        ...updates,
       });
       this._syncThreadListStatus();
       this._clearError();
@@ -3839,6 +3305,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _sendPrompt() {
     try {
       const promptInput = this.shadowRoot.getElementById("prompt-input");
@@ -3848,7 +3315,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       await this._callWS("send_prompt", {
         thread_id: this._selectedThreadId,
-        prompt
+        prompt,
       });
       promptInput.value = "";
       this._draft = "";
@@ -3858,6 +3325,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _cancelRun() {
     if (!this._selectedThreadId || this._activeThread?.status !== "running") {
       return;
@@ -3870,12 +3338,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _startAuthLogin() {
     try {
       const auth = await this._callWS("start_auth_login", { force_logout: true });
       this._status = {
-        ...this._status || {},
-        auth
+        ...(this._status || {}),
+        auth,
       };
       this._dismissedBannerKey = "";
       this._clearError();
@@ -3884,15 +3353,16 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _refreshAuthStatus() {
     try {
       const [auth, status] = await Promise.all([
         this._callWS("get_auth_status"),
-        this._callWS("get_status")
+        this._callWS("get_status"),
       ]);
       this._status = {
-        ...status || this._status || {},
-        auth: auth || status?.auth
+        ...(status || this._status || {}),
+        auth: auth || status?.auth,
       };
       this._dismissedBannerKey = "";
       this._clearError();
@@ -3901,6 +3371,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _copyAuthCode() {
     const auth = this._status?.auth;
     const text = [auth?.user_code, auth?.verification_uri || auth?.login_url].filter(Boolean).join("\n");
@@ -3914,15 +3385,20 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _uploadFiles(files, { useRelativePaths }) {
     if (!this._selectedThreadId || !files.length || this._pendingUploads) {
       return;
     }
     const threadId = this._selectedThreadId;
     const totalBytes = files.reduce((total, file) => total + (file.size || 0), 0);
-    if (useRelativePaths && (files.length > 75 || totalBytes > 100 * 1024 * 1024) && !window.confirm(
-      `Upload ${files.length} files (${this._formatBytes(totalBytes)}) into this chat? Large VBA/codebase folders can take a while.`
-    )) {
+    if (
+      useRelativePaths &&
+      (files.length > 75 || totalBytes > 100 * 1024 * 1024) &&
+      !window.confirm(
+        `Upload ${files.length} files (${this._formatBytes(totalBytes)}) into this chat? Large VBA/codebase folders can take a while.`
+      )
+    ) {
       return;
     }
     try {
@@ -3935,18 +3411,20 @@ var CodexBridgePanel = class extends HTMLElement {
         total: files.length,
         current: "",
         currentPercent: 0,
-        totalBytes
+        totalBytes,
       };
       this._render();
       for (const file of files) {
-        const relativePath = useRelativePaths ? file.webkitRelativePath || file.relativePath || file.name : null;
+        const relativePath = useRelativePaths
+          ? file.webkitRelativePath || file.relativePath || file.name
+          : null;
         this._uploadProgress.current = relativePath || file.name;
         this._uploadProgress.currentPercent = 0;
         await this._uploadSingleFile(file, {
           relativePath,
           token,
           threadId,
-          signal: abortController.signal
+          signal: abortController.signal,
         });
         this._pendingUploads -= 1;
         this._uploadProgress.completed += 1;
@@ -3964,6 +3442,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._render();
     }
   }
+
   _uploadSingleFile(file, { relativePath, token, threadId, signal }) {
     return uploadResumableFile({
       file,
@@ -3975,11 +3454,14 @@ var CodexBridgePanel = class extends HTMLElement {
         if (!this._uploadProgress) {
           return;
         }
-        this._uploadProgress.currentPercent = totalBytes ? Math.min(100, Math.round(completedBytes / totalBytes * 100)) : 100;
+        this._uploadProgress.currentPercent = totalBytes
+          ? Math.min(100, Math.round((completedBytes / totalBytes) * 100))
+          : 100;
         this._render();
-      }
+      },
     });
   }
+
   _uploadProgressText() {
     if (!this._uploadProgress) {
       return `Uploading ${this._pendingUploads} file${this._pendingUploads === 1 ? "" : "s"}`;
@@ -3988,13 +3470,14 @@ var CodexBridgePanel = class extends HTMLElement {
     const sizeLabel = totalBytes ? ` - ${this._formatBytes(totalBytes)}` : "";
     return `Uploading ${completed + 1}/${total} - ${currentPercent}% - ${current}${sizeLabel}`;
   }
+
   async _archiveThread(threadId) {
     if (!threadId) {
       return;
     }
     try {
       const archived = await this._callWS("archive_thread", { thread_id: threadId });
-      this._threads = this._threads.map((thread) => thread.thread_id === threadId ? archived : thread);
+      this._threads = this._threads.map((thread) => (thread.thread_id === threadId ? archived : thread));
       if (this._selectedThreadId === threadId) {
         const replacement = this._threads.find((thread) => !thread.archived_at && thread.thread_id !== threadId);
         this._selectedThreadId = replacement?.thread_id || null;
@@ -4017,13 +3500,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _archiveProject(projectId) {
     if (!projectId) {
       return;
     }
     try {
       const archived = await this._callWS("archive_project", { project_id: projectId });
-      this._projects = this._projects.map((project) => project.project_id === projectId ? archived : project);
+      this._projects = this._projects.map((project) => (project.project_id === projectId ? archived : project));
       this._clearSelectionForProject(projectId, { preferProjectId: this._directProject()?.project_id || null });
       this._clearError();
       this._render();
@@ -4031,13 +3515,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _restoreProject(projectId) {
     if (!projectId) {
       return;
     }
     try {
       const restored = await this._callWS("restore_project", { project_id: projectId });
-      this._projects = this._projects.map((project) => project.project_id === projectId ? restored : project);
+      this._projects = this._projects.map((project) => (project.project_id === projectId ? restored : project));
       this._selectedProjectId = projectId;
       const replacement = this._threads.find((thread) => thread.project_id === projectId && !thread.archived_at) || null;
       if (replacement) {
@@ -4050,6 +3535,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _deleteProject(projectId) {
     if (!projectId || !window.confirm("Delete this project and its chat records? The VM folder will be left in place.")) {
       return;
@@ -4062,7 +3548,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._projects = this._projects.filter((project) => project.project_id !== projectId);
       this._threads = this._threads.filter((thread) => thread.project_id !== projectId);
       this._clearSelectionForProject(projectId, {
-        preferProjectId: this._directProject()?.project_id || this._projects[0]?.project_id || null
+        preferProjectId: this._directProject()?.project_id || this._projects[0]?.project_id || null,
       });
       if (removedThreadIds.has(this._selectedThreadId)) {
         this._selectedThreadId = null;
@@ -4073,13 +3559,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _restoreThread(threadId) {
     if (!threadId) {
       return;
     }
     try {
       const restored = await this._callWS("restore_thread", { thread_id: threadId });
-      this._threads = this._threads.map((thread) => thread.thread_id === threadId ? restored : thread);
+      this._threads = this._threads.map((thread) => (thread.thread_id === threadId ? restored : thread));
       this._selectedThreadId = threadId;
       this._selectedProjectId = restored.project_id;
       await this._refreshActiveThread();
@@ -4089,6 +3576,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _deleteThread(threadId) {
     if (!threadId || !window.confirm("Delete this chat? Project files will be left in place.")) {
       return;
@@ -4119,13 +3607,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _createWorkspaceArchive() {
     if (!this._selectedThreadId) {
       return;
     }
     try {
       const artifact = await this._callWS("create_workspace_archive", {
-        thread_id: this._selectedThreadId
+        thread_id: this._selectedThreadId,
       });
       this._artifacts = await this._callWS("list_artifacts", { thread_id: this._selectedThreadId });
       this._selectedArtifactId = artifact.artifact_id;
@@ -4137,6 +3626,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _selectArtifact(artifactId) {
     if (!artifactId || artifactId === this._selectedArtifactId) {
       return;
@@ -4146,6 +3636,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
     await this._loadArtifactPreview(artifactId);
   }
+
   async _loadArtifactPreview(artifactId) {
     if (!this._selectedThreadId || !artifactId) {
       return;
@@ -4168,7 +3659,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const threadSegment = encodeURIComponent(this._selectedThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
       const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
-        headers
+        headers,
       });
       if (!response.ok) {
         throw new Error("Preview failed");
@@ -4177,6 +3668,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) {
         return;
       }
+
       this._revokePreviewUrl();
       const descriptor = previewDescriptor(artifact, blob);
       if (descriptor.kind === "text") {
@@ -4191,11 +3683,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   _revokePreviewUrl() {
     if (this._artifactPreview?.url) {
       URL.revokeObjectURL(this._artifactPreview.url);
     }
   }
+
   async _downloadArtifact(artifactId) {
     if (!this._selectedThreadId || !artifactId) {
       return;
@@ -4206,7 +3700,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const threadSegment = encodeURIComponent(this._selectedThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
       const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
-        headers
+        headers,
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -4227,6 +3721,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _copyMessage(sequence) {
     const numericSequence = Number(sequence);
     const event = this._events.find((item) => item.sequence === numericSequence);
@@ -4241,6 +3736,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _copyCodeBlock(button) {
     const block = button.closest(".code-block");
     const text = block?.querySelector(".code-text")?.textContent || "";
@@ -4254,6 +3750,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+
   async _writeClipboardText(text) {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -4266,6 +3763,7 @@ var CodexBridgePanel = class extends HTMLElement {
     document.execCommand("copy");
     helper.remove();
   }
+
   _startPolling() {
     this._stopPolling();
     if (!this._selectedThreadId) {
@@ -4276,7 +3774,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._lastStatusRefreshAt = 0;
     this._scheduleNextPoll(250, this._pollGeneration);
   }
-  _scheduleNextPoll(delay2 = this._pollDelay(), generation = this._pollGeneration) {
+
+  _scheduleNextPoll(delay = this._pollDelay(), generation = this._pollGeneration) {
     if (!this._pollActive || !this._selectedThreadId) {
       return;
     }
@@ -4286,26 +3785,28 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       this._pollTimer = null;
       this._runPollTick(generation);
-    }, delay2);
+    }, delay);
   }
+
   _pollDelay() {
     if (document.visibilityState === "hidden") {
-      return 8e3;
+      return 8000;
     }
     if (this._activeThread?.status === "running") {
       return 900;
     }
     if (this._error) {
-      return 5e3;
+      return 5000;
     }
     return 3600;
   }
+
   async _runPollTick(generation = this._pollGeneration) {
     if (!this._pollActive || generation !== this._pollGeneration || !this._selectedThreadId) {
       return;
     }
     if (this._pollInFlight) {
-      this._scheduleNextPoll(void 0, generation);
+      this._scheduleNextPoll(undefined, generation);
       return;
     }
     this._pollInFlight = true;
@@ -4316,15 +3817,19 @@ var CodexBridgePanel = class extends HTMLElement {
       const previousStatus = this._activeThread?.status;
       const isRunning = previousStatus === "running";
       const now = Date.now();
-      const statusInterval = isRunning ? 7e3 : 3e4;
+      const statusInterval = isRunning ? 7000 : 30000;
       const shouldRefreshStatus = !this._lastStatusRefreshAt || now - this._lastStatusRefreshAt >= statusInterval;
       const [events, status, thread] = await Promise.all([
-        this._eventSubscriptionActive ? Promise.resolve([]) : this._callWS("get_events", {
-          thread_id: polledThreadId,
-          after: this._sequence
-        }),
+        this._eventSubscriptionActive
+          ? Promise.resolve([])
+          : this._callWS("get_events", {
+              thread_id: polledThreadId,
+              after: this._sequence,
+            }),
         shouldRefreshStatus ? this._callWS("get_status") : Promise.resolve(this._status),
-        isRunning || shouldRefreshStatus ? this._callWS("get_thread", { thread_id: polledThreadId }) : Promise.resolve(null)
+        isRunning || shouldRefreshStatus
+          ? this._callWS("get_thread", { thread_id: polledThreadId })
+          : Promise.resolve(null),
       ]);
       if (polledThreadId !== this._selectedThreadId) {
         return;
@@ -4351,15 +3856,19 @@ var CodexBridgePanel = class extends HTMLElement {
       if (status) {
         this._status = status;
       }
+
       const hasNewEvents = this._sequence !== previousSequence;
       const shouldRefreshThread = Boolean(thread) || hasNewEvents;
       if (shouldRefreshThread) {
-        this._activeThread = thread || await this._callWS("get_thread", { thread_id: polledThreadId });
+        this._activeThread = thread || (await this._callWS("get_thread", { thread_id: polledThreadId }));
         if (polledThreadId !== this._selectedThreadId) {
           return;
         }
         this._syncThreadListStatus();
-        if (this._activeThread.status !== "running" && (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)) {
+        if (
+          this._activeThread.status !== "running" &&
+          (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)
+        ) {
           this._artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
           this._syncSelectedArtifact();
         }
@@ -4370,10 +3879,11 @@ var CodexBridgePanel = class extends HTMLElement {
     } finally {
       this._pollInFlight = false;
       if (this._pollActive && generation === this._pollGeneration && this._selectedThreadId) {
-        this._scheduleNextPoll(void 0, generation);
+        this._scheduleNextPoll(undefined, generation);
       }
     }
   }
+
   _stopPolling() {
     this._pollActive = false;
     this._pollGeneration += 1;
@@ -4383,6 +3893,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._pollInFlight = false;
   }
+
   _startEventSubscription() {
     this._stopEventSubscription();
     if (!this._selectedThreadId || !this._hass?.connection?.subscribeMessage) {
@@ -4390,21 +3901,25 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const threadId = this._selectedThreadId;
-    this._eventSubscriptionPending = this._hass.connection.subscribeMessage((event) => this._handleSubscribedEvent(threadId, event), {
-      type: "codex_bridge/subscribe_events",
-      thread_id: threadId,
-      after: this._sequence
-    }).then((unsubscribe) => {
-      if (threadId !== this._selectedThreadId) {
-        unsubscribe();
-        return;
-      }
-      this._eventUnsubscribe = unsubscribe;
-      this._eventSubscriptionActive = true;
-    }).catch(() => {
-      this._eventSubscriptionActive = false;
-    });
+    this._eventSubscriptionPending = this._hass.connection
+      .subscribeMessage((event) => this._handleSubscribedEvent(threadId, event), {
+        type: "codex_bridge/subscribe_events",
+        thread_id: threadId,
+        after: this._sequence,
+      })
+      .then((unsubscribe) => {
+        if (threadId !== this._selectedThreadId) {
+          unsubscribe();
+          return;
+        }
+        this._eventUnsubscribe = unsubscribe;
+        this._eventSubscriptionActive = true;
+      })
+      .catch(() => {
+        this._eventSubscriptionActive = false;
+      });
   }
+
   _stopEventSubscription() {
     if (this._eventUnsubscribe) {
       this._eventUnsubscribe();
@@ -4417,6 +3932,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._eventSubscriptionPending = null;
     this._eventSubscriptionActive = false;
   }
+
   _handleSubscribedEvent(threadId, event) {
     if (threadId !== this._selectedThreadId) {
       return;
@@ -4440,25 +3956,29 @@ var CodexBridgePanel = class extends HTMLElement {
     const acceptedEvent = result.event;
     this._events = result.state.events;
     this._renderMessages();
-    if ([
-      "run.started",
-      "run.completed",
-      "run.failed",
-      "run.cancelled",
-      "run.queued",
-      "run.dequeued",
-      "run.queue_cleared",
-      "artifact.added",
-      "session.bound"
-    ].includes(acceptedEvent.event_type)) {
+    if (
+      [
+        "run.started",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+        "run.queued",
+        "run.dequeued",
+        "run.queue_cleared",
+        "artifact.added",
+        "session.bound",
+      ].includes(acceptedEvent.event_type)
+    ) {
       this._scheduleLiveRefresh(threadId);
     }
   }
+
   _resetEventState(cursor = 0) {
     this._eventStream = createEventStreamState({ cursor });
     this._events = [];
     this._sequence = this._eventStream.cursor;
   }
+
   _scheduleLiveRefresh(threadId) {
     if (this._eventRefreshTimer) {
       window.clearTimeout(this._eventRefreshTimer);
@@ -4472,7 +3992,7 @@ var CodexBridgePanel = class extends HTMLElement {
         const [thread, artifacts, status] = await Promise.all([
           this._callWS("get_thread", { thread_id: threadId }),
           this._callWS("list_artifacts", { thread_id: threadId }),
-          this._callWS("get_status")
+          this._callWS("get_status"),
         ]);
         if (threadId !== this._selectedThreadId) {
           return;
@@ -4488,14 +4008,16 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }, 250);
   }
+
   _syncThreadListStatus() {
     if (!this._activeThread) {
       return;
     }
-    this._threads = this._threads.map(
-      (thread) => thread.thread_id === this._activeThread.thread_id ? this._activeThread : thread
+    this._threads = this._threads.map((thread) =>
+      thread.thread_id === this._activeThread.thread_id ? this._activeThread : thread
     );
   }
+
   _syncSelectedArtifact() {
     if (!this._artifacts.length) {
       this._selectedArtifactId = null;
@@ -4507,22 +4029,26 @@ var CodexBridgePanel = class extends HTMLElement {
     if (stillExists) {
       return;
     }
-    const previewCandidate = this._artifacts.find(
-      (artifact) => previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary"
-    ) || this._artifacts[0];
+    const previewCandidate =
+      this._artifacts.find(
+        (artifact) => previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary"
+      ) || this._artifacts[0];
     this._selectedArtifactId = previewCandidate.artifact_id;
     this._artifactPreview = null;
     this._loadArtifactPreview(this._selectedArtifactId);
   }
+
   _activeProject() {
     if (this._activeThread) {
       return this._projects.find((project) => project.project_id === this._activeThread.project_id) || null;
     }
     return this._projects.find((project) => project.project_id === this._selectedProjectId) || null;
   }
+
   _directProject() {
     return this._projects.find((project) => project.kind === "direct") || null;
   }
+
   _threadIsPrimaryActive(thread) {
     if (thread.archived_at) {
       return false;
@@ -4530,16 +4056,25 @@ var CodexBridgePanel = class extends HTMLElement {
     const project = this._projects.find((item) => item.project_id === thread.project_id) || null;
     return !project?.archived_at;
   }
+
   _directThreads(includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_kind === "direct" && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) =>
+        thread.project_kind === "direct" &&
+        (includeArchived || !thread.archived_at) &&
+        this._threadMatchesQuery(thread)
     );
   }
+
   _projectThreads(projectId, includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_id === projectId && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) =>
+        thread.project_id === projectId &&
+        (includeArchived || !thread.archived_at) &&
+        this._threadMatchesQuery(thread)
     );
   }
+
   _projectIsVisible(project) {
     if (project.kind === "direct") {
       return false;
@@ -4549,6 +4084,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return this._projectMatchesQuery(project);
   }
+
   _projectMatchesQuery(project) {
     const query = this._searchQuery.trim().toLowerCase();
     if (!query) {
@@ -4559,17 +4095,24 @@ var CodexBridgePanel = class extends HTMLElement {
       return true;
     }
     return this._threads.some(
-      (thread) => thread.project_id === project.project_id && !thread.archived_at && this._threadMatchesQuery(thread)
+      (thread) =>
+        thread.project_id === project.project_id &&
+        !thread.archived_at &&
+        this._threadMatchesQuery(thread)
     );
   }
+
   _clearSelectionForProject(projectId, { preferProjectId = null } = {}) {
     const selectedThread = this._threads.find((thread) => thread.thread_id === this._selectedThreadId) || null;
     if (selectedThread?.project_id !== projectId && this._selectedProjectId !== projectId) {
       return;
     }
-    const replacement = this._threads.find(
-      (thread) => this._threadIsPrimaryActive(thread) && (!preferProjectId || thread.project_id === preferProjectId)
-    ) || this._threads.find((thread) => this._threadIsPrimaryActive(thread)) || null;
+    const replacement =
+      this._threads.find(
+        (thread) => this._threadIsPrimaryActive(thread) && (!preferProjectId || thread.project_id === preferProjectId)
+      ) ||
+      this._threads.find((thread) => this._threadIsPrimaryActive(thread)) ||
+      null;
     this._selectedThreadId = replacement?.thread_id || null;
     this._selectedProjectId = replacement?.project_id || preferProjectId || this._directProject()?.project_id || null;
     if (replacement) {
@@ -4595,6 +4138,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._artifactPreview = null;
     this._forceMessageRebuild = true;
   }
+
   _threadMatchesQuery(thread) {
     const query = this._searchQuery.trim().toLowerCase();
     if (!query) {
@@ -4603,15 +4147,18 @@ var CodexBridgePanel = class extends HTMLElement {
     const haystack = `${thread.title} ${thread.workspace_path} ${thread.effective_model} ${thread.effective_thinking_level}`.toLowerCase();
     return haystack.includes(query);
   }
+
   _limitState() {
     return this._status?.limits || null;
   }
+
   _accountLabel(account) {
     if (!account?.available) {
       return "Account unavailable";
     }
     return account.email || account.name || account.account_id || "Signed in";
   }
+
   _accountTitle(account) {
     if (!account?.available) {
       return "The bridge could not read a Codex login from auth.json";
@@ -4621,31 +4168,34 @@ var CodexBridgePanel = class extends HTMLElement {
       account.email,
       account.plan_type ? `${this._titleCase(account.plan_type)} plan` : "",
       account.organization_title,
-      account.auth_mode ? `Auth: ${account.auth_mode}` : ""
+      account.auth_mode ? `Auth: ${account.auth_mode}` : "",
     ].filter(Boolean);
     return parts.join(" | ");
   }
+
   _formatPercent(value) {
     if (typeof value !== "number") {
       return "--";
     }
     return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
   }
+
   _formatReset(epochSeconds) {
     if (!epochSeconds) {
       return "unknown";
     }
     try {
-      return new Intl.DateTimeFormat(void 0, {
+      return new Intl.DateTimeFormat(undefined, {
         month: "short",
         day: "numeric",
         hour: "numeric",
-        minute: "2-digit"
-      }).format(new Date(epochSeconds * 1e3));
+        minute: "2-digit",
+      }).format(new Date(epochSeconds * 1000));
     } catch {
       return "unknown";
     }
   }
+
   _formatBytes(value) {
     if (typeof value !== "number" || Number.isNaN(value)) {
       return "";
@@ -4662,6 +4212,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
   }
+
   _formatDuration(seconds) {
     if (typeof seconds !== "number" || Number.isNaN(seconds)) {
       return "Unknown";
@@ -4677,6 +4228,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const remainingMinutes = minutes % 60;
     return `${hours}h ${remainingMinutes}m`;
   }
+
   _timeAgo(timestamp) {
     if (!timestamp) {
       return "";
@@ -4685,7 +4237,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (Number.isNaN(value)) {
       return "";
     }
-    const deltaMinutes = Math.max(0, Math.round((Date.now() - value) / 6e4));
+    const deltaMinutes = Math.max(0, Math.round((Date.now() - value) / 60000));
     if (deltaMinutes < 1) {
       return "now";
     }
@@ -4704,22 +4256,28 @@ var CodexBridgePanel = class extends HTMLElement {
     if (deltaWeeks < 5) {
       return `${deltaWeeks}w`;
     }
-    return new Intl.DateTimeFormat(void 0, { month: "short", day: "numeric" }).format(new Date(value));
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(value));
   }
+
   _modelRecords() {
     const catalogModels = this._status?.model_catalog?.models;
     if (Array.isArray(catalogModels) && catalogModels.length) {
       return catalogModels.filter((model) => typeof model?.model === "string" && model.model);
     }
-    const legacyModels = Array.isArray(this._status?.models) && this._status.models.length ? this._status.models : ["gpt-5.5"];
+    const legacyModels = Array.isArray(this._status?.models) && this._status.models.length
+      ? this._status.models
+      : ["gpt-5.5"];
     return legacyModels.map((model) => ({ model, display_name: model, catalogued: true }));
   }
+
   _availableModels() {
     return this._modelRecords().map((record) => record.model);
   }
+
   _defaultModel() {
     return this._status?.model_catalog?.default_model || this._availableModels()[0] || "gpt-5.5";
   }
+
   _thinkingLevelsForModel(model, selectedValue = null) {
     const record = this._modelRecords().find((item) => item.model === model);
     const structuredCatalog = this._status?.model_catalog;
@@ -4733,13 +4291,20 @@ var CodexBridgePanel = class extends HTMLElement {
     } else {
       advertised = ["medium"];
     }
-    return selectedValue && !advertised.includes(selectedValue) ? [selectedValue, ...advertised] : advertised;
+    return selectedValue && !advertised.includes(selectedValue)
+      ? [selectedValue, ...advertised]
+      : advertised;
   }
+
   _defaultThinkingLevel(model = this._defaultModel()) {
     const record = this._modelRecords().find((item) => item.model === model);
     const supportedLevels = this._thinkingLevelsForModel(model);
     const catalog = this._status?.model_catalog;
-    if (model === catalog?.default_model && catalog.default_thinking_level && supportedLevels.includes(catalog.default_thinking_level)) {
+    if (
+      model === catalog?.default_model &&
+      catalog.default_thinking_level &&
+      supportedLevels.includes(catalog.default_thinking_level)
+    ) {
       return catalog.default_thinking_level;
     }
     if (record?.default_thinking_level && supportedLevels.includes(record.default_thinking_level)) {
@@ -4750,13 +4315,14 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return supportedLevels[0] || "medium";
   }
+
   _appendModelOptions(select, selectedValue) {
     const records = [...this._modelRecords()];
     if (selectedValue && !records.some((record) => record.model === selectedValue)) {
       records.unshift({
         model: selectedValue,
         display_name: selectedValue,
-        catalogued: false
+        catalogued: false,
       });
     }
     for (const record of records) {
@@ -4764,11 +4330,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._appendOption(select, record.model, `${record.display_name || record.model}${suffix}`, record.model === selectedValue);
     }
   }
+
   _appendThinkingOptions(select, selectedValue, model = this._defaultModel()) {
     for (const level of this._thinkingLevelsForModel(model, selectedValue)) {
       this._appendOption(select, level, this._titleCase(level), level === selectedValue);
     }
   }
+
   _appendOption(select, value, label, selected = false) {
     const option = document.createElement("option");
     option.value = String(value ?? "");
@@ -4776,16 +4344,25 @@ var CodexBridgePanel = class extends HTMLElement {
     option.selected = selected;
     select.append(option);
   }
+
   _titleCase(value) {
-    return String(value).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+    return String(value)
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
   }
+
   _setError(error) {
-    this._error = typeof error === "string" ? error : error?.body?.message || error?.message || "Unexpected error";
+    this._error = typeof error === "string"
+      ? error
+      : error?.body?.message || error?.message || "Unexpected error";
     this._render();
   }
+
   _clearError() {
     this._error = "";
   }
+
   _textElement(tagName, className, value) {
     const element = document.createElement(tagName);
     if (className) {
@@ -4794,6 +4371,7 @@ var CodexBridgePanel = class extends HTMLElement {
     element.textContent = String(value ?? "");
     return element;
   }
+
   _actionButton(className, action, accessibleLabel) {
     const button = document.createElement("button");
     button.type = "button";
@@ -4805,6 +4383,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return button;
   }
+
   _input(className, id, placeholder, value) {
     const input = document.createElement("input");
     input.className = className;
@@ -4814,12 +4393,14 @@ var CodexBridgePanel = class extends HTMLElement {
     input.value = String(value ?? "");
     return input;
   }
+
   _select(className, id) {
     const select = document.createElement("select");
     select.className = className;
     select.id = id;
     return select;
   }
+
   _setTrustedButtonContent(button, iconMarkup, label = "") {
     button.replaceChildren();
     this._appendTrustedIcon(button, iconMarkup);
@@ -4827,6 +4408,7 @@ var CodexBridgePanel = class extends HTMLElement {
       button.append(this._textElement("span", "", label));
     }
   }
+
   _sectionTitleLine(chevron, iconMarkup, label) {
     const line = document.createElement("div");
     line.className = "section-title-line";
@@ -4837,6 +4419,7 @@ var CodexBridgePanel = class extends HTMLElement {
     line.append(this._textElement("span", "section-name", label));
     return line;
   }
+
   _emptyStateNode(title, note) {
     const state = document.createElement("div");
     state.className = "empty-state";
@@ -4845,6 +4428,7 @@ var CodexBridgePanel = class extends HTMLElement {
     state.append(body);
     return state;
   }
+
   _toolbarControl(label, thread, renderControl) {
     const control = document.createElement("div");
     control.className = "mini-control";
@@ -4857,14 +4441,17 @@ var CodexBridgePanel = class extends HTMLElement {
     control.append(select, this._textElement("span", "setting-foot", effectiveLabel));
     return control;
   }
+
   _appendTrustedIcon(container, iconMarkup) {
     const iconTemplate = document.createElement("template");
     iconTemplate.innerHTML = iconMarkup;
     container.append(iconTemplate.content.cloneNode(true));
   }
+
   _renderEmptyState(container, title, note) {
     container.replaceChildren(this._emptyStateNode(title, note));
   }
+
   _renderKeyValueRows(container, rows, rowClassName) {
     const fragment = document.createDocumentFragment();
     for (const [label, value] of rows) {
@@ -4878,7 +4465,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     container.replaceChildren(fragment);
   }
-};
+
+}
+
 if (!customElements.get("codex-bridge-panel")) {
   customElements.define("codex-bridge-panel", CodexBridgePanel);
 }

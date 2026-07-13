@@ -380,19 +380,89 @@
 
       const defaultEvents = [];
 
-      window.fetch = async (url) => {
-        if (String(url).includes("/artifacts/art_csv")) {
+      const uploadSessions = new Map();
+      let uploadCounter = 0;
+      const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      });
+      const sessionView = (record) => ({
+        upload_id: record.uploadId,
+        filename: record.manifest.filename,
+        relative_path: record.manifest.relative_path,
+        mime_type: record.manifest.mime_type,
+        size_bytes: record.manifest.size_bytes,
+        sha256: record.manifest.sha256,
+        chunk_size: 8 * 1024 * 1024,
+        total_chunks: Math.ceil(record.manifest.size_bytes / (8 * 1024 * 1024)),
+        received_indices: [...record.received].sort((left, right) => left - right),
+        next_offset: Math.min(record.manifest.size_bytes, record.received.size * 8 * 1024 * 1024),
+        status: record.status,
+      });
+
+      window.fetch = async (url, init = {}) => {
+        const pathname = new URL(String(url), window.location.origin).pathname;
+        if (pathname.includes("/artifacts/art_csv")) {
           return new Response("filename,size_bytes\nModule1.bas,1204\nsample.xlsx,5632\n", {
             status: 200,
             headers: { "Content-Type": "text/csv" },
           });
         }
-        if (String(url).includes("/artifacts/art_zip")) {
+        if (pathname.includes("/artifacts/art_zip")) {
           return new Response("zip preview unavailable", {
             status: 200,
             headers: { "Content-Type": "application/zip" },
           });
         }
+
+        const createMatch = pathname.match(/^\/api\/codex_bridge\/threads\/([^/]+)\/uploads$/);
+        if (createMatch && init.method === "POST") {
+          uploadCounter += 1;
+          const uploadId = `upl_harness_${uploadCounter}`;
+          const record = {
+            uploadId,
+            threadId: decodeURIComponent(createMatch[1]),
+            manifest: JSON.parse(init.body),
+            received: new Set(),
+            status: "active",
+          };
+          uploadSessions.set(uploadId, record);
+          return jsonResponse(sessionView(record), 201);
+        }
+
+        const chunkMatch = pathname.match(/^\/api\/codex_bridge\/threads\/([^/]+)\/uploads\/([^/]+)\/chunks\/(\d+)$/);
+        if (chunkMatch && init.method === "PUT") {
+          const record = uploadSessions.get(decodeURIComponent(chunkMatch[2]));
+          if (!record) return jsonResponse({ message: "Upload missing" }, 404);
+          record.received.add(Number(chunkMatch[3]));
+          return jsonResponse(sessionView(record));
+        }
+
+        const completeMatch = pathname.match(/^\/api\/codex_bridge\/threads\/([^/]+)\/uploads\/([^/]+)\/complete$/);
+        if (completeMatch && init.method === "POST") {
+          const record = uploadSessions.get(decodeURIComponent(completeMatch[2]));
+          if (!record) return jsonResponse({ message: "Upload missing" }, 404);
+          record.status = "completed";
+          const thread = threadMap[record.threadId];
+          const attachment = {
+            attachment_id: `att_${record.uploadId}`,
+            filename: record.manifest.filename,
+            mime_type: record.manifest.mime_type,
+            relative_path: record.manifest.relative_path,
+            size_bytes: record.manifest.size_bytes,
+          };
+          if (thread) thread.attachments = [...thread.attachments, attachment];
+          return jsonResponse(attachment, 201);
+        }
+
+        const sessionMatch = pathname.match(/^\/api\/codex_bridge\/threads\/([^/]+)\/uploads\/([^/]+)$/);
+        if (sessionMatch) {
+          const record = uploadSessions.get(decodeURIComponent(sessionMatch[2]));
+          if (!record) return jsonResponse({ message: "Upload missing" }, 404);
+          if (init.method === "DELETE") record.status = "cancelled";
+          return jsonResponse(sessionView(record));
+        }
+
         return new Response("Preview unavailable", {
           status: 200,
           headers: { "Content-Type": "text/plain" },
@@ -405,54 +475,6 @@
       };
 
       const clone = (value) => JSON.parse(JSON.stringify(value));
-
-      class HarnessUploadRequest {
-        constructor() {
-          this.upload = {};
-          this.status = 200;
-          this.responseText = "{}";
-          this.headers = {};
-        }
-
-        open(method, url) {
-          this.method = method;
-          this.url = url;
-        }
-
-        setRequestHeader(name, value) {
-          this.headers[name] = value;
-        }
-
-        send(formData) {
-          const file = formData.get("file");
-          const relativePath = formData.get("relative_path") || file?.name || "upload.bin";
-          const thread = threadMap[harnessState.selectedThreadId];
-          if (thread && file) {
-            thread.attachments = [
-              ...thread.attachments,
-              {
-                attachment_id: `att_${Date.now()}`,
-                filename: file.name || "clipboard.png",
-                mime_type: file.type || "application/octet-stream",
-                stored_path: `C:\\CodexHA\\uploads\\${thread.thread_id}\\${relativePath}`,
-                relative_path: relativePath,
-                size_bytes: file.size || 0,
-              },
-            ];
-          }
-          this.responseText = JSON.stringify({ ok: true, filename: file?.name || "upload.bin" });
-          window.setTimeout(() => {
-            if (this.upload.onprogress) {
-              this.upload.onprogress({ lengthComputable: true, loaded: file?.size || 1, total: file?.size || 1 });
-            }
-            if (this.onload) {
-              this.onload();
-            }
-          }, 20);
-        }
-      }
-
-      window.XMLHttpRequest = HarnessUploadRequest;
 
       const hass = {
         auth: { data: { access_token: "demo-token" } },
