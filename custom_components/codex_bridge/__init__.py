@@ -3,6 +3,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -23,7 +24,9 @@ from .const import (
     DATA_VIEWS_REGISTERED,
     DATA_WS_REGISTERED,
     DOMAIN,
+    EVENT_CURSOR_STORAGE_VERSION,
 )
+from .event_broker import EventBroker
 from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
@@ -88,6 +91,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         discovery_uuid=entry.data.get(CONF_DISCOVERY_UUID),
         api_version=client.negotiated_api_version or 0,
     )
+    if runtime.api_version == 1:
+        runtime.event_broker = EventBroker(
+            client,
+            store=Store(
+                hass,
+                EVENT_CURSOR_STORAGE_VERSION,
+                f"{DOMAIN}.{entry.entry_id}.event_cursor",
+            ),
+            task_factory=lambda target, name: entry.async_create_background_task(
+                hass, target, name
+            ),
+        )
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
         if not domain_data[DATA_VIEWS_REGISTERED]:
@@ -101,6 +116,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not domain_data[DATA_PANEL_REGISTERED]:
             await async_register_panel(hass, entry.title)
             domain_data[DATA_PANEL_REGISTERED] = True
+        if runtime.event_broker is not None:
+            await runtime.event_broker.async_start()
     except BaseException:
         domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
         await runtime.async_close()

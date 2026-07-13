@@ -3945,7 +3945,16 @@ class CodexBridgePanel extends HTMLElement {
     if (threadId !== this._selectedThreadId) {
       return;
     }
+    if (event?.event_type === "bridge.snapshot_required") {
+      if (typeof event.sequence === "number") {
+        this._sequence = Math.max(this._sequence, event.sequence);
+      }
+      this._stopEventSubscription();
+      this._refreshActiveThread();
+      return;
+    }
     if (event?.event_type === "bridge.error") {
+      this._stopEventSubscription();
       this._setError(event.payload?.error || "Bridge event stream failed");
       return;
     }

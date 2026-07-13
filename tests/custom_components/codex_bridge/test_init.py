@@ -1,5 +1,6 @@
 """Integration lifecycle tests for Codex Bridge."""
 
+import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -181,6 +182,86 @@ async def test_partial_setup_closes_runtime_and_preserves_permanent_registration
     assert websocket.call_count == 1
     assert panel.await_count == 2
     client.async_close.assert_awaited_once()
+
+
+async def test_v1_event_consumer_is_config_entry_owned_and_cancelled_on_unload(hass):
+    entry = _entry(hass)
+    started = asyncio.Event()
+
+    async def replay_events(*, after: int):
+        assert after == 0
+        started.set()
+        await asyncio.Event().wait()
+
+    client = Mock()
+    client.async_ready = AsyncMock(return_value=object())
+    client.async_close = AsyncMock()
+    client.require_api_v1 = Mock()
+    client.negotiated_api_version = 1
+    client.async_replay_events = AsyncMock(side_effect=replay_events)
+    client.async_wait_events = AsyncMock()
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+    ):
+        assert await async_setup_entry(hass, entry)
+        await asyncio.wait_for(started.wait(), 1)
+        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        broker_task = runtime.event_broker._task
+        assert broker_task is not None
+        assert broker_task in entry._background_tasks
+
+        assert await async_unload_entry(hass, entry)
+
+    assert broker_task.cancelled()
+    client.async_close.assert_awaited_once()
+
+
+async def test_token_reload_closes_old_broker_before_starting_replacement(hass):
+    entry = _entry(hass)
+    first_client = Mock(
+        async_ready=AsyncMock(return_value=object()),
+        async_close=AsyncMock(),
+        require_api_v1=Mock(),
+        negotiated_api_version=1,
+    )
+    second_client = Mock(
+        async_ready=AsyncMock(return_value=object()),
+        async_close=AsyncMock(),
+        require_api_v1=Mock(),
+        negotiated_api_version=1,
+    )
+    first_broker = Mock(async_start=AsyncMock(), async_close=AsyncMock())
+    second_broker = Mock(async_start=AsyncMock(), async_close=AsyncMock())
+    with (
+        patch(
+            "custom_components.codex_bridge.BridgeApiClient",
+            side_effect=[first_client, second_client],
+        ) as client_class,
+        patch(
+            "custom_components.codex_bridge.EventBroker",
+            side_effect=[first_broker, second_broker],
+        ),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+    ):
+        assert await async_setup_entry(hass, entry)
+        assert await async_unload_entry(hass, entry)
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_BRIDGE_TOKEN: "b" * 48}
+        )
+        assert await async_setup_entry(hass, entry)
+
+    assert client_class.call_args_list[0].args[2] == TOKEN
+    assert client_class.call_args_list[1].args[2] == "b" * 48
+    first_broker.async_start.assert_awaited_once()
+    first_broker.async_close.assert_awaited_once()
+    second_broker.async_start.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

@@ -5,13 +5,17 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import aiohttp
 
 from .const import (
     API_CURRENT,
     BRIDGE_API_HEADER,
+    BRIDGE_EVENT_BATCH_LIMIT,
+    BRIDGE_EVENT_BATCH_MAX_BYTES,
+    BRIDGE_EVENT_CURSOR_MAX,
+    BRIDGE_EVENT_WAIT_SECONDS,
     BRIDGE_PROBLEM_BODY_MAX_BYTES,
     BRIDGE_TIMEOUT_CONNECT_SECONDS,
     BRIDGE_TIMEOUT_POOL_SECONDS,
@@ -62,6 +66,56 @@ def _request_path(value: object) -> str:
     ):
         raise BridgeApiEndpointError()
     return value
+
+
+def _nonnegative_cursor(value: object) -> int:
+    if type(value) is not int or not 0 <= value <= BRIDGE_EVENT_CURSOR_MAX:
+        raise BridgeApiEndpointError("cursor_invalid")
+    return value
+
+
+def _client_request_id(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value.encode("utf-8")) > 256
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        raise BridgeApiEndpointError("client_request_id_invalid")
+    return value
+
+
+def _interaction_answers(value: object) -> list[dict[str, Any]]:
+    """Validate and copy the bounded public user-input answer contract."""
+
+    if not isinstance(value, list) or not 1 <= len(value) <= 32:
+        raise BridgeApiEndpointError("answers_invalid")
+    answers: list[dict[str, Any]] = []
+    question_ids: set[str] = set()
+    for answer in value:
+        if not isinstance(answer, Mapping) or set(answer) != {"question_id", "values"}:
+            raise BridgeApiEndpointError("answers_invalid")
+        try:
+            question_id = validate_bridge_identifier(answer["question_id"])
+        except EndpointError:
+            raise BridgeApiEndpointError("answers_invalid") from None
+        values = answer["values"]
+        if (
+            question_id in question_ids
+            or not isinstance(values, list)
+            or not 1 <= len(values) <= 32
+            or any(
+                not isinstance(item, str)
+                or not 1 <= len(item) <= 4096
+                or "\x00" in item
+                for item in values
+            )
+        ):
+            raise BridgeApiEndpointError("answers_invalid")
+        question_ids.add(question_id)
+        answers.append({"question_id": question_id, "values": list(values)})
+    return answers
 
 
 class BridgeApiError(RuntimeError):
@@ -439,11 +493,20 @@ class BridgeApiClient:
             expected_status={204},
         )
 
-    async def async_send_prompt(self, thread_id: str, prompt: str) -> dict[str, Any]:
+    async def async_send_prompt(
+        self,
+        thread_id: str,
+        prompt: str,
+        *,
+        client_request_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"prompt": prompt}
+        if client_request_id is not None:
+            payload["client_request_id"] = _client_request_id(client_request_id)
         return await self._async_json(
             "POST",
             f"/threads/{_path_segment(thread_id)}/prompts",
-            json_body={"prompt": prompt},
+            json_body=payload,
             expected_status={202},
         )
 
@@ -457,11 +520,155 @@ class BridgeApiClient:
         self, thread_id: str, after: int = 0
     ) -> list[dict[str, Any]]:
         self.require_legacy_v0()
-        if type(after) is not int or after < 0:
-            raise BridgeApiEndpointError("cursor_invalid")
+        after = _nonnegative_cursor(after)
         return await self._async_json(
             "GET",
             f"/threads/{_path_segment(thread_id)}/events/replay?after={after}",
+        )
+
+    async def async_replay_events(
+        self,
+        *,
+        after: int = 0,
+        scopes: frozenset[str] | set[str] | None = None,
+        thread_ids: frozenset[str] | set[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Read a bounded page from the global v1 event journal."""
+
+        self.require_api_v1()
+        return await self._async_global_events(
+            "/events/replay",
+            after=after,
+            scopes=scopes,
+            thread_ids=thread_ids,
+            limit=limit,
+        )
+
+    async def async_wait_events(
+        self,
+        *,
+        after: int = 0,
+        scopes: frozenset[str] | set[str] | None = None,
+        thread_ids: frozenset[str] | set[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Long-poll one globally ordered v1 event page."""
+
+        self.require_api_v1()
+        return await self._async_global_events(
+            "/events/wait",
+            after=after,
+            scopes=scopes,
+            thread_ids=thread_ids,
+            limit=limit,
+        )
+
+    async def _async_global_events(
+        self,
+        endpoint: str,
+        *,
+        after: int,
+        scopes: frozenset[str] | set[str] | None,
+        thread_ids: frozenset[str] | set[str] | None,
+        limit: int | None,
+    ) -> dict[str, Any]:
+        after = _nonnegative_cursor(after)
+        normalized_scopes = None if scopes is None else tuple(sorted(scopes))
+        if normalized_scopes is not None and (
+            not normalized_scopes
+            or not set(normalized_scopes) <= {"auth", "runtime", "thread"}
+        ):
+            raise BridgeApiEndpointError("event_filter_invalid")
+        normalized_threads = None
+        if thread_ids is not None:
+            normalized_threads = tuple(
+                sorted(_path_segment(value) for value in thread_ids)
+            )
+            if (
+                not normalized_threads
+                or len(normalized_threads) > 64
+                or (normalized_scopes is not None and "thread" not in normalized_scopes)
+            ):
+                raise BridgeApiEndpointError("event_filter_invalid")
+        if limit is None:
+            limit = BRIDGE_EVENT_BATCH_LIMIT
+        if type(limit) is not int or not 1 <= limit <= BRIDGE_EVENT_BATCH_LIMIT:
+            raise BridgeApiEndpointError("event_limit_invalid")
+        query: list[tuple[str, object]] = [("after", after)]
+        query.extend(("scope", scope) for scope in normalized_scopes or ())
+        query.extend(("thread_id", thread_id) for thread_id in normalized_threads or ())
+        query.append(("limit", limit))
+        if endpoint == "/events/wait":
+            query.append(("timeout_seconds", BRIDGE_EVENT_WAIT_SECONDS))
+        return await self._async_json(
+            "GET",
+            f"{endpoint}?{urlencode(query)}",
+            maximum_bytes=BRIDGE_EVENT_BATCH_MAX_BYTES,
+        )
+
+    async def async_cancel_auth_login(self) -> dict[str, Any]:
+        self.require_api_v1()
+        return await self._async_json("POST", "/auth/device-login/cancel")
+
+    async def async_list_pending_interactions(
+        self, *, thread_id: str | None = None
+    ) -> dict[str, Any]:
+        self.require_api_v1()
+        suffix = "" if thread_id is None else f"?thread_id={_path_segment(thread_id)}"
+        return await self._async_json("GET", f"/interactions/pending{suffix}")
+
+    async def async_decide_interaction(
+        self,
+        interaction_id: str,
+        *,
+        thread_id: str,
+        run_id: str,
+        turn_id: str,
+        item_id: str,
+        decision: str,
+        client_request_id: str,
+    ) -> dict[str, Any]:
+        self.require_api_v1()
+        if decision not in {"accept", "decline", "cancel"}:
+            raise BridgeApiEndpointError("decision_invalid")
+        return await self._async_json(
+            "POST",
+            f"/interactions/{_path_segment(interaction_id)}/decision",
+            json_body={
+                "thread_id": _path_segment(thread_id),
+                "run_id": _path_segment(run_id),
+                "turn_id": _path_segment(turn_id),
+                "item_id": _path_segment(item_id),
+                "decision": decision,
+                "client_request_id": _client_request_id(client_request_id),
+            },
+        )
+
+    async def async_answer_interaction(
+        self,
+        interaction_id: str,
+        *,
+        thread_id: str,
+        run_id: str,
+        turn_id: str,
+        item_id: str,
+        answers: list[dict[str, Any]],
+        client_request_id: str,
+    ) -> dict[str, Any]:
+        self.require_api_v1()
+        normalized_answers = _interaction_answers(answers)
+        return await self._async_json(
+            "POST",
+            f"/interactions/{_path_segment(interaction_id)}/answer",
+            json_body={
+                "thread_id": _path_segment(thread_id),
+                "run_id": _path_segment(run_id),
+                "turn_id": _path_segment(turn_id),
+                "item_id": _path_segment(item_id),
+                "answers": normalized_answers,
+                "client_request_id": _client_request_id(client_request_id),
+            },
         )
 
     async def async_list_artifacts(self, thread_id: str) -> list[dict[str, Any]]:
@@ -523,6 +730,7 @@ class BridgeApiClient:
         json_body: dict[str, Any] | None = None,
         data: Any = None,
         expected_status: set[int] | None = None,
+        maximum_bytes: int | None = None,
     ) -> Any:
         response = await self._async_request(
             method,
@@ -533,11 +741,25 @@ class BridgeApiClient:
         )
         async with response:
             try:
-                return await response.json()
+                if maximum_bytes is None:
+                    return await response.json()
+                if (
+                    response.content_length is not None
+                    and response.content_length > maximum_bytes
+                ):
+                    raise BridgeApiPayloadTooLargeError(status=response.status)
+                raw = bytearray()
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    if len(raw) + len(chunk) > maximum_bytes:
+                        raise BridgeApiPayloadTooLargeError(status=response.status)
+                    raw.extend(chunk)
+                return json.loads(raw)
             except aiohttp.SocketTimeoutError:
                 raise BridgeApiReadTimeoutError() from None
             except asyncio.TimeoutError:
                 raise BridgeApiTimeoutError() from None
+            except asyncio.IncompleteReadError:
+                raise BridgeApiConnectionError() from None
             except (aiohttp.ClientError, ValueError):
                 raise BridgeApiProblemError(status=response.status) from None
 

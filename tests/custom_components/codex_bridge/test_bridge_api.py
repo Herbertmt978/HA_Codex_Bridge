@@ -386,6 +386,127 @@ async def test_v1_rejects_legacy_buffered_file_and_event_transports(
             await client.async_download_artifact("thr_safe", "art_safe")
 
 
+async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
+    bridge_server_factory,
+) -> None:
+    paths: list[str] = []
+    bodies: dict[str, dict] = {}
+
+    async def handler(request: web.Request) -> web.Response:
+        paths.append(f"{request.path}?{request.query_string}")
+        if request.can_read_body:
+            bodies[request.path] = await request.json()
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        if request.path in {"/events/replay", "/events/wait"}:
+            return web.json_response(
+                {
+                    "events": [],
+                    "next_cursor": 3,
+                    "minimum_cursor": 0,
+                    "has_more": False,
+                    "heartbeat": request.path == "/events/wait",
+                }
+            )
+        if request.path.endswith("/prompts"):
+            return web.json_response({"ok": True}, status=202)
+        return web.json_response({"ok": True})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_replay_events(
+            after=3, scopes={"thread"}, thread_ids={"thr_safe"}
+        )
+        await client.async_wait_events(after=3)
+        await client.async_cancel_auth_login()
+        await client.async_list_pending_interactions(thread_id="thr_safe")
+        await client.async_send_prompt(
+            "thr_safe", "hello", client_request_id="request-1"
+        )
+        await client.async_decide_interaction(
+            "int_safe",
+            thread_id="thr_safe",
+            run_id="run_safe",
+            turn_id="turn_safe",
+            item_id="item_safe",
+            decision="accept",
+            client_request_id="decision-1",
+        )
+        await client.async_answer_interaction(
+            "int_safe",
+            thread_id="thr_safe",
+            run_id="run_safe",
+            turn_id="turn_safe",
+            item_id="item_safe",
+            answers=[{"question_id": "question_safe", "values": ["yes"]}],
+            client_request_id="answer-1",
+        )
+
+    assert "/events/replay?after=3&scope=thread&thread_id=thr_safe&limit=256" in paths
+    assert "/events/wait?after=3&limit=256&timeout_seconds=15" in paths
+    assert "/auth/device-login/cancel?" in paths
+    assert "/interactions/pending?thread_id=thr_safe" in paths
+    assert "/interactions/int_safe/decision?" in paths
+    assert "/interactions/int_safe/answer?" in paths
+    assert bodies["/threads/thr_safe/prompts"]["client_request_id"] == "request-1"
+    assert bodies["/interactions/int_safe/answer"]["answers"] == [
+        {"question_id": "question_safe", "values": ["yes"]}
+    ]
+
+
+async def test_v1_event_body_is_bounded_before_json_decoding(
+    bridge_server_factory, monkeypatch
+) -> None:
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        return web.Response(body=b"{" + (b"x" * 64))
+
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.bridge_api.BRIDGE_EVENT_BATCH_MAX_BYTES", 64
+    )
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiPayloadTooLargeError):
+            await client.async_replay_events()
+
+
+async def test_interaction_answers_are_strict_bounded_and_unique(
+    bridge_server_factory,
+) -> None:
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        return web.json_response({"ok": True})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        for answers in (
+            [{"question_id": "question_1", "answers": ["wrong key"]}],
+            [
+                {"question_id": "question_1", "values": ["one"]},
+                {"question_id": "question_1", "values": ["two"]},
+            ],
+            [{"question_id": "question_1", "values": [""]}],
+        ):
+            with pytest.raises(BridgeApiEndpointError):
+                await client.async_answer_interaction(
+                    "int_safe",
+                    thread_id="thr_safe",
+                    run_id="run_safe",
+                    turn_id="turn_safe",
+                    item_id="item_safe",
+                    answers=answers,
+                    client_request_id="answer-1",
+                )
+
+
 def test_uses_bounded_connect_read_total_and_pool_timeouts() -> None:
     assert REQUEST_TIMEOUT.total is not None and REQUEST_TIMEOUT.total <= 30
     assert REQUEST_TIMEOUT.connect is not None and REQUEST_TIMEOUT.connect <= 10
