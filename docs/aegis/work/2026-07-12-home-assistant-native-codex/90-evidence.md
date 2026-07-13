@@ -185,9 +185,31 @@ transport that cannot leak private copies into a user workspace or source
 control. Real filesystem/network sandbox enforcement remains a protected-HA
 acceptance condition, and the VM rollback path is unchanged.
 
+## Task 8 — durable global event journal and replay
+
+| Evidence | Result |
+|----------|--------|
+| Global replay contract | One SQLite WAL journal assigns monotonic cursors across auth, runtime, and thread scopes; replay and bounded wait support filters, heartbeats, batch ceilings, and snapshot-guided 410 recovery |
+| State/event atomicity | A durable outbox prepares complete JSON writes and events, atomically replaces/fsyncs canonical state, then uniquely finalizes journal events; startup and pre-commit reconciliation finish pending operations exactly once |
+| Crash and ordering coverage | Injected crashes after prepare, after state replace, and before event append recover once; newer revisions cannot overtake an older pending operation |
+| Retention and capacity | Per-scope count/byte retention, global physical journal limits, bounded waiters, bounded operation metadata/tombstones, deterministic 413/429/507 responses, and fail-closed retired idempotency keys |
+| Privacy boundary | Device codes/raw auth output, private workspace/stored paths, raw provider `codex.event` payloads, and unsafe legacy failure fields are projected out before hashing, sizing, SQLite persistence, or replay |
+| Compatibility | The list-shaped v0 per-thread adapter remains; legacy JSONL imports are idempotent and safely projected; the deprecated external runner now pairs canonical lifecycle state with its events through the same outbox |
+| Focused verification | 322 passed, 66 skipped across journal, outbox, API, runtime, runner, auth, storage, and workspace suites |
+| Windows full suite | 814 passed, 141 skipped |
+| Linux full suite | 944 passed, 1 skipped, and 1 known Starlette TestClient deprecation warning in a Python 3.13 container; the Windows-only updater test was excluded |
+| Static verification | Ruff, `compileall`, panel JavaScript syntax, staged diff check, and final diff hygiene passed |
+| Independent review | Luna and Terra found no remaining P0/P1 after event projection, capacity-envelope, legacy atomicity, notification-restart, and pending-operation ordering fixes |
+| Implementation commit | `c1f2307` (`Add durable Bridge event journal`) |
+
+The journal is private Bridge state, not a Home Assistant entity, event-bus, or
+logbook payload. The future Integration may forward only these normalized
+records over administrator-authorized HA WebSockets. Task 9 owns binary
+transport; Task 10 and later own the Integration consumer and panel resume flow.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
 ceilings, safe archives, bounded app-server transport, structured ChatGPT auth,
-and the single HA runtime broker, but not yet the durable global outbox, HA App
+and the single HA runtime broker plus durable global outbox, but not yet the HA App
 image, target sandbox, proxy deployment, release, or cutover.

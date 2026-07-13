@@ -298,11 +298,11 @@ confinement on the target Home Assistant system.
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_event_store.py bridge_service/tests/test_events_api.py`
 
-- [ ] Write failing tests for global monotonic cursors, auth/runtime/thread scopes, replay-before-live locking, wait heartbeat, bounded batch, dedupe, concurrent writers, SQLite restart, retention/compaction, expired cursor 410 with minimum/snapshot guidance, and idempotent legacy import. Add injected crashes after outbox commit, after atomic JSON replace, and before event append; startup reconciliation must yield one state revision and exactly one event.
-- [ ] Run focused tests and confirm current per-thread snapshots lack a global cursor/wait behavior.
-- [ ] Implement SQLite WAL-backed `BridgeEventStore.append/replay/wait/compact`, typed batches, condition signalling, payload size validation, and adapters. Add a `DurableOutbox`: commit an operation ID plus complete intended JSON/event payload to SQLite, atomically replace/fsync the JSON record with that operation ID/revision, then append the uniquely keyed event and mark applied in one SQLite transaction. Before readiness, reconcile every pending row by applying or recognizing the JSON revision and idempotently appending the event.
-- [ ] Run focused/full tests with concurrent writers and restart loops; inspect database/event sizes against configured limits.
-- [ ] Commit with message `Add durable Bridge event journal`.
+- [x] Write failing tests for global monotonic cursors, auth/runtime/thread scopes, replay-before-live locking, wait heartbeat, bounded batch, dedupe, concurrent writers, SQLite restart, retention/compaction, expired cursor 410 with minimum/snapshot guidance, and idempotent legacy import. Add injected crashes after outbox commit, after atomic JSON replace, and before event append; startup reconciliation must yield one state revision and exactly one event.
+- [x] Run focused tests and confirm current per-thread snapshots lack a global cursor/wait behavior.
+- [x] Implement SQLite WAL-backed `BridgeEventStore.append/replay/wait/compact`, typed batches, condition signalling, payload size validation, and adapters. Add a `DurableOutbox`: commit an operation ID plus complete intended JSON/event payload to SQLite, atomically replace/fsync the JSON record with that operation ID/revision, then append the uniquely keyed event and mark applied in one SQLite transaction. Before readiness, reconcile every pending row by applying or recognizing the JSON revision and idempotently appending the event.
+- [x] Run focused/full tests with concurrent writers and restart loops; inspect database/event sizes against configured limits.
+- [x] Commit with message `Add durable Bridge event journal`.
 
 ## Task 9: Add resumable uploads and ranged artifact downloads
 
@@ -537,7 +537,7 @@ docker compose -f tests/transport/compose.yaml up --build --abort-on-container-e
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_app_package.py`
 
-- [ ] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, and `all_addon_configs`. Assert only `addon_config:rw`, cold backup, experimental stage, discovery, immutable image, and the proven architecture.
+- [ ] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, `all_addon_configs`, and obsolete `build.yaml`. Assert only `addon_config:rw`, cold backup, experimental stage, discovery, a generic multi-architecture immutable image, and the proven architecture.
 - [ ] Run focused tests and confirm metadata is missing.
 - [ ] Add App repository/metadata/translations/branding with `slug: codex_bridge`, App version `0.6.0`, `startup: application`, `boot: auto`, `init: false`, `stage: experimental`, `backup: cold`, and `ghcr.io/herbertmt978/ha-codex-bridge-app`.
 - [ ] Run tests plus the current Home Assistant App/repository linter; render App Store metadata and inspect name/icon/descriptions.
@@ -554,7 +554,7 @@ docker compose -f tests/transport/compose.yaml up --build --abort-on-container-e
 
 **Why:** Automatic Codex updates require independent identity verification, monotonic versions, bounded archives, and exact architecture assets.
 
-**Impact/Compatibility:** Start from stable `rust-v0.144.1`; the updater never installs at runtime and never accepts drafts/prereleases or an identity mismatch.
+**Impact/Compatibility:** Seed the lock from the then-current verified stable `openai/codex` release; do not hard-code the planning-time version. The updater never installs at runtime and never accepts drafts/prereleases or an identity mismatch.
 
 **Verification:**
 
@@ -565,7 +565,7 @@ python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
 - [ ] Write failing fixture tests for stable/prerelease/draft, monotonic tag, missing/duplicate assets, archive/bundle digest, decompression size, Sigstore issuer/identity/repository/workflow/tag/transparency log, both musl architectures, and malicious GitHub metadata.
 - [ ] Run tests and confirm updater/lock are absent.
-- [ ] Implement offline-verifiable lock parsing and online update/check modes. Seed verified 0.144.1 musl Codex and Bubblewrap assets/digests from official release metadata, including issuer `https://token.actions.githubusercontent.com` and tagged `openai/codex` release-workflow identity. Record compressed/decompressed size/digest and bundle identity.
+- [ ] Implement offline-verifiable lock parsing and online update/check modes. Seed the current verified stable musl Codex and Bubblewrap assets/digests from official release metadata, including issuer `https://token.actions.githubusercontent.com` and tagged `openai/codex` release-workflow identity. Record version, compressed/decompressed size/digest, and bundle identity in the lock.
 - [ ] Run fixtures, fetch current official metadata, independently verify every recorded digest/Sigstore bundle, stage the target asset, and confirm `codex --version` exactly matches the lock.
 - [ ] Commit with message `Lock verified Codex release assets`.
 

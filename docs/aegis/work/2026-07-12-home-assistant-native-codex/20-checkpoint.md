@@ -3,22 +3,22 @@
 ## TodoCheckpointDraft
 
 - **State:** active
-- **Current todo:** Task 8 — add a durable global event journal and replay contract
-- **Active slice:** Replace split JSON/JSONL event delivery with a SQLite WAL journal and durable outbox/reconciler
-- **Completed:** approved spec and plan; Tasks 1–7; global auth/run exclusion, bounded app-server turns, HA approvals/questions, cancellation, restart recovery, and legacy HA runtime-owner rejection
-- **Evidence refs:** `90-evidence.md`; Task 7 implementation commit `6583d9f`
+- **Current todo:** Task 9 — add resumable uploads and ranged artifact downloads
+- **Active slice:** Build the bounded 8 MiB chunk/session protocol and safe Range/ETag download contract entirely behind the Bridge
+- **Completed:** approved spec and plan; Tasks 1–8; durable global replay, cross-file outbox recovery, privacy projections, and legacy v0 adapters
+- **Evidence refs:** `90-evidence.md`; Task 8 implementation commit `c1f2307`
 - **Blocked on:** no implementation blocker; real HA inherited-descriptor, process-group, and sandbox behavior remain acceptance gates
-- **Next step:** write Task 8 RED contracts for global cursors, replay/wait, retention, SQLite restart, and injected outbox crash points
+- **Next step:** write Task 9 RED contracts for resumable chunk sessions, checksums, restart/cancel recovery, quotas, and ranged artifact downloads
 
 ## ResumeStateHint
 
 - **Repository:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge`
 - **Worktree:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge\.worktrees\ha-app`
 - **Branch:** `Herb/ha-app`
-- **Current implementation head before this checkpoint update:** `6583d9f`
-- **Worktree status at checkpoint:** Task 7 implementation committed; Task 8 is the next implementation slice
+- **Current implementation head before this checkpoint update:** `c1f2307`
+- **Worktree status at checkpoint:** Task 8 implementation committed; README branding rewrite remains intentionally unstaged; Task 9 is the next implementation slice
 - **Baseline command:** `python -m pytest -q` from `bridge_service`
-- **Baseline result:** focused 251 passed/6 skipped; Windows Python 3.14.4 full 723 passed/139 skipped; Linux Python 3.13 container 851 passed/1 skipped with one Starlette deprecation warning and the Windows-only updater test excluded
+- **Baseline result:** Task 8 focused 322 passed/66 skipped; Windows full 814 passed/141 skipped; Linux Python 3.13 container 944 passed/1 skipped with one Starlette deprecation warning and the Windows-only updater test excluded
 - **Required readback on resume:** `10-intent.md`, this file, approved spec, plan, current `git status`, latest commits, and evidence file
 
 ## DriftCheckDraft
@@ -27,5 +27,5 @@
 - **Compatibility:** v0 adapter and VM rollback remain explicit.
 - **New owner/fallback:** `RuntimeBroker` is the only permitted HA turn owner; `BridgeRunner` remains an explicitly deprecated external rollback adapter and is rejected by HA app composition.
 - **Retirement:** unchanged; VM stops only after real acceptance.
-- **Evidence sufficiency:** sufficient to accept exact sandbox/path rejection, callback FIFO with early provider resolution, one queued prompt per chat, non-replayable steer outcome uncertainty, and serialized deletion/storage mutation on Windows and Linux host/container tests. Durable global event/outbox atomicity remains explicitly owned by Task 8; real HA sandbox behavior remains an acceptance gate.
+- **Evidence sufficiency:** sufficient to accept monotonic global replay, bounded waits/retention, safe event projections, legacy import, serialized outbox ordering, and exactly-once state/event recovery across every injected crash seam on Windows and Linux. Real HA sandbox, proxy, backup, and App image behavior remain acceptance gates.
 - **Decision:** continue.
