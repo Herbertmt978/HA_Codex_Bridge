@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Any, Literal, Self
 
 from enum import StrEnum
@@ -70,6 +71,18 @@ class AttachmentRecord(BaseModel):
     stored_path: str
     relative_path: str | None = None
     size_bytes: int | None = None
+    # Legacy multipart attachments predate integrity metadata.  New resumable
+    # HA uploads always set this, while old persisted records remain readable.
+    sha256: str | None = None
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_sha256(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ValueError("sha256 must be a lowercase SHA-256 digest")
+        return value
 
 
 class ArtifactRecord(BaseModel):

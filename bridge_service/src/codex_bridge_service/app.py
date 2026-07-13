@@ -34,6 +34,7 @@ from .routes import (
     approvals,
     artifacts,
     attachments,
+    uploads,
     codex_auth,
     events,
     health,
@@ -367,6 +368,11 @@ def create_app(
             max_body_bytes=(
                 limits.max_upload_file_bytes + limits.max_upload_request_overhead_bytes
             ),
+            max_chunk_body_bytes=8 * 1024 * 1024,
+            # Session metadata is intentionally much smaller than the
+            # durable manifest ceiling and is bounded before FastAPI/Pydantic
+            # attempts to parse hostile JSON.
+            max_session_body_bytes=64 * 1024,
         )
     if initialize_special_projects:
         if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
@@ -433,7 +439,11 @@ def create_app(
     app.include_router(artifacts.router)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         app.include_router(approvals.router)
-    app.include_router(attachments.router)
+        app.include_router(uploads.router)
+    else:
+        # The multipart endpoint is the external-v0 rollback adapter. HA uses
+        # only bounded resumable chunks so Core never parses a whole file.
+        app.include_router(attachments.router)
     app.include_router(codex_auth.router)
     app.include_router(events.router)
     app.include_router(health.router)

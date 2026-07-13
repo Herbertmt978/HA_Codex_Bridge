@@ -585,11 +585,16 @@ def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> Non
         mode=RunMode.EDIT,
     )
     client = TestClient(app)
+    upload_request = {
+        "filename": "quota.bin",
+        "size_bytes": 1,
+        "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    }
 
     response = client.post(
-        f"/threads/{thread.thread_id}/attachments",
+        f"/threads/{thread.thread_id}/uploads",
         headers={"Authorization": "Bearer secret"},
-        files={"file": ("too-large.bin", b"12", "application/octet-stream")},
+        json=upload_request,
     )
 
     assert response.status_code == 413
@@ -604,11 +609,11 @@ def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> Non
     def conflict(**_kwargs):
         raise ReservationConflictError("private")
 
-    monkeypatch.setattr(app.state.storage, "attach_file", conflict)
+    monkeypatch.setattr(app.state.storage, "create_upload_session", conflict)
     response = client.post(
-        f"/threads/{thread.thread_id}/attachments",
+        f"/threads/{thread.thread_id}/uploads",
         headers={"Authorization": "Bearer secret"},
-        files={"file": ("retry.bin", b"1", "application/octet-stream")},
+        json=upload_request,
     )
     assert response.status_code == 409
     assert response.json()["detail"] == {

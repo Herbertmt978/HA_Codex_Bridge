@@ -1,5 +1,6 @@
 import json
 import io
+import hashlib
 import mimetypes
 import os
 import re
@@ -53,11 +54,35 @@ from .workspace import (
     WorkspaceExistsError,
     WorkspaceFileIdentity,
     WorkspaceInputError,
+    WorkspaceNotFoundError,
     WorkspaceResourceLimitError,
+    normalize_portable_relative_path,
 )
 
 _UNSET = object()
 _WORKSPACE_ID_PATTERN = re.compile(r"^ws_[0-9a-f]{12}$")
+_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_UPLOAD_MANIFEST_MAX_BYTES = 64 * 1024
+_UPLOAD_MAX_FILENAME_BYTES = 255
+_UPLOAD_MAX_RELATIVE_PATH_BYTES = 2048
+_UPLOAD_MAX_RELATIVE_PATH_DEPTH = 16
+_UPLOAD_MAX_MIME_TYPE_BYTES = 255
+_UPLOAD_TERMINAL_SESSION_LIMIT = 128
+_UPLOAD_SESSION_LIMIT = 256
+_UPLOAD_SESSION_FIELDS = frozenset(
+    {
+        "upload_id",
+        "thread_id",
+        "filename",
+        "mime_type",
+        "relative_path",
+        "size_bytes",
+        "sha256",
+        "received",
+        "status",
+    }
+)
 
 
 def _write_all(output: BinaryIO, content: bytes | bytearray | memoryview) -> int:
@@ -119,6 +144,9 @@ class _ReleasingBinaryStream:
     def fileno(self) -> int:
         return self._stream.fileno()
 
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._stream.seek(offset, whence)
+
     def close(self) -> None:
         release = self._release
         self._release = None
@@ -139,6 +167,147 @@ class ProjectNotFoundError(FileNotFoundError):
 
 class ProjectMutationError(ValueError):
     pass
+
+
+class UploadNotFoundError(FileNotFoundError):
+    pass
+
+
+class UploadConflictError(ValueError):
+    pass
+
+
+class UploadValidationError(ValueError):
+    pass
+
+
+class _UploadChunkWriter:
+    """One descriptor-rooted chunk write; owns the upload lock until finished."""
+
+    def __init__(self, storage: "BridgeStorage", payload: dict[str, object], index: int, digest: str, expected: int, reservation: QuotaReservation) -> None:
+        self.storage, self.payload, self.index, self.digest, self.expected = storage, payload, index, digest, expected
+        self.reservation = reservation
+        self.boundary = storage._home_assistant_uploads_boundary()
+        self.part = f"{storage._upload_payload_dir(str(payload['upload_id']))}/{index}.{uuid4().hex}.part"
+        self.chunk = f"{storage._upload_payload_dir(str(payload['upload_id']))}/{index}.chunk"
+        self.output = self.boundary.create_file_exclusive(self.part)
+        self.identity = self.boundary.identify_open_file(self.output)
+        storage._active_upload_parts.add(self.part)
+        self.counter = 0
+        self.hasher = hashlib.sha256()
+        self.chunk_published = False
+        self.closed = False
+
+    def write(self, block: bytes) -> None:
+        if self.closed or not isinstance(block, bytes) or self.counter + len(block) > self.expected:
+            raise UploadValidationError("content_length")
+        self.reservation.consume(len(block))
+        _write_all(self.output, block)
+        self.hasher.update(block)
+        self.counter += len(block)
+
+    def finish(self) -> dict[str, object]:
+        self.storage._upload_mutation_lock.acquire()
+        try:
+            self.output.flush()
+            os.fsync(self.output.fileno())
+            self.output.close()
+            if self.counter != self.expected or self.hasher.hexdigest() != self.digest:
+                raise UploadValidationError("chunk_sha256")
+            current = self.storage._read_upload_session_locked(str(self.payload["upload_id"]))
+            if current["status"] != "active":
+                raise UploadConflictError("upload is not active")
+            received = current["received"]
+            assert isinstance(received, dict)
+            if str(self.index) in received or {int(value) for value in received} != set(range(self.index)):
+                raise UploadConflictError("chunk order")
+            self.boundary.replace_regular_file(
+                self.part, self.chunk, expected_identity=self.identity
+            )
+            self.chunk_published = True
+            received[str(self.index)] = {"sha256": self.digest, "size_bytes": self.counter}
+            self.storage._write_upload_session_locked(current)
+            self.reservation.commit(persisted_bytes=self.counter)
+            return self.storage._upload_view(current)
+        except BaseException:
+            self._rollback_finish_failure()
+            raise
+        finally:
+            self._release_lock()
+
+    def abort(self) -> None:
+        with self.storage._upload_mutation_lock:
+            if self.closed:
+                return
+            self.closed = True
+            try:
+                self.output.close()
+            finally:
+                try:
+                    self.boundary.unlink_regular_file(
+                        self.part,
+                        missing_ok=True,
+                        expected_identity=self.identity,
+                    )
+                finally:
+                    self.storage._active_upload_parts.discard(self.part)
+                    if self.reservation.active:
+                        self.reservation.release()
+
+    def _rollback_finish_failure(self) -> None:
+        """Undo a pre-manifest publish without unlinking a durable retry."""
+        try:
+            manifest_persisted = False
+            if self.chunk_published:
+                try:
+                    current = self.storage._read_upload_session_locked(
+                        str(self.payload["upload_id"])
+                    )
+                    received = current["received"]
+                    assert isinstance(received, dict)
+                    metadata = received.get(str(self.index))
+                    manifest_persisted = (
+                        isinstance(metadata, dict)
+                        and metadata.get("sha256") == self.digest
+                        and metadata.get("size_bytes") == self.counter
+                    )
+                except (UploadNotFoundError, WorkspaceBoundaryError):
+                    manifest_persisted = False
+                if manifest_persisted:
+                    # An atomic manifest operation may report an error after
+                    # its durable replace.  Retain its exact chunk for the
+                    # idempotent retry and settle (or release) the transient
+                    # reservation without creating an accounting leak.
+                    if self.reservation.active:
+                        try:
+                            self.reservation.commit(persisted_bytes=self.counter)
+                        except BaseException:
+                            if self.reservation.active:
+                                self.reservation.release()
+                else:
+                    self.boundary.unlink_regular_file(
+                        self.chunk,
+                        missing_ok=True,
+                        expected_identity=self.identity,
+                    )
+            else:
+                self.boundary.unlink_regular_file(
+                    self.part,
+                    missing_ok=True,
+                    expected_identity=self.identity,
+                )
+        finally:
+            if self.reservation.active:
+                self.reservation.release()
+
+    def _release_lock(self) -> None:
+        if not self.closed:
+            self.closed = True
+        self.storage._active_upload_parts.discard(self.part)
+        try:
+            self.storage._upload_mutation_lock.release()
+        except RuntimeError:
+            pass
 
 
 class BridgeStorage:
@@ -188,6 +357,14 @@ class BridgeStorage:
         self._event_next_sequences: dict[str, int] = {}
         self._project_mutation_lock = RLock()
         self._thread_mutation_lock = RLock()
+        # A single process lock deliberately precedes the thread lock in every
+        # upload transition and deletion, avoiding complete/cancel/delete ABBA.
+        self._upload_mutation_lock = RLock()
+        # Open request streams release the mutation lock while bytes arrive.
+        # Reaping consults these exact descriptor-rooted locators so a live
+        # writer is never mistaken for debris; a restarted process begins
+        # empty and can therefore reclaim genuinely abandoned parts.
+        self._active_upload_parts: set[str] = set()
 
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             if workspace_root is None or not str(workspace_root).strip():
@@ -229,6 +406,12 @@ class BridgeStorage:
             # Retain a descriptor for the private upload root before handling
             # any untrusted attachment or archive locator.
             self.uploads_boundary = WorkspaceBoundary(self.uploads_dir)
+            if os.name == "nt":
+                # Windows is validation-only for the HA profile; production
+                # upload mutations require POSIX descriptor-relative APIs.
+                (self.uploads_dir / ".sessions").mkdir(exist_ok=True)
+            else:
+                self.uploads_boundary.create_directory(".sessions")
             self.artifacts_boundary = WorkspaceBoundary(self.artifacts_dir)
             self.resource_limits = resource_limits or ResourceLimits()
             limits = self.resource_limits
@@ -529,6 +712,15 @@ class BridgeStorage:
                 ):
                     lease.close()
                     raise WorkspaceEscapeError()
+                if attachment.sha256 is not None:
+                    digest = hashlib.sha256()
+                    offset = 0
+                    while block := os.pread(lease.fileno(), 1024 * 1024, offset):
+                        digest.update(block)
+                        offset += len(block)
+                    if digest.hexdigest() != attachment.sha256:
+                        lease.close()
+                        raise WorkspaceEscapeError()
                 leases[attachment.attachment_id] = lease
             return leases
         except BaseException:
@@ -1636,6 +1828,42 @@ class BridgeStorage:
                 return self._resolve_thread(record)
 
     def delete_thread(self, thread_id: str) -> None:
+        # Keep the same upload -> thread ordering used by completion/cancel.
+        with self._upload_mutation_lock:
+            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                boundary = self._home_assistant_uploads_boundary()
+                manifest_paths = boundary.walk_regular_files(".sessions")
+            else:
+                manifest_paths = ()
+            for manifest_path in manifest_paths:
+                if not manifest_path.endswith(".json"):
+                    continue
+                try:
+                    with boundary.open_regular_file(manifest_path) as stream:
+                        payload = json.loads(stream.read().decode("utf-8"))
+                except (WorkspaceBoundaryError, OSError, ValueError):
+                    continue
+                if isinstance(payload, dict) and payload.get("thread_id") == thread_id:
+                    upload_id = payload.get("upload_id")
+                    if isinstance(upload_id, str) and re.fullmatch(r"upl_[0-9a-f]{32}", upload_id):
+                        received = payload.get("received", {})
+                        if isinstance(received, dict):
+                            if payload.get("status") == "publishing":
+                                try:
+                                    self._rollback_published_upload_locked(payload)
+                                except (UploadConflictError, WorkspaceBoundaryError):
+                                    # Thread deletion will fail closed when a
+                                    # hostile replacement prevents precise
+                                    # cleanup; never unlink by pathname alone.
+                                    raise
+                            self._clear_upload_payload_locked(upload_id, received)
+                            boundary.remove_empty_directory(
+                                self._upload_payload_dir(upload_id), missing_ok=True
+                            )
+                    boundary.unlink_regular_file(manifest_path, missing_ok=True)
+            self._delete_thread_locked(thread_id)
+
+    def _delete_thread_locked(self, thread_id: str) -> None:
         with self._thread_mutation_lock:
             record = self.load_thread(thread_id)
             # Remove replayable prompts/deltas before deleting metadata. If a
@@ -1659,14 +1887,37 @@ class BridgeStorage:
                 event_path.unlink()
             self._event_next_sequences.pop(thread_id, None)
 
-            upload_dir = self.uploads_dir / thread_id
-            if upload_dir.exists():
-                for path in sorted(upload_dir.rglob("*"), reverse=True):
-                    if path.is_file():
-                        path.unlink()
-                    elif path.is_dir():
-                        path.rmdir()
-                upload_dir.rmdir()
+            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                self._remove_upload_tree_locked(thread_id)
+            else:
+                upload_dir = self.uploads_dir / thread_id
+                if upload_dir.exists():
+                    for path in sorted(upload_dir.rglob("*"), reverse=True):
+                        if path.is_file():
+                            path.unlink()
+                        elif path.is_dir():
+                            path.rmdir()
+                    upload_dir.rmdir()
+
+    def _remove_upload_tree_locked(self, relative: str) -> None:
+        """Clear Bridge-owned uploads through the retained private descriptor."""
+
+        boundary = self._home_assistant_uploads_boundary()
+        try:
+            files = boundary.walk_regular_files(relative, reject_unsafe=True)
+        except WorkspaceNotFoundError:
+            return
+        directories = {relative}
+        pending = [relative]
+        while pending:
+            directory = pending.pop()
+            for child in boundary.list_directories(directory):
+                directories.add(child)
+                pending.append(child)
+        for locator in files:
+            boundary.unlink_regular_file(locator, missing_ok=True)
+        for directory in sorted(directories, key=lambda item: item.count("/"), reverse=True):
+            boundary.remove_empty_directory(directory, missing_ok=True)
 
     def save_thread(self, record: ThreadRecord) -> None:
         with self._thread_mutation_lock:
@@ -2002,6 +2253,720 @@ class BridgeStorage:
             if attachment.attachment_id == attachment_id:
                 return attachment
         raise ThreadNotFoundError(attachment_id)
+
+    # Resumable upload state is intentionally private metadata rather than an
+    # event/outbox payload: chunk progress is not a public thread transition.
+    def _upload_session_path(self, upload_id: str) -> str:
+        if not re.fullmatch(r"upl_[0-9a-f]{32}", upload_id):
+            raise UploadNotFoundError(upload_id)
+        return f".sessions/{upload_id}.json"
+
+    def _upload_payload_dir(self, upload_id: str) -> str:
+        if not re.fullmatch(r"upl_[0-9a-f]{32}", upload_id):
+            raise UploadNotFoundError(upload_id)
+        return f".sessions/{upload_id}"
+
+    @staticmethod
+    def _validate_upload_sha256(value: object) -> str:
+        if not isinstance(value, str) or not _SHA256_PATTERN.fullmatch(value):
+            raise UploadValidationError("sha256")
+        return value
+
+    def _read_upload_session_locked(self, upload_id: str) -> dict[str, object]:
+        try:
+            with self._home_assistant_uploads_boundary().open_regular_file(
+                self._upload_session_path(upload_id)
+            ) as stream:
+                raw = stream.read(_UPLOAD_MANIFEST_MAX_BYTES + 1)
+                if len(raw) > _UPLOAD_MANIFEST_MAX_BYTES:
+                    raise UploadNotFoundError(upload_id)
+                payload = json.loads(raw.decode("utf-8"))
+        except FileNotFoundError:
+            raise UploadNotFoundError(upload_id) from None
+        except (OSError, ValueError, TypeError):
+            raise UploadNotFoundError(upload_id) from None
+        if not isinstance(payload, dict):
+            raise UploadNotFoundError(upload_id)
+        if not _UPLOAD_SESSION_FIELDS.issubset(payload):
+            raise UploadNotFoundError(upload_id)
+        if payload["upload_id"] != upload_id or not isinstance(payload["thread_id"], str):
+            raise UploadNotFoundError(upload_id)
+        if type(payload["size_bytes"]) is not int or payload["size_bytes"] <= 0:
+            raise UploadNotFoundError(upload_id)
+        if payload["size_bytes"] > self._resource_limits().max_upload_file_bytes:
+            raise UploadNotFoundError(upload_id)
+        try:
+            self._validate_upload_sha256(payload["sha256"])
+        except UploadValidationError:
+            raise UploadNotFoundError(upload_id) from None
+        if not isinstance(payload["received"], dict) or payload["status"] not in {
+            "active",
+            "publishing",
+            "cancelled",
+            "completed",
+        }:
+            raise UploadNotFoundError(upload_id)
+        try:
+            thread_id = normalize_portable_relative_path(payload["thread_id"])
+            filename = normalize_portable_relative_path(payload["filename"])
+            relative = normalize_portable_relative_path(payload["relative_path"])
+        except (WorkspaceInputError, TypeError):
+            raise UploadNotFoundError(upload_id) from None
+        if (
+            "/" in thread_id
+            or "/" in filename
+            or thread_id != payload["thread_id"]
+            or filename != payload["filename"]
+            or relative != payload["relative_path"]
+            or len(filename.encode("utf-8")) > _UPLOAD_MAX_FILENAME_BYTES
+            or len(relative.encode("utf-8")) > _UPLOAD_MAX_RELATIVE_PATH_BYTES
+            or len(PurePosixPath(relative).parts) > _UPLOAD_MAX_RELATIVE_PATH_DEPTH
+        ):
+            raise UploadNotFoundError(upload_id)
+        if PurePosixPath(relative).name != filename:
+            raise UploadNotFoundError(upload_id)
+        mime_type = payload.get("mime_type")
+        if not isinstance(mime_type, str) or not mime_type or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES or any(ord(char) < 32 for char in mime_type):
+            raise UploadNotFoundError(upload_id)
+        total = int(payload["size_bytes"])
+        chunks = (total + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE
+        received_indices: list[int] = []
+        for raw_index, metadata in payload["received"].items():
+            if not isinstance(raw_index, str) or not raw_index.isdecimal() or str(int(raw_index)) != raw_index:
+                raise UploadNotFoundError(upload_id)
+            index = int(raw_index)
+            if index >= chunks or not isinstance(metadata, dict):
+                raise UploadNotFoundError(upload_id)
+            expected = min(_UPLOAD_CHUNK_SIZE, total - index * _UPLOAD_CHUNK_SIZE)
+            if type(metadata.get("size_bytes")) is not int or metadata.get("size_bytes") != expected:
+                raise UploadNotFoundError(upload_id)
+            try:
+                self._validate_upload_sha256(metadata.get("sha256"))
+            except UploadValidationError:
+                raise UploadNotFoundError(upload_id) from None
+            received_indices.append(index)
+        if sorted(received_indices) != list(range(len(received_indices))):
+            raise UploadNotFoundError(upload_id)
+        status = payload["status"]
+        has_attachment = "attachment" in payload
+        allowed_fields = _UPLOAD_SESSION_FIELDS | (
+            {"attachment"} if has_attachment else set()
+        )
+        if set(payload) != allowed_fields:
+            raise UploadNotFoundError(upload_id)
+        if status in {"publishing", "completed"} and not has_attachment:
+            raise UploadNotFoundError(upload_id)
+        if has_attachment:
+            try:
+                raw_attachment = payload["attachment"]
+                if not isinstance(raw_attachment, dict) or set(raw_attachment) != set(
+                    AttachmentRecord.model_fields
+                ):
+                    raise UploadValidationError("attachment")
+                attachment = AttachmentRecord.model_validate(raw_attachment)
+                expected_attachment = self._upload_attachment_from_payload(payload)
+            except (TypeError, ValueError, UploadValidationError):
+                raise UploadNotFoundError(upload_id) from None
+            if attachment != expected_attachment:
+                raise UploadNotFoundError(upload_id)
+        return payload
+
+    def _upload_attachment_from_payload(
+        self,
+        payload: dict[str, object],
+    ) -> AttachmentRecord:
+        upload_id = str(payload["upload_id"])
+        thread_id = str(payload["thread_id"])
+        relative = str(payload["relative_path"])
+        return AttachmentRecord(
+            attachment_id=f"att_{upload_id}",
+            filename=str(payload["filename"]),
+            mime_type=str(payload["mime_type"]),
+            stored_path=f"{thread_id}/resumable/{upload_id}/{relative}",
+            relative_path=f"resumable/{upload_id}/{relative}",
+            size_bytes=int(payload["size_bytes"]),
+            sha256=str(payload["sha256"]),
+        )
+
+    def _verify_upload_attachment_locked(
+        self,
+        attachment: AttachmentRecord,
+    ) -> WorkspaceFileIdentity:
+        if attachment.size_bytes is None or attachment.sha256 is None:
+            raise WorkspaceEscapeError()
+        boundary = self._home_assistant_uploads_boundary()
+        digest = hashlib.sha256()
+        size_bytes = 0
+        with boundary.open_regular_file(attachment.stored_path) as stream:
+            identity = boundary.identify_open_file(stream)
+            while block := stream.read(1024 * 1024):
+                digest.update(block)
+                size_bytes += len(block)
+        if size_bytes != attachment.size_bytes or digest.hexdigest() != attachment.sha256:
+            raise WorkspaceEscapeError()
+        boundary.validate_regular_file_identity(attachment.stored_path, identity)
+        return identity
+
+    def _write_upload_session_locked(self, payload: dict[str, object]) -> None:
+        encoded = json.dumps(
+            payload, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+        if len(encoded) > _UPLOAD_MANIFEST_MAX_BYTES:
+            raise UploadValidationError("manifest")
+        # The replacement briefly creates a second private manifest.  Check
+        # both logical quota and filesystem free-space before creating it;
+        # this has no retained reservation on a failed write.
+        self._disk_quota().check("private", additional_bytes=len(encoded))
+        self._home_assistant_uploads_boundary().atomic_write_bytes(
+            self._upload_session_path(str(payload["upload_id"])), encoded
+        )
+
+    def _reconcile_published_upload_locked(
+        self,
+        payload: dict[str, object],
+    ) -> AttachmentRecord | None:
+        """Turn a durable attachment/event into a completed upload tombstone.
+
+        The thread record is the authoritative commit point.  If the process
+        died between that commit and the final manifest rewrite, cancellation
+        must preserve the published inode rather than rolling it back.
+        """
+        if "attachment" not in payload:
+            return None
+        expected = self._upload_attachment_from_payload(payload)
+        record = self.load_thread(str(payload["thread_id"]))
+        existing = next(
+            (item for item in record.attachments if item.attachment_id == expected.attachment_id),
+            None,
+        )
+        if existing is None:
+            return None
+        if existing != expected:
+            raise UploadConflictError("attachment conflict")
+        try:
+            self._verify_upload_attachment_locked(existing)
+        except WorkspaceBoundaryError as exc:
+            raise UploadConflictError("attachment conflict") from exc
+        payload["status"] = "completed"
+        payload["attachment"] = existing.model_dump(mode="json")
+        self._write_upload_session_locked(payload)
+        received = payload["received"]
+        assert isinstance(received, dict)
+        self._clear_upload_payload_locked(str(payload["upload_id"]), received)
+        return existing
+
+    def _clear_upload_payload_locked(self, upload_id: str, received: dict[str, object]) -> None:
+        boundary = self._home_assistant_uploads_boundary()
+        try:
+            files = boundary.walk_regular_files(
+                self._upload_payload_dir(upload_id), reject_unsafe=True
+            )
+        except WorkspaceNotFoundError:
+            return
+        for locator in files:
+            boundary.unlink_regular_file(locator, missing_ok=True)
+
+    def _reap_terminal_upload_sessions_locked(self) -> None:
+        """Bound idle-session metadata and directories without touching active work."""
+        boundary = self._home_assistant_uploads_boundary()
+        terminal: list[tuple[str, dict[str, object]]] = []
+        manifests = [
+            locator for locator in boundary.walk_regular_files(".sessions")
+            if locator.endswith(".json")
+        ]
+        for locator in manifests:
+            upload_id = PurePosixPath(locator).stem
+            try:
+                payload = self._read_upload_session_locked(upload_id)
+            except UploadNotFoundError:
+                continue
+            if payload["status"] in {"completed", "cancelled"}:
+                terminal.append((upload_id, payload))
+            # Live request streams register their exact part locators while
+            # this lock is released. Every other unmanifested regular file is
+            # recoverable debris from an interrupted writer or assembly.
+            received = payload["received"]
+            assert isinstance(received, dict)
+            allowed = {
+                f"{self._upload_payload_dir(upload_id)}/{index}.chunk"
+                for index in received
+            }
+            try:
+                for orphan in boundary.walk_regular_files(
+                    self._upload_payload_dir(upload_id), reject_unsafe=True
+                ):
+                    if orphan not in allowed and orphan not in self._active_upload_parts:
+                        boundary.unlink_regular_file(orphan, missing_ok=True)
+            except WorkspaceNotFoundError:
+                pass
+            if payload["status"] in {"completed", "cancelled"} and received:
+                self._clear_upload_payload_locked(upload_id, received)
+                payload["received"] = {}
+                self._write_upload_session_locked(payload)
+        reaped_manifest_paths: set[str] = set()
+        for upload_id, payload in sorted(terminal)[: max(0, len(terminal) - _UPLOAD_TERMINAL_SESSION_LIMIT)]:
+            received = payload["received"]
+            assert isinstance(received, dict)
+            self._clear_upload_payload_locked(upload_id, received)
+            boundary.remove_empty_directory(
+                self._upload_payload_dir(upload_id), missing_ok=True
+            )
+            boundary.unlink_regular_file(
+                self._upload_session_path(upload_id), missing_ok=True
+            )
+            reaped_manifest_paths.add(self._upload_session_path(upload_id))
+        # Empty/partial directories without a valid manifest are not
+        # sessions.  Remove only generated-name, regular-file-only entries;
+        # hostile or unknown entries remain counted, so they cannot bypass
+        # the resource ceiling by making cleanup unsafe.
+        safe_directories = []
+        for locator in boundary.list_directories(".sessions"):
+            upload_id = PurePosixPath(locator).name
+            if not re.fullmatch(r"upl_[0-9a-f]{32}", upload_id):
+                continue
+            safe_directories.append(locator)
+            manifest_path = self._upload_session_path(upload_id)
+            try:
+                with boundary.open_regular_file(manifest_path):
+                    continue
+            except WorkspaceNotFoundError:
+                pass
+            try:
+                for orphan in boundary.walk_regular_files(locator, reject_unsafe=True):
+                    boundary.unlink_regular_file(orphan, missing_ok=True)
+                boundary.remove_empty_directory(locator, missing_ok=True)
+                safe_directories.pop()
+            except WorkspaceBoundaryError:
+                # Preserve unknown/hostile state for a manual investigation,
+                # while retaining it in the hard count below.
+                continue
+        remaining_manifest_count = sum(
+            locator not in reaped_manifest_paths for locator in manifests
+        )
+        if (
+            remaining_manifest_count >= _UPLOAD_SESSION_LIMIT
+            or len(safe_directories) >= _UPLOAD_SESSION_LIMIT
+        ):
+            raise QuotaExceededError("upload_sessions")
+
+    @staticmethod
+    def _upload_view(payload: dict[str, object]) -> dict[str, object]:
+        received = payload["received"]
+        assert isinstance(received, dict)
+        indices = sorted(int(index) for index in received)
+        size = int(payload["size_bytes"])
+        next_index = 0
+        while next_index in indices:
+            next_index += 1
+        return {
+            "upload_id": payload["upload_id"],
+            "thread_id": payload["thread_id"],
+            "filename": payload["filename"],
+            "mime_type": payload["mime_type"],
+            "relative_path": payload.get("relative_path"),
+            "size_bytes": size,
+            "sha256": payload["sha256"],
+            "chunk_size": _UPLOAD_CHUNK_SIZE,
+            "total_chunks": (size + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE,
+            "received_indices": indices,
+            "next_offset": next_index * _UPLOAD_CHUNK_SIZE,
+            "status": payload["status"],
+        }
+
+    def create_upload_session(
+        self,
+        *,
+        thread_id: str,
+        filename: str,
+        mime_type: str = "application/octet-stream",
+        relative_path: str | None = None,
+        size_bytes: int,
+        sha256: str,
+    ) -> dict[str, object]:
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise UploadValidationError("runtime_profile")
+        try:
+            safe_filename = normalize_portable_relative_path(filename)
+            if "/" in safe_filename or safe_filename != filename:
+                raise WorkspaceInputError()
+            safe_relative = normalize_portable_relative_path(relative_path or safe_filename)
+            if PurePosixPath(safe_relative).name != safe_filename:
+                raise WorkspaceInputError()
+        except WorkspaceInputError:
+            raise UploadValidationError("filename") from None
+        if (
+            len(safe_filename.encode("utf-8")) > _UPLOAD_MAX_FILENAME_BYTES
+            or len(safe_relative.encode("utf-8")) > _UPLOAD_MAX_RELATIVE_PATH_BYTES
+            or len(PurePosixPath(safe_relative).parts) > _UPLOAD_MAX_RELATIVE_PATH_DEPTH
+        ):
+            raise UploadValidationError("filename")
+        if not isinstance(mime_type, str) or not mime_type or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES or any(ord(char) < 32 for char in mime_type):
+            raise UploadValidationError("mime_type")
+        if type(size_bytes) is not int or size_bytes <= 0:
+            raise UploadValidationError("size_bytes")
+        if size_bytes > self._resource_limits().max_upload_file_bytes:
+            raise QuotaExceededError("upload_file")
+        digest = self._validate_upload_sha256(sha256)
+        with self._upload_mutation_lock:
+            # Deletion takes this lock before the thread lock.  Keeping the
+            # validation and durable manifest creation inside it prevents a
+            # session being created after its thread has disappeared.
+            self.load_thread(thread_id)
+            self._reap_terminal_upload_sessions_locked()
+            upload_id = f"upl_{uuid4().hex}"
+            payload: dict[str, object] = {
+                "upload_id": upload_id,
+                "thread_id": thread_id,
+                "filename": safe_filename,
+                "mime_type": mime_type,
+                "relative_path": safe_relative,
+                "size_bytes": size_bytes,
+                "sha256": digest,
+                "received": {},
+                "status": "active",
+            }
+            self._home_assistant_uploads_boundary().create_directory(
+                self._upload_payload_dir(upload_id)
+            )
+            try:
+                self._write_upload_session_locked(payload)
+            except BaseException:
+                # If atomic manifest persistence reported failure before a
+                # durable manifest exists, reclaim only the exact empty
+                # generated directory.  A post-replace failure leaves a
+                # valid session recoverable instead of being destroyed.
+                try:
+                    with self._home_assistant_uploads_boundary().open_regular_file(
+                        self._upload_session_path(upload_id)
+                    ):
+                        pass
+                except WorkspaceNotFoundError:
+                    self._home_assistant_uploads_boundary().remove_empty_directory(
+                        self._upload_payload_dir(upload_id), missing_ok=True
+                    )
+                raise
+            return self._upload_view(payload)
+
+    def get_upload_session(self, *, thread_id: str, upload_id: str) -> dict[str, object]:
+        with self._upload_mutation_lock:
+            self.load_thread(thread_id)
+            payload = self._read_upload_session_locked(upload_id)
+            if payload["thread_id"] != thread_id:
+                raise UploadNotFoundError(upload_id)
+            return self._upload_view(payload)
+
+    def begin_upload_chunk(
+        self,
+        *,
+        thread_id: str,
+        upload_id: str,
+        index: int,
+        offset: int,
+        content_length: int,
+        sha256: str,
+    ) -> _UploadChunkWriter | dict[str, object]:
+        """Validate and open a private no-follow part file for request streaming."""
+        self._upload_mutation_lock.acquire()
+        try:
+            self.load_thread(thread_id)
+            payload = self._read_upload_session_locked(upload_id)
+            if payload["thread_id"] != thread_id:
+                raise UploadNotFoundError(upload_id)
+            if payload["status"] != "active":
+                raise UploadConflictError("upload is not active")
+            total = int(payload["size_bytes"])
+            chunks = (total + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE
+            if type(index) is not int or index < 0 or index >= chunks or offset != index * _UPLOAD_CHUNK_SIZE:
+                raise UploadConflictError("chunk offset")
+            expected = min(_UPLOAD_CHUNK_SIZE, total - offset)
+            if content_length != expected:
+                raise UploadValidationError("content_length")
+            digest = self._validate_upload_sha256(sha256)
+            received = payload["received"]
+            assert isinstance(received, dict)
+            old = received.get(str(index))
+            if isinstance(old, dict):
+                if old.get("sha256") == digest and old.get("size_bytes") == expected:
+                    calculated = hashlib.sha256()
+                    actual = 0
+                    with self._home_assistant_uploads_boundary().open_regular_file(
+                        f"{self._upload_payload_dir(upload_id)}/{index}.chunk"
+                    ) as source:
+                        while block := source.read(1024 * 1024):
+                            calculated.update(block)
+                            actual += len(block)
+                    if actual != expected or calculated.hexdigest() != digest:
+                        raise UploadConflictError("stored chunk conflict")
+                    return self._upload_view(payload)
+                raise UploadConflictError("chunk conflict")
+            if {int(value) for value in received} != set(range(index)):
+                raise UploadConflictError("chunk order")
+            reservation = self._disk_quota().reserve(
+                "private", amount_bytes=expected, item_limit_bytes=self._resource_limits().max_upload_file_bytes
+            )
+            try:
+                writer = _UploadChunkWriter(self, payload, index, digest, expected, reservation)
+            except BaseException:
+                reservation.release()
+                raise
+            return writer
+        finally:
+            self._upload_mutation_lock.release()
+
+    def complete_upload_session(self, *, thread_id: str, upload_id: str) -> AttachmentRecord:
+        with self._upload_mutation_lock:
+            payload = self._read_upload_session_locked(upload_id)
+            if payload["thread_id"] != thread_id:
+                raise UploadNotFoundError(upload_id)
+            attachment = self._upload_attachment_from_payload(payload)
+            record = self.load_thread(thread_id)
+            for existing in record.attachments:
+                if existing.attachment_id == attachment.attachment_id:
+                    if existing != attachment:
+                        raise UploadConflictError("attachment conflict")
+                    try:
+                        self._verify_upload_attachment_locked(existing)
+                    except WorkspaceBoundaryError as exc:
+                        raise UploadConflictError("attachment conflict") from exc
+                    payload["status"] = "completed"
+                    payload["attachment"] = existing.model_dump(mode="json")
+                    self._write_upload_session_locked(payload)
+                    received = payload["received"]
+                    assert isinstance(received, dict)
+                    self._clear_upload_payload_locked(upload_id, received)
+                    return existing
+            if payload["status"] == "publishing":
+                recovered = self._reconcile_published_upload_locked(payload)
+                if recovered is not None:
+                    return recovered
+            if payload["status"] not in {"active", "publishing"}:
+                raise UploadConflictError("upload is not active")
+            total = int(payload["size_bytes"])
+            received = payload["received"]
+            assert isinstance(received, dict)
+            expected_indices = range(
+                (total + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE
+            )
+            if set(received) != {str(index) for index in expected_indices}:
+                raise UploadConflictError("upload incomplete")
+            try:
+                self._verify_upload_attachment_locked(attachment)
+            except WorkspaceNotFoundError:
+                self._publish_upload_attachment_locked(
+                    payload=payload,
+                    attachment=attachment,
+                    expected_indices=expected_indices,
+                )
+            except WorkspaceBoundaryError as exc:
+                raise UploadConflictError("published attachment conflict") from exc
+
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                existing = next(
+                    (
+                        item
+                        for item in record.attachments
+                        if item.attachment_id == attachment.attachment_id
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    if existing != attachment:
+                        raise UploadConflictError("attachment conflict")
+                else:
+                    record.attachments.append(attachment)
+                    self._touch_thread(record)
+                    self._save_thread_with_events(
+                        record,
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="attachment.added",
+                            payload={
+                                "attachment_id": attachment.attachment_id,
+                                "filename": attachment.filename,
+                                "mime_type": attachment.mime_type,
+                                "stored_path": attachment.stored_path,
+                                "relative_path": attachment.relative_path,
+                                "size_bytes": attachment.size_bytes,
+                                "sha256": attachment.sha256,
+                            },
+                        ),
+                    )
+            payload["status"] = "completed"
+            payload["attachment"] = attachment.model_dump(mode="json")
+            self._write_upload_session_locked(payload)
+            self._clear_upload_payload_locked(upload_id, received)
+            return attachment
+
+    def _publish_upload_attachment_locked(
+        self,
+        *,
+        payload: dict[str, object],
+        attachment: AttachmentRecord,
+        expected_indices: range,
+    ) -> None:
+        """Assemble chunks and persist a recovery record before final publish."""
+
+        total = int(payload["size_bytes"])
+        received = payload["received"]
+        assert isinstance(received, dict)
+        boundary = self._home_assistant_uploads_boundary()
+        target_parent = str(PurePosixPath(attachment.stored_path).parent)
+        boundary.create_directory(target_parent)
+        # A final assembly is kept below the session root until it is
+        # checksum-verified and atomically published.  A hard process death
+        # is therefore recoverable by the session's cancel/retry/delete path.
+        target_part = f"{self._upload_payload_dir(str(payload['upload_id']))}/assembly.part"
+        boundary.unlink_regular_file(target_part, missing_ok=True)
+        reservation = self._disk_quota().reserve(
+            "private",
+            amount_bytes=total,
+            item_limit_bytes=self._resource_limits().max_upload_file_bytes,
+        )
+        total_digest = hashlib.sha256()
+        written = 0
+        target_identity: WorkspaceFileIdentity | None = None
+        published = False
+        try:
+            with boundary.create_file_exclusive(target_part) as output:
+                target_identity = boundary.identify_open_file(output)
+                for index in expected_indices:
+                    chunk = (
+                        f"{self._upload_payload_dir(str(payload['upload_id']))}"
+                        f"/{index}.chunk"
+                    )
+                    try:
+                        with boundary.open_regular_file(chunk) as source:
+                            source_identity = boundary.identify_open_file(source)
+                            data_digest = hashlib.sha256()
+                            chunk_written = 0
+                            while block := source.read(1024 * 1024):
+                                reservation.consume(len(block))
+                                _write_all(output, block)
+                                total_digest.update(block)
+                                data_digest.update(block)
+                                written += len(block)
+                                chunk_written += len(block)
+                        boundary.validate_regular_file_identity(
+                            chunk, source_identity
+                        )
+                    except WorkspaceBoundaryError as exc:
+                        raise UploadConflictError("stored chunk") from exc
+                    metadata = received[str(index)]
+                    if (
+                        not isinstance(metadata, dict)
+                        or metadata.get("size_bytes") != chunk_written
+                        or metadata.get("sha256") != data_digest.hexdigest()
+                    ):
+                        raise UploadValidationError("stored_chunk")
+                output.flush()
+                os.fsync(output.fileno())
+                self._validate_uploaded_archive_if_present(
+                    boundary,
+                    output,
+                    filename=attachment.filename,
+                    mime_type=attachment.mime_type,
+                )
+            if written != total or total_digest.hexdigest() != attachment.sha256:
+                raise UploadValidationError("sha256")
+            payload["status"] = "publishing"
+            payload["attachment"] = attachment.model_dump(mode="json")
+            self._write_upload_session_locked(payload)
+            assert target_identity is not None
+            boundary.replace_regular_file(
+                target_part,
+                attachment.stored_path,
+                expected_identity=target_identity,
+            )
+            published = True
+            reservation.commit(persisted_bytes=total)
+        except BaseException:
+            if published and reservation.active:
+                # A normal quota-commit failure is not a crash seam. Remove
+                # only the inode we published, then restore an active session
+                # so its verified chunks can be retried. A process crash here
+                # leaves the durable ``publishing`` marker for recovery.
+                try:
+                    identity = self._verify_upload_attachment_locked(attachment)
+                    boundary.unlink_regular_file(
+                        attachment.stored_path,
+                        missing_ok=True,
+                        expected_identity=identity,
+                    )
+                    payload["status"] = "active"
+                    payload.pop("attachment", None)
+                    self._write_upload_session_locked(payload)
+                    published = False
+                except WorkspaceBoundaryError:
+                    pass
+            if not published and target_identity is not None:
+                try:
+                    boundary.unlink_regular_file(
+                        target_part,
+                        missing_ok=True,
+                        expected_identity=target_identity,
+                    )
+                except WorkspaceBoundaryError:
+                    pass
+            if reservation.active:
+                reservation.release()
+            raise
+
+    def cancel_upload_session(self, *, thread_id: str, upload_id: str) -> dict[str, object]:
+        with self._upload_mutation_lock:
+            self.load_thread(thread_id)
+            payload = self._read_upload_session_locked(upload_id)
+            if payload["thread_id"] != thread_id:
+                raise UploadNotFoundError(upload_id)
+            if payload["status"] == "publishing":
+                recovered = self._reconcile_published_upload_locked(payload)
+                if recovered is not None:
+                    return self._upload_view(payload)
+            if payload["status"] in {"active", "publishing"}:
+                payload["status"] = "cancelled"
+                self._write_upload_session_locked(payload)
+                # The terminal tombstone is durable before cleanup.  A crash
+                # can leave private chunks, but never an active manifest that
+                # incorrectly claims they are available for completion.
+                received = payload["received"]
+                assert isinstance(received, dict)
+                self._rollback_published_upload_locked(payload)
+                self._clear_upload_payload_locked(upload_id, received)
+                payload["received"] = {}
+                self._write_upload_session_locked(payload)
+            elif payload["status"] == "cancelled":
+                received = payload["received"]
+                assert isinstance(received, dict)
+                self._rollback_published_upload_locked(payload)
+                if received:
+                    self._clear_upload_payload_locked(upload_id, received)
+                    payload["received"] = {}
+                    self._write_upload_session_locked(payload)
+            elif payload["status"] == "completed":
+                received = payload["received"]
+                assert isinstance(received, dict)
+                if received:
+                    self._clear_upload_payload_locked(upload_id, received)
+                    payload["received"] = {}
+                    self._write_upload_session_locked(payload)
+            return self._upload_view(payload)
+
+    def _rollback_published_upload_locked(self, payload: dict[str, object]) -> None:
+        if "attachment" not in payload:
+            return
+        attachment = self._upload_attachment_from_payload(payload)
+        try:
+            identity = self._verify_upload_attachment_locked(attachment)
+        except WorkspaceNotFoundError:
+            return
+        except WorkspaceBoundaryError as exc:
+            raise UploadConflictError("published attachment conflict") from exc
+        self._home_assistant_uploads_boundary().unlink_regular_file(
+            attachment.stored_path,
+            missing_ok=True,
+            expected_identity=identity,
+        )
 
     def attach_file(
         self,

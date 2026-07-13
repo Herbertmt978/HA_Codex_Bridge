@@ -431,8 +431,6 @@ class RuntimeBroker:
                     else _outcome_record(existing_outcome)
                 )
 
-            if thread.attachments:
-                raise RuntimeAttachmentsUnavailableError()
             self._ensure_request_capacity_locked()
 
             if any(
@@ -483,12 +481,12 @@ class RuntimeBroker:
                     model=thread.effective_model,
                     effort=thread.effective_thinking_level,
                     workspace_path=thread.workspace_path,
-                    attachment_ids=[
-                        attachment.attachment_id for attachment in thread.attachments
-                    ],
-                    attachment_manifest_fingerprint=_attachment_manifest(
-                        thread.attachments
-                    ),
+                    # Stored uploads are deliberately inert unless a future
+                    # explicit, checksum-bound attachment-selection API opts
+                    # into them.  A text-only prompt must never leak every
+                    # historical upload merely because it belongs to a thread.
+                    attachment_ids=[],
+                    attachment_manifest_fingerprint=_attachment_manifest([]),
                     codex_thread_id=thread.codex_thread_id,
                     status="starting",
                     created_at=now,
@@ -2933,6 +2931,7 @@ def _attachment_manifest(attachments: list[Any]) -> str:
                 "stored_path": attachment.stored_path,
                 "relative_path": attachment.relative_path,
                 "size_bytes": attachment.size_bytes,
+                "sha256": attachment.sha256,
             }
             for attachment in attachments
         ]

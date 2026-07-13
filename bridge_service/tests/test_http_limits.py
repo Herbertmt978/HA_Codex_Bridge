@@ -3,11 +3,15 @@ import asyncio
 from codex_bridge_service.http_limits import AttachmentIngressMiddleware
 
 
-def _scope(*headers: tuple[bytes, bytes]):
+def _scope(
+    *headers: tuple[bytes, bytes],
+    method: str = "POST",
+    path: str = "/threads/thr_test/attachments",
+):
     return {
         "type": "http",
-        "method": "POST",
-        "path": "/threads/thr_test/attachments",
+        "method": method,
+        "path": path,
         "headers": list(headers),
     }
 
@@ -115,4 +119,45 @@ def test_attachment_ingress_counts_chunked_body_before_multipart_parser() -> Non
         )
     )
 
+    assert sent[0]["status"] == 413
+
+
+def test_resumable_chunk_ingress_uses_the_chunk_ceiling_before_reading() -> None:
+    invoked = False
+    receive_called = False
+    sent = []
+
+    async def inner(_scope, _receive, _send):
+        nonlocal invoked
+        invoked = True
+
+    async def receive():
+        nonlocal receive_called
+        receive_called = True
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    middleware = AttachmentIngressMiddleware(
+        inner,
+        expected_token="secret",
+        max_body_bytes=100,
+        max_chunk_body_bytes=5,
+    )
+    asyncio.run(
+        middleware(
+            _scope(
+                (b"authorization", b"Bearer secret"),
+                (b"content-length", b"6"),
+                method="PUT",
+                path="/threads/thr_test/uploads/upl_test/chunks/0",
+            ),
+            receive,
+            send,
+        )
+    )
+
+    assert invoked is False
+    assert receive_called is False
     assert sent[0]["status"] == 413

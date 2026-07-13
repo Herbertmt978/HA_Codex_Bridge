@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -688,6 +689,32 @@ def test_home_assistant_runs_are_serialized_while_inputs_share_workspace(
     assert popen_calls == 2
 
 
+def test_home_assistant_attachment_lease_rejects_a_sha256_mismatch(tmp_path) -> None:
+    storage, thread, _, _ = _home_assistant_thread(tmp_path)
+    attachment = storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="digest.txt",
+        mime_type="text/plain",
+        content=b"trusted input",
+    )
+    record = storage.load_thread(thread.thread_id)
+    record.attachments[0] = attachment.model_copy(update={"sha256": "0" * 64})
+
+    with pytest.raises(WorkspaceEscapeError):
+        storage.lease_run_attachments(record)
+
+    verified = storage.load_thread(thread.thread_id)
+    verified.attachments[0] = attachment.model_copy(
+        update={"sha256": hashlib.sha256(b"trusted input").hexdigest()}
+    )
+    leases = storage.lease_run_attachments(verified)
+    try:
+        assert os.read(leases[attachment.attachment_id].fileno(), 64) == b"trusted input"
+    finally:
+        for lease in leases.values():
+            lease.close()
+
+
 def test_home_assistant_runner_without_attachments_skips_attachment_leases(
     tmp_path,
     monkeypatch,
@@ -806,7 +833,7 @@ def test_home_assistant_missing_attachment_prevents_process_start(
     assert "/config/" not in serialized
 
 
-def test_home_assistant_attachment_api_returns_only_relative_locators(tmp_path) -> None:
+def test_home_assistant_hides_the_legacy_multipart_attachment_api(tmp_path) -> None:
     state_root = tmp_path / "data" / "bridge"
     workspace_root = tmp_path / "config" / "workspaces"
     app = create_app(
@@ -832,60 +859,5 @@ def test_home_assistant_attachment_api_returns_only_relative_locators(tmp_path) 
         data={"relative_path": "docs/notes.txt"},
     )
 
-    assert response.status_code == 201
-    payload = response.json()
-    serialized = response.text + storage._thread_path(thread.thread_id).read_text(
-        encoding="utf-8"
-    )
-    assert payload["stored_path"] == f"{thread.thread_id}/docs/notes.txt"
-    assert payload["relative_path"] == "docs/notes.txt"
-    assert str(state_root) not in serialized
-    assert str(workspace_root) not in serialized
-    assert "/data/" not in serialized
-    assert "/config/" not in serialized
-
-    invalid = client.post(
-        f"/threads/{thread.thread_id}/attachments",
-        headers={"Authorization": "Bearer secret"},
-        files={"file": ("notes.txt", b"hello", "text/plain")},
-        data={"relative_path": "../private/notes.txt"},
-    )
-    assert invalid.status_code == 400
-    assert invalid.json() == {"detail": "invalid attachment location"}
-
-
-def test_attachment_api_maps_boundary_not_found_to_generic_404(
-    tmp_path, monkeypatch
-) -> None:
-    state_root = tmp_path / "data" / "bridge"
-    workspace_root = tmp_path / "config" / "workspaces"
-    app = create_app(
-        root_path=state_root,
-        auth_token="secret",
-        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
-        workspace_root=workspace_root,
-        runner_factory=lambda _storage: object(),
-    )
-    storage = app.state.storage
-    project = storage.create_project(name="API", root_path="projects/api")
-    thread = storage.create_thread(
-        title="API",
-        project_id=project.project_id,
-        mode=RunMode.EDIT,
-    )
-
-    from codex_bridge_service.workspace import WorkspaceNotFoundError
-
-    monkeypatch.setattr(
-        storage,
-        "attach_file",
-        lambda **_kwargs: (_ for _ in ()).throw(WorkspaceNotFoundError()),
-    )
-    response = TestClient(app).post(
-        f"/threads/{thread.thread_id}/attachments",
-        headers={"Authorization": "Bearer secret"},
-        files={"file": ("notes.txt", b"hello", "text/plain")},
-    )
-
     assert response.status_code == 404
-    assert response.json() == {"detail": "attachment location not found"}
+    assert storage.load_thread(thread.thread_id).attachments == []

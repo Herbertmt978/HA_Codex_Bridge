@@ -2,6 +2,7 @@ import json
 import os
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from pathlib import Path
 from threading import Barrier
 
@@ -273,11 +274,140 @@ def test_home_assistant_download_stream_is_descriptor_pinned_and_hardened(
     assert response.headers["x-content-type-options"] == "nosniff"
     assert "attachment" in response.headers["content-disposition"]
     assert "report.html" in response.headers["content-disposition"]
-    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["cache-control"] == "private, no-store, no-transform"
     assert tracked["stream"].closed is True
     serialized = json.dumps(dict(response.headers))
     assert str(state_root) not in serialized
     assert str(workspace_root) not in serialized
+
+
+def test_home_assistant_artifact_download_honours_a_single_if_range(tmp_path) -> None:
+    app, storage, thread, _, _, workspace = _home_assistant_app(tmp_path)
+    target = workspace / "report.txt"
+    target.write_bytes(b"0123456789")
+    artifact = storage.sync_thread_artifacts(thread.thread_id)[0]
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "Range": "bytes=2-5"}
+    initial = client.get(f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}", headers=headers)
+
+    assert initial.status_code == 206
+    assert initial.content == b"2345"
+    assert initial.headers["content-range"] == "bytes 2-5/10"
+    assert initial.headers["accept-ranges"] == "bytes"
+    assert initial.headers["etag"].startswith('"')
+    replay = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers=headers | {"If-Range": initial.headers["etag"]},
+    )
+    assert replay.status_code == 206
+    assert replay.content == b"2345"
+    unsatisfiable = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret", "Range": "bytes=20-"},
+    )
+    assert unsatisfiable.status_code == 416
+    assert unsatisfiable.headers["content-range"] == "bytes */10"
+    assert unsatisfiable.headers["cache-control"] == "private, no-store, no-transform"
+    assert unsatisfiable.headers["x-content-type-options"] == "nosniff"
+    suffix = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret", "Range": "bytes=-3"},
+    )
+    assert suffix.status_code == 206
+    assert suffix.content == b"789"
+    open_ended = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret", "Range": "bytes=7-"},
+    )
+    assert open_ended.status_code == 206
+    assert open_ended.content == b"789"
+    ignored = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers=headers | {"If-Range": '"other"'},
+    )
+    assert ignored.status_code == 200
+    assert ignored.content == b"0123456789"
+    for stale_if_range in (f"W/{initial.headers['etag']}", "Sun, 06 Nov 1994 08:49:37 GMT"):
+        response = client.get(
+            f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+            headers=headers | {"If-Range": stale_if_range},
+        )
+        assert response.status_code == 200
+        assert response.content == b"0123456789"
+    for malformed in ("bytes=0-1,3-4", "bytes=-0", "items=0-1"):
+        response = client.get(
+            f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+            headers={"Authorization": "Bearer secret", "Range": malformed},
+        )
+        assert response.status_code == 416
+    huge = client.get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret", "Range": f"bytes={'9' * 5000}-"},
+    )
+    assert huge.status_code == 416
+
+
+def test_home_assistant_empty_artifact_range_keeps_forced_safe_headers(tmp_path) -> None:
+    app, storage, thread, _, _, workspace = _home_assistant_app(tmp_path)
+    target = workspace / "empty.html"
+    target.write_bytes(b"")
+    artifact = storage.sync_thread_artifacts(thread.thread_id)[0]
+
+    response = TestClient(app).get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret", "Range": "bytes=0-"},
+    )
+
+    assert response.status_code == 416
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.headers["content-disposition"].startswith("attachment;")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-range"] == "bytes */0"
+
+
+def test_home_assistant_artifact_hash_failure_closes_lease(tmp_path, monkeypatch) -> None:
+    app, storage, thread, _, _, workspace = _home_assistant_app(tmp_path)
+    target = workspace / "lease.txt"
+    target.write_bytes(b"lease")
+    artifact = storage.sync_thread_artifacts(thread.thread_id)[0]
+    original_open = storage.open_artifact
+    captured: dict[str, object] = {}
+
+    def track_open(thread_id: str, artifact_id: str):
+        opened = original_open(thread_id, artifact_id)
+        captured["stream"] = opened[1]
+        return opened
+
+    monkeypatch.setattr(storage, "open_artifact", track_open)
+    monkeypatch.setattr(
+        "codex_bridge_service.routes.artifacts._stream_sha256_etag",
+        lambda _stream: (_ for _ in ()).throw(OSError("hash failed")),
+    )
+    response = TestClient(app, raise_server_exceptions=False).get(
+        f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert response.status_code == 500
+    assert captured["stream"].closed is True
+
+
+def test_bounded_artifact_iterator_never_requests_more_than_one_mebibyte() -> None:
+    from codex_bridge_service.routes.artifacts import _stream_and_close
+
+    class RecordingStream(BytesIO):
+        def __init__(self) -> None:
+            super().__init__(b"x" * (2 * 1024 * 1024 + 7))
+            self.read_sizes: list[int] = []
+
+        def read(self, size: int = -1) -> bytes:
+            self.read_sizes.append(size)
+            return super().read(size)
+
+    stream = RecordingStream()
+    assert b"".join(_stream_and_close(stream)) == b"x" * (2 * 1024 * 1024 + 7)
+    assert max(stream.read_sizes) <= 1024 * 1024
+    assert stream.closed is True
 
 
 @pytest.mark.parametrize(

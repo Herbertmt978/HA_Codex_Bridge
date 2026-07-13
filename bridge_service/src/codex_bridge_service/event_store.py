@@ -1491,6 +1491,7 @@ _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
             "mime_type",
             "relative_path",
             "size_bytes",
+            "sha256",
         }
     ),
     "artifact.added": frozenset(

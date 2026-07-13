@@ -371,6 +371,40 @@ class WorkspaceBoundary:
         self._create_directory_posix(parts)
         return normalized
 
+    def remove_empty_directory(
+        self,
+        relative: Path | str,
+        *,
+        missing_ok: bool = False,
+    ) -> None:
+        """Remove one empty directory without following a replacement link."""
+
+        self._require_secure_operations()
+        normalized = self.normalize(relative)
+        parts = tuple(normalized.split("/"))
+        parent_fd = self._open_parent_fd(parts[:-1])
+        try:
+            try:
+                entry_stat = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                if missing_ok:
+                    return
+                raise WorkspaceNotFoundError() from None
+            if stat.S_ISLNK(entry_stat.st_mode):
+                raise WorkspaceEscapeError()
+            if not stat.S_ISDIR(entry_stat.st_mode):
+                raise WorkspaceTypeError()
+            try:
+                os.rmdir(parts[-1], dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            except FileNotFoundError:
+                if not missing_ok:
+                    raise WorkspaceNotFoundError() from None
+            except OSError as error:
+                raise self._translated_entry_error(error, parts[-1], parent_fd) from None
+        finally:
+            os.close(parent_fd)
+
     def list_directories(self, relative: Path | str = ".") -> tuple[str, ...]:
         self._require_secure_operations()
         normalized = self.normalize(relative, allow_root=True)
@@ -714,6 +748,88 @@ class WorkspaceBoundary:
         except (OSError, ValueError):
             os.close(file_fd)
             raise WorkspaceTypeError() from None
+
+    def atomic_write_bytes(self, relative: Path | str, content: bytes) -> None:
+        """Durably replace one regular file without resolving outside root."""
+        self._require_secure_operations()
+        normalized = self.normalize(relative)
+        parts = tuple(normalized.split("/"))
+        parent_fd = self._open_parent_fd(parts[:-1])
+        temporary = f".{parts[-1]}.{os.urandom(12).hex()}.tmp"
+        fd: int | None = None
+        try:
+            try:
+                fd = os.open(
+                    temporary,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | self._cloexec_flag(),
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                view = memoryview(content)
+                while view:
+                    written = os.write(fd, view)
+                    if written <= 0:
+                        raise OSError("short write")
+                    view = view[written:]
+                os.fsync(fd)
+                try:
+                    existing = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+                    if not stat.S_ISREG(existing.st_mode):
+                        raise WorkspaceTypeError()
+                except FileNotFoundError:
+                    pass
+                os.replace(temporary, parts[-1], src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            except WorkspaceBoundaryError:
+                raise
+            except OSError as error:
+                raise self._translated_entry_error(error, parts[-1], parent_fd) from None
+        finally:
+            if fd is not None:
+                os.close(fd)
+            try:
+                os.unlink(temporary, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+            finally:
+                os.close(parent_fd)
+
+    def replace_regular_file(
+        self,
+        source: Path | str,
+        target: Path | str,
+        *,
+        expected_identity: WorkspaceFileIdentity | None = None,
+    ) -> None:
+        """Atomically publish a caller-created private regular file."""
+        self._require_secure_operations()
+        source_name = self.normalize(source)
+        target_name = self.normalize(target)
+        source_parts = tuple(source_name.split("/"))
+        target_parts = tuple(target_name.split("/"))
+        source_parent = self._open_parent_fd(source_parts[:-1])
+        target_parent = self._open_parent_fd(target_parts[:-1])
+        try:
+            source_stat = os.stat(source_parts[-1], dir_fd=source_parent, follow_symlinks=False)
+            if not stat.S_ISREG(source_stat.st_mode):
+                raise WorkspaceTypeError()
+            if expected_identity is not None and self._identity_from_stat(source_stat) != expected_identity:
+                raise WorkspaceEscapeError()
+            try:
+                target_stat = os.stat(target_parts[-1], dir_fd=target_parent, follow_symlinks=False)
+                if not stat.S_ISREG(target_stat.st_mode):
+                    raise WorkspaceTypeError()
+            except FileNotFoundError:
+                pass
+            os.replace(source_parts[-1], target_parts[-1], src_dir_fd=source_parent, dst_dir_fd=target_parent)
+            os.fsync(target_parent)
+        except WorkspaceBoundaryError:
+            raise
+        except OSError as error:
+            raise self._translated_entry_error(error, source_parts[-1], source_parent) from None
+        finally:
+            os.close(source_parent)
+            os.close(target_parent)
 
     def identify_open_file(self, stream: BinaryIO) -> WorkspaceFileIdentity:
         """Capture the inode identity of a regular file lease."""

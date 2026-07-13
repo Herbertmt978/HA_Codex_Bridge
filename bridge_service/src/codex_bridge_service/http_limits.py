@@ -20,6 +20,8 @@ class AttachmentIngressMiddleware:
         *,
         expected_token: str,
         max_body_bytes: int,
+        max_chunk_body_bytes: int | None = None,
+        max_session_body_bytes: int | None = None,
     ) -> None:
         if not expected_token:
             raise ValueError("expected token must not be blank")
@@ -28,11 +30,30 @@ class AttachmentIngressMiddleware:
         self.app = app
         self._expected_authorization = f"Bearer {expected_token}".encode("utf-8")
         self._max_body_bytes = max_body_bytes
+        self._max_chunk_body_bytes = (
+            max_body_bytes
+            if max_chunk_body_bytes is None
+            else max_chunk_body_bytes
+        )
+        if self._max_chunk_body_bytes <= 0:
+            raise ValueError("chunk request body limit must be positive")
+        self._max_session_body_bytes = (
+            max_body_bytes
+            if max_session_body_bytes is None
+            else max_session_body_bytes
+        )
+        if self._max_session_body_bytes <= 0:
+            raise ValueError("session request body limit must be positive")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if not self._is_attachment_upload(scope):
+        upload_kind = self._upload_kind(scope)
+        if upload_kind is None:
             await self.app(scope, receive, send)
             return
+        max_body_bytes = {
+            "resumable_chunk": self._max_chunk_body_bytes,
+            "resumable_session": self._max_session_body_bytes,
+        }.get(upload_kind, self._max_body_bytes)
         headers = scope.get("headers", ())
         authorization = [
             value
@@ -60,7 +81,7 @@ class AttachmentIngressMiddleware:
             except (UnicodeDecodeError, ValueError):
                 await self._too_large(send)
                 return
-            if declared < 0 or declared > self._max_body_bytes:
+            if declared < 0 or declared > max_body_bytes:
                 await self._too_large(send)
                 return
 
@@ -74,7 +95,7 @@ class AttachmentIngressMiddleware:
                 if not isinstance(body, bytes):
                     raise _AttachmentBodyTooLarge()
                 received += len(body)
-                if received > self._max_body_bytes:
+                if received > max_body_bytes:
                     raise _AttachmentBodyTooLarge()
             return message
 
@@ -93,20 +114,41 @@ class AttachmentIngressMiddleware:
                 await self._too_large(send)
 
     @staticmethod
-    def _is_attachment_upload(scope: Scope) -> bool:
-        if scope.get("type") != "http" or scope.get("method") != "POST":
-            return False
+    def _upload_kind(scope: Scope) -> str | None:
+        if scope.get("type") != "http":
+            return None
         path = scope.get("path")
         if not isinstance(path, str):
-            return False
+            return None
         parts = path.split("/")
-        return (
+        if scope.get("method") == "POST" and (
             len(parts) == 4
             and parts[0] == ""
             and parts[1] == "threads"
             and bool(parts[2])
             and parts[3] == "attachments"
-        )
+        ):
+            return "legacy_attachment"
+        if scope.get("method") == "PUT" and (
+            len(parts) == 7
+            and parts[0] == ""
+            and parts[1] == "threads"
+            and bool(parts[2])
+            and parts[3] == "uploads"
+            and bool(parts[4])
+            and parts[5] == "chunks"
+            and bool(parts[6])
+        ):
+            return "resumable_chunk"
+        if scope.get("method") == "POST" and (
+            len(parts) == 4
+            and parts[0] == ""
+            and parts[1] == "threads"
+            and bool(parts[2])
+            and parts[3] == "uploads"
+        ):
+            return "resumable_session"
+        return None
 
     async def _too_large(self, send: Send) -> None:
         await self._send_json(

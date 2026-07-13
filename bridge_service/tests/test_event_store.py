@@ -119,6 +119,7 @@ def test_public_event_projection_is_applied_before_persistence(
                 "relative_path": "notes.txt",
                 "stored_path": private_root,
                 "size_bytes": 4,
+                "sha256": "a" * 64,
             },
         ),
         store.append(
@@ -178,6 +179,7 @@ def test_public_event_projection_is_applied_before_persistence(
             "filename": "notes.txt",
             "relative_path": "notes.txt",
             "size_bytes": 4,
+            "sha256": "a" * 64,
         },
         {
             "artifact_id": "art_projection",

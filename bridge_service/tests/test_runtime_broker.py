@@ -1154,7 +1154,7 @@ def test_start_requests_keep_the_control_rpc_timeout_cap(tmp_path: Path) -> None
         broker.close()
 
 
-def test_attachment_prompt_fails_closed_before_reserving_runtime(
+def test_uploaded_attachments_remain_unselected_for_a_text_only_prompt(
     tmp_path: Path,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
@@ -1167,17 +1167,22 @@ def test_attachment_prompt_fails_closed_before_reserving_runtime(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        with pytest.raises(RuntimeBrokerError) as unavailable:
-            broker.submit_prompt(
-                thread.thread_id,
-                "Use the attachment",
-                client_request_id="client-attachment-not-ready",
-            )
+        run = broker.submit_prompt(
+            thread.thread_id,
+            "Summarize the workspace without selecting uploads",
+            client_request_id="client-text-only-after-upload",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
 
-        _assert_broker_error(unavailable, "runtime_attachments_not_ready")
-        assert broker.runtime_snapshot().active_turns == 0
-        assert broker.runtime_snapshot().queued_prompts == 0
-        assert client.requests == []
+        runtime_run = broker._state.runs[run.run_id]
+        assert runtime_run.attachment_ids == []
+        assert runtime_run.attachment_manifest_fingerprint == runtime_fingerprint([])
+        assert _requests(client, "turn/start")[0]["input"] == [
+            {
+                "type": "text",
+                "text": "Summarize the workspace without selecting uploads",
+            }
+        ]
     finally:
         broker.close()
 
