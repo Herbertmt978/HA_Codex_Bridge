@@ -1,6 +1,7 @@
 import asyncio
 import hmac
 import json
+import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -46,6 +47,18 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(
     sock_read=BRIDGE_TIMEOUT_READ_SECONDS,
 )
 WRITE_TIMEOUT_SECONDS = BRIDGE_TIMEOUT_WRITE_SECONDS
+_UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
+_FILE_METADATA_MAX_BYTES = 64 * 1024
+_ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_FORWARDED_REQUEST_HEADERS = {
+    "content-length": "Content-Length",
+    "content-type": "Content-Type",
+    "if-range": "If-Range",
+    "range": "Range",
+    "upload-offset": "Upload-Offset",
+    "x-chunk-sha256": "X-Chunk-SHA256",
+}
 
 
 def _path_segment(value: object) -> str:
@@ -84,6 +97,61 @@ def _client_request_id(value: object) -> str:
     ):
         raise BridgeApiEndpointError("client_request_id_invalid")
     return value
+
+
+def _upload_sha256(value: object) -> str:
+    if not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None:
+        raise BridgeApiEndpointError("sha256_invalid")
+    return value
+
+
+def _upload_size(value: object, *, maximum: int = 2**63 - 1) -> int:
+    if type(value) is not int or not 1 <= value <= maximum:
+        raise BridgeApiEndpointError("size_invalid")
+    return value
+
+
+def _upload_text(
+    value: object,
+    *,
+    maximum_bytes: int,
+    allow_none: bool = False,
+) -> str | None:
+    if allow_none and value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value.encode("utf-8")) > maximum_bytes
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        raise BridgeApiEndpointError("upload_metadata_invalid")
+    return value
+
+
+def _upload_index(value: object) -> int:
+    if type(value) is not int or not 0 <= value <= 2**63 - 1:
+        raise BridgeApiEndpointError("chunk_index_invalid")
+    return value
+
+
+def _forwarded_request_headers(
+    values: Mapping[str, str] | None,
+) -> dict[str, str]:
+    selected: dict[str, str] = {}
+    if values is None:
+        return selected
+    for name, value in values.items():
+        canonical = _FORWARDED_REQUEST_HEADERS.get(name.lower())
+        if (
+            canonical is None
+            or not isinstance(value, str)
+            or len(value) > 4096
+            or any(ord(character) < 32 or ord(character) == 127 for character in value)
+        ):
+            raise BridgeApiEndpointError("header_invalid")
+        selected[canonical] = value
+    return selected
 
 
 def _interaction_answers(value: object) -> list[dict[str, Any]]:
@@ -675,6 +743,7 @@ class BridgeApiClient:
         return await self._async_json(
             "GET",
             f"/threads/{_path_segment(thread_id)}/artifacts",
+            maximum_bytes=_ARTIFACT_LIST_MAX_BYTES,
         )
 
     async def async_create_workspace_archive(self, thread_id: str) -> dict[str, Any]:
@@ -683,6 +752,142 @@ class BridgeApiClient:
             f"/threads/{_path_segment(thread_id)}/artifacts/workspace-archive",
             expected_status={201},
         )
+
+    async def async_create_upload(
+        self,
+        thread_id: str,
+        *,
+        filename: str,
+        mime_type: str,
+        relative_path: str | None,
+        size_bytes: int,
+        sha256: str,
+    ) -> dict[str, Any]:
+        """Create one API v1 resumable upload session."""
+
+        self.require_api_v1()
+        return await self._async_json(
+            "POST",
+            f"/threads/{_path_segment(thread_id)}/uploads",
+            json_body={
+                "filename": _upload_text(filename, maximum_bytes=255),
+                "mime_type": _upload_text(mime_type, maximum_bytes=255),
+                "relative_path": _upload_text(
+                    relative_path, maximum_bytes=2048, allow_none=True
+                ),
+                "size_bytes": _upload_size(size_bytes),
+                "sha256": _upload_sha256(sha256),
+            },
+            expected_status={201},
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+        )
+
+    async def async_get_upload(
+        self,
+        thread_id: str,
+        upload_id: str,
+    ) -> dict[str, Any]:
+        """Return resumable upload status without touching its payload."""
+
+        self.require_api_v1()
+        return await self._async_json(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/uploads/{_path_segment(upload_id)}",
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+        )
+
+    async def async_upload_chunk(
+        self,
+        thread_id: str,
+        upload_id: str,
+        index: int,
+        *,
+        offset: int,
+        content_length: int,
+        sha256: str,
+        content: Any,
+    ) -> dict[str, Any]:
+        """Stream one fixed API v1 chunk without buffering it in HA Core."""
+
+        self.require_api_v1()
+        chunk_index = _upload_index(index)
+        chunk_offset = _upload_index(offset)
+        chunk_length = _upload_size(
+            content_length, maximum=_UPLOAD_CHUNK_MAX_BYTES
+        )
+        digest = _upload_sha256(sha256)
+        return await self._async_json(
+            "PUT",
+            (
+                f"/threads/{_path_segment(thread_id)}/uploads/"
+                f"{_path_segment(upload_id)}/chunks/{chunk_index}"
+            ),
+            data=content,
+            request_headers={
+                "Content-Length": str(chunk_length),
+                "Content-Type": "application/octet-stream",
+                "Upload-Offset": str(chunk_offset),
+                "X-Chunk-SHA256": digest,
+            },
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+        )
+
+    async def async_complete_upload(
+        self,
+        thread_id: str,
+        upload_id: str,
+    ) -> dict[str, Any]:
+        """Publish a checksum-verified upload session exactly once."""
+
+        self.require_api_v1()
+        return await self._async_json(
+            "POST",
+            (
+                f"/threads/{_path_segment(thread_id)}/uploads/"
+                f"{_path_segment(upload_id)}/complete"
+            ),
+            expected_status={201},
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+        )
+
+    async def async_cancel_upload(
+        self,
+        thread_id: str,
+        upload_id: str,
+    ) -> dict[str, Any]:
+        """Cancel a resumable upload; the Bridge operation is idempotent."""
+
+        self.require_api_v1()
+        return await self._async_json(
+            "DELETE",
+            f"/threads/{_path_segment(thread_id)}/uploads/{_path_segment(upload_id)}",
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+        )
+
+    @asynccontextmanager
+    async def async_stream_artifact(
+        self,
+        thread_id: str,
+        artifact_id: str,
+        *,
+        range_header: str | None = None,
+        if_range: str | None = None,
+    ) -> AsyncIterator[BridgeStreamResponse]:
+        """Own one API v1 full or ranged artifact response."""
+
+        self.require_api_v1()
+        headers: dict[str, str] = {}
+        if range_header is not None:
+            headers["Range"] = range_header
+        if if_range is not None:
+            headers["If-Range"] = if_range
+        async with self.async_stream(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}",
+            expected_status={200, 206, 416},
+            request_headers=headers,
+        ) as response:
+            yield response
 
     async def async_upload_attachment(
         self,
@@ -711,6 +916,33 @@ class BridgeApiClient:
             expected_status={201},
         )
 
+    async def async_stream_legacy_attachment(
+        self,
+        thread_id: str,
+        *,
+        content_type: str,
+        content_length: int,
+        content: Any,
+    ) -> dict[str, Any]:
+        """Proxy the deprecated multipart body without an HA temporary file."""
+
+        self.require_legacy_v0()
+        media_type = _upload_text(content_type, maximum_bytes=512)
+        if not media_type.lower().startswith("multipart/form-data; boundary="):
+            raise BridgeApiEndpointError("content_type_invalid")
+        length = _upload_size(content_length)
+        return await self._async_json(
+            "POST",
+            f"/threads/{_path_segment(thread_id)}/attachments",
+            data=content,
+            expected_status={201},
+            maximum_bytes=_FILE_METADATA_MAX_BYTES,
+            request_headers={
+                "Content-Length": str(length),
+                "Content-Type": media_type,
+            },
+        )
+
     async def async_download_artifact(
         self, thread_id: str, artifact_id: str
     ) -> BridgeDownload:
@@ -722,6 +954,21 @@ class BridgeApiClient:
             f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}",
         )
 
+    @asynccontextmanager
+    async def async_stream_legacy_artifact(
+        self,
+        thread_id: str,
+        artifact_id: str,
+    ) -> AsyncIterator[BridgeStreamResponse]:
+        """Stream the deprecated v0 artifact without buffering it in HA Core."""
+
+        self.require_legacy_v0()
+        async with self.async_stream(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}",
+        ) as response:
+            yield response
+
     async def _async_json(
         self,
         method: str,
@@ -731,6 +978,7 @@ class BridgeApiClient:
         data: Any = None,
         expected_status: set[int] | None = None,
         maximum_bytes: int | None = None,
+        request_headers: Mapping[str, str] | None = None,
     ) -> Any:
         response = await self._async_request(
             method,
@@ -738,6 +986,7 @@ class BridgeApiClient:
             json_body=json_body,
             data=data,
             expected_status=expected_status,
+            request_headers=request_headers,
         )
         async with response:
             try:
@@ -807,6 +1056,7 @@ class BridgeApiClient:
         json_body: dict[str, Any] | None = None,
         data: Any = None,
         expected_status: set[int] | None = None,
+        request_headers: Mapping[str, str] | None = None,
     ) -> AsyncIterator[BridgeStreamResponse]:
         """Yield a response without buffering it; always release it afterwards."""
 
@@ -816,6 +1066,7 @@ class BridgeApiClient:
             json_body=json_body,
             data=data,
             expected_status=expected_status,
+            request_headers=request_headers,
         )
         try:
             yield BridgeStreamResponse(response)
@@ -876,6 +1127,7 @@ class BridgeApiClient:
         json_body: dict[str, Any] | None = None,
         data: Any = None,
         expected_status: set[int] | None = None,
+        request_headers: Mapping[str, str] | None = None,
     ) -> aiohttp.ClientResponse:
         if expected_status is None:
             expected_status = {200}
@@ -884,17 +1136,19 @@ class BridgeApiClient:
         request_path = _request_path(path)
         try:
             async with asyncio.timeout(WRITE_TIMEOUT_SECONDS):
+                headers = {
+                    "Authorization": f"Bearer {self._token}",
+                    BRIDGE_API_HEADER: str(
+                        self._api_version
+                        if self._api_version is not None
+                        else API_CURRENT
+                    ),
+                }
+                headers.update(_forwarded_request_headers(request_headers))
                 response = await self._session.request(
                     method,
                     f"{self._base_url}{request_path}",
-                    headers={
-                        "Authorization": f"Bearer {self._token}",
-                        BRIDGE_API_HEADER: str(
-                            self._api_version
-                            if self._api_version is not None
-                            else API_CURRENT
-                        ),
-                    },
+                    headers=headers,
                     json=json_body,
                     data=data,
                     timeout=REQUEST_TIMEOUT,

@@ -24,11 +24,21 @@ def test_panel_and_http_file_surfaces_require_home_assistant_admin() -> None:
         if not isinstance(node, ast.ClassDef):
             continue
         for item in node.body:
-            if isinstance(item, ast.AsyncFunctionDef) and item.name in {"get", "post"}:
+            if isinstance(item, ast.AsyncFunctionDef) and item.name in {
+                "delete",
+                "get",
+                "post",
+                "put",
+            }:
                 protected_methods[f"{node.name}.{item.name}"] = ast.unparse(item.body[0])
 
     assert protected_methods == {
         "CodexBridgeAttachmentUploadView.post": "_require_admin(request)",
+        "CodexBridgeUploadCreateView.post": "_require_admin(request)",
+        "CodexBridgeUploadSessionView.get": "_require_admin(request)",
+        "CodexBridgeUploadSessionView.delete": "_require_admin(request)",
+        "CodexBridgeUploadChunkView.put": "_require_admin(request)",
+        "CodexBridgeUploadCompleteView.post": "_require_admin(request)",
         "CodexBridgeArtifactDownloadView.get": "_require_admin(request)",
     }
 
