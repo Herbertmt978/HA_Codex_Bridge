@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -11,6 +12,19 @@ class CodexBridgeRuntime:
     entry_id: str
     title: str
     client: BridgeApiClient
+    connection_type: str
+    discovery_uuid: str | None
+    api_version: int
+
+    async def async_close(self) -> None:
+        """Provide a lifecycle seam without taking ownership of HA's session."""
+
+        close = getattr(self.client, "async_close", None)
+        if close is None:
+            return
+        result: Any = close()
+        if hasattr(result, "__await__"):
+            await result
 
 
 def async_get_runtime(hass: HomeAssistant) -> CodexBridgeRuntime:

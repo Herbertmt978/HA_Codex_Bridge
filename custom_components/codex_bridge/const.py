@@ -23,9 +23,12 @@ BRIDGE_TIMEOUT_WRITE_SECONDS = 30
 
 CONF_BRIDGE_URL = "bridge_url"
 CONF_BRIDGE_TOKEN = "bridge_token"
-CONF_PANEL_TITLE = "panel_title"
+CONF_CONNECTION_TYPE = "connection_type"
+CONF_DISCOVERY_UUID = "discovery_uuid"
 
-DEFAULT_PANEL_TITLE = "Codex Bridge"
+CONNECTION_TYPE_SUPERVISOR = "supervisor"
+CONNECTION_TYPE_EXTERNAL_LEGACY = "external_legacy"
+
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8766"
 
 PANEL_COMPONENT_NAME = "codex-bridge-panel"
