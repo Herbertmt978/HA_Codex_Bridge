@@ -446,11 +446,13 @@ an unsupported runtime field or copying private files into source-controlled wor
 
 **Verification:** `python -m pytest -q tests/custom_components/codex_bridge/test_http.py`
 
-- [ ] Write failing tests for admin authorization, create/status, repeated chunk, checksum mismatch, request streaming without temp files, completion/cancel, client cancellation, upstream timeout, 413, Range/If-Range, 206/416, bounded response iteration, malicious filename/header injection, hop-by-hop stripping, attachment/octet-stream/nosniff, and redirect refusal.
-- [ ] Run tests and confirm current `NamedTemporaryFile`/`response.read()` behavior fails bounded-stream assertions.
-- [ ] Implement chunk/range views that pass `request.content` upstream and write upstream chunks to `aiohttp.web.StreamResponse`; preserve only safe range/cache metadata and own/close every response deterministically.
-- [ ] Run focused/full Integration suites plus a 100 MiB memory smoke test through a local HA test server.
-- [ ] Commit with message `Stream files through Home Assistant`.
+- [x] Write failing tests for admin authorization, create/status, repeated chunk, checksum mismatch, request streaming without temp files, completion/cancel, client cancellation, upstream timeout, 413, Range/If-Range, 206/416, bounded response iteration, malicious filename/header injection, hop-by-hop stripping, attachment/octet-stream/nosniff, and redirect refusal.
+- [x] Run tests and confirm current `NamedTemporaryFile`/`response.read()` behavior fails bounded-stream assertions.
+- [x] Implement chunk/range views that pass `request.content` upstream and write upstream chunks to `aiohttp.web.StreamResponse`; preserve only safe range/cache metadata and own/close every response deterministically.
+- [x] Run focused/full Integration suites plus a 100 MiB memory smoke test through a local HA test server.
+- [x] Commit with message `Stream files through Home Assistant`.
+
+**Completed:** `72b7454` adds administrator-only v1 upload sessions, fixed streamed chunks, completion/cancel, exact ranged download forwarding, safe response headers, deterministic cancellation/close behavior, and bounded streaming compatibility for external v0. Final Linux verification passed 41 HTTP transport tests, 157 full Integration tests, and 66 Bridge upload/artifact/security contracts; the 100 MiB HA-server smoke stayed below its Python/RSS ceilings without a temporary file.
 
 ## Task 15: Establish a reproducible frontend build and hostile-content tests
 

@@ -317,6 +317,28 @@ The event broker persists only its monotonic cursor. Durable events and snapshot
 remain Bridge-owned, and file bytes remain outside the WebSocket path. Task 14
 now owns authenticated, resumable, bounded HA HTTP forwarding.
 
+## Task 14 — authenticated resumable HA file streaming
+
+| Evidence | Result |
+|----------|--------|
+| HA authorization | Every create/status/chunk/complete/cancel/download view requires an authenticated HA administrator before reading a request body; the browser credential is never forwarded and the private Bridge bearer remains client-owned. |
+| Resumable uploads | API v1 exposes create, durable status, ordered 8 MiB chunks, idempotent retry, completion, and cancel. Metadata is capped at 64 KiB, upload/file identifiers and checksums are validated before network access, and oversized chunks fail locally with 413. |
+| Request streaming | Binary request bodies move from `request.content` to aiohttp in 64 KiB blocks with exact declared-length enforcement, no `NamedTemporaryFile`, and cancellation propagated through the owned upstream request. External v0 multipart is forwarded intact under an explicit 101 MiB compatibility ceiling. |
+| Ranged downloads | Full, 206, and 416 responses preserve validated `Range`/`If-Range`, strong ETag and content-range metadata while streaming with backpressure. Exact `Content-Length` is enforced and post-header failures abort the partial connection instead of attempting a second response. |
+| Header safety | Only validated end-to-end length/range/ETag metadata survives. Downloads force attachment, `application/octet-stream`, `nosniff`, and private no-store/no-transform; hop-by-hop, cookie, content-type, CRLF, traversal, and malformed filename values are dropped or replaced safely. |
+| Compatibility | External v0 multipart and artifact payloads now stream through HA without temp files or whole-artifact buffering. Its artifact list is bounded to 8 MiB before JSON decoding. The browser-side v1 resumable consumer is the explicit Task 15 integration gate before release. |
+| Resource smoke | A 100 MiB, thirteen-chunk transfer through the local HA test server stayed under 24 MiB traced Python growth and 64 MiB sampled RSS growth, wrote no temporary file, and preserved the exact byte count. |
+| Focused verification | 41 HTTP transport tests passed; the combined HTTP/API client slice passed 71 tests on Linux. |
+| Full Integration verification | 157 passed on Linux with HA socket/task/timer/thread cleanup enabled. |
+| Bridge contract verification | 66 upload, artifact, ingress-limit, and HA security contracts passed; the sole warning is the existing Starlette TestClient deprecation. |
+| Static verification | Ruff, `compileall`, staged/final diff checks, and exact admin-surface AST assertions passed. |
+| Independent review | Luna and Terra clean-sealed request/response ownership, cancellation, memory/disk ceilings, range semantics, header injection, token isolation, legacy bounds, and post-header failure behavior with no remaining P0–P2 finding. |
+| Implementation commit | `72b7454` (`Stream files through Home Assistant`) |
+
+Task 14 establishes the private binary transport but deliberately does not ship
+an intermediate release. Task 15 must make the browser consume the resumable v1
+routes before the HA-native application can pass end-to-end acceptance.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
