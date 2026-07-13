@@ -423,11 +423,13 @@ an unsupported runtime field or copying private files into source-controlled wor
 
 **Verification:** `python -m pytest -q tests/custom_components/codex_bridge/test_event_broker.py tests/custom_components/codex_bridge/test_websocket_api.py`
 
-- [ ] Write failing tests proving two subscribers create one upstream consumer; cover auth/runtime/thread scopes, cursor persistence, replay-before-live, exactly-once dedupe, heartbeat, gap snapshot, bounded slow subscriber, exponential reconnect, token change, unsubscribe, unload, and upstream-error state.
-- [ ] Run tests and confirm the current per-browser polling behavior fails the shared-consumer assertions.
-- [ ] Implement a config-entry-owned broker with one cancellable long-poll loop, scoped callback subscriptions, bounded queues, cursor-gap recovery, and connection status. Register admin-only `subscribe_events`, auth actions, approvals, user-input, prompt idempotency, and safe diagnostics commands.
-- [ ] Run focused/full tests with task-leak detection; verify no data is placed on the HA event bus/logbook.
-- [ ] Commit with message `Stream Bridge events through Home Assistant`.
+- [x] Write failing tests proving two subscribers create one upstream consumer; cover auth/runtime/thread scopes, cursor persistence, replay-before-live, exactly-once dedupe, heartbeat, gap snapshot, bounded slow subscriber, exponential reconnect, token change, unsubscribe, unload, and upstream-error state.
+- [x] Run tests and confirm the current per-browser polling behavior fails the shared-consumer assertions.
+- [x] Implement a config-entry-owned broker with one cancellable long-poll loop, scoped callback subscriptions, bounded queues, cursor-gap recovery, and connection status. Register admin-only `subscribe_events`, auth actions, approvals, user-input, prompt idempotency, and safe diagnostics commands.
+- [x] Run focused/full tests with task-leak detection; verify no data is placed on the HA event bus/logbook.
+- [x] Commit with message `Stream Bridge events through Home Assistant`.
+
+**Completed:** `60e08fe` gives API v1 one config-entry-owned global consumer with persisted cursors, bounded replay/fan-out, typed gap and terminal recovery, safe admin-only WebSocket actions, and a compatibility recovery seam for the retiring panel. Final Linux verification passed 68 focused and 116 full Integration tests with HA task-leak checks.
 
 ## Task 14: Stream resumable files through authenticated HA HTTP views
 

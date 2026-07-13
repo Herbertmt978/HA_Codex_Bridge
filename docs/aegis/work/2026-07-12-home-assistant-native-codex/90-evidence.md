@@ -295,6 +295,28 @@ does not ship `hass_frontend`; the complete flow-manager/install sequence remain
 a target-system acceptance item in Task 22. Task 13 now owns the one-consumer
 event lifecycle that will attach to `CodexBridgeRuntime.async_close()`.
 
+## Task 13 — one Integration event broker and HA WebSocket fan-out
+
+| Evidence | Result |
+|----------|--------|
+| Single consumer | Each API v1 config entry owns one HA-tracked replay/wait task; multiple authenticated panel subscriptions fan out from that task, and unload or partial setup cancels it deterministically. |
+| Replay and exactly-once | A persisted global cursor, bounded local history, replay-before-live ordering, monotonic dedupe, and compacted-journal snapshots recover proxy reconnects without silently skipping events. |
+| Scope and zero-chat auth | Auth, runtime, and selected-thread filters follow the Bridge contract; auth events stream without a project or chat, while explicit contradictory filters fail before any upstream request. |
+| Resource bounds | Event responses are capped at 8 MiB and 256 records; subscriber queues and replay history have count and byte ceilings; slow clients receive a cursor-bearing snapshot rather than an unbounded queue or silent close. |
+| Recovery status | Heartbeats, capped exponential reconnect, retryable connection recovery, terminal auth/protocol/upstream states, and a safe `get_event_status` diagnostic expose no raw exception or private Bridge origin. |
+| Admin actions | HA-admin-only WebSocket commands cover event replay/subscription, auth cancel, pending approvals/questions, correlated decision/answer responses, and prompt idempotency keys. User-input answers are strictly bounded and match the Bridge `question_id`/`values` contract. |
+| Compatibility | External v0 alone retains per-thread polling. The retiring panel receives v1 thread projections, advances on snapshot cursors, refreshes after overflow/compaction, and falls back to polling after a terminal live-stream error. |
+| Privacy | No prompt, response, event payload, token, device code, filename, or auth claim is written to HA state, the event bus, logbook, or routine logs; only the cursor is persisted in HA storage. |
+| Focused verification | 68 passed on Linux across the API client, event broker, WebSocket surface, and Integration lifecycle. |
+| Full Integration verification | 116 passed on Linux with HA socket/task/timer/thread cleanup enabled. |
+| Static verification | Ruff, `compileall`, panel `node --check`, staged/final diff checks, and JavaScript cache-version bump passed. |
+| Independent review | Luna and Terra clean-sealed replay races, memory bounds, slow-client recovery, compacted-journal behavior, task ownership, native HA subscription cleanup, and legacy/v1 compatibility with no remaining P0–P2 issue. |
+| Implementation commit | `60e08fe` (`Stream Bridge events through Home Assistant`) |
+
+The event broker persists only its monotonic cursor. Durable events and snapshots
+remain Bridge-owned, and file bytes remain outside the WebSocket path. Task 14
+now owns authenticated, resumable, bounded HA HTTP forwarding.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
