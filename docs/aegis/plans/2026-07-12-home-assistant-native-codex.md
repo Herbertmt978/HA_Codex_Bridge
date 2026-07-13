@@ -398,11 +398,13 @@ an unsupported runtime field or copying private files into source-controlled wor
 
 **Verification:** `python -m pytest -q tests/custom_components/codex_bridge/test_config_flow.py tests/custom_components/codex_bridge/test_init.py`
 
-- [ ] Write failing tests for Integration-first/App-first order, exact service/slug/instance ID, private host/port, token validation, authenticated contract confirmation, duplicate discovery, rediscovery update/reload, rotation without token logs, incompatible API, auth rejection, user install/start guidance, advanced external flow, unload/reload, and process-lifetime command/view registration.
-- [ ] Run focused tests and confirm only manual setup exists.
-- [ ] Implement `async_step_hassio`, stable unique ID, automatic entry updates, primary waiting/retry form, explicit external step, runtime cancellation/restart, and redacted repair errors. Token rotation returns status only; the new token arrives by rediscovery.
-- [ ] Run focused/full Integration suites and inspect `caplog` for old/new token sentinels.
-- [ ] Commit with message `Discover the Codex Bridge App automatically`.
+- [x] Write failing tests for Integration-first/App-first order, exact service/slug/instance ID, private host/port, token validation, authenticated contract confirmation, duplicate discovery, rediscovery update/reload, rotation without token logs, incompatible API, auth rejection, user install/start guidance, advanced external flow, unload/reload, and process-lifetime command/view registration.
+- [x] Run focused tests and confirm only manual setup exists.
+- [x] Implement `async_step_hassio`, stable unique ID, automatic entry updates, primary waiting/retry form, explicit external step, runtime cancellation/restart, and redacted repair errors. Token rotation returns status only; the new token arrives by rediscovery.
+- [x] Run focused/full Integration suites and inspect `caplog` for old/new token sentinels.
+- [x] Commit with message `Discover the Codex Bridge App automatically`.
+
+**Completed:** `e730c36` makes Supervisor discovery the confirmed v1 setup path, automatically reloads changed App credentials by stable UUID, migrates the single advanced external v0 entry only after confirmation, and preserves process-lifetime HA registrations across safe runtime teardown. Final Linux verification passed 23 focused and 82 full Integration tests.
 
 ## Task 13: Replace per-panel polling with one Integration event broker
 

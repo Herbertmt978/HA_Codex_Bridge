@@ -274,6 +274,27 @@ through Home Assistant. Those consumers remain deliberately gated until Tasks
 12–14 establish stable entry identity, one event broker, and bounded streaming
 views.
 
+## Task 12 — Supervisor discovery and stable Integration identity
+
+| Evidence | Result |
+|----------|--------|
+| Primary setup | HA 2026.7 `HassioServiceInfo` wrapper identity supplies authoritative slug/UUID; App config supplies only validated private host, port, token, and API range. No endpoint or token field appears in the App flow. |
+| Administrator consent | A newly discovered or external-to-App replacement remains pending until explicit administrator confirmation, and authenticated readiness is revalidated at confirmation time. |
+| Stable recovery | Supervisor UUID is the config-entry unique ID; changed host/token data is authenticated, replaced atomically, and reloaded only when changed. Old and new token sentinels remain absent from logs. |
+| Single-entry invariant | External v0 and Supervisor v1 modes cannot coexist ambiguously. A confirmed App may replace the one external entry; another Supervisor instance and a second active runtime fail closed. |
+| Compatibility | Supervisor mode requires negotiated API v1. The explicit **External Bridge (advanced)** path requires negotiated legacy v0 and remains the rollback route. |
+| Lifecycle | Runtime close executes on unload and partial setup failure. HTTP views and WebSocket commands register once per HA process; the panel is removed/re-added with active entry lifecycle. |
+| Focused verification | 23 passed on Linux with the Home Assistant custom-component plugin. |
+| Full Integration verification | 82 passed on Linux with no socket/task/timer/thread cleanup failures. |
+| Static verification | Ruff, `compileall`, JSON/localisation equivalence, manifest assertions, staged diff check, and final diff hygiene passed. |
+| Independent review | Terra implemented the slice; Luna sealed the final confirmation, single-entry, rollback, revalidation, v1/v0, and registration behavior with no remaining finding. |
+| Implementation commit | `e730c36` (`Discover the Codex Bridge App automatically`) |
+
+The local dependency harness exercises real HA flow classes directly because it
+does not ship `hass_frontend`; the complete flow-manager/install sequence remains
+a target-system acceptance item in Task 22. Task 13 now owns the one-consumer
+event lifecycle that will attach to `CodexBridgeRuntime.async_close()`.
+
 ## Evidence status
 
 This is draft evidence for continuation. It now proves host/container resource
