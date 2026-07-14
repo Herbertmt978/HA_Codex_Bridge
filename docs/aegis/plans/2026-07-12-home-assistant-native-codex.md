@@ -507,11 +507,13 @@ npm run build
 python -m pytest -q tests/custom_components/codex_bridge/test_websocket_api.py
 ```
 
-- [ ] Write failing tests for App-connected completed state, App disconnect/retry, live **Sign in with ChatGPT**, code copy/open, phone guidance, cancel, explicit confirmed sign-out, safe plan type, terminal code clearing, API-key/PAT rejection, workspace creation, first chat, and zero-thread auth events.
-- [ ] Run tests and capture current `force_logout=true`, missing cancel/logout, and VM wording failures.
-- [ ] Implement the four-stage checklist, auth subscription before chats, idempotent login without implicit logout, cancel/sign-out controls, relative workspace picker/importer, runtime/version strip, and precise provider-neutral remote guidance. Remove active URL/token/Windows/VM/API-key copy.
-- [ ] Run frontend/Python tests and manually exercise narrow/mobile plus light/dark HA themes in the harness.
-- [ ] Commit with message `Create Home Assistant first run experience`.
+- [x] Write failing tests for App-connected completed state, App disconnect/retry, live **Sign in with ChatGPT**, code copy/open, phone guidance, cancel, explicit confirmed sign-out, safe plan type, terminal code clearing, API-key/PAT rejection, workspace creation, first chat, and zero-thread auth events.
+- [x] Run tests and capture current `force_logout=true`, missing cancel/logout, and VM wording failures.
+- [x] Implement the four-stage checklist, auth subscription before chats, idempotent login without implicit logout, cancel/sign-out controls, relative workspace picker/importer, runtime/version strip, and precise provider-neutral remote guidance. Remove active URL/token/Windows/VM/API-key copy.
+- [x] Run frontend/Python tests and manually exercise narrow/mobile plus light/dark HA themes in the harness.
+- [x] Commit with message `Create Home Assistant first run experience`.
+
+**Completed:** `2cf5627` delivers the four-stage Home Assistant onboarding checklist, capability-safe runtime strip, ChatGPT device/account controls, zero-chat auth/runtime subscription, revision-safe recovery, relative workspace presentation, and capability-limited external-v0 notice. Account mutations are idempotent and explicit; verification URLs use an exact HTTPS host/port/path allowlist; terminal codes, raw subprocess output, private URLs, credentials, account identifiers, and absolute paths are removed from the browser surface. ESLint passed; Vitest passed 83 tests across eleven files; the deterministic generated bundle and syntax checks passed; Playwright passed three same-origin, first-run, device-auth, 1280 px, 390 px, light, and dark scenarios; the focused Bridge slice passed 120 tests; the Linux Home Assistant Integration slice passed 45 tests; Ruff, `compileall`, and diff hygiene passed. Terra confirmed the responsive and accessible control experience; Luna drove the final auth-revision, reconnect, legacy-capability, URL, and path-redaction fixes and found no remaining P0-P2 issue.
 
 ## Task 17: Add inline approvals, questions, resilient runs, and accessibility
 
