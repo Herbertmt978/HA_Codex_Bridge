@@ -2,12 +2,13 @@
 
 ## Status before you start
 
-The Supervisor App is experimental and `amd64` only. Its source is in this
-repository, but a public App image is not available yet. A private immutable
-image running Codex `0.144.4` passed sandbox self-test and authenticated
-readiness on an amd64 Home Assistant OS development VM on 14 July 2026. This
-does not validate public distribution, remote access, updates, or App-image
-rollback.
+The Supervisor App is experimental and `amd64` only. App `0.6.0` is distributed
+as a signed immutable image with an SPDX SBOM and build provenance. It bundles
+Bridge `0.5.3` and Codex `0.144.4`; the separately installed Integration is
+`0.5.4`. A protected-runtime image passed sandbox self-test and authenticated
+readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
+access, the first automatic update, and prior-image recovery remain acceptance
+checks for the intended Home Assistant installation.
 
 Codex Bridge has two separate surfaces:
 
@@ -17,12 +18,13 @@ Codex Bridge has two separate surfaces:
 
 The Integration can be installed as a HACS custom repository. This does not
 imply a HACS or Home Assistant listing, review, endorsement, or support. The
-future public App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
+App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 ## Prerequisites
 
-- Home Assistant Operating System on `amd64`, with administrator access. Home
-  Assistant Container does not provide Apps and cannot use this Supervisor App.
+- Home Assistant Core `2026.7.2` or newer, running on Home Assistant OS for
+  `amd64`, with administrator access. Home Assistant Container does not provide
+  Apps and cannot use this Supervisor App.
 - A ChatGPT account that can use Codex. Device login does not use an OpenAI API
   key.
 - A small, non-sensitive project directory you are comfortable letting Codex
@@ -35,7 +37,8 @@ future public App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install **Codex Bridge** and restart Home Assistant.
+2. Install the latest **Codex Bridge** Integration release (`0.5.4`) and restart
+   Home Assistant.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.
 
@@ -44,16 +47,11 @@ Integration. It neither installs nor publishes an App image.
 
 ## Install the App
 
-When a matching versioned App image is published, open **Settings -> Apps ->
-App store**, select the three-dot menu, then **Repositories**. Add
-<https://github.com/Herbertmt978/HA_Codex_Bridge>, install **Codex Bridge**, and
-start it. Use matching Integration and App release notes.
-
-Until then, [`codex_bridge_app`](../codex_bridge_app) is a controlled
-source/evaluation workflow for contributors with a Home Assistant development
-environment. It is not a general copy-and-paste installation method. The App
-has no supported ingress route, direct port, or browser-visible Bridge URL;
-Supervisor discovery supplies the private connection.
+Open **Settings -> Apps -> App store**, select the three-dot menu, then
+**Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>, install
+**Codex Bridge** `0.6.0`, and start it. The App has no ingress route, direct
+port, or browser-visible Bridge URL; Supervisor discovery supplies the private
+connection.
 
 ## First run
 
@@ -75,6 +73,8 @@ device-auth page.
 
 - Read [remote access](remote-access.md) before exposing Home Assistant
   remotely.
+- Enable App auto-update only after making a cold backup and accepting the
+  experimental update/recovery limits described below.
 - Make a cold backup before an App change; see
   [backup and recovery](backup-restore.md).
 - Never paste device codes, cookies, bearer tokens, or API keys into App

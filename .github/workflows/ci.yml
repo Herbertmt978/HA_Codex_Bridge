@@ -59,6 +59,31 @@ jobs:
           python scripts/sync_app_release.py --check
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
+  repository-validation:
+    name: HACS and hassfest validation
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Validate the HACS Integration repository
+        uses: ./.github/actions/hacs-validation
+        with:
+          category: integration
+          comment: "false"
+
+      - name: Validate Home Assistant metadata and translations
+        env:
+          HASSFEST_IMAGE: ghcr.io/home-assistant/hassfest@sha256:5fc3c5d7df109d248a61acfb0a675b38b1e4dc3a202feb260a8e33696f9803e3
+        run: >-
+          docker run --rm --pull=always
+          --volume "${GITHUB_WORKSPACE}:/github/workspace"
+          "${HASSFEST_IMAGE}"
+
   windows-updater:
     name: Windows updater compatibility
     runs-on: windows-2025

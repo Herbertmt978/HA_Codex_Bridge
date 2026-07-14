@@ -25,22 +25,23 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration and external Bridge: `0.5.3`.
-- App: `0.6.0`, experimental and `amd64` only.
-- The App source is present, but a public App image is not available yet. A
-  private immutable image passed sandbox self-test and authenticated readiness
-  on an amd64 Home Assistant OS development VM on 14 July 2026.
-- That result does not validate remote access, update, App rollback, or public
-  distribution. The current recovery plan is a cold backup and, if already
-  operated, a private external Bridge; cold restore remains an acceptance gate.
-  Do not claim Supervisor can choose an
+- Integration: `0.5.4`; optional external Bridge: `0.5.3`.
+- App: `0.6.0`, experimental and `amd64` only; bundled Codex: `0.144.4`.
+- The App is distributed as a signed immutable image with an SPDX SBOM and
+  build provenance. A protected-runtime image passed sandbox self-test and
+  authenticated readiness on an amd64 Home Assistant OS development VM on
+  14 July 2026.
+- That result does not validate remote access, the first automatic update, or
+  App-image recovery on the intended installation. The current recovery plan
+  is a cold backup and, if already operated, a private external Bridge; cold
+  restore remains an acceptance gate. Do not claim Supervisor can choose an
   arbitrary earlier image until a prior immutable tag and restore procedure are
   published and exercised.
 
 ## Product language
 
 - Keep **Integration** and **App** distinct. HACS installs the Integration;
-  Supervisor installs the App once its public image is available.
+  Supervisor installs the App from this repository.
 - ChatGPT device login and Home Assistant login are separate. Use the exact UI
   labels **Sign in with ChatGPT**, **Cancel**, and **Sign out**. Cancellation is
   only for an in-progress sign-in; sign-out removes an established session.

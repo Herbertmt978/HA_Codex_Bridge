@@ -8,7 +8,8 @@ Run and supervise Codex work from Home Assistant without publishing a coding-age
 
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
-[![App: experimental](https://img.shields.io/badge/App-Experimental-F59E0B)](codex_bridge_app/README.md)
+[![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
+[![App: 0.6.0 experimental](https://img.shields.io/badge/App-0.6.0%20Experimental-F59E0B)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00897B.svg)](LICENSE)
 
 [Installation](docs/installation.md) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
@@ -35,37 +36,38 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   a custom-repository flow; it is not a statement that this project is listed,
   reviewed, endorsed, or supported by HACS or Home Assistant.
 - **Supervisor App:** the private runtime intended to run the Bridge and Codex
-  alongside Home Assistant. Its source is in
-  [`codex_bridge_app`](codex_bridge_app), but a public App image is **not
-  available yet**. When published, its repository will be
-  <https://github.com/Herbertmt978/HA_Codex_Bridge>.
+  alongside Home Assistant. Add this repository to the Home Assistant App
+  store to install its published immutable image.
 
-The App is experimental, `amd64`-only, and version `0.6.0`; the Integration and
-external Bridge are version `0.5.3`. A private immutable App image passed the
-sandbox self-test and authenticated readiness check on an amd64 Home Assistant
-OS development VM on 14 July 2026. That is protected-runtime evidence, not a
-public App release or a claim that remote access, update, or App rollback has
-been validated.
+The App is experimental, `amd64`-only, and version `0.6.0`; the Integration is
+`0.5.4`, the optional external Bridge is `0.5.3`, and the bundled Codex runtime
+is `0.144.4`. The release workflow publishes a signed GHCR image with an SPDX
+SBOM and build provenance. A protected-runtime image also passed the sandbox
+self-test and authenticated readiness check on an amd64 Home Assistant OS
+development VM on 14 July 2026. Remote-access acceptance, the first automatic
+update, and prior-image recovery still need validation on the intended Home
+Assistant installation.
 
 The external Bridge remains an optional, private compatibility path for people
-who already operate one. Until the App image is public, it is the only runnable
-backend available here; that does not make it a recommended fresh deployment.
-It is also a practical recovery route until an earlier immutable App tag and
-its restore procedure are published and tested.
+who already operate one. Fresh Home Assistant OS installations should use the
+App. Keep an existing external Bridge only as a recovery path until an App
+update and cold-restore exercise has passed on the intended installation.
 
 > [!IMPORTANT]
-> There is no supported fresh App deployment until the public image is
-> published. Installing the HACS Integration alone provides the panel but does
-> not run Codex; it needs the Supervisor App or an explicitly configured private
-> external Bridge.
+> The App is experimental and currently supports `amd64` Home Assistant OS.
+> Installing the HACS Integration alone provides the panel but does not run
+> Codex; install the Supervisor App as well, or explicitly configure the
+> advanced private external Bridge.
 
-## Evaluation sequence after a runtime is available
+## Install and first run
 
-1. Install the **Codex Bridge** Integration through HACS, restart Home
-   Assistant, then add it in **Settings -> Devices & services**.
-2. If you are evaluating the App from source, follow the controlled development
-   guidance in [installation](docs/installation.md). Do not treat the source
-   tree as a public App installation.
+1. In **Settings -> Apps -> App store -> Repositories**, add
+   <https://github.com/Herbertmt978/HA_Codex_Bridge>. Install and start
+   **Codex Bridge**.
+2. Install the **Codex Bridge** Integration through HACS, restart Home
+   Assistant, then add it in **Settings -> Devices & services**. App discovery
+   supplies the private connection automatically; there is no host, port, or
+   bearer token to copy.
 3. Open the panel as a Home Assistant administrator. Select **Sign in with
    ChatGPT**, then use a browser to complete the approved ChatGPT device-auth
    page. **Cancel** only cancels an in-progress sign-in; **Sign out** removes an
@@ -82,12 +84,14 @@ key.
 ## Updates and recovery
 
 App images are immutable: a running container does not update Codex or itself.
-The Supervisor App does **not** currently provide a validated way to select an
-arbitrary prior image. Do not rely on App-image rollback. The current recovery
-plan is a cold Home Assistant backup and, where one already exists, a private
-external Bridge. Cold restore still needs acceptance testing on the intended
-Home Assistant installation; follow [backup and recovery](docs/backup-restore.md)
-before an App change.
+Home Assistant can offer a released App update and can apply it automatically
+after the administrator enables the App's auto-update toggle. Upstream Codex
+updates first arrive as a verified, reviewable repository PR; unattended merge
+remains disabled until a real update/recovery canary passes. The Supervisor App
+does **not** currently provide a validated way to select an arbitrary prior
+image, so make a cold Home Assistant backup before an App change. Keep a private
+external Bridge where one already exists until cold restore has been exercised;
+see [backup and recovery](docs/backup-restore.md).
 
 ## Security boundary
 

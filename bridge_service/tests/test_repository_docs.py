@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import shutil
@@ -16,7 +17,7 @@ REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
     "README.md": (
         "What it is",
         "Two components, two installation paths",
-        "Evaluation sequence after a runtime is available",
+        "Install and first run",
         "Updates and recovery",
         "Security boundary",
     ),
@@ -140,6 +141,15 @@ def test_readme_explains_the_integration_app_and_chatgpt_login_contract() -> Non
     )
 
 
+def test_installation_distinguishes_core_and_operating_system_versions() -> None:
+    minimum_core = json.loads(_read(ROOT / "hacs.json"))["homeassistant"]
+    installation = _read(ROOT / "docs" / "installation.md")
+
+    assert f"Home Assistant Core `{minimum_core}` or newer" in installation
+    assert re.search(r"Home Assistant OS.{0,40}`amd64`", installation, re.DOTALL)
+    assert f"Home Assistant Operating System `{minimum_core}`" not in installation
+
+
 def test_remote_access_stays_on_home_assistant_and_is_provider_neutral() -> None:
     documents = (
         ROOT / "README.md",
@@ -169,11 +179,15 @@ def test_app_availability_and_rollback_claims_remain_honest() -> None:
     )
     corpus = _corpus(app_documents)
     assert re.search(
+        r"(?:public|distributed).{0,120}(?:signed|immutable).{0,120}(?:image|SBOM|provenance)",
+        corpus,
+        re.IGNORECASE | re.DOTALL,
+    )
+    assert not re.search(
         r"public.{0,100}(?:not available|not a public|not published)",
         corpus,
         re.IGNORECASE | re.DOTALL,
     )
-    assert not re.search(r"public App(?: image)?\s+(?:is\s+)?available\b", corpus, re.IGNORECASE)
     assert re.search(
         r"Supervisor.{0,140}arbitrary (?:prior|earlier)(?: App)? image",
         corpus,

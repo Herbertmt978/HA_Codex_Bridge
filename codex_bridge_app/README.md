@@ -7,21 +7,23 @@ administrator panel and connects to this App through Supervisor.
 ## Status
 
 - App version: `0.6.0` (`amd64` only, experimental)
-- Integration and external Bridge: `0.5.3`
-- Public App image: not available yet
-- Future App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
+- Integration: `0.5.4`
+- External Bridge: `0.5.3`
+- Bundled Codex: `0.144.4`
+- App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-The source, manifest, and image definition are present here. A private immutable
-image passed sandbox self-test and authenticated readiness on an amd64 Home
-Assistant OS development VM on 14 July 2026. This is not a published App
-release or validation of remote access, updates, or App-image rollback.
+The public immutable image is signed and accompanied by an SPDX SBOM and build
+provenance. A protected-runtime image passed sandbox self-test and authenticated
+readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
+access, the first automatic update, and prior-image recovery remain acceptance
+checks for the intended Home Assistant installation.
 
 ## Installation model
 
-For a published release, install the matching App image through Home Assistant
-Supervisor and the Integration through HACS. Supervisor discovery supplies the
-private Integration-to-App connection; an administrator does not enter a Bridge
-address, port, or bearer token.
+Add this repository to the Home Assistant App store, install the App, then
+install the Integration through HACS. Supervisor discovery supplies the private
+Integration-to-App connection; an administrator does not enter a Bridge address,
+port, or bearer token.
 
 The App exposes no browser-facing port or ingress route. Reach the panel through
 Home Assistant. HACS and Home Assistant references describe compatible
@@ -41,11 +43,12 @@ the approved ChatGPT page. This flow does not use an OpenAI API key.
 
 ## Updates and recovery
 
-The running image never replaces Codex or itself. Do not assume Supervisor can
-select an arbitrary earlier App image: App-image rollback is not yet validated.
-Until a prior immutable tag and restore procedure are published and tested, use
-a cold Home Assistant backup or an existing private external Bridge for
-recovery. Keep workspaces until their contents have been reviewed.
+The running image never replaces Codex or itself. Home Assistant can install a
+newly released image and can apply it automatically after the App auto-update
+toggle is enabled. Do not assume Supervisor can select an arbitrary earlier App
+image: App-image rollback is not yet validated. Use a cold Home Assistant backup
+or an existing private external Bridge for recovery, and keep workspaces until
+their contents have been reviewed.
 
 See [DOCS.md](DOCS.md), the repository [installation guide](../docs/installation.md),
 and [backup and recovery](../docs/backup-restore.md).
