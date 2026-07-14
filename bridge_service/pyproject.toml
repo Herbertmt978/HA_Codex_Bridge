@@ -19,6 +19,7 @@ codex-bridge-service = "codex_bridge_service.__main__:main"
 test = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.26.0",
+  "PyYAML>=6.0.3,<7",
   "types-jsonschema>=4.23.0",
 ]
 

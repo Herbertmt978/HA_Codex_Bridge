@@ -1,0 +1,15 @@
+#include <tunables/global>
+
+profile codex_bridge flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  network inet stream,
+  network inet6 stream,
+
+  /app/** rix,
+  /data/** rwk,
+  /config/ r,
+  /config/workspaces/ rw,
+  /config/workspaces/** rwk,
+}
