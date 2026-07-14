@@ -588,11 +588,13 @@ python -m pytest -q bridge_service/tests/test_codex_release_lock.py
 python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 ```
 
-- [ ] Write failing fixture tests for stable/prerelease/draft, monotonic tag, missing/duplicate assets, archive/bundle digest, decompression size, Sigstore issuer/identity/repository/workflow/tag/transparency log, both musl architectures, and malicious GitHub metadata.
-- [ ] Run tests and confirm updater/lock are absent.
-- [ ] Implement offline-verifiable lock parsing and online update/check modes. Seed the current verified stable musl Codex and Bubblewrap assets/digests from official release metadata, including issuer `https://token.actions.githubusercontent.com` and tagged `openai/codex` release-workflow identity. Record version, compressed/decompressed size/digest, and bundle identity in the lock.
-- [ ] Run fixtures, fetch current official metadata, independently verify every recorded digest/Sigstore bundle, stage the target asset, and confirm `codex --version` exactly matches the lock.
-- [ ] Commit with message `Lock verified Codex release assets`.
+- [x] Write failing fixture tests for stable/prerelease/draft, monotonic tag, missing/duplicate assets, archive/bundle digest, decompression size, Sigstore issuer/identity/repository/workflow/tag/transparency log, both musl architectures, and malicious GitHub metadata.
+- [x] Run tests and confirm updater/lock are absent.
+- [x] Implement offline-verifiable lock parsing and online update/check modes. Seed the current verified stable musl Codex and Bubblewrap assets/digests from official release metadata, including issuer `https://token.actions.githubusercontent.com` and tagged `openai/codex` release-workflow identity. Record version, compressed/decompressed size/digest, and bundle identity in the lock.
+- [x] Run fixtures, fetch current official metadata, independently verify every recorded digest/Sigstore bundle, stage the target asset, and confirm `codex --version` exactly matches the lock.
+- [x] Commit with message `Lock verified Codex release assets`.
+
+**Completed:** `b2bfc0c` adds a fixture-driven, monotonic release lock and updater seeded from the current stable `openai/codex` `rust-v0.144.4` release at verified commit `8c68d4c87dc54d38861f5114e920c3de2efa5876`. The live path independently downloaded all four amd64/aarch64 musl Codex/Bubblewrap archives and four legacy Cosign bundles, matched GitHub asset and decompressed digests/sizes, peeled the annotated tag, verified the exact tagged `rust-release` GitHub OIDC identity/issuer/repository/ref/SHA/push claims and Rekor evidence with Cosign v3.1.1, and confirmed both Codex binaries report `codex-cli 0.144.4`. A strict constant-memory USTAR reader rejects PAX/GNU sparse metadata, expansion/trailer tricks, extra entries, wrong ELF architectures, and partial/pre-existing destination hazards; an OS-level critical section prevents concurrent rollback. All 21 updater tests passed on Windows and POSIX, the combined App package slice passed 53 tests, offline lock validation passed, and a same-version live verification left the lock hash and mtime unchanged. Luna and Terra found no remaining P0-P2 issue.
 
 ## Task 20: Build the reproducible non-root App runtime and discovery bootstrap
 
