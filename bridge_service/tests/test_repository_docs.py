@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import shutil
@@ -138,6 +139,15 @@ def test_readme_explains_the_integration_app_and_chatgpt_login_contract() -> Non
         readme,
         re.IGNORECASE | re.DOTALL,
     )
+
+
+def test_installation_distinguishes_core_and_operating_system_versions() -> None:
+    minimum_core = json.loads(_read(ROOT / "hacs.json"))["homeassistant"]
+    installation = _read(ROOT / "docs" / "installation.md")
+
+    assert f"Home Assistant Core `{minimum_core}` or newer" in installation
+    assert re.search(r"Home Assistant OS.{0,40}`amd64`", installation, re.DOTALL)
+    assert f"Home Assistant Operating System `{minimum_core}`" not in installation
 
 
 def test_remote_access_stays_on_home_assistant_and_is_provider_neutral() -> None:

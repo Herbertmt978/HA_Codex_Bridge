@@ -22,9 +22,9 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 ## Prerequisites
 
-- Home Assistant Operating System `2026.7.2` or newer on `amd64`, with
-  administrator access. Home Assistant Container does not provide Apps and
-  cannot use this Supervisor App.
+- Home Assistant Core `2026.7.2` or newer, running on Home Assistant OS for
+  `amd64`, with administrator access. Home Assistant Container does not provide
+  Apps and cannot use this Supervisor App.
 - A ChatGPT account that can use Codex. Device login does not use an OpenAI API
   key.
 - A small, non-sensitive project directory you are comfortable letting Codex
