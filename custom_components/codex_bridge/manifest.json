@@ -1,8 +1,8 @@
 {
   "domain": "codex_bridge",
   "name": "Codex Bridge",
-  "documentation": "https://github.com/Herbertmt978/ha-codex-bridge#readme",
-  "issue_tracker": "https://github.com/Herbertmt978/ha-codex-bridge/issues",
+  "documentation": "https://github.com/Herbertmt978/HA_Codex_Bridge#readme",
+  "issue_tracker": "https://github.com/Herbertmt978/HA_Codex_Bridge/issues",
   "codeowners": ["@Herbertmt978"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom"],

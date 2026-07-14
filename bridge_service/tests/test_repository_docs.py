@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -219,3 +220,38 @@ def test_user_facing_docs_contain_no_obvious_private_urls_or_credentials() -> No
                 failures.append(f"{document.relative_to(ROOT)} contains an obvious {label}")
 
     assert not failures, "; ".join(failures)
+
+
+def test_aegis_runtime_records_are_indexed_and_generated_dist_is_untracked() -> None:
+    """Keep the implementation record auditable without committing build outputs."""
+
+    records = (
+        "docs/aegis/baseline/2026-07-14-ha-native-implementation-baseline.md",
+        "docs/aegis/adr/0001-ha-app-runtime-ownership.md",
+        "docs/aegis/adr/0002-ha-origin-transport-and-trust.md",
+        "docs/aegis/adr/0003-private-state-and-device-auth.md",
+        "docs/aegis/adr/0004-immutable-app-distribution.md",
+        "docs/aegis/adr/0005-external-bridge-retirement.md",
+    )
+    index = _read(ROOT / "docs" / "aegis" / "INDEX.md")
+
+    for relative in records:
+        record = ROOT / relative
+        assert record.is_file(), f"missing Aegis governance record: {relative}"
+        index_target = relative.removeprefix("docs/aegis/")
+        assert f"]({index_target})" in index, f"INDEX.md does not link to {relative}"
+        for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", _read(record)):
+            if target.startswith(("#", "http://", "https://")):
+                continue
+            assert (record.parent / target.split("#", 1)[0]).resolve().exists(), (
+                f"{relative} has an unresolved local link: {target}"
+            )
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", "bridge_service/dist"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert not tracked, f"generated Bridge distribution artifacts must not be committed: {tracked}"

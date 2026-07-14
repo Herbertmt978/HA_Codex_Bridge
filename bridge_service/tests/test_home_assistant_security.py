@@ -53,6 +53,6 @@ def test_home_assistant_setup_uses_protected_side_effect_free_readiness_check() 
 def test_hacs_manifest_contains_required_repository_metadata() -> None:
     manifest = json.loads((COMPONENT_ROOT / "manifest.json").read_text(encoding="utf-8"))
 
-    assert manifest["documentation"] == "https://github.com/Herbertmt978/ha-codex-bridge#readme"
-    assert manifest["issue_tracker"] == "https://github.com/Herbertmt978/ha-codex-bridge/issues"
+    assert manifest["documentation"] == "https://github.com/Herbertmt978/HA_Codex_Bridge#readme"
+    assert manifest["issue_tracker"] == "https://github.com/Herbertmt978/HA_Codex_Bridge/issues"
     assert manifest["codeowners"] == ["@Herbertmt978"]

@@ -9,7 +9,7 @@ administrator panel and connects to this App through Supervisor.
 - App version: `0.6.0` (`amd64` only, experimental)
 - Integration and external Bridge: `0.5.3`
 - Public App image: not available yet
-- Future App repository: <https://github.com/Herbertmt978/ha-codex-bridge>
+- Future App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
 The source, manifest, and image definition are present here. A private immutable
 image passed sandbox self-test and authenticated readiness on an amd64 Home

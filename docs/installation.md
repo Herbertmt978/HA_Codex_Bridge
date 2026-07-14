@@ -17,7 +17,7 @@ Codex Bridge has two separate surfaces:
 
 The Integration can be installed as a HACS custom repository. This does not
 imply a HACS or Home Assistant listing, review, endorsement, or support. The
-future public App repository is <https://github.com/Herbertmt978/ha-codex-bridge>.
+future public App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ Integration. It neither installs nor publishes an App image.
 
 When a matching versioned App image is published, open **Settings -> Apps ->
 App store**, select the three-dot menu, then **Repositories**. Add
-<https://github.com/Herbertmt978/ha-codex-bridge>, install **Codex Bridge**, and
+<https://github.com/Herbertmt978/HA_Codex_Bridge>, install **Codex Bridge**, and
 start it. Use matching Integration and App release notes.
 
 Until then, [`codex_bridge_app`](../codex_bridge_app) is a controlled

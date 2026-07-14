@@ -38,7 +38,7 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   alongside Home Assistant. Its source is in
   [`codex_bridge_app`](codex_bridge_app), but a public App image is **not
   available yet**. When published, its repository will be
-  <https://github.com/Herbertmt978/ha-codex-bridge>.
+  <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 The App is experimental, `amd64`-only, and version `0.6.0`; the Integration and
 external Bridge are version `0.5.3`. A private immutable App image passed the

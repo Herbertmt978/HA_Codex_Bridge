@@ -23,7 +23,7 @@ def test_repository_manifest_points_to_the_public_app_repository() -> None:
 
     assert manifest == {
         "name": "Home Assistant Codex Bridge",
-        "url": "https://github.com/Herbertmt978/ha-codex-bridge",
+        "url": "https://github.com/Herbertmt978/HA_Codex_Bridge",
         "maintainer": "Herbertmt978",
     }
 
