@@ -49,7 +49,7 @@ def test_resumable_upload_publishes_one_checksum_verified_attachment(tmp_path) -
     payload = b"resumable upload bytes"
     digest = hashlib.sha256(payload).hexdigest()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     created = client.post(
         f"/threads/{thread.thread_id}/uploads",
@@ -102,7 +102,7 @@ def test_resumable_upload_rejects_conflicting_chunk_and_wrong_thread(tmp_path) -
     payload = b"one"
     digest = hashlib.sha256(payload).hexdigest()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     session = client.post(
         f"/threads/{thread.thread_id}/uploads", headers=headers,
         json={"filename": "one.txt", "size_bytes": 3, "sha256": digest},
@@ -119,7 +119,7 @@ def test_resumable_upload_rejects_a_gap_and_cancel_is_idempotent(tmp_path) -> No
     payload = b"x" * (8 * 1024 * 1024 + 1)
     digest = hashlib.sha256(payload).hexdigest()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     session = client.post(
         f"/threads/{thread.thread_id}/uploads", headers=headers,
         json={"filename": "large.bin", "size_bytes": len(payload), "sha256": digest},
@@ -147,7 +147,7 @@ def test_resumable_upload_status_survives_storage_restart(tmp_path) -> None:
     payload = b"resume"
     digest = hashlib.sha256(payload).hexdigest()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     session = client.post(
         f"/threads/{thread.thread_id}/uploads", headers=headers,
         json={"filename": "resume.txt", "size_bytes": len(payload), "sha256": digest},
@@ -194,7 +194,7 @@ def test_resumable_upload_rejects_short_bad_hash_and_corrupt_retry(tmp_path) -> 
     content = b"three"
     digest = hashlib.sha256(content).hexdigest()
     client = TestClient(app)
-    auth = {"Authorization": "Bearer secret"}
+    auth = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     def create() -> dict[str, object]:
         return client.post(
@@ -458,7 +458,7 @@ def test_upload_create_rejects_mismatched_relative_basename(tmp_path) -> None:
     app, _, thread = _app_thread(tmp_path)
     response = TestClient(app).post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         json={
             "filename": "notes.txt",
             "relative_path": "docs/other.txt",
@@ -488,7 +488,7 @@ def test_upload_create_maps_the_file_limit_to_typed_413(tmp_path) -> None:
     )
     response = TestClient(app).post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         json={
             "filename": "large.bin",
             "size_bytes": 5,
@@ -510,7 +510,7 @@ def test_duplicate_chunk_retry_must_still_match_the_declared_digest(tmp_path) ->
     payload = b"trusted"
     digest = hashlib.sha256(payload).hexdigest()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     session = client.post(
         f"/threads/{thread.thread_id}/uploads",
         headers=headers,
@@ -693,7 +693,7 @@ def test_upload_session_metadata_body_is_rejected_before_json_parsing(tmp_path) 
     app, _storage, thread = _app_thread(tmp_path)
     response = TestClient(app).post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         content=(b'{"filename":"' + b"x" * (64 * 1024) + b'"}'),
     )
 
@@ -706,7 +706,7 @@ def test_upload_session_rejects_unbounded_relative_path_depth(tmp_path) -> None:
     app, _storage, thread = _app_thread(tmp_path)
     response = TestClient(app).post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         json={
             "filename": "notes.txt",
             "relative_path": "/".join(["nested"] * 16 + ["notes.txt"]),

@@ -246,7 +246,7 @@ def test_home_assistant_download_stream_is_descriptor_pinned_and_hardened(
     client = TestClient(app)
     listed = client.get(
         f"/threads/{thread.thread_id}/artifacts",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
     assert listed.status_code == 200
     assert listed.json()[0]["stored_path"] == f"{thread.workspace_path}/report.html"
@@ -264,7 +264,7 @@ def test_home_assistant_download_stream_is_descriptor_pinned_and_hardened(
     monkeypatch.setattr(storage, "open_artifact", open_then_replace)
     response = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
 
     assert response.status_code == 200
@@ -287,7 +287,7 @@ def test_home_assistant_artifact_download_honours_a_single_if_range(tmp_path) ->
     target.write_bytes(b"0123456789")
     artifact = storage.sync_thread_artifacts(thread.thread_id)[0]
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret", "Range": "bytes=2-5"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": "bytes=2-5"}
     initial = client.get(f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}", headers=headers)
 
     assert initial.status_code == 206
@@ -303,7 +303,7 @@ def test_home_assistant_artifact_download_honours_a_single_if_range(tmp_path) ->
     assert replay.content == b"2345"
     unsatisfiable = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret", "Range": "bytes=20-"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": "bytes=20-"},
     )
     assert unsatisfiable.status_code == 416
     assert unsatisfiable.headers["content-range"] == "bytes */10"
@@ -311,13 +311,13 @@ def test_home_assistant_artifact_download_honours_a_single_if_range(tmp_path) ->
     assert unsatisfiable.headers["x-content-type-options"] == "nosniff"
     suffix = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret", "Range": "bytes=-3"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": "bytes=-3"},
     )
     assert suffix.status_code == 206
     assert suffix.content == b"789"
     open_ended = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret", "Range": "bytes=7-"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": "bytes=7-"},
     )
     assert open_ended.status_code == 206
     assert open_ended.content == b"789"
@@ -337,12 +337,12 @@ def test_home_assistant_artifact_download_honours_a_single_if_range(tmp_path) ->
     for malformed in ("bytes=0-1,3-4", "bytes=-0", "items=0-1"):
         response = client.get(
             f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-            headers={"Authorization": "Bearer secret", "Range": malformed},
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": malformed},
         )
         assert response.status_code == 416
     huge = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret", "Range": f"bytes={'9' * 5000}-"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": f"bytes={'9' * 5000}-"},
     )
     assert huge.status_code == 416
 
@@ -355,7 +355,7 @@ def test_home_assistant_empty_artifact_range_keeps_forced_safe_headers(tmp_path)
 
     response = TestClient(app).get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret", "Range": "bytes=0-"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1", "Range": "bytes=0-"},
     )
 
     assert response.status_code == 416
@@ -385,7 +385,7 @@ def test_home_assistant_artifact_hash_failure_closes_lease(tmp_path, monkeypatch
     )
     response = TestClient(app, raise_server_exceptions=False).get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
 
     assert response.status_code == 500
@@ -434,7 +434,7 @@ def test_home_assistant_download_snapshot_ignores_same_inode_size_changes(
     monkeypatch.setattr(storage, "open_artifact", open_then_mutate)
     response = TestClient(app).get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
 
     assert response.status_code == 200
@@ -455,7 +455,7 @@ def test_home_assistant_artifact_api_uses_generic_missing_and_invalid_errors(
 
     missing = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
     assert missing.status_code == 404
     assert missing.json() == {"detail": "artifact file not found"}
@@ -463,7 +463,7 @@ def test_home_assistant_artifact_api_uses_generic_missing_and_invalid_errors(
     target.symlink_to(state_root / "secret")
     invalid = client.get(
         f"/threads/{thread.thread_id}/artifacts/{artifact.artifact_id}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
     assert invalid.status_code == 400
     assert invalid.json() == {"detail": "invalid artifact location"}
@@ -489,7 +489,7 @@ def test_home_assistant_archive_route_packages_owned_sources_with_relative_metad
     client = TestClient(app)
     response = client.post(
         f"/threads/{thread.thread_id}/artifacts/workspace-archive",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
 
     assert response.status_code == 201
@@ -513,7 +513,7 @@ def test_home_assistant_archive_route_packages_owned_sources_with_relative_metad
 
     downloaded = client.get(
         f"/threads/{thread.thread_id}/artifacts/{payload['artifact_id']}",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
     assert downloaded.status_code == 200
     assert downloaded.content.startswith(b"PK")

@@ -124,13 +124,18 @@ class _SharedClient:
                 if method == "thread/resume"
                 else f"codex-thread-{self._thread_number}"
             )
-            sandbox = {
-                "type": "workspaceWrite",
-                "networkAccess": False,
-                "writableRoots": [params["cwd"]],
-                "excludeSlashTmp": True,
-                "excludeTmpdirEnvVar": True,
-            }
+            permission_profile = params["config"]["default_permissions"]
+            sandbox = (
+                {"type": "readOnly", "networkAccess": False}
+                if permission_profile == "ha_observe"
+                else {
+                    "type": "workspaceWrite",
+                    "networkAccess": False,
+                    "writableRoots": [params["cwd"]],
+                    "excludeSlashTmp": True,
+                    "excludeTmpdirEnvVar": True,
+                }
+            )
             return {
                 "thread": {
                     "id": thread_id,
@@ -152,6 +157,10 @@ class _SharedClient:
                 "approvalPolicy": params["approvalPolicy"],
                 "approvalsReviewer": params["approvalsReviewer"],
                 "sandbox": sandbox,
+                "activePermissionProfile": {
+                    "id": permission_profile,
+                    "extends": None,
+                },
             }
         if method == "turn/start":
             self._turn_number += 1
@@ -332,7 +341,7 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
 
         response = http.post(
             f"/threads/{thread.thread_id}/prompts",
-            headers={"Authorization": "Bearer secret"},
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
             json={"prompt": "Use the shared runtime", "client_request_id": "shared-1"},
         )
         assert response.status_code == 202
@@ -355,6 +364,7 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
         params for method, params in client.requests if method == "turn/start"
     )
     assert "sandbox" not in thread_request
+    assert thread_request["config"] == {"default_permissions": "ha_bridge"}
     assert "sandboxPolicy" not in turn_request
     _wait_until(
         lambda: not any(
@@ -460,7 +470,7 @@ def test_ha_readiness_fatal_causes_are_redacted_and_block_prompts(
         build_info=BuildInfo(codex_version=build_version),
     )
     thread = _seed_blocked_thread(app, name="Fatal gate")
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     with TestClient(app) as http:
         readiness = http.get("/ready", headers=headers)
@@ -484,7 +494,7 @@ def test_ha_readiness_fatal_causes_are_redacted_and_block_prompts(
 def test_ha_readiness_reports_ready_auth_required_and_degraded_catalogue(
     tmp_path: Path,
 ) -> None:
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     ready_client = _SharedClient()
     ready_app = _ha_app(tmp_path / "ready", ready_client)
@@ -528,7 +538,7 @@ def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(
     with TestClient(app) as http:
         response = http.get(
             "/ready",
-            headers={"Authorization": "Bearer secret"},
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         )
 
     assert response.status_code == 200
@@ -546,7 +556,7 @@ def test_auth_required_blocks_new_turn_until_generation_reconciles(
     client = _SharedClient()
     app = _ha_app(tmp_path, client)
     thread = _seed_blocked_thread(app, name="Authentication gate")
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     with TestClient(app) as http:
         initial_reads = client.calls.count("account/read")
@@ -571,7 +581,7 @@ def test_first_direct_chat_recovers_shared_catalogue_defaults(tmp_path: Path) ->
     client = _SharedClient()
     client.fail_catalogue = True
     app = _ha_app(tmp_path, client)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     with TestClient(app) as http:
         stale_project = http.get("/projects", headers=headers).json()[0]
@@ -616,7 +626,7 @@ def test_generation_change_interrupts_active_and_queued_shared_turns(
         mode=RunMode.EDIT,
         project_id=project.project_id,
     )
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     with TestClient(app) as http:
         active = http.post(

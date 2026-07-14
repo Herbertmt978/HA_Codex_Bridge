@@ -25,6 +25,7 @@ def get_auth_status(
 ) -> CodexAuthStatusRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     coordinator = getattr(request.app.state, "auth_coordinator", None)
@@ -46,6 +47,7 @@ def start_device_login(
 ) -> CodexAuthStatusRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     coordinator = getattr(request.app.state, "auth_coordinator", None)
@@ -66,6 +68,7 @@ def cancel_device_login(
 ) -> CodexAuthStatusRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     coordinator = getattr(request.app.state, "auth_coordinator", None)
@@ -87,6 +90,7 @@ def logout(
 ) -> CodexAuthStatusRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     coordinator = getattr(request.app.state, "auth_coordinator", None)

@@ -10,9 +10,37 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #f5f7fb;
-        color: #151b29;
+        color-scheme: light;
+        --primary-background-color: #f5f7fb;
+        --secondary-background-color: #eef2f7;
+        --card-background-color: #ffffff;
+        --ha-card-background: #ffffff;
+        --input-fill-color: #f0f3f7;
+        --divider-color: #d8dee8;
+        --primary-text-color: #172033;
+        --secondary-text-color: #596579;
+        --primary-color: #3b82f6;
+        --error-color: #d94f61;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
         font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          color-scheme: dark;
+          --primary-background-color: #111318;
+          --secondary-background-color: #191c23;
+          --card-background-color: #20242d;
+          --ha-card-background: #20242d;
+          --input-fill-color: #191c23;
+          --divider-color: #343a46;
+          --primary-text-color: #edf1f7;
+          --secondary-text-color: #aab3c2;
+          --primary-color: #75a9ff;
+          --error-color: #ff7c8b;
+        }
       }
 
       codex-bridge-panel {
@@ -24,7 +52,7 @@
   <body>
     <codex-bridge-panel></codex-bridge-panel>
     <script type="module">
-      import "../../custom_components/codex_bridge/frontend/codex-bridge-panel.js";
+      import "../src/codex-bridge-panel.js";
 
       const statusPayload = {
         connection_type: "supervisor",

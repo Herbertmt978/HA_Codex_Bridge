@@ -383,9 +383,10 @@ def test_sandbox_self_test_uses_managed_permission_profile_not_legacy_policy() -
     self_test = SANDBOX_SELF_TEST.read_text(encoding="utf-8")
     assert "permissionProfile/list" in self_test
     assert "ha_bridge" in self_test
+    assert "ha_observe" in self_test
+    assert "default_permissions" in self_test
     assert "activePermissionProfile" in self_test
     assert "sandboxPolicy" not in self_test
-    assert "workspaceWrite" not in self_test
 
 
 def test_app_bakes_managed_permission_profile_requirements() -> None:
@@ -395,6 +396,7 @@ def test_app_bakes_managed_permission_profile_requirements() -> None:
     assert re.search(r"default_permissions\s*=\s*[\"']ha_bridge[\"']", text)
     assert "[allowed_permission_profiles]" in text
     assert re.search(r"(?m)^ha_bridge\s*=\s*true\s*$", text)
+    assert re.search(r"(?m)^ha_observe\s*=\s*true\s*$", text)
     for built_in in (":read-only", ":workspace", ":danger-full-access"):
         assert re.search(
             rf"(?m)^[\"']{re.escape(built_in)}[\"']\s*=\s*false\s*$",
@@ -416,6 +418,24 @@ def test_runtime_bootstrap_writes_the_locked_ha_bridge_profile() -> None:
     assert "allow_local_binding = false" in text
     assert "allow_upstream_proxy = false" in text
     assert "managed Codex configuration could not be verified" in text
+
+
+def test_runtime_bootstrap_writes_a_read_only_observe_profile() -> None:
+    bootstrap = ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    text = bootstrap.read_text(encoding="utf-8")
+    observe = text.split("[permissions.ha_observe]", 1)[1].split(
+        "[permissions.ha_bridge]", 1
+    )[0]
+
+    assert "Home Assistant read-only workspace sandbox" in observe
+    assert "permissions.ha_observe.filesystem" in observe
+    assert '":minimal" = "read"' in observe
+    assert '[permissions.ha_observe.filesystem.":workspace_roots"]' in observe
+    assert '"." = "read"' in observe
+    assert 'enabled = false' in observe
+    assert 'allow_local_binding = false' in observe
+    assert 'allow_upstream_proxy = false' in observe
+    assert '"write"' not in observe
 
 
 def test_sandbox_probe_attests_final_state_without_exposing_procfs() -> None:

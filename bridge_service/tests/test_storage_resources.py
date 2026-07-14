@@ -593,7 +593,7 @@ def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> Non
 
     response = client.post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         json=upload_request,
     )
 
@@ -612,7 +612,7 @@ def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(app.state.storage, "create_upload_session", conflict)
     response = client.post(
         f"/threads/{thread.thread_id}/uploads",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         json=upload_request,
     )
     assert response.status_code == 409

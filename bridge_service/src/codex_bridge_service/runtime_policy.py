@@ -23,6 +23,7 @@ class RuntimeProtocolMismatchError(RuntimeError):
 class RuntimeModePolicy:
     thread_sandbox: Literal["read-only", "workspace-write"]
     approval_policy: Literal["on-request", "never"]
+    permission_profile: Literal["ha_observe", "ha_bridge"]
     sandbox_policy: dict[str, object]
 
 
@@ -31,6 +32,7 @@ def mode_policy(mode: RunMode, workspace: Path) -> RuntimeModePolicy:
         return RuntimeModePolicy(
             thread_sandbox="read-only",
             approval_policy="on-request",
+            permission_profile="ha_observe",
             sandbox_policy={"type": "readOnly", "networkAccess": False},
         )
     writable = {
@@ -43,6 +45,7 @@ def mode_policy(mode: RunMode, workspace: Path) -> RuntimeModePolicy:
     return RuntimeModePolicy(
         thread_sandbox="workspace-write",
         approval_policy=("never" if mode is RunMode.FULL_AUTO else "on-request"),
+        permission_profile="ha_bridge",
         sandbox_policy=writable,
     )
 
@@ -67,7 +70,10 @@ def validate_thread_result(
         or result.get("modelProvider") != "openai"
         or result.get("approvalPolicy") != policy.approval_policy
         or result.get("approvalsReviewer") != "user"
-        or not _sandbox_matches(result.get("sandbox"), policy, expected_cwd)
+        or not _active_permission_profile_matches(
+            result.get("activePermissionProfile"), policy
+        )
+        or not _sandbox_matches(result.get("sandbox"), policy)
         or not _thread_environment_matches(thread, expected_cwd)
         or not _instruction_sources_match(
             result.get("instructionSources", []), expected_cwd
@@ -266,29 +272,28 @@ def bounded_raw_text(value: object, limit_bytes: int) -> str | None:
     return encoded[:limit_bytes].decode("utf-8", errors="ignore")
 
 
-def _sandbox_matches(value: object, policy: RuntimeModePolicy, expected_cwd: Path) -> bool:
-    if not isinstance(value, dict):
-        return False
-    sandbox_type = value.get("type")
-    if sandbox_type == "readOnly":
-        return set(value) == {"type", "networkAccess"} and (
-            value.get("networkAccess") is False
-        )
-    if sandbox_type != "workspaceWrite" or set(value) != {
-        "type",
-        "networkAccess",
-        "writableRoots",
-        "excludeSlashTmp",
-        "excludeTmpdirEnvVar",
-    }:
-        return False
-    if value.get("networkAccess") is not False:
-        return False
-    if value.get("writableRoots") != [str(expected_cwd)]:
-        return False
-    return all(
-        value.get(name) is True for name in ("excludeSlashTmp", "excludeTmpdirEnvVar")
+def _active_permission_profile_matches(
+    value: object, policy: RuntimeModePolicy
+) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"id", "extends"}
+        and value.get("id") == policy.permission_profile
+        and value.get("extends") is None
     )
+
+
+def _sandbox_matches(value: object, policy: RuntimeModePolicy) -> bool:
+    if not isinstance(value, dict) or set(value) != set(policy.sandbox_policy):
+        return False
+    for key, expected in policy.sandbox_policy.items():
+        actual = value.get(key)
+        if isinstance(expected, bool):
+            if actual is not expected:
+                return False
+        elif type(actual) is not type(expected) or actual != expected:
+            return False
+    return True
 
 
 def _command_must_be_denied(params: dict[str, Any], *, expected_cwd: Path) -> bool:

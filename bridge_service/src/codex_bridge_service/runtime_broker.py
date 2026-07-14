@@ -1040,6 +1040,7 @@ class RuntimeBroker:
             "model": run.model,
             "approvalPolicy": policy.approval_policy,
             "approvalsReviewer": "user",
+            "config": {"default_permissions": policy.permission_profile},
         }
         if run.codex_thread_id:
             thread_params["threadId"] = run.codex_thread_id

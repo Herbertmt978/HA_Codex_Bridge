@@ -30,6 +30,13 @@ sandbox and constrained AppArmor child profile. They are limited to the selected
 workspace and have no network access to Home Assistant, Supervisor, other Apps,
 the LAN, or the internet.
 
+The Bridge selects a managed Codex permission profile for every new or resumed
+chat and verifies the profile provenance and resulting sandbox before starting
+a turn. **Observe** receives a read-only workspace. **Edit** and **Full auto**
+receive the selected writable workspace; Full auto changes approval handling,
+not its filesystem or network boundary. Any profile or sandbox mismatch fails
+closed.
+
 At startup, a fail-closed attestation verifies the locked binaries and profiles,
 namespace and mount isolation, capabilities, seccomp/no-new-privileges state,
 workspace-only writes, protected private state, hidden parent environment, and

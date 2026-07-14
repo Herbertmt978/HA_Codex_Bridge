@@ -69,6 +69,7 @@ def list_projects(
 ) -> list[ProjectRecord]:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
@@ -99,6 +100,7 @@ def create_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
@@ -146,6 +148,7 @@ def update_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -204,6 +207,7 @@ def archive_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -226,6 +230,7 @@ def restore_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -248,6 +253,7 @@ def delete_project(
 ) -> None:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -280,6 +286,7 @@ def browse_project_paths(
 ) -> PathBrowseRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -304,6 +311,7 @@ def create_project_folder(
 ) -> PathBrowseEntryRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:

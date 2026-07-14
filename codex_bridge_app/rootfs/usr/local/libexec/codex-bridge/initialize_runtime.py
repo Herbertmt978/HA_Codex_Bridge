@@ -24,6 +24,20 @@ TOKEN_PATTERN = re.compile(rb"[A-Za-z0-9_-]{64}")
 CONFIG_PAYLOAD = b"""cli_auth_credentials_store = "file"
 default_permissions = "ha_bridge"
 
+[permissions.ha_observe]
+description = "Home Assistant read-only workspace sandbox"
+
+[permissions.ha_observe.filesystem]
+":minimal" = "read"
+
+[permissions.ha_observe.filesystem.":workspace_roots"]
+"." = "read"
+
+[permissions.ha_observe.network]
+enabled = false
+allow_local_binding = false
+allow_upstream_proxy = false
+
 [permissions.ha_bridge]
 description = "Home Assistant workspace-only sandbox"
 

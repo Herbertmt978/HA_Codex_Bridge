@@ -5,7 +5,10 @@ from codex_bridge_service.app import create_app
 from codex_bridge_service.build_info import BuildInfo
 
 
-AUTHORIZATION = {"Authorization": "Bearer secret"}
+AUTHORIZATION = {
+    "Authorization": "Bearer secret",
+    "X-Codex-Bridge-Api": "1",
+}
 
 
 def test_readiness_requires_bridge_bearer_token(tmp_path) -> None:

@@ -122,7 +122,7 @@ def test_durable_event_errors_have_stable_resource_responses_for_mutations(
         model_catalog_probe=FakeModelCatalogProbe(),
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     project = app.state.storage.create_project(
         name="Thread project",
         root_path=str(tmp_path / "thread-project"),
@@ -432,7 +432,7 @@ def test_special_project_provisional_defaults_recover_with_fresh_catalog(
         initialize_special_projects=True,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     stale_direct = client.get("/projects", headers=headers).json()[0]
     stale_thread = client.post(
@@ -1006,7 +1006,10 @@ def test_runtime_owned_thread_and_project_deletes_return_typed_conflicts(
         runner_factory=BusyDeleteRunner,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {
+        "Authorization": "Bearer secret",
+        "X-Codex-Bridge-Api": "1",
+    }
     project = client.post(
         "/projects",
         headers=headers,
@@ -1056,7 +1059,10 @@ def test_home_assistant_delete_requires_runtime_owner(tmp_path) -> None:
         runner_factory=FakeRunner,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {
+        "Authorization": "Bearer secret",
+        "X-Codex-Bridge-Api": "1",
+    }
     project = client.post(
         "/projects",
         headers=headers,

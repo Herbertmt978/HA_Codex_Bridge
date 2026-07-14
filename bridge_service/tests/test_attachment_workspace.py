@@ -854,7 +854,7 @@ def test_home_assistant_hides_the_legacy_multipart_attachment_api(tmp_path) -> N
 
     response = client.post(
         f"/threads/{thread.thread_id}/attachments",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
         files={"file": ("notes.txt", b"hello", "text/plain")},
         data={"relative_path": "docs/notes.txt"},
     )

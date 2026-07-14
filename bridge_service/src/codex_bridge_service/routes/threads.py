@@ -88,6 +88,7 @@ def create_thread(
 ) -> ThreadViewRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     is_special_project = (
@@ -177,6 +178,7 @@ def list_threads(
 ) -> list[ThreadViewRecord]:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -195,6 +197,7 @@ def get_thread(
 ) -> ThreadViewRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -216,6 +219,7 @@ def update_thread(
 ) -> ThreadViewRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -269,6 +273,7 @@ def archive_thread(
 ) -> ThreadViewRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -289,6 +294,7 @@ def restore_thread(
 ) -> ThreadViewRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -309,6 +315,7 @@ def delete_thread(
 ) -> Response:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:

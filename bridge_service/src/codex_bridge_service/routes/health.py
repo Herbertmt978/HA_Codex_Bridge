@@ -25,6 +25,7 @@ def readiness_check(
 ) -> BridgeReadinessRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     build_info = request.app.state.build_info

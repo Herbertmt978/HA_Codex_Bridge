@@ -34,7 +34,11 @@ class UploadCreateRequest(BaseModel):
 
 
 def _require_token(request: Request, authorization: str | None) -> None:
-    require_bridge_token(authorization=authorization, expected_token=request.app.state.auth_token)
+    require_bridge_token(
+        authorization=authorization,
+        request=request,
+        expected_token=request.app.state.auth_token,
+    )
 
 
 def _upload_http_error(error: Exception) -> HTTPException:

@@ -12,7 +12,10 @@ from codex_bridge_service.event_store import EventWaitCapacityError
 from codex_bridge_service.models import RunMode, RuntimeProfile
 
 
-AUTHORIZATION = {"Authorization": "Bearer secret"}
+AUTHORIZATION = {
+    "Authorization": "Bearer secret",
+    "X-Codex-Bridge-Api": "1",
+}
 EXPECTED_BATCH_KEYS = {
     "events",
     "next_cursor",

@@ -273,13 +273,18 @@ class ValidatorBackedAppServer:
                 if method == "thread/resume"
                 else f"codex-thread-{self._thread_number}"
             )
-            sandbox = {
-                "type": "workspaceWrite",
-                "networkAccess": False,
-                "writableRoots": [params["cwd"]],
-                "excludeSlashTmp": True,
-                "excludeTmpdirEnvVar": True,
-            }
+            permission_profile = params["config"]["default_permissions"]
+            sandbox = (
+                {"type": "readOnly", "networkAccess": False}
+                if permission_profile == "ha_observe"
+                else {
+                    "type": "workspaceWrite",
+                    "networkAccess": False,
+                    "writableRoots": [params["cwd"]],
+                    "excludeSlashTmp": True,
+                    "excludeTmpdirEnvVar": True,
+                }
+            )
             return {
                 "thread": _thread(remote_thread_id, cwd=params["cwd"]),
                 "model": params["model"],
@@ -288,6 +293,10 @@ class ValidatorBackedAppServer:
                 "approvalPolicy": params["approvalPolicy"],
                 "approvalsReviewer": params["approvalsReviewer"],
                 "sandbox": sandbox,
+                "activePermissionProfile": {
+                    "id": permission_profile,
+                    "extends": None,
+                },
             }
         if method == "turn/start":
             self._turn_number += 1
@@ -549,17 +558,18 @@ def test_maximum_route_prompt_that_cannot_fit_event_envelope_is_rejected_safely(
 
 
 @pytest.mark.parametrize(
-    ("mode", "approval_policy"),
+    ("mode", "approval_policy", "permission_profile"),
     [
-        (RunMode.OBSERVE, "on-request"),
-        (RunMode.EDIT, "on-request"),
-        (RunMode.FULL_AUTO, "never"),
+        (RunMode.OBSERVE, "on-request", "ha_observe"),
+        (RunMode.EDIT, "on-request", "ha_bridge"),
+        (RunMode.FULL_AUTO, "never", "ha_bridge"),
     ],
 )
 def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandbox(
     tmp_path: Path,
     mode: RunMode,
     approval_policy: str,
+    permission_profile: str,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path, mode=mode)
     client = ValidatorBackedAppServer()
@@ -581,6 +591,7 @@ def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandb
                 "model": "gpt-5.6-codex",
                 "approvalPolicy": approval_policy,
                 "approvalsReviewer": "user",
+                "config": {"default_permissions": permission_profile},
                 "ephemeral": False,
             }
         ]
@@ -627,6 +638,7 @@ def test_thread_result_rejects_untrusted_nested_environment_before_turn_start(
         "cwd": cwd,
         "approvalPolicy": "on-request",
         "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_bridge", "extends": None},
         "sandbox": {
             "type": "workspaceWrite",
             "networkAccess": False,
@@ -676,6 +688,7 @@ def test_thread_result_rejects_bare_sandbox_echo(tmp_path: Path) -> None:
         "cwd": str(workspace),
         "approvalPolicy": "on-request",
         "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_bridge", "extends": None},
         "sandbox": "workspace-write",
     }
 
@@ -704,6 +717,10 @@ def test_thread_result_rejects_extra_sandbox_fields(
         "cwd": str(workspace),
         "approvalPolicy": policy.approval_policy,
         "approvalsReviewer": "user",
+        "activePermissionProfile": {
+            "id": policy.permission_profile,
+            "extends": None,
+        },
         "sandbox": sandbox,
     }
 
@@ -713,6 +730,128 @@ def test_thread_result_rejects_extra_sandbox_fields(
             expected_cwd=workspace,
             expected_model="gpt-5.6-codex",
             policy=policy,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mode", "field", "value"),
+    [
+        (RunMode.OBSERVE, "networkAccess", 0),
+        (RunMode.EDIT, "networkAccess", 0),
+        (RunMode.EDIT, "excludeSlashTmp", 1),
+        (RunMode.EDIT, "excludeTmpdirEnvVar", 1),
+    ],
+)
+def test_thread_result_rejects_integer_sandbox_booleans(
+    tmp_path: Path,
+    mode: RunMode,
+    field: str,
+    value: int,
+) -> None:
+    workspace = (tmp_path / "workspace").resolve()
+    policy = mode_policy(mode, workspace)
+    sandbox = deepcopy(policy.sandbox_policy)
+    sandbox[field] = value
+    result = {
+        "thread": _thread("typed-sandbox-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": policy.approval_policy,
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {
+            "id": policy.permission_profile,
+            "extends": None,
+        },
+        "sandbox": sandbox,
+    }
+
+    with pytest.raises(RuntimeProtocolMismatchError):
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=policy,
+        )
+
+
+def test_observe_result_rejects_workspace_write_before_turn_start(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.OBSERVE)
+    client = ValidatorBackedAppServer()
+    cwd = str(storage.resolve_workspace_path(thread.workspace_path))
+    result = {
+        "thread": _thread("writable-observe-thread", cwd=cwd),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": cwd,
+        "approvalPolicy": "on-request",
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_observe", "extends": None},
+        "sandbox": {
+            "type": "workspaceWrite",
+            "networkAccess": False,
+            "writableRoots": [cwd],
+            "excludeSlashTmp": True,
+            "excludeTmpdirEnvVar": True,
+        },
+    }
+    _PROTOCOL_VALIDATOR.validate_client_response("thread/start", result=result)
+    client.script("thread/start", result)
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Inspect without changing files",
+            client_request_id="observe-must-be-read-only",
+        )
+        _wait_until(
+            lambda: any(
+                event.event_type == "run.failed"
+                for event in storage.list_thread_events(thread.thread_id)
+            )
+        )
+
+        assert _requests(client, "turn/start") == []
+        assert storage.load_thread(thread.thread_id).status == "error"
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize(
+    "active_profile",
+    [
+        None,
+        {"id": "ha_bridge", "extends": None},
+        {"id": "ha_observe"},
+        {"id": "ha_observe", "extends": ":read-only"},
+    ],
+    ids=["missing", "wrong-id", "missing-provenance", "unexpected-parent"],
+)
+def test_observe_result_requires_exact_managed_profile_provenance(
+    tmp_path: Path,
+    active_profile: dict[str, object] | None,
+) -> None:
+    workspace = (tmp_path / "workspace").resolve()
+    result: dict[str, object] = {
+        "thread": _thread("observe-profile-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": "on-request",
+        "approvalsReviewer": "user",
+        "sandbox": {"type": "readOnly", "networkAccess": False},
+    }
+    if active_profile is not None:
+        result["activePermissionProfile"] = active_profile
+
+    with pytest.raises(RuntimeProtocolMismatchError):
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=mode_policy(RunMode.OBSERVE, workspace),
         )
 
 
@@ -813,6 +952,7 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
                 "model": "gpt-5.6-codex",
                 "approvalPolicy": "on-request",
                 "approvalsReviewer": "user",
+                "config": {"default_permissions": "ha_bridge"},
             }
         ]
         assert _requests(client, "turn/start")[-1] == {

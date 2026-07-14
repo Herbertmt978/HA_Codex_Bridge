@@ -263,6 +263,87 @@ test("keeps the active approval actions visible at the 1280px desktop layout", a
   expect(actionIsVisible).toBe(true);
 });
 
+test("uses a Codex-like reading workspace with an adjacent context rail and mobile chat-first order", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+
+  const desktop = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const rect = (selector) => root?.querySelector(selector)?.getBoundingClientRect();
+    const main = rect(".main-pane");
+    const side = rect(".side-pane");
+    const messages = rect("#message-list");
+    const composerElement = root?.querySelector(".composer-shell");
+    const composer = composerElement?.getBoundingClientRect();
+    const toolbar = root?.querySelector("#compact-toolbar");
+    const bubble = root?.querySelector(".bubble-text");
+    return {
+      contextIsAdjacent: Boolean(main && side && side.left >= main.right - 1 && Math.abs(side.top - main.top) < 2),
+      readingMeasure: messages?.width || 0,
+      composerMeasure: composer?.width || 0,
+      toolbarInComposer: Boolean(toolbar && composerElement?.contains(toolbar)),
+      proseFont: bubble ? getComputedStyle(bubble).fontFamily : "",
+    };
+  });
+  expect(desktop.contextIsAdjacent).toBe(true);
+  expect(desktop.readingMeasure).toBeLessThanOrEqual(900);
+  expect(desktop.composerMeasure).toBeLessThanOrEqual(900);
+  expect(desktop.toolbarInComposer).toBe(true);
+  expect(desktop.proseFont).not.toMatch(/monospace|consolas|courier/i);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(220);
+  const navigationToggle = panel.locator("#mobile-nav-toggle");
+  const contextToggle = panel.locator("#mobile-context-toggle");
+  const navigation = panel.locator("#workspace-drawer");
+  const context = panel.locator("#context-drawer");
+  const scrim = panel.locator("#mobile-drawer-scrim");
+  await expect(navigationToggle).toBeVisible();
+  await expect(contextToggle).toBeVisible();
+  await expect(navigationToggle).toHaveAccessibleName("Chats");
+  await expect(contextToggle).toHaveAccessibleName("Context");
+  await expect(navigation).toHaveAttribute("aria-hidden", "true");
+  await expect(context).toHaveAttribute("aria-hidden", "true");
+  await expect(scrim).toBeHidden();
+
+  const closedMobile = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const shell = root?.querySelector(".shell");
+    const main = root?.querySelector(".main-pane")?.getBoundingClientRect();
+    const rail = root?.querySelector(".rail-pane")?.getBoundingClientRect();
+    const side = root?.querySelector(".side-pane")?.getBoundingClientRect();
+    return {
+      chatFillsViewport: Boolean(main && main.height >= window.innerHeight - 2),
+      noStackedPanels: Boolean(shell && shell.scrollHeight <= shell.clientHeight + 1 && rail && side && rail.right <= 0 && side.left >= window.innerWidth),
+    };
+  });
+  expect(closedMobile).toEqual({ chatFillsViewport: true, noStackedPanels: true });
+
+  await navigationToggle.click();
+  await expect(navigationToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(navigation).toHaveAttribute("aria-hidden", "false");
+  await expect(scrim).toBeVisible();
+  await expect(navigation.locator("#new-direct-chat-button")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(navigationToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(scrim).toBeHidden();
+  await expect(navigationToggle).toBeFocused();
+
+  await navigationToggle.click();
+  await navigation.locator('[data-action="select-thread"]').first().click();
+  await expect(navigationToggle).toHaveAttribute("aria-expanded", "false");
+
+  await contextToggle.click();
+  await expect(contextToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(context).toHaveAttribute("aria-hidden", "false");
+  await expect(scrim).toBeVisible();
+  await scrim.click({ position: { x: 10, y: 420 } });
+  await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(contextToggle).toBeFocused();
+});
+
 test("retries a dropped prompt response with one stable client request id", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
@@ -324,34 +405,93 @@ test("reconnects an interrupted interaction stream and keeps approvals keyboard-
   await expect(panel.locator('[data-interaction-id="int_question_harness"]')).toBeVisible();
 });
 
-test("passes axe checks with live decisions at desktop and mobile widths", async ({ page }, testInfo) => {
-  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
-  await selectHarnessThread(page);
-  const panel = page.locator("codex-bridge-panel");
-  await expect(panel.locator('[data-interaction-id="int_command_harness"]')).toBeVisible();
-  await expect(panel.locator('[data-interaction-id="int_question_harness"]')).toBeVisible();
+test("keeps every pending decision action reachable at desktop and mobile widths", async ({ page }) => {
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
 
-  for (const viewport of [
-    { name: "desktop", width: 1280, height: 1000 },
-    { name: "mobile", width: 390, height: 844 },
-  ]) {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    for (const viewport of [
+      { width: 1280, height: 1000 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const commandActions = panel.locator('[data-interaction-id="int_command_harness"] .decision-actions button');
+      for (let index = 0; index < await commandActions.count(); index += 1) {
+        const action = commandActions.nth(index);
+        await action.focus();
+        await expect(action).toBeFocused();
+        await expect.poll(() => action.evaluate((node) => {
+          const regionBox = node.closest("#interaction-region")?.getBoundingClientRect();
+          const actionBox = node.getBoundingClientRect();
+          return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+        })).toBe(true);
+      }
+
+      const question = panel.locator('[data-interaction-id="int_question_harness"]');
+      await question.getByLabel("Source and tests").check();
+      const answer = question.locator('[data-action="answer-interaction"]');
+      await answer.focus();
+      await expect(answer).toBeFocused();
+      await expect.poll(() => answer.evaluate((node) => {
+        const regionBox = node.closest("#interaction-region")?.getBoundingClientRect();
+        const actionBox = node.getBoundingClientRect();
+        return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+      })).toBe(true);
+    }
+  }
+});
+
+test("passes axe checks with live decisions at desktop and mobile widths", async ({ page }, testInfo) => {
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator(".interaction-summary")).toContainText("Codex needs your input");
+    await expect(panel.locator(".interaction-summary-count")).toContainText("2 pending decisions");
     await expect(panel.locator('[data-interaction-id="int_command_harness"]')).toBeVisible();
     await expect(panel.locator('[data-interaction-id="int_question_harness"]')).toBeVisible();
-    const results = await new AxeBuilder({ page })
-      .include("codex-bridge-panel")
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .analyze();
-    expect(
-      results.violations.map((violation) => ({
-        id: violation.id,
-        impact: violation.impact,
-        targets: violation.nodes.flatMap((node) => node.target),
-      }))
-    ).toEqual([]);
-    await page.screenshot({
-      path: testInfo.outputPath(`task17-${viewport.name}.png`),
-      fullPage: true,
-    });
+
+    for (const viewport of [
+      { name: "desktop", width: 1280, height: 1000 },
+      { name: "mobile", width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.waitForTimeout(220);
+      await expect(panel.locator('[data-interaction-id="int_command_harness"]')).toBeVisible();
+      await expect(panel.locator('[data-interaction-id="int_question_harness"]')).toBeVisible();
+      const results = await new AxeBuilder({ page })
+        .include("codex-bridge-panel")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      expect(
+        results.violations.map((violation) => ({
+          id: violation.id,
+          impact: violation.impact,
+          targets: violation.nodes.flatMap((node) => node.target),
+        }))
+      ).toEqual([]);
+      const theme = await page.evaluate(() => {
+        const panel = document.querySelector("codex-bridge-panel");
+        const root = panel?.shadowRoot;
+        const shell = root?.querySelector(".shell");
+        const composer = root?.querySelector(".composer-shell");
+        return {
+          colorScheme: getComputedStyle(document.documentElement).colorScheme,
+          panelBackground: root ? getComputedStyle(panel).getPropertyValue("--panel-bg").trim() : "",
+          shellBackground: shell ? getComputedStyle(shell).backgroundColor : "",
+          composerBottomPadding: composer ? getComputedStyle(composer).paddingBottom : "",
+        };
+      });
+      expect(theme.colorScheme).toBe(scheme);
+      expect(theme.panelBackground).not.toBe("");
+      expect(theme.composerBottomPadding).not.toBe("0px");
+      await page.screenshot({
+        path: testInfo.outputPath(`task17-${scheme}-${viewport.name}.png`),
+        fullPage: true,
+      });
+    }
   }
 });

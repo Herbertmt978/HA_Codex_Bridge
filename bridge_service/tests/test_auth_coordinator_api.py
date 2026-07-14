@@ -20,7 +20,10 @@ from codex_bridge_service.models import (
 from codex_bridge_service.limits import AppServerLimitsProbe
 
 
-AUTHORIZATION = {"Authorization": "Bearer secret"}
+AUTHORIZATION = {
+    "Authorization": "Bearer secret",
+    "X-Codex-Bridge-Api": "1",
+}
 
 
 def _status(

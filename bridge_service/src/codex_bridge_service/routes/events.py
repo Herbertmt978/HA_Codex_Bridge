@@ -21,6 +21,7 @@ def stream_thread_events(
 ) -> StreamingResponse:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -56,6 +57,7 @@ def replay_thread_events(
 ) -> list[ThreadEventRecord]:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:

@@ -1247,27 +1247,49 @@ var INTERACTION_ERROR_CODES = /* @__PURE__ */ new Set([
   "runtime_request_conflict",
   "turn_changed"
 ]);
+var ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
+var ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
+function artifactPreviewSizeState(artifact) {
+  const sizeBytes = artifact?.size_bytes;
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
+    return "unknown";
+  }
+  return sizeBytes <= ARTIFACT_PREVIEW_MAX_BYTES ? "within-limit" : "oversized";
+}
+function isAutoPreviewCandidate(artifact) {
+  return artifactPreviewSizeState(artifact) === "within-limit" && previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary";
+}
+function previewUnavailableMessage(sizeState) {
+  if (sizeState === "oversized") {
+    return `Preview limited to files up to ${ARTIFACT_PREVIEW_MAX_LABEL}. Download it to view the full file.`;
+  }
+  return "Preview unavailable because the file size is unknown. Download it to view the full file.";
+}
 var template = document.createElement("template");
 template.innerHTML = `
   <style>
     :host {
       --panel-bg: var(--primary-background-color, #f5f7fb);
-      --surface-bg: var(--card-background-color, #ffffff);
-      --surface-alt: color-mix(in srgb, var(--surface-bg) 92%, #eef3fb 8%);
-      --surface-muted: color-mix(in srgb, var(--surface-bg) 96%, #f4f7fb 4%);
-      --border-color: color-mix(in srgb, var(--divider-color, #d7dde7) 85%, transparent);
+      --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
+      --surface-alt: var(--secondary-background-color, color-mix(in srgb, var(--surface-bg) 94%, var(--panel-bg) 6%));
+      --surface-muted: var(--input-fill-color, var(--secondary-background-color, color-mix(in srgb, var(--surface-bg) 92%, var(--panel-bg) 8%)));
+      --border-color: var(--divider-color, color-mix(in srgb, var(--secondary-text-color, #667085) 24%, var(--surface-bg) 76%));
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
-      --brand-cyan: #18c8d8;
-      --brand-blue: #3182f6;
-      --brand-violet: #8b5cf6;
+      --brand-cyan: #64748b;
+      --brand-blue: #475569;
+      --brand-violet: #475569;
       --brand-emerald: #1dbf73;
       --brand-amber: #f59e0b;
-      --accent-soft: color-mix(in srgb, var(--accent-color) 12%, white 88%);
-      --danger-color: #e25563;
-      --shadow-soft: 0 18px 42px rgba(15, 23, 42, 0.08);
-      --shadow-card: 0 10px 28px rgba(15, 23, 42, 0.08);
+      --accent-soft: color-mix(in srgb, var(--accent-color) 12%, var(--surface-bg) 88%);
+      --danger-color: var(--error-color, #e25563);
+      --accent-surface: color-mix(in srgb, var(--accent-color) 9%, var(--surface-bg) 91%);
+      --danger-surface: color-mix(in srgb, var(--danger-color) 11%, var(--surface-bg) 89%);
+      --warning-surface: color-mix(in srgb, var(--brand-amber) 10%, var(--surface-bg) 90%);
+      --success-surface: color-mix(in srgb, var(--brand-emerald) 10%, var(--surface-bg) 90%);
+      --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06);
+      --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
       height: 100%;
       color: var(--text-color);
@@ -2158,6 +2180,7 @@ template.innerHTML = `
       min-height: 340px;
       padding: 8px 16px 2px;
       overflow: auto;
+      scroll-padding-block: 52px 8px;
     }
 
     .interaction-region:empty {
@@ -2167,6 +2190,7 @@ template.innerHTML = `
 
     .interaction-card {
       min-width: 0;
+      scroll-margin-top: 52px;
     }
 
     .approval-card,
@@ -2868,7 +2892,410 @@ template.innerHTML = `
       background: color-mix(in srgb, var(--danger-color) 8%, white 92%);
     }
 
-    @media (max-width: 1280px) {
+    /* The workspace intentionally uses a quiet, mostly flat Codex-like hierarchy.
+     * These rules sit near the responsive rules so stateful controls above retain their
+     * existing selectors and behaviour while sharing one visual language. */
+    .shell {
+      grid-template-columns: 224px minmax(0, 1fr) 260px;
+      gap: 0;
+      padding: 0;
+      background: var(--panel-bg);
+    }
+
+    .pane {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      background: var(--surface-bg);
+    }
+
+    .pane::before {
+      display: none;
+    }
+
+    .rail-pane,
+    .side-pane {
+      background: var(--surface-muted);
+    }
+
+    .rail-pane {
+      border-right: 1px solid var(--border-color);
+    }
+
+    .side-pane {
+      border-left: 1px solid var(--border-color);
+    }
+
+    .rail-header,
+    .main-header,
+    .side-header {
+      min-height: 56px;
+      padding: 12px 14px;
+      background: transparent;
+    }
+
+    .main-header {
+      padding-inline: max(20px, calc((100% - 900px) / 2));
+    }
+
+    .eyeline,
+    .browser-label,
+    .section-label,
+    .setting-label,
+    .limit-label,
+    .mini-limit-name {
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 650;
+    }
+
+    .account-pill,
+    .runtime-item,
+    .tool-chip,
+    .attachment-chip {
+      border-radius: 7px;
+      background: var(--surface-bg);
+      color: var(--muted-color);
+    }
+
+    .account-pill {
+      border-color: var(--border-color);
+    }
+
+    .rail-actions,
+    .forms-stack {
+      padding: 10px;
+      background: transparent;
+    }
+
+    .tool-button {
+      min-height: 34px;
+      padding: 8px 9px;
+      border-radius: 6px;
+    }
+
+    .tool-button:hover,
+    .chat-select:hover {
+      background: color-mix(in srgb, var(--accent-color) 7%, var(--surface-bg) 93%);
+    }
+
+    .project-head.active,
+    .chat-select.active {
+      background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-bg) 90%);
+      box-shadow: inset 2px 0 0 var(--accent-color);
+    }
+
+    .project-head.active .row-meta,
+    .chat-select.active .row-meta,
+    .chat-select.active .timestamp {
+      color: var(--text-color);
+    }
+
+    .chat-select.active {
+      border-color: transparent;
+    }
+
+    .main-pane {
+      background: var(--surface-bg);
+    }
+
+    .main-top,
+    .interaction-region,
+    .message-list {
+      width: min(calc(100% - 32px), 900px);
+      margin-inline: auto;
+    }
+
+    .main-top {
+      max-height: min(25vh, 220px);
+      padding: 10px 0 0;
+    }
+
+    .runtime-item {
+      min-height: 24px;
+      font-weight: 600;
+    }
+
+    .onboarding-shell {
+      gap: 4px;
+      padding: 8px 10px;
+      border-color: var(--border-color);
+      border-radius: 7px;
+      background: var(--surface-muted);
+      box-shadow: none;
+    }
+
+    .onboarding-shell:not(:has(.onboarding-stage.pending)) {
+      display: flex;
+      align-items: center;
+      min-height: 34px;
+    }
+
+    .onboarding-shell:not(:has(.onboarding-stage.pending)) #onboarding {
+      display: none;
+    }
+
+    .onboarding-shell:not(:has(.onboarding-stage.pending)) .onboarding-heading {
+      width: 100%;
+    }
+
+    .onboarding-checklist {
+      gap: 6px;
+    }
+
+    .onboarding-stage {
+      padding: 7px;
+      border-radius: 6px;
+      background: var(--surface-bg);
+    }
+
+    .compact-toolbar {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+      gap: 8px;
+      padding-top: 2px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .toolbar-card {
+      padding: 7px 0 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .toolbar-card.controls {
+      border-left: 1px solid var(--border-color);
+      padding-left: 10px;
+    }
+
+    .compact-select {
+      height: 28px;
+      border-radius: 6px;
+      background: var(--surface-bg);
+    }
+
+    .mini-limit-fill,
+    .send-button,
+    .auth-actions button.primary,
+    .decision-actions button[data-decision="accept"],
+    .decision-actions button[data-action="answer-interaction"],
+    .banner-action.primary {
+      background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
+      box-shadow: none;
+    }
+
+    .send-button {
+      min-width: 42px;
+      height: 42px;
+      padding: 0 13px;
+      border-radius: 8px;
+    }
+
+    .send-button:hover {
+      background: color-mix(in srgb, var(--accent-color) 64%, black 36%);
+      transform: translateY(-1px);
+    }
+
+    .message-list {
+      padding: 14px 0 6px;
+      gap: 16px;
+    }
+
+    .message {
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .message.user {
+      grid-template-columns: minmax(0, 1fr) 24px;
+    }
+
+    .avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--surface-muted);
+      border-color: var(--border-color);
+      box-shadow: none;
+      color: var(--muted-color);
+    }
+
+    .message.user .avatar {
+      background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-bg) 88%);
+      border-color: color-mix(in srgb, var(--accent-color) 26%, var(--border-color) 74%);
+      color: var(--accent-color);
+    }
+
+    .bubble,
+    .message.user .bubble {
+      max-width: min(760px, 100%);
+      padding: 11px 12px;
+      border-radius: 8px;
+      background: var(--surface-bg);
+      border-color: var(--border-color);
+      box-shadow: none;
+    }
+
+    .message.user .bubble {
+      background: var(--accent-surface);
+    }
+
+    .bubble-text {
+      font-family: var(--paper-font-body1_-_font-family, var(--primary-font-family, system-ui, sans-serif));
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .composer-shell {
+      position: sticky;
+      z-index: 2;
+      bottom: 12px;
+      width: min(calc(100% - 32px), 900px);
+      margin: 8px auto 12px;
+      padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--text-color) 10%, transparent);
+    }
+
+    .composer textarea {
+      min-height: 88px;
+      border-radius: 7px;
+      background: var(--surface-muted);
+      box-shadow: none;
+    }
+
+    .interaction-summary {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+      padding: 2px 2px 4px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+    }
+
+    .interaction-summary strong {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .interaction-summary-count,
+    .interaction-summary-cue {
+      color: var(--muted-color);
+      font-size: 11px;
+    }
+
+    .interaction-summary-cue {
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .error-strip {
+      background: var(--danger-surface);
+      color: var(--text-color);
+    }
+
+    .status-banner {
+      background: var(--warning-surface);
+      color: var(--text-color);
+    }
+
+    .status-banner.error {
+      background: var(--danger-surface);
+      color: var(--text-color);
+    }
+
+    .approval-card,
+    .user-input-card {
+      background: var(--surface-bg);
+      box-shadow: none;
+    }
+
+    .approval-card .decision-command,
+    .approval-card .decision-scope,
+    .user-input-card fieldset,
+    .mode-boundaries {
+      background: var(--surface-alt);
+    }
+
+    .status-pill.running,
+    .message.user .avatar,
+    .progress-dot.active {
+      background: var(--accent-surface);
+    }
+
+    .status-pill.idle,
+    .progress-dot.complete,
+    .tool-chip.available {
+      background: var(--success-surface);
+    }
+
+    .status-pill.error,
+    .progress-dot.error,
+    .stop-button {
+      background: var(--danger-surface);
+    }
+
+    .runtime-notice {
+      background: var(--warning-surface);
+      color: var(--text-color);
+    }
+
+    .auth-plan {
+      color: var(--text-color);
+      background: var(--surface-alt);
+    }
+
+    .toolbar-card,
+    .compact-select,
+    .copy-button,
+    .attachment-chip,
+    .tool-chip,
+    .file-row.active,
+    .browser-card,
+    .panel-form {
+      background: var(--surface-bg);
+      box-shadow: none;
+    }
+
+    .onboarding-shell,
+    .onboarding-stage {
+      background: var(--surface-muted);
+      box-shadow: none;
+    }
+
+    .side-scroll {
+      gap: 0;
+      padding: 0;
+    }
+
+    .side-section {
+      gap: 8px;
+      padding: 12px 14px;
+      border: 0;
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .mobile-header-actions,
+    .mobile-drawer-scrim {
+      display: none;
+    }
+
+    @media (max-width: 1120px) {
       .shell {
         grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) clamp(260px, 34vh, 340px);
@@ -2887,20 +3314,112 @@ template.innerHTML = `
 
     @media (max-width: 880px) {
       .shell {
-        grid-template-columns: 1fr;
-        grid-template-rows: none;
-        height: auto;
-        max-height: none;
-        min-height: 100%;
-        overflow: auto;
+        display: block;
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 100dvh;
+        overflow: hidden;
+      }
+
+      .main-pane {
+        min-height: 100dvh;
+        height: 100dvh;
+        position: relative;
+        z-index: 1;
+      }
+
+      .main-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        padding-inline: 16px;
+      }
+
+      .main-header .status-text {
+        display: none;
+      }
+
+      .mobile-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 0;
+      }
+
+      .main-header .row-actions {
+        gap: 4px;
+      }
+
+      .mobile-drawer-toggle {
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: var(--surface-muted);
+      }
+
+      .mobile-drawer-toggle svg {
+        pointer-events: none;
       }
 
       .rail-pane,
-      .main-pane,
       .side-pane {
-        grid-column: 1;
-        grid-row: auto;
-        min-height: 360px;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        z-index: 4;
+        width: min(86vw, 324px);
+        min-height: 100dvh;
+        height: 100dvh;
+        transition: transform 180ms ease, box-shadow 180ms ease;
+        box-shadow: 0 12px 32px color-mix(in srgb, var(--text-color) 18%, transparent);
+        will-change: transform;
+      }
+
+      .rail-pane {
+        left: 0;
+        border-right: 1px solid var(--border-color);
+        transform: translateX(-105%);
+      }
+
+      .side-pane {
+        right: 0;
+        border-left: 1px solid var(--border-color);
+        transform: translateX(105%);
+      }
+
+      .rail-pane.drawer-open,
+      .side-pane.drawer-open {
+        transform: translateX(0);
+      }
+
+      .mobile-drawer-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: 0;
+        background: color-mix(in srgb, var(--text-color) 28%, transparent);
+        cursor: default;
+        opacity: 0;
+        transition: opacity 180ms ease;
+      }
+
+      .mobile-drawer-scrim[hidden] {
+        display: none;
+      }
+
+      .mobile-drawer-scrim.open {
+        opacity: 1;
+      }
+
+      .main-top,
+      .interaction-region,
+      .message-list,
+      .composer-shell {
+        width: calc(100% - 24px);
       }
 
       .compact-toolbar {
@@ -2926,10 +3445,21 @@ template.innerHTML = `
       }
 
       .interaction-region {
-        flex: none;
-        max-height: none;
+        flex: 0 1 auto;
+        max-height: 38vh;
         min-height: 0;
-        padding-inline: 10px;
+        padding-inline: 0;
+      }
+
+      .interaction-summary {
+        flex-wrap: wrap;
+        gap: 4px 8px;
+      }
+
+      .interaction-summary-cue {
+        width: 100%;
+        margin-left: 0;
+        text-align: left;
       }
 
       .main-top {
@@ -2938,8 +3468,13 @@ template.innerHTML = `
       }
 
       .message-list {
-        flex: none;
-        min-height: 180px;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+
+      .composer-shell {
+        bottom: 8px;
+        margin-block: 8px;
       }
 
       .decision-actions button {
@@ -2959,7 +3494,7 @@ template.innerHTML = `
     }
   </style>
   <div class="shell">
-    <aside class="pane rail-pane">
+    <aside class="pane rail-pane" id="workspace-drawer">
       <div class="rail-header">
         <div class="title-block">
           <span class="eyeline">Workspace</span>
@@ -2995,6 +3530,10 @@ template.innerHTML = `
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
         </div>
+        <div class="mobile-header-actions" aria-label="Panel navigation">
+          <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
+          <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-context" id="mobile-context-toggle" aria-label="Context" aria-controls="context-drawer" aria-expanded="false"></button>
+        </div>
         <div class="row-actions">
           <div class="status-text" id="thread-status-text"></div>
           <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
@@ -3012,7 +3551,6 @@ template.innerHTML = `
           <div id="onboarding"></div>
         </section>
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
-        <div class="compact-toolbar" id="compact-toolbar"></div>
       </div>
       <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -3029,13 +3567,16 @@ template.innerHTML = `
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-status"></textarea>
           <button class="send-button" type="button" data-action="send-prompt" id="send-button" aria-describedby="composer-status"></button>
         </div>
+        <div class="compact-toolbar" id="compact-toolbar"></div>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
       </div>
     </main>
 
-    <aside class="pane side-pane">
+    <button class="mobile-drawer-scrim" type="button" data-action="close-mobile-drawer" id="mobile-drawer-scrim" aria-label="Close panel drawer" hidden></button>
+
+    <aside class="pane side-pane" id="context-drawer">
       <div class="side-header">
         <div class="title-block">
           <span class="eyeline">Context</span>
@@ -3101,7 +3642,9 @@ var icons = {
   archive: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="M9 11h6"></path><path d="M4 4h16v3H4z"></path>'),
   restore: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="m9 14 3-3 3 3"></path><path d="M12 11v7"></path><path d="M4 4h16v3H4z"></path>'),
   trash: iconSvg('<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path>'),
-  package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>')
+  package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>'),
+  menu: iconSvg('<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>'),
+  panelRight: iconSvg('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path>')
 };
 var CodexBridgePanel = class extends HTMLElement {
   constructor() {
@@ -3196,9 +3739,18 @@ var CodexBridgePanel = class extends HTMLElement {
       direct: false,
       archived: true
     };
+    this._mobileDrawer = null;
+    this._mobileDrawerReturnFocus = null;
+    this._mobileDrawerMedia = null;
+    this._mobileDrawerMediaListener = null;
+    this._mobileDrawerMediaListening = false;
   }
   connectedCallback() {
     this._installStaticUi();
+    if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
+      this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
+      this._mobileDrawerMediaListening = true;
+    }
     if (this._config && this._hass) {
       this._startSystemEventSubscription();
     }
@@ -3215,6 +3767,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
     this._revokePreviewUrl();
+    this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
+    this._mobileDrawerMediaListening = false;
   }
   set hass(value) {
     this._hass = value;
@@ -3275,6 +3829,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
@@ -3282,6 +3838,20 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.addEventListener("keydown", (event) => this._handleKeyDown(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
+    this._mobileDrawerMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px)") : {
+      matches: false,
+      addEventListener() {
+      },
+      removeEventListener() {
+      }
+    };
+    this._mobileDrawerMediaListener = () => {
+      this._syncMobileDrawer();
+      queueMicrotask(() => this._scrollInteractionTargetIntoView(this.shadowRoot.activeElement));
+    };
+    this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
+    this._mobileDrawerMediaListening = true;
+    this._syncMobileDrawer();
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
       if (files.length) {
@@ -3297,6 +3867,80 @@ var CodexBridgePanel = class extends HTMLElement {
       event.target.value = "";
     });
   }
+  _toggleMobileDrawer(drawer, trigger) {
+    if (!this._mobileDrawerMedia?.matches) {
+      return;
+    }
+    if (this._mobileDrawer === drawer) {
+      this._closeMobileDrawer();
+      return;
+    }
+    this._mobileDrawer = drawer;
+    this._mobileDrawerReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+    this._syncMobileDrawer();
+    const drawerElement = this.shadowRoot.getElementById(
+      drawer === "navigation" ? "workspace-drawer" : "context-drawer"
+    );
+    queueMicrotask(() => {
+      const firstControl = drawerElement?.querySelector("button:not(:disabled), input:not(:disabled), select:not(:disabled)");
+      firstControl?.focus();
+    });
+  }
+  _closeMobileDrawer({ restoreFocus = true } = {}) {
+    if (!this._mobileDrawer) {
+      return;
+    }
+    const returnFocus = this._mobileDrawerReturnFocus;
+    this._mobileDrawer = null;
+    this._mobileDrawerReturnFocus = null;
+    this._syncMobileDrawer();
+    if (restoreFocus) {
+      queueMicrotask(() => returnFocus?.focus());
+    }
+  }
+  _syncMobileDrawer() {
+    const navigation = this.shadowRoot.getElementById("workspace-drawer");
+    const context = this.shadowRoot.getElementById("context-drawer");
+    const main = this.shadowRoot.querySelector(".main-pane");
+    const scrim = this.shadowRoot.getElementById("mobile-drawer-scrim");
+    const navigationToggle = this.shadowRoot.getElementById("mobile-nav-toggle");
+    const contextToggle = this.shadowRoot.getElementById("mobile-context-toggle");
+    const mobile = Boolean(this._mobileDrawerMedia?.matches);
+    if (!mobile) {
+      this._mobileDrawer = null;
+      this._mobileDrawerReturnFocus = null;
+      for (const drawer of [navigation, context]) {
+        drawer?.classList.remove("drawer-open");
+        drawer?.removeAttribute("aria-hidden");
+        if (drawer) drawer.inert = false;
+      }
+      if (main) main.inert = false;
+      scrim?.classList.remove("open");
+      if (scrim) scrim.hidden = true;
+      navigationToggle?.setAttribute("aria-expanded", "false");
+      contextToggle?.setAttribute("aria-expanded", "false");
+      return;
+    }
+    const navigationOpen = this._mobileDrawer === "navigation";
+    const contextOpen = this._mobileDrawer === "context";
+    navigation?.classList.toggle("drawer-open", navigationOpen);
+    context?.classList.toggle("drawer-open", contextOpen);
+    if (navigation) {
+      navigation.inert = !navigationOpen;
+      navigation.setAttribute("aria-hidden", String(!navigationOpen));
+    }
+    if (context) {
+      context.inert = !contextOpen;
+      context.setAttribute("aria-hidden", String(!contextOpen));
+    }
+    if (main) main.inert = Boolean(this._mobileDrawer);
+    if (scrim) {
+      scrim.hidden = !this._mobileDrawer;
+      scrim.classList.toggle("open", Boolean(this._mobileDrawer));
+    }
+    navigationToggle?.setAttribute("aria-expanded", String(navigationOpen));
+    contextToggle?.setAttribute("aria-expanded", String(contextOpen));
+  }
   _handleClick(event) {
     const actionTarget = event.target.closest("[data-action]");
     if (!actionTarget) {
@@ -3304,6 +3948,15 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const action = actionTarget.dataset.action;
     switch (action) {
+      case "toggle-mobile-nav":
+        this._toggleMobileDrawer("navigation", actionTarget);
+        break;
+      case "toggle-mobile-context":
+        this._toggleMobileDrawer("context", actionTarget);
+        break;
+      case "close-mobile-drawer":
+        this._closeMobileDrawer();
+        break;
       case "new-direct-chat":
         this._openThreadFormForProject(null);
         break;
@@ -3348,6 +4001,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._toggleProjectCollapse(actionTarget.dataset.projectId || "");
         break;
       case "select-project":
+        this._closeMobileDrawer({ restoreFocus: false });
         this._selectProject(actionTarget.dataset.projectId || null);
         break;
       case "edit-project":
@@ -3366,6 +4020,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._openThreadFormForProject(actionTarget.dataset.projectId || null);
         break;
       case "select-thread":
+        this._closeMobileDrawer({ restoreFocus: false });
         this._selectThread(actionTarget.dataset.threadId || null);
         break;
       case "archive-thread":
@@ -3550,6 +4205,11 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (event.key === "Escape" && this._mobileDrawer) {
+      event.preventDefault();
+      this._closeMobileDrawer();
+      return;
+    }
     const interactionCard = target.closest("[data-interaction-id]");
     if (interactionCard) {
       const interaction = this._pendingInteractions.find(
@@ -3584,10 +4244,25 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _handleFocusIn(event) {
     const target = event.target;
+    this._scrollInteractionTargetIntoView(target);
     if (!this._isRefreshLockTarget(target)) {
       return;
     }
     this._suspendUiRefresh = true;
+  }
+  _scrollInteractionTargetIntoView(target) {
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const interactionCard = target.closest("[data-interaction-id]");
+    if (!interactionCard) {
+      return;
+    }
+    const isControl = ["BUTTON", "INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+    const scrollTarget = isControl ? target : interactionCard;
+    if (typeof scrollTarget.scrollIntoView === "function") {
+      scrollTarget.scrollIntoView({ block: isControl ? "nearest" : "start", inline: "nearest" });
+    }
   }
   _handleFocusOut(event) {
     if (!this._isRefreshLockTarget(event.target)) {
@@ -3691,6 +4366,23 @@ var CodexBridgePanel = class extends HTMLElement {
     region.replaceChildren();
     if (!this._selectedThreadId || !this._isSupervisorConnection()) {
       return;
+    }
+    const visibleInteractions = this._pendingInteractions.filter(
+      (interaction) => interaction.thread_id === this._selectedThreadId
+    );
+    if (visibleInteractions.length) {
+      const summary = document.createElement("div");
+      summary.className = "interaction-summary";
+      const heading = document.createElement("strong");
+      heading.textContent = "Codex needs your input";
+      const count = document.createElement("span");
+      count.className = "interaction-summary-count";
+      count.textContent = `${visibleInteractions.length} pending ${visibleInteractions.length === 1 ? "decision" : "decisions"}`;
+      const cue = document.createElement("span");
+      cue.className = "interaction-summary-cue";
+      cue.textContent = "Tab through each action or scroll to review all.";
+      summary.append(heading, count, cue);
+      region.append(summary);
     }
     const newCards = [];
     for (const interaction of this._pendingInteractions) {
@@ -4308,6 +5000,9 @@ var CodexBridgePanel = class extends HTMLElement {
   _isRefreshLockTarget(target) {
     if (!(target instanceof HTMLElement)) {
       return false;
+    }
+    if (target.closest("[data-interaction-id]") && ["BUTTON", "INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+      return true;
     }
     if (target.classList.contains("stable-select")) {
       return true;
@@ -5151,7 +5846,7 @@ var CodexBridgePanel = class extends HTMLElement {
     binary.className = "preview-binary";
     binary.append(
       this._textElement("div", "", preview.filename || "Artifact preview unavailable"),
-      this._textElement("div", "empty-note", preview.contentType || "Binary file")
+      this._textElement("div", "empty-note", preview.notice || preview.contentType || "Binary file")
     );
     container.append(binary);
   }
@@ -6083,6 +6778,17 @@ var CodexBridgePanel = class extends HTMLElement {
       this._render();
       return;
     }
+    const sizeState = artifactPreviewSizeState(artifact);
+    if (sizeState !== "within-limit") {
+      this._revokePreviewUrl();
+      this._artifactPreview = {
+        ...advertisedDescriptor,
+        kind: "binary",
+        notice: previewUnavailableMessage(sizeState)
+      };
+      this._render();
+      return;
+    }
     try {
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -6675,9 +7381,14 @@ var CodexBridgePanel = class extends HTMLElement {
     if (stillExists) {
       return;
     }
-    const previewCandidate = this._artifacts.find(
-      (artifact) => previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary"
-    ) || this._artifacts[0];
+    const previewCandidate = this._artifacts.find((artifact) => isAutoPreviewCandidate(artifact)) || this._artifacts.find((artifact) => artifactPreviewSizeState(artifact) === "within-limit");
+    if (!previewCandidate) {
+      this._selectedArtifactId = null;
+      this._previewToken += 1;
+      this._revokePreviewUrl();
+      this._artifactPreview = null;
+      return;
+    }
     this._selectedArtifactId = previewCandidate.artifact_id;
     this._artifactPreview = null;
     this._loadArtifactPreview(this._selectedArtifactId);

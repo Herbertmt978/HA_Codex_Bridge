@@ -28,6 +28,7 @@ def list_artifacts(
 ) -> list[ArtifactRecord]:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -55,6 +56,7 @@ def create_workspace_archive(
 ) -> ArtifactRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -81,6 +83,7 @@ def download_artifact(
 ) -> Response:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     storage = request.app.state.storage

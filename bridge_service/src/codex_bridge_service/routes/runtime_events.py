@@ -32,6 +32,7 @@ def replay_events(
 ) -> EventBatchRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     scopes, thread_ids = _normalize_filters(scope, thread_id)
@@ -64,6 +65,7 @@ def wait_for_events(
 ) -> EventBatchRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     scopes, thread_ids = _normalize_filters(scope, thread_id)

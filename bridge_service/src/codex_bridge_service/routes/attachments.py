@@ -22,6 +22,7 @@ async def upload_attachment(
 ) -> AttachmentRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:

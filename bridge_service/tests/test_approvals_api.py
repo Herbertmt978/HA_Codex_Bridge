@@ -13,7 +13,10 @@ from codex_bridge_service.app import create_app
 from codex_bridge_service.models import RuntimeProfile
 
 
-AUTHORIZATION = {"Authorization": "Bearer secret"}
+AUTHORIZATION = {
+    "Authorization": "Bearer secret",
+    "X-Codex-Bridge-Api": "1",
+}
 INTERACTIONS_PATH = "/interactions/pending"
 
 

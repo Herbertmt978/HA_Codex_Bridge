@@ -187,6 +187,7 @@ def test_discovery_waits_for_authenticated_readiness_and_uses_exact_payload() ->
     assert "/ready" in text
     assert re.search(r"\b(?:curl|wget|urlopen|urllib)\b", text)
     assert "Authorization" in text and "Bearer {token}" in text
+    assert '"X-Codex-Bridge-Api": "1"' in text
     assert "publish_discovery.py" in text
     assert '"service": "codex_bridge"' in text
     assert "bashio::app.hostname" in text

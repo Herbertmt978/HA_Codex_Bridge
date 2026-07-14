@@ -46,6 +46,7 @@ def submit_prompt(
 ) -> RunRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     readiness = evaluate_readiness(request.app.state, include_catalogue=False)
@@ -84,6 +85,7 @@ def cancel_active_run(
 ) -> RunRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:

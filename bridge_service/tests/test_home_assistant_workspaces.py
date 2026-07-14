@@ -349,7 +349,7 @@ def test_home_assistant_api_rejects_tampered_project_chat_id_without_path_leak(t
     payload["workspace_id"] = private_id
     thread_path.write_text(json.dumps(payload), encoding="utf-8")
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     responses = [
         client.get("/threads", headers=headers),
@@ -383,7 +383,7 @@ def test_home_assistant_event_routes_redact_missing_workspace_errors(tmp_path) -
     )
     (workspace_root / "projects" / "bridge").rmdir()
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     for suffix in ("events", "events/replay"):
         response = client.get(f"/threads/{thread.thread_id}/{suffix}", headers=headers)
@@ -404,7 +404,7 @@ def test_home_assistant_api_never_returns_private_or_absolute_workspace_roots(tm
         workspace_root=workspace_root,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
 
     project_response = client.post(
         "/projects",
@@ -445,7 +445,7 @@ def test_home_assistant_workspace_route_errors_are_generic_and_redacted(tmp_path
         workspace_root=workspace_root,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     secret_path = str(tmp_path / "private-secret")
 
     create_response = client.post(
@@ -485,7 +485,7 @@ def test_home_assistant_project_patch_rejects_workspace_change_after_chat_creati
         workspace_root=workspace_root,
     )
     client = TestClient(app)
-    headers = {"Authorization": "Bearer secret"}
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
     project = app.state.storage.create_project(name="Bridge", root_path="projects/old")
     thread = app.state.storage.create_thread(
         title="Existing chat",

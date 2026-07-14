@@ -63,7 +63,13 @@ def wait_for_bridge(*, url: str, token_file: Path, timeout_seconds: float) -> bo
     deadline = time.monotonic() + timeout_seconds
     while True:
         try:
-            request = Request(url, headers={"Authorization": f"Bearer {token}"})
+            request = Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Codex-Bridge-Api": "1",
+                },
+            )
             with urlopen(request, timeout=5) as response:
                 payload = response.read(MAX_RESPONSE_BYTES + 1)
             if acceptable_readiness(payload):

@@ -9,6 +9,9 @@ All notable App changes are recorded here.
 - Limits the writable host mapping to `addon_config:rw`, with workspaces under
   `/config/workspaces`, and fails closed when the locked tool sandbox cannot
   complete its boot-time attestation.
+- Selects and verifies separate managed Codex permission profiles: Observe is
+  read-only, while Edit and Full auto are confined to the selected writable
+  workspace. Model-controlled tool networking remains disabled in every mode.
 - Uses ChatGPT device login; no OpenAI API-key setup is part of the App flow.
 - Discovers models and supported reasoning levels from the installed Codex
   runtime, preserving configured selections during marked temporary recovery.

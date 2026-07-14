@@ -29,6 +29,7 @@ def list_pending_interactions(
 ) -> PendingInteractionCollectionRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     broker = request.app.state.runner
@@ -56,6 +57,7 @@ def decide_interaction(
 ) -> InteractionResultRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     result = request.app.state.runner.decide_approval(
@@ -85,6 +87,7 @@ def answer_interaction(
 ) -> InteractionResultRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     result = request.app.state.runner.answer_user_input(

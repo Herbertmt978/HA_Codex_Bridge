@@ -28,7 +28,14 @@ from codex_bridge_service.sandbox_attestation import (
 PROBE_PATH = Path("/usr/local/libexec/codex-bridge/sandbox_probe.py")
 WORKSPACE_ROOT = Path("/config/workspaces")
 CODEX_HOME = Path("/data/codex-home")
-PERMISSION_PROFILE = "ha_bridge"
+OBSERVE_PERMISSION_PROFILE = "ha_observe"
+BRIDGE_PERMISSION_PROFILE = "ha_bridge"
+MANAGED_PERMISSION_PROFILES = frozenset(
+    {OBSERVE_PERMISSION_PROFILE, BRIDGE_PERMISSION_PROFILE}
+)
+BUILT_IN_PERMISSION_PROFILES = frozenset(
+    {":read-only", ":workspace", ":danger-" + "full-access"}
+)
 MAX_WORKER_OUTPUT = 32 * 1024
 MAX_AUTH_BYTES = 4 * 1024 * 1024
 PROBE_CHECKS = frozenset(
@@ -329,22 +336,95 @@ def _assert_permission_profile_catalog(
     data = profiles.get("data") if isinstance(profiles, dict) else None
     if not isinstance(data, list):
         raise SelfTestError
-    allowed = {
-        item.get("id"): item.get("allowed")
-        for item in data
-        if isinstance(item, dict) and isinstance(item.get("id"), str)
-    }
-    if allowed.get(PERMISSION_PROFILE) is not True:
+    allowed: dict[str, bool] = {}
+    for item in data:
+        if not isinstance(item, dict):
+            raise SelfTestError
+        profile_id = item.get("id")
+        profile_allowed = item.get("allowed")
+        if (
+            not isinstance(profile_id, str)
+            or not profile_id
+            or not isinstance(profile_allowed, bool)
+            or profile_id in allowed
+        ):
+            raise SelfTestError
+        allowed[profile_id] = profile_allowed
+    if any(allowed.get(profile) is not True for profile in MANAGED_PERMISSION_PROFILES):
         raise SelfTestError
-    for built_in in (":read-only", ":workspace", ":danger-" + "full-access"):
+    if {
+        profile for profile, profile_allowed in allowed.items() if profile_allowed
+    } != MANAGED_PERMISSION_PROFILES:
+        raise SelfTestError
+    for built_in in BUILT_IN_PERMISSION_PROFILES:
         if allowed.get(built_in) is not False:
             raise SelfTestError
-    # Keep this literal visible to static tests and future maintainers: runtime
-    # thread responses may expose "activePermissionProfile" as the profile
-    # provenance field, while standalone command execution relies on the same
-    # managed default profile.
-    _active_profile_field = "activePermissionProfile"
-    if not _active_profile_field:
+
+
+def _assert_profile_thread(
+    client: Any,
+    *,
+    workspace: Path,
+    permission_profile: str,
+) -> None:
+    response = client.request(
+        "thread/start",
+        {
+            "cwd": str(workspace),
+            "ephemeral": True,
+            "approvalPolicy": "on-request",
+            "approvalsReviewer": "user",
+            "config": {"default_permissions": permission_profile},
+        },
+        timeout_seconds=15,
+    )
+    if not isinstance(response, dict):
+        raise SelfTestError
+    if (
+        response.get("approvalPolicy") != "on-request"
+        or response.get("approvalsReviewer") != "user"
+    ):
+        raise SelfTestError
+    thread = response.get("thread")
+    if not isinstance(thread, dict) or thread.get("ephemeral") is not True:
+        raise SelfTestError
+    active_profile = response.get("activePermissionProfile")
+    if (
+        not isinstance(active_profile, dict)
+        or set(active_profile) != {"id", "extends"}
+        or active_profile.get("id") != permission_profile
+        or active_profile.get("extends") is not None
+    ):
+        raise SelfTestError
+
+    sandbox = response.get("sandbox")
+    if not isinstance(sandbox, dict):
+        raise SelfTestError
+    if permission_profile == OBSERVE_PERMISSION_PROFILE:
+        if (
+            set(sandbox) != {"type", "networkAccess"}
+            or sandbox.get("type") != "readOnly"
+            or sandbox.get("networkAccess") is not False
+        ):
+            raise SelfTestError
+        return
+    if permission_profile != BRIDGE_PERMISSION_PROFILE:
+        raise SelfTestError
+    if (
+        set(sandbox)
+        != {
+            "type",
+            "writableRoots",
+            "networkAccess",
+            "excludeSlashTmp",
+            "excludeTmpdirEnvVar",
+        }
+        or sandbox.get("type") != "workspaceWrite"
+        or sandbox.get("writableRoots") != [str(workspace)]
+        or sandbox.get("networkAccess") is not False
+        or sandbox.get("excludeSlashTmp") is not True
+        or sandbox.get("excludeTmpdirEnvVar") is not True
+    ):
         raise SelfTestError
 
 
@@ -378,6 +458,15 @@ def _worker(arguments: argparse.Namespace) -> int:
     try:
         client.start()
         _assert_permission_profile_catalog(client, workspace=workspace)
+        for permission_profile in (
+            OBSERVE_PERMISSION_PROFILE,
+            BRIDGE_PERMISSION_PROFILE,
+        ):
+            _assert_profile_thread(
+                client,
+                workspace=workspace,
+                permission_profile=permission_profile,
+            )
         command = [
             "/usr/local/bin/python",
             str(PROBE_PATH),

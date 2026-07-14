@@ -174,6 +174,7 @@ describe("safe DOM and hostile content", () => {
       artifact_id: panel._selectedArtifactId,
       filename: "safe.txt",
       mime_type: "text/plain",
+      size_bytes: 4,
     })];
     const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
       new Response("safe", { status: 200, headers: { "Content-Type": "text/plain" } })
