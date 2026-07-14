@@ -27,6 +27,12 @@
       import "../../custom_components/codex_bridge/frontend/codex-bridge-panel.js";
 
       const statusPayload = {
+        connection_type: "supervisor",
+        api_version: 1,
+        app: { connected: true, version: "0.6.0" },
+        integration: { ready: true, version: "0.6.0" },
+        bridge_ready: true,
+        codex_ready: true,
         models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
         thinking_levels: ["low", "medium", "high", "xhigh", "max", "ultra"],
         model_catalog: {
@@ -75,23 +81,27 @@
           organization_title: "Personal",
           updated_at: "2026-05-09T10:40:00Z",
         },
+        auth: {
+          revision: 1,
+          state: "ok",
+          busy: false,
+          auth_required: false,
+          auth_mode: "chatgpt",
+          plan_type: "pro",
+          message: "Connected to ChatGPT.",
+          verification_uri: null,
+          login_url: null,
+          user_code: null,
+          output_tail: null,
+          updated_at: "2026-07-14T10:00:00Z",
+        },
         diagnostics: {
+          app_version: "0.6.0",
           bridge_version: "0.5.3",
-          git_commit: "abc1234",
-          git_branch: "main",
-          python_version: "3.12.10",
-          python_executable: "C:\\Python312\\python.exe",
-          platform: "Windows",
-          codex_cli_version: "codex-cli 0.144.1",
+          active_codex_version: "0.144.1",
           service_started_at: "2026-05-10T10:00:00Z",
           service_uptime_seconds: 742,
           last_error: null,
-          tools: [
-            { name: "python", available: true, path: "C:\\Python312\\python.exe", version: "Python 3.12.10" },
-            { name: "git", available: true, path: "C:\\Tools\\Git\\cmd\\git.exe", version: "git version 2.49.0" },
-            { name: "rg", available: true, path: "C:\\Users\\codex\\.local\\bin\\rg.exe", version: "ripgrep 15.1.0" },
-            { name: "7z", available: false, path: null, version: null },
-          ],
         },
       };
 
@@ -99,7 +109,7 @@
         {
           project_id: "prj_direct",
           name: "Direct chats",
-          root_path: "C:\\CodexHA\\workspaces",
+          root_path: "direct-chats",
           kind: "direct",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -109,7 +119,7 @@
         {
           project_id: "prj_vba",
           name: "VBA Upgrade",
-          root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          root_path: "projects/vba-upgrade",
           kind: "project",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -119,7 +129,7 @@
         {
           project_id: "prj_ytdlp",
           name: "Youtube DL",
-          root_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          root_path: "projects/media-tools",
           kind: "project",
           default_model: "gpt-5.5",
           default_thinking_level: "high",
@@ -129,7 +139,7 @@
         {
           project_id: "prj_imported",
           name: "Imported Threads",
-          root_path: "C:\\CodexHA\\workspaces",
+          root_path: "imported",
           kind: "imported",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -144,7 +154,7 @@
           project_id: "prj_direct",
           title: "Quick bridge note",
           workspace_id: "ws_0a",
-          workspace_path: "C:\\CodexHA\\workspaces\\ws_0a",
+          workspace_path: "direct-chats/quick-bridge-note",
           status: "idle",
           mode: "full-auto",
           codex_session_id: "sess_direct",
@@ -158,7 +168,7 @@
           updated_at: "2026-05-09T08:24:00Z",
           archived_at: null,
           project_name: "Direct chats",
-          project_root_path: "C:\\CodexHA\\workspaces",
+          project_root_path: "direct-chats",
           project_kind: "direct",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -170,7 +180,7 @@
           project_id: "prj_vba",
           title: "Attachment validation",
           workspace_id: "ws_vba_1",
-          workspace_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          workspace_path: "projects/vba-upgrade",
           status: "idle",
           mode: "full-auto",
           codex_session_id: "sess_vba_1",
@@ -181,7 +191,7 @@
               attachment_id: "att_1",
               filename: "Module1.bas",
               mime_type: "text/plain",
-              stored_path: "C:\\CodexHA\\uploads\\thr_vba_1\\src\\Module1.bas",
+              stored_path: "attachments/src/Module1.bas",
               relative_path: "src/Module1.bas",
               size_bytes: 1204,
             },
@@ -189,7 +199,7 @@
               attachment_id: "att_2",
               filename: "sample.xlsx",
               mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              stored_path: "C:\\CodexHA\\uploads\\thr_vba_1\\sample.xlsx",
+              stored_path: "attachments/sample.xlsx",
               relative_path: "sample.xlsx",
               size_bytes: 5632,
             },
@@ -199,7 +209,7 @@
               artifact_id: "art_csv",
               filename: "attachment_inventory.csv",
               mime_type: "text/csv",
-              stored_path: "C:\\Projects\\Finance\\VBA Upgrade\\attachment_inventory.csv",
+              stored_path: "artifacts/attachment_inventory.csv",
               relative_path: "attachment_inventory.csv",
               size_bytes: 284,
             },
@@ -207,7 +217,7 @@
               artifact_id: "art_zip",
               filename: "attachment-validation-20260509-114500.zip",
               mime_type: "application/zip",
-              stored_path: "C:\\CodexHA\\artifacts\\thr_vba_1\\attachment-validation-20260509-114500.zip",
+              stored_path: "artifacts/attachment-validation-20260509-114500.zip",
               relative_path: "attachment-validation-20260509-114500.zip",
               size_bytes: 14882,
             },
@@ -218,7 +228,7 @@
           updated_at: "2026-05-09T10:42:00Z",
           archived_at: null,
           project_name: "VBA Upgrade",
-          project_root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          project_root_path: "projects/vba-upgrade",
           project_kind: "project",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -230,7 +240,7 @@
           project_id: "prj_vba",
           title: "Module split review",
           workspace_id: "ws_vba_2",
-          workspace_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          workspace_path: "projects/vba-upgrade",
           status: "running",
           mode: "edit",
           codex_session_id: "sess_vba_2",
@@ -244,7 +254,7 @@
           updated_at: "2026-05-09T10:43:00Z",
           archived_at: null,
           project_name: "VBA Upgrade",
-          project_root_path: "C:\\Projects\\Finance\\VBA Upgrade",
+          project_root_path: "projects/vba-upgrade",
           project_kind: "project",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -256,7 +266,7 @@
           project_id: "prj_ytdlp",
           title: "Investigate metadata parsing",
           workspace_id: "ws_ytdlp",
-          workspace_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          workspace_path: "projects/media-tools",
           status: "error",
           mode: "full-auto",
           codex_session_id: "sess_ytdlp",
@@ -270,7 +280,7 @@
           updated_at: "2026-05-09T09:45:00Z",
           archived_at: null,
           project_name: "Youtube DL",
-          project_root_path: "C:\\Users\\Ashby\\Dropbox\\PC (3)\\Documents\\Youtube DL",
+          project_root_path: "projects/media-tools",
           project_kind: "project",
           default_model: "gpt-5.5",
           default_thinking_level: "high",
@@ -282,7 +292,7 @@
           project_id: "prj_imported",
           title: "Old continuation",
           workspace_id: "ws_old",
-          workspace_path: "C:\\CodexHA\\workspaces\\ws_old",
+          workspace_path: "imported/old-continuation",
           status: "idle",
           mode: "full-auto",
           codex_session_id: "sess_old",
@@ -296,7 +306,7 @@
           updated_at: "2026-05-08T18:20:00Z",
           archived_at: "2026-05-09T07:00:00Z",
           project_name: "Imported Threads",
-          project_root_path: "C:\\CodexHA\\workspaces",
+          project_root_path: "imported",
           project_kind: "imported",
           default_model: "gpt-5.4",
           default_thinking_level: "medium",
@@ -472,27 +482,92 @@
       const harnessState = {
         selectedThreadId: "thr_vba_1",
         threadCounter: 10,
+        authRevision: 1,
+        systemCursor: 0,
+        authSubscribers: new Set(),
+        subscriptions: [],
+        calls: [],
+        auth: {
+          revision: 1,
+          state: "ok",
+          busy: false,
+          auth_required: false,
+          auth_mode: "chatgpt",
+          plan_type: "pro",
+          message: "Connected to ChatGPT.",
+          verification_uri: null,
+          login_url: null,
+          user_code: null,
+          output_tail: null,
+          updated_at: "2026-07-14T10:00:00Z",
+        },
       };
 
       const clone = (value) => JSON.parse(JSON.stringify(value));
 
+      const emitAuthEvent = () => {
+        const envelope = {
+          type: "event",
+          event: {
+            cursor: ++harnessState.systemCursor,
+            scope: "auth",
+            event_type: "auth.status_changed",
+            payload: clone(harnessState.auth),
+          },
+        };
+        harnessState.authSubscribers.forEach((callback) => callback(envelope));
+      };
+
+      window.__codexHarness = {
+        emitAuthEvent,
+        completeLogin() {
+          harnessState.auth = {
+            ...harnessState.auth,
+            revision: ++harnessState.authRevision,
+            state: "ok",
+            busy: false,
+            auth_required: false,
+            message: "Connected to ChatGPT.",
+            verification_uri: null,
+            login_url: null,
+            user_code: null,
+          };
+          emitAuthEvent();
+        },
+        get subscriptions() {
+          return clone(harnessState.subscriptions);
+        },
+        get calls() {
+          return clone(harnessState.calls);
+        },
+      };
+
       const hass = {
-        auth: { data: { access_token: "demo-token" } },
+        auth: { data: { access_token: "" } },
         connection: {
           subscribeMessage: async (callback, payload) => {
+            harnessState.subscriptions.push(clone(payload));
+            harnessState.calls.push({ kind: "subscribe", payload: clone(payload) });
+            if (Array.isArray(payload.scopes) && (payload.scopes.includes("auth") || payload.scopes.includes("runtime"))) {
+              harnessState.authSubscribers.add(callback);
+              window.setTimeout(emitAuthEvent, 0);
+              return () => harnessState.authSubscribers.delete(callback);
+            }
             const events = (eventMap[payload.thread_id] || defaultEvents).filter((item) => item.sequence > (payload.after || 0));
             const timers = events.map((event, index) => window.setTimeout(() => callback(clone(event)), 40 + index * 20));
             return () => timers.forEach((timer) => window.clearTimeout(timer));
           },
           sendMessagePromise: async (payload) => {
+            harnessState.calls.push({ kind: "ws", type: payload.type });
             switch (payload.type) {
               case "codex_bridge/get_config":
                 return {
                   panel_title: "Codex Bridge",
-                  bridge_url: "http://192.168.50.25:8766",
+                  connection_type: "supervisor",
+                  api_version: 1,
                 };
               case "codex_bridge/get_status":
-                return clone(statusPayload);
+                return clone({ ...statusPayload, auth: harnessState.auth });
               case "codex_bridge/list_projects":
                 return clone(projects);
               case "codex_bridge/list_threads":
@@ -523,7 +598,7 @@
                   artifact_id: "art_bundle",
                   filename: "workspace-bundle-20260509-114900.zip",
                   mime_type: "application/zip",
-                  stored_path: "C:\\CodexHA\\artifacts\\thr_vba_1\\workspace-bundle-20260509-114900.zip",
+                  stored_path: "artifacts/workspace-bundle-20260509-114900.zip",
                   relative_path: "workspace-bundle-20260509-114900.zip",
                   size_bytes: 18222,
                 };
@@ -531,7 +606,7 @@
                 return clone(artifact);
               }
               case "codex_bridge/browse_paths":
-                return { path: "C:\\Projects", parent_path: "C:\\", directories: [] };
+                return { path: "projects", parent_path: "", directories: [{ name: "vba-upgrade", path: "projects/vba-upgrade" }] };
               case "codex_bridge/create_project": {
                 const folderName = (payload.name || "New project")
                   .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
@@ -540,7 +615,7 @@
                 const project = {
                   project_id: `prj_new_${Date.now()}`,
                   name: payload.name || "New project",
-                  root_path: payload.root_path || `C:\\CodexHA\\project-workspaces\\${folderName}`,
+                  root_path: payload.root_path || `projects/${folderName.toLowerCase().replace(/\s+/g, "-")}`,
                   kind: "project",
                   default_model: payload.default_model || statusPayload.model_catalog.default_model,
                   default_thinking_level: payload.default_thinking_level || statusPayload.model_catalog.default_thinking_level,
@@ -562,6 +637,51 @@
               }
               case "codex_bridge/create_folder":
                 return { path: payload.path };
+              case "codex_bridge/get_auth_status":
+                return clone(harnessState.auth);
+              case "codex_bridge/start_auth_login":
+                harnessState.auth = {
+                  ...harnessState.auth,
+                  revision: ++harnessState.authRevision,
+                  state: "login_running",
+                  busy: true,
+                  auth_required: true,
+                  message: "Use this code to continue with ChatGPT.",
+                  verification_uri: "https://auth.openai.com/codex/device",
+                  login_url: "https://auth.openai.com/codex/device",
+                  user_code: "HOME-ASSISTANT",
+                };
+                emitAuthEvent();
+                return clone(harnessState.auth);
+              case "codex_bridge/cancel_auth_login":
+                harnessState.auth = {
+                  ...harnessState.auth,
+                  revision: ++harnessState.authRevision,
+                  state: "signed_out",
+                  busy: false,
+                  auth_required: true,
+                  message: "Sign-in cancelled.",
+                  verification_uri: null,
+                  login_url: null,
+                  user_code: null,
+                };
+                emitAuthEvent();
+                return clone(harnessState.auth);
+              case "codex_bridge/logout_auth":
+                harnessState.auth = {
+                  ...harnessState.auth,
+                  revision: ++harnessState.authRevision,
+                  state: "signed_out",
+                  busy: false,
+                  auth_required: true,
+                  message: "Signed out of ChatGPT.",
+                  verification_uri: null,
+                  login_url: null,
+                  user_code: null,
+                  plan_type: "Unknown",
+                };
+                emitAuthEvent();
+                return clone(harnessState.auth);
               case "codex_bridge/create_thread": {
                 harnessState.threadCounter += 1;
                 const project = projects.find((item) => item.project_id === payload.project_id) || projects[0];

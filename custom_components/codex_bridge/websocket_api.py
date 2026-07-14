@@ -157,7 +157,7 @@ async def ws_get_auth_status(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/start_auth_login",
-        vol.Optional("force_logout", default=True): bool,
+        vol.Optional("force_logout", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -170,7 +170,7 @@ async def ws_start_auth_login(
         hass,
         connection,
         msg,
-        lambda client: client.async_start_auth_login(msg["force_logout"]),
+        lambda client: client.async_start_auth_login(msg.get("force_logout", False)),
     )
 
 

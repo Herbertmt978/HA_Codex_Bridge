@@ -2,6 +2,26 @@ import { acceptEvent, acceptEvents, createEventStreamState } from "./event-strea
 import { parseEvents } from "./protocol.js";
 import { createPreviewElement, previewDescriptor, sanitizeFilename } from "./safe-dom.js";
 import { uploadResumableFile } from "./uploads.js";
+import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
+import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js";
+import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
+
+const PANEL_VERSION = "0.6.0";
+const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
+const AUTH_VERIFICATION_HOSTS = new Set([
+  "auth.openai.com",
+  "chatgpt.com",
+  "platform.openai.com",
+]);
+const AUTH_ACTION_IDS = new Set([
+  "start-auth-login",
+  "open-chatgpt",
+  "cancel-sign-in",
+  "confirm-sign-out",
+  "sign-out",
+  "refresh-auth-status",
+  "copy-auth-code",
+]);
 
 const MODE_OPTIONS = [
   { value: "observe", label: "Observe" },
@@ -624,6 +644,199 @@ template.innerHTML = `
       padding: 10px 14px 0;
     }
 
+    .runtime-shell {
+      display: grid;
+      gap: 6px;
+    }
+
+    .runtime-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .runtime-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 0 9px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: var(--surface-bg);
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    .runtime-item::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--brand-amber);
+      content: "";
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-amber) 12%, transparent);
+    }
+
+    .runtime-item.ready::before {
+      background: var(--brand-emerald);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-emerald) 12%, transparent);
+    }
+
+    .runtime-notice {
+      margin: 0;
+      padding: 7px 9px;
+      border: 1px solid color-mix(in srgb, var(--brand-amber) 25%, var(--border-color) 75%);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--brand-amber) 7%, var(--surface-bg) 93%);
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .onboarding-shell {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 23%, var(--border-color) 77%);
+      border-radius: 12px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 7%, var(--surface-bg) 93%), transparent 45%),
+        var(--surface-bg);
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+    }
+
+    .onboarding-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .onboarding-heading strong {
+      font-size: 13px;
+    }
+
+    .onboarding-heading span {
+      color: var(--muted-color);
+      font-size: 11px;
+    }
+
+    .onboarding-checklist {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: onboarding;
+    }
+
+    .onboarding-stage {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--surface-bg) 96%, var(--surface-alt) 4%);
+      counter-increment: onboarding;
+    }
+
+    .onboarding-stage > div {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .onboarding-stage strong {
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    .onboarding-stage span {
+      color: var(--muted-color);
+      font-size: 10px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .onboarding-stage.complete {
+      border-color: color-mix(in srgb, var(--brand-emerald) 28%, var(--border-color) 72%);
+      background: color-mix(in srgb, var(--brand-emerald) 6%, var(--surface-bg) 94%);
+    }
+
+    .onboarding-stage button {
+      min-height: 28px;
+      padding: 0 9px;
+      color: var(--accent-color);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .auth-card {
+      display: grid;
+      gap: 8px;
+    }
+
+    .auth-card > strong {
+      font-size: 13px;
+    }
+
+    .auth-plan {
+      width: fit-content;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-violet) 10%, var(--surface-bg) 90%);
+      color: color-mix(in srgb, var(--brand-violet) 80%, var(--text-color) 20%);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .auth-code {
+      width: fit-content;
+      max-width: 100%;
+      padding: 8px 10px;
+      border: 1px dashed color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%);
+      border-radius: 8px;
+      background: var(--surface-alt);
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      overflow-wrap: anywhere;
+    }
+
+    .auth-card p {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .auth-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .auth-actions button {
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .auth-actions button.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--brand-blue), var(--brand-violet));
+      color: white;
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--brand-blue) 20%, transparent);
+    }
+
     .error-strip {
       display: none;
       min-height: 28px;
@@ -1236,17 +1449,36 @@ template.innerHTML = `
     @media (max-width: 1280px) {
       .shell {
         grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) clamp(260px, 34vh, 340px);
+      }
+
+      .onboarding-checklist {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .side-pane {
         grid-column: 1 / -1;
-        min-height: 280px;
+        grid-row: 2;
+        min-height: 0;
       }
     }
 
     @media (max-width: 880px) {
       .shell {
         grid-template-columns: 1fr;
+        grid-template-rows: none;
+        height: auto;
+        max-height: none;
+        min-height: 100%;
+        overflow: auto;
+      }
+
+      .rail-pane,
+      .main-pane,
+      .side-pane {
+        grid-column: 1;
+        grid-row: auto;
+        min-height: 360px;
       }
 
       .compact-toolbar {
@@ -1259,6 +1491,16 @@ template.innerHTML = `
 
       .composer {
         grid-template-columns: 1fr;
+      }
+
+      .onboarding-checklist {
+        grid-template-columns: 1fr;
+      }
+
+      .onboarding-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 3px;
       }
     }
   </style>
@@ -1306,7 +1548,15 @@ template.innerHTML = `
         </div>
       </div>
       <div class="main-top">
+        <div class="runtime-shell" id="runtime-strip"></div>
         <div class="error-strip" id="error-strip"></div>
+        <section class="onboarding-shell" id="onboarding-shell">
+          <div class="onboarding-heading">
+            <strong id="onboarding-title">Home Assistant setup</strong>
+            <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
+          </div>
+          <div id="onboarding"></div>
+        </section>
         <div class="status-banner" id="status-banner"></div>
         <div class="compact-toolbar" id="compact-toolbar"></div>
       </div>
@@ -1338,6 +1588,10 @@ template.innerHTML = `
       </div>
       <div class="side-scroll">
         <section class="side-section">
+          <span class="section-label">ChatGPT account</span>
+          <div id="auth-panel"></div>
+        </section>
+        <section class="side-section">
           <span class="section-label">Progress</span>
           <div class="progress-list" id="progress-list"></div>
         </section>
@@ -1357,7 +1611,7 @@ template.innerHTML = `
           <div class="context-list" id="context-list"></div>
         </section>
         <section class="side-section">
-          <span class="section-label">Diagnostics</span>
+          <span class="section-label">Versions</span>
           <div class="diagnostics-list" id="diagnostics-list"></div>
         </section>
       </div>
@@ -1403,6 +1657,7 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.appendChild(template.content.cloneNode(true));
     this._hass = null;
     this._panel = null;
+    this._staticUiInstalled = false;
     this._config = null;
     this._status = null;
     this._projects = [];
@@ -1444,8 +1699,19 @@ class CodexBridgePanel extends HTMLElement {
     this._eventUnsubscribe = null;
     this._eventSubscriptionPending = null;
     this._eventSubscriptionActive = false;
+    this._eventSubscriptionGeneration = 0;
     this._eventRefreshTimer = null;
     this._eventStream = createEventStreamState();
+    this._systemEventUnsubscribe = null;
+    this._systemEventSubscriptionPending = null;
+    this._systemEventSubscriptionActive = false;
+    this._systemEventGeneration = 0;
+    this._systemEventCursor = 0;
+    this._systemRefreshTimer = null;
+    this._systemReconnectTimer = null;
+    this._systemReconnectAttempt = 0;
+    this._confirmSignOut = false;
+    this._authActionPending = false;
     this._uploadProgress = null;
     this._uploadAbortController = null;
     this._isLoading = false;
@@ -1469,12 +1735,19 @@ class CodexBridgePanel extends HTMLElement {
 
   connectedCallback() {
     this._installStaticUi();
+    if (this._config && this._hass) {
+      this._startSystemEventSubscription();
+    }
+    if (this._selectedThreadId && this._hass) {
+      this._startEventSubscription();
+    }
     this._render();
   }
 
   disconnectedCallback() {
     this._stopPolling();
     this._stopEventSubscription();
+    this._stopSystemEventSubscription();
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
     this._revokePreviewUrl();
@@ -1509,7 +1782,9 @@ class CodexBridgePanel extends HTMLElement {
     this._isLoading = true;
     try {
       this._config = await this._callWS("get_config");
-      await Promise.all([this._loadStatus(), this._loadProjects(), this._loadThreads()]);
+      await this._startSystemEventSubscription();
+      await Promise.all([this._loadStatus(), this._loadProjects()]);
+      await this._loadThreads();
       this._clearError();
     } catch (error) {
       this._setError(error);
@@ -1537,6 +1812,10 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _installStaticUi() {
+    if (this._staticUiInstalled) {
+      return;
+    }
+    this._staticUiInstalled = true;
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.chat, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-project-button"), icons.plus, "New project");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
@@ -1682,11 +1961,27 @@ class CodexBridgePanel extends HTMLElement {
       case "start-auth-login":
         this._startAuthLogin();
         break;
+      case "open-chatgpt":
+        this._openChatGptSignIn();
+        break;
+      case "cancel-sign-in":
+        this._cancelAuthLogin();
+        break;
+      case "confirm-sign-out":
+        this._confirmSignOut = true;
+        this._renderAuthSurface();
+        break;
+      case "sign-out":
+        this._logoutAuth();
+        break;
       case "refresh-auth-status":
         this._refreshAuthStatus();
         break;
       case "copy-auth-code":
         this._copyAuthCode();
+        break;
+      case "retry-app":
+        this._retryAppConnection();
         break;
       case "dismiss-banner":
         this._dismissStatusBanner();
@@ -1838,12 +2133,12 @@ class CodexBridgePanel extends HTMLElement {
     const account = this._status?.account;
     accountPill.textContent = this._accountLabel(account);
     accountPill.title = this._accountTitle(account);
-    accountPill.classList.toggle("unavailable", !account?.available);
+    accountPill.classList.toggle("unavailable", !this._authViewModel().signedIn);
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
     this.shadowRoot.getElementById("thread-title-label").textContent =
       activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent =
-      activeThread?.workspace_path || activeProject?.root_path || "";
+      this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
     this.shadowRoot.getElementById("thread-status-text").textContent =
       activeThread ? `Status: ${activeThread.status}` : "";
     this.shadowRoot.getElementById("stop-run-button").classList.toggle(
@@ -1861,9 +2156,16 @@ class CodexBridgePanel extends HTMLElement {
     errorStrip.textContent = this._error;
     errorStrip.classList.toggle("visible", Boolean(this._error));
 
+    this._renderRuntimeSurface();
+    this._renderOnboardingSurface();
+    this._renderAuthSurface();
     this._renderProjectForm();
     this._renderStatusBanner();
     this._renderThreadForm();
+    this.shadowRoot.getElementById("project-form-panel").parentElement.classList.toggle(
+      "hidden",
+      !this._showProjectForm && !this._showThreadForm
+    );
     this._renderDirectSection();
     this._renderProjectList();
     this._renderArchivedSection();
@@ -1888,6 +2190,94 @@ class CodexBridgePanel extends HTMLElement {
     sendButton.title = isRunning
       ? "Queue steering for this running Codex turn"
       : "Send message to Codex";
+  }
+
+  _isSupervisorConnection() {
+    return this._config?.connection_type === "supervisor" && Number(this._config?.api_version) === 1;
+  }
+
+  _isLegacyConnection() {
+    return !this._isSupervisorConnection() && Boolean(this._config);
+  }
+
+  _authViewModel() {
+    return getAuthViewModel({
+      ...(this._status?.auth || {}),
+      account: this._status?.account || {},
+      signedOutConfirmed: this._confirmSignOut,
+    });
+  }
+
+  _runtimeViewModel() {
+    const diagnostics = this._status?.diagnostics || {};
+    const bridgeReady = Boolean(this._status);
+    return getRuntimeStripViewModel({
+      api_version: this._config?.api_version,
+      connection_type: this._config?.connection_type,
+      app: {
+        connected: this._isSupervisorConnection() && bridgeReady,
+        version: diagnostics.app_version,
+      },
+      integration: {
+        ready: Boolean(this._config),
+        version: PANEL_VERSION,
+      },
+      bridge_ready: bridgeReady,
+      codex_ready: bridgeReady && Boolean(diagnostics.active_codex_version || diagnostics.bundled_codex_version),
+      diagnostics: {
+        bridge_version: diagnostics.bridge_version,
+        app_server_version: diagnostics.active_codex_version || diagnostics.bundled_codex_version,
+      },
+    });
+  }
+
+  _renderRuntimeSurface() {
+    const container = this.shadowRoot.getElementById("runtime-strip");
+    renderRuntimeStrip(container, this._runtimeViewModel());
+  }
+
+  _renderOnboardingSurface() {
+    const shell = this.shadowRoot.getElementById("onboarding-shell");
+    const model = getOnboardingViewModel({
+      appConnected: this._isSupervisorConnection() && Boolean(this._status),
+      integrationReady: Boolean(this._config),
+      bridgeReady: Boolean(this._status),
+      signedIn: this._authViewModel().signedIn,
+      workspaceReady: this._projects.some((project) => project.kind === "project" && !project.archived_at),
+      threadCount: this._threads.filter((thread) => !thread.archived_at).length,
+    });
+    shell.classList.toggle("hidden", this._isLegacyConnection());
+    this.shadowRoot.getElementById("onboarding-title").textContent = model.complete
+      ? "Home Assistant setup complete"
+      : "Finish setup in Home Assistant";
+    this.shadowRoot.getElementById("onboarding-summary").textContent = model.complete
+      ? "The App, Integration, workspace, and ChatGPT account are ready."
+      : "No Bridge address or account credential is exposed to this browser.";
+    renderOnboarding(this.shadowRoot.getElementById("onboarding"), model);
+  }
+
+  _renderAuthSurface() {
+    const container = this.shadowRoot.getElementById("auth-panel");
+    if (this._isLegacyConnection()) {
+      const card = document.createElement("section");
+      card.className = "auth-card";
+      card.append(
+        this._textElement("strong", "", "Account controls need the Home Assistant App"),
+        this._textElement(
+          "p",
+          "",
+          "This older connection can show chats, but ChatGPT sign-in and sign-out are available only through the private Home Assistant App."
+        )
+      );
+      container.replaceChildren(card);
+      return;
+    }
+    renderAuth(container, this._authViewModel());
+    if (this._authActionPending) {
+      for (const button of container.querySelectorAll("button[data-action]")) {
+        button.disabled = true;
+      }
+    }
   }
 
   _projectFormRenderKey() {
@@ -1925,16 +2315,26 @@ class CodexBridgePanel extends HTMLElement {
       this._textElement("span", "eyeline", isEditMode ? "Edit project" : "New project"),
       this._textElement("span", "title", isEditMode ? "Project settings" : "Create project")
     );
-    const nameInput = this._input("field", "project-name-input", "Project name", this._projectForm.name);
+    const nameInput = this._input("field", "project-name-input", "Project name", this._projectForm.name, "Project name");
     panel.append(titleBlock, nameInput);
 
     if (isEditMode) {
-      const rootInput = this._input("field", "project-root-input", "C:\\Projects\\My Work", this._projectForm.rootPath);
+      const rootInput = this._input(
+        "field",
+        "project-root-input",
+        "team/project",
+        this._projectForm.rootPath,
+        "Workspace path"
+      );
       const fieldGrid = document.createElement("div");
       fieldGrid.className = "field-grid";
-      const modelSelect = this._select("field-select stable-select", "project-model-select");
+      const modelSelect = this._select("field-select stable-select", "project-model-select", "Default model");
       this._appendModelOptions(modelSelect, this._projectForm.defaultModel);
-      const thinkingSelect = this._select("field-select stable-select", "project-thinking-select");
+      const thinkingSelect = this._select(
+        "field-select stable-select",
+        "project-thinking-select",
+        "Default thinking level"
+      );
       this._appendThinkingOptions(thinkingSelect, this._projectForm.defaultThinkingLevel, this._projectForm.defaultModel);
       fieldGrid.append(modelSelect, thinkingSelect);
 
@@ -1942,7 +2342,7 @@ class CodexBridgePanel extends HTMLElement {
       browserCard.className = "browser-card";
       const browseActions = document.createElement("div");
       browseActions.className = "browser-actions";
-      for (const [action, label] of [["browse-current", "Browse"], ["browse-up", "Up"], ["browse-roots", "Drives"]]) {
+      for (const [action, label] of [["browse-current", "Browse"], ["browse-up", "Up"], ["browse-roots", "Workspace root"]]) {
         const button = this._actionButton("text-button", action);
         button.textContent = label;
         browseActions.append(button);
@@ -1962,13 +2362,19 @@ class CodexBridgePanel extends HTMLElement {
       }
       const folderActions = document.createElement("div");
       folderActions.className = "browser-actions";
-      const folderInput = this._input("field", "folder-name-input", "New folder name", this._folderDraft);
+      const folderInput = this._input(
+        "field",
+        "folder-name-input",
+        "New folder name",
+        this._folderDraft,
+        "New folder name"
+      );
       const createFolder = this._actionButton("text-button", "create-folder");
       createFolder.textContent = "Create folder";
       folderActions.append(folderInput, createFolder);
       browserCard.append(
-        this._textElement("span", "browser-label", "Path browser"),
-        this._textElement("div", "meta-line", this._browseState?.path || "No folder loaded yet"),
+        this._textElement("span", "browser-label", "App workspace browser"),
+        this._textElement("div", "meta-line", this._workspaceLabel(this._browseState?.path, "No folder loaded yet")),
         browseActions,
         browseList,
         folderActions
@@ -2017,8 +2423,8 @@ class CodexBridgePanel extends HTMLElement {
       this._textElement("span", "eyeline", isDirect ? "New direct chat" : "New project chat"),
       this._textElement("span", "title", targetProject?.name || "Choose a target")
     );
-    const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title);
-    const modeSelect = this._select("field-select stable-select", "thread-mode-select");
+    const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
+    const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
     for (const option of MODE_OPTIONS) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
     }
@@ -2033,7 +2439,11 @@ class CodexBridgePanel extends HTMLElement {
       titleBlock,
       titleInput,
       modeSelect,
-      this._textElement("div", "meta-line", targetProject?.root_path || "Pick a project or direct chat context first."),
+      this._textElement(
+        "div",
+        "meta-line",
+        this._workspaceLabel(targetProject?.root_path, "Pick a project or direct chat context first.")
+      ),
       formActions
     );
     this._renderedThreadFormKey = formKey;
@@ -2144,7 +2554,7 @@ class CodexBridgePanel extends HTMLElement {
     sectionHead.append(this._sectionTitleLine(null, icons.folder, "Projects"));
     section.append(sectionHead);
     if (!projects.length) {
-      section.append(this._emptyStateNode("No projects yet", "Create a project and point it at a real folder on the VM."));
+      section.append(this._emptyStateNode("No projects yet", "Create a project to provision a private App workspace."));
       return;
     }
 
@@ -2190,7 +2600,12 @@ class CodexBridgePanel extends HTMLElement {
     if (project.kind === "project") {
       const actions = archived
         ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]]
-        : [["new-chat", "New chat", icons.plus], ["edit-project", "Edit project", icons.edit], ["archive-project", "Archive project", icons.archive], ["delete-project", "Delete project", icons.trash]];
+        : [
+            ["new-chat", "New chat", icons.plus],
+            ...(this._isLegacyConnection() ? [] : [["edit-project", "Edit project", icons.edit]]),
+            ["archive-project", "Archive project", icons.archive],
+            ["delete-project", "Delete project", icons.trash],
+          ];
       for (const [action, label, icon] of actions) {
         const button = this._actionButton("icon-button small", action, label);
         button.dataset.projectId = String(project.project_id || "");
@@ -2337,13 +2752,17 @@ class CodexBridgePanel extends HTMLElement {
     controlsCard.className = "toolbar-card controls";
     controlsCard.append(
       this._toolbarControl("Model", thread, () => {
-        const select = this._select("compact-select stable-select", "thread-model-select");
+        const select = this._select("compact-select stable-select", "thread-model-select", "Chat model override");
         this._appendOption(select, "", project?.default_model ? `Inherit (${project.default_model})` : "Inherit default", !modelValue);
         this._appendModelOptions(select, modelValue);
         return [select, `Effective ${thread.effective_model || project?.default_model || this._defaultModel()}`];
       }),
       this._toolbarControl("Thinking", thread, () => {
-        const select = this._select("compact-select stable-select", "thread-thinking-select");
+        const select = this._select(
+          "compact-select stable-select",
+          "thread-thinking-select",
+          "Chat thinking level override"
+        );
         this._appendOption(select, "", project?.default_thinking_level ? `Inherit (${project.default_thinking_level})` : "Inherit default", !thinkingValue);
         for (const level of thinkingLevels) {
           this._appendOption(select, level, this._titleCase(level), level === thinkingValue);
@@ -2396,7 +2815,8 @@ class CodexBridgePanel extends HTMLElement {
     if (limits.blocked && limits.message) {
       return limits.message;
     }
-    const plan = limits.plan_type ? this._titleCase(limits.plan_type) : "Codex";
+    const normalizedPlan = normalizePlanType(limits.plan_type);
+    const plan = normalizedPlan === "Unknown" ? "Codex" : normalizedPlan;
     const updated = limits.updated_at ? this._timeAgo(limits.updated_at) : "now";
     return `${plan} usage snapshot ${updated}`;
   }
@@ -2421,6 +2841,9 @@ class CodexBridgePanel extends HTMLElement {
       for (const action of actions) {
         const button = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
         button.textContent = action.label;
+        if (this._authActionPending && AUTH_ACTION_IDS.has(action.action)) {
+          button.disabled = true;
+        }
         actionContainer.append(button);
       }
       content.append(actionContainer);
@@ -2432,15 +2855,24 @@ class CodexBridgePanel extends HTMLElement {
 
   _statusBannerState() {
     const auth = this._status?.auth;
-    if (auth?.auth_required || ["expired", "login_failed", "login_running", "login_starting"].includes(auth?.state)) {
-      const message = this._authBannerMessage(auth);
-      const actions = [
-        { action: "start-auth-login", label: auth?.state === "login_running" ? "Restart VM sign-in" : "Start VM sign-in", primary: true },
-        { action: "refresh-auth-status", label: "Check again" },
-      ];
-      if (auth?.user_code) {
-        actions.push({ action: "copy-auth-code", label: "Copy code" });
+    if (
+      auth?.auth_required ||
+      ["expired", "login_failed", "login_running", "login_starting", "unsupported"].includes(auth?.state)
+    ) {
+      if (this._isLegacyConnection()) {
+        return {
+          key: "legacy:account-actions",
+          tone: "error",
+          message: "Move this connection to the private Home Assistant App to manage ChatGPT sign-in.",
+          actions: [],
+        };
       }
+      const message = this._authBannerMessage(auth);
+      const actions = this._authViewModel().actions.map((action) => ({
+        action: action.id,
+        label: action.label,
+        primary: action.primary,
+      }));
       return {
         key: `auth:${auth?.state || "unknown"}:${message}:${auth?.user_code || ""}`,
         tone: "error",
@@ -2450,7 +2882,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     const limits = this._status?.limits;
     if (limits?.blocked) {
-      const message = limits.message || "Codex reported that the current account is out of available usage.";
+      const message = "Codex usage is currently unavailable for this ChatGPT account.";
       return {
         key: `limits:${message}`,
         tone: "error",
@@ -2464,7 +2896,7 @@ class CodexBridgePanel extends HTMLElement {
       return {
         key: `thread:${this._selectedThreadId}:${this._activeThread.last_error}`,
         tone: "error",
-        message: `Last Codex error: ${this._activeThread.last_error}`,
+        message: "The latest Codex run did not complete. Refresh the chat or try again.",
       };
     }
     const diagnosticsError = this._status?.diagnostics?.last_error;
@@ -2475,24 +2907,27 @@ class CodexBridgePanel extends HTMLElement {
       return {
         key: `diagnostics:${diagnosticsError}`,
         tone: "error",
-        message: `Latest bridge error: ${diagnosticsError}`,
+        message: "The Codex service needs attention. Check the App status in Home Assistant and retry.",
       };
     }
     return null;
   }
 
   _authBannerMessage(auth) {
-    const base = auth?.message || "Codex needs a fresh sign-in on the VM.";
-    if (auth?.state === "login_running") {
-      const code = auth.user_code ? ` Code: ${auth.user_code}.` : "";
-      const url = auth.verification_uri || auth.login_url;
-      const target = url ? ` Open ${url} from a device that can reach ChatGPT.` : " Complete the sign-in step from a device that can reach ChatGPT.";
-      return `${base}.${code}${target}`;
+    const state = auth?.state;
+    if (["login_starting", "login_running"].includes(state)) {
+      return "ChatGPT device sign-in is waiting for the one-time code to be approved. You can finish on your phone.";
     }
-    if (auth?.state === "login_failed") {
-      return `${base} You can restart the VM sign-in from here; if your work PC blocks ChatGPT, finish the device-code step on your phone, home browser, or the VM console.`;
+    if (state === "unsupported") {
+      return "Only ChatGPT account sign-in is supported. Sign out, then connect the correct account.";
     }
-    return `${base} HA can start the VM sign-in and show the device code, but an invalid refresh token still needs approval from a device that can reach ChatGPT.`;
+    if (state === "login_failed") {
+      return "ChatGPT device sign-in did not complete. Try again from Home Assistant.";
+    }
+    if (state === "expired") {
+      return "Your ChatGPT sign-in expired. Sign in again to continue.";
+    }
+    return "Sign in with ChatGPT to use Codex through Home Assistant.";
   }
 
   _isResolvedAuthError(message) {
@@ -2750,10 +3185,10 @@ class CodexBridgePanel extends HTMLElement {
 
   _progressItems() {
     const items = [];
-    if (this._config?.bridge_url) {
+    if (this._status) {
       items.push({
-        title: "Bridge connected",
-        meta: this._config.bridge_url,
+        title: "Home Assistant connected",
+        meta: this._isSupervisorConnection() ? "Private App connection" : "Older connection",
         state: "complete",
       });
     }
@@ -2804,7 +3239,7 @@ class CodexBridgePanel extends HTMLElement {
     if (event.event_type === "run.failed") {
       return {
         title: "Run failed",
-        meta: payload.error || "Unknown error",
+        meta: "Open the chat and retry when ready.",
         state: "error",
       };
     }
@@ -2946,10 +3381,9 @@ class CodexBridgePanel extends HTMLElement {
     const project = this._activeProject();
     const account = this._status?.account;
     const rows = [
-      ["Signed in", this._accountLabel(account)],
-      ["Account plan", account?.plan_type ? this._titleCase(account.plan_type) : "Unknown"],
-      ["Organization", account?.organization_title || "Unknown"],
-      ["Workspace", thread?.workspace_path || project?.root_path || "Not selected"],
+      ["ChatGPT", this._authViewModel().signedIn ? "Connected" : "Not connected"],
+      ["Account plan", normalizePlanType(account?.plan_type)],
+      ["Workspace", this._workspaceLabel(thread?.workspace_path || project?.root_path)],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
       ["Mode", thread?.mode || "full-auto"],
       ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
@@ -2964,47 +3398,19 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderDiagnostics() {
     const container = this.shadowRoot.getElementById("diagnostics-list");
-    const diagnostics = this._status?.diagnostics;
-    if (!diagnostics) {
-      container.replaceChildren(this._textElement("div", "empty-note", "Diagnostics unavailable."));
-      return;
-    }
-    const tools = diagnostics.tools || [];
-    const auth = this._status?.auth;
-    const modelCatalog = this._status?.model_catalog;
-    const rows = [
-      ["Bridge", diagnostics.bridge_version || "Unknown"],
-      ["Git", [diagnostics.git_branch, diagnostics.git_commit].filter(Boolean).join(" @ ") || "Unknown"],
-      ["Python", diagnostics.python_version || "Unknown"],
-      ["Codex CLI", diagnostics.codex_cli_version || "Unknown"],
-      ["Model catalogue", modelCatalog?.source || "Legacy bridge"],
-      ["Codex default", modelCatalog?.default_model || this._defaultModel()],
-      ["Catalogue refreshed", modelCatalog?.refreshed_at || "Unknown"],
-      ["Catalogue error", modelCatalog?.error || "None"],
-      ["Auth state", auth?.state || "Unknown"],
-      ["Auth message", auth?.message || "None"],
-      ["Device code", auth?.user_code || "None"],
-      ["Login URL", auth?.verification_uri || auth?.login_url || "None"],
-      ["Uptime", this._formatDuration(diagnostics.service_uptime_seconds)],
-      ["Last error", diagnostics.last_error || "None"],
-    ];
+    const model = this._runtimeViewModel();
+    const rows = model.items.map((item) => [
+      item.label,
+      [item.version, item.state === "ready" ? "Ready" : "Attention"].filter(Boolean).join(" · "),
+    ]);
     this._renderKeyValueRows(container, rows, "diagnostics-row");
-    const toolList = document.createElement("div");
-    toolList.className = "tool-chip-list";
-    for (const tool of tools) {
-      const chip = this._textElement(
-        "span",
-        `tool-chip${tool?.available ? " available" : ""}`,
-        tool?.name || "Unknown tool"
-      );
-      chip.title = String(tool?.version || tool?.path || "");
-      toolList.append(chip);
+    if (model.notice) {
+      container.append(this._textElement("div", "runtime-notice", model.notice));
     }
-    container.append(toolList);
   }
 
   async _loadStatus() {
-    this._status = await this._callWS("get_status");
+    this._mergeStatus(await this._callWS("get_status"));
   }
 
   async _loadProjects() {
@@ -3065,7 +3471,7 @@ class CodexBridgePanel extends HTMLElement {
       this._events = replay.state.events;
       this._sequence = replay.state.cursor;
       this._artifacts = artifacts;
-      this._status = status;
+      this._mergeStatus(status);
       this._forceMessageRebuild = true;
       this._syncThreadListStatus();
       this._syncSelectedArtifact();
@@ -3097,6 +3503,9 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _openProjectFormForEdit(projectId) {
+    if (this._isLegacyConnection()) {
+      return;
+    }
     const project = this._projects.find((item) => item.project_id === projectId);
     if (!project || project.kind !== "project") {
       return;
@@ -3107,7 +3516,7 @@ class CodexBridgePanel extends HTMLElement {
     this._showThreadForm = false;
     this._projectForm = {
       name: project.name,
-      rootPath: project.root_path,
+      rootPath: this._normalizedWorkspacePath(project.root_path) || "",
       defaultModel: project.default_model,
       defaultThinkingLevel: project.default_thinking_level,
     };
@@ -3340,18 +3749,121 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _startAuthLogin() {
+    if (this._authActionPending || this._isLegacyConnection()) {
+      return;
+    }
+    this._authActionPending = true;
+    this._renderAuthSurface();
+    this._renderStatusBanner();
     try {
-      const auth = await this._callWS("start_auth_login", { force_logout: true });
-      this._status = {
-        ...(this._status || {}),
-        auth,
-      };
+      const auth = await this._callWS("start_auth_login");
+      this._applyAuthStatus(auth);
+      this._confirmSignOut = false;
       this._dismissedBannerKey = "";
       this._clearError();
       this._render();
     } catch (error) {
       this._setError(error);
+    } finally {
+      this._authActionPending = false;
+      this._render();
     }
+  }
+
+  async _cancelAuthLogin() {
+    if (this._authActionPending || this._isLegacyConnection()) {
+      return;
+    }
+    this._authActionPending = true;
+    this._renderAuthSurface();
+    this._renderStatusBanner();
+    try {
+      const auth = await this._callWS("cancel_auth_login");
+      this._applyAuthStatus(auth);
+      this._confirmSignOut = false;
+      this._dismissedBannerKey = "";
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    } finally {
+      this._authActionPending = false;
+      this._render();
+    }
+  }
+
+  async _logoutAuth() {
+    if (this._authActionPending || this._isLegacyConnection()) {
+      return;
+    }
+    if (!this._confirmSignOut) {
+      this._confirmSignOut = true;
+      this._renderAuthSurface();
+      return;
+    }
+    this._authActionPending = true;
+    this._renderAuthSurface();
+    this._renderStatusBanner();
+    try {
+      const auth = await this._callWS("logout_auth");
+      this._applyAuthStatus(auth);
+      this._status = {
+        ...(this._status || {}),
+        account: { available: false, auth_mode: null, plan_type: null },
+      };
+      this._confirmSignOut = false;
+      this._dismissedBannerKey = "";
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
+    } finally {
+      this._authActionPending = false;
+      this._render();
+    }
+  }
+
+  _applyAuthStatus(auth) {
+    const newest = this._selectNewestAuthStatus(auth, this._status?.auth);
+    const next = this._normalizedAuthStatus(newest);
+    this._status = {
+      ...(this._status || {}),
+      auth: next,
+    };
+  }
+
+  _normalizedAuthStatus(auth) {
+    const next = auth && typeof auth === "object" && !Array.isArray(auth)
+      ? { ...auth }
+      : { state: "unknown" };
+    if (!["login_starting", "login_running"].includes(next.state)) {
+      next.user_code = null;
+      next.verification_uri = null;
+      next.login_url = null;
+      next.output_tail = [];
+    }
+    return next;
+  }
+
+  _selectNewestAuthStatus(primary, secondary) {
+    const first = primary && typeof primary === "object" && !Array.isArray(primary) ? primary : null;
+    const second = secondary && typeof secondary === "object" && !Array.isArray(secondary) ? secondary : null;
+    if (!first) return second;
+    if (!second) return first;
+    const firstRevision = Number.isSafeInteger(first.revision) && first.revision >= 0 ? first.revision : -1;
+    const secondRevision = Number.isSafeInteger(second.revision) && second.revision >= 0 ? second.revision : -1;
+    return secondRevision > firstRevision ? second : first;
+  }
+
+  _mergeStatus(status) {
+    if (!status || typeof status !== "object" || Array.isArray(status)) {
+      return;
+    }
+    const newestAuth = this._selectNewestAuthStatus(status.auth, this._status?.auth);
+    this._status = {
+      ...status,
+      auth: this._normalizedAuthStatus(newestAuth),
+    };
   }
 
   async _refreshAuthStatus() {
@@ -3360,10 +3872,14 @@ class CodexBridgePanel extends HTMLElement {
         this._callWS("get_auth_status"),
         this._callWS("get_status"),
       ]);
-      this._status = {
+      const newestAuth = this._selectNewestAuthStatus(auth, status?.auth);
+      this._mergeStatus({
         ...(status || this._status || {}),
-        auth: auth || status?.auth,
-      };
+        auth: newestAuth,
+      });
+      if (!this._authViewModel().signedIn) {
+        this._confirmSignOut = false;
+      }
       this._dismissedBannerKey = "";
       this._clearError();
       this._render();
@@ -3373,17 +3889,66 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _copyAuthCode() {
-    const auth = this._status?.auth;
-    const text = [auth?.user_code, auth?.verification_uri || auth?.login_url].filter(Boolean).join("\n");
-    if (!text) {
+    const code = this._authViewModel().code;
+    if (!code) {
       return;
     }
     try {
-      await this._writeClipboardText(text);
+      await this._writeClipboardText(code);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
+  }
+
+  _safeAuthVerificationUrl() {
+    if (!this._authViewModel().canOpen) {
+      return null;
+    }
+    const candidate = this._status?.auth?.verification_uri || this._status?.auth?.login_url;
+    if (typeof candidate !== "string") {
+      return null;
+    }
+    try {
+      const url = new URL(candidate);
+      if (
+        url.protocol !== "https:" ||
+        !AUTH_VERIFICATION_HOSTS.has(url.hostname.toLowerCase()) ||
+        !["", "443"].includes(url.port) ||
+        !url.pathname ||
+        url.pathname === "/" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        return null;
+      }
+      return url.href;
+    } catch {
+      return null;
+    }
+  }
+
+  _openChatGptSignIn() {
+    const url = this._safeAuthVerificationUrl();
+    if (!url) {
+      this._setError("The ChatGPT sign-in page is unavailable. Copy the code and continue on another device.");
+      return;
+    }
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) {
+      opened.opener = null;
+    }
+  }
+
+  async _retryAppConnection() {
+    this._stopSystemEventSubscription();
+    this._config = null;
+    this._status = null;
+    this._dismissedBannerKey = "";
+    this._clearError();
+    await this._bootstrap();
   }
 
   async _uploadFiles(files, { useRelativePaths }) {
@@ -3537,7 +4102,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _deleteProject(projectId) {
-    if (!projectId || !window.confirm("Delete this project and its chat records? The VM folder will be left in place.")) {
+    if (!projectId || !window.confirm("Delete this project and its chat records? Workspace files will be left in place.")) {
       return;
     }
     try {
@@ -3854,7 +4419,7 @@ class CodexBridgePanel extends HTMLElement {
         }
       }
       if (status) {
-        this._status = status;
+        this._mergeStatus(status);
       }
 
       const hasNewEvents = this._sequence !== previousSequence;
@@ -3894,6 +4459,167 @@ class CodexBridgePanel extends HTMLElement {
     this._pollInFlight = false;
   }
 
+  async _startSystemEventSubscription() {
+    if (!this._isSupervisorConnection() || !this._hass?.connection?.subscribeMessage) {
+      this._systemEventSubscriptionActive = false;
+      return false;
+    }
+    if (this._systemEventSubscriptionActive) {
+      return true;
+    }
+    if (this._systemEventSubscriptionPending) {
+      return this._systemEventSubscriptionPending;
+    }
+
+    const generation = ++this._systemEventGeneration;
+    const subscribe = async () => {
+      try {
+        const unsubscribe = await this._hass.connection.subscribeMessage(
+          (event) => {
+            if (generation === this._systemEventGeneration) {
+              this._handleSystemEvent(event);
+            }
+          },
+          {
+            type: "codex_bridge/subscribe_events",
+            after: this._systemEventCursor,
+            scopes: [...SYSTEM_EVENT_SCOPES],
+          }
+        );
+        if (generation !== this._systemEventGeneration) {
+          unsubscribe();
+          return false;
+        }
+        this._systemEventUnsubscribe = unsubscribe;
+        this._systemEventSubscriptionActive = true;
+        this._systemReconnectAttempt = 0;
+        if (this._systemReconnectTimer) {
+          window.clearTimeout(this._systemReconnectTimer);
+          this._systemReconnectTimer = null;
+        }
+        return true;
+      } catch {
+        if (generation === this._systemEventGeneration) {
+          this._systemEventSubscriptionActive = false;
+          this._scheduleSystemReconnect();
+        }
+        return false;
+      } finally {
+        if (generation === this._systemEventGeneration) {
+          this._systemEventSubscriptionPending = null;
+        }
+      }
+    };
+    this._systemEventSubscriptionPending = subscribe();
+    return this._systemEventSubscriptionPending;
+  }
+
+  _stopSystemEventSubscription() {
+    this._systemEventGeneration += 1;
+    if (this._systemEventUnsubscribe) {
+      this._systemEventUnsubscribe();
+      this._systemEventUnsubscribe = null;
+    }
+    if (this._systemRefreshTimer) {
+      window.clearTimeout(this._systemRefreshTimer);
+      this._systemRefreshTimer = null;
+    }
+    if (this._systemReconnectTimer) {
+      window.clearTimeout(this._systemReconnectTimer);
+      this._systemReconnectTimer = null;
+    }
+    this._systemEventSubscriptionPending = null;
+    this._systemEventSubscriptionActive = false;
+    this._systemReconnectAttempt = 0;
+  }
+
+  _retireSystemEventSubscription() {
+    this._systemEventGeneration += 1;
+    if (this._systemEventUnsubscribe) {
+      this._systemEventUnsubscribe();
+      this._systemEventUnsubscribe = null;
+    }
+    this._systemEventSubscriptionPending = null;
+    this._systemEventSubscriptionActive = false;
+    this._scheduleSystemReconnect();
+  }
+
+  _scheduleSystemReconnect() {
+    if (
+      this._systemReconnectTimer ||
+      !this.isConnected ||
+      !this._isSupervisorConnection()
+    ) {
+      return;
+    }
+    this._systemReconnectAttempt = Math.min(this._systemReconnectAttempt + 1, 7);
+    const delay = Math.min(30000, 500 * (2 ** (this._systemReconnectAttempt - 1)));
+    this._systemReconnectTimer = window.setTimeout(() => {
+      this._systemReconnectTimer = null;
+      this._startSystemEventSubscription();
+    }, delay);
+  }
+
+  _handleSystemEvent(envelope) {
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+      return;
+    }
+    if (envelope.type === "event") {
+      const event = envelope.event;
+      if (!event || typeof event !== "object" || Array.isArray(event)) {
+        return;
+      }
+      const cursor = event.cursor;
+      const scope = event.scope;
+      const eventType = event.event_type;
+      const payload = event.payload;
+      if (
+        !Number.isSafeInteger(cursor) ||
+        cursor <= this._systemEventCursor ||
+        !SYSTEM_EVENT_SCOPES.includes(scope) ||
+        typeof eventType !== "string" ||
+        !eventType.startsWith(`${scope}.`) ||
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload)
+      ) {
+        return;
+      }
+      this._systemEventCursor = cursor;
+      this._scheduleSystemRefresh();
+      return;
+    }
+    if (envelope.type === "snapshot_required") {
+      const cursor = envelope.cursor;
+      if (Number.isSafeInteger(cursor) && cursor >= 0) {
+        this._systemEventCursor = Math.max(this._systemEventCursor, cursor);
+      }
+      this._scheduleSystemRefresh();
+      return;
+    }
+    if (envelope.type === "stream_status") {
+      this._scheduleSystemRefresh();
+      if (["authentication_failed", "failed", "protocol_error", "upstream_error", "stopped"].includes(envelope.state)) {
+        this._retireSystemEventSubscription();
+      }
+      return;
+    }
+    if (envelope.type === "error") {
+      this._scheduleSystemRefresh();
+      this._retireSystemEventSubscription();
+    }
+  }
+
+  _scheduleSystemRefresh() {
+    if (this._systemRefreshTimer) {
+      return;
+    }
+    this._systemRefreshTimer = window.setTimeout(() => {
+      this._systemRefreshTimer = null;
+      this._refreshAuthStatus();
+    }, 40);
+  }
+
   _startEventSubscription() {
     this._stopEventSubscription();
     if (!this._selectedThreadId || !this._hass?.connection?.subscribeMessage) {
@@ -3901,14 +4627,19 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     const threadId = this._selectedThreadId;
+    const generation = this._eventSubscriptionGeneration;
     this._eventSubscriptionPending = this._hass.connection
-      .subscribeMessage((event) => this._handleSubscribedEvent(threadId, event), {
+      .subscribeMessage((event) => {
+        if (generation === this._eventSubscriptionGeneration) {
+          this._handleSubscribedEvent(threadId, event);
+        }
+      }, {
         type: "codex_bridge/subscribe_events",
         thread_id: threadId,
         after: this._sequence,
       })
       .then((unsubscribe) => {
-        if (threadId !== this._selectedThreadId) {
+        if (generation !== this._eventSubscriptionGeneration || threadId !== this._selectedThreadId) {
           unsubscribe();
           return;
         }
@@ -3916,11 +4647,19 @@ class CodexBridgePanel extends HTMLElement {
         this._eventSubscriptionActive = true;
       })
       .catch(() => {
-        this._eventSubscriptionActive = false;
+        if (generation === this._eventSubscriptionGeneration) {
+          this._eventSubscriptionActive = false;
+        }
+      })
+      .finally(() => {
+        if (generation === this._eventSubscriptionGeneration) {
+          this._eventSubscriptionPending = null;
+        }
       });
   }
 
   _stopEventSubscription() {
+    this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
       this._eventUnsubscribe();
       this._eventUnsubscribe = null;
@@ -3999,7 +4738,7 @@ class CodexBridgePanel extends HTMLElement {
         }
         this._activeThread = thread;
         this._artifacts = artifacts;
-        this._status = status;
+        this._mergeStatus(status);
         this._syncThreadListStatus();
         this._syncSelectedArtifact();
         this._render();
@@ -4043,6 +4782,48 @@ class CodexBridgePanel extends HTMLElement {
       return this._projects.find((project) => project.project_id === this._activeThread.project_id) || null;
     }
     return this._projects.find((project) => project.project_id === this._selectedProjectId) || null;
+  }
+
+  _workspaceLabel(value, fallback = "Not selected") {
+    if (typeof value !== "string" || !value.trim()) {
+      return fallback;
+    }
+    if (!this._isSupervisorConnection()) {
+      return this._isLegacyConnection() ? "External workspace" : fallback;
+    }
+    const normalized = this._normalizedWorkspacePath(value);
+    if (!normalized) {
+      return "Private App workspace";
+    }
+    if (normalized === ".") {
+      return "App workspace root";
+    }
+    return normalized;
+  }
+
+  _normalizedWorkspacePath(value) {
+    if (typeof value !== "string" || !value.trim()) {
+      return null;
+    }
+    const normalized = value.trim().replaceAll("\\", "/");
+    if (normalized === ".") {
+      return normalized;
+    }
+    const segments = normalized.split("/");
+    const hasControlCharacter = [...normalized].some((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint < 32 || codePoint === 127;
+    });
+    if (
+      hasControlCharacter ||
+      normalized.startsWith("/") ||
+      /^[A-Za-z]:/u.test(normalized) ||
+      normalized.includes("://") ||
+      segments.some((segment) => !segment || segment === "." || segment === "..")
+    ) {
+      return null;
+    }
+    return normalized;
   }
 
   _directProject() {
@@ -4153,24 +4934,21 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _accountLabel(account) {
-    if (!account?.available) {
-      return "Account unavailable";
+    if (this._authViewModel().signedIn) {
+      const plan = normalizePlanType(account?.plan_type);
+      return plan === "Unknown" ? "ChatGPT connected" : `ChatGPT ${plan}`;
     }
-    return account.email || account.name || account.account_id || "Signed in";
+    return account?.auth_mode && account.auth_mode !== "chatgpt"
+      ? "Account needs attention"
+      : "ChatGPT not connected";
   }
 
   _accountTitle(account) {
-    if (!account?.available) {
-      return "The bridge could not read a Codex login from auth.json";
+    if (!this._authViewModel().signedIn) {
+      return "Manage ChatGPT sign-in in Home Assistant";
     }
-    const parts = [
-      account.name,
-      account.email,
-      account.plan_type ? `${this._titleCase(account.plan_type)} plan` : "",
-      account.organization_title,
-      account.auth_mode ? `Auth: ${account.auth_mode}` : "",
-    ].filter(Boolean);
-    return parts.join(" | ");
+    const plan = normalizePlanType(account?.plan_type);
+    return plan === "Unknown" ? "Connected with ChatGPT" : `Connected with the ChatGPT ${plan} plan`;
   }
 
   _formatPercent(value) {
@@ -4353,10 +5131,31 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _setError(error) {
-    this._error = typeof error === "string"
-      ? error
-      : error?.body?.message || error?.message || "Unexpected error";
+    this._error = this._safeUiError(error);
     this._render();
+  }
+
+  _safeUiError(error) {
+    const candidate = typeof error === "string"
+      ? error
+      : error?.body?.message || error?.message || "The Codex request did not complete.";
+    const withoutControlCharacters = Array.from(String(candidate), (character) => {
+      const code = character.codePointAt(0);
+      return code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127
+        ? " "
+        : character;
+    }).join("");
+    const safe = withoutControlCharacters
+      .replace(/https?:\/\/[^\s<>"']+/giu, "[private address]")
+      .replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]")
+      .replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]")
+      .replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]")
+      .replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]")
+      .replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]")
+      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]")
+      .replace(/\s+/gu, " ")
+      .trim();
+    return (safe || "The Codex request did not complete.").slice(0, 240);
   }
 
   _clearError() {
@@ -4384,20 +5183,24 @@ class CodexBridgePanel extends HTMLElement {
     return button;
   }
 
-  _input(className, id, placeholder, value) {
+  _input(className, id, placeholder, value, accessibleLabel = placeholder) {
     const input = document.createElement("input");
     input.className = className;
     input.id = id;
     input.type = "text";
     input.placeholder = placeholder;
     input.value = String(value ?? "");
+    input.setAttribute("aria-label", accessibleLabel);
     return input;
   }
 
-  _select(className, id) {
+  _select(className, id, accessibleLabel) {
     const select = document.createElement("select");
     select.className = className;
     select.id = id;
+    if (accessibleLabel) {
+      select.setAttribute("aria-label", accessibleLabel);
+    }
     return select;
   }
 

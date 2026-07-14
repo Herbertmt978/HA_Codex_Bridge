@@ -132,7 +132,7 @@ class LegacyAuthManager:
     def start_device_login(
         self,
         *,
-        force_logout: bool = True,
+        force_logout: bool = False,
     ) -> CodexAuthStatusRecord:
         self.calls.append(("start_device_login", force_logout))
         return _status(
@@ -312,7 +312,7 @@ def test_external_profile_keeps_injected_legacy_manager_without_structured_owner
         login_response = client.post(
             "/auth/device-login",
             headers=AUTHORIZATION,
-            json={"force_logout": False},
+            json={},
         )
         logout_response = client.post("/auth/logout", headers=AUTHORIZATION)
 
@@ -363,6 +363,11 @@ def test_home_assistant_auth_routes_dispatch_to_the_structured_coordinator(
             headers=AUTHORIZATION,
             json={"force_logout": True},
         )
+        default_login = client.post(
+            "/auth/device-login",
+            headers=AUTHORIZATION,
+            json={},
+        )
         unforced_login = client.post(
             "/auth/device-login",
             headers=AUTHORIZATION,
@@ -379,6 +384,7 @@ def test_home_assistant_auth_routes_dispatch_to_the_structured_coordinator(
     assert bridge_status_response.status_code == 200
     assert bridge_status_response.json()["auth"] == status_response.json()
     assert forced_login.status_code == 202
+    assert default_login.status_code == 202
     assert unforced_login.status_code == 202
     assert forced_login.json()["busy"] is True
     assert forced_login.json()["user_code"] == "ABCD-EFGH"
@@ -389,6 +395,7 @@ def test_home_assistant_auth_routes_dispatch_to_the_structured_coordinator(
     assert coordinator.calls == [
         "status",
         "status",
+        "start_device_login",
         "start_device_login",
         "start_device_login",
         "cancel_login",

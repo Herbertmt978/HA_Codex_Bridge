@@ -213,7 +213,7 @@ class CodexAuthCoordinator:
     def start_device_login(
         self,
         *,
-        force_logout: bool = True,
+        force_logout: bool = False,
     ) -> CodexAuthStatusRecord:
         """Start ChatGPT device authorization without implicitly removing credentials."""
 

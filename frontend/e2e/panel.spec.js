@@ -107,3 +107,87 @@ test("keeps hostile Codex content inert and on the Home Assistant origin", async
   await expect(panel.locator("#attachment-chip-list")).toContainText("safe-upload.txt");
   expect(pageErrors).toEqual([]);
 });
+
+test("runs the Home Assistant first-run and ChatGPT device sign-in flow without exposing runtime secrets", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  const onboarding = panel.locator("#onboarding");
+  const auth = panel.locator("#auth-panel");
+
+  await expect(onboarding).toContainText("App connected");
+  await expect(onboarding).toContainText("Integration confirmed");
+  await expect(onboarding).toContainText("Bridge ready");
+  await expect(onboarding).toContainText("Codex ready");
+  await expect(panel.locator("#runtime-strip")).toContainText("App 0.6.0");
+  await expect(panel.locator("#runtime-strip")).toContainText("Codex 0.144.1");
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__codexHarness.subscriptions.map((subscription) => subscription.scopes || [])),
+    )
+    .toContainEqual(expect.arrayContaining(["auth", "runtime"]));
+  const calls = await page.evaluate(() => window.__codexHarness.calls);
+  const globalSubscription = calls.findIndex(
+    (call) => call.kind === "subscribe" && call.payload.scopes?.includes("auth") && call.payload.scopes?.includes("runtime"),
+  );
+  const firstChatData = calls.findIndex((call) => call.kind === "ws" && ["codex_bridge/list_projects", "codex_bridge/list_threads"].includes(call.type));
+  expect(globalSubscription).toBeGreaterThanOrEqual(0);
+  expect(firstChatData).toBeGreaterThan(globalSubscription);
+
+  await auth.locator('button[data-action="confirm-sign-out"]').click();
+  await auth.locator('button[data-action="sign-out"]').click();
+  await expect(auth.locator('button[data-action="start-auth-login"]')).toBeVisible();
+  await auth.locator('button[data-action="start-auth-login"]').click();
+  await expect(auth).toContainText("HOME-ASSISTANT");
+  await expect(auth).toContainText("phone or another signed-in device");
+  await auth.locator('button[data-action="copy-auth-code"]').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("HOME-ASSISTANT");
+
+  await page.evaluate(() => {
+    window.__openedChatGpt = null;
+    window.open = (url) => {
+      window.__openedChatGpt = String(url);
+      return null;
+    };
+  });
+  await auth.locator('button[data-action="open-chatgpt"]').click();
+  await expect.poll(() => page.evaluate(() => window.__openedChatGpt)).toBe("https://auth.openai.com/codex/device");
+
+  await auth.locator('button[data-action="cancel-sign-in"]').click();
+  await expect(auth).not.toContainText("HOME-ASSISTANT");
+  await expect(auth.locator('button[data-action="start-auth-login"]')).toBeVisible();
+
+  await auth.locator('button[data-action="start-auth-login"]').click();
+  await page.evaluate(() => window.__codexHarness.completeLogin());
+  await expect(auth).toContainText("ChatGPT connected");
+  await auth.locator('button[data-action="confirm-sign-out"]').click();
+  await auth.locator('button[data-action="sign-out"]').click();
+  await expect(auth).toContainText("ChatGPT sign-in");
+
+  const renderedText = await panel.locator(".shell").textContent();
+  for (const privateFragment of ["C:\\", "Windows", "VM", "API key", "PAT", "access_token", "auth.openai.com/codex/device"]) {
+    expect(renderedText).not.toContain(privateFragment);
+  }
+});
+
+test("creates a workspace project and first chat at compact widths in both colour schemes", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+
+  await panel.locator("#new-project-button").click();
+  await panel.locator("#project-name-input").fill("Home lab notes");
+  await panel.locator('button[data-action="save-project"]').click();
+  await expect(panel.locator("#project-section")).toContainText("Home lab notes");
+
+  await panel.locator('button[data-action="new-chat"]').last().click();
+  await panel.locator("#thread-title-input").fill("First Home Assistant chat");
+  await panel.locator('button[data-action="save-thread"]').click();
+  await expect(panel.locator("#thread-title-label")).toContainText("First Home Assistant chat");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(panel.locator("#runtime-strip")).toBeVisible();
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(panel.locator("#runtime-strip")).toBeVisible();
+});

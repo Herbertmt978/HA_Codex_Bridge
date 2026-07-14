@@ -16,6 +16,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_get_event_status,
     ws_get_events,
     ws_get_status,
+    ws_start_auth_login,
     ws_subscribe_events,
     ws_unsubscribe_events,
 )
@@ -126,6 +127,25 @@ async def test_v1_subscription_acknowledges_and_forwards_auth_without_a_chat() -
             },
         )
     ]
+
+
+async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:
+    runtime, _broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    runtime.client.async_start_auth_login = AsyncMock(
+        return_value={"state": "login_starting"}
+    )
+
+    ws_start_auth_login(
+        hass,
+        connection,
+        {"id": 4, "type": f"{DOMAIN}/start_auth_login"},
+    )
+    await asyncio.sleep(0)
+
+    runtime.client.async_start_auth_login.assert_awaited_once_with(False)
+    assert connection.results == [(4, {"state": "login_starting"})]
 
 
 async def test_singular_thread_filter_preserves_the_retiring_panel_contract() -> None:

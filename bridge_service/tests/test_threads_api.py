@@ -284,7 +284,7 @@ class FakeAuthManager:
             return CodexAuthStatusRecord(
                 state="expired",
                 auth_required=True,
-                message="Codex login expired on the VM. Start a new VM sign-in from Home Assistant.",
+                message="Codex sign-in expired. Start a new sign-in from Home Assistant.",
             )
         return CodexAuthStatusRecord(state="ok", message="Codex login is ready.")
 
@@ -826,7 +826,7 @@ def test_status_surfaces_codex_auth_expired_state(tmp_path) -> None:
     payload = response.json()
     assert payload["auth"]["state"] == "expired"
     assert payload["auth"]["auth_required"] is True
-    assert "login expired" in payload["auth"]["message"]
+    assert "sign-in expired" in payload["auth"]["message"]
     assert payload["diagnostics"]["app_version"] == "0.6.0"
     assert payload["diagnostics"]["bridge_version"] == "0.4.test"
     assert payload["diagnostics"]["api_current"] == 1

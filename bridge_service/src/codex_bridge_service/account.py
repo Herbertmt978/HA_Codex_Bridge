@@ -150,7 +150,7 @@ class CodexAccountProbe:
         name = self._first_str(id_claims.get("name"), profile_claims.get("name"), access_claims.get("name"))
         account_id = self._first_str(auth_claims.get("chatgpt_account_id"), tokens.get("account_id"))
         user_id = self._first_str(auth_claims.get("chatgpt_user_id"), auth_claims.get("user_id"))
-        plan_type = self._first_str(auth_claims.get("chatgpt_plan_type"))
+        plan_type = normalize_chatgpt_plan_type(auth_claims.get("chatgpt_plan_type"))
         organization_id = self._first_str(organization.get("id"))
         organization_title = self._first_str(organization.get("title"))
         auth_mode = self._first_str(auth.get("auth_mode"))

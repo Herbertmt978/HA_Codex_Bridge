@@ -415,7 +415,7 @@ def test_runner_marks_thread_auth_expired_after_refresh_token_failure(tmp_path, 
 
     assert saved.status == "error"
     assert saved.active_run_id is None
-    assert saved.last_error == "Codex login expired on the VM. Start a new VM sign-in from Home Assistant."
+    assert saved.last_error == "Codex sign-in expired. Start a new sign-in from Home Assistant."
     assert events[-1].event_type == "run.failed"
     assert events[-1].payload["failure_type"] == "auth.expired"
     assert events[-1].payload["auth_required"] is True

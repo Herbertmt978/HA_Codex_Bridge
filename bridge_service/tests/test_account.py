@@ -76,3 +76,25 @@ def test_account_probe_returns_unavailable_when_auth_is_missing(tmp_path) -> Non
 
     assert account.available is False
     assert account.email is None
+
+
+def test_account_probe_redacts_unknown_chatgpt_plan_type(tmp_path) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    id_token = _jwt(
+        {
+            "email": "person@example.com",
+            "https://api.openai.com/auth": {
+                "chatgpt_plan_type": "private-enterprise-plan",
+            },
+        }
+    )
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "chatgpt", "tokens": {"id_token": id_token}}),
+        encoding="utf-8",
+    )
+
+    account = CodexAccountProbe(codex_home).probe()
+
+    assert account.plan_type is None
+    assert "private-enterprise-plan" not in repr(account)

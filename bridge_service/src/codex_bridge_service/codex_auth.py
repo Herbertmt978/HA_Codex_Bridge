@@ -3,11 +3,12 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock, Thread
+from urllib.parse import urlsplit
 
 from .codex_process import codex_command_prefix, codex_subprocess_environment
 from .models import CodexAuthStatusRecord
 
-AUTH_EXPIRED_MESSAGE = "Codex login expired on the VM. Start a new VM sign-in from Home Assistant."
+AUTH_EXPIRED_MESSAGE = "Codex sign-in expired. Start a new sign-in from Home Assistant."
 _AUTH_FAILURE_MARKERS = (
     "401 unauthorized",
     "access token could not be refreshed",
@@ -18,6 +19,9 @@ _AUTH_FAILURE_MARKERS = (
 )
 _ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 _DEVICE_CODE_PATTERN = re.compile(r"\b(?=[A-Z0-9-]*\d)[A-Z0-9]{4,6}-[A-Z0-9]{4,6}\b")
+_ALLOWED_LOGIN_HOSTS = frozenset(
+    {"auth.openai.com", "chatgpt.com", "platform.openai.com"}
+)
 
 
 def is_codex_auth_failure(message: str | None) -> bool:
@@ -68,7 +72,7 @@ class CodexAuthManager:
             )
         return current
 
-    def start_device_login(self, *, force_logout: bool = True) -> CodexAuthStatusRecord:
+    def start_device_login(self, *, force_logout: bool = False) -> CodexAuthStatusRecord:
         with self._lock:
             login_is_starting = self._status.state in {"login_starting", "login_running"}
             if login_is_starting or (self._process is not None and self._process.poll() is None):
@@ -76,7 +80,7 @@ class CodexAuthManager:
             self._status = CodexAuthStatusRecord(
                 state="login_starting",
                 auth_required=True,
-                message="Starting Codex sign-in on the VM.",
+                message="Starting Codex sign-in.",
                 updated_at=self._now(),
             )
             worker = Thread(target=self._run_device_login, args=(force_logout,), daemon=True)
@@ -96,21 +100,20 @@ class CodexAuthManager:
             timeout=30,
             env=codex_subprocess_environment(self.codex_home),
         )
-        output_tail = self._tail_output(completed.stdout, completed.stderr)
         state = "logged_out" if completed.returncode == 0 else "logout_failed"
-        message = "Codex credentials were removed from the VM." if completed.returncode == 0 else "Codex logout failed."
+        message = "Codex credentials were removed." if completed.returncode == 0 else "Codex sign-out failed."
         with self._lock:
             self._process = None
             self._status = CodexAuthStatusRecord(
                 state=state,
                 auth_required=True,
                 message=message,
-                output_tail=output_tail,
+                output_tail=[],
                 updated_at=self._now(),
             )
             return self._status.model_copy(deep=True)
 
-    def _run_device_login(self, force_logout: bool) -> None:
+    def _run_device_login(self, force_logout: bool = False) -> None:
         output_lines: list[str] = []
         try:
             if force_logout:
@@ -137,7 +140,7 @@ class CodexAuthManager:
                 self._status = self._status.model_copy(
                     update={
                         "state": "login_running",
-                        "message": "Codex sign-in is running on the VM.",
+                        "message": "Codex sign-in is waiting for a device code.",
                         "updated_at": self._now(),
                     }
                 )
@@ -159,8 +162,11 @@ class CodexAuthManager:
                         update={
                             "state": "ok",
                             "auth_required": False,
-                            "message": "Codex sign-in completed on the VM.",
-                            "output_tail": output_lines[-20:],
+                            "message": "Codex sign-in completed.",
+                            "verification_uri": None,
+                            "login_url": None,
+                            "user_code": None,
+                            "output_tail": [],
                             "updated_at": self._now(),
                         }
                     )
@@ -169,26 +175,33 @@ class CodexAuthManager:
                         update={
                             "state": "login_failed",
                             "auth_required": True,
-                            "message": "Codex sign-in did not complete on the VM.",
-                            "output_tail": output_lines[-20:],
+                            "message": "Codex sign-in did not complete.",
+                            "verification_uri": None,
+                            "login_url": None,
+                            "user_code": None,
+                            "output_tail": [],
                             "updated_at": self._now(),
                         }
                     )
-        except Exception as exc:
+        except Exception:
             with self._lock:
                 self._process = None
                 self._status = CodexAuthStatusRecord(
                     state="login_failed",
                     auth_required=True,
-                    message=str(exc),
-                    output_tail=output_lines[-20:],
+                    message="Codex sign-in did not complete.",
+                    output_tail=[],
                     updated_at=self._now(),
                 )
 
     def _update_login_output(self, output_lines: list[str]) -> None:
         clean_lines = [self._strip_ansi(line) for line in output_lines]
         text = "\n".join(clean_lines)
-        urls = re.findall(r"https?://[^\s)>\"]+", text)
+        urls = [
+            url
+            for url in re.findall(r"https?://[^\s)>\"]+", text)
+            if self._safe_login_url(url)
+        ]
         code = self._extract_user_code(text)
         with self._lock:
             self._status = self._status.model_copy(
@@ -199,7 +212,7 @@ class CodexAuthManager:
                     "verification_uri": urls[0] if urls else self._status.verification_uri,
                     "login_url": urls[-1] if urls else self._status.login_url,
                     "user_code": code or self._status.user_code,
-                    "output_tail": clean_lines[-20:],
+                    "output_tail": [],
                     "updated_at": self._now(),
                 }
             )
@@ -216,18 +229,31 @@ class CodexAuthManager:
         standalone = _DEVICE_CODE_PATTERN.search(clean_text)
         return standalone.group(0) if standalone else None
 
+    def _safe_login_url(self, value: str) -> bool:
+        if not isinstance(value, str) or value != value.strip():
+            return False
+        try:
+            parsed = urlsplit(value)
+            hostname = parsed.hostname
+            port = parsed.port
+        except (TypeError, ValueError):
+            return False
+        return (
+            parsed.scheme == "https"
+            and hostname in _ALLOWED_LOGIN_HOSTS
+            and port in {None, 443}
+            and parsed.path not in {"", "/"}
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+
     def _strip_ansi(self, value: str) -> str:
         return _ANSI_PATTERN.sub("", value)
 
     def _command_prefix(self) -> list[str]:
         return codex_command_prefix(self.codex_command)
-
-    def _tail_output(self, stdout: str | None, stderr: str | None) -> list[str]:
-        lines = []
-        for value in (stdout, stderr):
-            if value:
-                lines.extend(line.strip() for line in value.splitlines() if line.strip())
-        return lines[-20:]
 
     def _now(self) -> str:
         return datetime.now(UTC).isoformat().replace("+00:00", "Z")

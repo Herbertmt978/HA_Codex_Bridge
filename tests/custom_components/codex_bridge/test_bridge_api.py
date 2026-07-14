@@ -73,6 +73,25 @@ async def test_authenticated_ready_negotiates_v1_and_sends_api_header(
     assert ready == ReadyRecord.from_payload(_fixture("ready_v1.json"))
 
 
+async def test_start_auth_login_defaults_to_non_destructive_mode(
+    bridge_server_factory,
+) -> None:
+    bodies: list[dict[str, object]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/auth/device-login":
+            bodies.append(await request.json())
+            return web.json_response({"state": "login_starting"}, status=202)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_start_auth_login()
+
+    assert bodies == [{"force_logout": False}]
+
+
 async def test_explicit_legacy_client_uses_v0_header_after_legacy_readiness(
     bridge_server_factory,
 ) -> None:

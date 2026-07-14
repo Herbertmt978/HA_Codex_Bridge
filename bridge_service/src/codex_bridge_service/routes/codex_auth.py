@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 class DeviceLoginRequest(BaseModel):
-    force_logout: bool = True
+    force_logout: bool = False
 
 
 @router.get("/auth/status", response_model=CodexAuthStatusRecord)
