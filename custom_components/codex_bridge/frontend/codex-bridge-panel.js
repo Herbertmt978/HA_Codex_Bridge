@@ -820,6 +820,122 @@ function renderAuth(container, model) {
   container.append(card);
 }
 
+// frontend/src/views/approval.js
+var APPROVAL_ACTIONS = /* @__PURE__ */ new Map([
+  ["accept", "Accept"],
+  ["decline", "Decline"],
+  ["cancel", "Cancel"]
+]);
+var MAX_TITLE_LENGTH = 160;
+var MAX_SUMMARY_LENGTH = 512;
+var MAX_COMMAND_LENGTH = 512;
+var MAX_SCOPE_PATHS = 128;
+function plainText(value, limit) {
+  if (typeof value !== "string") return "";
+  return [...value].filter((character) => {
+    const code = character.codePointAt(0);
+    return code > 31 && code !== 127;
+  }).join("").trim().slice(0, limit);
+}
+function safeWorkspacePath(value) {
+  const path = plainText(value, 240).replaceAll("\\", "/");
+  if (!path || path.startsWith("/") || /^[A-Za-z]:/u.test(path) || path.includes("://")) return null;
+  const segments = path.split("/");
+  return segments.every((segment) => segment && segment !== "." && segment !== "..") ? path : null;
+}
+function expiryState(value, now) {
+  if (typeof value !== "string") return { expired: true, label: "Expiry unavailable" };
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return { expired: true, label: "Expiry unavailable" };
+  if (timestamp <= now) return { expired: true, label: "Expired" };
+  return { expired: false, label: `Expires ${new Date(timestamp).toISOString().replace(".000", "")}` };
+}
+function getApprovalViewModel(interaction = {}, { now = Date.now(), pending = false, stale = false } = {}) {
+  const display = interaction && typeof interaction.display === "object" ? interaction.display : {};
+  const expiry = expiryState(interaction?.expires_at, now);
+  const interactionPending = interaction?.status === "pending";
+  const unavailable = Boolean(pending || stale || expiry.expired || !interactionPending);
+  const state = pending ? "submitting" : stale ? "stale" : expiry.expired ? "expired" : interactionPending ? "ready" : "unavailable";
+  const allowedActions = Array.isArray(interaction?.allowed_actions) ? interaction.allowed_actions : [];
+  const actions = [...APPROVAL_ACTIONS].filter(([action]) => allowedActions.includes(action)).map(([id, label]) => ({ id, label, disabled: unavailable }));
+  const scope = Array.isArray(display.workspace_paths) ? display.workspace_paths.map(safeWorkspacePath).filter(Boolean).slice(0, MAX_SCOPE_PATHS) : [];
+  const command = plainText(display.command, MAX_COMMAND_LENGTH);
+  const kind = interaction?.kind === "file_change_approval" ? "File change approval" : "Command approval";
+  return {
+    interactionId: typeof interaction?.interaction_id === "string" ? interaction.interaction_id : "",
+    title: plainText(display.title, MAX_TITLE_LENGTH) || kind,
+    summary: plainText(display.summary, MAX_SUMMARY_LENGTH) || "Codex needs your decision to continue.",
+    kind,
+    command: command || null,
+    scope,
+    expiry: expiry.label,
+    state,
+    disabled: unavailable,
+    actions
+  };
+}
+function renderApproval(container, model) {
+  container.replaceChildren();
+  const card = document.createElement("section");
+  card.className = `approval-card approval-${model.state}`;
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-modal", "false");
+  card.tabIndex = -1;
+  const accessibleId = /^[A-Za-z0-9_.:-]{1,128}$/u.test(model.interactionId) ? model.interactionId : "pending";
+  const titleId = `approval-${accessibleId}-title`;
+  const summaryId = `approval-${accessibleId}-summary`;
+  card.setAttribute("aria-labelledby", titleId);
+  card.setAttribute("aria-describedby", summaryId);
+  const title = document.createElement("h3");
+  title.id = titleId;
+  title.textContent = model.title;
+  const summary = document.createElement("p");
+  summary.id = summaryId;
+  summary.textContent = model.summary;
+  const status = document.createElement("p");
+  status.className = "decision-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.textContent = model.state === "submitting" ? "Sending decision..." : model.expiry;
+  card.append(title, summary, status);
+  if (model.command) {
+    const commandLabel = document.createElement("span");
+    commandLabel.className = "decision-label";
+    commandLabel.textContent = "Command";
+    const command = document.createElement("pre");
+    command.className = "decision-command";
+    command.textContent = model.command;
+    card.append(commandLabel, command);
+  }
+  if (model.scope.length) {
+    const scopeLabel = document.createElement("span");
+    scopeLabel.className = "decision-label";
+    scopeLabel.textContent = "Workspace files";
+    const list = document.createElement("ul");
+    list.className = "decision-scope";
+    for (const path of model.scope) {
+      const item = document.createElement("li");
+      item.textContent = path;
+      list.append(item);
+    }
+    card.append(scopeLabel, list);
+  }
+  const actions = document.createElement("div");
+  actions.className = "decision-actions";
+  for (const action of model.actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.action = `${action.id}-interaction`;
+    button.dataset.decision = action.id;
+    button.textContent = action.label;
+    button.disabled = action.disabled;
+    button.setAttribute("aria-disabled", String(action.disabled));
+    actions.append(button);
+  }
+  card.append(actions);
+  container.append(card);
+}
+
 // frontend/src/views/onboarding.js
 var STAGE_DEFINITIONS = [
   ["App connected", "Connect the Home Assistant App.", (state) => state.appConnected],
@@ -916,6 +1032,171 @@ function renderRuntimeStrip(container, model) {
   }
 }
 
+// frontend/src/views/user-input.js
+var MAX_QUESTIONS = 3;
+var MAX_OPTIONS = 3;
+var MAX_FREE_TEXT = 4096;
+function plainText2(value, limit) {
+  if (typeof value !== "string") return "";
+  return [...value].filter((character) => {
+    const code = character.codePointAt(0);
+    return code > 31 && code !== 127;
+  }).join("").trim().slice(0, limit);
+}
+function safeId(value, fallback) {
+  return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,128}$/u.test(value) ? value : fallback;
+}
+function expiryState2(value, now) {
+  if (typeof value !== "string") return { expired: true, label: "Expiry unavailable" };
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return { expired: true, label: "Expiry unavailable" };
+  if (timestamp <= now) return { expired: true, label: "Expired" };
+  return { expired: false, label: `Expires ${new Date(timestamp).toISOString().replace(".000", "")}` };
+}
+function selectedValues(value, options, allowFreeText) {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  const allowed = new Set(options.map((option) => option.label));
+  return raw.map((item) => plainText2(item, MAX_FREE_TEXT)).filter((item) => item && (allowed.has(item) || allowFreeText)).slice(0, 32);
+}
+function getUserInputViewModel(interaction = {}, { now = Date.now(), pending = false, stale = false, answers = {} } = {}) {
+  const display = interaction && typeof interaction.display === "object" ? interaction.display : {};
+  const expiry = expiryState2(interaction?.expires_at, now);
+  const interactionPending = interaction?.status === "pending";
+  const unavailable = Boolean(pending || stale || expiry.expired || !interactionPending);
+  const state = pending ? "submitting" : stale ? "stale" : expiry.expired ? "expired" : interactionPending ? "ready" : "unavailable";
+  const questions = (Array.isArray(display.questions) ? display.questions : []).slice(0, MAX_QUESTIONS).map((raw, index) => {
+    const question = raw && typeof raw === "object" ? raw : {};
+    const id = plainText2(question.question_id, 128) || `question-${index + 1}`;
+    const domId = `${safeId(question.question_id, `question-${index + 1}`)}-${index + 1}`;
+    const options = (Array.isArray(question.options) ? question.options : []).slice(0, MAX_OPTIONS).map((rawOption) => {
+      const option = rawOption && typeof rawOption === "object" ? rawOption : {};
+      return { label: plainText2(option.label, 160), description: plainText2(option.description, 512) };
+    }).filter((option) => option.label && option.description);
+    const allowFreeText = Boolean(question.allow_free_text);
+    const selected = selectedValues(answers?.[id], options, allowFreeText);
+    return {
+      id,
+      domId,
+      header: plainText2(question.header, 160) || `Question ${index + 1}`,
+      prompt: plainText2(question.prompt, 2048) || "Choose an answer to continue.",
+      options,
+      multiple: Boolean(question.multiple),
+      allowFreeText,
+      selected,
+      complete: selected.length > 0
+    };
+  });
+  const ready = questions.length > 0 && questions.every((question) => question.complete);
+  const allowedActions = Array.isArray(interaction?.allowed_actions) ? interaction.allowed_actions : [];
+  return {
+    interactionId: typeof interaction?.interaction_id === "string" ? interaction.interaction_id : "",
+    title: plainText2(display.title, 160) || "Codex has a question",
+    summary: plainText2(display.summary, 512) || "Answer to continue this Codex turn.",
+    expiry: expiry.label,
+    state,
+    disabled: unavailable,
+    questions,
+    submitDisabled: unavailable || !ready || !allowedActions.includes("answer")
+  };
+}
+function renderUserInput(container, model) {
+  container.replaceChildren();
+  const card = document.createElement("section");
+  card.className = `user-input-card user-input-${model.state}`;
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-modal", "false");
+  card.tabIndex = -1;
+  const accessibleId = /^[A-Za-z0-9_.:-]{1,128}$/u.test(model.interactionId) ? model.interactionId : "pending";
+  const titleId = `question-${accessibleId}-title`;
+  const summaryId = `question-${accessibleId}-summary`;
+  card.setAttribute("aria-labelledby", titleId);
+  card.setAttribute("aria-describedby", summaryId);
+  const title = document.createElement("h3");
+  title.id = titleId;
+  title.textContent = model.title;
+  const summary = document.createElement("p");
+  summary.id = summaryId;
+  summary.textContent = model.summary;
+  const status = document.createElement("p");
+  status.className = "decision-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.textContent = model.state === "submitting" ? "Sending answer..." : model.expiry;
+  card.append(title, summary, status);
+  for (const question of model.questions) {
+    const fieldset = document.createElement("fieldset");
+    fieldset.disabled = model.disabled;
+    const legend = document.createElement("legend");
+    legend.textContent = question.header;
+    const prompt = document.createElement("p");
+    prompt.textContent = question.prompt;
+    fieldset.append(legend, prompt);
+    for (const [index, option] of question.options.entries()) {
+      const id = `question-${accessibleId}-${question.domId}-option-${index + 1}`;
+      const optionLabel = document.createElement("label");
+      optionLabel.htmlFor = id;
+      const control = document.createElement("input");
+      control.type = question.multiple ? "checkbox" : "radio";
+      control.id = id;
+      control.name = `question-${accessibleId}-${question.domId}`;
+      control.value = option.label;
+      control.dataset.questionId = question.id;
+      control.dataset.answerValue = option.label;
+      control.checked = question.selected.includes(option.label);
+      const copy = document.createElement("span");
+      copy.textContent = option.label;
+      const description = document.createElement("small");
+      description.textContent = option.description;
+      optionLabel.append(control, copy, description);
+      fieldset.append(optionLabel);
+    }
+    if (question.allowFreeText) {
+      const freeTextId = `question-${accessibleId}-${question.domId}-free-text`;
+      const freeTextLabel = document.createElement("label");
+      freeTextLabel.htmlFor = freeTextId;
+      freeTextLabel.textContent = "Other answer";
+      const textarea = document.createElement("textarea");
+      textarea.id = freeTextId;
+      textarea.name = `question-${accessibleId}-${question.domId}-free-text`;
+      textarea.maxLength = MAX_FREE_TEXT;
+      textarea.disabled = model.disabled;
+      textarea.dataset.questionId = question.id;
+      textarea.dataset.questionFreeText = "true";
+      textarea.setAttribute("aria-label", `${question.header}: other answer`);
+      const freeText = question.selected.find((value) => !question.options.some((option) => option.label === value));
+      textarea.value = freeText || "";
+      fieldset.append(freeTextLabel, textarea);
+    }
+    card.append(fieldset);
+  }
+  const actions = document.createElement("div");
+  actions.className = "decision-actions";
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.dataset.action = "answer-interaction";
+  submit.textContent = "Submit answer";
+  submit.disabled = model.submitDisabled;
+  submit.setAttribute("aria-disabled", String(model.submitDisabled));
+  actions.append(submit);
+  card.append(actions);
+  container.append(card);
+}
+function collectUserInputAnswers(container, model) {
+  const answers = [];
+  for (const question of model.questions) {
+    const selected = [...container.querySelectorAll("[data-question-id][data-answer-value]:checked")].filter((control) => control.dataset.questionId === question.id).map((control) => plainText2(control.value, MAX_FREE_TEXT));
+    const freeText = [...container.querySelectorAll('[data-question-id][data-question-free-text="true"]')].find((control) => control.dataset.questionId === question.id);
+    let values = selected;
+    if (freeText) {
+      const value = plainText2(freeText.value, MAX_FREE_TEXT);
+      if (value) values = question.multiple ? [...selected, value] : [value];
+    }
+    const unique = [...new Set(values)].slice(0, question.multiple ? 32 : 1);
+    if (unique.length) answers.push({ question_id: question.id, values: unique });
+  }
+  return answers;
+}
+
 // frontend/src/codex-bridge-panel.js
 var PANEL_VERSION = "0.6.0";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -934,10 +1215,38 @@ var AUTH_ACTION_IDS = /* @__PURE__ */ new Set([
   "copy-auth-code"
 ]);
 var MODE_OPTIONS = [
-  { value: "observe", label: "Observe" },
-  { value: "edit", label: "Edit" },
-  { value: "full-auto", label: "Full auto" }
+  {
+    value: "observe",
+    label: "Observe",
+    description: "Read-only workspace access; asks before commands; network access stays off."
+  },
+  {
+    value: "edit",
+    label: "Edit",
+    description: "Workspace edits are allowed; commands still require approval; network access stays off."
+  },
+  {
+    value: "full-auto",
+    label: "Full auto",
+    description: "Workspace changes run automatically; network and private host paths remain blocked."
+  }
 ];
+var INTERACTION_EVENT_TYPES = /* @__PURE__ */ new Set([
+  "interaction.created",
+  "interaction.resolved",
+  "interaction.expired",
+  "interaction.outcome_unknown"
+]);
+var INTERACTION_ERROR_CODES = /* @__PURE__ */ new Set([
+  "interaction_already_resolved",
+  "interaction_kind_mismatch",
+  "interaction_not_found",
+  "interaction_outcome_unknown",
+  "interaction_stale",
+  "interaction_thread_mismatch",
+  "runtime_request_conflict",
+  "turn_changed"
+]);
 var template = document.createElement("template");
 template.innerHTML = `
   <style>
@@ -988,6 +1297,14 @@ template.innerHTML = `
     button:hover {
       border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color) 45%);
       background: color-mix(in srgb, var(--surface-bg) 92%, var(--accent-soft) 8%);
+    }
+
+    button:disabled,
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
     }
 
     input,
@@ -1549,8 +1866,11 @@ template.innerHTML = `
 
     .main-top {
       display: grid;
+      flex: 0 1 auto;
       gap: 6px;
+      max-height: min(30vh, 300px);
       padding: 10px 14px 0;
+      overflow: auto;
     }
 
     .runtime-shell {
@@ -1830,6 +2150,188 @@ template.innerHTML = `
       background: transparent;
     }
 
+    .interaction-region {
+      display: grid;
+      flex: 2 1 340px;
+      gap: 8px;
+      max-height: min(48vh, 520px);
+      min-height: 340px;
+      padding: 8px 16px 2px;
+      overflow: auto;
+    }
+
+    .interaction-region:empty {
+      display: none;
+      min-height: 0;
+    }
+
+    .interaction-card {
+      min-width: 0;
+    }
+
+    .approval-card,
+    .user-input-card {
+      display: grid;
+      gap: 9px;
+      padding: 13px 14px;
+      border: 1px solid color-mix(in srgb, var(--brand-amber) 34%, var(--border-color) 66%);
+      border-radius: 11px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--brand-amber) 7%, transparent), transparent 48%),
+        var(--surface-bg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .approval-card:focus-visible,
+    .user-input-card:focus-visible {
+      outline: 2px solid var(--accent-color);
+      outline-offset: 2px;
+    }
+
+    .approval-card h3,
+    .user-input-card h3,
+    .approval-card p,
+    .user-input-card p {
+      margin: 0;
+    }
+
+    .approval-card h3,
+    .user-input-card h3 {
+      font-size: 14px;
+    }
+
+    .approval-card > p,
+    .user-input-card > p,
+    .decision-status,
+    .decision-notice {
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .decision-label {
+      color: var(--muted-color);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .decision-command {
+      max-height: 104px;
+      margin: 0;
+      padding: 9px 10px;
+      overflow: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--surface-alt);
+      font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+
+    .decision-scope {
+      display: grid;
+      gap: 3px;
+      max-height: 56px;
+      margin: 0;
+      padding-left: 20px;
+      overflow: auto;
+      color: var(--muted-color);
+      font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .decision-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .decision-actions button {
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .decision-actions button[data-decision="accept"],
+    .decision-actions button[data-action="answer-interaction"] {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--brand-blue), var(--brand-violet));
+      color: white;
+    }
+
+    .decision-actions button[data-decision="decline"],
+    .decision-actions button[data-decision="cancel"] {
+      color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%);
+    }
+
+    .user-input-card fieldset {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      margin: 0;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+    }
+
+    .user-input-card legend {
+      padding: 0 4px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .user-input-card fieldset > label:not([for$="free-text"]) {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px 8px;
+      align-items: start;
+      padding: 7px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .user-input-card fieldset > label input {
+      grid-row: 1 / span 2;
+      margin-top: 2px;
+    }
+
+    .user-input-card small {
+      color: var(--muted-color);
+      line-height: 1.35;
+    }
+
+    .user-input-card textarea {
+      min-height: 72px;
+      padding: 9px 10px;
+      resize: vertical;
+    }
+
+    .mode-boundaries {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.4;
+      list-style: none;
+    }
+
+    .mode-boundaries strong {
+      color: var(--text-color);
+    }
+
     .compact-toolbar {
       display: grid;
       grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
@@ -1934,8 +2436,10 @@ template.innerHTML = `
     .message-list {
       padding: 10px 16px 6px;
       display: grid;
+      flex-basis: 120px;
       gap: 12px;
       align-content: start;
+      min-height: 60px;
     }
 
     .message {
@@ -2070,6 +2574,7 @@ template.innerHTML = `
 
     .composer-shell {
       display: grid;
+      flex: 0 0 auto;
       gap: 10px;
       padding: 10px 16px 14px;
       border-top: 1px solid var(--border-color);
@@ -2132,6 +2637,14 @@ template.innerHTML = `
       line-height: 1.5;
       padding: 12px 14px;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .composer-status {
+      min-height: 16px;
+      margin: -4px 0 0;
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.35;
     }
 
     .empty-state {
@@ -2411,6 +2924,38 @@ template.innerHTML = `
         flex-direction: column;
         gap: 3px;
       }
+
+      .interaction-region {
+        flex: none;
+        max-height: none;
+        min-height: 0;
+        padding-inline: 10px;
+      }
+
+      .main-top {
+        max-height: none;
+        overflow: visible;
+      }
+
+      .message-list {
+        flex: none;
+        min-height: 180px;
+      }
+
+      .decision-actions button {
+        flex: 1 1 120px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
     }
   </style>
   <div class="shell">
@@ -2458,7 +3003,7 @@ template.innerHTML = `
       </div>
       <div class="main-top">
         <div class="runtime-shell" id="runtime-strip"></div>
-        <div class="error-strip" id="error-strip"></div>
+        <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
         <section class="onboarding-shell" id="onboarding-shell">
           <div class="onboarding-heading">
             <strong id="onboarding-title">Home Assistant setup</strong>
@@ -2466,10 +3011,11 @@ template.innerHTML = `
           </div>
           <div id="onboarding"></div>
         </section>
-        <div class="status-banner" id="status-banner"></div>
+        <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
         <div class="compact-toolbar" id="compact-toolbar"></div>
       </div>
-      <div class="message-list" id="message-list"></div>
+      <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+      <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
       <div class="composer-shell">
         <div class="attachment-toolbar">
           <div class="attachment-actions">
@@ -2480,9 +3026,10 @@ template.innerHTML = `
           <div class="attachment-chips" id="attachment-chip-list"></div>
         </div>
         <div class="composer">
-          <textarea id="prompt-input" placeholder="Message Codex through Home Assistant"></textarea>
-          <button class="send-button" type="button" data-action="send-prompt" id="send-button"></button>
+          <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-status"></textarea>
+          <button class="send-button" type="button" data-action="send-prompt" id="send-button" aria-describedby="composer-status"></button>
         </div>
+        <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
       </div>
@@ -2570,6 +3117,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._threads = [];
     this._selectedProjectId = null;
     this._selectedThreadId = null;
+    this._threadSelectionEpoch = 0;
+    this._threadSnapshotEpoch = 0;
     this._activeThread = null;
     this._events = [];
     this._artifacts = [];
@@ -2578,6 +3127,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._previewToken = 0;
     this._sequence = 0;
     this._draft = "";
+    this._drafts = /* @__PURE__ */ new Map();
     this._searchQuery = "";
     this._showProjectForm = false;
     this._showThreadForm = false;
@@ -2607,6 +3157,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._eventSubscriptionActive = false;
     this._eventSubscriptionGeneration = 0;
     this._eventRefreshTimer = null;
+    this._eventReconnectTimer = null;
+    this._eventReconnectAttempt = 0;
     this._eventStream = createEventStreamState();
     this._systemEventUnsubscribe = null;
     this._systemEventSubscriptionPending = null;
@@ -2630,6 +3182,13 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderedThreadFormKey = "";
     this._forceMessageRebuild = true;
     this._pendingUploads = 0;
+    this._pendingInteractions = [];
+    this._interactionMutations = /* @__PURE__ */ new Map();
+    this._interactionAnswers = /* @__PURE__ */ new Map();
+    this._announcedInteractionIds = /* @__PURE__ */ new Set();
+    this._interactionExpiryTimer = null;
+    this._promptMutations = /* @__PURE__ */ new Map();
+    this._promptMutation = null;
     this._suspendUiRefresh = false;
     this._queuedRender = false;
     this._collapsedProjects = {};
@@ -2652,6 +3211,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._stopPolling();
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
+    this._clearInteractionExpiryTimer();
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
     this._revokePreviewUrl();
@@ -2719,6 +3279,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
     this.shadowRoot.addEventListener("paste", (event) => this._handlePaste(event));
+    this.shadowRoot.addEventListener("keydown", (event) => this._handleKeyDown(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
@@ -2819,6 +3380,14 @@ var CodexBridgePanel = class extends HTMLElement {
       case "send-prompt":
         this._sendPrompt();
         break;
+      case "accept-interaction":
+      case "decline-interaction":
+      case "cancel-interaction":
+        this._decideInteractionFromTarget(actionTarget, action.replace("-interaction", ""));
+        break;
+      case "answer-interaction":
+        this._answerInteractionFromTarget(actionTarget);
+        break;
       case "stop-run":
         this._cancelRun();
         break;
@@ -2880,8 +3449,13 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (target.closest("[data-interaction-id]")) {
+      this._captureInteractionAnswers(target);
+      return;
+    }
     if (target.id === "prompt-input") {
       this._draft = target.value;
+      this._setDraftForThread(this._selectedThreadId, target.value);
       return;
     }
     if (target.id === "search-input") {
@@ -2908,6 +3482,10 @@ var CodexBridgePanel = class extends HTMLElement {
   _handleChange(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (target.closest("[data-interaction-id]")) {
+      this._captureInteractionAnswers(target);
       return;
     }
     if (target.id === "project-model-select") {
@@ -2966,6 +3544,43 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     this._uploadFiles(files, { useRelativePaths: false });
+  }
+  _handleKeyDown(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const interactionCard = target.closest("[data-interaction-id]");
+    if (interactionCard) {
+      const interaction = this._pendingInteractions.find(
+        (item) => item.interaction_id === interactionCard.dataset.interactionId
+      );
+      if (!interaction) {
+        return;
+      }
+      if (event.key === "Escape" && interaction.kind !== "user_input") {
+        const cancel = interactionCard.querySelector('[data-action="cancel-interaction"]:not(:disabled)');
+        if (cancel) {
+          event.preventDefault();
+          this._decideInteraction(interaction.interaction_id, "cancel");
+          this._focusPrompt();
+        }
+        return;
+      }
+      const wantsAnswer = interaction.kind === "user_input" && event.key === "Enter" && (event.ctrlKey || event.metaKey || target.tagName !== "TEXTAREA");
+      if (wantsAnswer) {
+        const submit = interactionCard.querySelector('[data-action="answer-interaction"]:not(:disabled)');
+        if (submit) {
+          event.preventDefault();
+          this._answerInteractionFromTarget(submit);
+        }
+      }
+      return;
+    }
+    if (target.id === "prompt-input" && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      this._sendPrompt();
+    }
   }
   _handleFocusIn(event) {
     const target = event.target;
@@ -3032,6 +3647,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderArchivedSection();
     this._renderToolbar();
     this._renderAttachmentChips();
+    this._renderInteractions();
     this._renderMessages();
     this._renderProgress();
     this._renderArtifacts();
@@ -3042,10 +3658,405 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderComposerState(activeThread) {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
+    const composerStatus = this.shadowRoot.getElementById("composer-status");
     const isRunning = activeThread?.status === "running";
+    const mutation = this._promptMutationForThread(this._selectedThreadId);
+    const retryable = mutation?.state === "retryable";
+    const locked = Boolean(mutation);
+    const draft = retryable ? mutation.prompt : this._draftForThread(this._selectedThreadId);
+    if (promptInput.value !== draft) {
+      promptInput.value = draft;
+    }
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
-    this._setTrustedButtonContent(sendButton, icons.send, isRunning ? "Steer" : "Send");
+    promptInput.disabled = !activeThread || locked;
+    sendButton.disabled = !activeThread || locked && !retryable || !retryable && !promptInput.value.trim();
+    this._setTrustedButtonContent(
+      sendButton,
+      icons.send,
+      retryable ? "Retry" : isRunning ? "Steer" : "Send"
+    );
     sendButton.title = isRunning ? "Queue steering for this running Codex turn" : "Send message to Codex";
+    if (mutation?.state === "sending") {
+      composerStatus.textContent = "Sending through Home Assistant...";
+    } else if (mutation?.state === "reconciling") {
+      composerStatus.textContent = "Checking whether Home Assistant accepted this message...";
+    } else if (retryable) {
+      composerStatus.textContent = "The response was interrupted. Retry safely with the same request ID.";
+    } else {
+      composerStatus.textContent = activeThread ? "Enter sends; Shift+Enter adds a new line." : "Select a chat before sending a message.";
+    }
+  }
+  _renderInteractions() {
+    const region = this.shadowRoot.getElementById("interaction-region");
+    region.replaceChildren();
+    if (!this._selectedThreadId || !this._isSupervisorConnection()) {
+      return;
+    }
+    const newCards = [];
+    for (const interaction of this._pendingInteractions) {
+      if (interaction.thread_id !== this._selectedThreadId) {
+        continue;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "interaction-card";
+      wrapper.dataset.interactionId = interaction.interaction_id;
+      wrapper.dataset.interactionKind = interaction.kind;
+      const mutation = this._interactionMutations.get(interaction.interaction_id) || null;
+      const pending = mutation?.state === "sending" || mutation?.state === "reconciling";
+      if (interaction.kind === "user_input") {
+        const model = getUserInputViewModel(interaction, {
+          pending,
+          answers: this._interactionAnswers.get(interaction.interaction_id) || {}
+        });
+        renderUserInput(wrapper, model);
+        if (mutation?.state === "retryable") {
+          for (const fieldset of wrapper.querySelectorAll("fieldset")) {
+            fieldset.disabled = true;
+          }
+          const submit = wrapper.querySelector('[data-action="answer-interaction"]');
+          if (submit) {
+            submit.disabled = false;
+            submit.setAttribute("aria-disabled", "false");
+            submit.textContent = "Retry answer";
+          }
+        }
+      } else {
+        const model = getApprovalViewModel(interaction, { pending });
+        renderApproval(wrapper, model);
+        if (mutation?.state === "retryable") {
+          for (const button of wrapper.querySelectorAll("[data-decision]")) {
+            const isOriginalDecision = button.dataset.decision === mutation.decision;
+            button.disabled = !isOriginalDecision;
+            button.setAttribute("aria-disabled", String(!isOriginalDecision));
+            if (isOriginalDecision) {
+              button.textContent = `Retry ${button.textContent.toLowerCase()}`;
+            }
+          }
+        }
+      }
+      if (mutation?.state === "reconciling" || mutation?.state === "retryable") {
+        const card = wrapper.querySelector("[role='alertdialog']");
+        const notice = this._textElement(
+          "p",
+          "decision-notice",
+          mutation.state === "reconciling" ? "Checking whether this response reached Codex..." : "The response was interrupted. Retrying will use the same request ID."
+        );
+        notice.setAttribute("role", "status");
+        card?.insertBefore(notice, card.querySelector(".decision-actions"));
+      }
+      region.append(wrapper);
+      if (!this._announcedInteractionIds.has(interaction.interaction_id)) {
+        newCards.push(wrapper);
+        this._announcedInteractionIds.add(interaction.interaction_id);
+      }
+    }
+    const currentIds = new Set(this._pendingInteractions.map((item) => item.interaction_id));
+    for (const interactionId of [...this._announcedInteractionIds]) {
+      if (!currentIds.has(interactionId)) {
+        this._announcedInteractionIds.delete(interactionId);
+      }
+    }
+    this._scheduleInteractionExpiryRefresh();
+    if (newCards.length) {
+      const active = this.shadowRoot.activeElement;
+      if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
+        newCards[0].querySelector("[role='alertdialog']")?.focus();
+      }
+    }
+  }
+  _captureInteractionAnswers(target) {
+    const wrapper = target.closest("[data-interaction-id]");
+    const interaction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "user_input"
+    );
+    if (!wrapper || !interaction) {
+      return;
+    }
+    const model = getUserInputViewModel(interaction, {
+      answers: this._interactionAnswers.get(interaction.interaction_id) || {}
+    });
+    const answers = collectUserInputAnswers(wrapper, model);
+    this._interactionAnswers.set(
+      interaction.interaction_id,
+      Object.fromEntries(answers.map((answer) => [answer.question_id, answer.values]))
+    );
+    const submit = wrapper.querySelector('[data-action="answer-interaction"]');
+    if (submit) {
+      const complete = answers.length === model.questions.length && model.questions.length > 0;
+      const locked = this._interactionMutations.has(interaction.interaction_id);
+      submit.disabled = !complete || locked || !interaction.allowed_actions.includes("answer");
+      submit.setAttribute("aria-disabled", String(submit.disabled));
+    }
+  }
+  _decideInteractionFromTarget(target, decision) {
+    const wrapper = target.closest("[data-interaction-id]");
+    if (wrapper?.dataset.interactionId) {
+      this._decideInteraction(wrapper.dataset.interactionId, decision);
+    }
+  }
+  _answerInteractionFromTarget(target) {
+    const wrapper = target.closest("[data-interaction-id]");
+    const interaction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "user_input"
+    );
+    if (!wrapper || !interaction) {
+      return;
+    }
+    const model = getUserInputViewModel(interaction, {
+      answers: this._interactionAnswers.get(interaction.interaction_id) || {}
+    });
+    const answers = collectUserInputAnswers(wrapper, model);
+    if (answers.length !== model.questions.length || !answers.length) {
+      this._setError("Answer every Codex question before continuing.");
+      return;
+    }
+    this._answerInteraction(interaction.interaction_id, answers);
+  }
+  async _decideInteraction(interactionId, decision) {
+    const interaction = this._pendingInteractions.find((item) => item.interaction_id === interactionId);
+    if (!interaction || interaction.kind === "user_input" || interaction.thread_id !== this._selectedThreadId || !interaction.allowed_actions.includes(decision)) {
+      return;
+    }
+    await this._submitInteractionResponse(interaction, {
+      action: "decide_interaction",
+      kind: "decision",
+      fingerprint: `decision:${decision}`,
+      decision,
+      payload: { decision }
+    });
+  }
+  async _answerInteraction(interactionId, answers) {
+    const interaction = this._pendingInteractions.find((item) => item.interaction_id === interactionId);
+    if (!interaction || interaction.kind !== "user_input" || interaction.thread_id !== this._selectedThreadId || !interaction.allowed_actions.includes("answer")) {
+      return;
+    }
+    const normalizedAnswers = answers.map((answer) => ({
+      question_id: answer.question_id,
+      values: [...answer.values]
+    }));
+    await this._submitInteractionResponse(interaction, {
+      action: "answer_interaction",
+      kind: "answer",
+      fingerprint: `answer:${JSON.stringify(normalizedAnswers)}`,
+      answers: normalizedAnswers,
+      payload: { answers: normalizedAnswers }
+    });
+  }
+  async _submitInteractionResponse(interaction, request) {
+    const existing = this._interactionMutations.get(interaction.interaction_id) || null;
+    if (existing && ["sending", "reconciling"].includes(existing.state)) {
+      return;
+    }
+    if (existing && existing.fingerprint !== request.fingerprint) {
+      this._setError("Retry the original Codex response before choosing another action.");
+      return;
+    }
+    const mutation = existing || {
+      threadId: interaction.thread_id,
+      kind: request.kind,
+      fingerprint: request.fingerprint,
+      clientRequestId: this._createClientRequestId(request.kind),
+      decision: request.decision || null,
+      answers: request.answers || null,
+      state: "sending"
+    };
+    mutation.state = "sending";
+    this._interactionMutations.set(interaction.interaction_id, mutation);
+    this._render();
+    try {
+      await this._callWS(request.action, {
+        interaction_id: interaction.interaction_id,
+        thread_id: interaction.thread_id,
+        run_id: interaction.run_id,
+        turn_id: interaction.turn_id,
+        item_id: interaction.item_id,
+        ...request.payload,
+        client_request_id: mutation.clientRequestId
+      });
+      if (this._interactionMutations.get(interaction.interaction_id) !== mutation || interaction.thread_id !== this._selectedThreadId) {
+        return;
+      }
+      mutation.state = "reconciling";
+      mutation.deliveryConfirmed = true;
+      this._render();
+      let items;
+      try {
+        items = await this._refreshInteractions(interaction.thread_id);
+      } catch {
+        if (this._interactionMutations.get(interaction.interaction_id) === mutation && interaction.thread_id === this._selectedThreadId) {
+          this._error = "Home Assistant accepted this response. The request stays locked until its final state can be refreshed.";
+          this._render();
+        }
+        return;
+      }
+      if (interaction.thread_id !== this._selectedThreadId) {
+        return;
+      }
+      if (items.some((item) => item.interaction_id === interaction.interaction_id)) {
+        this._error = "Home Assistant accepted this response. The request stays locked while Codex finishes reconciling it.";
+        this._render();
+        return;
+      }
+      this._clearError();
+      this._focusPrompt();
+    } catch (error) {
+      if (this._interactionMutations.get(interaction.interaction_id) !== mutation || interaction.thread_id !== this._selectedThreadId) {
+        return;
+      }
+      const errorCode = this._bridgeErrorCode(error);
+      mutation.state = "reconciling";
+      this._render();
+      let stillPending;
+      try {
+        const items = await this._listPendingInteractions(interaction.thread_id);
+        stillPending = items.some((item) => item.interaction_id === interaction.interaction_id);
+        if (interaction.thread_id === this._selectedThreadId) {
+          this._replacePendingInteractions(items);
+        }
+      } catch {
+        stillPending = true;
+      }
+      if (this._interactionMutations.get(interaction.interaction_id) !== mutation || interaction.thread_id !== this._selectedThreadId) {
+        return;
+      }
+      if (!stillPending) {
+        this._interactionMutations.delete(interaction.interaction_id);
+        this._interactionAnswers.delete(interaction.interaction_id);
+        if (errorCode === "interaction_outcome_unknown") {
+          this._error = "Codex received the response, but its final outcome could not be confirmed. Refresh before continuing.";
+        } else if (stillPending) {
+          this._error = this._safeUiError(error);
+        } else {
+          this._error = "This Codex request is no longer pending.";
+        }
+        this._render();
+        this._focusPrompt();
+        return;
+      }
+      if (INTERACTION_ERROR_CODES.has(errorCode)) {
+        mutation.state = "reconciling";
+        this._error = errorCode === "interaction_outcome_unknown" ? "Codex received the response, but its final outcome could not be confirmed. This request stays locked while Home Assistant reconciles it." : "This Codex response could not be applied. The request stays locked until Home Assistant refreshes it.";
+        this._render();
+        return;
+      }
+      mutation.state = "retryable";
+      this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+      this._render();
+    }
+  }
+  async _refreshInteractions(threadId = this._selectedThreadId) {
+    if (!threadId || threadId !== this._selectedThreadId) {
+      return [];
+    }
+    const items = await this._listPendingInteractions(threadId);
+    if (threadId === this._selectedThreadId) {
+      this._replacePendingInteractions(items);
+      this._render();
+    }
+    return items;
+  }
+  _replacePendingInteractions(items) {
+    const next = Array.isArray(items) ? items : [];
+    const nextIds = new Set(next.map((item) => item.interaction_id));
+    let resolved = false;
+    for (const interaction of this._pendingInteractions) {
+      if (!nextIds.has(interaction.interaction_id)) {
+        resolved = resolved || this._interactionMutations.has(interaction.interaction_id);
+        this._interactionMutations.delete(interaction.interaction_id);
+        this._interactionAnswers.delete(interaction.interaction_id);
+      }
+    }
+    this._pendingInteractions = next;
+    if (resolved) {
+      this._focusPrompt();
+    }
+  }
+  async _listPendingInteractions(threadId) {
+    if (!this._isSupervisorConnection() || !threadId) {
+      return [];
+    }
+    const response = await this._callWS("list_pending_interactions", { thread_id: threadId });
+    const items = Array.isArray(response?.items) ? response.items : [];
+    return items.map((item) => this._normalizePendingInteraction(item, threadId)).filter(Boolean);
+  }
+  _normalizePendingInteraction(value, threadId) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    const identifier = (candidate, limit = 256) => typeof candidate === "string" && candidate.length <= limit && /^[A-Za-z0-9_.:-]+$/u.test(candidate) ? candidate : null;
+    const interactionId = identifier(value.interaction_id, 128);
+    const actualThreadId = identifier(value.thread_id, 128);
+    const kind = ["command_approval", "file_change_approval", "user_input"].includes(value.kind) ? value.kind : null;
+    const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
+    const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
+    if (!interactionId || actualThreadId !== threadId || !kind || !identifier(value.run_id, 128) || !identifier(value.turn_id, 256) || !identifier(value.item_id, 256) || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (kind === "user_input" ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
+      return null;
+    }
+    return {
+      interaction_id: interactionId,
+      kind,
+      thread_id: actualThreadId,
+      run_id: value.run_id,
+      turn_id: value.turn_id,
+      item_id: value.item_id,
+      event_id: value.event_id,
+      status: "pending",
+      expires_at: expiresAt,
+      display: { ...value.display },
+      allowed_actions: allowed
+    };
+  }
+  _scheduleInteractionExpiryRefresh() {
+    if (this._interactionExpiryTimer || !this._pendingInteractions.length) {
+      return;
+    }
+    const now = Date.now();
+    const expiry = Math.min(...this._pendingInteractions.map((item) => Date.parse(item.expires_at)));
+    const remaining = expiry - now;
+    const delay2 = remaining <= 0 ? 5e3 : Math.max(250, Math.min(2147483647, remaining + 25));
+    this._interactionExpiryTimer = window.setTimeout(async () => {
+      this._interactionExpiryTimer = null;
+      if (!this._selectedThreadId) {
+        return;
+      }
+      this._renderInteractions();
+      try {
+        await this._refreshInteractions(this._selectedThreadId);
+      } catch {
+        this._scheduleInteractionExpiryRefresh();
+      }
+    }, delay2);
+  }
+  _clearInteractionExpiryTimer() {
+    if (this._interactionExpiryTimer) {
+      window.clearTimeout(this._interactionExpiryTimer);
+      this._interactionExpiryTimer = null;
+    }
+  }
+  _focusPrompt() {
+    const prompt = this.shadowRoot.getElementById("prompt-input");
+    if (prompt && !prompt.disabled) {
+      prompt.focus();
+    }
+  }
+  _createClientRequestId(prefix = "request") {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) {
+      return `${prefix}-${uuid}`;
+    }
+    const bytes = new Uint8Array(16);
+    globalThis.crypto?.getRandomValues?.(bytes);
+    const entropy = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+    return `${prefix}-${Date.now().toString(36)}-${entropy || Math.random().toString(36).slice(2)}`;
+  }
+  _bridgeErrorCode(error) {
+    const candidates = [
+      error?.code,
+      error?.body?.code,
+      error?.body?.error?.code,
+      error?.error?.code
+    ];
+    return candidates.find((value) => typeof value === "string") || "";
   }
   _isSupervisorConnection() {
     return this._config?.connection_type === "supervisor" && Number(this._config?.api_version) === 1;
@@ -3259,8 +4270,19 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
+    modeSelect.setAttribute("aria-describedby", "thread-mode-description");
     for (const option of MODE_OPTIONS) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
+    }
+    const modeDescription = document.createElement("ul");
+    modeDescription.id = "thread-mode-description";
+    modeDescription.className = "mode-boundaries";
+    for (const option of MODE_OPTIONS) {
+      const item = document.createElement("li");
+      const label = document.createElement("strong");
+      label.textContent = `${option.label}: `;
+      item.append(label, document.createTextNode(option.description));
+      modeDescription.append(item);
     }
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
@@ -3273,6 +4295,7 @@ var CodexBridgePanel = class extends HTMLElement {
       titleBlock,
       titleInput,
       modeSelect,
+      modeDescription,
       this._textElement(
         "div",
         "meta-line",
@@ -3503,6 +4526,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const status = document.createElement("span");
     status.className = `status-pill ${statusClass}`;
     status.title = `Status: ${thread.status || ""}`;
+    status.setAttribute("role", "img");
     status.setAttribute("aria-label", `Status ${thread.status || ""}`);
     const threadActions = document.createElement("div");
     threadActions.className = "thread-actions";
@@ -4179,56 +5203,80 @@ var CodexBridgePanel = class extends HTMLElement {
       include_archived: true
     });
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
-      this._selectedThreadId = null;
+      this._setSelectedThreadId(null);
     }
     if (!this._selectedThreadId) {
       const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
-      this._selectedThreadId = firstActive?.thread_id || null;
+      this._setSelectedThreadId(firstActive?.thread_id || null);
     }
     if (!this._selectedProjectId && this._threads.length) {
       this._selectedProjectId = this._threads[0].project_id;
     }
     if (this._selectedThreadId) {
-      await this._refreshActiveThread();
-      this._startPolling();
+      const threadId = this._selectedThreadId;
+      const selectionEpoch = this._threadSelectionEpoch;
+      await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
     }
   }
   async _refreshActiveThread() {
-    if (!this._selectedThreadId) {
+    const threadId = this._selectedThreadId;
+    const selectionEpoch = this._threadSelectionEpoch;
+    const refreshEpoch = ++this._threadSnapshotEpoch;
+    const isCurrent = () => refreshEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(threadId, selectionEpoch);
+    if (!threadId) {
       this._stopEventSubscription();
+      this._clearInteractionExpiryTimer();
       this._activeThread = null;
       this._resetEventState();
       this._artifacts = [];
       this._selectedArtifactId = null;
       this._revokePreviewUrl();
       this._artifactPreview = null;
+      this._pendingInteractions = [];
+      this._interactionMutations.clear();
+      this._interactionAnswers.clear();
+      this._promptMutation = null;
       this._render();
-      return;
+      return true;
     }
     try {
-      const threadId = this._selectedThreadId;
-      const [thread, events, artifacts, status] = await Promise.all([
+      const [thread, events, artifacts, status, interactions] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
         this._callWS("get_events", { thread_id: threadId, after: 0 }),
         this._callWS("list_artifacts", { thread_id: threadId }),
-        this._callWS("get_status")
+        this._callWS("get_status"),
+        this._listPendingInteractions(threadId)
       ]);
+      if (!isCurrent()) {
+        return false;
+      }
       this._activeThread = thread;
       this._selectedProjectId = thread.project_id;
-      const replay = acceptEvents(createEventStreamState(), parseEvents(events));
+      const replay = acceptEvents(
+        createEventStreamState(),
+        parseEvents(events).filter((event) => !event.thread_id || event.thread_id === threadId)
+      );
       this._eventStream = replay.state;
       this._events = replay.state.events;
       this._sequence = replay.state.cursor;
       this._artifacts = artifacts;
+      this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
       this._forceMessageRebuild = true;
       this._syncThreadListStatus();
       this._syncSelectedArtifact();
+      if (this._promptMutationForThread(threadId)) {
+        this._settlePromptMutationFromEvents();
+      }
       this._clearError();
       this._render();
       this._startEventSubscription();
+      return true;
     } catch (error) {
-      this._setError(error);
+      if (isCurrent()) {
+        this._setError(error);
+      }
+      return false;
     }
   }
   _openProjectFormForCreate() {
@@ -4314,8 +5362,9 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (!visibleThread) {
-      this._selectedThreadId = null;
+      this._setSelectedThreadId(null);
       this._stopEventSubscription();
+      this._retireThreadInteractionState(null);
       this._activeThread = null;
       this._resetEventState();
       this._artifacts = [];
@@ -4331,7 +5380,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     this._stopEventSubscription();
-    this._selectedThreadId = threadId;
+    this._retireThreadInteractionState(threadId);
+    const selectionEpoch = this._setSelectedThreadId(threadId, { force: true });
     this._resetEventState();
     this._activeThread = null;
     this._artifacts = [];
@@ -4339,8 +5389,38 @@ var CodexBridgePanel = class extends HTMLElement {
     this._revokePreviewUrl();
     this._artifactPreview = null;
     this._forceMessageRebuild = true;
+    await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
+  }
+  _setSelectedThreadId(threadId, { force = false } = {}) {
+    const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
+    if (force || nextThreadId !== this._selectedThreadId) {
+      this._stopPolling();
+      this._threadSelectionEpoch += 1;
+      this._threadSnapshotEpoch += 1;
+    }
+    this._selectedThreadId = nextThreadId;
+    return this._threadSelectionEpoch;
+  }
+  _threadSelectionIsCurrent(threadId, selectionEpoch) {
+    return threadId === this._selectedThreadId && selectionEpoch === this._threadSelectionEpoch;
+  }
+  async _refreshSelectedThreadAndStartPolling(threadId, selectionEpoch) {
     await this._refreshActiveThread();
-    this._startPolling();
+    if (this._threadSelectionIsCurrent(threadId, selectionEpoch)) {
+      this._startPolling();
+    }
+  }
+  _retireThreadInteractionState(nextThreadId) {
+    this._clearInteractionExpiryTimer();
+    this._pendingInteractions = [];
+    this._interactionMutations.clear();
+    this._interactionAnswers.clear();
+    this._announcedInteractionIds.clear();
+    if (this._promptMutation?.threadId) {
+      this._promptMutations.set(this._promptMutation.threadId, this._promptMutation);
+    }
+    this._promptMutation = this._promptMutationForThread(nextThreadId);
+    this._draft = this._promptMutation?.state === "retryable" ? this._promptMutation.prompt : this._draftForThread(nextThreadId);
   }
   async _saveProject() {
     try {
@@ -4419,7 +5499,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const thread = await this._callWS("create_thread", payload);
       this._threadForm.title = "";
       this._showThreadForm = false;
-      this._selectedThreadId = thread.thread_id;
+      this._setSelectedThreadId(thread.thread_id);
       this._selectedProjectId = thread.project_id;
       this._clearError();
       await this._loadThreads();
@@ -4445,22 +5525,123 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   async _sendPrompt() {
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    const threadId = this._selectedThreadId;
+    const existing = this._promptMutationForThread(threadId);
+    if (existing && ["sending", "reconciling"].includes(existing.state)) {
+      return;
+    }
+    const prompt = existing?.state === "retryable" ? existing.prompt : promptInput.value.trim();
+    if (!prompt || !threadId) {
+      return;
+    }
+    const mutation = existing || {
+      threadId,
+      prompt,
+      clientRequestId: this._createClientRequestId("prompt"),
+      state: "sending"
+    };
+    mutation.state = "sending";
+    this._promptMutations.set(threadId, mutation);
+    this._promptMutation = mutation;
+    this._draft = prompt;
+    this._setDraftForThread(threadId, prompt);
+    this._render();
     try {
-      const promptInput = this.shadowRoot.getElementById("prompt-input");
-      const prompt = promptInput.value.trim();
-      if (!prompt || !this._selectedThreadId) {
+      await this._callWS("send_prompt", {
+        thread_id: threadId,
+        prompt,
+        client_request_id: mutation.clientRequestId
+      });
+      if (this._promptMutation === mutation) {
+        this._promptMutation = null;
+      }
+      if (this._promptMutations.get(threadId) === mutation) {
+        this._promptMutations.delete(threadId);
+      }
+      if (threadId === this._selectedThreadId) {
+        promptInput.value = "";
+        this._draft = "";
+        this._setDraftForThread(threadId, "");
+        this._clearError();
+        await this._refreshActiveThread();
+        this._render();
+      }
+    } catch {
+      if (this._promptMutations.get(threadId) !== mutation) {
         return;
       }
-      await this._callWS("send_prompt", {
-        thread_id: this._selectedThreadId,
-        prompt
-      });
+      mutation.state = "reconciling";
+      if (threadId === this._selectedThreadId) {
+        this._render();
+      }
+      try {
+        await this._refreshActiveThread();
+      } catch {
+      }
+      if (this._promptMutations.get(threadId) !== mutation) {
+        return;
+      }
+      if (this._promptEventObserved(mutation.clientRequestId)) {
+        this._settlePromptMutation(mutation.clientRequestId);
+        return;
+      }
+      mutation.state = "retryable";
+      if (threadId === this._selectedThreadId) {
+        this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+        this._render();
+      }
+    }
+  }
+  _promptEventObserved(clientRequestId) {
+    return this._events.some(
+      (event) => event.event_type === "message.created" && event.payload?.client_request_id === clientRequestId
+    );
+  }
+  _settlePromptMutationFromEvents() {
+    const mutation = this._promptMutationForThread(this._selectedThreadId);
+    return Boolean(
+      mutation && this._promptEventObserved(mutation.clientRequestId) && this._settlePromptMutation(mutation.clientRequestId)
+    );
+  }
+  _settlePromptMutation(clientRequestId) {
+    const mutation = this._promptMutationForThread(this._selectedThreadId);
+    if (!mutation || mutation.clientRequestId !== clientRequestId) {
+      return false;
+    }
+    if (this._promptMutations.get(mutation.threadId) === mutation) {
+      this._promptMutations.delete(mutation.threadId);
+    }
+    if (this._promptMutation === mutation) {
+      this._promptMutation = null;
+    }
+    if (mutation.threadId === this._selectedThreadId) {
+      const promptInput = this.shadowRoot.getElementById("prompt-input");
       promptInput.value = "";
       this._draft = "";
+      this._setDraftForThread(mutation.threadId, "");
       this._clearError();
-      await this._refreshActiveThread();
-    } catch (error) {
-      this._setError(error);
+      this._render();
+    }
+    return true;
+  }
+  _promptMutationForThread(threadId) {
+    if (!threadId) {
+      return null;
+    }
+    return this._promptMutations.get(threadId) || (this._promptMutation?.threadId === threadId ? this._promptMutation : null);
+  }
+  _draftForThread(threadId) {
+    return threadId ? this._drafts.get(threadId) || "" : "";
+  }
+  _setDraftForThread(threadId, draft) {
+    if (!threadId) {
+      return;
+    }
+    if (draft) {
+      this._drafts.set(threadId, draft);
+    } else {
+      this._drafts.delete(threadId);
     }
   }
   async _cancelRun() {
@@ -4737,9 +5918,9 @@ var CodexBridgePanel = class extends HTMLElement {
       this._threads = this._threads.map((thread) => thread.thread_id === threadId ? archived : thread);
       if (this._selectedThreadId === threadId) {
         const replacement = this._threads.find((thread) => !thread.archived_at && thread.thread_id !== threadId);
-        this._selectedThreadId = replacement?.thread_id || null;
+        const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
         if (this._selectedThreadId) {
-          await this._refreshActiveThread();
+          await this._refreshSelectedThreadAndStartPolling(this._selectedThreadId, selectionEpoch);
         } else {
           this._stopEventSubscription();
           this._activeThread = null;
@@ -4805,7 +5986,7 @@ var CodexBridgePanel = class extends HTMLElement {
         preferProjectId: this._directProject()?.project_id || this._projects[0]?.project_id || null
       });
       if (removedThreadIds.has(this._selectedThreadId)) {
-        this._selectedThreadId = null;
+        this._setSelectedThreadId(null);
       }
       this._clearError();
       this._render();
@@ -4820,9 +6001,9 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       const restored = await this._callWS("restore_thread", { thread_id: threadId });
       this._threads = this._threads.map((thread) => thread.thread_id === threadId ? restored : thread);
-      this._selectedThreadId = threadId;
+      const selectionEpoch = this._setSelectedThreadId(threadId);
       this._selectedProjectId = restored.project_id;
-      await this._refreshActiveThread();
+      await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
       this._clearError();
       this._render();
     } catch (error) {
@@ -4838,10 +6019,10 @@ var CodexBridgePanel = class extends HTMLElement {
       this._threads = this._threads.filter((thread) => thread.thread_id !== threadId);
       if (this._selectedThreadId === threadId) {
         const replacement = this._threads.find((thread) => !thread.archived_at) || null;
-        this._selectedThreadId = replacement?.thread_id || null;
+        const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
         this._selectedProjectId = replacement?.project_id || this._directProject()?.project_id || null;
         if (replacement) {
-          await this._refreshActiveThread();
+          await this._refreshSelectedThreadAndStartPolling(replacement.thread_id, selectionEpoch);
         } else {
           this._stopEventSubscription();
           this._activeThread = null;
@@ -5050,6 +6231,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._pollInFlight = true;
     const polledThreadId = this._selectedThreadId;
+    const selectionEpoch = this._threadSelectionEpoch;
+    const snapshotEpoch = ++this._threadSnapshotEpoch;
+    const isCurrent = () => this._pollActive && generation === this._pollGeneration && snapshotEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(polledThreadId, selectionEpoch);
     try {
       this._pollTick += 1;
       const previousSequence = this._sequence;
@@ -5058,6 +6242,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const now = Date.now();
       const statusInterval = isRunning ? 7e3 : 3e4;
       const shouldRefreshStatus = !this._lastStatusRefreshAt || now - this._lastStatusRefreshAt >= statusInterval;
+      let hasInteractionEvents = false;
       const [events, status, thread] = await Promise.all([
         this._eventSubscriptionActive ? Promise.resolve([]) : this._callWS("get_events", {
           thread_id: polledThreadId,
@@ -5066,17 +6251,22 @@ var CodexBridgePanel = class extends HTMLElement {
         shouldRefreshStatus ? this._callWS("get_status") : Promise.resolve(this._status),
         isRunning || shouldRefreshStatus ? this._callWS("get_thread", { thread_id: polledThreadId }) : Promise.resolve(null)
       ]);
-      if (polledThreadId !== this._selectedThreadId) {
+      if (!isCurrent()) {
         return;
       }
       if (shouldRefreshStatus) {
         this._lastStatusRefreshAt = Date.now();
       }
       if (Array.isArray(events) && events.length) {
-        const batch = acceptEvents(this._eventStream, events);
+        const scopedEvents = events.filter(
+          (event) => !event?.thread_id || event.thread_id === polledThreadId
+        );
+        const batch = acceptEvents(this._eventStream, scopedEvents);
         this._eventStream = batch.state;
         this._events = batch.state.events;
         this._sequence = batch.state.cursor;
+        hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
+        this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();
           await this._refreshActiveThread();
@@ -5091,24 +6281,40 @@ var CodexBridgePanel = class extends HTMLElement {
       if (status) {
         this._mergeStatus(status);
       }
+      if (hasInteractionEvents) {
+        const interactions = await this._listPendingInteractions(polledThreadId);
+        if (!isCurrent()) {
+          return;
+        }
+        this._replacePendingInteractions(interactions);
+      }
       const hasNewEvents = this._sequence !== previousSequence;
       const shouldRefreshThread = Boolean(thread) || hasNewEvents;
       if (shouldRefreshThread) {
-        this._activeThread = thread || await this._callWS("get_thread", { thread_id: polledThreadId });
-        if (polledThreadId !== this._selectedThreadId) {
+        const refreshedThread = thread || await this._callWS("get_thread", { thread_id: polledThreadId });
+        if (!isCurrent()) {
           return;
         }
+        this._activeThread = refreshedThread;
         this._syncThreadListStatus();
         if (this._activeThread.status !== "running" && (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)) {
-          this._artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
+          const artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
+          if (!isCurrent()) {
+            return;
+          }
+          this._artifacts = artifacts;
           this._syncSelectedArtifact();
         }
         this._render();
       }
     } catch (error) {
-      this._setError(error);
+      if (isCurrent()) {
+        this._setError(error);
+      }
     } finally {
-      this._pollInFlight = false;
+      if (generation === this._pollGeneration) {
+        this._pollInFlight = false;
+      }
       if (this._pollActive && generation === this._pollGeneration && this._selectedThreadId) {
         this._scheduleNextPoll(void 0, generation);
       }
@@ -5264,8 +6470,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._refreshAuthStatus();
     }, 40);
   }
-  _startEventSubscription() {
-    this._stopEventSubscription();
+  _startEventSubscription({ reconnecting = false } = {}) {
+    this._stopEventSubscription({ preserveReconnectAttempt: reconnecting });
     if (!this._selectedThreadId || !this._hass?.connection?.subscribeMessage) {
       this._eventSubscriptionActive = false;
       return;
@@ -5287,17 +6493,24 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       this._eventUnsubscribe = unsubscribe;
       this._eventSubscriptionActive = true;
+      this._eventReconnectAttempt = 0;
+      if (this._eventReconnectTimer) {
+        window.clearTimeout(this._eventReconnectTimer);
+        this._eventReconnectTimer = null;
+      }
     }).catch(() => {
       if (generation === this._eventSubscriptionGeneration) {
         this._eventSubscriptionActive = false;
+        this._scheduleEventReconnect(threadId);
       }
     }).finally(() => {
       if (generation === this._eventSubscriptionGeneration) {
         this._eventSubscriptionPending = null;
       }
     });
+    return this._eventSubscriptionPending;
   }
-  _stopEventSubscription() {
+  _stopEventSubscription({ preserveReconnectAttempt = false } = {}) {
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
       this._eventUnsubscribe();
@@ -5307,11 +6520,63 @@ var CodexBridgePanel = class extends HTMLElement {
       window.clearTimeout(this._eventRefreshTimer);
       this._eventRefreshTimer = null;
     }
+    if (!preserveReconnectAttempt && this._eventReconnectTimer) {
+      window.clearTimeout(this._eventReconnectTimer);
+      this._eventReconnectTimer = null;
+    }
     this._eventSubscriptionPending = null;
     this._eventSubscriptionActive = false;
+    if (!preserveReconnectAttempt) {
+      this._eventReconnectAttempt = 0;
+    }
+  }
+  _retireEventSubscription({ reconnect = true } = {}) {
+    const threadId = this._selectedThreadId;
+    this._eventSubscriptionGeneration += 1;
+    if (this._eventUnsubscribe) {
+      this._eventUnsubscribe();
+      this._eventUnsubscribe = null;
+    }
+    this._eventSubscriptionPending = null;
+    this._eventSubscriptionActive = false;
+    if (reconnect && threadId) {
+      this._scheduleEventReconnect(threadId);
+    }
+  }
+  _scheduleEventReconnect(threadId = this._selectedThreadId) {
+    if (this._eventReconnectTimer || !this.isConnected || !threadId || threadId !== this._selectedThreadId || !this._hass?.connection?.subscribeMessage) {
+      return;
+    }
+    this._eventReconnectAttempt = Math.min(this._eventReconnectAttempt + 1, 7);
+    const delay2 = Math.min(3e4, 500 * 2 ** (this._eventReconnectAttempt - 1));
+    this._eventReconnectTimer = window.setTimeout(() => {
+      this._eventReconnectTimer = null;
+      if (threadId === this._selectedThreadId) {
+        this._startEventSubscription({ reconnecting: true });
+      }
+    }, delay2);
   }
   _handleSubscribedEvent(threadId, event) {
     if (threadId !== this._selectedThreadId) {
+      return;
+    }
+    if (event?.type === "stream_status") {
+      if (["authentication_failed", "failed", "protocol_error", "upstream_error", "stopped"].includes(event.state)) {
+        this._retireEventSubscription();
+      }
+      return;
+    }
+    if (event?.type === "snapshot_required") {
+      this._retireEventSubscription({ reconnect: false });
+      this._refreshActiveThread();
+      return;
+    }
+    if (event?.type === "error") {
+      this._retireEventSubscription();
+      this._setError("Bridge event stream failed");
+      return;
+    }
+    if (event?.thread_id && event.thread_id !== threadId) {
       return;
     }
     const result = acceptEvent(this._eventStream, event);
@@ -5326,12 +6591,15 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (result.control === "error") {
-      this._stopEventSubscription();
+      this._retireEventSubscription();
       this._setError(result.state.error || "Bridge event stream failed");
       return;
     }
     const acceptedEvent = result.event;
     this._events = result.state.events;
+    if (acceptedEvent.event_type === "message.created" && typeof acceptedEvent.payload?.client_request_id === "string") {
+      this._settlePromptMutation(acceptedEvent.payload.client_request_id);
+    }
     this._renderMessages();
     if ([
       "run.started",
@@ -5343,7 +6611,7 @@ var CodexBridgePanel = class extends HTMLElement {
       "run.queue_cleared",
       "artifact.added",
       "session.bound"
-    ].includes(acceptedEvent.event_type)) {
+    ].includes(acceptedEvent.event_type) || INTERACTION_EVENT_TYPES.has(acceptedEvent.event_type)) {
       this._scheduleLiveRefresh(threadId);
     }
   }
@@ -5356,28 +6624,35 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._eventRefreshTimer) {
       window.clearTimeout(this._eventRefreshTimer);
     }
+    const selectionEpoch = this._threadSelectionEpoch;
+    const refreshEpoch = ++this._threadSnapshotEpoch;
+    const isCurrent = () => refreshEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(threadId, selectionEpoch);
     this._eventRefreshTimer = window.setTimeout(async () => {
       this._eventRefreshTimer = null;
-      if (threadId !== this._selectedThreadId) {
+      if (!isCurrent()) {
         return;
       }
       try {
-        const [thread, artifacts, status] = await Promise.all([
+        const [thread, artifacts, status, interactions] = await Promise.all([
           this._callWS("get_thread", { thread_id: threadId }),
           this._callWS("list_artifacts", { thread_id: threadId }),
-          this._callWS("get_status")
+          this._callWS("get_status"),
+          this._listPendingInteractions(threadId)
         ]);
-        if (threadId !== this._selectedThreadId) {
+        if (!isCurrent()) {
           return;
         }
         this._activeThread = thread;
         this._artifacts = artifacts;
+        this._replacePendingInteractions(interactions);
         this._mergeStatus(status);
         this._syncThreadListStatus();
         this._syncSelectedArtifact();
         this._render();
       } catch (error) {
-        this._setError(error);
+        if (isCurrent()) {
+          this._setError(error);
+        }
       }
     }, 250);
   }
@@ -5497,8 +6772,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const replacement = this._threads.find(
       (thread) => this._threadIsPrimaryActive(thread) && (!preferProjectId || thread.project_id === preferProjectId)
     ) || this._threads.find((thread) => this._threadIsPrimaryActive(thread)) || null;
-    this._selectedThreadId = replacement?.thread_id || null;
+    const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
     this._selectedProjectId = replacement?.project_id || preferProjectId || this._directProject()?.project_id || null;
+    this._retireThreadInteractionState(this._selectedThreadId);
     if (replacement) {
       this._stopEventSubscription();
       this._activeThread = replacement;
@@ -5508,8 +6784,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._revokePreviewUrl();
       this._artifactPreview = null;
       this._forceMessageRebuild = true;
-      this._refreshActiveThread();
-      this._startPolling();
+      void this._refreshSelectedThreadAndStartPolling(replacement.thread_id, selectionEpoch);
       return;
     }
     this._stopPolling();

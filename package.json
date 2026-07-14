@@ -17,6 +17,7 @@
     "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.61.1",
     "esbuild": "0.28.1",

@@ -5,13 +5,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
-from custom_components.codex_bridge.bridge_api import BridgeApiError, BridgeApiGoneError
+from custom_components.codex_bridge.bridge_api import (
+    BridgeApiConflictError,
+    BridgeApiError,
+    BridgeApiGoneError,
+)
 from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
 from custom_components.codex_bridge.event_broker import EventBroker, EventRecord
 from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 from custom_components.codex_bridge.protocol import ProblemRecord
 from custom_components.codex_bridge.websocket_api import (
     ws_answer_interaction,
+    ws_decide_interaction,
     ws_get_config,
     ws_get_event_status,
     ws_get_events,
@@ -428,6 +433,103 @@ async def test_answer_interaction_forwards_exact_bounded_values_contract() -> No
         answers=[{"question_id": "question_1", "values": ["yes"]}],
         client_request_id="answer-1",
     )
+
+
+async def test_interaction_commands_preserve_only_actionable_safe_problem_codes() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_decide_interaction = AsyncMock(
+        side_effect=BridgeApiGoneError(
+            problem=ProblemRecord.from_payload(
+                410,
+                {"detail": {"code": "interaction_stale", "retryable": False}},
+            )
+        )
+    )
+    runtime.client.async_answer_interaction = AsyncMock(
+        side_effect=BridgeApiConflictError(
+            problem=ProblemRecord.from_payload(
+                409,
+                {
+                    "detail": {
+                        "code": "interaction_outcome_unknown",
+                        "retryable": False,
+                    }
+                },
+            )
+        )
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_decide_interaction(
+        hass,
+        connection,
+        {
+            "id": 31,
+            "type": f"{DOMAIN}/decide_interaction",
+            "interaction_id": "int_1",
+            "thread_id": "thr_1",
+            "run_id": "run_1",
+            "turn_id": "turn_1",
+            "item_id": "item_1",
+            "decision": "decline",
+            "client_request_id": "decision-1",
+        },
+    )
+    ws_answer_interaction(
+        hass,
+        connection,
+        {
+            "id": 32,
+            "type": f"{DOMAIN}/answer_interaction",
+            "interaction_id": "int_2",
+            "thread_id": "thr_1",
+            "run_id": "run_1",
+            "turn_id": "turn_1",
+            "item_id": "item_2",
+            "answers": [{"question_id": "question_1", "values": ["yes"]}],
+            "client_request_id": "answer-1",
+        },
+    )
+    await hass.finish()
+
+    assert connection.errors == [
+        (31, "interaction_stale", "This Codex request is no longer active"),
+        (
+            32,
+            "interaction_outcome_unknown",
+            "The response outcome could not be confirmed",
+        ),
+    ]
+
+
+async def test_interaction_commands_still_redact_unrecognized_bridge_errors() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_decide_interaction = AsyncMock(
+        side_effect=BridgeApiError("private-interaction-sentinel")
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_decide_interaction(
+        hass,
+        connection,
+        {
+            "id": 33,
+            "type": f"{DOMAIN}/decide_interaction",
+            "interaction_id": "int_1",
+            "thread_id": "thr_1",
+            "run_id": "run_1",
+            "turn_id": "turn_1",
+            "item_id": "item_1",
+            "decision": "cancel",
+            "client_request_id": "decision-2",
+        },
+    )
+    await hass.finish()
+
+    assert connection.errors == [(33, "bridge_error", "Bridge request failed")]
+    assert "private-interaction-sentinel" not in repr(connection.errors)
 
 
 async def test_explicit_unsubscribe_invokes_and_removes_subscription_callback() -> None:

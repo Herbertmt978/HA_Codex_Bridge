@@ -3,6 +3,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "../src/codex-bridge-panel.js";
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function threadRecord(threadId, title) {
+  return {
+    thread_id: threadId,
+    project_id: "project-safe",
+    title,
+    status: "idle",
+    mode: "edit",
+    attachments: [],
+  };
+}
+
 function controlEvent(eventType, payload = {}) {
   return {
     event_id: `evt_${eventType.replaceAll(".", "_")}`,
@@ -32,7 +53,11 @@ function pollingPanel(event) {
 }
 
 describe("polling event fallback", () => {
-  beforeEach(() => document.body.replaceChildren());
+  beforeEach(() => {
+    document.body.replaceChildren();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
 
   it("refreshes the authoritative transcript on a snapshot boundary", async () => {
     const panel = pollingPanel(controlEvent("bridge.snapshot_required"));
@@ -55,5 +80,337 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("broker stopped");
     expect(panel._sequence).toBe(5);
     expect(panel._events).toEqual([]);
+  });
+
+  it("rejects a misrouted live event from another chat", () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thr_safe";
+    panel._promptMutation = {
+      threadId: "thr_safe",
+      prompt: "Keep this request isolated",
+      clientRequestId: "prompt-safe",
+      state: "reconciling",
+    };
+
+    panel._handleSubscribedEvent("thr_safe", {
+      event_id: "evt_other_chat",
+      thread_id: "thr_other",
+      sequence: 1,
+      event_type: "message.created",
+      payload: { text: "Wrong chat", client_request_id: "prompt-safe" },
+    });
+
+    expect(panel._sequence).toBe(0);
+    expect(panel._events).toEqual([]);
+    expect(panel._promptMutation).not.toBeNull();
+  });
+
+  it("preserves exponential reconnect attempts across failed subscriptions", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thr_safe";
+    panel._eventReconnectAttempt = 3;
+    panel._hass = {
+      connection: {
+        subscribeMessage: vi.fn().mockRejectedValue(new Error("stream unavailable")),
+      },
+    };
+
+    await panel._startEventSubscription({ reconnecting: true });
+
+    expect(panel._eventReconnectAttempt).toBe(4);
+    panel._stopEventSubscription();
+    vi.useRealTimers();
+  });
+
+  it("rejects an older same-chat snapshot after an A-to-B-to-A selection", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._startEventSubscription = vi.fn();
+    panel._startPolling = vi.fn();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const firstAlpha = deferred();
+    const secondAlpha = deferred();
+    let alphaRequests = 0;
+    panel._callWS = vi.fn((action, payload) => {
+      if (action === "get_thread" && payload.thread_id === "thread-alpha") {
+        alphaRequests += 1;
+        return alphaRequests === 1 ? firstAlpha.promise : secondAlpha.promise;
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord(payload.thread_id, "Beta"));
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const staleRefresh = panel._refreshActiveThread();
+    await panel._selectThread("thread-beta");
+    const currentRefresh = panel._selectThread("thread-alpha");
+    secondAlpha.resolve(threadRecord("thread-alpha", "Newest Alpha"));
+    await currentRefresh;
+    expect(panel._activeThread?.title).toBe("Newest Alpha");
+    const subscriptionCount = panel._startEventSubscription.mock.calls.length;
+
+    firstAlpha.resolve(threadRecord("thread-alpha", "Stale Alpha"));
+    await staleRefresh;
+
+    expect(panel._activeThread?.title).toBe("Newest Alpha");
+    expect(panel._startEventSubscription).toHaveBeenCalledTimes(subscriptionCount);
+  });
+
+  it("does not surface a rejected refresh from a previously selected chat", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._startEventSubscription = vi.fn();
+    panel._startPolling = vi.fn();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const staleAlpha = deferred();
+    panel._callWS = vi.fn((action, payload) => {
+      if (action === "get_thread" && payload.thread_id === "thread-alpha") return staleAlpha.promise;
+      if (action === "get_thread") return Promise.resolve(threadRecord(payload.thread_id, "Beta"));
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const staleRefresh = panel._refreshActiveThread();
+    await panel._selectThread("thread-beta");
+    staleAlpha.reject(new Error("private stale alpha failure"));
+    await staleRefresh;
+
+    expect(panel._selectedThreadId).toBe("thread-beta");
+    expect(panel._error).toBe("");
+  });
+
+  it("rejects a delayed live response from an earlier visit to the same chat", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Initial Alpha");
+    panel._status = {};
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
+    panel._startPolling = vi.fn();
+    const liveThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return liveThread.promise;
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    await panel._selectThread("thread-beta");
+    await panel._selectThread("thread-alpha");
+    panel._activeThread = threadRecord("thread-alpha", "Newest Alpha");
+
+    liveThread.resolve(threadRecord("thread-alpha", "Stale Live Alpha"));
+    await vi.runAllTimersAsync();
+
+    expect(panel._activeThread?.title).toBe("Newest Alpha");
+    vi.useRealTimers();
+  });
+
+  it("rejects a delayed poll response from an earlier visit to the same chat", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Initial Alpha");
+    panel._status = {};
+    panel._lastStatusRefreshAt = Date.now();
+    panel._pollActive = true;
+    panel._pollGeneration = 1;
+    panel._scheduleNextPoll = vi.fn();
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
+    panel._startPolling = vi.fn();
+    const pollEvents = deferred();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return pollEvents.promise;
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const stalePoll = panel._runPollTick(1);
+    await panel._selectThread("thread-beta");
+    await panel._selectThread("thread-alpha");
+    panel._events = [{ event_id: "new-alpha" }];
+    panel._sequence = 10;
+
+    pollEvents.resolve([{
+      ...controlEvent("message.created", { text: "stale poll" }),
+      thread_id: "thread-alpha",
+    }]);
+    await stalePoll;
+
+    expect(panel._events).toEqual([{ event_id: "new-alpha" }]);
+    expect(panel._sequence).toBe(10);
+  });
+
+  it("keeps a newer full snapshot when an older same-chat live refresh finishes last", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Initial Alpha");
+    panel._status = {};
+    panel._startEventSubscription = vi.fn();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const staleLiveThread = deferred();
+    let threadRequests = 0;
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") {
+        threadRequests += 1;
+        return threadRequests === 1
+          ? staleLiveThread.promise
+          : Promise.resolve(threadRecord("thread-alpha", "Newest Full Alpha"));
+      }
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    expect(threadRequests).toBe(1);
+    await panel._refreshActiveThread();
+    expect(panel._activeThread?.title).toBe("Newest Full Alpha");
+
+    staleLiveThread.resolve(threadRecord("thread-alpha", "Stale Live Alpha"));
+    await vi.runAllTimersAsync();
+
+    expect(panel._activeThread?.title).toBe("Newest Full Alpha");
+    vi.useRealTimers();
+  });
+
+  it("keeps a newer full snapshot when an older same-chat poll finishes last", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Initial Alpha");
+    panel._status = {};
+    panel._sequence = 4;
+    panel._lastStatusRefreshAt = Date.now();
+    panel._pollActive = true;
+    panel._pollGeneration = 1;
+    panel._scheduleNextPoll = vi.fn();
+    panel._startEventSubscription = vi.fn();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const stalePollEvents = deferred();
+    panel._callWS = vi.fn((action, payload) => {
+      if (action === "get_events") {
+        return payload.after === 4 ? stalePollEvents.promise : Promise.resolve([]);
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Newest Full Alpha"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const stalePoll = panel._runPollTick(1);
+    await Promise.resolve();
+    await panel._refreshActiveThread();
+    expect(panel._activeThread?.title).toBe("Newest Full Alpha");
+
+    stalePollEvents.resolve([{
+      ...controlEvent("message.created", { text: "stale poll" }),
+      thread_id: "thread-alpha",
+    }]);
+    await stalePoll;
+
+    expect(panel._events).toEqual([]);
+    expect(panel._sequence).toBe(0);
+  });
+
+  it("keeps a newer poll update when an older same-chat full snapshot finishes last", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Initial Alpha");
+    panel._status = {};
+    panel._sequence = 4;
+    panel._lastStatusRefreshAt = Date.now();
+    panel._pollActive = true;
+    panel._pollGeneration = 1;
+    panel._scheduleNextPoll = vi.fn();
+    panel._startEventSubscription = vi.fn();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const staleFullThread = deferred();
+    let threadRequests = 0;
+    panel._callWS = vi.fn((action, payload) => {
+      if (action === "get_thread") {
+        threadRequests += 1;
+        return threadRequests === 1
+          ? staleFullThread.promise
+          : Promise.resolve(threadRecord("thread-alpha", "Newest Poll Alpha"));
+      }
+      if (action === "get_events") {
+        return Promise.resolve(payload.after === 4 ? [{
+          ...controlEvent("message.created", { text: "new poll" }),
+          thread_id: "thread-alpha",
+        }] : []);
+      }
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const staleFull = panel._refreshActiveThread();
+    await Promise.resolve();
+    await panel._runPollTick(1);
+    expect(panel._events).toHaveLength(1);
+    expect(panel._sequence).toBe(5);
+
+    staleFullThread.resolve(threadRecord("thread-alpha", "Stale Full Alpha"));
+    await staleFull;
+
+    expect(panel._events).toHaveLength(1);
+    expect(panel._events[0]?.payload?.text).toBe("new poll");
+    expect(panel._sequence).toBe(5);
+    expect(panel._activeThread?.title).toBe("Newest Poll Alpha");
+  });
+
+  it.each([
+    ["archive", async (panel) => {
+      panel._callWS = vi.fn().mockResolvedValue({
+        ...threadRecord("thread-alpha", "Archived Alpha"),
+        archived_at: "2026-07-14T12:00:00Z",
+      });
+      await panel._archiveThread("thread-alpha");
+    }],
+    ["restore", async (panel) => {
+      panel._callWS = vi.fn().mockResolvedValue(threadRecord("thread-beta", "Restored Beta"));
+      await panel._restoreThread("thread-beta");
+    }],
+    ["delete", async (panel) => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      panel._callWS = vi.fn().mockResolvedValue({});
+      await panel._deleteThread("thread-alpha");
+    }],
+  ])("restarts polling after a %s replacement selects another chat", async (_action, run) => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._threads = [
+      threadRecord("thread-alpha", "Alpha"),
+      threadRecord("thread-beta", "Beta"),
+    ];
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Alpha");
+    panel._pollActive = true;
+    panel._pollGeneration = 1;
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
+    panel._startPolling = vi.fn();
+
+    await run(panel);
+
+    expect(panel._selectedThreadId).toBe("thread-beta");
+    expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
+    expect(panel._startPolling).toHaveBeenCalledOnce();
   });
 });

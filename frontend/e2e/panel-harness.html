@@ -390,6 +390,61 @@
 
       const defaultEvents = [];
 
+      const pendingInteractionsByThread = {
+        thr_vba_1: [
+          {
+            interaction_id: "int_command_harness",
+            kind: "command_approval",
+            thread_id: "thr_vba_1",
+            run_id: "run_harness",
+            turn_id: "turn_harness",
+            item_id: "item_command_harness",
+            event_id: 800,
+            status: "pending",
+            expires_at: "2099-07-14T12:00:00Z",
+            display: {
+              title: "Run the focused checks",
+              summary: "Codex needs approval before it runs this workspace command.",
+              command: "python -m pytest bridge_service/tests -q",
+              workspace_paths: ["bridge_service/tests", "custom_components/codex_bridge"],
+              questions: [],
+            },
+            allowed_actions: ["accept", "decline", "cancel"],
+          },
+          {
+            interaction_id: "int_question_harness",
+            kind: "user_input",
+            thread_id: "thr_vba_1",
+            run_id: "run_harness",
+            turn_id: "turn_harness",
+            item_id: "item_question_harness",
+            event_id: 801,
+            status: "pending",
+            expires_at: "2099-07-14T12:00:00Z",
+            display: {
+              title: "Choose the change scope",
+              summary: "Codex needs an answer before it can continue.",
+              command: null,
+              workspace_paths: [],
+              questions: [
+                {
+                  question_id: "scope",
+                  header: "Scope",
+                  prompt: "Which files should Codex update?",
+                  options: [
+                    { label: "Source only", description: "Update application source files." },
+                    { label: "Source and tests", description: "Update source files and focused tests." },
+                  ],
+                  multiple: false,
+                  allow_free_text: false,
+                },
+              ],
+            },
+            allowed_actions: ["answer"],
+          },
+        ],
+      };
+
       const uploadSessions = new Map();
       let uploadCounter = 0;
       const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
@@ -485,8 +540,11 @@
         authRevision: 1,
         systemCursor: 0,
         authSubscribers: new Set(),
+        threadSubscribers: new Map(),
         subscriptions: [],
         calls: [],
+        dropNextPromptResponse: false,
+        publishedPromptRequestIds: new Set(),
         auth: {
           revision: 1,
           state: "ok",
@@ -518,8 +576,56 @@
         harnessState.authSubscribers.forEach((callback) => callback(envelope));
       };
 
+      const nextThreadSequence = (threadId) => {
+        const events = eventMap[threadId] || [];
+        return events.reduce((maximum, event) => Math.max(maximum, event.sequence || 0), 0) + 1;
+      };
+
+      const emitThreadEvent = (threadId, eventType, payload = {}) => {
+        const event = {
+          event_id: `evt_harness_${threadId}_${nextThreadSequence(threadId)}`,
+          thread_id: threadId,
+          sequence: nextThreadSequence(threadId),
+          event_type: eventType,
+          payload: clone(payload),
+          timestamp: new Date().toISOString(),
+        };
+        eventMap[threadId] = [...(eventMap[threadId] || []), event];
+        const subscribers = harnessState.threadSubscribers.get(threadId);
+        subscribers?.forEach((callback) => callback(clone(event)));
+        return event;
+      };
+
+      const removeInteraction = (interactionId, status) => {
+        for (const [threadId, interactions] of Object.entries(pendingInteractionsByThread)) {
+          const interaction = interactions.find((item) => item.interaction_id === interactionId);
+          if (!interaction) continue;
+          pendingInteractionsByThread[threadId] = interactions.filter((item) => item.interaction_id !== interactionId);
+          emitThreadEvent(threadId, "interaction.resolved", {
+            interaction_id: interactionId,
+            status,
+          });
+          return interaction;
+        }
+        return null;
+      };
+
       window.__codexHarness = {
         emitAuthEvent,
+        emitThreadEvent,
+        dropNextPromptResponse() {
+          harnessState.dropNextPromptResponse = true;
+        },
+        resolveInteraction(interactionId, status = "accepted") {
+          return clone(removeInteraction(interactionId, status));
+        },
+        stopThreadStream(threadId = "thr_vba_1") {
+          const subscribers = harnessState.threadSubscribers.get(threadId);
+          subscribers?.forEach((callback) => callback({ type: "stream_status", state: "stopped" }));
+        },
+        get pendingInteractions() {
+          return clone(pendingInteractionsByThread);
+        },
         completeLogin() {
           harnessState.auth = {
             ...harnessState.auth,
@@ -553,12 +659,20 @@
               window.setTimeout(emitAuthEvent, 0);
               return () => harnessState.authSubscribers.delete(callback);
             }
+            const threadId = payload.thread_id;
+            const subscribers = harnessState.threadSubscribers.get(threadId) || new Set();
+            subscribers.add(callback);
+            harnessState.threadSubscribers.set(threadId, subscribers);
             const events = (eventMap[payload.thread_id] || defaultEvents).filter((item) => item.sequence > (payload.after || 0));
             const timers = events.map((event, index) => window.setTimeout(() => callback(clone(event)), 40 + index * 20));
-            return () => timers.forEach((timer) => window.clearTimeout(timer));
+            return () => {
+              timers.forEach((timer) => window.clearTimeout(timer));
+              subscribers.delete(callback);
+              if (!subscribers.size) harnessState.threadSubscribers.delete(threadId);
+            };
           },
           sendMessagePromise: async (payload) => {
-            harnessState.calls.push({ kind: "ws", type: payload.type });
+            harnessState.calls.push({ kind: "ws", type: payload.type, payload: clone(payload) });
             switch (payload.type) {
               case "codex_bridge/get_config":
                 return {
@@ -579,6 +693,16 @@
                 return clone((eventMap[payload.thread_id] || defaultEvents).filter((item) => item.sequence > (payload.after || 0)));
               case "codex_bridge/list_artifacts":
                 return clone(threadMap[payload.thread_id]?.artifacts || []);
+              case "codex_bridge/list_pending_interactions": {
+                const items = payload.thread_id
+                  ? pendingInteractionsByThread[payload.thread_id] || []
+                  : Object.values(pendingInteractionsByThread).flat();
+                return {
+                  items: clone(items),
+                  count: items.length,
+                  thread_id: payload.thread_id || null,
+                };
+              }
               case "codex_bridge/update_thread": {
                 const thread = threadMap[payload.thread_id];
                 if ("model_override" in payload) {
@@ -762,8 +886,44 @@
                   }
                 }
                 return {};
-              case "codex_bridge/send_prompt":
-                return {};
+              case "codex_bridge/decide_interaction": {
+                const statuses = { accept: "accepted", decline: "declined", cancel: "cancelled" };
+                const status = statuses[payload.decision];
+                const interaction = removeInteraction(payload.interaction_id, status);
+                if (!interaction) throw new Error("interaction_stale");
+                return {
+                  interaction_id: interaction.interaction_id,
+                  thread_id: interaction.thread_id,
+                  status,
+                  client_request_id: payload.client_request_id,
+                };
+              }
+              case "codex_bridge/answer_interaction": {
+                const interaction = removeInteraction(payload.interaction_id, "answered");
+                if (!interaction) throw new Error("interaction_stale");
+                return {
+                  interaction_id: interaction.interaction_id,
+                  thread_id: interaction.thread_id,
+                  status: "answered",
+                  client_request_id: payload.client_request_id,
+                };
+              }
+              case "codex_bridge/send_prompt": {
+                const requestId = payload.client_request_id || "prompt-without-id";
+                if (harnessState.dropNextPromptResponse) {
+                  harnessState.dropNextPromptResponse = false;
+                  throw new Error("Bridge response was lost");
+                }
+                if (!harnessState.publishedPromptRequestIds.has(requestId)) {
+                  harnessState.publishedPromptRequestIds.add(requestId);
+                  emitThreadEvent(payload.thread_id, "message.created", {
+                    role: "user",
+                    text: payload.prompt,
+                    client_request_id: payload.client_request_id,
+                  });
+                }
+                return { accepted: true, client_request_id: payload.client_request_id };
+              }
               default:
                 throw new Error(`Unhandled WS call: ${payload.type}`);
             }

@@ -17,6 +17,17 @@ from .event_broker import EventBatch, EventRecord
 from .protocol import EndpointError
 from .runtime import async_get_runtime
 
+_INTERACTION_ERROR_MESSAGES = {
+    "interaction_already_resolved": "This Codex request was already resolved",
+    "interaction_kind_mismatch": "This response does not match the Codex request",
+    "interaction_not_found": "This Codex request is no longer available",
+    "interaction_outcome_unknown": "The response outcome could not be confirmed",
+    "interaction_stale": "This Codex request is no longer active",
+    "interaction_thread_mismatch": "This Codex request belongs to another chat",
+    "runtime_request_conflict": "This response conflicts with an earlier request",
+    "turn_changed": "The active Codex turn has changed",
+}
+
 
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
     commands = (
@@ -62,6 +73,8 @@ async def _async_handle(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
     handler,
+    *,
+    safe_error_messages: dict[str, str] | None = None,
 ) -> None:
     try:
         runtime = async_get_runtime(hass)
@@ -72,8 +85,11 @@ async def _async_handle(
         connection.send_error(msg["id"], "cannot_connect", "Bridge is unavailable")
     except EndpointError:
         connection.send_error(msg["id"], "bridge_error", "Bridge response is invalid")
-    except BridgeApiError:
-        connection.send_error(msg["id"], "bridge_error", "Bridge request failed")
+    except BridgeApiError as err:
+        if safe_error_messages is not None and err.code in safe_error_messages:
+            connection.send_error(msg["id"], err.code, safe_error_messages[err.code])
+        else:
+            connection.send_error(msg["id"], "bridge_error", "Bridge request failed")
     except RuntimeError:
         connection.send_error(
             msg["id"], "not_configured", "Codex Bridge is not configured"
@@ -868,6 +884,7 @@ async def ws_decide_interaction(
                 )
             },
         ),
+        safe_error_messages=_INTERACTION_ERROR_MESSAGES,
     )
 
 
@@ -916,6 +933,7 @@ async def ws_answer_interaction(
                 )
             },
         ),
+        safe_error_messages=_INTERACTION_ERROR_MESSAGES,
     )
 
 
