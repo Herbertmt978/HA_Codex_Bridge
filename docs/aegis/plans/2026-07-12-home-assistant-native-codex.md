@@ -537,11 +537,13 @@ npm run test:e2e
 docker compose -f tests/transport/compose.yaml up --build --abort-on-container-exit --exit-code-from e2e
 ```
 
-- [ ] Write failing tests for escaped command/patch scope, expiry, accept/decline/cancel, questions/answers, immediate control disable, stale/duplicate/cross-thread rejection, stable `client_request_id`, transcript/cursor preservation, reconnect/reconcile states, exactly-once resume, keyboard dialogs, focus return, live regions, reduced motion, mobile layout, and axe-core violations.
-- [ ] Run unit/E2E/proxy tests and confirm current subscription failure and duplicate-submit risks.
-- [ ] Implement inline decision cards, question forms, descriptive Observe/Edit/Full auto boundaries, mutation lock during reconciliation, cursor snapshot/resume, accessible dialogs/focus/live regions, and provider-neutral relative HTTP/WebSocket paths.
-- [ ] Run full frontend/Integration/proxy suites; capture redacted desktop/mobile screenshots from the real built panel, not a generated mockup.
-- [ ] Commit with message `Add resilient Codex controls to the HA panel`.
+- [x] Write failing tests for escaped command/patch scope, expiry, accept/decline/cancel, questions/answers, immediate control disable, stale/duplicate/cross-thread rejection, stable `client_request_id`, transcript/cursor preservation, reconnect/reconcile states, exactly-once resume, keyboard dialogs, focus return, live regions, reduced motion, mobile layout, and axe-core violations.
+- [x] Run unit/E2E/proxy tests and confirm current subscription failure and duplicate-submit risks.
+- [x] Implement inline decision cards, question forms, descriptive Observe/Edit/Full auto boundaries, mutation lock during reconciliation, cursor snapshot/resume, accessible dialogs/focus/live regions, and provider-neutral relative HTTP/WebSocket paths.
+- [x] Run full frontend/Integration/proxy suites; capture redacted desktop/mobile screenshots from the real built panel, not a generated mockup.
+- [x] Commit with message `Add resilient Codex controls to the HA panel`.
+
+**Completed:** `e0979aa` adds escaped inline approvals, structured questions, explicit Observe/Edit/Full boundaries, stable request reconciliation, exactly-once retry behavior, shared full/live/poll snapshot epochs, selection-safe fallback polling, and HA-shaped WebSocket/proxy transport coverage. ESLint passed; Vitest passed 123 tests across fifteen files; Playwright passed eight built-panel scenarios including axe-core and redacted responsive screenshots; the focused Bridge slice passed 143 tests; the Linux Home Assistant Integration slice passed 161 tests; the Docker HA-shaped transport harness passed; generated-asset, Ruff, `compileall`, and diff hygiene checks passed. Luna and Terra independently found no remaining P0-P2 correctness, security, accessibility, or reconnect-race issue in the committed snapshot.
 
 ## Task 18: Create the least-privilege Home Assistant App repository
 
