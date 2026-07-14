@@ -1038,7 +1038,6 @@ class RuntimeBroker:
         thread_params: dict[str, object] = {
             "cwd": str(workspace),
             "model": run.model,
-            "sandbox": policy.thread_sandbox,
             "approvalPolicy": policy.approval_policy,
             "approvalsReviewer": "user",
         }
@@ -1112,7 +1111,6 @@ class RuntimeBroker:
                 "effort": run.effort,
                 "approvalPolicy": policy.approval_policy,
                 "approvalsReviewer": "user",
-                "sandboxPolicy": policy.sandbox_policy,
             },
             timeout_seconds=turn_request_timeout,
         )

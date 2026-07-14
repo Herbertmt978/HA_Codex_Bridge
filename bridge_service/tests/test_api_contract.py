@@ -22,6 +22,7 @@ EXPECTED_BUILD_ENVIRONMENT_KEYS = {
     "CODEX_BRIDGE_IMAGE_REVISION",
     "CODEX_BRIDGE_ARCH",
     "CODEX_BRIDGE_RELEASE_LOCK_DIGEST",
+    "CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION",
 }
 
 BUILD_ENVIRONMENT_KEYS = tuple(sorted(EXPECTED_BUILD_ENVIRONMENT_KEYS))
@@ -145,6 +146,7 @@ def test_build_info_reads_only_explicit_environment_fields() -> None:
             "CODEX_BRIDGE_IMAGE_REVISION": "sha256:" + ("a" * 64),
             "CODEX_BRIDGE_ARCH": "aarch64",
             "CODEX_BRIDGE_RELEASE_LOCK_DIGEST": "d" * 64,
+            "CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION": "2",
             "SUPERVISOR_TOKEN": "supervisor-secret",
             "OPENAI_API_KEY": "openai-secret",
         }
@@ -160,6 +162,7 @@ def test_build_info_reads_only_explicit_environment_fields() -> None:
         "image_revision": "sha256:" + ("a" * 64),
         "architecture": "aarch64",
         "release_lock_digest": "d" * 64,
+        "sandbox_contract_version": 2,
     }
     assert "supervisor-secret" not in repr(build)
     assert "openai-secret" not in repr(build)
@@ -180,6 +183,7 @@ def test_build_info_normalizes_missing_or_blank_values_without_mutation() -> Non
         "image_revision": None,
         "architecture": "unknown",
         "release_lock_digest": None,
+        "sandbox_contract_version": None,
     }
 
     with pytest.raises(ValidationError):

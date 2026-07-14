@@ -36,6 +36,7 @@ ARCHITECTURES = {
 }
 COMPONENTS = ("codex", "bwrap")
 SOURCE_DATE_EPOCH = "315532800"  # 1980-01-01, the first ZIP timestamp.
+SANDBOX_CONTRACT_VERSION = 2
 
 
 class StageError(RuntimeError):
@@ -71,6 +72,71 @@ def _load_release_lock(path: Path) -> tuple[Mapping[str, Any], Any]:
     if not isinstance(lock, dict):
         raise StageError("the Codex release lock is invalid")
     return lock, module
+
+
+def _sandbox_contract(
+    lock: Mapping[str, Any],
+    arch: str,
+    release_lock_digest: str,
+) -> dict[str, object]:
+    """Project the verified release lock into the runtime sandbox contract."""
+
+    try:
+        release = lock["release"]
+        selected = lock["assets"][arch]
+        codex_digest = selected["codex"]["decompressed_sha256"]
+        bwrap_digest = selected["bwrap"]["decompressed_sha256"]
+        codex_version = release["version"]
+    except (KeyError, TypeError) as exc:
+        raise StageError("the Codex release lock cannot form a sandbox contract") from exc
+    bwrap_wrapper_digest = _sha256_bytes(
+        _canonical_text_bytes(
+            APP_ROOT
+            / "rootfs"
+            / "usr"
+            / "local"
+            / "libexec"
+            / "codex-bridge"
+            / "bwrap-wrapper.py"
+        )
+    )
+    values = (
+        release_lock_digest,
+        codex_digest,
+        bwrap_digest,
+        bwrap_wrapper_digest,
+    )
+    if not all(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+        for value in values
+    ) or not isinstance(codex_version, str):
+        raise StageError("the Codex release lock cannot form a sandbox contract")
+    return {
+        "schema_version": SANDBOX_CONTRACT_VERSION,
+        "architecture": arch,
+        "codex_version": codex_version,
+        "release_lock_digest": release_lock_digest,
+        "executables": {
+            "codex": {
+                "path": "/usr/local/bin/codex",
+                "sha256": codex_digest,
+            },
+            "bwrap": {
+                "path": "/usr/local/bin/bwrap",
+                "sha256": bwrap_digest,
+            },
+            "bwrap_launcher": {
+                "path": "/opt/codex/bin/bwrap",
+                "sha256": bwrap_wrapper_digest,
+            },
+        },
+        "apparmor": {
+            "parent_profile_suffix": "codex_bridge",
+            "bwrap_profile_suffix": "//codex_bwrap",
+        },
+    }
 
 
 def _copy_file(source: Path, destination: Path) -> None:
@@ -466,6 +532,7 @@ def stage(*, arch: str, output: Path) -> Path:
 
     lock_path = APP_ROOT / "codex-release.json"
     lock, release_module = _load_release_lock(lock_path)
+    release_lock_digest = _sha256_bytes(_canonical_text_bytes(lock_path))
     output = _safe_output(output, arch)
     output.parent.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="codex-bridge-app-scratch-"))
@@ -483,6 +550,27 @@ def stage(*, arch: str, output: Path) -> Path:
             context / "rootfs",
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
         )
+        sandbox_contract_path = (
+            context
+            / "rootfs"
+            / "usr"
+            / "local"
+            / "share"
+            / "codex-bridge"
+            / "sandbox-contract.json"
+        )
+        sandbox_contract_path.parent.mkdir(parents=True, exist_ok=True)
+        sandbox_contract_path.write_bytes(
+            (
+                json.dumps(
+                    _sandbox_contract(lock, arch, release_lock_digest),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            ).encode("utf-8")
+        )
+        sandbox_contract_path.chmod(0o444)
         wheel = _build_bridge_wheel(context / "wheel", scratch)
         _materialize_runtime(context / "runtime-site-packages", arch)
 

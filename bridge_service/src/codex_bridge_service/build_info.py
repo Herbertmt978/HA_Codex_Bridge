@@ -39,6 +39,7 @@ class BuildInfo(BaseModel):
     image_revision: str | None = None
     architecture: str = "unknown"
     release_lock_digest: str | None = None
+    sandbox_contract_version: int | None = None
 
     @field_validator("app_version", "bridge_version", "codex_version", mode="before")
     @classmethod
@@ -81,6 +82,15 @@ class BuildInfo(BaseModel):
             return None
         return value.lower()
 
+    @field_validator("sandbox_contract_version", mode="before")
+    @classmethod
+    def validate_sandbox_contract_version(cls, value: object) -> int | None:
+        if type(value) is int:
+            return value if 1 <= value <= 999 else None
+        if isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,2}", value):
+            return int(value)
+        return None
+
     @classmethod
     def from_environment(
         cls,
@@ -94,4 +104,7 @@ class BuildInfo(BaseModel):
             image_revision=source.get("CODEX_BRIDGE_IMAGE_REVISION"),
             architecture=source.get("CODEX_BRIDGE_ARCH"),
             release_lock_digest=source.get("CODEX_BRIDGE_RELEASE_LOCK_DIGEST"),
+            sandbox_contract_version=source.get(
+                "CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION"
+            ),
         )

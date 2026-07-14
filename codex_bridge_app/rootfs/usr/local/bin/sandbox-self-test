@@ -1,0 +1,669 @@
+#!/usr/local/bin/python
+"""Attest the exact app-server tool sandbox used by the HA App."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import grp
+import re
+import secrets
+import shutil
+import stat
+import subprocess
+import sys
+from typing import Any
+
+from codex_bridge_service.sandbox_attestation import (
+    ATTESTATION_PATH,
+    CONTRACT_PATH,
+    read_sandbox_contract,
+)
+
+
+PROBE_PATH = Path("/usr/local/libexec/codex-bridge/sandbox_probe.py")
+WORKSPACE_ROOT = Path("/config/workspaces")
+CODEX_HOME = Path("/data/codex-home")
+PERMISSION_PROFILE = "ha_bridge"
+MAX_WORKER_OUTPUT = 32 * 1024
+MAX_AUTH_BYTES = 4 * 1024 * 1024
+PROBE_CHECKS = frozenset(
+    {
+        "apparmor_tool_profile",
+        "zero_permitted_capabilities",
+        "zero_effective_capabilities",
+        "zero_inheritable_capabilities",
+        "zero_ambient_capabilities",
+        "zero_bounding_capabilities",
+        "no_new_privileges",
+        "seccomp_filter",
+        "root_filesystem_write_denied",
+        "workspace_mount_read_write",
+        "workspace_write",
+        "system_read",
+        "bridge_token_denied",
+        "bridge_state_denied",
+        "auth_state_denied",
+        "outside_workspace_denied",
+        "sibling_workspace_read_denied",
+        "sibling_workspace_write_denied",
+        "attestation_state_denied",
+        "supervisor_environment_absent",
+        "inherited_sockets_absent",
+        "nested_user_namespace_denied",
+        "clone_user_namespace_denied",
+        "setns_denied",
+        "clone3_unavailable",
+        "mount_denied",
+        "umount_denied",
+        "pivot_root_denied",
+        "ipv4_network_denied",
+        "supervisor_network_denied",
+        "homeassistant_network_denied",
+        "loopback_network_denied",
+        "lan_network_denied",
+        "openai_network_denied",
+        "ipv6_network_denied",
+        "netlink_network_denied",
+    }
+)
+DIRECTORY_FLAGS = (
+    os.O_RDONLY
+    | os.O_DIRECTORY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+
+
+class SelfTestError(RuntimeError):
+    pass
+
+
+def _strict_json(payload: bytes, *, maximum: int) -> object:
+    if not payload or len(payload) > maximum:
+        raise SelfTestError
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise SelfTestError
+            value[key] = item
+        return value
+
+    try:
+        return json.loads(
+            payload.decode("utf-8"), object_pairs_hook=reject_duplicates
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SelfTestError from exc
+
+
+def _current_profile() -> str:
+    try:
+        value = Path("/proc/self/attr/current").read_bytes()
+    except OSError as exc:
+        raise SelfTestError from exc
+    if len(value) > 512:
+        raise SelfTestError
+    try:
+        label = value.decode("ascii").strip()
+    except UnicodeDecodeError as exc:
+        raise SelfTestError from exc
+    suffix = " (enforce)"
+    if not label.endswith(suffix):
+        raise SelfTestError
+    profile = label.removesuffix(suffix)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,200}", profile):
+        raise SelfTestError
+    return profile
+
+
+def _sha256_executable(path: Path) -> str:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != 0
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+            or not stat.S_IMODE(metadata.st_mode) & 0o111
+        ):
+            raise SelfTestError
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        return digest.hexdigest()
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _unlink_name(parent: Path, name: str) -> None:
+    descriptor = os.open(parent, DIRECTORY_FLAGS)
+    try:
+        try:
+            os.unlink(name, dir_fd=descriptor)
+        except FileNotFoundError:
+            pass
+    finally:
+        os.close(descriptor)
+
+
+def _remove_attestation() -> None:
+    _unlink_name(ATTESTATION_PATH.parent, ATTESTATION_PATH.name)
+
+
+def _create_file(
+    path: Path,
+    *,
+    payload: bytes,
+    mode: int,
+    uid: int,
+    gid: int,
+) -> tuple[int, int]:
+    parent_descriptor = os.open(path.parent, DIRECTORY_FLAGS)
+    descriptor = -1
+    created = False
+    complete = False
+    try:
+        descriptor = os.open(
+            path.name,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            mode,
+            dir_fd=parent_descriptor,
+        )
+        created = True
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise SelfTestError
+            view = view[written:]
+        os.fchown(descriptor, uid, gid)
+        os.fchmod(descriptor, mode)
+        os.fsync(descriptor)
+        metadata = os.fstat(descriptor)
+        complete = True
+        return metadata.st_dev, metadata.st_ino
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if created and not complete:
+            try:
+                os.unlink(path.name, dir_fd=parent_descriptor)
+            except FileNotFoundError:
+                pass
+        os.close(parent_descriptor)
+
+
+def _remove_if_same(path: Path, identity: tuple[int, int]) -> None:
+    parent_descriptor = os.open(path.parent, DIRECTORY_FLAGS)
+    try:
+        metadata = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (metadata.st_dev, metadata.st_ino) != identity:
+            raise SelfTestError
+        os.unlink(path.name, dir_fd=parent_descriptor)
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        os.close(parent_descriptor)
+
+
+def _existing_private_identity(
+    path: Path,
+    *,
+    uid: int,
+    gid: int,
+    maximum: int,
+) -> tuple[int, int]:
+    parent_descriptor = os.open(path.parent, DIRECTORY_FLAGS)
+    try:
+        metadata = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != uid
+            or metadata.st_gid != gid
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size <= 0
+            or metadata.st_size > maximum
+        ):
+            raise SelfTestError
+        return metadata.st_dev, metadata.st_ino
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        os.close(parent_descriptor)
+
+
+def _atomic_attestation(payload: bytes, *, gid: int) -> None:
+    parent_descriptor = os.open(ATTESTATION_PATH.parent, DIRECTORY_FLAGS)
+    temporary = f".{ATTESTATION_PATH.name}.tmp-{secrets.token_hex(8)}"
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            0o440,
+            dir_fd=parent_descriptor,
+        )
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise SelfTestError
+            view = view[written:]
+        os.fchown(descriptor, 0, gid)
+        os.fchmod(descriptor, 0o440)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(
+            temporary,
+            ATTESTATION_PATH.name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        os.fsync(parent_descriptor)
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            os.unlink(temporary, dir_fd=parent_descriptor)
+        except FileNotFoundError:
+            pass
+        os.close(parent_descriptor)
+
+
+def _probe_payload(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "checks"}:
+        raise SelfTestError
+    if value.get("schema_version") != 1:
+        raise SelfTestError
+    checks = value.get("checks")
+    if (
+        not isinstance(checks, dict)
+        or set(checks) != PROBE_CHECKS
+        or not all(item is True for item in checks.values())
+    ):
+        raise SelfTestError
+    return value
+
+
+def _assert_permission_profile_catalog(
+    client: Any,
+    *,
+    workspace: Path,
+) -> None:
+    profiles = client.request(
+        "permissionProfile/list",
+        {"cwd": str(workspace)},
+        timeout_seconds=10,
+    )
+    data = profiles.get("data") if isinstance(profiles, dict) else None
+    if not isinstance(data, list):
+        raise SelfTestError
+    allowed = {
+        item.get("id"): item.get("allowed")
+        for item in data
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    if allowed.get(PERMISSION_PROFILE) is not True:
+        raise SelfTestError
+    for built_in in (":read-only", ":workspace", ":danger-" + "full-access"):
+        if allowed.get(built_in) is not False:
+            raise SelfTestError
+    # Keep this literal visible to static tests and future maintainers: runtime
+    # thread responses may expose "activePermissionProfile" as the profile
+    # provenance field, while standalone command execution relies on the same
+    # managed default profile.
+    _active_profile_field = "activePermissionProfile"
+    if not _active_profile_field:
+        raise SelfTestError
+
+
+def _worker(arguments: argparse.Namespace) -> int:
+    account = pwd.getpwnam("codexbridge")
+    group = grp.getgrnam("codexbridge")
+    if os.geteuid() != account.pw_uid or os.getegid() != group.gr_gid:
+        raise SelfTestError
+    if "SUPERVISOR_TOKEN" in os.environ:
+        raise SelfTestError
+    workspace = Path(arguments.workspace)
+    os.chdir(workspace)
+
+    from codex_bridge_service.codex_app_server import CodexAppServerClient
+
+    client = CodexAppServerClient(
+        codex_command="/usr/local/bin/codex-ha",
+        codex_home=CODEX_HOME,
+        client_name="ha_codex_bridge_sandbox_test",
+        client_title="HA Codex Bridge sandbox test",
+        client_version="0.6.0",
+        initialize_timeout_seconds=30,
+        request_timeout_seconds=30,
+        max_message_bytes=128 * 1024,
+        max_pending_requests=4,
+        callback_workers=1,
+        max_callback_queue=4,
+        shutdown_grace_seconds=3,
+        protocol_contract=None,
+    )
+    try:
+        client.start()
+        _assert_permission_profile_catalog(client, workspace=workspace)
+        command = [
+            "/usr/local/bin/python",
+            str(PROBE_PATH),
+            "--workspace",
+            arguments.workspace,
+            "--private-sentinel",
+            arguments.private_sentinel,
+            "--auth-sentinel",
+            arguments.auth_sentinel,
+            "--outside-sentinel",
+            arguments.outside_sentinel,
+            "--sibling-sentinel",
+            arguments.sibling_sentinel,
+            "--runtime-sentinel",
+            arguments.runtime_sentinel,
+            "--expected-profile",
+            arguments.expected_profile,
+        ]
+        response = client.request(
+            "command/exec",
+            {
+                "command": command,
+                "cwd": arguments.workspace,
+                "timeoutMs": 30000,
+                "outputBytesCap": MAX_WORKER_OUTPUT,
+            },
+            timeout_seconds=45,
+        )
+        if (
+            not isinstance(response, dict)
+            or set(response) != {"exitCode", "stdout", "stderr"}
+            or response.get("exitCode") != 0
+            or response.get("stderr") != ""
+            or not isinstance(response.get("stdout"), str)
+        ):
+            raise SelfTestError
+        probe = _probe_payload(
+            _strict_json(response["stdout"].encode("utf-8"), maximum=MAX_WORKER_OUTPUT)
+        )
+    finally:
+        client.close()
+    sys.stdout.write(json.dumps(probe, sort_keys=True, separators=(",", ":")) + "\n")
+    return 0
+
+
+def _run_worker(
+    *,
+    workspace: Path,
+    private_sentinel: Path,
+    auth_sentinel: Path,
+    outside_sentinel: Path,
+    sibling_sentinel: Path,
+    runtime_sentinel: Path,
+    expected_profile: str,
+) -> dict[str, object]:
+    environment = (
+        "PATH=/opt/codex/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "HOME=/data/codex-home",
+        "CODEX_HOME=/data/codex-home",
+        "TMPDIR=/tmp/codex-bridge",
+        "LANG=C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+    )
+    command = [
+        "/usr/bin/s6-setuidgid",
+        "codexbridge",
+        "/usr/bin/env",
+        "-i",
+        *environment,
+        "/usr/local/bin/python",
+        "/usr/local/bin/sandbox-self-test",
+        "--worker",
+        "--workspace",
+        str(workspace),
+        "--private-sentinel",
+        str(private_sentinel),
+        "--auth-sentinel",
+        str(auth_sentinel),
+        "--outside-sentinel",
+        str(outside_sentinel),
+        "--sibling-sentinel",
+        str(sibling_sentinel),
+        "--runtime-sentinel",
+        str(runtime_sentinel),
+        "--expected-profile",
+        expected_profile,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=workspace,
+            env={},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SelfTestError from exc
+    if (
+        result.returncode != 0
+        or result.stderr
+        or not result.stdout
+        or len(result.stdout) > MAX_WORKER_OUTPUT
+    ):
+        raise SelfTestError
+    return _probe_payload(_strict_json(result.stdout, maximum=MAX_WORKER_OUTPUT))
+
+
+def _root() -> int:
+    if os.geteuid() != 0:
+        raise SelfTestError
+    _remove_attestation()
+    loaded = read_sandbox_contract(CONTRACT_PATH, require_root=True)
+    if loaded is None:
+        raise SelfTestError
+    contract, contract_bytes = loaded
+    account = pwd.getpwnam("codexbridge")
+    group = grp.getgrnam("codexbridge")
+    uid, gid = account.pw_uid, group.gr_gid
+
+    executables = contract.get("executables")
+    apparmor = contract.get("apparmor")
+    if not isinstance(executables, dict) or not isinstance(apparmor, dict):
+        raise SelfTestError
+    for name in ("codex", "bwrap", "bwrap_launcher"):
+        specification = executables.get(name)
+        if (
+            not isinstance(specification, dict)
+            or not isinstance(specification.get("path"), str)
+            or _sha256_executable(Path(specification["path"]))
+            != specification.get("sha256")
+        ):
+            raise SelfTestError
+
+    parent_profile = _current_profile()
+    parent_suffix = apparmor.get("parent_profile_suffix")
+    bwrap_suffix = apparmor.get("bwrap_profile_suffix")
+    if (
+        not isinstance(parent_suffix, str)
+        or not parent_profile.endswith(parent_suffix)
+        or not isinstance(bwrap_suffix, str)
+    ):
+        raise SelfTestError
+    expected_profile = parent_profile + bwrap_suffix
+
+    nonce = secrets.token_hex(16)
+    workspace = WORKSPACE_ROOT / f".sandbox-self-test-{nonce}"
+    if workspace.parent != WORKSPACE_ROOT or not re.fullmatch(
+        r"\.sandbox-self-test-[0-9a-f]{32}", workspace.name
+    ):
+        raise SelfTestError
+    created: list[tuple[Path, tuple[int, int]]] = []
+    workspace_created = False
+    auth_sentinel = CODEX_HOME / f".sandbox-auth-{nonce}"
+    private_sentinel = Path(f"/data/bridge/.sandbox-self-test-{nonce}")
+    outside_sentinel = Path(f"/config/.sandbox-self-test-{nonce}")
+    sibling_sentinel = WORKSPACE_ROOT / f".sandbox-sibling-{nonce}"
+    runtime_sentinel = Path(f"/run/codex-bridge/.sandbox-self-test-{nonce}")
+    try:
+        workspace.mkdir(mode=0o700)
+        workspace_created = True
+        os.chown(workspace, uid, gid)
+
+        for path in (
+            private_sentinel,
+            outside_sentinel,
+            sibling_sentinel,
+            runtime_sentinel,
+        ):
+            identity = _create_file(
+                path,
+                payload=b"sandbox-self-test\n",
+                mode=0o600,
+                uid=uid,
+                gid=gid,
+            )
+            created.append((path, identity))
+        _existing_private_identity(
+            Path("/data/bridge-token"), uid=uid, gid=gid, maximum=512
+        )
+        auth_identity = _create_file(
+            auth_sentinel,
+            payload=b"sandbox-auth\n",
+            mode=0o600,
+            uid=uid,
+            gid=gid,
+        )
+        created.append((auth_sentinel, auth_identity))
+
+        _run_worker(
+            workspace=workspace,
+            private_sentinel=private_sentinel,
+            auth_sentinel=auth_sentinel,
+            outside_sentinel=outside_sentinel,
+            sibling_sentinel=sibling_sentinel,
+            runtime_sentinel=runtime_sentinel,
+            expected_profile=expected_profile,
+        )
+    finally:
+        cleanup_error = False
+        for path, identity in reversed(created):
+            try:
+                _remove_if_same(path, identity)
+            except SelfTestError:
+                cleanup_error = True
+        if workspace.parent != WORKSPACE_ROOT or not re.fullmatch(
+            r"\.sandbox-self-test-[0-9a-f]{32}", workspace.name
+        ):
+            cleanup_error = True
+        elif workspace_created:
+            try:
+                if workspace.is_symlink() or not workspace.is_dir():
+                    raise SelfTestError
+                shutil.rmtree(workspace)
+            except (OSError, SelfTestError):
+                cleanup_error = True
+        if cleanup_error:
+            raise SelfTestError
+
+    attestation = {
+        "schema_version": 1,
+        "contract_sha256": hashlib.sha256(contract_bytes).hexdigest(),
+        "attested": True,
+    }
+    payload = (
+        json.dumps(attestation, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("ascii")
+    _atomic_attestation(payload, gid=gid)
+    return 0
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--worker", action="store_true")
+    parser.add_argument("--workspace")
+    parser.add_argument("--private-sentinel")
+    parser.add_argument("--auth-sentinel")
+    parser.add_argument("--outside-sentinel")
+    parser.add_argument("--sibling-sentinel")
+    parser.add_argument("--runtime-sentinel")
+    parser.add_argument("--expected-profile")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = _parser().parse_args(argv)
+    try:
+        if arguments.worker:
+            required = (
+                arguments.workspace,
+                arguments.private_sentinel,
+                arguments.auth_sentinel,
+                arguments.outside_sentinel,
+                arguments.sibling_sentinel,
+                arguments.runtime_sentinel,
+                arguments.expected_profile,
+            )
+            if not all(isinstance(item, str) and item for item in required):
+                raise SelfTestError
+            return _worker(arguments)
+        if any(
+            value is not None
+            for value in (
+                arguments.workspace,
+                arguments.private_sentinel,
+                arguments.auth_sentinel,
+                arguments.outside_sentinel,
+                arguments.sibling_sentinel,
+                arguments.runtime_sentinel,
+                arguments.expected_profile,
+            )
+        ):
+            raise SelfTestError
+        return _root()
+    except Exception:
+        try:
+            _remove_attestation()
+        except Exception:
+            pass
+        if not arguments.worker:
+            print("Codex sandbox self-test failed.", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

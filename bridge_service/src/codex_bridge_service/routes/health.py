@@ -6,6 +6,7 @@ from ..models import (
     BridgeReadinessRecord,
     ComponentVersionRecord,
     ImageBuildRecord,
+    SandboxStatusRecord,
 )
 from ..readiness import evaluate_readiness
 
@@ -39,5 +40,9 @@ def readiness_check(
             release_lock_digest=build_info.release_lock_digest,
         ),
         architecture=build_info.architecture,
+        sandbox=SandboxStatusRecord(
+            contract_version=build_info.sandbox_contract_version,
+            attested=request.app.state.sandbox_ready is True,
+        ),
         readiness=readiness,
     )

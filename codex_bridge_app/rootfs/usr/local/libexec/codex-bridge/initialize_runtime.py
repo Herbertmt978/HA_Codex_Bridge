@@ -21,7 +21,29 @@ DIRECTORY_FLAGS = (
 )
 FILE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
 TOKEN_PATTERN = re.compile(rb"[A-Za-z0-9_-]{64}")
-CONFIG_LINE = b'cli_auth_credentials_store = "file"'
+CONFIG_PAYLOAD = b"""cli_auth_credentials_store = "file"
+default_permissions = "ha_bridge"
+
+[permissions.ha_bridge]
+description = "Home Assistant workspace-only sandbox"
+
+[permissions.ha_bridge.filesystem]
+":minimal" = "read"
+
+[permissions.ha_bridge.filesystem.":workspace_roots"]
+"." = "write"
+".codex" = "write"
+".git" = "write"
+".agents" = "write"
+".cursor" = "write"
+".vscode" = "write"
+
+[permissions.ha_bridge.network]
+enabled = false
+allow_local_binding = false
+allow_upstream_proxy = false
+"""
+CONFIG_REQUIRED_LINES = tuple(CONFIG_PAYLOAD.splitlines())
 
 
 class BootstrapError(RuntimeError):
@@ -169,6 +191,7 @@ def initialize() -> None:
         _secure_directory(path, mode=0o700, uid=uid, gid=gid)
     _secure_directory(Path("/config/workspaces"), mode=0o700, uid=uid, gid=gid)
     _secure_directory(Path("/tmp/codex-bridge"), mode=0o700, uid=uid, gid=gid)
+    _secure_directory(Path("/run/codex-bridge"), mode=0o750, uid=0, gid=gid)
 
     token_parent = Path("/data")
     token_name = "bridge-token"
@@ -201,7 +224,7 @@ def initialize() -> None:
         _atomic_write(
             config_parent,
             config_name,
-            CONFIG_LINE + b"\n",
+            CONFIG_PAYLOAD,
             mode=0o600,
             uid=uid,
             gid=gid,
@@ -214,8 +237,29 @@ def initialize() -> None:
         gid=gid,
         maximum=1024 * 1024,
     )
-    if CONFIG_LINE not in config.splitlines():
-        raise BootstrapError("Codex file credential storage is not configured")
+    config_lines = set(config.splitlines())
+    if not all(line in config_lines for line in CONFIG_REQUIRED_LINES if line):
+        _atomic_write(
+            config_parent,
+            config_name,
+            CONFIG_PAYLOAD,
+            mode=0o600,
+            uid=uid,
+            gid=gid,
+        )
+        config = _read_private_file(
+            config_parent,
+            config_name,
+            mode=0o600,
+            uid=uid,
+            gid=gid,
+            maximum=1024 * 1024,
+        )
+        config_lines = set(config.splitlines())
+        if not all(
+            line in config_lines for line in CONFIG_REQUIRED_LINES if line
+        ):
+            raise BootstrapError("managed Codex configuration could not be verified")
 
 
 def main() -> int:

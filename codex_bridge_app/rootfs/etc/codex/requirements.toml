@@ -1,0 +1,8 @@
+allowed_approval_policies = ["untrusted", "on-request", "never"]
+default_permissions = "ha_bridge"
+
+[allowed_permission_profiles]
+ha_bridge = true
+":read-only" = false
+":workspace" = false
+":danger-full-access" = false

@@ -412,6 +412,13 @@ class ReadinessStateRecord(BaseModel):
     reasons: tuple[str, ...] = ()
 
 
+class SandboxStatusRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    contract_version: int | None = None
+    attested: bool = False
+
+
 class BridgeReadinessRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -426,6 +433,7 @@ class BridgeReadinessRecord(BaseModel):
         "api_v1",
         "legacy_v0",
     )
+    sandbox: SandboxStatusRecord = Field(default_factory=SandboxStatusRecord)
     readiness: ReadinessStateRecord = Field(default_factory=ReadinessStateRecord)
 
 

@@ -67,7 +67,7 @@ def validate_thread_result(
         or result.get("modelProvider") != "openai"
         or result.get("approvalPolicy") != policy.approval_policy
         or result.get("approvalsReviewer") != "user"
-        or not _sandbox_matches(result.get("sandbox"), policy)
+        or not _sandbox_matches(result.get("sandbox"), policy, expected_cwd)
         or not _thread_environment_matches(thread, expected_cwd)
         or not _instruction_sources_match(
             result.get("instructionSources", []), expected_cwd
@@ -266,19 +266,25 @@ def bounded_raw_text(value: object, limit_bytes: int) -> str | None:
     return encoded[:limit_bytes].decode("utf-8", errors="ignore")
 
 
-def _sandbox_matches(value: object, policy: RuntimeModePolicy) -> bool:
+def _sandbox_matches(value: object, policy: RuntimeModePolicy, expected_cwd: Path) -> bool:
     if not isinstance(value, dict):
         return False
-    expected_type = (
-        "readOnly" if policy.thread_sandbox == "read-only" else "workspaceWrite"
-    )
-    if set(value) != set(policy.sandbox_policy):
+    sandbox_type = value.get("type")
+    if sandbox_type == "readOnly":
+        return set(value) == {"type", "networkAccess"} and (
+            value.get("networkAccess") is False
+        )
+    if sandbox_type != "workspaceWrite" or set(value) != {
+        "type",
+        "networkAccess",
+        "writableRoots",
+        "excludeSlashTmp",
+        "excludeTmpdirEnvVar",
+    }:
         return False
-    if value.get("type") != expected_type or value.get("networkAccess") is not False:
+    if value.get("networkAccess") is not False:
         return False
-    if expected_type == "readOnly":
-        return True
-    if value.get("writableRoots") != policy.sandbox_policy.get("writableRoots"):
+    if value.get("writableRoots") != [str(expected_cwd)]:
         return False
     return all(
         value.get(name) is True for name in ("excludeSlashTmp", "excludeTmpdirEnvVar")

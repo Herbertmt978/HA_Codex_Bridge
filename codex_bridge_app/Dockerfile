@@ -25,7 +25,15 @@ RUN set -eux; \
       --lock-digest 108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0 \
       --assets-dir /tmp/assets \
       --destination /usr/local/bin; \
+    install -d -o root -g root -m 0755 /opt/codex/bin; \
+    test ! -e /opt/codex/bin/bwrap; \
+    install -o root -g root -m 0755 \
+      /usr/local/libexec/codex-bridge/bwrap-wrapper.py \
+      /opt/codex/bin/bwrap; \
     rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
+    chmod 0755 /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
+      /usr/local/bin/bwrap /opt/codex/bin/bwrap; \
+    chmod 0444 /usr/local/share/codex-bridge/sandbox-contract.json; \
     chmod 0755 /usr/local/libexec/codex-bridge/*.py; \
     chmod 0755 /usr/local/libexec/codex-bridge/*.sh; \
     chmod 0700 /usr/local/libexec/codex-bridge/publish_discovery.py; \
@@ -38,4 +46,5 @@ ENV CODEX_BRIDGE_APP_VERSION="0.6.0" \
     CODEX_BRIDGE_VERSION="0.5.3" \
     CODEX_BRIDGE_CODEX_VERSION="0.144.4" \
     CODEX_BRIDGE_ARCH="amd64" \
-    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0"
+    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0" \
+    CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION="2"

@@ -57,6 +57,7 @@ def test_readiness_round_trips_validated_injected_build_information(tmp_path) ->
         },
         "architecture": "amd64",
         "capabilities": ["api_v1", "legacy_v0"],
+        "sandbox": {"contract_version": None, "attested": False},
         "readiness": {"state": "ready", "reasons": []},
     }
     assert app.state.build_info is build_info
@@ -86,6 +87,7 @@ def test_readiness_defaults_are_safe_and_keep_existing_status_field(tmp_path) ->
         "image": {"revision": None, "release_lock_digest": None},
         "architecture": "unknown",
         "capabilities": ["api_v1", "legacy_v0"],
+        "sandbox": {"contract_version": None, "attested": False},
         "readiness": {"state": "ready", "reasons": []},
     }
 

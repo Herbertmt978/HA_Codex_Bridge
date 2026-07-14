@@ -273,17 +273,13 @@ class ValidatorBackedAppServer:
                 if method == "thread/resume"
                 else f"codex-thread-{self._thread_number}"
             )
-            sandbox = (
-                {"type": "readOnly", "networkAccess": False}
-                if params["sandbox"] == "read-only"
-                else {
-                    "type": "workspaceWrite",
-                    "networkAccess": False,
-                    "writableRoots": [params["cwd"]],
-                    "excludeSlashTmp": True,
-                    "excludeTmpdirEnvVar": True,
-                }
-            )
+            sandbox = {
+                "type": "workspaceWrite",
+                "networkAccess": False,
+                "writableRoots": [params["cwd"]],
+                "excludeSlashTmp": True,
+                "excludeTmpdirEnvVar": True,
+            }
             return {
                 "thread": _thread(remote_thread_id, cwd=params["cwd"]),
                 "model": params["model"],
@@ -553,50 +549,22 @@ def test_maximum_route_prompt_that_cannot_fit_event_envelope_is_rejected_safely(
 
 
 @pytest.mark.parametrize(
-    ("mode", "sandbox", "approval_policy", "sandbox_policy"),
+    ("mode", "approval_policy"),
     [
-        (
-            RunMode.OBSERVE,
-            "read-only",
-            "on-request",
-            {"type": "readOnly", "networkAccess": False},
-        ),
-        (
-            RunMode.EDIT,
-            "workspace-write",
-            "on-request",
-            "workspace-write",
-        ),
-        (
-            RunMode.FULL_AUTO,
-            "workspace-write",
-            "never",
-            "workspace-write",
-        ),
+        (RunMode.OBSERVE, "on-request"),
+        (RunMode.EDIT, "on-request"),
+        (RunMode.FULL_AUTO, "never"),
     ],
 )
-def test_new_thread_and_turn_use_exact_locked_schema_and_mode_policy(
+def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandbox(
     tmp_path: Path,
     mode: RunMode,
-    sandbox: str,
     approval_policy: str,
-    sandbox_policy: dict[str, Any] | str,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path, mode=mode)
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     cwd = str(storage.resolve_workspace_path(thread.workspace_path))
-    expected_turn_sandbox = (
-        {
-            "type": "workspaceWrite",
-            "networkAccess": False,
-            "writableRoots": [cwd],
-            "excludeSlashTmp": True,
-            "excludeTmpdirEnvVar": True,
-        }
-        if sandbox_policy == "workspace-write"
-        else sandbox_policy
-    )
     try:
         run = broker.submit_prompt(
             thread.thread_id,
@@ -611,7 +579,6 @@ def test_new_thread_and_turn_use_exact_locked_schema_and_mode_policy(
             {
                 "cwd": cwd,
                 "model": "gpt-5.6-codex",
-                "sandbox": sandbox,
                 "approvalPolicy": approval_policy,
                 "approvalsReviewer": "user",
                 "ephemeral": False,
@@ -629,7 +596,6 @@ def test_new_thread_and_turn_use_exact_locked_schema_and_mode_policy(
                 "effort": "high",
                 "approvalPolicy": approval_policy,
                 "approvalsReviewer": "user",
-                "sandboxPolicy": expected_turn_sandbox,
             }
         ]
     finally:
@@ -845,7 +811,6 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
                 "threadId": remote_thread_id,
                 "cwd": cwd,
                 "model": "gpt-5.6-codex",
-                "sandbox": "workspace-write",
                 "approvalPolicy": "on-request",
                 "approvalsReviewer": "user",
             }
@@ -859,13 +824,6 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
             "effort": "high",
             "approvalPolicy": "on-request",
             "approvalsReviewer": "user",
-            "sandboxPolicy": {
-                "type": "workspaceWrite",
-                "networkAccess": False,
-                "writableRoots": [cwd],
-                "excludeSlashTmp": True,
-                "excludeTmpdirEnvVar": True,
-            },
         }
     finally:
         broker.close()
