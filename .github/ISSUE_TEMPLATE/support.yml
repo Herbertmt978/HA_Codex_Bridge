@@ -1,0 +1,44 @@
+name: Setup or usage question
+description: Ask for help without sharing private Home Assistant or workspace data.
+title: "support: "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read SUPPORT.md first. Do not include device codes, tokens, cookies,
+        private URLs, API keys, workspace contents, or unredacted logs.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Setup surface
+      options:
+        - HACS Integration or panel
+        - Supervisor App
+        - External Bridge compatibility path
+        - Remote access through Home Assistant
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions and platform
+      placeholder: "Home Assistant OS ..., Integration ..., App ..., amd64"
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question and redacted context
+      description: Explain the intended outcome, what you tried, and the safe status shown in Home Assistant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I read SUPPORT.md and removed all sensitive information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

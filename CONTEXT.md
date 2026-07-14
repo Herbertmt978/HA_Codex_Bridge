@@ -1,22 +1,53 @@
-# Project Context: Home Assistant Codex Bridge
+# Project context: Home Assistant Codex Bridge
 
-## Language
+## Purpose
 
-| Term | Definition | Avoid |
-|------|------------|-------|
-| **App** | A Supervisor-managed package that runs alongside Home Assistant and hosts supporting software. | “add-on” except when quoting older Home Assistant material; “integration” |
-| **Integration** | The Home Assistant component that provides setup, access control, and the Codex Bridge panel inside Home Assistant. | “app”; “add-on”; “bridge service” |
-| **Bridge** | The local service that accepts authorised Home Assistant requests and coordinates Codex work. | “Windows VM”; “integration”; “Codex itself” |
-| **Workspace** | A deliberately granted folder in which Codex may inspect and change project files. | “all files”; “Home Assistant config”; “project” |
-| **Project** | A user-visible grouping of Codex chats associated with one workspace and a set of defaults. | “workspace”; “repository” |
+Home Assistant Codex Bridge keeps Home Assistant as the browser-facing control
+plane for Codex:
 
-## Relationships
+```text
+Browser -> Home Assistant -> private Supervisor App or external Bridge -> Codex / OpenAI
+```
 
-- An **App** hosts the **Bridge** on a Home Assistant system.
-- The **Integration** connects Home Assistant users to the **Bridge**.
-- A **Project** selects one **Workspace** for its Codex chats.
-- A **Workspace** contains the files Codex is allowed to work with.
+Remote access terminates at Home Assistant. A browser must not connect directly
+to the App or Bridge.
 
-## Flagged Ambiguities
+## Terms
 
-- “Home Assistant add-on” → **App**; Home Assistant renamed add-ons to apps, while older documentation and APIs may retain the old wording (2026-07-12).
+| Term | Meaning | Do not use for |
+| --- | --- | --- |
+| **App** | The Supervisor-managed Codex Bridge runtime beside Home Assistant. | The Home Assistant integration. |
+| **Integration** | The `codex_bridge` Home Assistant component, configuration flow, and administrator panel. | The App or Bridge process. |
+| **Bridge** | A private service that receives authenticated Integration requests and coordinates Codex. | Codex itself. |
+| **Workspace** | A deliberately granted project folder; in App mode, it is beneath `/config/workspaces`. | Home Assistant configuration or a generic broad share. |
+| **Project** | A user-visible group of Codex chats with one workspace and defaults. | A workspace or repository. |
+| **External Bridge** | An optional, separately operated private Bridge compatibility path. | A required Windows VM or browser endpoint. |
+
+## Current compatibility statement
+
+- Integration and external Bridge: `0.5.3`.
+- App: `0.6.0`, experimental and `amd64` only.
+- The App source is present, but a public App image is not available yet. A
+  private immutable image passed sandbox self-test and authenticated readiness
+  on an amd64 Home Assistant OS development VM on 14 July 2026.
+- That result does not validate remote access, update, App rollback, or public
+  distribution. The current recovery plan is a cold backup and, if already
+  operated, a private external Bridge; cold restore remains an acceptance gate.
+  Do not claim Supervisor can choose an
+  arbitrary earlier image until a prior immutable tag and restore procedure are
+  published and exercised.
+
+## Product language
+
+- Keep **Integration** and **App** distinct. HACS installs the Integration;
+  Supervisor installs the App once its public image is available.
+- ChatGPT device login and Home Assistant login are separate. Use the exact UI
+  labels **Sign in with ChatGPT**, **Cancel**, and **Sign out**. Cancellation is
+  only for an in-progress sign-in; sign-out removes an established session.
+- Normal panel use can remain on Home Assistant after sign-in. Initial sign-in
+  and re-authentication require browser access to the approved ChatGPT
+  device-auth page.
+- Codex discovers available models and reasoning levels at runtime. A marked
+  last-known-good catalogue must not silently change a chat to another model.
+- App images are immutable. Never imply that the current Supervisor App can
+  roll back to an arbitrary earlier image.
