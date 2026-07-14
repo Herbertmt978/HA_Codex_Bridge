@@ -2,6 +2,16 @@
 
 All notable App changes are recorded here.
 
+## 0.6.1
+
+- Fixes Supervisor discovery on Home Assistant OS by using Bashio's supported
+  App-hostname helper. The ready Bridge can now publish its private endpoint
+  instead of remaining in a retry loop.
+- Verifies at image-build time that the pinned Home Assistant base exports the
+  required discovery helper.
+- Continues to bundle Bridge `0.5.3` and Codex `0.144.4` without changing the
+  Integration API contract.
+
 ## 0.6.0
 
 - Introduces the experimental private Home Assistant Codex Bridge App for

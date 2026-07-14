@@ -2,7 +2,7 @@
 
 ## Status before you start
 
-The Supervisor App is experimental and `amd64` only. App `0.6.0` is distributed
+The Supervisor App is experimental and `amd64` only. App `0.6.1` is distributed
 as a signed immutable image with an SPDX SBOM and build provenance. It bundles
 Bridge `0.5.3` and Codex `0.144.4`; the separately installed Integration is
 `0.5.4`. A protected-runtime image passed sandbox self-test and authenticated
@@ -49,7 +49,7 @@ Integration. It neither installs nor publishes an App image.
 
 Open **Settings -> Apps -> App store**, select the three-dot menu, then
 **Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>, install
-**Codex Bridge** `0.6.0`, and start it. The App has no ingress route, direct
+**Codex Bridge** `0.6.1`, and start it. The App has no ingress route, direct
 port, or browser-visible Bridge URL; Supervisor discovery supplies the private
 connection.
 

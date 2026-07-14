@@ -35,7 +35,9 @@ while true; do
         --url http://127.0.0.1:8766/ready \
         --token-file "${token_path}" \
         --timeout-seconds 60; then
-        host="$(bashio::app.hostname)"
+        # Bashio retains the addon.* namespace even though Home Assistant now
+        # presents these packages as Apps in the user interface.
+        host="$(bashio::addon.hostname)"
         if run_child python /usr/local/libexec/codex-bridge/publish_discovery.py \
             --host "${host}"; then
             unset SUPERVISOR_TOKEN host child_pid

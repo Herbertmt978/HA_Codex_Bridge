@@ -26,7 +26,7 @@ to the App or Bridge.
 ## Current compatibility statement
 
 - Integration: `0.5.4`; optional external Bridge: `0.5.3`.
-- App: `0.6.0`, experimental and `amd64` only; bundled Codex: `0.144.4`.
+- App: `0.6.1`, experimental and `amd64` only; bundled Codex: `0.144.4`.
 - The App is distributed as a signed immutable image with an SPDX SBOM and
   build provenance. A protected-runtime image passed sandbox self-test and
   authenticated readiness on an amd64 Home Assistant OS development VM on

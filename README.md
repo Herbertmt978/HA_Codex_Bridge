@@ -9,7 +9,7 @@ Run and supervise Codex work from Home Assistant without publishing a coding-age
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
-[![App: 0.6.0 experimental](https://img.shields.io/badge/App-0.6.0%20Experimental-F59E0B)](codex_bridge_app/README.md)
+[![App: 0.6.1 experimental](https://img.shields.io/badge/App-0.6.1%20Experimental-F59E0B)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00897B.svg)](LICENSE)
 
 [Installation](docs/installation.md) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
@@ -39,7 +39,7 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   alongside Home Assistant. Add this repository to the Home Assistant App
   store to install its published immutable image.
 
-The App is experimental, `amd64`-only, and version `0.6.0`; the Integration is
+The App is experimental, `amd64`-only, and version `0.6.1`; the Integration is
 `0.5.4`, the optional external Bridge is `0.5.3`, and the bundled Codex runtime
 is `0.144.4`. The release workflow publishes a signed GHCR image with an SPDX
 SBOM and build provenance. A protected-runtime image also passed the sandbox
