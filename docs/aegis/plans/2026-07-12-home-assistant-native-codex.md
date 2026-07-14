@@ -560,11 +560,13 @@ docker compose -f tests/transport/compose.yaml up --build --abort-on-container-e
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_app_package.py`
 
-- [ ] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, `all_addon_configs`, and obsolete `build.yaml`. Assert only `addon_config:rw`, cold backup, experimental stage, discovery, a generic multi-architecture immutable image, and the proven architecture.
-- [ ] Run focused tests and confirm metadata is missing.
-- [ ] Add App repository/metadata/translations/branding with `slug: codex_bridge`, App version `0.6.0`, `startup: application`, `boot: auto`, `init: false`, `stage: experimental`, `backup: cold`, and `ghcr.io/herbertmt978/ha-codex-bridge-app`.
-- [ ] Run tests plus the current Home Assistant App/repository linter; render App Store metadata and inspect name/icon/descriptions.
-- [ ] Commit with message `Add Codex Bridge Home Assistant App`.
+- [x] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, `all_addon_configs`, and obsolete `build.yaml`. Assert only `addon_config:rw`, cold backup, experimental stage, discovery, a generic multi-architecture immutable image, and the proven architecture.
+- [x] Run focused tests and confirm metadata is missing.
+- [x] Add App repository/metadata/translations/branding with `slug: codex_bridge`, App version `0.6.0`, semantic `startup: application` and `boot: auto` defaults omitted as required by the current linter, `init: false`, `stage: experimental`, `backup: cold`, and `ghcr.io/herbertmt978/ha-codex-bridge-app`.
+- [x] Run tests plus the current Home Assistant App/repository linter; render App Store metadata and inspect name/icon/descriptions.
+- [x] Commit with message `Add Codex Bridge Home Assistant App`.
+
+**Completed:** `d600a11` adds the single-App repository, `amd64`-only experimental metadata, generic immutable image reference, cold backup, Supervisor discovery, dedicated `addon_config:rw` workspace mapping, custom AppArmor profile, App documentation, translations, and reused branding. The production HAOS target reported `arch: amd64` through `ha info --raw-json`. Contract tests first failed 26 times against the absent package, then passed 32 tests; `frenck/action-addon-linter@v2.21`, Ruff, formatting, asset hash/dimension inspection, and diff hygiene passed. The profile permits only App-private state plus `/config/workspaces`, never broad Home Assistant configuration. Luna and Terra found no remaining P0-P2 issue.
 
 ## Task 19: Lock and verify upstream Codex releases
 
