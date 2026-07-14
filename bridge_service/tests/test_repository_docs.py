@@ -16,7 +16,7 @@ REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
     "README.md": (
         "What it is",
         "Two components, two installation paths",
-        "Evaluation sequence after a runtime is available",
+        "Install and first run",
         "Updates and recovery",
         "Security boundary",
     ),
@@ -169,11 +169,15 @@ def test_app_availability_and_rollback_claims_remain_honest() -> None:
     )
     corpus = _corpus(app_documents)
     assert re.search(
+        r"(?:public|distributed).{0,120}(?:signed|immutable).{0,120}(?:image|SBOM|provenance)",
+        corpus,
+        re.IGNORECASE | re.DOTALL,
+    )
+    assert not re.search(
         r"public.{0,100}(?:not available|not a public|not published)",
         corpus,
         re.IGNORECASE | re.DOTALL,
     )
-    assert not re.search(r"public App(?: image)?\s+(?:is\s+)?available\b", corpus, re.IGNORECASE)
     assert re.search(
         r"Supervisor.{0,140}arbitrary (?:prior|earlier)(?: App)? image",
         corpus,

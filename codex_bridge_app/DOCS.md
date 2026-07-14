@@ -78,10 +78,11 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. A private immutable image running
-Codex `0.144.4` passed sandbox self-test and authenticated readiness on an amd64
-Home Assistant OS development VM on 14 July 2026. The source is not a public
-App image; public distribution, remote-access validation, and a tested immutable
-tag/restore remain release work.
+The App is experimental and `amd64` only. App `0.6.0` is distributed as a
+signed immutable image with an SPDX SBOM and build provenance. A protected
+runtime running Codex `0.144.4` passed sandbox self-test and authenticated
+readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
+access, the first automatic update, and a tested prior-image recovery remain
+acceptance work for the intended Home Assistant installation.
 
 For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).

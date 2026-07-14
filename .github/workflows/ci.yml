@@ -59,6 +59,26 @@ jobs:
           python scripts/sync_app_release.py --check
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
+  repository-validation:
+    name: HACS and hassfest validation
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Validate the HACS Integration repository
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main 2026-06-08
+        with:
+          category: integration
+          comment: "false"
+
+      - name: Validate Home Assistant metadata and translations
+        uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c # master 2026-06-22
+
   windows-updater:
     name: Windows updater compatibility
     runs-on: windows-2025
