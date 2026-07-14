@@ -1,0 +1,224 @@
+name: Verified Codex update
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: codex-update
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Verify upstream release and generate a narrow patch
+    if: vars.CODEX_UPDATE_PAUSED != 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      app_version: ${{ steps.metadata.outputs.app_version }}
+      changed: ${{ steps.lock.outputs.changed }}
+      codex_version: ${{ steps.metadata.outputs.codex_version }}
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Check out current main without write credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Record the exact update base
+        id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce the repository kill switch
+        shell: bash
+        env:
+          CODEX_UPDATE_PAUSED: ${{ vars.CODEX_UPDATE_PAUSED }}
+        run: test "${CODEX_UPDATE_PAUSED:-false}" != "true"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.2"
+
+      - name: Install pinned Cosign verifier
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Verify the latest stable Codex release into the lock
+        run: >-
+          python scripts/update_codex_lock.py
+          --update codex_bridge_app/codex-release.json
+          --cosign "$(command -v cosign)"
+
+      - name: Detect a real upstream change
+        id: lock
+        shell: bash
+        run: |
+          if git diff --quiet -- codex_bridge_app/codex-release.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage the newly verified amd64 runtime
+        if: steps.lock.outputs.changed == 'true'
+        run: python scripts/stage_app_context.py --arch amd64
+
+      - name: Generate the app-server contract with no workflow credential
+        if: steps.lock.outputs.changed == 'true'
+        shell: bash
+        run: |
+          clean_home="${RUNNER_TEMP}/codex-contract-home"
+          mkdir -p "${clean_home}"
+          env -i \
+            HOME="${clean_home}" \
+            PATH="${PATH}" \
+            PYTHONPATH="${GITHUB_WORKSPACE}/bridge_service/src" \
+            TMPDIR="${RUNNER_TEMP}" \
+            python scripts/generate_codex_app_server_contract.py \
+              --codex-command .build/app-context/assets/codex
+
+      - name: Bump App patch metadata and changelog
+        if: steps.lock.outputs.changed == 'true'
+        run: python scripts/sync_app_release.py --bump-patch
+
+      - name: Validate every generated authority
+        if: steps.lock.outputs.changed == 'true'
+        run: |
+          python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
+          python scripts/sync_app_release.py --check
+          env -i \
+            HOME="${RUNNER_TEMP}/codex-contract-home" \
+            PATH="${PATH}" \
+            PYTHONPATH="${GITHUB_WORKSPACE}/bridge_service/src" \
+            TMPDIR="${RUNNER_TEMP}" \
+            python scripts/generate_codex_app_server_contract.py \
+              --codex-command .build/app-context/assets/codex \
+              --check
+
+      - name: Reject changes outside the updater allowlist
+        if: steps.lock.outputs.changed == 'true'
+        shell: bash
+        run: |
+          allowed='^(codex_bridge_app/(codex-release\.json|config\.yaml|Dockerfile|CHANGELOG\.md|rootfs/etc/s6-overlay/s6-rc\.d/codex-bridge/run)|bridge_service/src/codex_bridge_service/codex_app_server_(contract\.json|protocol\.schema\.json|protocol\.v2\.schema\.json))$'
+          changed="$(git diff --name-only --diff-filter=ACMRTUXB)"
+          test -n "${changed}"
+          while IFS= read -r path; do
+            if [[ ! "${path}" =~ ${allowed} ]]; then
+              echo "Updater produced a forbidden path: ${path}" >&2
+              exit 1
+            fi
+          done <<< "${changed}"
+
+      - name: Read safe update metadata
+        if: steps.lock.outputs.changed == 'true'
+        id: metadata
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          import re
+
+          config = Path("codex_bridge_app/config.yaml").read_text(encoding="utf-8")
+          versions = re.findall(r'(?m)^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$', config)
+          lock = json.loads(Path("codex_bridge_app/codex-release.json").read_text(encoding="utf-8"))
+          if len(versions) != 1:
+              raise SystemExit("invalid App version projection")
+          print(f"app_version={versions[0]}")
+          print(f"codex_version={lock['release']['version']}")
+          PY
+
+      - name: Preserve only the reviewed update surface
+        if: steps.lock.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: error
+          name: verified-codex-update-${{ github.run_id }}
+          path: |
+            bridge_service/src/codex_bridge_service/codex_app_server_contract.json
+            bridge_service/src/codex_bridge_service/codex_app_server_protocol.schema.json
+            bridge_service/src/codex_bridge_service/codex_app_server_protocol.v2.schema.json
+            codex_bridge_app/CHANGELOG.md
+            codex_bridge_app/Dockerfile
+            codex_bridge_app/codex-release.json
+            codex_bridge_app/config.yaml
+            codex_bridge_app/rootfs/etc/s6-overlay/s6-rc.d/codex-bridge/run
+          retention-days: 1
+
+  pull-request:
+    name: Open reviewed App update
+    needs: generate
+    if: needs.generate.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Commit allowlisted files to an automation branch.
+      pull-requests: write # Open or update the reviewable update PR.
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ needs.generate.outputs.source_sha }}
+
+      - name: Refuse to apply an update to an advanced main branch
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.generate.outputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "${SOURCE_SHA}"
+
+      - name: Restore the narrow verified update
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-codex-update-${{ github.run_id }}
+          path: .
+
+      - name: Recheck the restored allowlist and projections
+        shell: bash
+        run: |
+          allowed='^(codex_bridge_app/(codex-release\.json|config\.yaml|Dockerfile|CHANGELOG\.md|rootfs/etc/s6-overlay/s6-rc\.d/codex-bridge/run)|bridge_service/src/codex_bridge_service/codex_app_server_(contract\.json|protocol\.schema\.json|protocol\.v2\.schema\.json))$'
+          changed="$(git diff --name-only --diff-filter=ACMRTUXB)"
+          test -n "${changed}"
+          while IFS= read -r path; do
+            [[ "${path}" =~ ${allowed} ]] || exit 1
+          done <<< "${changed}"
+          python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
+          python scripts/sync_app_release.py --check
+
+      - name: Create the reviewable Codex update pull request
+        # v8.1.1 owns branch reuse, signed-off commits, and PR lifecycle.
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # zizmor: ignore[superfluous-actions]
+        with:
+          add-paths: |
+            bridge_service/src/codex_bridge_service/codex_app_server_contract.json
+            bridge_service/src/codex_bridge_service/codex_app_server_protocol.schema.json
+            bridge_service/src/codex_bridge_service/codex_app_server_protocol.v2.schema.json
+            codex_bridge_app/CHANGELOG.md
+            codex_bridge_app/Dockerfile
+            codex_bridge_app/codex-release.json
+            codex_bridge_app/config.yaml
+            codex_bridge_app/rootfs/etc/s6-overlay/s6-rc.d/codex-bridge/run
+          body: |
+            This automated PR updates the Sigstore-verified bundled Codex runtime
+            to `${{ needs.generate.outputs.codex_version }}` and bumps the App to
+            `${{ needs.generate.outputs.app_version }}`.
+
+            The running App never self-modifies. CI must pass, and the App update
+            remains reviewable before Home Assistant Supervisor can offer it.
+          branch: automation/codex-${{ needs.generate.outputs.codex_version }}
+          commit-message: Update verified Codex to ${{ needs.generate.outputs.codex_version }}
+          delete-branch: true
+          signoff: true
+          title: Update verified Codex to ${{ needs.generate.outputs.codex_version }}
+          token: ${{ github.token }}
