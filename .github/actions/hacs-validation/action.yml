@@ -1,0 +1,30 @@
+name: HACS repository validation
+description: Run the HACS validator from an immutable container image.
+
+inputs:
+  category:
+    description: HACS repository category.
+    required: true
+  comment:
+    default: "false"
+    description: Whether to post the validation result to the pull request.
+    required: false
+  github_token:
+    default: ${{ github.token }}
+    description: Read-only GitHub token used by the validator.
+    required: false
+  ignore:
+    default: ""
+    description: Space-separated HACS checks to ignore.
+    required: false
+  repository:
+    description: Repository name override.
+    required: false
+
+runs:
+  using: docker
+  image: docker://ghcr.io/hacs/action@sha256:3b5eaf821de267ede11dfdd3a792679dfdc72f52bdaf395422b39f0cfad27120
+
+branding:
+  color: gray-dark
+  icon: terminal

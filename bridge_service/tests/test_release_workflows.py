@@ -191,6 +191,24 @@ def test_ci_uses_the_hash_verified_official_actionlint_binary() -> None:
     assert "npx --yes actionlint" not in normalized
 
 
+def test_ci_repository_validators_use_digest_pinned_images() -> None:
+    hacs_action = _load(ROOT / ".github" / "actions" / "hacs-validation" / "action.yml")
+    runs = hacs_action.get("runs")
+    assert isinstance(runs, dict)
+    assert re.fullmatch(
+        r"docker://ghcr\.io/hacs/action@sha256:[0-9a-f]{64}",
+        str(runs.get("image")),
+    )
+
+    _, source = _workflow("ci")
+    assert re.search(
+        r"HASSFEST_IMAGE:\s*ghcr\.io/home-assistant/hassfest@sha256:[0-9a-f]{64}",
+        source,
+    )
+    assert "hacs/action@" not in source
+    assert "home-assistant/actions/hassfest@" not in source
+
+
 def test_dependabot_and_codeowners_cover_ci_policy() -> None:
     dependabot = _load(ROOT / ".github" / "dependabot.yml")
     updates = dependabot.get("updates")
