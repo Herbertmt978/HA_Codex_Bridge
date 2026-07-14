@@ -619,11 +619,13 @@ python scripts/stage_app_context.py --arch $arch
 docker buildx build --load -t codex-bridge:test .build/app-context
 ```
 
-- [ ] Write failing tests for deterministic staged manifests, wheel build, exact Task 19 lock/digests, no parent-directory Docker COPY, token generation/mode/atomicity, `/data` and `/config/workspaces` ownership, `CODEX_HOME` file-store config, sanitized long-lived environment, one Uvicorn worker, readiness wait, exact discovery payload, Supervisor-token removal, signal shutdown, and log redaction.
-- [ ] Run focused tests and confirm runtime files are absent.
-- [ ] Implement the context stager, explicit pinned base image, non-root user, S6 one-shots/longrun, token-file auth, config initialization, authenticated readiness, Bashio/Supervisor discovery, and `exec` with a sanitized environment. Stage only lock-verified Codex/Bubblewrap assets and add `.build/` to ignore rules.
-- [ ] Run pytest, ShellCheck, Hadolint, image build, locked `codex --version`, container health, and shutdown tests. Inspect the Bridge process environment inside the test container for sentinel secrets.
-- [ ] Commit with message `Build the immutable Codex Bridge App image`.
+- [x] Write failing tests for deterministic staged manifests, wheel build, exact Task 19 lock/digests, no parent-directory Docker COPY, token generation/mode/atomicity, `/data` and `/config/workspaces` ownership, `CODEX_HOME` file-store config, sanitized long-lived environment, one Uvicorn worker, readiness wait, exact discovery payload, Supervisor-token removal, signal shutdown, and log redaction.
+- [x] Run focused tests and confirm runtime files are absent.
+- [x] Implement the context stager, explicit pinned base image, non-root user, S6 one-shots/longruns, token-file auth, config initialization, authenticated readiness, direct Supervisor discovery, and `exec` with a sanitized environment. Stage only lock-verified Codex/Bubblewrap assets and add `.build/` to ignore rules.
+- [x] Run pytest, ShellCheck, Hadolint, image build, locked `codex --version`, container health, and shutdown tests. Inspect the Bridge process environment inside the test container for sentinel secrets.
+- [x] Commit with message `Build the immutable Codex Bridge App image`.
+
+**Completed:** `3a7ba6a` builds the App from a canonical LF-only staged context using a digest-pinned Home Assistant base, hash-locked Python dependencies, and only Task 19-verified Codex 0.144.4/Bubblewrap assets. The S6 runtime creates descriptor-relative private state, runs one non-root Bridge/Codex lifecycle, reads the Bridge credential from a mode-checked token file, publishes the exact Supervisor discovery contract without logging or retaining the Supervisor token, and shuts down cleanly. Final verification passed 953 Bridge tests with 180 expected platform skips, the focused image/startup slice with 41 passes and 2 skips, Ruff, ShellCheck, Hadolint, lock/schema checks, staged secret/diff checks, image build/version inspection, fake-Supervisor payload/identity checks, repeated initialization and symlink rejection, and live process-environment/shutdown gates. Luna and Terra reported no remaining P0-P2 issue. The image deliberately remains `fatal: sandbox_unavailable` until Task 21 proves the real Home Assistant confinement boundary.
 
 ## Task 21: Enforce AppArmor and the fatal filesystem/network sandbox gate
 
