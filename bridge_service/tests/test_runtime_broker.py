@@ -2691,7 +2691,10 @@ def test_cancel_during_blocked_turn_start_aborts_generation_and_queue(
         _wait_until(
             lambda: storage.load_thread(queued_thread.thread_id).status == "error"
         )
-        assert len(_requests(client, "turn/start")) == 1
+        _wait_until(
+            lambda: len(_requests(client, "turn/start")) == 1,
+            message="released turn/start request was not recorded",
+        )
         assert any(
             event.event_type == "run.cancelled"
             for event in storage.list_thread_events(first_thread.thread_id)
