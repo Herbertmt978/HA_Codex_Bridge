@@ -158,7 +158,7 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert client.ready is True
         assert client.generation == 1
         assert client.process_id == fake_server.process()["pid"]
-        assert client.server_version == "0.139.0"
+        assert client.server_version == "0.144.4"
         _wait_for_client_message(
             fake_server,
             lambda message: message.get("method") == "initialized",

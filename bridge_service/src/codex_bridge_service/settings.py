@@ -1,10 +1,74 @@
+import os
+from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
+import stat
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .models import RuntimeProfile
 from .resource_limits import ResourceLimits
+
+
+_MAX_AUTH_TOKEN_FILE_BYTES = 513
+
+
+def _read_private_auth_token_file(value: str) -> str:
+    # The Home Assistant App is Linux-only. Windows cannot provide an atomic
+    # O_NOFOLLOW equivalent through os.open, so legacy Windows deployments
+    # must keep using the existing environment-token path.
+    if os.name == "nt":
+        raise ValueError("auth token file is unavailable or unsafe")
+    if not value or value != value.strip() or not PurePosixPath(value).is_absolute():
+        raise ValueError("auth token file must be an absolute private file")
+    descriptor = -1
+    try:
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(Path(value), flags)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_size <= 0
+            or metadata.st_size > _MAX_AUTH_TOKEN_FILE_BYTES
+        ):
+            raise ValueError("auth token file is not a private regular file")
+        if os.name != "nt":
+            if stat.S_IMODE(metadata.st_mode) != 0o600:
+                raise ValueError("auth token file must have mode 0600")
+            if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
+                raise ValueError("auth token file must be owned by the runtime user")
+        chunks: list[bytes] = []
+        total = 0
+        while chunk := os.read(
+            descriptor, min(4096, _MAX_AUTH_TOKEN_FILE_BYTES + 1 - total)
+        ):
+            total += len(chunk)
+            if total > _MAX_AUTH_TOKEN_FILE_BYTES:
+                raise ValueError("auth token file is too large")
+            chunks.append(chunk)
+        payload = b"".join(chunks)
+        if len(payload) != metadata.st_size:
+            raise ValueError("auth token file changed while being read")
+    except (OSError, ValueError):
+        raise ValueError("auth token file is unavailable or unsafe") from None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if payload.endswith(b"\n"):
+        payload = payload[:-1]
+    try:
+        token = payload.decode("ascii")
+    except UnicodeDecodeError:
+        raise ValueError("auth token file is unavailable or unsafe") from None
+    if token != token.strip():
+        raise ValueError("auth token file is unavailable or unsafe")
+    return token
 
 
 class Settings(BaseSettings):
@@ -19,7 +83,8 @@ class Settings(BaseSettings):
     root_path: str = "C:/CodexHA"
     runtime_profile: RuntimeProfile = RuntimeProfile.EXTERNAL_LEGACY
     workspace_root: str | None = None
-    auth_token: str
+    auth_token: str = Field(default="", repr=False, exclude=True)
+    auth_token_file: str | None = Field(default=None, repr=False, exclude=True)
     codex_wrapper_path: str = "codex"
     codex_home: str | None = None
     bypass_sandbox: bool = False
@@ -52,14 +117,34 @@ class Settings(BaseSettings):
     @field_validator("auth_token")
     @classmethod
     def validate_auth_token(cls, value: str) -> str:
+        if value == "":
+            return value
         token = value.strip()
         known_placeholders = {
             "change-me",
             "replace-this-with-a-long-random-token",
         }
-        if token.lower() in known_placeholders or len(token) < 32:
-            raise ValueError("auth token must be an explicit random value of at least 32 characters")
+        if (
+            token.lower() in known_placeholders
+            or not 32 <= len(token) <= 512
+            or any(not 0x21 <= ord(character) <= 0x7E for character in token)
+        ):
+            raise ValueError(
+                "auth token must be an explicit random value of at least 32 characters"
+            )
         return token
+
+    @model_validator(mode="after")
+    def resolve_auth_token(self) -> "Settings":
+        if self.auth_token and self.auth_token_file is not None:
+            raise ValueError("configure exactly one auth token source")
+        if self.auth_token_file is not None:
+            self.auth_token = self.validate_auth_token(
+                _read_private_auth_token_file(self.auth_token_file)
+            )
+        if not self.auth_token:
+            raise ValueError("configure exactly one auth token source")
+        return self
 
     @field_validator("workspace_root")
     @classmethod
@@ -69,15 +154,17 @@ class Settings(BaseSettings):
         if not value.strip() or value != value.strip():
             raise ValueError("workspace root must be a nonblank trimmed path")
         if not (
-            PurePosixPath(value).is_absolute()
-            or PureWindowsPath(value).is_absolute()
+            PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
         ):
             raise ValueError("workspace root must be absolute")
         return value
 
     @model_validator(mode="after")
     def require_home_assistant_workspace_root(self) -> "Settings":
-        if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT and self.workspace_root is None:
+        if (
+            self.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+            and self.workspace_root is None
+        ):
             raise ValueError("home_assistant profile requires a workspace root")
         return self
 

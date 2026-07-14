@@ -108,7 +108,7 @@ def test_contract_rejects_duplicate_methods_and_noncanonical_manifest(tmp_path: 
 def test_bundled_contract_contains_required_stable_bridge_methods() -> None:
     contract = load_bundled_protocol_contract()
 
-    assert contract.codex_version == "codex-cli 0.139.0"
+    assert contract.codex_version == "codex-cli 0.144.4"
     for method in {
         "initialize",
         "account/read",

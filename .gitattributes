@@ -1,0 +1,10 @@
+codex_bridge_app/Dockerfile text eol=lf
+codex_bridge_app/*.in text eol=lf
+codex_bridge_app/*.json text eol=lf
+codex_bridge_app/*.txt text eol=lf
+codex_bridge_app/rootfs/** text eol=lf
+bridge_service/*.toml text eol=lf
+bridge_service/**/*.json text eol=lf
+bridge_service/**/*.py text eol=lf
+scripts/stage_app_context.py text eol=lf
+scripts/update_codex_lock.py text eol=lf

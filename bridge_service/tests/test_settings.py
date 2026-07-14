@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +11,7 @@ from codex_bridge_service.settings import Settings
 
 def test_settings_require_an_explicit_bridge_auth_token(monkeypatch) -> None:
     monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", raising=False)
 
     with pytest.raises(ValidationError):
         Settings()
@@ -24,7 +28,9 @@ def test_settings_reject_known_or_short_bridge_auth_tokens(monkeypatch) -> None:
         Settings()
     assert rejected_token not in str(error.value)
 
-    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "replace-this-with-a-long-random-token")
+    monkeypatch.setenv(
+        "CODEX_BRIDGE_AUTH_TOKEN", "replace-this-with-a-long-random-token"
+    )
     with pytest.raises(ValidationError):
         Settings()
 
@@ -35,7 +41,107 @@ def test_settings_accept_a_long_random_bridge_auth_token(monkeypatch) -> None:
     assert Settings().auth_token == "a" * 43
 
 
-def test_settings_default_to_external_legacy_without_workspace_root(monkeypatch) -> None:
+@pytest.mark.skipif(os.name == "nt", reason="token files are App/POSIX-only")
+def test_settings_load_bridge_auth_token_from_a_private_file(
+    monkeypatch, tmp_path: Path
+) -> None:
+    token = "private-random-bridge-token-" + ("a" * 32)
+    token_file = tmp_path / "bridge-token"
+    token_file.write_text(token, encoding="ascii")
+    if os.name != "nt":
+        token_file.chmod(0o600)
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", str(token_file))
+
+    settings = Settings()
+
+    assert settings.auth_token == token
+    assert token not in repr(settings)
+    assert str(token_file) not in repr(settings)
+    assert "auth_token" not in settings.model_dump()
+    assert "auth_token_file" not in settings.model_dump()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="token files are App/POSIX-only")
+def test_settings_reject_windows_shaped_token_paths_on_posix(monkeypatch) -> None:
+    token_path = r"C:\private\bridge-token"
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", token_path)
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert token_path not in str(error.value)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows must use the environment token")
+def test_settings_reject_token_files_on_windows(monkeypatch, tmp_path: Path) -> None:
+    token_file = tmp_path / "bridge-token"
+    token_file.write_text("a" * 43, encoding="ascii")
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", str(token_file))
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert str(token_file) not in str(error.value)
+
+
+def test_settings_reject_both_token_sources_without_leaking_either(
+    monkeypatch, tmp_path: Path
+) -> None:
+    environment_token = "environment-private-token-" + ("a" * 32)
+    file_token = "file-private-token-" + ("b" * 32)
+    token_file = tmp_path / "bridge-token"
+    token_file.write_text(file_token, encoding="ascii")
+    if os.name != "nt":
+        token_file.chmod(0o600)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", environment_token)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", str(token_file))
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    serialized = str(error.value)
+    assert environment_token not in serialized
+    assert file_token not in serialized
+    assert str(token_file) not in serialized
+
+
+def test_settings_reject_token_files_with_extra_lines(
+    monkeypatch, tmp_path: Path
+) -> None:
+    token = "a" * 43
+    token_file = tmp_path / "bridge-token"
+    token_file.write_text(f"{token}\n\n", encoding="ascii")
+    if os.name != "nt":
+        token_file.chmod(0o600)
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", str(token_file))
+
+    with pytest.raises(ValidationError) as error:
+        Settings()
+
+    assert token not in str(error.value)
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX ownership and modes apply in the App"
+)
+def test_settings_reject_unsafe_token_file_modes(monkeypatch, tmp_path: Path) -> None:
+    token_file = tmp_path / "bridge-token"
+    token_file.write_text("a" * 43, encoding="ascii")
+    token_file.chmod(0o644)
+    monkeypatch.delenv("CODEX_BRIDGE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN_FILE", str(token_file))
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_settings_default_to_external_legacy_without_workspace_root(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
 
     settings = Settings()
@@ -109,7 +215,9 @@ def test_settings_require_a_nonblank_home_assistant_workspace_root(
     assert private_token not in serialized_error
 
 
-def test_settings_expose_the_home_assistant_resource_limit_defaults(monkeypatch) -> None:
+def test_settings_expose_the_home_assistant_resource_limit_defaults(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
 
     assert Settings().to_resource_limits() == ResourceLimits()
@@ -128,7 +236,9 @@ def test_settings_build_immutable_resource_limits_from_environment(monkeypatch) 
     assert limits.minimum_free_fraction == 0.1
 
 
-def test_settings_reject_invalid_resource_limits_without_echoing_input(monkeypatch) -> None:
+def test_settings_reject_invalid_resource_limits_without_echoing_input(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
     invalid_value = "-999999999999999999999"
     monkeypatch.setenv("CODEX_BRIDGE_MAX_PRIVATE_BYTES", invalid_value)

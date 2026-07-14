@@ -1,0 +1,3 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+exec /usr/local/libexec/codex-bridge/publish-discovery.sh

@@ -1,0 +1,41 @@
+FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24@sha256:f5a3334bf992c36fbf2d1a0fbd7138cc5689967c1f98e3982111195be273eb76
+
+ARG TARGETARCH
+
+LABEL \
+    io.hass.type="app" \
+    io.hass.arch="amd64" \
+    io.hass.version="0.6.0"
+
+COPY requirements-runtime.txt /tmp/requirements-runtime.txt
+COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
+COPY wheel/ /tmp/wheel/
+COPY codex-release.json /tmp/codex-release.json
+COPY assets/ /tmp/assets/
+COPY rootfs/ /
+
+RUN set -eux; \
+    test "${TARGETARCH}" = "amd64"; \
+    addgroup -S codexbridge; \
+    adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
+    python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \
+    python /usr/local/libexec/codex-bridge/install_locked_assets.py \
+      --arch "${TARGETARCH}" \
+      --lock /tmp/codex-release.json \
+      --lock-digest 108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0 \
+      --assets-dir /tmp/assets \
+      --destination /usr/local/bin; \
+    rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
+    chmod 0755 /usr/local/libexec/codex-bridge/*.py; \
+    chmod 0755 /usr/local/libexec/codex-bridge/*.sh; \
+    chmod 0700 /usr/local/libexec/codex-bridge/publish_discovery.py; \
+    find /etc/s6-overlay/s6-rc.d -type f \( -name up -o -name run \) -exec chmod 0755 {} +; \
+    install -d -o codexbridge -g codexbridge -m 0700 /data/bridge /data/codex-home /config/workspaces
+
+EXPOSE 8766
+
+ENV CODEX_BRIDGE_APP_VERSION="0.6.0" \
+    CODEX_BRIDGE_VERSION="0.5.3" \
+    CODEX_BRIDGE_CODEX_VERSION="0.144.4" \
+    CODEX_BRIDGE_ARCH="amd64" \
+    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0"

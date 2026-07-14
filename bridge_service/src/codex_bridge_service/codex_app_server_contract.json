@@ -6,10 +6,12 @@
     "account/login/cancel",
     "account/login/start",
     "account/logout",
+    "account/rateLimitResetCredit/consume",
     "account/rateLimits/read",
     "account/read",
     "account/sendAddCreditsNudgeEmail",
     "account/usage/read",
+    "account/workspaceMessages/read",
     "app/list",
     "command/exec",
     "command/exec/resize",
@@ -24,6 +26,7 @@
     "experimentalFeature/list",
     "externalAgentConfig/detect",
     "externalAgentConfig/import",
+    "externalAgentConfig/import/readHistories",
     "feedback/upload",
     "fs/copy",
     "fs/createDirectory",
@@ -65,6 +68,7 @@
     "thread/approveGuardianDeniedAction",
     "thread/archive",
     "thread/compact/start",
+    "thread/delete",
     "thread/fork",
     "thread/goal/clear",
     "thread/goal/get",
@@ -87,9 +91,9 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.139.0",
+  "codexVersion": "codex-cli 0.144.4",
   "contractVersion": 1,
-  "schemaBundleSha256": "f3c143fff7b14f69e6dc428a57603ea4d71fe38885795b4a0d4b395127393b61",
+  "schemaBundleSha256": "763e9ffdbb197ce59e452df6b7d85da5cf97879f8d5b242c047436751993cefd",
   "serverNotifications": [
     "account/login/completed",
     "account/rateLimits/updated",
@@ -100,6 +104,7 @@
     "deprecationNotice",
     "error",
     "externalAgentConfig/import/completed",
+    "externalAgentConfig/import/progress",
     "fs/changed",
     "fuzzyFileSearch/sessionCompleted",
     "fuzzyFileSearch/sessionUpdated",
@@ -123,6 +128,7 @@
     "mcpServer/oauthLogin/completed",
     "mcpServer/startupStatus/updated",
     "model/rerouted",
+    "model/safetyBuffering/updated",
     "model/verification",
     "process/exited",
     "process/outputDelta",
@@ -132,6 +138,7 @@
     "thread/archived",
     "thread/closed",
     "thread/compacted",
+    "thread/deleted",
     "thread/goal/cleared",
     "thread/goal/updated",
     "thread/name/updated",
@@ -169,6 +176,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "3530e3e0a21a7df541c980f49f669ac0d1a488f61089cbf34af7ec45b909a716",
-  "v2SchemaSha256": "284ccc8532627ef6542ba2b45d12430f6253f5d004294026019d092094aae969"
+  "stableSchemaSha256": "df03d7a1a9de9e0d8ac6456f74fa46f3c75e2fc63fd0a4fa29b7a510fecc0144",
+  "v2SchemaSha256": "66ab7534f29e1ee7c065eb15c799d5f6e93fdd1d0ba86c262c3842a6a8f3d0c8"
 }
