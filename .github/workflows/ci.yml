@@ -59,6 +59,37 @@ jobs:
           python scripts/sync_app_release.py --check
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
+  windows-updater:
+    name: Windows updater compatibility
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.2"
+
+      - name: Install the pinned Windows test tools
+        run: uv pip install --system pytest==9.0.3 pytest-timeout==2.4.0
+
+      - name: Test the Windows updater and rollback path
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -q bridge_service/tests/test_update_script.py
+          -p pytest_timeout
+
   frontend:
     name: Panel unit, build, and browser tests
     runs-on: ubuntu-24.04

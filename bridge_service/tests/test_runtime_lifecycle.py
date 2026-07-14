@@ -124,17 +124,13 @@ class _SharedClient:
                 if method == "thread/resume"
                 else f"codex-thread-{self._thread_number}"
             )
-            sandbox = (
-                {"type": "readOnly", "networkAccess": False}
-                if params["sandbox"] == "read-only"
-                else {
-                    "type": "workspaceWrite",
-                    "networkAccess": False,
-                    "writableRoots": [params["cwd"]],
-                    "excludeSlashTmp": True,
-                    "excludeTmpdirEnvVar": True,
-                }
-            )
+            sandbox = {
+                "type": "workspaceWrite",
+                "networkAccess": False,
+                "writableRoots": [params["cwd"]],
+                "excludeSlashTmp": True,
+                "excludeTmpdirEnvVar": True,
+            }
             return {
                 "thread": {
                     "id": thread_id,
@@ -352,6 +348,14 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
         "thread/start",
         "turn/start",
     } <= set(client.calls)
+    thread_request = next(
+        params for method, params in client.requests if method == "thread/start"
+    )
+    turn_request = next(
+        params for method, params in client.requests if method == "turn/start"
+    )
+    assert "sandbox" not in thread_request
+    assert "sandboxPolicy" not in turn_request
     _wait_until(
         lambda: not any(
             thread.name.startswith("CodexRuntime-") for thread in threading.enumerate()

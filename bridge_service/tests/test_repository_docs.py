@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import shutil
 import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -222,8 +225,8 @@ def test_user_facing_docs_contain_no_obvious_private_urls_or_credentials() -> No
     assert not failures, "; ".join(failures)
 
 
-def test_aegis_runtime_records_are_indexed_and_generated_dist_is_untracked() -> None:
-    """Keep the implementation record auditable without committing build outputs."""
+def test_aegis_runtime_records_are_indexed() -> None:
+    """Keep the HA-native implementation record complete and navigable."""
 
     records = (
         "docs/aegis/baseline/2026-07-14-ha-native-implementation-baseline.md",
@@ -247,8 +250,15 @@ def test_aegis_runtime_records_are_indexed_and_generated_dist_is_untracked() -> 
                 f"{relative} has an unresolved local link: {target}"
             )
 
+
+def test_generated_bridge_distributions_are_not_tracked() -> None:
+    """Keep generated Bridge wheels and source archives out of Git."""
+
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("Git is unavailable in this source-only test environment")
     tracked = subprocess.run(
-        ["git", "ls-files", "--", "bridge_service/dist"],
+        [git, "ls-files", "--", "bridge_service/dist"],
         cwd=ROOT,
         check=True,
         capture_output=True,

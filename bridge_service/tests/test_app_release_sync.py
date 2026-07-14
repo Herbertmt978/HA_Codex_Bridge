@@ -137,6 +137,7 @@ def test_malformed_or_ambiguous_sources_are_rejected(tmp_path: Path) -> None:
 
 
 def test_symlinked_managed_file_is_rejected(tmp_path: Path) -> None:
+    module = _script_module()
     root = _fixture(tmp_path)
     target = root / "codex_bridge_app/Dockerfile"
     backup = root / "codex_bridge_app/Dockerfile.real"
@@ -146,5 +147,5 @@ def test_symlinked_managed_file_is_rejected(tmp_path: Path) -> None:
     except (OSError, NotImplementedError):
         backup.rename(target)
         pytest.skip("symlink creation is unavailable on this platform")
-    with pytest.raises(_script_module().ReleaseSyncError, match="symlink"):
-        _script_module().synchronize(root, mode="check")
+    with pytest.raises(module.ReleaseSyncError, match="symlink"):
+        module.synchronize(root, mode="check")
