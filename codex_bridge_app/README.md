@@ -6,7 +6,7 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- App version: `0.6.0` (`amd64` only, experimental)
+- App version: `0.6.1` (`amd64` only, experimental)
 - Integration: `0.5.4`
 - External Bridge: `0.5.3`
 - Bundled Codex: `0.144.4`

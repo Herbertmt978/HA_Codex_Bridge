@@ -78,7 +78,7 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. App `0.6.0` is distributed as a
+The App is experimental and `amd64` only. App `0.6.1` is distributed as a
 signed immutable image with an SPDX SBOM and build provenance. A protected
 runtime running Codex `0.144.4` passed sandbox self-test and authenticated
 readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote

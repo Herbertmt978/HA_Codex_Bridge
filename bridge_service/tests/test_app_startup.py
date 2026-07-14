@@ -184,16 +184,19 @@ def test_discovery_is_supervised_and_interruptible_during_readiness_wait() -> No
 
 def test_discovery_waits_for_authenticated_readiness_and_uses_exact_payload() -> None:
     text = _text()
+    docker = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "/ready" in text
     assert re.search(r"\b(?:curl|wget|urlopen|urllib)\b", text)
     assert "Authorization" in text and "Bearer {token}" in text
     assert '"X-Codex-Bridge-Api": "1"' in text
     assert "publish_discovery.py" in text
     assert '"service": "codex_bridge"' in text
-    assert "bashio::app.hostname" in text
+    assert "bashio::addon.hostname" in text
+    assert "bashio::app.hostname" not in text
     assert re.search(r"(?:port|PORT)[^\n]*8766", text)
     assert re.search(r"(?:api|API)[^\n]*1", text)
-    assert re.search(r"(?:host|HOST)[^\n]*bashio::app\.hostname", text)
+    assert re.search(r"(?:host|HOST)[^\n]*bashio::addon\.hostname", text)
+    assert "declare -F bashio::addon.hostname" in docker
 
     module = _load_helper("publish_discovery")
     token = "a" * 64
