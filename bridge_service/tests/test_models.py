@@ -181,7 +181,12 @@ def test_codex_account_record_round_trips_safe_profile_fields() -> None:
 
 def test_bridge_diagnostics_record_round_trips() -> None:
     diagnostics = BridgeDiagnosticsRecord(
+        app_version="0.6.0",
         bridge_version="0.4.17",
+        bundled_codex_version="0.144.1",
+        image_revision="a" * 40,
+        architecture="aarch64",
+        release_lock_digest="b" * 64,
         git_commit="abc1234",
         python_version="3.12.10",
         service_uptime_seconds=12.5,
@@ -199,6 +204,14 @@ def test_bridge_diagnostics_record_round_trips() -> None:
     restored = BridgeDiagnosticsRecord.model_validate(diagnostics.model_dump())
 
     assert restored.bridge_version == "0.4.17"
+    assert restored.app_version == "0.6.0"
+    assert restored.api_current == 1
+    assert restored.api_minimum == 1
+    assert restored.api_maximum == 1
+    assert restored.bundled_codex_version == "0.144.1"
+    assert restored.image_revision == "a" * 40
+    assert restored.architecture == "aarch64"
+    assert restored.release_lock_digest == "b" * 64
     assert restored.tools[0].available is True
 
 

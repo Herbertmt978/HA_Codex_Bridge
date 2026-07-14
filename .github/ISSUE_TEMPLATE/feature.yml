@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a focused improvement to the Home Assistant-native Codex experience.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the outcome rather than assuming a specific implementation.
+        Do not include credentials, private workspace data, or organisation-specific URLs.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who benefits and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Security and compatibility considerations
+      description: Explain any impact on HA-only browser access, workspaces, login, or the experimental App.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing requests and have not included sensitive data.
+          required: true

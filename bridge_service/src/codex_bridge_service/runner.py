@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from queue import Empty, Queue
@@ -8,8 +9,17 @@ from uuid import uuid4
 
 from .codex_auth import AUTH_EXPIRED_MESSAGE, is_codex_auth_failure
 from .codex_process import codex_command_prefix, codex_subprocess_environment
-from .models import PendingPromptRecord, RunMode, RunRecord, ThreadRecord, ThreadViewRecord
+from .event_store import EventDraft
+from .models import (
+    PendingPromptRecord,
+    RunMode,
+    RunRecord,
+    RuntimeProfile,
+    ThreadRecord,
+    ThreadViewRecord,
+)
 from .storage import BridgeStorage
+from .workspace import WorkspaceAnonymousFileLease, WorkspaceBoundaryError
 
 
 class ThreadBusyError(RuntimeError):
@@ -20,7 +30,17 @@ class NoActiveRunError(RuntimeError):
     pass
 
 
+class CodexChildFailure(RuntimeError):
+    """A non-zero Codex child exit whose text is an untrusted boundary."""
+
+
 class BridgeRunner:
+    """Deprecated ``codex exec`` adapter for the external rollback profile.
+
+    Home Assistant application composition rejects this class as a runtime
+    owner; supervised HA turns belong exclusively to ``RuntimeBroker``.
+    """
+
     def __init__(
         self,
         storage: BridgeStorage,
@@ -32,6 +52,10 @@ class BridgeRunner:
         idle_timeout_seconds: float | None = 1800.0,
         recover_stale_runs: bool = True,
     ) -> None:
+        if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            raise ValueError(
+                "BridgeRunner is unavailable in the Home Assistant runtime profile."
+            )
         self.storage = storage
         self.codex_command = codex_command
         self.codex_home = codex_home
@@ -39,6 +63,7 @@ class BridgeRunner:
         self.ignore_user_config = ignore_user_config
         self.idle_timeout_seconds = idle_timeout_seconds
         self._lock = Lock()
+        self._home_assistant_run_lock = Lock()
         self._processes: dict[str, subprocess.Popen[str]] = {}
         self._cancelled_runs: set[str] = set()
         if recover_stale_runs:
@@ -58,17 +83,20 @@ class BridgeRunner:
             record.status = "running"
             record.active_run_id = run.run_id
             record.last_error = None
-            self.storage.save_thread(record)
-            self.storage.clear_limits_blocked()
-            self.storage.append_thread_event(
-                thread_id=thread_id,
-                event_type="message.created",
-                payload={
-                    "run_id": run.run_id,
-                    "role": "user",
-                    "text": prompt,
-                },
+            self.storage._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread",
+                    thread_id=thread_id,
+                    event_type="message.created",
+                    payload={
+                        "run_id": run.run_id,
+                        "role": "user",
+                        "text": prompt,
+                    },
+                ),
             )
+            self.storage.clear_limits_blocked()
             self._start_worker(self.storage.get_thread(thread_id), run, prompt)
             return run
 
@@ -89,24 +117,30 @@ class BridgeRunner:
             record.last_error = "Run cancelled"
             queued_count = len(record.pending_prompts)
             record.pending_prompts.clear()
-            self.storage.save_thread(record)
-            self.storage.append_thread_event(
-                thread_id=thread_id,
-                event_type="run.cancelled",
-                payload={
-                    "run_id": run_id,
-                    "reason": "cancelled by user",
-                },
-            )
-            if queued_count:
-                self.storage.append_thread_event(
+            events = [
+                EventDraft(
+                    scope="thread",
                     thread_id=thread_id,
-                    event_type="run.queue_cleared",
+                    event_type="run.cancelled",
                     payload={
-                        "reason": "active run cancelled",
-                        "queued_count": queued_count,
+                        "run_id": run_id,
+                        "reason": "cancelled by user",
                     },
                 )
+            ]
+            if queued_count:
+                events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "active run cancelled",
+                            "queued_count": queued_count,
+                        },
+                    )
+                )
+            self.storage._save_thread_with_events(record, *events)
             return RunRecord(run_id=run_id, thread_id=thread_id, status="cancelled")
 
     def _queue_prompt(self, record: ThreadRecord, prompt: str) -> RunRecord:
@@ -117,28 +151,36 @@ class BridgeRunner:
         )
         record.pending_prompts.append(pending)
         self.storage._touch_thread(record)
-        self.storage.save_thread(record)
-        self.storage.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="message.created",
-            payload={
-                "run_id": pending.run_id,
-                "role": "user",
-                "text": prompt,
-                "queued": True,
-            },
+        self.storage._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="message.created",
+                payload={
+                    "run_id": pending.run_id,
+                    "role": "user",
+                    "text": prompt,
+                    "queued": True,
+                },
+            ),
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="run.queued",
+                payload={
+                    "run_id": pending.run_id,
+                    "pending_count": len(record.pending_prompts),
+                },
+            ),
         )
-        self.storage.append_thread_event(
-            thread_id=record.thread_id,
-            event_type="run.queued",
-            payload={
-                "run_id": pending.run_id,
-                "pending_count": len(record.pending_prompts),
-            },
+        return RunRecord(
+            run_id=pending.run_id, thread_id=record.thread_id, status="queued"
         )
-        return RunRecord(run_id=pending.run_id, thread_id=record.thread_id, status="queued")
 
-    def _start_worker(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+    def _start_worker(
+        self, record: ThreadViewRecord, run: RunRecord, prompt: str
+    ) -> None:
         worker = Thread(
             target=self._run_prompt,
             args=(record, run, prompt),
@@ -146,26 +188,76 @@ class BridgeRunner:
         )
         worker.start()
 
-    def _run_prompt(self, record: ThreadViewRecord, run: RunRecord, prompt: str) -> None:
+    def _run_prompt(
+        self, record: ThreadViewRecord, run: RunRecord, prompt: str
+    ) -> None:
+        home_assistant_run_lock_acquired = False
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            self._home_assistant_run_lock.acquire()
+            home_assistant_run_lock_acquired = True
         stderr_lines: list[str] = []
         codex_error: str | None = None
-        saw_run_completion = False
+        completion_usage: dict[str, object] = {}
         error: str | None = None
+        failure_payload: dict[str, object] | None = None
+        run_attachment_paths: dict[str, str] | None = None
+        workspace_fd: int | None = None
+        attachment_leases: dict[str, WorkspaceAnonymousFileLease] = {}
         try:
-            process = subprocess.Popen(
-                self._build_command(record, prompt),
-                cwd=record.workspace_path,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=codex_subprocess_environment(self.codex_home),
-                text=True,
-                encoding="utf-8",
+            if run.run_id in self._cancelled_runs:
+                return
+            process_workspace_path, workspace_fd = self._lease_process_workspace(record)
+            if (
+                self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+                and record.attachments
+            ):
+                attachment_leases = self.storage.lease_run_attachments(record)
+                run_attachment_paths = {
+                    attachment_id: lease.process_path
+                    for attachment_id, lease in attachment_leases.items()
+                }
+            popen_options: dict[str, object] = {}
+            leased_fds = tuple(
+                descriptor
+                for descriptor in (
+                    workspace_fd,
+                    *(lease.fileno() for lease in attachment_leases.values()),
+                )
+                if descriptor is not None
             )
+            if leased_fds:
+                popen_options["pass_fds"] = leased_fds
+            with self._lock:
+                if run.run_id in self._cancelled_runs:
+                    return
+                try:
+                    process = subprocess.Popen(
+                        self._build_command(
+                            record,
+                            prompt,
+                            process_workspace_path=process_workspace_path,
+                            run_attachment_paths=run_attachment_paths,
+                        ),
+                        cwd=process_workspace_path,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        env=codex_subprocess_environment(self.codex_home),
+                        text=True,
+                        encoding="utf-8",
+                        **popen_options,
+                    )
+                except OSError:
+                    if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                        # Never serialize a private process path from a
+                        # platform-specific process-start failure.
+                        raise RuntimeError(
+                            "Codex process could not be started."
+                        ) from None
+                    raise
+                self._processes[record.thread_id] = process
             assert process.stdout is not None
             assert process.stderr is not None
-            with self._lock:
-                self._processes[record.thread_id] = process
 
             stream_queue: Queue[tuple[str, str | None]] = Queue()
             Thread(
@@ -222,7 +314,9 @@ class BridgeRunner:
 
                 codex_error = self._extract_codex_error(event) or codex_error
                 if self._handle_codex_event(record.thread_id, run.run_id, event):
-                    saw_run_completion = True
+                    raw_usage = event.get("usage")
+                    if isinstance(raw_usage, dict):
+                        completion_usage = raw_usage
 
             return_code = process.wait()
             while not stderr_done:
@@ -239,35 +333,42 @@ class BridgeRunner:
                 self.storage.sync_thread_artifacts(record.thread_id)
                 return
             if return_code != 0:
-                raise RuntimeError(
+                raise CodexChildFailure(
                     codex_error
-                    or (stderr_lines[-1] if stderr_lines else f"codex exited with code {return_code}")
-                )
-            if not saw_run_completion:
-                self.storage.append_thread_event(
-                    thread_id=record.thread_id,
-                    event_type="run.completed",
-                    payload={
-                        "run_id": run.run_id,
-                        "usage": {},
-                    },
+                    or (
+                        stderr_lines[-1]
+                        if stderr_lines
+                        else f"codex exited with code {return_code}"
+                    )
                 )
             self.storage.sync_thread_artifacts(record.thread_id)
         except Exception as exc:
             if run.run_id in self._cancelled_runs:
                 return
-            failure_payload = self._failure_payload(str(exc))
-            error = str(failure_payload["error"])
-            self.storage.append_thread_event(
-                thread_id=record.thread_id,
-                event_type="run.failed",
-                payload={
-                    "run_id": run.run_id,
-                    **failure_payload,
-                },
+            failure_payload = self._failure_payload(
+                str(exc),
+                child_failure=isinstance(exc, CodexChildFailure),
             )
+            error = str(failure_payload["error"])
         finally:
-            self._finish_run(record.thread_id, run.run_id, error=error)
+            for lease in attachment_leases.values():
+                lease.close()
+            if workspace_fd is not None:
+                try:
+                    os.close(workspace_fd)
+                except OSError:
+                    pass
+            try:
+                self._finish_run(
+                    record.thread_id,
+                    run.run_id,
+                    error=error,
+                    failure_payload=failure_payload,
+                    completion_usage=completion_usage,
+                )
+            finally:
+                if home_assistant_run_lock_acquired:
+                    self._home_assistant_run_lock.release()
 
     def _read_stream(
         self,
@@ -300,29 +401,58 @@ class BridgeRunner:
             record.active_run_id = None
             record.last_error = message
             record.pending_prompts.clear()
-            self.storage.save_thread(record)
-            self.storage.append_thread_event(
-                thread_id=record.thread_id,
-                event_type="run.failed",
-                payload={
-                    "run_id": run_id,
-                    "error": message,
-                    "blocked": False,
-                    "failure_type": "run.orphaned",
-                },
-            )
-            if queued_count:
-                self.storage.append_thread_event(
+            events = [
+                EventDraft(
+                    scope="thread",
                     thread_id=record.thread_id,
-                    event_type="run.queue_cleared",
+                    event_type="run.failed",
                     payload={
-                        "reason": "bridge restarted",
-                        "queued_count": queued_count,
+                        "run_id": run_id,
+                        "error": message,
+                        "blocked": False,
+                        "failure_type": "run.orphaned",
                     },
                 )
+            ]
+            if queued_count:
+                events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=record.thread_id,
+                        event_type="run.queue_cleared",
+                        payload={
+                            "reason": "bridge restarted",
+                            "queued_count": queued_count,
+                        },
+                    )
+                )
+            self.storage._save_thread_with_events(record, *events)
 
-    def _build_command(self, record: ThreadViewRecord, prompt: str) -> list[str]:
-        prompt_with_context = self._compose_prompt(record, prompt)
+    def _lease_process_workspace(
+        self,
+        record: ThreadViewRecord,
+    ) -> tuple[str, int | None]:
+        if self.storage.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
+            # Preserve the legacy adapter exactly: Popen remains responsible
+            # for interpreting and rejecting its persisted workspace string.
+            return record.workspace_path, None
+        directory_fd = self.storage.open_workspace_directory_fd(record.workspace_path)
+        return f"/proc/self/fd/{directory_fd}", directory_fd
+
+    def _build_command(
+        self,
+        record: ThreadViewRecord,
+        prompt: str,
+        *,
+        process_workspace_path: str,
+        run_attachment_paths: dict[str, str] | None,
+    ) -> list[str]:
+        prompt_with_context = self._compose_prompt(
+            record,
+            prompt,
+            process_workspace_path=process_workspace_path,
+            run_attachment_paths=run_attachment_paths,
+        )
         command = self._command_prefix()
         command.append("exec")
         if self.ignore_user_config:
@@ -333,7 +463,9 @@ class BridgeRunner:
         if record.effective_model:
             command.extend(["-m", record.effective_model])
         if record.effective_thinking_level:
-            command.extend(["-c", f"model_reasoning_effort={record.effective_thinking_level}"])
+            command.extend(
+                ["-c", f"model_reasoning_effort={record.effective_thinking_level}"]
+            )
 
         command.extend(
             [
@@ -343,10 +475,11 @@ class BridgeRunner:
             ]
         )
         if not record.codex_session_id:
-            command.extend(["-C", record.workspace_path])
-            uploads_dir = self.storage.uploads_dir / record.thread_id
-            if uploads_dir.exists():
-                command.extend(["--add-dir", str(uploads_dir)])
+            command.extend(["-C", process_workspace_path])
+            if self.storage.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY:
+                uploads_dir = self.storage.uploads_dir / record.thread_id
+                if uploads_dir.exists():
+                    command.extend(["--add-dir", str(uploads_dir)])
 
         if self.bypass_sandbox:
             command.append("--dangerously-bypass-approvals-and-sandbox")
@@ -362,38 +495,71 @@ class BridgeRunner:
     def _command_prefix(self) -> list[str]:
         return codex_command_prefix(self.codex_command)
 
-    def _compose_prompt(self, record: ThreadRecord, prompt: str) -> str:
+    def _compose_prompt(
+        self,
+        record: ThreadRecord,
+        prompt: str,
+        *,
+        process_workspace_path: str,
+        run_attachment_paths: dict[str, str] | None,
+    ) -> str:
         if not record.attachments:
             return prompt
 
-        attachment_lines = "\n".join(
-            f"- {attachment.filename} ({attachment.mime_type}): {attachment.stored_path}"
-            for attachment in record.attachments
-        )
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            if run_attachment_paths is None:
+                raise WorkspaceBoundaryError()
+            attachment_lines_list: list[str] = []
+            for attachment in record.attachments:
+                materialized_path = run_attachment_paths.get(attachment.attachment_id)
+                if materialized_path is None:
+                    raise WorkspaceBoundaryError()
+                attachment_lines_list.append(
+                    f"- {attachment.filename} ({attachment.mime_type}): "
+                    f"{materialized_path}"
+                )
+            attachment_lines = "\n".join(attachment_lines_list)
+        else:
+            attachment_lines = "\n".join(
+                f"- {attachment.filename} ({attachment.mime_type}): {attachment.stored_path}"
+                for attachment in record.attachments
+            )
         return (
             "Bridge workspace context:\n"
-            f"- Working directory: {record.workspace_path}\n"
+            f"- Working directory: {process_workspace_path}\n"
             "- Uploaded files are available at these local paths:\n"
             f"{attachment_lines}\n\n"
             "User request:\n"
             f"{prompt}"
         )
 
-    def _handle_codex_event(self, thread_id: str, run_id: str, event: dict[str, object]) -> bool:
+    def _handle_codex_event(
+        self, thread_id: str, run_id: str, event: dict[str, object]
+    ) -> bool:
         event_type = str(event.get("type", "codex.event"))
+        if (
+            self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+            and event_type in {"error", "turn.failed"}
+        ):
+            # Child error bodies are untrusted and can echo private container
+            # paths. The terminal run.failed event carries a safe classification.
+            return False
         if event_type == "thread.started":
             session_id = str(event.get("thread_id", ""))
             if session_id:
                 record = self.storage.load_thread(thread_id)
                 record.codex_session_id = session_id
-                self.storage.save_thread(record)
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="session.bound",
-                    payload={
-                        "run_id": run_id,
-                        "codex_session_id": session_id,
-                    },
+                self.storage._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="session.bound",
+                        payload={
+                            "run_id": run_id,
+                            "codex_session_id": session_id,
+                        },
+                    ),
                 )
             return False
 
@@ -426,22 +592,36 @@ class BridgeRunner:
                 return False
 
         if event_type == "turn.completed":
-            self.storage.append_thread_event(
-                thread_id=thread_id,
-                event_type="run.completed",
-                payload={
-                    "run_id": run_id,
-                    "usage": event.get("usage", {}),
-                },
-            )
+            # Completion is persisted only after artifact sync and terminal
+            # thread metadata succeed, preventing completed+failed replays.
             return True
 
+        safe_provider_type = (
+            event_type
+            if len(event_type.encode("utf-8")) <= 128
+            and event_type == event_type.strip()
+            and all(
+                ord(character) >= 0x20 and ord(character) != 0x7F
+                for character in event_type
+            )
+            else "unknown"
+        )
+        public_event: dict[str, object]
+        if self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            # The deprecated exec adapter may receive provider fields such as
+            # cwd or absolute paths. HA mode exposes only a notification hint;
+            # the canonical RuntimeBroker has typed projections for real UI
+            # events.
+            public_event = {"provider_event_type": safe_provider_type}
+        else:
+            public_event = event
         self.storage.append_thread_event(
             thread_id=thread_id,
             event_type="codex.event",
             payload={
                 "run_id": run_id,
-                "event": event,
+                "provider_event_type": safe_provider_type,
+                "event": public_event,
             },
         )
         return False
@@ -481,7 +661,18 @@ class BridgeRunner:
             return message
         return str(value)
 
-    def _failure_payload(self, message: str) -> dict[str, object]:
+    def _failure_payload(
+        self,
+        message: str,
+        *,
+        child_failure: bool = False,
+    ) -> dict[str, object]:
+        if (
+            child_failure
+            and self.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        ):
+            return self._home_assistant_child_failure_payload(message)
+
         if is_codex_auth_failure(message):
             return {
                 "error": AUTH_EXPIRED_MESSAGE,
@@ -514,7 +705,47 @@ class BridgeRunner:
             "failure_type": "run.failed",
         }
 
-    def _finish_run(self, thread_id: str, run_id: str, *, error: str | None = None) -> None:
+    def _home_assistant_child_failure_payload(self, message: str) -> dict[str, object]:
+        if is_codex_auth_failure(message):
+            return {
+                "error": AUTH_EXPIRED_MESSAGE,
+                "blocked": False,
+                "auth_required": True,
+                "failure_type": "auth.expired",
+            }
+
+        lowered = message.lower()
+        if "model is not supported" in lowered:
+            return {
+                "error": "The selected Codex model is not supported.",
+                "blocked": False,
+                "failure_type": "model.unsupported",
+            }
+
+        if any(marker in lowered for marker in ("limit", "credit", "quota")):
+            safe_message = "Codex usage limits have been reached."
+            self.storage.mark_limits_blocked(safe_message)
+            return {
+                "error": safe_message,
+                "blocked": True,
+                "failure_type": "limits.exhausted",
+            }
+
+        return {
+            "error": "Codex could not complete the run.",
+            "blocked": False,
+            "failure_type": "run.failed",
+        }
+
+    def _finish_run(
+        self,
+        thread_id: str,
+        run_id: str,
+        *,
+        error: str | None = None,
+        failure_payload: dict[str, object] | None = None,
+        completion_usage: dict[str, object] | None = None,
+    ) -> None:
         with self._lock:
             was_cancelled = run_id in self._cancelled_runs
             self._processes.pop(thread_id, None)
@@ -522,48 +753,110 @@ class BridgeRunner:
             if was_cancelled:
                 return
 
-            record = self.storage.load_thread(thread_id)
             if error:
-                queued_count = len(record.pending_prompts)
-                record.status = "error"
-                record.active_run_id = None
-                record.last_error = error
-                record.pending_prompts.clear()
-                self.storage.save_thread(record)
-                if queued_count:
-                    self.storage.append_thread_event(
+                payload = failure_payload or {
+                    "error": "The run failed.",
+                    "blocked": False,
+                    "failure_type": "run.failed",
+                }
+                try:
+                    record = self.storage.load_thread(thread_id)
+                    queued_count = len(record.pending_prompts)
+                    record.status = "error"
+                    record.active_run_id = None
+                    record.last_error = error
+                    record.pending_prompts.clear()
+                    events = [
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.failed",
+                            payload={
+                                "run_id": run_id,
+                                **payload,
+                            },
+                        )
+                    ]
+                    if queued_count:
+                        events.append(
+                            EventDraft(
+                                scope="thread",
+                                thread_id=thread_id,
+                                event_type="run.queue_cleared",
+                                payload={
+                                    "reason": "active run failed",
+                                    "queued_count": queued_count,
+                                },
+                            )
+                        )
+                    self.storage._save_thread_with_events(record, *events)
+                except WorkspaceBoundaryError:
+                    self.storage.fail_home_assistant_run_without_workspace_validation(
                         thread_id=thread_id,
-                        event_type="run.queue_cleared",
-                        payload={
-                            "reason": "active run failed",
-                            "queued_count": queued_count,
-                        },
+                        run_id=run_id,
+                        failure_type=str(payload.get("failure_type", "run.failed")),
                     )
+                    return
                 return
 
-            if record.pending_prompts:
-                pending = record.pending_prompts.pop(0)
-                next_run = RunRecord(
-                    run_id=pending.run_id,
-                    thread_id=thread_id,
-                    status="running",
-                )
-                record.status = "running"
-                record.active_run_id = pending.run_id
+            fallback_run_id = run_id
+            try:
+                record = self.storage.load_thread(thread_id)
+                if record.pending_prompts:
+                    pending = record.pending_prompts.pop(0)
+                    next_run = RunRecord(
+                        run_id=pending.run_id,
+                        thread_id=thread_id,
+                        status="running",
+                    )
+                    record.status = "running"
+                    record.active_run_id = pending.run_id
+                    record.last_error = None
+                    self.storage._save_thread_with_events(
+                        record,
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.completed",
+                            payload={
+                                "run_id": run_id,
+                                "usage": completion_usage or {},
+                            },
+                        ),
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="run.dequeued",
+                            payload={
+                                "run_id": pending.run_id,
+                                "pending_count": len(record.pending_prompts),
+                            },
+                        ),
+                    )
+                    fallback_run_id = pending.run_id
+                    next_record = self.storage.get_thread(thread_id)
+                    self._start_worker(next_record, next_run, pending.prompt)
+                    return
+
+                record.status = "idle"
+                record.active_run_id = None
                 record.last_error = None
-                self.storage.save_thread(record)
-                self.storage.append_thread_event(
-                    thread_id=thread_id,
-                    event_type="run.dequeued",
-                    payload={
-                        "run_id": pending.run_id,
-                        "pending_count": len(record.pending_prompts),
-                    },
+                self.storage._save_thread_with_events(
+                    record,
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="run.completed",
+                        payload={
+                            "run_id": run_id,
+                            "usage": completion_usage or {},
+                        },
+                    ),
                 )
-                self._start_worker(self.storage.get_thread(thread_id), next_run, pending.prompt)
+            except WorkspaceBoundaryError:
+                self.storage.fail_home_assistant_run_without_workspace_validation(
+                    thread_id=thread_id,
+                    run_id=fallback_run_id,
+                    failure_type="run.failed",
+                )
                 return
-
-            record.status = "idle"
-            record.active_run_id = None
-            record.last_error = None
-            self.storage.save_thread(record)

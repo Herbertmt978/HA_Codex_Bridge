@@ -2,19 +2,46 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Codex Bridge",
-        "description": "Point Home Assistant at the local Codex bridge service running on your Windows machine.",
+        "title": "Set up Codex Bridge",
+        "description": "Use the Home Assistant App for the private, recommended setup. External Bridge is an advanced legacy compatibility option.",
+        "menu_options": {
+          "app": "Home Assistant App (recommended)",
+          "external": "External Bridge (advanced)"
+        }
+      },
+      "app": {
+        "title": "Install or start the Codex Bridge App",
+        "description": "Install the Codex Bridge App in Home Assistant Community Apps, start it, then retry. Home Assistant will discover its private endpoint and credentials automatically."
+      },
+      "external": {
+        "title": "Connect an external legacy Bridge",
+        "description": "Advanced compatibility setup. This accepts only a private legacy API v0 Bridge; use the Home Assistant App for current Codex features.",
         "data": {
           "bridge_url": "Bridge URL",
-          "bridge_token": "Bridge token",
-          "panel_title": "Panel title"
+          "bridge_token": "Bridge token"
         }
+      },
+      "hassio_confirm": {
+        "title": "Connect the discovered Codex Bridge App",
+        "description": "Home Assistant securely verified {name}. Confirm to add the Integration and show Codex in the sidebar."
       }
     },
     "error": {
       "cannot_connect": "Home Assistant could not reach the Codex bridge service.",
       "invalid_auth": "The bridge token was rejected.",
+      "invalid_endpoint": "Enter a valid private Bridge endpoint and token.",
+      "incompatible_api": "This Bridge API is not compatible with the selected setup.",
+      "app_not_discovered": "The App has not been discovered yet. Confirm that it is installed and running, then retry.",
       "unknown": "Unexpected error while validating the bridge connection."
+    },
+    "abort": {
+      "already_configured": "Codex Bridge already has a configured connection.",
+      "invalid_discovery": "The App discovery data was invalid.",
+      "invalid_auth": "The App credentials were rejected.",
+      "cannot_connect": "Home Assistant could not reach the App.",
+      "incompatible_api": "The App API is not compatible with this integration.",
+      "unknown": "The App could not be validated safely.",
+      "reconfigure_successful": "The App connection was updated."
     }
   }
 }

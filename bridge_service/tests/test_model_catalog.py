@@ -102,6 +102,8 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
     popen_calls: list[list[str]] = []
     popen_environments: list[dict[str, str]] = []
     monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "bridge-secret")
+    monkeypatch.setenv("GITHUB_TOKEN", "github_pat_realistic_secret_carrier")
+    monkeypatch.setenv("NO_PROXY", "supervisor,homeassistant,metadata")
 
     def fake_popen(command, **kwargs):
         popen_calls.append(command)
@@ -121,7 +123,11 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
     assert popen_calls == [[str(codex_path), "app-server", "--stdio"]]
     assert popen_environments[0] is not None
     assert "CODEX_BRIDGE_AUTH_TOKEN" not in popen_environments[0]
+    assert "GITHUB_TOKEN" not in popen_environments[0]
+    assert "NO_PROXY" not in popen_environments[0]
+    assert "PATH" in popen_environments[0]
     assert popen_environments[0]["CODEX_HOME"] == str(tmp_path)
+    assert popen_environments[0]["HOME"] == str(tmp_path)
     assert catalog.source == "codex-app-server"
     assert catalog.default_model == "gpt-5.6-sol"
     assert catalog.default_thinking_level == "ultra"
@@ -575,4 +581,5 @@ def test_probe_keeps_last_known_catalog_when_refresh_fails(tmp_path, monkeypatch
     assert [model.model for model in stale.models] == [model.model for model in fresh.models]
     assert stale.source == "last-known-good"
     assert stale.stale is True
-    assert "temporary outage" in (stale.error or "")
+    assert "unavailable" in (stale.error or "")
+    assert "temporary outage" not in (stale.error or "")

@@ -1,0 +1,15 @@
+name: Codex Bridge
+version: "0.6.0"
+slug: codex_bridge
+description: Run the Codex Bridge service privately inside Home Assistant.
+url: https://github.com/Herbertmt978/HA_Codex_Bridge
+arch:
+  - amd64
+init: false
+stage: experimental
+backup: cold
+image: ghcr.io/herbertmt978/ha-codex-bridge-app
+map:
+  - addon_config:rw
+discovery:
+  - codex_bridge

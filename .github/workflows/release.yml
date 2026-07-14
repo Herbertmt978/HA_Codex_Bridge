@@ -1,0 +1,99 @@
+name: Release Home Assistant App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-app.yml"
+      - ".github/workflows/release.yml"
+      - "codex_bridge_app/config.yaml"
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: Optional exact current main commit SHA to release.
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-app-main
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Lock the current main release input
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      expected_sha: ${{ steps.expected.outputs.expected_sha }}
+    steps:
+      - name: Check out the triggering revision without credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Require one exact current main commit
+        id: expected
+        shell: bash
+        env:
+          REQUESTED_HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          expected_sha="${REQUESTED_HEAD_SHA:-${GITHUB_SHA}}"
+          if [[ ! "${expected_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "head_sha must be a full lowercase Git commit SHA" >&2
+            exit 1
+          fi
+          main_sha="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
+          test -n "${main_sha}"
+          test "${expected_sha}" = "${main_sha}"
+          echo "expected_sha=${expected_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the exact accepted main commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ steps.expected.outputs.expected_sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Validate synchronized App release metadata and lock
+        run: |
+          python scripts/sync_app_release.py --check
+          python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
+
+      - name: Require the changelog to lead with the released App version
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          config = Path("codex_bridge_app/config.yaml").read_text(encoding="utf-8")
+          changelog = Path("codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
+          versions = re.findall(
+              r'(?m)^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$',
+              config,
+          )
+          headings = re.findall(r'(?m)^## ([0-9]+\.[0-9]+\.[0-9]+)\s*$', changelog)
+          if len(versions) != 1 or not headings or headings[0] != versions[0]:
+              raise SystemExit("App config.yaml and CHANGELOG.md release versions differ")
+          PY
+
+  publish:
+    name: Publish the verified App image
+    needs: validate
+    uses: ./.github/workflows/build-app.yml
+    with:
+      publish: true
+      expected_sha: ${{ needs.validate.outputs.expected_sha }}
+    permissions:
+      attestations: write # Let the reusable builder record provenance.
+      contents: read
+      id-token: write # Let the reusable builder sign images and SBOMs.
+      packages: write # Let the reusable builder publish GHCR objects.

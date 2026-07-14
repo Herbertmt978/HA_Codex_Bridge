@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# The App never permits persistent/user configuration to select Codex's
+# legacy Landlock path.  Bubblewrap failure must remain a hard failure.
+exec /usr/local/bin/codex \
+    --strict-config \
+    -c features.use_legacy_landlock=false \
+    "$@"

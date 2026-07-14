@@ -1,0 +1,13 @@
+{
+  "base64Signature": "c2lnbmF0dXJl",
+  "cert": "Y2VydGlmaWNhdGU=",
+  "rekorBundle": {
+    "SignedEntryTimestamp": "c2V0",
+    "Payload": {
+      "body": "eyJhcGlWZXJzaW9uIjoiMC4wLjEiLCJraW5kIjoiaGFzaGVkcmVrb3JkIiwic3BlYyI6eyJkYXRhIjp7Imhhc2giOnsiYWxnb3JpdGhtIjoic2hhMjU2IiwidmFsdWUiOiJjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjIn19LCJzaWduYXR1cmUiOnsiY29udGVudCI6ImMybG5ibUYwZFhKbCIsInB1YmxpY0tleSI6eyJjb250ZW50IjoiWTJWeWRHbG1hV05oZEdVPSJ9fX19",
+      "integratedTime": 1784003665,
+      "logIndex": 1,
+      "logID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+}

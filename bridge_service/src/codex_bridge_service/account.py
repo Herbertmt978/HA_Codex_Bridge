@@ -1,12 +1,105 @@
 import base64
 import json
+from math import isfinite
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, Protocol
 
 from .models import CodexAccountRecord
 
 AUTH_CLAIMS_KEY = "https://api.openai.com/auth"
 PROFILE_CLAIMS_KEY = "https://api.openai.com/profile"
+
+SAFE_CHATGPT_PLAN_TYPES = frozenset(
+    {
+        "free",
+        "go",
+        "plus",
+        "pro",
+        "prolite",
+        "team",
+        "self_serve_business_usage_based",
+        "business",
+        "enterprise_cbp_usage_based",
+        "enterprise",
+        "edu",
+        "unknown",
+    }
+)
+
+
+def normalize_chatgpt_plan_type(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in SAFE_CHATGPT_PLAN_TYPES else None
+
+
+class _AppServerClient(Protocol):
+    def request(
+        self,
+        method: str,
+        params: Any = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Any: ...
+
+
+class AppServerAccountProbe:
+    """Read a privacy-preserving account projection from the shared app-server."""
+
+    def __init__(
+        self,
+        client: _AppServerClient,
+        *,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("account probe timeout must be positive")
+        self._client = client
+        self._timeout_seconds = float(timeout_seconds)
+        self._probe_lock = Lock()
+
+    def probe(self) -> CodexAccountRecord:
+        with self._probe_lock:
+            try:
+                response = self._client.request(
+                    "account/read",
+                    {"refreshToken": False},
+                    timeout_seconds=self._timeout_seconds,
+                )
+            except Exception:
+                return CodexAccountRecord()
+
+        if not isinstance(response, dict):
+            return CodexAccountRecord()
+        account = response.get("account")
+        if account is None:
+            return CodexAccountRecord()
+        if not isinstance(account, dict):
+            return CodexAccountRecord()
+
+        account_type = account.get("type")
+        if account_type == "apiKey":
+            return CodexAccountRecord(auth_mode="apikey")
+        if account_type != "chatgpt":
+            return CodexAccountRecord(
+                auth_mode="unsupported" if isinstance(account_type, str) else None
+            )
+
+        plan_type = normalize_chatgpt_plan_type(account.get("planType"))
+        if plan_type is None:
+            return CodexAccountRecord(auth_mode="unsupported")
+        return CodexAccountRecord(
+            available=True,
+            auth_mode="chatgpt",
+            plan_type=plan_type,
+        )
 
 
 class CodexAccountProbe:
@@ -34,7 +127,8 @@ class CodexAccountProbe:
             return CodexAccountRecord()
 
     def _account_from_auth(self, auth: dict[str, Any]) -> CodexAccountRecord:
-        tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
+        tokens_value = auth.get("tokens")
+        tokens: dict[str, Any] = tokens_value if isinstance(tokens_value, dict) else {}
         id_claims = self._decode_claims(str(tokens.get("id_token") or ""))
         access_claims = self._decode_claims(str(tokens.get("access_token") or ""))
 
@@ -56,7 +150,7 @@ class CodexAccountProbe:
         name = self._first_str(id_claims.get("name"), profile_claims.get("name"), access_claims.get("name"))
         account_id = self._first_str(auth_claims.get("chatgpt_account_id"), tokens.get("account_id"))
         user_id = self._first_str(auth_claims.get("chatgpt_user_id"), auth_claims.get("user_id"))
-        plan_type = self._first_str(auth_claims.get("chatgpt_plan_type"))
+        plan_type = normalize_chatgpt_plan_type(auth_claims.get("chatgpt_plan_type"))
         organization_id = self._first_str(organization.get("id"))
         organization_title = self._first_str(organization.get("title"))
         auth_mode = self._first_str(auth.get("auth_mode"))

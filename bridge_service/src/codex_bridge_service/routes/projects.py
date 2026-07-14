@@ -2,8 +2,15 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, field_validator
 
 from ..auth import require_bridge_token
-from ..models import PathBrowseEntryRecord, PathBrowseRecord, ProjectRecord
+from ..models import (
+    PathBrowseEntryRecord,
+    PathBrowseRecord,
+    ProjectRecord,
+    RuntimeProfile,
+)
+from ..runtime_broker import RuntimeUnavailableError
 from ..storage import ProjectMutationError, ProjectNotFoundError
+from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
 router = APIRouter()
 
@@ -62,22 +69,30 @@ def list_projects(
 ) -> list[ProjectRecord]:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
-    request.app.state.storage.reconcile_special_projects(
-        default_model=model_catalog.default_model,
-        default_thinking_level=model_catalog.default_thinking_level,
-        defaults_provisional=model_catalog.stale,
-    )
-    return request.app.state.storage.list_projects(
-        default_model=model_catalog.default_model,
-        default_thinking_level=model_catalog.default_thinking_level,
-        defaults_provisional=model_catalog.stale,
-    )
+    try:
+        request.app.state.storage.reconcile_special_projects(
+            default_model=model_catalog.default_model,
+            default_thinking_level=model_catalog.default_thinking_level,
+            defaults_provisional=model_catalog.stale,
+        )
+        return request.app.state.storage.list_projects(
+            default_model=model_catalog.default_model,
+            default_thinking_level=model_catalog.default_thinking_level,
+            defaults_provisional=model_catalog.stale,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
-@router.post("/projects", response_model=ProjectRecord, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/projects", response_model=ProjectRecord, status_code=status.HTTP_201_CREATED
+)
 def create_project(
     payload: CreateProjectRequest,
     request: Request,
@@ -85,6 +100,7 @@ def create_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     model_catalog = request.app.state.model_catalog_probe.probe()
@@ -110,12 +126,17 @@ def create_project(
             status_code=400,
             detail=f"{default_thinking_level} is not supported by {default_model}",
         )
-    return request.app.state.storage.create_project(
-        name=payload.name,
-        root_path=payload.root_path,
-        default_model=default_model,
-        default_thinking_level=default_thinking_level,
-    )
+    try:
+        return request.app.state.storage.create_project(
+            name=payload.name,
+            root_path=payload.root_path,
+            default_model=default_model,
+            default_thinking_level=default_thinking_level,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectRecord)
@@ -127,6 +148,7 @@ def update_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
@@ -135,11 +157,17 @@ def update_project(
         model_was_requested = updates.get("default_model") is not None
         thinking_was_requested = updates.get("default_thinking_level") is not None
         target_model = updates.get("default_model") or current.default_model
-        target_thinking = updates.get("default_thinking_level") or current.default_thinking_level
+        target_thinking = (
+            updates.get("default_thinking_level") or current.default_thinking_level
+        )
         if model_was_requested or thinking_was_requested:
             model_catalog = request.app.state.model_catalog_probe.probe()
             model_record = next(
-                (model for model in model_catalog.models if model.model == target_model),
+                (
+                    model
+                    for model in model_catalog.models
+                    if model.model == target_model
+                ),
                 None,
             )
             if (
@@ -151,7 +179,9 @@ def update_project(
                     target_thinking = model_record.default_thinking_level
                     updates["default_thinking_level"] = target_thinking
                 else:
-                    raise ValueError(f"{target_thinking} is not supported by {target_model}")
+                    raise ValueError(
+                        f"{target_thinking} is not supported by {target_model}"
+                    )
         return request.app.state.storage.update_project(
             project_id,
             name=updates.get("name"),
@@ -161,6 +191,10 @@ def update_project(
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -173,12 +207,17 @@ def archive_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
         return request.app.state.storage.archive_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -191,12 +230,17 @@ def restore_project(
 ) -> ProjectRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
         return request.app.state.storage.restore_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -209,12 +253,27 @@ def delete_project(
 ) -> None:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
-        request.app.state.storage.delete_project(project_id)
+        delete_with_runtime_ownership = getattr(
+            request.app.state.runner,
+            "delete_project",
+            None,
+        )
+        if request.app.state.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+            if not callable(delete_with_runtime_ownership):
+                raise RuntimeUnavailableError()
+            delete_with_runtime_ownership(project_id)
+        else:
+            request.app.state.storage.delete_project(project_id)
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -227,15 +286,24 @@ def browse_project_paths(
 ) -> PathBrowseRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
         return request.app.state.storage.browse_paths(path)
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="path not found") from exc
 
 
-@router.post("/projects/folders", response_model=PathBrowseEntryRecord, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/projects/folders",
+    response_model=PathBrowseEntryRecord,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_project_folder(
     payload: CreateFolderRequest,
     request: Request,
@@ -243,9 +311,15 @@ def create_project_folder(
 ) -> PathBrowseEntryRecord:
     require_bridge_token(
         authorization=authorization,
+        request=request,
         expected_token=request.app.state.auth_token,
     )
-    return request.app.state.storage.create_folder(
-        parent_path=payload.parent_path,
-        folder_name=payload.folder_name,
-    )
+    try:
+        return request.app.state.storage.create_folder(
+            parent_path=payload.parent_path,
+            folder_name=payload.folder_name,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="workspace path not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from exc

@@ -2,3 +2,9 @@
 **/__pycache__/
 bridge_service/build/
 bridge_service/src/*.egg-info/
+.worktrees/
+.build/
+node_modules/
+coverage/
+playwright-report/
+test-results/

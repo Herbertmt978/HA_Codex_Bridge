@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support and safe diagnostics
+    url: https://github.com/Herbertmt978/ha-codex-bridge/blob/main/SUPPORT.md
+    about: Read setup, diagnostic, and redaction guidance before opening an issue.
+  - name: Security reporting
+    url: https://github.com/Herbertmt978/HA_Codex_Bridge/security/advisories/new
+    about: Report suspected vulnerabilities privately; do not create a public issue.

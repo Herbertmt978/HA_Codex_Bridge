@@ -24,11 +24,21 @@ def test_panel_and_http_file_surfaces_require_home_assistant_admin() -> None:
         if not isinstance(node, ast.ClassDef):
             continue
         for item in node.body:
-            if isinstance(item, ast.AsyncFunctionDef) and item.name in {"get", "post"}:
+            if isinstance(item, ast.AsyncFunctionDef) and item.name in {
+                "delete",
+                "get",
+                "post",
+                "put",
+            }:
                 protected_methods[f"{node.name}.{item.name}"] = ast.unparse(item.body[0])
 
     assert protected_methods == {
         "CodexBridgeAttachmentUploadView.post": "_require_admin(request)",
+        "CodexBridgeUploadCreateView.post": "_require_admin(request)",
+        "CodexBridgeUploadSessionView.get": "_require_admin(request)",
+        "CodexBridgeUploadSessionView.delete": "_require_admin(request)",
+        "CodexBridgeUploadChunkView.put": "_require_admin(request)",
+        "CodexBridgeUploadCompleteView.post": "_require_admin(request)",
         "CodexBridgeArtifactDownloadView.get": "_require_admin(request)",
     }
 
@@ -43,6 +53,6 @@ def test_home_assistant_setup_uses_protected_side_effect_free_readiness_check() 
 def test_hacs_manifest_contains_required_repository_metadata() -> None:
     manifest = json.loads((COMPONENT_ROOT / "manifest.json").read_text(encoding="utf-8"))
 
-    assert manifest["documentation"] == "https://github.com/Herbertmt978/ha-codex-bridge#readme"
-    assert manifest["issue_tracker"] == "https://github.com/Herbertmt978/ha-codex-bridge/issues"
+    assert manifest["documentation"] == "https://github.com/Herbertmt978/HA_Codex_Bridge#readme"
+    assert manifest["issue_tracker"] == "https://github.com/Herbertmt978/HA_Codex_Bridge/issues"
     assert manifest["codeowners"] == ["@Herbertmt978"]

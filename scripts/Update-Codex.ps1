@@ -37,7 +37,22 @@ function Get-CodexVersion {
 function Get-FileDigest {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    $stream = $null
+    $sha256 = $null
+    try {
+        $stream = [IO.File]::OpenRead($Path)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        $digest = $sha256.ComputeHash($stream)
+        return ([BitConverter]::ToString($digest) -replace "-", "")
+    }
+    finally {
+        if ($null -ne $sha256) {
+            $sha256.Dispose()
+        }
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+    }
 }
 
 function Get-ManagedReleaseJunction {

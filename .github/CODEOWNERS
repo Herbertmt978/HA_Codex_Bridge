@@ -1,0 +1,27 @@
+# Repository owners review production publication, dependency automation, and
+# runtime confinement changes before they reach main.
+* @Herbertmt978
+.github/ @Herbertmt978
+.github/workflows/release.yml @Herbertmt978
+.github/workflows/build-app.yml @Herbertmt978
+.github/workflows/codex-update.yml @Herbertmt978
+.github/dependabot.yml @Herbertmt978
+.github/CODEOWNERS @Herbertmt978
+
+# Release authorities and generated App release projections.
+scripts/sync_app_release.py @Herbertmt978
+scripts/update_codex_lock.py @Herbertmt978
+scripts/stage_app_context.py @Herbertmt978
+codex_bridge_app/codex-release.json @Herbertmt978
+codex_bridge_app/config.yaml @Herbertmt978
+codex_bridge_app/CHANGELOG.md @Herbertmt978
+codex_bridge_app/Dockerfile @Herbertmt978
+
+# Sandbox and runtime-boundary policy.
+codex_bridge_app/apparmor.txt @Herbertmt978
+codex_bridge_app/rootfs/etc/codex/ @Herbertmt978
+codex_bridge_app/rootfs/usr/local/bin/ @Herbertmt978
+codex_bridge_app/rootfs/usr/local/libexec/codex-bridge/ @Herbertmt978
+bridge_service/src/codex_bridge_service/runtime_policy.py @Herbertmt978
+bridge_service/src/codex_bridge_service/runtime_broker.py @Herbertmt978
+bridge_service/src/codex_bridge_service/sandbox_attestation.py @Herbertmt978

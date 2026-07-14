@@ -4,6 +4,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="PowerShell updater tests require Windows",
+)
+
 
 def _run_update_script(
     update_script: Path,
@@ -67,6 +75,7 @@ exit /b 0
     )
 
 
+@windows_only
 def test_codex_update_script_check_only_records_installed_version(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     update_script = repo_root / "scripts" / "Update-Codex.ps1"
@@ -88,6 +97,7 @@ def test_codex_update_script_check_only_records_installed_version(tmp_path) -> N
     assert not (tmp_path / "codex-real.exe").exists()
 
 
+@windows_only
 def test_codex_update_script_smoke_tests_bundled_models_without_logging_output(
     tmp_path,
 ) -> None:
@@ -124,6 +134,7 @@ def test_codex_update_script_smoke_tests_bundled_models_without_logging_output(
     assert Path(selected_tar).parent.resolve() == Path(expected_system32).resolve()
 
 
+@windows_only
 def test_codex_update_script_rolls_back_wrapper_layout_when_update_fails(
     tmp_path, monkeypatch
 ) -> None:
@@ -150,6 +161,7 @@ def test_codex_update_script_rolls_back_wrapper_layout_when_update_fails(
     assert "Rollback completed" in log_path.read_text(encoding="utf-8")
 
 
+@windows_only
 def test_codex_update_script_rolls_back_when_model_smoke_test_fails(
     tmp_path, monkeypatch
 ) -> None:
@@ -176,6 +188,7 @@ def test_codex_update_script_rolls_back_when_model_smoke_test_fails(
     assert "Rollback completed" in log
 
 
+@windows_only
 def test_codex_update_script_removes_new_real_binary_after_failed_smoke(
     tmp_path, monkeypatch
 ) -> None:
@@ -199,12 +212,10 @@ def test_codex_update_script_removes_new_real_binary_after_failed_smoke(
     assert "Rollback completed" in log_path.read_text(encoding="utf-8")
 
 
+@windows_only
 def test_codex_update_script_restores_managed_release_junction_on_failed_smoke(
     tmp_path,
 ) -> None:
-    if sys.platform != "win32":
-        return
-
     repo_root = Path(__file__).resolve().parents[2]
     update_script = repo_root / "scripts" / "Update-Codex.ps1"
     releases = tmp_path / "releases"
@@ -275,10 +286,8 @@ finally {
     assert Path(completed.stdout.strip()).resolve() == old_release.parent.resolve()
 
 
+@windows_only
 def test_codex_update_script_skips_unchanged_locked_real_binary(tmp_path) -> None:
-    if sys.platform != "win32":
-        return
-
     from ctypes import wintypes
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -324,6 +333,7 @@ def test_codex_update_script_skips_unchanged_locked_real_binary(tmp_path) -> Non
     assert "ROLLBACK ERROR" not in log
 
 
+@windows_only
 def test_auto_update_installer_supports_non_mutating_preview(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     install_script = repo_root / "scripts" / "Install-CodexAutoUpdate.ps1"
@@ -360,6 +370,7 @@ def test_auto_update_installer_supports_non_mutating_preview(tmp_path) -> None:
     assert "CodexBridgeAutoUpdate-TestPreview" in completed.stdout
 
 
+@windows_only
 def test_auto_update_installer_resolves_default_updater_from_script_directory(tmp_path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     install_script = repo_root / "scripts" / "Install-CodexAutoUpdate.ps1"

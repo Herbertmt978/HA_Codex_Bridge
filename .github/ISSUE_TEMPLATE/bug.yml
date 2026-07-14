@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible problem without private credentials or workspace data.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Codex Bridge. Do not include device codes,
+        tokens, cookies, API keys, private URLs, or workspace contents. Use
+        SECURITY.md for a suspected vulnerability.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Home Assistant Integration or panel
+        - Supervisor App
+        - External Bridge compatibility path
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions and platform
+      description: Include Home Assistant, Integration/Bridge, App, and architecture where relevant.
+      placeholder: "HA ..., Integration ..., App ..., amd64"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour and redacted diagnostics
+      description: Remove secrets, device codes, tokens, cookies, and private paths.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I searched existing issues and removed sensitive information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

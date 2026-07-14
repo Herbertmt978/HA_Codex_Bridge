@@ -1,0 +1,79 @@
+name: codex-bridge-transport
+
+services:
+  upstream:
+    image: node:22.14.0-alpine3.21
+    command: ["node", "/workspace/e2e.spec.js", "--server"]
+    environment:
+      TRANSPORT_PORT: "8081"
+    volumes:
+      - ./e2e.spec.js:/workspace/e2e.spec.js:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8081/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+    networks:
+      - transport
+
+  proxy:
+    image: nginx:1.27.4-alpine3.21
+    command: ["nginx", "-g", "pid /tmp/nginx.pid; daemon off;"]
+    depends_on:
+      upstream:
+        condition: service_healthy
+    volumes:
+      - ./proxy.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # nginx changes ownership before dropping to its unprivileged worker.
+      - CHOWN
+      - SETGID
+      - SETUID
+    networks:
+      - transport
+
+  e2e:
+    image: node:22.14.0-alpine3.21
+    command: ["node", "/workspace/e2e.spec.js", "--client"]
+    depends_on:
+      upstream:
+        condition: service_healthy
+      proxy:
+        condition: service_started
+    environment:
+      PROXY_ORIGIN: http://proxy:8080
+    volumes:
+      - ./e2e.spec.js:/workspace/e2e.spec.js:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - transport
+
+networks:
+  transport:
+    internal: true

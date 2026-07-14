@@ -1,0 +1,196 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Integration and Bridge tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.2"
+
+      - name: Install version-pinned test environment
+        run: uv pip install --system -r requirements-test.txt
+
+      - name: Check Python style and syntax
+        run: |
+          uvx --from ruff==0.15.10 ruff check bridge_service custom_components scripts tests
+          python -m compileall -q bridge_service/src custom_components scripts
+
+      - name: Test the Home Assistant Integration
+        run: python -m pytest -q
+
+      - name: Test the Bridge in an isolated pytest lifecycle
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -q bridge_service/tests
+          -p pytest_asyncio.plugin
+          -p pytest_timeout
+
+      - name: Check release authorities
+        run: |
+          python scripts/sync_app_release.py --check
+          python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
+
+  windows-updater:
+    name: Windows updater compatibility
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.2"
+
+      - name: Install the pinned Windows test tools
+        run: uv pip install --system pytest==9.0.3 pytest-timeout==2.4.0
+
+      - name: Test the Windows updater and rollback path
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -q bridge_service/tests/test_update_script.py
+          -p pytest_timeout
+
+  frontend:
+    name: Panel unit, build, and browser tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: "24"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint, test, and verify generated panel
+        run: |
+          npm run lint
+          npm run test:unit
+          npm run build
+          git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js
+          node --check custom_components/codex_bridge/frontend/codex-bridge-panel.js
+
+      - name: Install Chromium test runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Test first-run and responsive UI flows
+        run: npm run test:e2e
+
+  transport:
+    name: Reverse-proxy transport contract
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run proxy and streaming checks
+        run: >-
+          docker compose -f tests/transport/compose.yaml up
+          --build
+          --abort-on-container-exit
+          --exit-code-from e2e
+
+      - name: Remove transport fixtures
+        if: always()
+        run: docker compose -f tests/transport/compose.yaml down --volumes --remove-orphans
+
+  workflow-policy:
+    name: Workflow and dependency policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.2"
+
+      - name: Install hash-verified actionlint
+        shell: bash
+        env:
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          archive="${RUNNER_TEMP}/actionlint.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "${archive}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum --check --strict
+          tar --extract --gzip --file "${archive}" --directory "${RUNNER_TEMP}" actionlint
+          echo "${RUNNER_TEMP}" >> "$GITHUB_PATH"
+
+      - name: Validate workflow syntax and security
+        run: |
+          actionlint
+          uvx --from zizmor==1.24.1 zizmor --pedantic .github/workflows
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0

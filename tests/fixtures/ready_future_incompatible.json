@@ -1,0 +1,17 @@
+{
+  "status": "ok",
+  "api": {
+    "current": 2,
+    "minimum": 2,
+    "maximum": 2,
+    "legacy_version": 0,
+    "legacy_supported": false
+  },
+  "app": {"version": "0.7.0"},
+  "bridge": {"version": "0.7.0"},
+  "codex": {"version": "0.145.0"},
+  "image": {"revision": null, "release_lock_digest": null},
+  "architecture": "amd64",
+  "capabilities": ["api_v1"],
+  "readiness": {"state": "ready", "reasons": []}
+}
