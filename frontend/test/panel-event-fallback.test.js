@@ -101,6 +101,102 @@ describe("polling event fallback", () => {
     expect(panel._scheduleNextPoll).toHaveBeenCalled();
   });
 
+  it("clears a polling connection error after the next successful poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._callWS
+      .mockRejectedValueOnce(new Error("Bridge request failed"))
+      .mockResolvedValueOnce([]);
+
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("Bridge request failed");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).toContain("visible");
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+  });
+
+  it("does not clear an unrelated retryable action error after a successful poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Healthy poll" }));
+    panel._callWS.mockResolvedValue([]);
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not overwrite an existing action error when a poll fails", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Failed poll" }));
+    panel._callWS.mockRejectedValue(new Error("Bridge request failed"));
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not let an older failed poll overwrite a newer action error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Delayed poll" }));
+    const delayedPoll = deferred();
+    panel._callWS
+      .mockReturnValueOnce(delayedPoll.promise)
+      .mockResolvedValueOnce([]);
+
+    const pending = panel._runPollTick(1);
+    panel._setError("Upload network failed", { retryable: true });
+    delayedPoll.reject(new Error("Bridge request failed"));
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not clear a newer action error while reconciling a poll snapshot", async () => {
+    const snapshotEvent = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshotEvent);
+    const snapshotThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([snapshotEvent]);
+      if (action === "get_thread") return snapshotThread.promise;
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._runPollTick(1);
+    await vi.waitFor(() => expect(panel._callWS).toHaveBeenCalledWith("get_thread", { thread_id: "thr_safe" }));
+    panel._setError("Upload network failed", { retryable: true });
+    snapshotThread.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not overwrite an existing action error when poll snapshot reconciliation fails", async () => {
+    const snapshotEvent = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshotEvent);
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([snapshotEvent]);
+      if (action === "get_thread") return Promise.reject(new Error("Bridge request failed"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
   it("rejects a misrouted live event from another chat", () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);

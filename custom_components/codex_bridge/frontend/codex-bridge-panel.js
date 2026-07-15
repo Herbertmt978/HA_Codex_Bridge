@@ -1198,7 +1198,7 @@ function collectUserInputAnswers(container, model) {
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.3";
+var PANEL_VERSION = "0.6.4";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -3952,6 +3952,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._isLoading = false;
     this._error = "";
     this._errorRetryable = false;
+    this._errorSource = "";
+    this._errorRevision = 0;
     this._dismissedBannerKey = "";
     this._renderedThreadId = null;
     this._renderedSequence = 0;
@@ -4859,7 +4861,7 @@ var CodexBridgePanel = class extends HTMLElement {
         items = await this._refreshInteractions(interaction.thread_id);
       } catch {
         if (this._interactionMutations.get(interaction.interaction_id) === mutation && interaction.thread_id === this._selectedThreadId) {
-          this._error = "Home Assistant accepted this response. The request stays locked until its final state can be refreshed.";
+          this._assignError("Home Assistant accepted this response. The request stays locked until its final state can be refreshed.");
           this._render();
         }
         return;
@@ -4868,7 +4870,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return;
       }
       if (items.some((item) => item.interaction_id === interaction.interaction_id)) {
-        this._error = "Home Assistant accepted this response. The request stays locked while Codex finishes reconciling it.";
+        this._assignError("Home Assistant accepted this response. The request stays locked while Codex finishes reconciling it.");
         this._render();
         return;
       }
@@ -4898,11 +4900,11 @@ var CodexBridgePanel = class extends HTMLElement {
         this._interactionMutations.delete(interaction.interaction_id);
         this._interactionAnswers.delete(interaction.interaction_id);
         if (errorCode === "interaction_outcome_unknown") {
-          this._error = "Codex received the response, but its final outcome could not be confirmed. Refresh before continuing.";
+          this._assignError("Codex received the response, but its final outcome could not be confirmed. Refresh before continuing.");
         } else if (stillPending) {
-          this._error = this._safeUiError(error);
+          this._assignError(error);
         } else {
-          this._error = "This Codex request is no longer pending.";
+          this._assignError("This Codex request is no longer pending.");
         }
         this._render();
         this._focusPrompt();
@@ -4910,12 +4912,12 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       if (INTERACTION_ERROR_CODES.has(errorCode)) {
         mutation.state = "reconciling";
-        this._error = errorCode === "interaction_outcome_unknown" ? "Codex received the response, but its final outcome could not be confirmed. This request stays locked while Home Assistant reconciles it." : "This Codex response could not be applied. The request stays locked until Home Assistant refreshes it.";
+        this._assignError(errorCode === "interaction_outcome_unknown" ? "Codex received the response, but its final outcome could not be confirmed. This request stays locked while Home Assistant reconciles it." : "This Codex response could not be applied. The request stays locked until Home Assistant refreshes it.");
         this._render();
         return;
       }
       mutation.state = "retryable";
-      this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+      this._assignError("The Home Assistant response was interrupted. Retry safely with the same request ID.");
       this._render();
     }
   }
@@ -6221,7 +6223,11 @@ var CodexBridgePanel = class extends HTMLElement {
       });
     }
   }
-  async _refreshActiveThread({ reportError = true } = {}) {
+  async _refreshActiveThread({
+    reportError = true,
+    errorSource = null,
+    expectedErrorRevision = null
+  } = {}) {
     const threadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
     const refreshEpoch = ++this._threadSnapshotEpoch;
@@ -6272,13 +6278,13 @@ var CodexBridgePanel = class extends HTMLElement {
       if (this._promptMutationForThread(threadId)) {
         this._settlePromptMutationFromEvents();
       }
-      this._clearError();
+      this._clearError(errorSource === null ? {} : { source: errorSource });
       this._render();
       this._startEventSubscription();
       return true;
     } catch (error) {
-      if (isCurrent() && reportError) {
-        this._setError(error);
+      if (isCurrent() && reportError && (expectedErrorRevision === null || this._errorRevision === expectedErrorRevision) && (errorSource === null || this._canSetBackgroundError(errorSource))) {
+        this._setError(error, errorSource === null ? {} : { source: errorSource });
       }
       return false;
     }
@@ -6644,7 +6650,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       mutation.state = "retryable";
       if (threadId === this._selectedThreadId) {
-        this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+        this._assignError("The Home Assistant response was interrupted. Retry safely with the same request ID.");
         this._render();
       }
     }
@@ -7351,6 +7357,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const polledThreadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
     const snapshotEpoch = ++this._threadSnapshotEpoch;
+    const errorRevision = this._errorRevision;
     const isCurrent = () => this._pollActive && generation === this._pollGeneration && snapshotEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(polledThreadId, selectionEpoch);
     try {
       this._pollTick += 1;
@@ -7387,7 +7394,10 @@ var CodexBridgePanel = class extends HTMLElement {
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();
-          await this._refreshActiveThread();
+          await this._refreshActiveThread({
+            errorSource: "poll",
+            expectedErrorRevision: errorRevision
+          });
           return;
         }
         if (batch.controls.includes("error")) {
@@ -7426,9 +7436,12 @@ var CodexBridgePanel = class extends HTMLElement {
         this._render();
       }
       this._threadRefreshGraceUntil = 0;
+      if (this._clearError({ source: "poll" })) {
+        this._render();
+      }
     } catch (error) {
-      if (isCurrent() && Date.now() >= this._threadRefreshGraceUntil) {
-        this._setError(error);
+      if (isCurrent() && this._errorRevision === errorRevision && this._canSetBackgroundError("poll") && Date.now() >= this._threadRefreshGraceUntil) {
+        this._setError(error, { source: "poll" });
       }
     } finally {
       if (generation === this._pollGeneration) {
@@ -8112,10 +8125,18 @@ var CodexBridgePanel = class extends HTMLElement {
   _titleCase(value) {
     return String(value).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
   }
-  _setError(error, { retryable = null } = {}) {
+  _assignError(error, { retryable = null, source = "" } = {}) {
     this._error = this._safeUiError(error);
     this._errorRetryable = retryable === null ? this._isRetryableTransportError(error) : Boolean(retryable);
+    this._errorSource = source;
+    this._errorRevision += 1;
+  }
+  _setError(error, options = {}) {
+    this._assignError(error, options);
     this._render();
+  }
+  _canSetBackgroundError(source) {
+    return !this._error || this._errorSource === source;
   }
   _isRetryableTransportError(error) {
     if (typeof error?.retryable === "boolean") {
@@ -8146,9 +8167,16 @@ var CodexBridgePanel = class extends HTMLElement {
     const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
     return (safe || "The Codex request did not complete.").slice(0, 240);
   }
-  _clearError() {
+  _clearError({ source = null } = {}) {
+    if (source !== null && this._errorSource !== source) {
+      return false;
+    }
+    const changed = Boolean(this._error);
     this._error = "";
     this._errorRetryable = false;
+    this._errorSource = "";
+    this._errorRevision += 1;
+    return changed;
   }
   _textElement(tagName, className, value) {
     const element = document.createElement(tagName);
