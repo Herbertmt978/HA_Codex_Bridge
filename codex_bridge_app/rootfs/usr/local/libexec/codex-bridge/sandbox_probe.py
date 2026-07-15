@@ -28,6 +28,10 @@ NETWORK_TARGETS = (
 PATH_DENIED_ERRNOS = frozenset({errno.EACCES, errno.EPERM, errno.ENOENT})
 SYSCALL_DENIED_ERRNOS = frozenset({errno.EACCES, errno.EPERM, errno.ENOSYS})
 MAX_INHERITED_FDS = 256
+# lsm_get_self_attr(2), capget(2), and prctl(2) are Linux-only kernel APIs.
+# The syscall numbers below are the pinned asm-generic/x86_64 UAPI values used
+# by HAOS (Linux 6.18); keep this probe proc-less because the Codex sandbox
+# intentionally mounts an empty /proc.
 MAX_LSM_CONTEXT_BYTES = 64 * 1024
 CLONE_NEWUSER = 0x10000000
 CLONE_THREAD = 0x00010000
@@ -229,20 +233,24 @@ def _apparmor_profile_matches(expected_profile: str) -> bool:
         or not ctypes.sizeof(_LsmContext) <= size.value <= MAX_LSM_CONTEXT_BYTES
     ):
         return False
-    payload = ctypes.create_string_buffer(size.value)
+    capacity = size.value
+    payload = ctypes.create_string_buffer(capacity)
     ctypes.set_errno(0)
-    count = library.syscall(
+    result = library.syscall(
         ctypes.c_long(syscall_number),
         ctypes.c_uint(LSM_ATTR_CURRENT),
         ctypes.byref(payload),
         ctypes.byref(size),
         ctypes.c_uint32(0),
     )
-    if count <= 0 or size.value > MAX_LSM_CONTEXT_BYTES:
+    # The syscall returns the number of ``struct lsm_ctx`` records.  Walk the
+    # variable-length records and require that count to match exactly.
+    if result <= 0 or size.value > capacity:
         return False
     offset = 0
+    records = 0
     apparmor_context: str | None = None
-    for _ in range(count):
+    while offset < size.value:
         if offset + ctypes.sizeof(_LsmContext) > size.value:
             return False
         header = _LsmContext.from_buffer_copy(
@@ -250,23 +258,41 @@ def _apparmor_profile_matches(expected_profile: str) -> bool:
         )
         if (
             header.length < ctypes.sizeof(_LsmContext)
+            or header.length % ctypes.alignment(_LsmContext) != 0
             or offset + header.length > size.value
             or header.context_length > header.length - ctypes.sizeof(_LsmContext)
         ):
             return False
         start = offset + ctypes.sizeof(_LsmContext)
-        context = payload.raw[start : start + header.context_length]
+        end = start + header.context_length
+        context = payload.raw[start:end]
         if header.id == LSM_ID_APPARMOR:
             if apparmor_context is not None:
                 return False
+            # The UAPI recommends a NUL inside ctx_len, while HAOS AppArmor
+            # currently reports the string length and leaves the aligned,
+            # zero-filled record padding as the terminator.  Accept either
+            # representation, but reject an unbounded or embedded NUL.
+            padding = payload.raw[end : offset + header.length]
+            if any(padding):
+                return False
+            if context.endswith(b"\0"):
+                context = context[:-1]
+            elif not padding:
+                return False
+            if b"\0" in context:
+                return False
             try:
-                apparmor_context = context.removesuffix(b"\0").decode(
-                    "ascii", errors="strict"
-                )
+                apparmor_context = context.decode("ascii", errors="strict")
             except UnicodeDecodeError:
                 return False
         offset += header.length
-    return apparmor_context == f"{expected_profile} (enforce)"
+        records += 1
+    return (
+        offset == size.value
+        and records == result
+        and apparmor_context == f"{expected_profile} (enforce)"
+    )
 
 
 def _is_read_only(path: Path) -> bool:

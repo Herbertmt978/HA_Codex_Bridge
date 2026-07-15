@@ -9,10 +9,22 @@ compatibility carrier only through the 0.6.x line. It uses the explicit v0
 adapter and retains its own workspace and credentials. The App does not import
 or delete that state, stop a VM, move workspaces, or copy credentials.
 
-The protected HAOS sandbox gate has passed. Retirement is permitted only after
-the remaining remote-flow, cold backup/restore, and App update/rollback evidence
-also passes and the user explicitly removes the VM fallback. The next breaking
-release is the earliest deletion boundary.
+Codex `0.144.4`'s official `--no-proc` fallback worked on target HAOS: denial of
+a fresh `/proc` mount left the user, PID, and network namespaces, read-only
+filesystem, AppArmor, and seccomp intact. App 0.6.1's fatal readiness cause was
+instead a sandbox-self-test contract mismatch: it required `writableRoots`
+exactly `[workspace]`, while the real `ha_bridge` `workspaceWrite` response
+includes bounded supplemental roots (`.agents`, `.codex`, `.cursor`, `.git`,
+and `.vscode`) beneath the workspace. The proc-less probe already used direct
+`capget`/`prctl`/`lsm_get_self_attr` calls, without requesting `SYS_ADMIN` or
+weakening isolation. App 0.6.2 validates canonical contained supplemental roots
+and hardens `lsm_get_self_attr` record parsing;
+candidate files passed the complete production self-test on target HAOS, but
+immutable image startup and authenticated readiness remain pending
+release/post-release checks. Retirement is permitted only after those checks
+and the remaining remote-flow, cold backup/restore, first automatic update, and
+App-image rollback evidence pass, and the user explicitly removes the VM
+fallback. The next breaking release is the earliest deletion boundary.
 
 ## Evidence and consequences
 

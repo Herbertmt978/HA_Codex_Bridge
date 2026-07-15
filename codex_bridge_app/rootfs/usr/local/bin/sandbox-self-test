@@ -7,7 +7,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import pwd
 import grp
 import re
@@ -361,6 +361,44 @@ def _assert_permission_profile_catalog(
             raise SelfTestError
 
 
+def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
+    """Accept only canonical POSIX roots contained by the selected workspace."""
+
+    if not isinstance(value, list) or len(value) > 64:
+        return False
+    workspace_text = str(workspace)
+    workspace_root = PurePosixPath(workspace_text)
+    if (
+        not workspace_root.is_absolute()
+        or workspace_root.as_posix() != workspace_text
+        or ".." in workspace_root.parts
+    ):
+        return False
+    seen: set[str] = set()
+    for item in value:
+        if (
+            not isinstance(item, str)
+            or not item
+            or "\0" in item
+            or len(item) > 4096
+            or item in seen
+        ):
+            return False
+        candidate = PurePosixPath(item)
+        if (
+            not candidate.is_absolute()
+            or candidate.as_posix() != item
+            or ".." in candidate.parts
+        ):
+            return False
+        try:
+            candidate.relative_to(workspace_root)
+        except ValueError:
+            return False
+        seen.add(item)
+    return True
+
+
 def _assert_profile_thread(
     client: Any,
     *,
@@ -420,7 +458,9 @@ def _assert_profile_thread(
             "excludeTmpdirEnvVar",
         }
         or sandbox.get("type") != "workspaceWrite"
-        or sandbox.get("writableRoots") != [str(workspace)]
+        or not _writable_roots_within_workspace(
+            sandbox.get("writableRoots"), workspace=workspace
+        )
         or sandbox.get("networkAccess") is not False
         or sandbox.get("excludeSlashTmp") is not True
         or sandbox.get("excludeTmpdirEnvVar") is not True

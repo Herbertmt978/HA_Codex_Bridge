@@ -29,10 +29,21 @@ node --check custom_components\codex_bridge\frontend\codex-bridge-panel.js
 ```
 
 Local containers and unit tests do not validate protected Home Assistant OS
-behavior. The App source is experimental; a private immutable image passed
-sandbox self-test and authenticated readiness on an amd64 HAOS development VM
-on 14 July 2026. Public distribution, remote access, updates, and App-image
-rollback still need target-system validation.
+behavior. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback
+works: denial of a fresh `/proc` mount leaves the sandbox namespaces, read-only
+filesystem, AppArmor, and seccomp intact; `/proc` is intentionally empty. App
+`0.6.1`'s fatal readiness cause was a sandbox-self-test contract mismatch: it
+required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
+`workspaceWrite` response includes bounded supplemental roots (`.agents`,
+`.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The proc-less
+probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
+requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates canonical
+contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
+Candidate files passed the complete
+production self-test on target HAOS, but immutable image startup and
+authenticated readiness remain pending release/post-release checks. Public
+distribution, remote access, the first automatic update, cold restore, and
+App-image rollback still need release/post-release validation.
 
 ## App development rules
 
