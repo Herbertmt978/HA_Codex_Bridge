@@ -119,6 +119,57 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("Upload network failed");
   });
 
+  it.each([
+    ["raw stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required" })],
+    ["accepted stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", controlEvent("bridge.snapshot_required"))],
+  ])("preserves a newer action error during a delayed %s refresh", async (_label, triggerSnapshot) => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const refresh = deferred();
+    panel._retireEventSubscription = vi.fn();
+    panel._stopEventSubscription = vi.fn();
+    panel._refreshActiveThread = vi.fn(async ({ errorSource }) => {
+      await refresh.promise;
+      panel._clearError({ source: errorSource });
+      return true;
+    });
+
+    triggerSnapshot(panel);
+    expect(panel._refreshActiveThread).toHaveBeenCalledWith({
+      errorSource: "poll",
+      expectedErrorRevision: 0,
+    });
+
+    panel._setError("Upload network failed", { retryable: true });
+    refresh.resolve();
+    await panel._refreshActiveThread.mock.results[0].value;
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("retries a failed snapshot replay before clearing its poll error", async () => {
+    const snapshot = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshot);
+    panel._refreshActiveThread = vi.fn()
+      .mockImplementationOnce(async () => {
+        panel._setError("Bridge request failed", { source: "poll" });
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+        panel._clearError({ source: "poll" });
+        return true;
+      });
+
+    await panel._runPollTick(1);
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._error).toBe("Bridge request failed");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
+    expect(panel._error).toBe("");
+  });
+
   it("retries transient snapshot failures quietly just after creating a chat", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);

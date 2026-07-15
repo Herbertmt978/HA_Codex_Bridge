@@ -7408,6 +7408,14 @@ var CodexBridgePanel = class extends HTMLElement {
           return;
         }
       }
+      if (this._eventStream.needsSnapshot) {
+        this._stopEventSubscription();
+        await this._refreshActiveThread({
+          errorSource: "poll",
+          expectedErrorRevision: errorRevision
+        });
+        return;
+      }
       if (status) {
         this._mergeStatus(status);
       }
@@ -7701,8 +7709,12 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (event?.type === "snapshot_required") {
+      const errorRevision = this._errorRevision;
       this._retireEventSubscription({ reconnect: false });
-      this._refreshActiveThread();
+      this._refreshActiveThread({
+        errorSource: "poll",
+        expectedErrorRevision: errorRevision
+      });
       return;
     }
     if (event?.type === "error") {
@@ -7722,8 +7734,12 @@ var CodexBridgePanel = class extends HTMLElement {
     this._eventStream = result.state;
     this._sequence = result.state.cursor;
     if (result.control === "snapshot") {
+      const errorRevision = this._errorRevision;
       this._stopEventSubscription();
-      this._refreshActiveThread();
+      this._refreshActiveThread({
+        errorSource: "poll",
+        expectedErrorRevision: errorRevision
+      });
       return;
     }
     if (result.control === "error") {
