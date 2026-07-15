@@ -6668,10 +6668,16 @@ class CodexBridgePanel extends HTMLElement {
       }
       if (this._eventStream.needsSnapshot) {
         this._stopEventSubscription();
+        const preservesLiveBrokerError = (
+          this._errorSource === "poll"
+          && this._eventStream.error
+          && this._error
+        );
         await this._refreshActiveThread({
           errorSource: "poll",
           expectedErrorRevision: errorRevision,
           cursorFloor: this._sequence,
+          reportError: !preservesLiveBrokerError,
         });
         return;
       }
@@ -7618,7 +7624,9 @@ class CodexBridgePanel extends HTMLElement {
     this._error = "";
     this._errorRetryable = false;
     this._errorSource = "";
-    this._errorRevision += 1;
+    if (changed) {
+      this._errorRevision += 1;
+    }
     return changed;
   }
 
