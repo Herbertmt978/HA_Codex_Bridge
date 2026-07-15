@@ -5310,6 +5310,7 @@ class CodexBridgePanel extends HTMLElement {
     reportError = true,
     errorSource = null,
     expectedErrorRevision = null,
+    cursorFloor = null,
   } = {}) {
     const threadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
@@ -5359,7 +5360,10 @@ class CodexBridgePanel extends HTMLElement {
       );
       const authoritativeCursor = authoritativeEvents.reduce(
         (cursor, event) => Math.max(cursor, event.sequence),
-        replay.state.cursor
+        Math.max(
+          replay.state.cursor,
+          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
+        )
       );
       // A full get_events replay is authoritative. Historical replay controls
       // advance the cursor but cannot truncate later transcript events or
@@ -6639,15 +6643,24 @@ class CodexBridgePanel extends HTMLElement {
         }
         if (batch.controls.includes("error")) {
           this._stopEventSubscription();
+          let refreshErrorRevision = errorRevision;
+          let reportRefreshError = true;
           if (
             this._errorRevision === errorRevision
             && this._canSetBackgroundError("poll")
           ) {
             this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
+            refreshErrorRevision = this._errorRevision;
+            // The broker error already describes this recovery attempt. Keep it
+            // if the authoritative replay fails instead of replacing it with a
+            // secondary fetch error.
+            reportRefreshError = false;
           }
           await this._refreshActiveThread({
             errorSource: "poll",
-            expectedErrorRevision: errorRevision,
+            expectedErrorRevision: refreshErrorRevision,
+            reportError: reportRefreshError,
+            cursorFloor: this._sequence,
           });
           return;
         }

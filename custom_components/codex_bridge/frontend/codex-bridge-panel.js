@@ -6234,7 +6234,8 @@ var CodexBridgePanel = class extends HTMLElement {
   async _refreshActiveThread({
     reportError = true,
     errorSource = null,
-    expectedErrorRevision = null
+    expectedErrorRevision = null,
+    cursorFloor = null
   } = {}) {
     const threadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
@@ -6280,7 +6281,10 @@ var CodexBridgePanel = class extends HTMLElement {
       );
       const authoritativeCursor = authoritativeEvents.reduce(
         (cursor, event) => Math.max(cursor, event.sequence),
-        replay.state.cursor
+        Math.max(
+          replay.state.cursor,
+          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
+        )
       );
       this._eventStream = {
         ...replay.state,
@@ -7426,12 +7430,18 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         if (batch.controls.includes("error")) {
           this._stopEventSubscription();
+          let refreshErrorRevision = errorRevision;
+          let reportRefreshError = true;
           if (this._errorRevision === errorRevision && this._canSetBackgroundError("poll")) {
             this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
+            refreshErrorRevision = this._errorRevision;
+            reportRefreshError = false;
           }
           await this._refreshActiveThread({
             errorSource: "poll",
-            expectedErrorRevision: errorRevision
+            expectedErrorRevision: refreshErrorRevision,
+            reportError: reportRefreshError,
+            cursorFloor: this._sequence
           });
           return;
         }

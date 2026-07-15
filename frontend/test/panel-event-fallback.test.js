@@ -88,6 +88,32 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("");
   });
 
+  it("retains a broker boundary cursor through an empty authoritative replay", async () => {
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    const panel = pollingPanel(brokerError);
+    let firstEventsRead = true;
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") {
+        if (firstEventsRead) {
+          firstEventsRead = false;
+          return Promise.resolve([brokerError]);
+        }
+        return Promise.resolve([]);
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._sequence).toBe(brokerError.sequence);
+    expect(panel._error).toBe("");
+  });
+
   it("does not replace a newer action error with a broker error from polling", async () => {
     const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
     const panel = pollingPanel(brokerError);
@@ -406,7 +432,11 @@ describe("polling event fallback", () => {
     });
     const refresh = vi.spyOn(panel, "_refreshActiveThread");
 
-    await panel._refreshActiveThread({ errorSource: "poll", expectedErrorRevision: panel._errorRevision });
+    await panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+      cursorFloor: historicalBridgeError.sequence,
+    });
     expect(panel._eventStream.needsSnapshot).toBe(false);
     expect(panel._sequence).toBe(6);
     expect(panel._events).toEqual([laterMessage]);
@@ -430,7 +460,11 @@ describe("polling event fallback", () => {
       throw new Error(`Unexpected action: ${action}`);
     });
 
-    await panel._refreshActiveThread({ errorSource: "poll", expectedErrorRevision: panel._errorRevision });
+    await panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+      cursorFloor: historicalBridgeError.sequence,
+    });
 
     expect(panel._eventStream.needsSnapshot).toBe(false);
     expect(panel._sequence).toBe(historicalBridgeError.sequence);
