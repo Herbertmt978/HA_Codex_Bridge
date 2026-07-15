@@ -320,6 +320,8 @@ def create_app(
         if model_catalog_probe is not None
         else AppServerModelCatalogProbe(
             cast(Any, resolved_app_server),
+            codex_command=codex_command,
+            codex_home=codex_home,
             timeout_seconds=model_discovery_timeout_seconds,
             cache_ttl_seconds=model_cache_ttl_seconds,
         )

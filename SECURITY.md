@@ -21,7 +21,8 @@ available and coordinate a fix and disclosure timeline with the reporter.
 The browser talks to Home Assistant, and Home Assistant talks privately to the
 Bridge. Do not expose the App or Bridge as a browser endpoint. Use Home
 Assistant's supported LAN, VPN, Nabu Casa, Cloudflare, or HTTPS reverse-proxy
-access path.
+access path, terminating that route at Home Assistant rather than proxying it
+through to the App or Bridge.
 
 The App uses ChatGPT device login and does not use an OpenAI API key. In App
 mode, keep workspaces under `/config/workspaces`; do not mount Home Assistant
@@ -29,11 +30,13 @@ configuration, host filesystems, or broad shares. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
 
-The App is experimental and `amd64` only. App `0.6.4` is published as a signed
-immutable image with an SPDX SBOM and build provenance, but arbitrary
-prior-image selection is not a validated Supervisor rollback mechanism. Until
-an update and restore canary is complete, recover with a cold backup or an
-existing private external Bridge.
+The release candidate matrix (Integration `0.6.5`, App `0.6.5`, Bridge
+`0.5.5`, Codex `0.144.4`) is experimental and `amd64` only; it is pending
+publication, signing, and target-Home-Assistant acceptance. App `0.6.4` is the
+previously published signed immutable image with an SPDX SBOM and build
+provenance, but arbitrary prior-image selection is not a validated Supervisor
+rollback mechanism. Until an update and restore canary is complete, recover
+with a cold backup or an existing private external Bridge.
 
 ## Scope notes
 

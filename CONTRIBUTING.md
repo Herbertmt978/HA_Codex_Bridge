@@ -24,10 +24,12 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The App is experimental and `amd64` only. App `0.6.4` is published as a signed
-immutable image, but a source checkout, local image, or unit test is not release
-evidence. Do not claim App-image rollback works; that requires a published prior
-immutable tag and a tested restore procedure.
+The candidate matrix is Integration `0.6.5`, App `0.6.5`, Bridge `0.5.5`, and
+Codex `0.144.4`. It is experimental, `amd64` only, and pending publication,
+signing, and target-Home-Assistant acceptance. App `0.6.4` is the previously
+published signed immutable image, but a source checkout, local image, or unit
+test is not release evidence. Do not claim App-image rollback works; that
+requires a published prior immutable tag and a tested restore procedure.
 
 ## Local checks
 
@@ -54,3 +56,10 @@ Use the terms in [CONTEXT.md](CONTEXT.md). Write the exact UI labels **Sign in
 with ChatGPT**, **Cancel**, and **Sign out**. State that normal signed-in panel
 use remains on Home Assistant, while initial sign-in and re-authentication need
 browser access to the approved ChatGPT device-auth page.
+
+For catalogue changes, preserve dynamic runtime discovery: stale data retries
+after 15 seconds, a verified last-known-good record precedes the installed
+Codex bundled catalogue, and static fallback is last. Do not hardcode GPT-5.6,
+Max, Ultra, or any other model-specific option. For panel changes, preserve the
+compact Codex-style sidebar and the typed transient artifact-reservation path,
+including prior-artifact preservation when the selected chat is idle.

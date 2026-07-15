@@ -63,14 +63,10 @@ const INTERACTION_ERROR_CODES = new Set([
 ]);
 const ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 const ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
-const ARTIFACT_REFRESH_TRANSIENT_THREAD_STATUSES = new Set(["queued", "running", "cancelling"]);
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
 
-function canDeferArtifactRefresh(thread, error) {
-  return (
-    ARTIFACT_REFRESH_TRANSIENT_THREAD_STATUSES.has(thread?.status)
-    && error?.code === ARTIFACT_RESERVATION_CONFLICT_CODE
-  );
+function canDeferArtifactRefresh(error) {
+  return error?.code === ARTIFACT_RESERVATION_CONFLICT_CODE;
 }
 
 function artifactPreviewSizeState(artifact) {
@@ -1548,12 +1544,18 @@ template.innerHTML = `
       transition: opacity 120ms ease;
     }
 
-    .chat-row.selected .thread-actions,
-    .chat-row.archived .thread-actions,
     .chat-row:hover .thread-actions,
     .chat-row:focus-within .thread-actions {
       opacity: 1;
       pointer-events: auto;
+    }
+
+    @media (hover: none), (pointer: coarse) {
+      .chat-row.selected .thread-actions,
+      .chat-row.archived .thread-actions {
+        opacity: 1;
+        pointer-events: auto;
+      }
     }
 
     .progress-list,
@@ -1833,6 +1835,201 @@ template.innerHTML = `
     #new-direct-chat-button:hover {
       border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color) 62%);
       background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-bg) 90%);
+    }
+
+    /* Navigation is deliberately a tree, not a stack of mini cards.  The primary
+     * route stays visible; destructive or infrequent project commands live behind
+     * one keyboard-accessible disclosure so a narrow HA panel never turns into a
+     * row of competing icons. */
+    .rail-actions {
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .rail-actions .tool-button {
+      min-height: 36px;
+      padding: 8px 10px;
+    }
+
+    #new-project-button {
+      color: var(--muted-color);
+    }
+
+    .rail-sections {
+      gap: 10px;
+      padding: 10px 8px 16px;
+    }
+
+    .section-head {
+      min-height: 30px;
+      padding: 6px 6px 3px;
+    }
+
+    .section-head-button {
+      min-height: 28px;
+    }
+
+    .project-list,
+    .chat-list {
+      gap: 2px;
+    }
+
+    .project-shell {
+      padding: 2px 0;
+    }
+
+    .project-head {
+      align-items: start;
+      gap: 6px;
+      padding: 7px 7px 5px;
+    }
+
+    .project-button {
+      min-height: 32px;
+      padding: 2px 0;
+    }
+
+    .project-meta {
+      gap: 2px;
+    }
+
+    .project-meta .row-meta {
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .project-head .project-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 28px);
+      justify-content: end;
+      gap: 4px;
+    }
+
+    .project-head .project-actions > .icon-button.small {
+      width: 28px;
+      height: 28px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .project-head .project-actions > .icon-button.small:hover,
+    .project-head .project-actions > .icon-button.small:focus-visible {
+      border-color: var(--border-color);
+      background: var(--surface-bg);
+    }
+
+    .project-primary-action {
+      color: color-mix(in srgb, var(--accent-color) 76%, var(--text-color) 24%);
+    }
+
+    .project-head .project-actions-toggle svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .project-secondary-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      padding-top: 3px;
+      border-top: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+    }
+
+    .project-secondary-actions[hidden] {
+      display: none;
+    }
+
+    .project-secondary-actions .icon-button.small {
+      width: 28px;
+      height: 28px;
+      border-color: var(--border-color);
+      background: var(--surface-bg);
+    }
+
+    .project-secondary-actions .icon-button.small:last-child {
+      color: var(--danger-color);
+    }
+
+    .chat-list {
+      margin-left: 12px;
+      padding: 1px 0 6px 10px;
+    }
+
+    .chat-row {
+      gap: 4px;
+      padding: 0;
+    }
+
+    .chat-select {
+      display: block;
+      min-height: 48px;
+      padding: 8px 9px;
+      border-radius: 7px;
+    }
+
+    .thread-title-block {
+      gap: 3px;
+    }
+
+    .thread-name {
+      display: block;
+      line-height: 1.25;
+    }
+
+    .chat-meta-line {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 6px;
+      color: var(--muted-color);
+      white-space: nowrap;
+    }
+
+    .chat-meta-line .row-meta,
+    .chat-meta-line .timestamp {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .chat-meta-line .row-meta {
+      flex: 1 1 auto;
+    }
+
+    .chat-meta-line .timestamp {
+      flex: 0 0 auto;
+    }
+
+    .status-pill.idle,
+    .status-pill.running {
+      box-shadow: none;
+    }
+
+    .status-pill {
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
+    }
+
+    .thread-actions {
+      gap: 3px;
+    }
+
+    .thread-actions .action-button.small {
+      width: 26px;
+      height: 26px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .thread-actions .action-button.small:hover,
+    .thread-actions .action-button.small:focus-visible {
+      border-color: var(--border-color);
+      background: var(--surface-bg);
     }
 
     .tool-button:hover,
@@ -2699,6 +2896,7 @@ const icons = {
   search: iconSvg('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>'),
   chevronDown: iconSvg('<path d="m6 9 6 6 6-6"></path>'),
   chevronRight: iconSvg('<path d="m9 6 6 6-6 6"></path>'),
+  more: iconSvg('<circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle>'),
   archive: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="M9 11h6"></path><path d="M4 4h16v3H4z"></path>'),
   restore: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="m9 14 3-3 3 3"></path><path d="M12 11v7"></path><path d="M4 4h16v3H4z"></path>'),
   trash: iconSvg('<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path>'),
@@ -2803,6 +3001,7 @@ class CodexBridgePanel extends HTMLElement {
     this._suspendUiRefresh = false;
     this._queuedRender = false;
     this._collapsedProjects = {};
+    this._expandedProjectActions = {};
     this._collapsedSections = {
       direct: false,
       archived: true,
@@ -3102,6 +3301,9 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "toggle-project-collapse":
         this._toggleProjectCollapse(actionTarget.dataset.projectId || "");
+        break;
+      case "toggle-project-actions":
+        this._toggleProjectActions(actionTarget.dataset.projectId || "");
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
@@ -4446,21 +4648,48 @@ class CodexBridgePanel extends HTMLElement {
     collapse.setAttribute("aria-controls", chatListId);
     this._setTrustedButtonContent(collapse, collapsed ? icons.chevronRight : icons.chevronDown);
     projectActions.append(collapse);
-    if (project.kind === "project") {
-      const actions = archived
+    if (project.kind === "project" && !archived) {
+      const newChat = this._actionButton("icon-button small project-primary-action", "new-chat", "New chat");
+      newChat.dataset.projectId = String(project.project_id || "");
+      this._setTrustedButtonContent(newChat, icons.plus);
+      projectActions.append(newChat);
+    }
+
+    const secondaryActions = project.kind === "project"
+      ? archived
         ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]]
         : [
-            ["new-chat", "New chat", icons.plus],
             ...(this._isLegacyConnection() ? [] : [["edit-project", "Edit project", icons.edit]]),
             ["archive-project", "Archive project", icons.archive],
             ["delete-project", "Delete project", icons.trash],
-          ];
-      for (const [action, label, icon] of actions) {
+          ]
+      : [];
+    if (secondaryActions.length) {
+      const expanded = Boolean(this._expandedProjectActions[project.project_id]);
+      const secondaryId = `project-secondary-actions-${project.project_id}`;
+      const more = this._actionButton(
+        "icon-button small project-actions-toggle",
+        "toggle-project-actions",
+        `${expanded ? "Hide" : "Show"} more actions for ${project.name || "project"}`
+      );
+      more.dataset.projectId = String(project.project_id || "");
+      more.id = `project-actions-toggle-${project.project_id}`;
+      more.setAttribute("aria-expanded", String(expanded));
+      more.setAttribute("aria-controls", secondaryId);
+      this._setTrustedButtonContent(more, icons.more);
+      projectActions.append(more);
+
+      const secondary = document.createElement("div");
+      secondary.id = secondaryId;
+      secondary.className = "project-secondary-actions";
+      secondary.hidden = !expanded;
+      for (const [action, label, icon] of secondaryActions) {
         const button = this._actionButton("icon-button small", action, label);
         button.dataset.projectId = String(project.project_id || "");
         this._setTrustedButtonContent(button, icon);
-        projectActions.append(button);
+        secondary.append(button);
       }
+      projectActions.append(secondary);
     }
     projectHead.append(projectButton, projectActions);
     shell.append(projectHead);
@@ -4526,18 +4755,25 @@ class CodexBridgePanel extends HTMLElement {
     const selected = thread.thread_id === this._selectedThreadId;
     const row = document.createElement("div");
     row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}`;
-    const select = this._actionButton(`chat-select${selected ? " active" : ""}`, "select-thread");
+    const select = this._actionButton(
+      `chat-select${selected ? " active" : ""}`,
+      "select-thread",
+      `Select chat ${thread.title || "Untitled chat"}`
+    );
     select.dataset.threadId = String(thread.thread_id || "");
     if (selected) {
       select.setAttribute("aria-current", "page");
     }
     const titleBlock = document.createElement("div");
-    titleBlock.className = "title-block";
-    titleBlock.append(
-      this._textElement("span", "thread-name", thread.title || ""),
-      this._textElement("span", "row-meta", meta)
+    titleBlock.className = "title-block thread-title-block";
+    const metaLine = document.createElement("div");
+    metaLine.className = "chat-meta-line";
+    metaLine.append(
+      this._textElement("span", "row-meta", meta),
+      this._textElement("span", "timestamp", timestamp)
     );
-    select.append(titleBlock, this._textElement("span", "timestamp", timestamp));
+    titleBlock.append(this._textElement("span", "thread-name", thread.title || ""), metaLine);
+    select.append(titleBlock);
     const rowActions = document.createElement("div");
     rowActions.className = "row-actions";
     const status = document.createElement("span");
@@ -5359,7 +5595,7 @@ class CodexBridgePanel extends HTMLElement {
       try {
         artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
       } catch (error) {
-        if (!canDeferArtifactRefresh(thread, error)) {
+        if (!canDeferArtifactRefresh(error)) {
           throw error;
         }
       }
@@ -5530,6 +5766,15 @@ class CodexBridgePanel extends HTMLElement {
     }
     this._collapsedProjects[projectId] = !this._collapsedProjects[projectId];
     this._render();
+  }
+
+  _toggleProjectActions(projectId) {
+    if (!projectId) {
+      return;
+    }
+    this._expandedProjectActions[projectId] = !this._expandedProjectActions[projectId];
+    this._render();
+    this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
   }
 
   _selectProject(projectId) {
@@ -6745,7 +6990,7 @@ class CodexBridgePanel extends HTMLElement {
           try {
             artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
           } catch (error) {
-            if (!canDeferArtifactRefresh(this._activeThread, error)) {
+            if (!canDeferArtifactRefresh(error)) {
               throw error;
             }
           }
@@ -7176,7 +7421,7 @@ class CodexBridgePanel extends HTMLElement {
         try {
           artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
         } catch (error) {
-          if (!canDeferArtifactRefresh(thread, error)) {
+          if (!canDeferArtifactRefresh(error)) {
             throw error;
           }
         }
@@ -7605,6 +7850,9 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _titleCase(value) {
+    if (String(value).toLowerCase() === "xhigh") {
+      return "XHigh";
+    }
     return String(value)
       .split("-")
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

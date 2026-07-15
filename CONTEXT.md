@@ -25,10 +25,12 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.6.5`; optional external Bridge: `0.5.4`.
-- App: `0.6.4`, experimental and `amd64` only; bundled Codex: `0.144.4`.
-- App `0.6.4` uses a signed immutable image with an SPDX SBOM
-  and build provenance.
+- Release candidate: Integration `0.6.5`, App `0.6.5` (experimental and
+  `amd64` only), optional external Bridge `0.5.5`, and bundled Codex
+  `0.144.4`. It is pending publication, signing, and target-Home-Assistant
+  acceptance.
+- The previously published App `0.6.4` uses a signed immutable image with an
+  SPDX SBOM and build provenance.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -37,11 +39,18 @@ to the App or Bridge.
 - Device-login recovery uses bounded authoritative account checks; account
   entitlement changes invalidate the signed-out model catalogue before project
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
+  If live app-server discovery fails, the `0.6.5` candidate uses the installed
+  Codex bundled catalogue dynamically, retries stale data after 15 seconds,
+  prefers a verified last-known-good record, and uses a static fallback only as
+  the final recovery layer. GPT-5.6 and per-model Max/Ultra options appear only
+  when the runtime advertises them.
 - Usage windows are classified by advertised duration, and a successful chat
   creation remains usable while secondary snapshots retry.
-- A temporary artifact-scan reservation during an active run does not turn a
-  healthy chat or completed response into a false connection failure.
-- The Integration keeps the chat surface at a bounded reading width, derives
+- A typed, temporary artifact-scan reservation preserves the previous artifact
+  snapshot and does not turn a healthy chat or completed response into a false
+  connection failure, even where the selected chat is idle.
+- The `0.6.5` candidate keeps the chat surface at a bounded reading width with
+  a compact Codex-style sidebar, derives
   rail and context contrast from Home Assistant theme tokens, and exposes
   disclosure, selection, progress, and retryable transport state to assistive
   technology.

@@ -45,6 +45,16 @@ Supervisor discovery, Integration pairing, and panel loading. Remote access,
 the first unattended automatic update, cold restore, and App-image rollback
 still need post-release validation.
 
+The source release candidate matrix is Integration `0.6.5`, App `0.6.5`,
+Bridge `0.5.5`, and Codex `0.144.4`. It is pending publication, signing, and
+target-Home-Assistant acceptance. Its catalogue recovery must remain ordered:
+live app-server discovery first, then a verified last-known-good record, then
+the dynamically read installed Codex bundled catalogue, and static fallback
+last; stale records retry after 15 seconds. Do not add hardcoded model names:
+GPT-5.6 and model-specific Max/Ultra are runtime data. Preserve the typed
+artifact reservation behavior, including prior artifact preservation when the
+selected chat is idle.
+
 ## Supervisor discovery contract
 
 The App publishes its endpoint through Supervisor discovery using the
@@ -71,6 +81,9 @@ unverified URL or token.
   of weakening isolation.
 - Keep browser traffic on Home Assistant. The approved ChatGPT device-auth page
   is needed only for initial sign-in and re-authentication.
+- Keep the compact Codex-style sidebar within Home Assistant's theme and
+  accessibility conventions; do not turn a typed transient artifact reservation
+  into a connection error.
 - Do not document a Supervisor prior-image selection as rollback until an
   immutable prior tag and restore procedure are published and tested.
 

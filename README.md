@@ -46,11 +46,12 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-This source release targets experimental, `amd64`-only App `0.6.4`; the
-Integration is `0.6.5`, the optional external Bridge is `0.5.4`, and the
-bundled Codex runtime is `0.144.4`. The public App is distributed as a signed
-immutable image with an SPDX SBOM and build provenance; App `0.6.4` uses that
-release workflow. The previously validated App release completed target-HAOS
+This source release candidate targets experimental, `amd64`-only App `0.6.5`,
+Integration `0.6.5`, optional external Bridge `0.5.5`, and bundled Codex
+`0.144.4`. This candidate is pending publication, signing, and target-Home
+Assistant acceptance; do not treat those versions as released. The previously
+published App `0.6.4` is a signed immutable image with an SPDX SBOM and build
+provenance, and completed target-HAOS
 startup, its production sandbox self-test and attestation, an
 authenticated API v1 readiness request, Supervisor discovery, Integration
 pairing, and panel loading. Codex uses its official `--no-proc`
@@ -70,12 +71,16 @@ account entitlements change, and discovers every model and reasoning level
 from Codex rather than hardcoding a release list. It also separates weekly-only
 usage from the disabled five-hour window and keeps a newly created chat usable
 while secondary snapshots retry.
-Integration `0.6.5` gives the panel a clearer Codex-style reading surface,
-stronger chat and composer hierarchy, intentional empty states, and improved
-keyboard and screen-reader navigation while retaining Home Assistant themes.
-It also retires recovered polling errors automatically, keeps an in-progress
-artifact scan from becoming a false connection failure, and does not hide
-unrelated action failures.
+The `0.6.5` candidate gives the panel a compact Codex-style sidebar and clearer
+chat/composer hierarchy while retaining Home Assistant themes and accessible
+navigation. Its catalogue recovers dynamically from the installed Codex bundled
+catalogue if live app-server discovery fails: stale records retry after 15
+seconds, a verified last-known-good catalogue is preferred, and the static
+fallback is last. It exposes GPT-5.6 and model-specific Max or Ultra levels
+only when Codex advertises them, without hardcoded model names. A typed,
+transient artifact reservation conflict preserves the prior artifact view and
+does not create a connection failure, including when the selected chat is idle;
+unrelated action failures still surface.
 
 The App publishes discovery with the current Supervisor `app_config` map
 permission and its assigned private HA-network IP. A restart includes a bounded
@@ -85,8 +90,9 @@ Integration before the App is reachable, the flow shows a retryable connection
 state and does not save an unverified endpoint.
 
 The external Bridge remains an optional, private compatibility path for people
-who already operate one. Fresh Home Assistant OS installations should use App
-`0.6.4` or newer; App `0.6.1` must not be used. Keep an existing
+who already operate one. Fresh Home Assistant OS installations should use the
+currently published App `0.6.4`; App `0.6.5` remains pending publication, and
+App `0.6.1` must not be used. Keep an existing
 external Bridge as a recovery path until an App update and cold-restore
 exercise has passed on the intended installation.
 

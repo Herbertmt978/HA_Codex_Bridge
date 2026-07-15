@@ -417,6 +417,42 @@ describe("polling event fallback", () => {
     vi.useRealTimers();
   });
 
+  it("keeps an idle chat healthy when another run reserves its artifact workspace", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Before live refresh");
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Idle refresh"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifacts are reserved"), {
+          code: "reservation_conflict",
+        }));
+      }
+      if (action === "get_status") return Promise.resolve({ runtime: { state: "idle" } });
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(panel._activeThread?.title).toBe("Idle refresh");
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+    vi.useRealTimers();
+  });
+
   it("surfaces a non-reservation artifact failure from a busy live refresh", async () => {
     vi.useFakeTimers();
     const panel = document.createElement("codex-bridge-panel");

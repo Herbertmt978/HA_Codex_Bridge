@@ -339,7 +339,7 @@ Task 14 establishes the private binary transport but deliberately does not ship
 an intermediate release. Task 15 must make the browser consume the resumable v1
 routes before the HA-native application can pass end-to-end acceptance.
 
-## Integration 0.6.5 / App 0.6.4 live acceptance
+## Historical Integration 0.6.5 development / App 0.6.4 live acceptance
 
 | Evidence | Result |
 | --- | --- |
@@ -360,16 +360,27 @@ routes before the HA-native application can pass end-to-end acceptance.
 | Target Home Assistant | Home Assistant restarted cleanly with exactly one installed/running Codex Bridge App. The live runtime strip reported App `0.6.4`, Integration `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`; Start on boot, Watchdog, and Auto update were enabled. |
 | Account and catalogue | ChatGPT device approval completed after bounded polling and the panel reported a connected Pro account. The installed Codex catalogue advertised `gpt-5.5` and `gpt-5.4-mini` with model-specific Minimal through Xhigh reasoning. The panel contains no hard-coded release list and will show GPT-5.6, Max, or Ultra when the account catalogue advertises them. |
 | Limits and chat | The live account rendered the disabled five-hour window as `Off` and the weekly window separately. An exact-response chat completed successfully. The run also exposed a false connection banner: a post-send artifact scan returned a transient `409` while the thread was active even though the prompt and response were authoritative. |
-| Integration `0.6.5` fix | Full, live, and poll refreshes now defer only a typed `reservation_conflict` while the authoritative thread is queued, running, or cancelling, retain the previous artifact snapshot, and continue refreshing transcript/status. Idle and unrelated artifact failures still surface. Frontend lint, 171 unit tests, deterministic generation, and diff hygiene pass; target-HA installation and recovery acceptance remain the release gate. |
+| Earlier Integration `0.6.5` candidate | Full, live, and poll refreshes deferred only a typed `reservation_conflict` while the authoritative thread was queued, running, or cancelling, retained the previous artifact snapshot, and continued refreshing transcript/status. This narrower behavior was superseded after live acceptance showed that another chat can reserve the same project workspace while the selected chat is idle; see the current candidate section below. |
 | Dependency notifications | All supported Dependabot ecosystems now feed one weekly maintenance group. Legacy PRs `#8`–`#14` were closed, grouped PR `#29` merged with green CI, and no dependency PR remains open. Security fixes remain enabled separately. |
+
+## Release candidate matrix: Integration 0.6.5 / App 0.6.5 / Bridge 0.5.5 / Codex 0.144.4
+
+| Candidate scope | Status |
+| --- | --- |
+| Release state | Source candidate only. Publication, image signing, target-Home-Assistant installation, ChatGPT sign-in, runtime chat, and recovery acceptance are pending. This section makes no published, signed, or live-accepted claim for `0.6.5`. |
+| Catalogue recovery | Live app-server discovery remains primary. On failure, a verified fresh catalogue is retained as stale last-known-good; otherwise the installed Codex `debug models --bundled` catalogue is read dynamically; only then is the static fallback used. Stale results retry after 15 seconds. |
+| Runtime-derived options | The candidate has no hardcoded GPT-5.6 or reasoning-level release list. GPT-5.6 and model-specific Max/Ultra are presented only when the installed Codex catalogue advertises them. |
+| Panel behavior | The candidate uses a compact Codex-style sidebar while retaining Home Assistant theme and accessibility behavior. A typed transient artifact `reservation_conflict` preserves the prior artifact snapshot and avoids a false connection error even when the selected chat is idle; unrelated artifact failures remain visible. |
+| Boundary unchanged | Browser and remote-proxy traffic remains terminated at Home Assistant. Nabu Casa, Cloudflare, VPN, and other HTTPS reverse proxies must not expose or forward a browser directly to the private App or Bridge. |
 
 ## Evidence status
 
 This remains active acceptance evidence rather than a completion claim. The
 signed App publication, target-HA installation/discovery, ChatGPT login,
 runtime catalogue, duration-aware limits, first chat, and dependency grouping
-are now evidenced. Integration `0.6.5` GitHub review/CI, target-HA installation,
-and stop/start chat recovery are the immediate gates. External blocked-network
+are now evidenced for the historical App `0.6.4` acceptance record. The
+`0.6.5` candidate matrix above is pending publication, signing, GitHub review/CI,
+target-HA installation, and chat/stop-start recovery. External blocked-network
 proof, cold restore, the first unattended App update, and previous-image
 recovery still require fresh evidence before the Windows recovery path can be
 retired.

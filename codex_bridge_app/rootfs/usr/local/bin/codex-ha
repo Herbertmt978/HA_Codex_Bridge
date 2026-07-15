@@ -3,6 +3,16 @@ set -eu
 
 # The App never permits persistent/user configuration to select Codex's
 # legacy Landlock path.  Bubblewrap failure must remain a hard failure.
+# `codex debug` rejects the global strict-config option.  Permit only the exact
+# offline bundled-catalogue read used by Bridge recovery; no model-controlled
+# command, workspace mutation, or network operation reaches this branch.
+if [ "$#" -eq 3 ] \
+    && [ "$1" = "debug" ] \
+    && [ "$2" = "models" ] \
+    && [ "$3" = "--bundled" ]; then
+    exec /usr/local/bin/codex debug models --bundled
+fi
+
 exec /usr/local/bin/codex \
     --strict-config \
     -c features.use_legacy_landlock=false \

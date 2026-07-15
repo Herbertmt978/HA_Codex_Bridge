@@ -41,6 +41,25 @@ def test_settings_accept_a_long_random_bridge_auth_token(monkeypatch) -> None:
     assert Settings().auth_token == "a" * 43
 
 
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CODEX_BRIDGE_MODEL_DISCOVERY_TIMEOUT_SECONDS", "0"),
+        ("CODEX_BRIDGE_MODEL_DISCOVERY_TIMEOUT_SECONDS", "nan"),
+        ("CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS", "-1"),
+        ("CODEX_BRIDGE_MODEL_CACHE_TTL_SECONDS", "nan"),
+    ],
+)
+def test_settings_reject_invalid_model_catalog_timing(
+    monkeypatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 @pytest.mark.skipif(os.name == "nt", reason="token files are App/POSIX-only")
 def test_settings_load_bridge_auth_token_from_a_private_file(
     monkeypatch, tmp_path: Path
