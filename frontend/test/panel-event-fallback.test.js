@@ -72,14 +72,20 @@ describe("polling event fallback", () => {
     expect(panel._events).toEqual([]);
   });
 
-  it("surfaces a broker error instead of silently advancing the cursor", async () => {
+  it("clears a recovered broker error instead of silently advancing the cursor", async () => {
     const panel = pollingPanel(controlEvent("bridge.error", { error: "broker stopped" }));
 
     await panel._runPollTick(1);
 
     expect(panel._error).toBe("broker stopped");
+    expect(panel._errorSource).toBe("poll");
     expect(panel._sequence).toBe(5);
     expect(panel._events).toEqual([]);
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("");
   });
 
   it("retries transient snapshot failures quietly just after creating a chat", async () => {
