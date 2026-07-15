@@ -102,6 +102,23 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("Upload network failed");
   });
 
+  it("clears recovered live stream errors without replacing action errors", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._retireEventSubscription = vi.fn();
+
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    expect(panel._error).toBe("Bridge event stream failed");
+    expect(panel._errorSource).toBe("poll");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+
+    panel._setError("Upload network failed", { retryable: true });
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    expect(panel._error).toBe("Upload network failed");
+  });
+
   it("retries transient snapshot failures quietly just after creating a chat", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);

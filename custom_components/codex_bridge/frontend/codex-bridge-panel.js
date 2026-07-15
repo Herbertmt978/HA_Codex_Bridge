@@ -7707,7 +7707,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (event?.type === "error") {
       this._retireEventSubscription();
-      this._setError("Bridge event stream failed");
+      if (this._canSetBackgroundError("poll")) {
+        this._setError("Bridge event stream failed", { source: "poll" });
+      }
       return;
     }
     if (event?.thread_id && event.thread_id !== threadId) {
@@ -7726,7 +7728,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (result.control === "error") {
       this._retireEventSubscription();
-      this._setError(result.state.error || "Bridge event stream failed");
+      if (this._canSetBackgroundError("poll")) {
+        this._setError(result.state.error || "Bridge event stream failed", { source: "poll" });
+      }
       return;
     }
     const acceptedEvent = result.event;
