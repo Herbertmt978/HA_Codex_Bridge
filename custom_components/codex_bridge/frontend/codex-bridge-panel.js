@@ -1198,7 +1198,7 @@ function collectUserInputAnswers(container, model) {
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.0";
+var PANEL_VERSION = "0.6.1";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",

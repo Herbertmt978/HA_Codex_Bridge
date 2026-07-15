@@ -7,7 +7,7 @@ administrator panel and connects to this App through Supervisor.
 ## Status
 
 - Source release: App `0.6.2` (`amd64` only, experimental)
-- Integration: `0.6.0`
+- Integration: `0.6.1`
 - External Bridge: `0.5.3`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>

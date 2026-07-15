@@ -4,7 +4,7 @@
 
 This guide targets the experimental, `amd64`-only App `0.6.2`, which bundles
 Bridge `0.5.3` and Codex `0.144.4`; the separately installed Integration is
-`0.6.0`. The public App `0.6.2` release is a signed immutable image with an SPDX
+`0.6.1`. The public App `0.6.2` release is a signed immutable image with an SPDX
 SBOM and build provenance. On target HAOS, Codex `0.144.4`'s official
 `--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
 namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
@@ -50,7 +50,7 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install the latest **Codex Bridge** Integration release (`0.6.0`) and restart
+2. Install the latest **Codex Bridge** Integration release (`0.6.1`) and restart
    Home Assistant.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.

@@ -1,7 +1,5 @@
 <div align="center">
 
-![Home Assistant Codex Bridge](https://raw.githubusercontent.com/Herbertmt978/HA_Codex_Bridge/main/brand/logo.png)
-
 # Home Assistant Codex Bridge
 
 Run and supervise Codex work from Home Assistant without publishing a coding-agent endpoint to the browser.
@@ -10,8 +8,6 @@ Run and supervise Codex work from Home Assistant without publishing a coding-age
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
-[![App source: 0.6.2 experimental](https://img.shields.io/badge/App%20source-0.6.2%20Experimental-F59E0B)](codex_bridge_app/README.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-00897B.svg)](LICENSE)
 
 [Installation](docs/installation.md) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
@@ -41,7 +37,7 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   store to install its published immutable image.
 
 This source release targets experimental, `amd64`-only App `0.6.2`; the
-Integration is `0.6.0`, the optional external Bridge is `0.5.3`, and the
+Integration is `0.6.1`, the optional external Bridge is `0.5.3`, and the
 bundled Codex runtime is `0.144.4`. Public App `0.6.2` is a signed immutable
 image with an SPDX SBOM and build provenance. On target HAOS, the published
 image completed startup, its production sandbox self-test and attestation, an
