@@ -25,9 +25,9 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.5.4`; optional external Bridge: `0.5.3`.
+- Integration: `0.6.0`; optional external Bridge: `0.5.3`.
 - App: `0.6.2`, experimental and `amd64` only; bundled Codex: `0.144.4`.
-- The public App `0.6.1` release is a signed immutable image with an SPDX SBOM
+- The public App `0.6.2` release is a signed immutable image with an SPDX SBOM
   and build provenance.
 - On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
   denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
@@ -41,14 +41,16 @@ to the App or Bridge.
   without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
   canonical contained supplemental roots and hardens `lsm_get_self_attr` record
   parsing.
-- Candidate files passed the complete production self-test on target HAOS, but
-  immutable App `0.6.2` image startup and authenticated readiness remain pending
-  release/post-release checks. Remote access, the first automatic update, cold
-  restore, and App-image rollback on the intended installation remain acceptance
-  gates. The current recovery plan is a cold backup and, if already operated, a
-  private external Bridge. Do not claim Supervisor can choose an arbitrary
-  earlier image until a prior immutable tag and restore procedure are published
-  and exercised.
+- The published App `0.6.2` image passed target-HAOS startup, its production
+  sandbox self-test and attestation, an authenticated API v1 readiness request,
+  Supervisor discovery, Integration pairing, and panel loading. A redacted
+  ChatGPT device-login start/cancel cycle also passed; completing account
+  authorization still requires the user. Remote access, the first unattended
+  automatic update, cold restore, and App-image rollback on the intended
+  installation remain acceptance gates. The current recovery plan is a cold
+  backup and, if already operated, a private external Bridge. Do not claim
+  Supervisor can choose an arbitrary earlier image until a prior immutable tag
+  and restore procedure are published and exercised.
 
 ## Product language
 

@@ -7,12 +7,12 @@ administrator panel and connects to this App through Supervisor.
 ## Status
 
 - Source release: App `0.6.2` (`amd64` only, experimental)
-- Integration: `0.5.4`
+- Integration: `0.6.0`
 - External Bridge: `0.5.3`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-The public App `0.6.1` release is a signed immutable image with an SPDX SBOM and
+The public App `0.6.2` release is a signed immutable image with an SPDX SBOM and
 build provenance. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
 namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
@@ -21,13 +21,15 @@ contract mismatch: it required `writableRoots` exactly `[workspace]`, while the
 real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
 (`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
 The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
-calls, without requesting `SYS_ADMIN` or weakening isolation; candidate `0.6.2`
-files validate canonical contained supplemental roots and harden
-`lsm_get_self_attr` record parsing, and passed the complete production self-test
-on target HAOS. Immutable App `0.6.2` image startup and authenticated readiness
-remain pending release/post-release checks. Remote access, the first automatic
-update, cold restore, and App-image rollback remain acceptance checks for the
-intended Home Assistant installation.
+calls, without requesting `SYS_ADMIN` or weakening isolation. App `0.6.2`
+validates canonical contained supplemental roots and hardens
+`lsm_get_self_attr` record parsing. Its published image passed target-HAOS
+startup, the production sandbox self-test and attestation, an authenticated API
+v1 readiness request, Supervisor discovery, Integration pairing, and panel
+loading. A redacted ChatGPT device-login start/cancel cycle also passed;
+completing account authorization still requires the user. Remote access, the
+first unattended automatic update, cold restore, and App-image rollback remain
+acceptance checks for the intended Home Assistant installation.
 
 ## Installation model
 

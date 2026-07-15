@@ -7,6 +7,7 @@
 Run and supervise Codex work from Home Assistant without publishing a coding-agent endpoint to the browser.
 
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
+[![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
 [![App source: 0.6.2 experimental](https://img.shields.io/badge/App%20source-0.6.2%20Experimental-F59E0B)](codex_bridge_app/README.md)
@@ -40,27 +41,24 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   store to install its published immutable image.
 
 This source release targets experimental, `amd64`-only App `0.6.2`; the
-Integration is `0.5.4`, the optional external Bridge is `0.5.3`, and the
-bundled Codex runtime is `0.144.4`. The public App `0.6.1` release is a signed
-immutable image with an SPDX SBOM and build provenance. On target HAOS,
-Codex correctly falls back to its official `--no-proc` restrictive-container
-mode. User, PID, and network
-namespaces, the read-only filesystem, AppArmor, and seccomp remain enforced;
-`/proc` is intentionally empty. App `0.6.1` nevertheless fails readiness
-because its startup contract expects `writableRoots` to contain only the
-workspace, while Codex reports a bounded set of supplemental tool directories
-inside that workspace. App `0.6.2` accepts only canonical supplemental roots
-contained by the selected workspace and hardens AppArmor LSM-record parsing,
-without requesting `SYS_ADMIN` or weakening isolation. Its candidate files
-passed the complete production sandbox self-test on the target HAOS host. The
-immutable `0.6.2` image startup and authenticated-readiness test remain the
-post-release gate. Remote-access acceptance, the first automatic update, and
-prior-image recovery also still need validation on the intended Home Assistant
-installation.
+Integration is `0.6.0`, the optional external Bridge is `0.5.3`, and the
+bundled Codex runtime is `0.144.4`. Public App `0.6.2` is a signed immutable
+image with an SPDX SBOM and build provenance. On target HAOS, the published
+image completed startup, its production sandbox self-test and attestation, an
+authenticated API v1 readiness request, Supervisor discovery, Integration
+pairing, and panel loading. Codex uses its official `--no-proc`
+restrictive-container fallback there; user, PID, and network namespaces, the
+read-only filesystem, AppArmor, and seccomp remain enforced, and `/proc` is
+intentionally empty. App `0.6.2` accepts only canonical supplemental roots
+contained by the selected workspace, without requesting `SYS_ADMIN` or
+weakening isolation. A redacted ChatGPT device-login start/cancel cycle also
+passed; completing account authorization still requires the user. Remote-access
+acceptance, the first unattended automatic update, cold restore, and prior-image
+recovery remain validation work for the intended installation.
 
 The external Bridge remains an optional, private compatibility path for people
 who already operate one. Fresh Home Assistant OS installations should use App
-`0.6.2` or newer once published; App `0.6.1` must not be used. Keep an existing
+`0.6.2` or newer; App `0.6.1` must not be used. Keep an existing
 external Bridge as a recovery path until an App update and cold-restore
 exercise has passed on the intended installation.
 

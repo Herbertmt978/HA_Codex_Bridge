@@ -91,15 +91,17 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. The public App `0.6.1` release is a
-signed immutable image with an SPDX SBOM and build provenance, but is known-bad
+The App is experimental and `amd64` only. Public App `0.6.2` is a signed
+immutable image with an SPDX SBOM and build provenance. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
-bounded supplemental roots beneath the workspace. Candidate `0.6.2` files
-validate canonical contained supplemental roots and harden
-`lsm_get_self_attr` record parsing; they passed the complete production
-self-test on target HAOS. Immutable App `0.6.2` image startup and authenticated
-readiness remain pending release/post-release checks. Remote access, the first
+bounded supplemental roots beneath the workspace. App `0.6.2` validates
+canonical contained supplemental roots and hardens `lsm_get_self_attr` record
+parsing. The published image passed target-HAOS startup, its production sandbox
+self-test and attestation, an authenticated API v1 readiness request,
+Supervisor discovery, Integration pairing, and panel loading. A redacted
+ChatGPT device-login start/cancel cycle also passed; completing account
+authorization still requires the user. Remote access, the first unattended
 automatic update, cold restore, and App-image rollback remain acceptance work
 for the intended Home Assistant installation.
 

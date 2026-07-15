@@ -1,6 +1,7 @@
 import ast
 import json
 from pathlib import Path
+import re
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -56,3 +57,38 @@ def test_hacs_manifest_contains_required_repository_metadata() -> None:
     assert manifest["documentation"] == "https://github.com/Herbertmt978/HA_Codex_Bridge#readme"
     assert manifest["issue_tracker"] == "https://github.com/Herbertmt978/HA_Codex_Bridge/issues"
     assert manifest["codeowners"] == ["@Herbertmt978"]
+
+
+def test_integration_and_panel_release_versions_stay_aligned() -> None:
+    manifest_version = json.loads(
+        (COMPONENT_ROOT / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
+    package_version = json.loads(
+        (REPO_ROOT / "package.json").read_text(encoding="utf-8")
+    )["version"]
+
+    constants = ast.parse((COMPONENT_ROOT / "const.py").read_text(encoding="utf-8"))
+    asset_version = next(
+        ast.literal_eval(node.value)
+        for node in constants.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "PANEL_ASSET_VERSION"
+            for target in node.targets
+        )
+    )
+
+    panel_source = (COMPONENT_ROOT / "frontend" / "codex-bridge-panel.js").read_text(
+        encoding="utf-8"
+    )
+    panel_version_match = re.search(
+        r'^var PANEL_VERSION = "([^"]+)";$', panel_source, re.MULTILINE
+    )
+    assert panel_version_match is not None
+
+    assert {
+        manifest_version,
+        package_version,
+        asset_version,
+        panel_version_match.group(1),
+    } == {manifest_version}

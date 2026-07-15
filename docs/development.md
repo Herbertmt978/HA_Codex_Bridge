@@ -39,11 +39,11 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
 requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-Candidate files passed the complete
-production self-test on target HAOS, but immutable image startup and
-authenticated readiness remain pending release/post-release checks. Public
-distribution, remote access, the first automatic update, cold restore, and
-App-image rollback still need release/post-release validation.
+The published App `0.6.2` image passed target-HAOS startup, its production
+sandbox self-test and attestation, an authenticated API v1 readiness request,
+Supervisor discovery, Integration pairing, and panel loading. Remote access,
+the first unattended automatic update, cold restore, and App-image rollback
+still need post-release validation.
 
 ## App development rules
 

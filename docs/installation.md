@@ -4,7 +4,7 @@
 
 This guide targets the experimental, `amd64`-only App `0.6.2`, which bundles
 Bridge `0.5.3` and Codex `0.144.4`; the separately installed Integration is
-`0.5.4`. The public App `0.6.1` release is a signed immutable image with an SPDX
+`0.6.0`. The public App `0.6.2` release is a signed immutable image with an SPDX
 SBOM and build provenance. On target HAOS, Codex `0.144.4`'s official
 `--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
 namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
@@ -15,10 +15,12 @@ real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
 The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
 calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2`
 validates canonical contained supplemental roots and hardens
-`lsm_get_self_attr` record parsing. Candidate files passed the complete
-production self-test on target HAOS, but immutable image startup and
-authenticated readiness remain pending release/post-release checks. Remote
-access, the first automatic update, cold restore, and App-image rollback remain
+`lsm_get_self_attr` record parsing. The published image passed target-HAOS
+startup, its production sandbox self-test and attestation, an authenticated API
+v1 readiness request, Supervisor discovery, Integration pairing, and panel
+loading. A redacted device-login start/cancel cycle passed, while final ChatGPT
+account authorization still requires the user. Remote access, the first
+unattended automatic update, cold restore, and App-image rollback remain
 acceptance checks for the intended Home Assistant installation.
 
 Codex Bridge has two separate surfaces:
@@ -48,7 +50,7 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install the latest **Codex Bridge** Integration release (`0.5.4`) and restart
+2. Install the latest **Codex Bridge** Integration release (`0.6.0`) and restart
    Home Assistant.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.
