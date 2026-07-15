@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/build-app.yml"
-      - ".github/workflows/release.yml"
       - "codex_bridge_app/config.yaml"
   workflow_dispatch:
     inputs:

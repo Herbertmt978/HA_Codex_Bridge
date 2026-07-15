@@ -25,10 +25,15 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.6.2`; optional external Bridge: `0.5.4`.
-- App: `0.6.3`, experimental and `amd64` only; bundled Codex: `0.144.4`.
-- App `0.6.3` uses a signed immutable image with an SPDX SBOM
+- Integration: `0.6.3`; optional external Bridge: `0.5.4`.
+- App: `0.6.4`, experimental and `amd64` only; bundled Codex: `0.144.4`.
+- App `0.6.4` uses a signed immutable image with an SPDX SBOM
   and build provenance.
+- Supervisor discovery advertises a validated private App IP, retains its
+  stable Supervisor UUID, and changes a bounded non-secret marker on every
+  start so Home Assistant re-delivers otherwise unchanged discovery. The
+  Integration keeps a valid-but-temporarily-unreachable discovery visible for
+  retry and never persists it before authenticated readiness succeeds.
 - Device-login recovery uses bounded authoritative account checks; account
   entitlement changes invalidate the signed-out model catalogue before project
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
@@ -36,7 +41,8 @@ to the App or Bridge.
   creation remains usable while secondary snapshots retry.
 - The Integration keeps the chat surface at a bounded reading width, derives
   rail and context contrast from Home Assistant theme tokens, and exposes
-  disclosure, selection, and progress state to assistive technology.
+  disclosure, selection, progress, and retryable transport state to assistive
+  technology.
 - On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
   denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
   read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally

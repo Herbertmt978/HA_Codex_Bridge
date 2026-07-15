@@ -41,13 +41,14 @@ def _flow(hass, source: str) -> CodexBridgeConfigFlow:
     return flow
 
 
-def _discovery(*, host: str = "127.0.0.1", token: str = TOKEN) -> HassioServiceInfo:
+def _discovery(*, host: str = "172.30.32.5", token: str = TOKEN) -> HassioServiceInfo:
     return HassioServiceInfo(
         config={
             "source": "attacker",
             "service": "attacker",
             "slug": "attacker",
             "uuid": "f" * 32,
+            "publication_id": "attacker-publication",
             "host": host,
             "port": 8766,
             "token": token,
@@ -79,7 +80,7 @@ async def test_hassio_discovery_uses_wrapper_identity_and_creates_safe_entry(has
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Codex Bridge App"
     assert result["data"] == {
-        CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+        CONF_BRIDGE_URL: "http://172.30.32.5:8766",
         CONF_BRIDGE_TOKEN: TOKEN,
         CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
         CONF_DISCOVERY_UUID: UUID,
@@ -92,8 +93,11 @@ async def test_hassio_discovery_uses_wrapper_identity_and_creates_safe_entry(has
     ("host", "port", "token"),
     [
         ("8.8.8.8", 8766, TOKEN),
-        ("127.0.0.1", 70000, TOKEN),
-        ("127.0.0.1", 8766, "short"),
+        ("127.0.0.1", 8766, TOKEN),
+        ("local-codex-bridge", 8766, TOKEN),
+        ("169.254.1.1", 8766, TOKEN),
+        ("172.30.32.5", 70000, TOKEN),
+        ("172.30.32.5", 8766, "short"),
     ],
 )
 async def test_hassio_discovery_rejects_invalid_endpoint_without_creating_entry(
@@ -122,7 +126,6 @@ async def test_hassio_discovery_rejects_an_unsupported_api_range(hass):
     ("error", "reason"),
     [
         (BridgeApiAuthError(), "invalid_auth"),
-        (BridgeApiConnectionError(), "cannot_connect"),
         (BridgeApiIncompatibleError(), "incompatible_api"),
     ],
 )
@@ -139,6 +142,77 @@ async def test_hassio_discovery_requires_authenticated_compatible_ready(
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == reason
+
+
+async def test_hassio_discovery_connection_failure_shows_confirm_and_retries(
+    hass,
+):
+    client = AsyncMock()
+    client.async_ready.side_effect = [
+        BridgeApiConnectionError(),
+        BridgeApiConnectionError(),
+        None,
+    ]
+    client.negotiated_api_version = 1
+    flow = _flow(hass, "hassio")
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ):
+        discovered = await flow.async_step_hassio(_discovery())
+        retry_failed = await flow.async_step_hassio_confirm({})
+        assert not hass.config_entries.async_entries(DOMAIN)
+        result = await flow.async_step_hassio_confirm({})
+
+    assert discovered["type"] is FlowResultType.FORM
+    assert discovered["step_id"] == "hassio_confirm"
+    assert discovered["errors"] == {"base": "cannot_connect"}
+    assert retry_failed["type"] is FlowResultType.FORM
+    assert retry_failed["errors"] == {"base": "cannot_connect"}
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_BRIDGE_TOKEN] == TOKEN
+    assert client.async_ready.await_count == 3
+
+
+async def test_hassio_connection_failure_does_not_update_existing_entry_until_retry(
+    hass,
+):
+    entry = MockConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: "e" * 48,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+            CONF_DISCOVERY_UUID: UUID,
+        },
+        source="hassio",
+        unique_id=UUID,
+    )
+    entry.add_to_hass(hass)
+    rotated_token = "b" * 48
+    client = AsyncMock()
+    client.async_ready.side_effect = [BridgeApiConnectionError(), None]
+    client.negotiated_api_version = 1
+    flow = _flow(hass, "hassio")
+    with (
+        patch(
+            "custom_components.codex_bridge.config_flow.BridgeApiClient",
+            return_value=client,
+        ),
+        patch.object(flow, "async_update_reload_and_abort") as update_reload,
+    ):
+        discovered = await flow.async_step_hassio(_discovery(token=rotated_token))
+        assert discovered["type"] is FlowResultType.FORM
+        assert update_reload.call_count == 0
+        assert entry.data[CONF_BRIDGE_TOKEN] == "e" * 48
+        result = await flow.async_step_hassio_confirm({})
+
+    assert result is update_reload.return_value
+    assert update_reload.call_args.args[0] is entry
+    assert update_reload.call_args.kwargs["data"][CONF_BRIDGE_TOKEN] == rotated_token
 
 
 async def test_hassio_confirmation_revalidates_cached_credentials(hass):

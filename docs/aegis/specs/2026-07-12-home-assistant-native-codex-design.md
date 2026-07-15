@@ -156,9 +156,9 @@ Integration, Bridge, App package, bundled Codex, and API contract versions are r
 | `/data/codex-home` | `auth.json` and Codex-owned configuration/cache | App-private, never served or logged |
 | `/data/bridge` | projects, chats, event cursors, uploads, artifacts, migrations | App-private |
 | `/data/bridge-token` | generated Integration-to-Bridge bearer token | mode `0600`, disclosed only via Supervisor discovery |
-| `/config/workspaces` | user-selected repositories and working files | dedicated `addon_config:rw` mapping only |
+| `/config/workspaces` | user-selected repositories and working files | dedicated `app_config:rw` mapping only |
 
-`addon_config` is the App's own public configuration area mounted at `/config`; it is not Home Assistant's main configuration directory. The App must not request `homeassistant_config`, `share`, or `all_addon_configs` access.
+`app_config` is the App's own public configuration area mounted at `/config`; it is not Home Assistant's main configuration directory. The App must not request `homeassistant_config`, `share`, or `all_addon_configs` access.
 
 The App sets `CODEX_HOME=/data/codex-home` and `cli_auth_credentials_store = "file"`. The directory is mode `0700`, credential files are mode `0600`, and startup rejects unsafe ownership/modes or a non-atomic credential state rather than attempting to log its contents.
 
@@ -442,7 +442,7 @@ After verified implementation, the architecture baseline must be updated to the 
 ## Source references
 
 - [Home Assistant Apps](https://developers.home-assistant.io/docs/apps/)
-- [App configuration and dedicated `addon_config`](https://developers.home-assistant.io/docs/apps/configuration/)
+- [App configuration and dedicated `app_config`](https://developers.home-assistant.io/docs/apps/configuration/)
 - [App communication and Supervisor APIs](https://developers.home-assistant.io/docs/apps/communication/)
 - [App security](https://developers.home-assistant.io/docs/apps/security/)
 - [App publishing](https://developers.home-assistant.io/docs/apps/publishing/)

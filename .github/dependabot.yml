@@ -17,18 +17,22 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
-
-  - package-ecosystem: pip
-    directory: "/codex_bridge_app"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    ignore:
+      # pytest-homeassistant-custom-component==0.13.346 requires pytest==9.0.3.
+      - dependency-name: "pytest"
+        versions:
+          - ">=9.1.0"
 
   - package-ecosystem: pip
     directory: "/bridge_service"
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    ignore:
+      # pytest-homeassistant-custom-component==0.13.346 requires pytest==9.0.3.
+      - dependency-name: "pytest"
+        versions:
+          - ">=9.1.0"
 
   - package-ecosystem: docker
     directory: "/codex_bridge_app"

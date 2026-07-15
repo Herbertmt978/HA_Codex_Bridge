@@ -191,22 +191,26 @@ def test_discovery_waits_for_authenticated_readiness_and_uses_exact_payload() ->
     assert '"X-Codex-Bridge-Api": "1"' in text
     assert "publish_discovery.py" in text
     assert '"service": "codex_bridge"' in text
-    assert "bashio::addon.hostname" in text
-    assert "bashio::app.hostname" not in text
+    assert "bashio::addon.ip_address" in text
+    assert "bashio::addon.hostname" not in text
     assert re.search(r"(?:port|PORT)[^\n]*8766", text)
     assert re.search(r"(?:api|API)[^\n]*1", text)
-    assert re.search(r"(?:host|HOST)[^\n]*bashio::addon\.hostname", text)
-    assert "declare -F bashio::addon.hostname" in docker
+    assert re.search(r"(?:host|HOST)[^\n]*bashio::addon\.ip_address", text)
+    assert "declare -F bashio::addon.ip_address" in docker
 
     module = _load_helper("publish_discovery")
     token = "a" * 64
-    assert module.discovery_payload(host="local-codex-bridge", token=token) == {
+    publication_id = "1234567890abcdef1234567890abcdef"
+    assert module.discovery_payload(
+        host="172.30.32.5", token=token, publication_id=publication_id
+    ) == {
         "service": "codex_bridge",
         "config": {
-            "host": "local-codex-bridge",
+            "host": "172.30.32.5",
             "port": 8766,
             "token": token,
             "api": {"minimum": 1, "maximum": 1},
+            "publication_id": publication_id,
         },
     }
 
@@ -242,6 +246,7 @@ def test_discovery_posts_only_to_the_fixed_supervisor_endpoint() -> None:
     bridge_token = "b" * 64
     supervisor_token = "supervisor.test.token"
     identity = "35b86ec12bbc4be083098650f746d420"
+    publication_id = "1234567890abcdef1234567890abcdef"
 
     class FakeResponse:
         status = 200
@@ -268,8 +273,9 @@ def test_discovery_posts_only_to_the_fixed_supervisor_endpoint() -> None:
     opener = FakeOpener()
     assert (
         module._post_discovery(
-            host="local-codex-bridge",
+            host="172.30.32.5",
             token=bridge_token,
+            publication_id=publication_id,
             supervisor_token=supervisor_token,
             opener=opener,
         )
@@ -283,18 +289,46 @@ def test_discovery_posts_only_to_the_fixed_supervisor_endpoint() -> None:
     assert opener.request.get_header("Authorization") == f"Bearer {supervisor_token}"
     assert opener.request.get_header("Content-type") == "application/json"
     assert json.loads(opener.request.data) == module.discovery_payload(
-        host="local-codex-bridge", token=bridge_token
+        host="172.30.32.5", token=bridge_token, publication_id=publication_id
     )
 
 
 @pytest.mark.parametrize(
     "host",
-    ["", "bad host", "http://elsewhere", "supervisor:80", "../bridge", "a" * 254],
+    [
+        "",
+        "local-codex-bridge",
+        "127.0.0.1",
+        "169.254.1.1",
+        "192.0.2.1",
+        "8.8.8.8",
+        "bad host",
+        "http://elsewhere",
+        "supervisor:80",
+        "../bridge",
+        "a" * 254,
+    ],
 )
 def test_discovery_rejects_unsafe_hostnames(host: str) -> None:
     module = _load_helper("publish_discovery")
     with pytest.raises(module.DiscoveryError):
-        module.discovery_payload(host=host, token="a" * 64)
+        module.discovery_payload(
+            host=host,
+            token="a" * 64,
+            publication_id="1234567890abcdef1234567890abcdef",
+        )
+
+
+@pytest.mark.parametrize(
+    "publication_id",
+    ["", "not-hex", "a" * 31, "a" * 33, "A" * 32, "a" * 31 + "\n"],
+)
+def test_discovery_rejects_unsafe_publication_markers(publication_id: str) -> None:
+    module = _load_helper("publish_discovery")
+    with pytest.raises(module.DiscoveryError):
+        module.discovery_payload(
+            host="172.30.32.5", token="a" * 64, publication_id=publication_id
+        )
 
 
 @pytest.mark.parametrize(
@@ -339,6 +373,46 @@ def test_discovery_publisher_refuses_non_root_execution(monkeypatch) -> None:
         )
 
 
+def test_discovery_uses_a_fresh_marker_while_retaining_supervisor_identity(
+    monkeypatch,
+) -> None:
+    module = _load_helper("publish_discovery")
+    identity = "35b86ec12bbc4be083098650f746d420"
+    publications: list[str] = []
+    persisted: list[str] = []
+    markers = iter(
+        (
+            module.UUID("12345678-90ab-cdef-1234-567890abcdef"),
+            module.UUID("fedcba09-8765-4321-fedc-ba0987654321"),
+        )
+    )
+
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(module, "_runtime_owner", lambda: (1000, 1000))
+    monkeypatch.setattr(module, "_read_token", lambda *_args, **_kwargs: "a" * 64)
+    monkeypatch.setattr(module, "uuid4", lambda: next(markers))
+
+    def post(**kwargs: str) -> str:
+        publications.append(kwargs["publication_id"])
+        return identity
+
+    monkeypatch.setattr(module, "_post_discovery", post)
+    monkeypatch.setattr(
+        module,
+        "_atomic_write_identity",
+        lambda _path, value: persisted.append(value),
+    )
+
+    module.publish_discovery(host="172.30.32.5", supervisor_token="supervisor.test.token")
+    module.publish_discovery(host="172.30.32.5", supervisor_token="supervisor.test.token")
+
+    assert publications == [
+        "1234567890abcdef1234567890abcdef",
+        "fedcba0987654321fedcba0987654321",
+    ]
+    assert persisted == [identity, identity]
+
+
 @pytest.mark.skipif(os.name == "nt", reason="descriptor-relative POSIX file contract")
 def test_discovery_identity_replaces_a_symlink_without_following_it(
     tmp_path: Path,
@@ -370,6 +444,22 @@ def test_discovery_identity_is_persisted_and_logs_are_redacted() -> None:
         re.IGNORECASE,
     )
     assert "set -x" not in text
+
+
+def test_discovery_logs_safe_failure_categories_without_credentials() -> None:
+    script = _discovery_script().read_text(encoding="utf-8")
+    publisher = (LIBEXEC / "publish_discovery.py").read_text(encoding="utf-8")
+
+    for category in ("configuration", "credential", "Supervisor", "transport", "storage"):
+        assert category in script
+    assert "publication_id" in publisher
+    assert "uuid4" in publisher
+    assert "SUPERVISOR_TOKEN" not in "\n".join(
+        line for line in script.splitlines() if "bashio::log" in line
+    )
+    assert "bridge-token" not in "\n".join(
+        line for line in script.splitlines() if "bashio::log" in line
+    )
 
 
 def test_startup_uses_exec_and_handles_term_signal_for_clean_shutdown() -> None:

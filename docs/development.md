@@ -37,13 +37,29 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 `workspaceWrite` response includes bounded supplemental roots (`.agents`,
 `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The proc-less
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
-requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates canonical
+requesting `SYS_ADMIN` or weakening isolation; App `0.6.4` retains canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-The published App `0.6.2` image passed target-HAOS startup, its production
+The previously published App image passed target-HAOS startup, its production
 sandbox self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, and panel loading. Remote access,
 the first unattended automatic update, cold restore, and App-image rollback
 still need post-release validation.
+
+## Supervisor discovery contract
+
+The App publishes its endpoint through Supervisor discovery using the
+Supervisor-assigned private HA-network IP. Do not substitute the App hostname:
+the Core-to-App path must remain private and hostname resolution is not
+guaranteed in every Supervisor network. The App manifest uses the current
+`app_config:rw` map permission; `addon_config` is legacy terminology and must
+not be reintroduced.
+
+Discovery keeps a stable identity but includes a bounded, non-secret
+publication marker on each App start. This causes Supervisor to re-push an
+otherwise unchanged record after a restart. The Integration validates the
+discovered endpoint before storing it. A temporary connection failure returns a
+retryable confirmation form, so tests and callers must not persist an
+unverified URL or token.
 
 ## App development rules
 

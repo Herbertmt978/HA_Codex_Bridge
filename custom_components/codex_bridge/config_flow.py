@@ -71,6 +71,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     _hassio_discovery: DiscoveryRecord | None = None
     _hassio_title = "Codex Bridge"
     _hassio_replaced_entry: config_entries.ConfigEntry | None = None
+    _hassio_error: str | None = None
 
     async def _async_hassio_ready_error(self, discovery: DiscoveryRecord) -> str | None:
         """Return a stable error code after authenticated v1 readiness validation."""
@@ -164,6 +165,8 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_hassio(self, discovery_info: HassioServiceInfo):
         """Validate Supervisor discovery, then establish a v1-only App entry."""
 
+        self._hassio_error = None
+        self._hassio_replaced_entry = None
         payload = dict(discovery_info.config)
         payload.update(
             {
@@ -179,7 +182,8 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_discovery")
         except ProtocolApiIncompatibleError:
             return self.async_abort(reason="incompatible_api")
-        if error := await self._async_hassio_ready_error(discovery):
+        error = await self._async_hassio_ready_error(discovery)
+        if error and error != "cannot_connect":
             return self.async_abort(reason=error)
 
         data = _entry_data(
@@ -190,7 +194,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         title = _safe_title(discovery_info.name)
         existing_entry = await self.async_set_unique_id(discovery.uuid)
-        if existing_entry is not None:
+        if existing_entry is not None and error is None:
             return self.async_update_reload_and_abort(
                 existing_entry,
                 title=title,
@@ -198,9 +202,11 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 reason="reconfigure_successful",
                 reload_even_if_entry_is_unchanged=False,
             )
+        if existing_entry is not None:
+            self._hassio_replaced_entry = existing_entry
 
         entries = self._async_current_entries()
-        if entries:
+        if entries and existing_entry is None:
             if (
                 len(entries) != 1
                 or entries[0].data.get(
@@ -213,6 +219,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._hassio_discovery = discovery
         self._hassio_title = title
+        self._hassio_error = error
         self._set_confirm_only()
         return await self.async_step_hassio_confirm()
 
@@ -227,11 +234,25 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="hassio_confirm",
                 data_schema=vol.Schema({}),
                 description_placeholders={"name": self._hassio_title},
+                errors=(
+                    {"base": self._hassio_error}
+                    if self._hassio_error is not None
+                    else {}
+                ),
             )
 
         if error := await self._async_hassio_ready_error(discovery):
+            if error == "cannot_connect":
+                self._hassio_error = error
+                return self.async_show_form(
+                    step_id="hassio_confirm",
+                    data_schema=vol.Schema({}),
+                    description_placeholders={"name": self._hassio_title},
+                    errors={"base": error},
+                )
             return self.async_abort(reason=error)
 
+        self._hassio_error = None
         data = _entry_data(
             bridge_url=discovery.base_url,
             bridge_token=discovery.token,

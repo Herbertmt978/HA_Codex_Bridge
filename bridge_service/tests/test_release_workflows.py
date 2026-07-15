@@ -171,7 +171,12 @@ def test_codex_updater_opens_pr_without_main_push_or_auto_merge() -> None:
 
 
 def test_release_validates_main_sha_and_version_without_hacs_release_tag() -> None:
-    _, source = _workflow("release")
+    document, source = _workflow("release")
+    push = document["on"]["push"]
+    assert push["paths"] == ["codex_bridge_app/config.yaml"], (
+        "ordinary main/workflow changes must not fail by trying to republish an "
+        "unchanged immutable App tag"
+    )
     normalized = source.lower()
     assert (
         "head_sha" in normalized
@@ -224,6 +229,34 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         and item.get("schedule", {}).get("interval") == "weekly"
         for item in github_actions
     )
+
+    root_pip = next(
+        item
+        for item in updates
+        if isinstance(item, dict)
+        and item.get("package-ecosystem") == "pip"
+        and item.get("directory") == "/"
+    )
+    expected_pytest_ignore = [
+        {"dependency-name": "pytest", "versions": [">=9.1.0"]}
+    ]
+    assert root_pip.get("ignore") == expected_pytest_ignore
+
+    assert not any(
+        isinstance(item, dict)
+        and item.get("package-ecosystem") == "pip"
+        and item.get("directory") == "/codex_bridge_app"
+        for item in updates
+    )
+
+    bridge_pip = next(
+        item
+        for item in updates
+        if isinstance(item, dict)
+        and item.get("package-ecosystem") == "pip"
+        and item.get("directory") == "/bridge_service"
+    )
+    assert bridge_pip.get("ignore") == expected_pytest_ignore
 
     codeowners = ROOT / ".github" / "CODEOWNERS"
     assert codeowners.is_file()

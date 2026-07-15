@@ -73,14 +73,14 @@ def test_parses_an_immutable_redacted_discovery_record() -> None:
             "service": "codex_bridge",
             "slug": "codex_bridge",
             "uuid": DISCOVERY_UUID,
-            "host": "127.0.0.1",
+            "host": "172.30.32.5",
             "port": 8766,
             "token": DISCOVERY_TOKEN,
             "api": {"minimum": 1, "maximum": 1},
         }
     )
 
-    assert discovery.base_url == "http://127.0.0.1:8766"
+    assert discovery.base_url == "http://172.30.32.5:8766"
     assert discovery.api == ApiRange(1, 1)
     assert DISCOVERY_TOKEN not in repr(discovery)
     with pytest.raises(AttributeError):
@@ -113,6 +113,26 @@ def test_rejects_malformed_or_public_discovery_without_echoing_token(
 
 
 @pytest.mark.parametrize(
+    "host",
+    ["127.0.0.1", "localhost", "local_codex_bridge", "169.254.1.1", "192.0.2.1"],
+)
+def test_rejects_non_app_supervisor_discovery_hosts(host: str) -> None:
+    with pytest.raises(EndpointError):
+        DiscoveryRecord.from_payload(
+            {
+                "source": "hassio",
+                "service": "codex_bridge",
+                "slug": "local_codex_bridge",
+                "uuid": DISCOVERY_UUID,
+                "host": host,
+                "port": 8766,
+                "token": DISCOVERY_TOKEN,
+                "api": {"minimum": 1, "maximum": 1},
+            }
+        )
+
+
+@pytest.mark.parametrize(
     ("field", "value"),
     [
         ("uuid", "bridge-instance-1"),
@@ -127,7 +147,7 @@ def test_rejects_untrusted_discovery_identity(field: str, value: str) -> None:
         "service": "codex_bridge",
         "slug": "local_codex_bridge",
         "uuid": DISCOVERY_UUID,
-        "host": "127.0.0.1",
+        "host": "172.30.32.5",
         "port": 8766,
         "token": DISCOVERY_TOKEN,
         "api": {"minimum": 1, "maximum": 1},
@@ -196,7 +216,7 @@ def test_rejects_short_or_control_character_discovery_tokens(token: str) -> None
                 "service": "codex_bridge",
                 "slug": "codex_bridge",
                 "uuid": DISCOVERY_UUID,
-                "host": "127.0.0.1",
+                "host": "172.30.32.5",
                 "port": 8766,
                 "token": token,
                 "api": {"minimum": 1, "maximum": 1},

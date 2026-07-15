@@ -83,6 +83,46 @@ describe("panel accessibility contract", () => {
     expect(interactionRegion?.getAttribute("aria-live")).toBe("polite");
   });
 
+  it("turns a transient bridge error into an actionable, dismissible panel state", async () => {
+    const panel = createPanel();
+    panel._render(true);
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
+    panel._setError("Bridge request failed");
+
+    const errorStrip = panel.shadowRoot.getElementById("error-strip");
+    expect(errorStrip.classList.contains("visible")).toBe(true);
+    expect(errorStrip.textContent).toContain("Connection issue");
+    const retry = errorStrip.querySelector('[data-action="retry-error"]');
+    const dismiss = errorStrip.querySelector('[data-action="dismiss-error"]');
+    expect(retry?.getAttribute("aria-label")).toBe("Retry connection");
+    expect(dismiss?.getAttribute("aria-label")).toBe("Dismiss error");
+
+    retry.click();
+    await Promise.resolve();
+    expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
+
+    panel._setError("Temporary issue");
+    errorStrip.querySelector('[data-action="dismiss-error"]').click();
+    expect(errorStrip.classList.contains("visible")).toBe(false);
+  });
+
+  it("does not offer a connection retry for local validation or sign-in guidance", () => {
+    const panel = createPanel();
+    panel._render(true);
+    const errorStrip = panel.shadowRoot.getElementById("error-strip");
+
+    for (const message of [
+      "Select a chat before pasting a screenshot.",
+      "The ChatGPT sign-in page is unavailable. Copy the code and continue on another device.",
+    ]) {
+      panel._setError(message);
+      expect(errorStrip.dataset.retryable).toBe("false");
+      expect(errorStrip.textContent).toContain("Codex needs attention");
+      expect(errorStrip.querySelector('[data-action="retry-error"]')).toBeNull();
+      expect(errorStrip.querySelector('[data-action="dismiss-error"]')).not.toBeNull();
+    }
+  });
+
   it("describes each permission mode and links the selector to that explanation", () => {
     const panel = createPanel();
     panel._showThreadForm = true;

@@ -14,7 +14,7 @@ Supervisor roles.
 
 ## Filesystem and persistence
 
-The only writable host mapping is `addon_config:rw`, mounted at `/config`.
+The only writable host mapping is `app_config:rw`, mounted at `/config`.
 Workspaces live under `/config/workspaces`; they are the only files an operator
 should grant to Codex. Private Bridge and ChatGPT device-login state live under
 the App-private `/data` volume.
@@ -87,6 +87,12 @@ next status request rather than waiting for the normal cache lifetime.
 
 ## Updates and recovery
 
+On each App start, the ready Bridge publishes its Supervisor-assigned private
+App IP with a fresh non-secret publication marker. This ensures Supervisor
+re-pushes discovery after an App restart while retaining the Supervisor-issued
+discovery UUID. Discovery failures are logged by safe category only; tokens and
+endpoint credentials are never logged.
+
 An App update is a new versioned image; Codex and the Bridge are not updated in
 a running container. App-image rollback is not yet validated: do not state or
 assume that Supervisor can select an arbitrary earlier image. Until a prior
@@ -96,7 +102,7 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. App `0.6.3` is a signed
+The App is experimental and `amd64` only. App `0.6.4` is a signed
 immutable image with an SPDX SBOM and build provenance. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
