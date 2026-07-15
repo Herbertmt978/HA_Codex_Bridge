@@ -1,22 +1,29 @@
 version: 2
+# Routine version updates share one review and notification thread each week.
+# Security alerts remain governed by GitHub's separate security-update settings.
+multi-ecosystem-groups:
+  weekly-maintenance:
+    schedule:
+      interval: weekly
+
 updates:
   - package-ecosystem: github-actions
     directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-maintenance
 
   - package-ecosystem: npm
     directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-maintenance
 
   - package-ecosystem: pip
     directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-maintenance
     ignore:
       # pytest-homeassistant-custom-component==0.13.346 requires pytest==9.0.3.
       - dependency-name: "pytest"
@@ -25,9 +32,9 @@ updates:
 
   - package-ecosystem: pip
     directory: "/bridge_service"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-maintenance
     ignore:
       # pytest-homeassistant-custom-component==0.13.346 requires pytest==9.0.3.
       - dependency-name: "pytest"
@@ -36,6 +43,6 @@ updates:
 
   - package-ecosystem: docker
     directory: "/codex_bridge_app"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-maintenance

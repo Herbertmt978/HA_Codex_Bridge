@@ -216,19 +216,28 @@ def test_ci_repository_validators_use_digest_pinned_images() -> None:
 
 def test_dependabot_and_codeowners_cover_ci_policy() -> None:
     dependabot = _load(ROOT / ".github" / "dependabot.yml")
+    maintenance_groups = dependabot.get("multi-ecosystem-groups")
+    assert maintenance_groups == {
+        "weekly-maintenance": {"schedule": {"interval": "weekly"}}
+    }, "routine version updates should arrive as one weekly maintenance PR"
+
     updates = dependabot.get("updates")
     assert isinstance(updates, list) and updates
+    assert all(
+        isinstance(item, dict)
+        and item.get("multi-ecosystem-group") == "weekly-maintenance"
+        and item.get("patterns") == ["*"]
+        and "schedule" not in item
+        for item in updates
+    ), "every managed ecosystem must participate in the single maintenance group"
+
     github_actions = [
         item
         for item in updates
         if isinstance(item, dict) and item.get("package-ecosystem") == "github-actions"
     ]
     assert github_actions, "Dependabot must keep pinned GitHub Actions current"
-    assert any(
-        item.get("directory") == "/"
-        and item.get("schedule", {}).get("interval") == "weekly"
-        for item in github_actions
-    )
+    assert any(item.get("directory") == "/" for item in github_actions)
 
     root_pip = next(
         item
