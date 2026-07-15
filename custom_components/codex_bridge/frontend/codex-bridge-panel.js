@@ -6269,13 +6269,27 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       this._activeThread = thread;
       this._selectedProjectId = thread.project_id;
+      const authoritativeEvents = parseEvents(events).filter(
+        (event) => !event.thread_id || event.thread_id === threadId
+      );
       const replay = acceptEvents(
         createEventStreamState(),
-        parseEvents(events).filter((event) => !event.thread_id || event.thread_id === threadId)
+        authoritativeEvents.filter(
+          (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
+        )
       );
-      this._eventStream = replay.state;
+      const authoritativeCursor = authoritativeEvents.reduce(
+        (cursor, event) => Math.max(cursor, event.sequence),
+        replay.state.cursor
+      );
+      this._eventStream = {
+        ...replay.state,
+        cursor: authoritativeCursor,
+        needsSnapshot: false,
+        error: null
+      };
       this._events = replay.state.events;
-      this._sequence = replay.state.cursor;
+      this._sequence = authoritativeCursor;
       this._artifacts = artifacts;
       this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
@@ -6286,7 +6300,9 @@ var CodexBridgePanel = class extends HTMLElement {
       if (this._promptMutationForThread(threadId)) {
         this._settlePromptMutationFromEvents();
       }
-      this._clearError(errorSource === null ? {} : { source: errorSource });
+      if (expectedErrorRevision === null || this._errorRevision === expectedErrorRevision) {
+        this._clearError(errorSource === null ? {} : { source: errorSource });
+      }
       this._render();
       this._startEventSubscription();
       return true;

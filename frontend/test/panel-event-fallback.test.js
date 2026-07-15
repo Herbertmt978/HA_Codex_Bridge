@@ -358,6 +358,84 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("Upload network failed");
   });
 
+  it("does not clear a newer polling error while snapshot recovery succeeds", async () => {
+    const panel = pollingPanel(controlEvent("bridge.snapshot_required"));
+    const snapshotThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return snapshotThread.promise;
+      if (action === "get_events") return Promise.resolve([]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+    });
+    await vi.waitFor(() => expect(panel._callWS).toHaveBeenCalledWith("get_thread", { thread_id: "thr_safe" }));
+    panel._setError("Newer stream failure", { source: "poll" });
+    snapshotThread.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+    await pending;
+
+    expect(panel._error).toBe("Newer stream failure");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+  });
+
+  it("does not loop snapshot recovery when an authoritative replay contains a bridge error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const historicalBridgeError = controlEvent("bridge.error", { error: "broker stopped" });
+    const laterMessage = {
+      ...controlEvent("message.created", { text: "Retained after broker error" }),
+      event_id: "evt_after_broker_error",
+      sequence: 6,
+    };
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events") return Promise.resolve([historicalBridgeError, laterMessage]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    const refresh = vi.spyOn(panel, "_refreshActiveThread");
+
+    await panel._refreshActiveThread({ errorSource: "poll", expectedErrorRevision: panel._errorRevision });
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(6);
+    expect(panel._events).toEqual([laterMessage]);
+
+    panel._lastStatusRefreshAt = Date.now();
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("advances the cursor past control-only authoritative replays", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const historicalBridgeError = controlEvent("bridge.error", { error: "broker stopped" });
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events") return Promise.resolve([historicalBridgeError]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._refreshActiveThread({ errorSource: "poll", expectedErrorRevision: panel._errorRevision });
+
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(historicalBridgeError.sequence);
+  });
+
   it("does not overwrite an existing action error when poll snapshot reconciliation fails", async () => {
     const snapshotEvent = controlEvent("bridge.snapshot_required");
     const panel = pollingPanel(snapshotEvent);
