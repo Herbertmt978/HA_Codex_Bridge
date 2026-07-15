@@ -39,7 +39,7 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
         "Run the Codex Bridge service privately inside Home Assistant."
     )
     assert config["slug"] == "codex_bridge"
-    assert config["version"] == "0.6.3"
+    assert config["version"] == "0.6.4"
     assert config.get("startup", "application") == "application"
     assert config.get("boot", "auto") == "auto"
     assert config["init"] is False
@@ -48,7 +48,7 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
     assert config["arch"] == ["amd64"]
     assert config["image"] == "ghcr.io/herbertmt978/ha-codex-bridge-app"
     assert config["discovery"] == ["codex_bridge"]
-    assert config["map"] == ["addon_config:rw"]
+    assert config["map"] == ["app_config:rw"]
     assert "options" not in config
     assert "schema" not in config
 

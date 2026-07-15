@@ -3,30 +3,31 @@
 ## TodoCheckpointDraft
 
 - **State:** active
-- **Current todo:** Task 15 — establish a reproducible frontend build and hostile-content tests
-- **Active slice:** Replace the generated-only panel with deterministic source modules, a resumable browser upload client, safe DOM boundaries, and unit/E2E authority
-- **Completed:** approved spec and plan; Tasks 1–14; authenticated HA HTTP views now stream resumable uploads and ranged artifacts without HA temp files or whole-payload buffers
-- **Evidence refs:** `90-evidence.md`; Task 14 implementation commit `72b7454`
-- **Blocked on:** no implementation blocker; real HA inherited-descriptor, process-group, and sandbox behavior remain acceptance gates
-- **Next step:** inventory the generated panel and write Task 15 RED build, protocol, resumable-upload, safe-DOM, XSS, and build-integrity contracts
+- **Current todo:** Task 25 — publish Integration `0.6.3` and App `0.6.4`, install them on the target Home Assistant, and complete the post-release smoke checks.
+- **Active slice:** Recover Supervisor discovery by advertising the App's validated private IP, force safe rediscovery after restarts, retain unreachable discovery for retry, and close superseded dependency PRs.
+- **Completed:** approved spec/plan; implementation Tasks 1–24; releases through Integration `0.6.2` / App `0.6.3`; private-IP recovery patch; consumer-side discovery confinement; retryable panel/config-flow UX; dependency consolidation; local production image and full regression gates.
+- **Evidence refs:** `90-evidence.md`; local candidate image `sha256:86d0ec5fba3eba371699b208cd028e5e503148673a1840bdc336a658a60f9248`.
+- **Blocked on:** no implementation blocker. PR review, signed publication, target-HA installation, cold restore/update canary, remote blocked-network proof, and rollback evidence remain acceptance gates.
+- **Next step:** commit and push the recovery branch, open the release PR, address automated review/CI, merge and publish, then update/install on the target Home Assistant and run the live smoke matrix.
 
 ## ResumeStateHint
 
-- **Repository:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge`
-- **Worktree:** `C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge\.worktrees\ha-app`
-- **Branch:** `Herb/ha-app`
-- **Current implementation head before this checkpoint update:** `72b7454`
-- **Worktree status at checkpoint:** Task 14 implementation committed; README branding rewrite remains intentionally unstaged and isolated until Task 23; Task 15 is the next implementation slice
-- **Baseline commands:** root `python -m pytest -q` for the HA Integration; `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --ignore=tests/test_update_script.py -p pytest_asyncio.plugin -p pytest_timeout` from `bridge_service` for the legacy service suite on Linux
-- **Baseline result:** Integration 157/157 on Linux, including 41 focused Task 14 HTTP contracts; 66 Bridge upload/artifact/security contracts passed; the prior full Bridge baseline remains 996 passed/1 skipped with the PowerShell updater module excluded; Ruff, `compileall`, diff checks, HA task-leak checks, and the 100 MiB RSS/tracemalloc/temp-file smoke passed
-- **Required readback on resume:** `10-intent.md`, this file, approved spec, plan, current `git status`, latest commits, and evidence file
+- **Repository:** repository root
+- **Worktree:** `.worktrees/ha-app`
+- **Branch:** `Herb/ha-discovery-recovery`
+- **Integrated main head:** `3e3996e` (Dependabot `httpx` and Docker login-action updates merged).
+- **Worktree status at checkpoint:** recovery/release changes are intentionally uncommitted pending final diff review; the original main worktree's unrelated user edits remain untouched.
+- **Local release matrix:** Integration 170/170 in disposable Linux HA 2026.7.2; Bridge 1092 passed/188 platform skips; frontend 142/142 plus Playwright 11/11; App/release focused 100 passed/3 skips; protocol/App security 78 passed/1 skip; Ruff, ESLint, compileall, deterministic bundle, lock sync, and App projection checks passed.
+- **Image evidence:** hermetic amd64 staging succeeded with `build==1.5.0`, `setuptools==83.0.0`, and `wheel==0.47.0`; the built image reports App `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`; the pinned base exposes the verified `bashio::addon.ip_address` helper.
+- **Required readback on resume:** `10-intent.md`, this file, approved spec/plan, current `git status`, latest main/PR/release state, and the final recovery section in `90-evidence.md`.
 
 ## DriftCheckDraft
 
-- **Intent alignment:** yes; HA authentication, turns, approvals, questions, cancellation, events, private binary transport, and concurrency remain behind the supervised Bridge boundary.
-- **Compatibility:** v0 adapter and VM rollback remain explicit.
-- **New owner/fallback:** one `CodexAppServerClient` is the HA process/credential owner for catalogue, account/limits, authentication, and `RuntimeBroker` turns; `BridgeRunner` plus subprocess probes remain explicitly deprecated external rollback adapters and are not composed in HA mode.
-- **Attachment boundary:** completed uploads are private and unselected by default; generic runtime representation is deferred until Tasks 10–17 can negotiate only schema-supported inputs or explicit workspace import.
-- **Retirement:** unchanged; VM stops only after real acceptance.
-- **Evidence sufficiency:** sufficient to accept shared runtime ownership, generation-aware model/limit recovery, direct-chat default reconciliation, bounded account/catalogue reads, version-mismatch diagnostics, reverse lifecycle cleanup, and fail-closed readiness across Windows and Linux. The real sandbox self-test remains intentionally fatal until Task 21; proxy, backup, Integration streaming, runtime attachment representation, App image behavior, and target-HA acceptance remain release gates.
-- **Decision:** continue.
+- **Intent alignment:** yes. Browser traffic remains on Home Assistant; only the private App/Bridge contacts Codex/OpenAI.
+- **Compatibility:** API v1 Supervisor discovery is primary; explicit private external v0 remains the rollback path.
+- **Discovery boundary:** publisher and consumer both accept only literal RFC1918/ULA App IPs. Tokens are validated only against that origin and are never placed in browser-visible configuration or logs.
+- **Restart recovery:** each publication retains the Supervisor UUID and changes only a bounded non-secret marker so Supervisor re-pushes an otherwise equal discovery record.
+- **Failure behavior:** a valid but unreachable App remains visible for administrator retry and is not persisted or used to replace an existing entry until authenticated readiness succeeds.
+- **Model/limits behavior:** catalogue and reasoning levels remain Codex-discovered; account changes expire stale entitlement data; duration-classified limits represent weekly-only and disabled five-hour windows correctly.
+- **Release discipline:** App images remain immutable; no claim is made that Supervisor can select an arbitrary prior image. Cold restore, first automatic update, and previous-image recovery remain open acceptance evidence.
+- **Decision:** continue to PR/release and live target-HA acceptance.

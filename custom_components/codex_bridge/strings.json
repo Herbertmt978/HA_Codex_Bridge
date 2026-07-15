@@ -23,7 +23,7 @@
       },
       "hassio_confirm": {
         "title": "Connect the discovered Codex Bridge App",
-        "description": "Home Assistant securely verified {name}. Confirm to add the Integration and show Codex in the sidebar."
+        "description": "Home Assistant discovered {name}. Confirm to validate its private endpoint and add the Integration; retry if the App is temporarily unavailable."
       }
     },
     "error": {

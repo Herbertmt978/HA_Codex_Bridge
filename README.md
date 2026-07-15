@@ -2,7 +2,7 @@
 
 # Home Assistant Codex Bridge
 
-Run and supervise Codex work from Home Assistant without publishing a coding-agent endpoint to the browser.
+Use Codex through Home Assistant without publishing a coding-agent endpoint to the browser.
 
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
@@ -25,6 +25,8 @@ Browser -> Home Assistant -> Codex Bridge Integration -> private App or external
 
 The browser does not connect directly to the Bridge, App, or Codex. Publish
 Home Assistant through its normal LAN or HTTPS remote-access route instead.
+Nabu Casa, Cloudflare, or another reverse proxy can provide that route; the
+App and Bridge remain private to Home Assistant.
 
 ## Two components, two installation paths
 
@@ -36,37 +38,51 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   alongside Home Assistant. Add this repository to the Home Assistant App
   store to install its published immutable image.
 
-This source release targets experimental, `amd64`-only App `0.6.3`; the
-Integration is `0.6.2`, the optional external Bridge is `0.5.4`, and the
+<details>
+<summary><b>Current release and validation details</b></summary>
+
+This source release targets experimental, `amd64`-only App `0.6.4`; the
+Integration is `0.6.3`, the optional external Bridge is `0.5.4`, and the
 bundled Codex runtime is `0.144.4`. The public App is distributed as a signed
-immutable image with an SPDX SBOM and build provenance; App `0.6.3` uses that
-release workflow. On target HAOS, App
-`0.6.2` completed startup, its production sandbox self-test and attestation, an
+immutable image with an SPDX SBOM and build provenance; App `0.6.4` uses that
+release workflow. The previously validated App release completed target-HAOS
+startup, its production sandbox self-test and attestation, an
 authenticated API v1 readiness request, Supervisor discovery, Integration
 pairing, and panel loading. Codex uses its official `--no-proc`
 restrictive-container fallback there; user, PID, and network namespaces, the
 read-only filesystem, AppArmor, and seccomp remain enforced, and `/proc` is
-intentionally empty. App `0.6.2` accepts only canonical supplemental roots
-contained by the selected workspace, without requesting `SYS_ADMIN` or
+intentionally empty. App `0.6.4` retains canonical supplemental-root
+validation for directories contained by the selected workspace, without
+requesting `SYS_ADMIN` or
 weakening isolation. A redacted ChatGPT device-login start/cancel cycle also
 passed; completing account authorization still requires the user. Remote-access
 acceptance, the first unattended automatic update, cold restore, and prior-image
 recovery remain validation work for the intended installation.
 
-App `0.6.3` adds bounded recovery for delayed ChatGPT device sign-in, expires
-the signed-out catalogue when account entitlements change, and continues to
-discover every model and reasoning level from Codex rather than hardcoding a
-release list. It also separates weekly-only usage from the disabled five-hour
-window and keeps a newly created chat usable while secondary snapshots retry.
-Integration `0.6.2` gives the panel a clearer Codex-style reading surface,
+App `0.6.4` adds private-IP Supervisor discovery. It retains bounded recovery
+for delayed ChatGPT device sign-in, expires the signed-out catalogue when
+account entitlements change, and discovers every model and reasoning level
+from Codex rather than hardcoding a release list. It also separates weekly-only
+usage from the disabled five-hour window and keeps a newly created chat usable
+while secondary snapshots retry.
+Integration `0.6.3` gives the panel a clearer Codex-style reading surface,
 stronger chat and composer hierarchy, intentional empty states, and improved
 keyboard and screen-reader navigation while retaining Home Assistant themes.
 
+The App publishes discovery with the current Supervisor `app_config` map
+permission and its assigned private HA-network IP. A restart includes a bounded
+non-secret publication marker, which makes Supervisor refresh an otherwise
+unchanged record without changing its stable identity. If Core starts the
+Integration before the App is reachable, the flow shows a retryable connection
+state and does not save an unverified endpoint.
+
 The external Bridge remains an optional, private compatibility path for people
 who already operate one. Fresh Home Assistant OS installations should use App
-`0.6.3` or newer; App `0.6.1` must not be used. Keep an existing
+`0.6.4` or newer; App `0.6.1` must not be used. Keep an existing
 external Bridge as a recovery path until an App update and cold-restore
 exercise has passed on the intended installation.
+
+</details>
 
 > [!IMPORTANT]
 > The App is experimental and currently supports `amd64` Home Assistant OS.
@@ -74,16 +90,27 @@ exercise has passed on the intended installation.
 > Codex; install the Supervisor App as well, or explicitly configure the
 > advanced private external Bridge.
 
+| Before you install | Boundary |
+| --- | --- |
+| Network | Publish Home Assistant only; the App and Bridge remain private. |
+| Storage | The App writes its private state plus workspaces deliberately placed under `/config/workspaces`. |
+| Account | ChatGPT device authentication stays in App-private storage and does not use an OpenAI API key. |
+| Reversal | Stop/remove the App and Integration; review workspaces and sign out before deleting their data. |
+
 ## Install and first run
 
 1. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
-   offers App `0.6.3` or newer, then install and start **Codex Bridge**. Do not
+   offers App `0.6.4` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
 2. Install the **Codex Bridge** Integration through HACS, restart Home
-   Assistant, then add it in **Settings -> Devices & services**. App discovery
-   supplies the private connection automatically; there is no host, port, or
-   bearer token to copy.
+   Assistant, then add it in **Settings -> Devices & services**. Supervisor
+   discovery advertises the App's private HA-network IP and port automatically;
+   there is no host, port, or bearer token to copy. If the App has just started
+   or restarted, discovery can take a few seconds to arrive. Retry the flow
+   after the App reports ready; the Integration keeps a valid discovery form
+   visible while that private endpoint is temporarily unreachable and does not
+   save an unverified connection.
 3. Open the panel as a Home Assistant administrator. Select **Sign in with
    ChatGPT**, then use a browser to complete the approved ChatGPT device-auth
    page. **Cancel** only cancels an in-progress sign-in; **Sign out** removes an

@@ -339,11 +339,29 @@ Task 14 establishes the private binary transport but deliberately does not ship
 an intermediate release. Task 15 must make the browser consume the resumable v1
 routes before the HA-native application can pass end-to-end acceptance.
 
+## Integration 0.6.3 / App 0.6.4 discovery recovery
+
+| Evidence | Result |
+| --- | --- |
+| Live root-cause probe | A deliberately invalid, non-secret diagnostic token against the advertised App hostname returned `cannot_connect`, not `invalid_auth`, proving Core could not reach the hostname before credentials were evaluated. |
+| App publication | The App uses the Supervisor-assigned private IP from the Bashio helper present in the exact pinned base image, validates it against RFC1918/ULA networks, preserves the Supervisor UUID, and supplies a fresh 32-hex non-secret `publication_id` per start. |
+| Integration confinement | Supervisor discovery now requires the same literal private App-IP policy before constructing or authenticating a Bridge client; loopback, link-local, public, documentation, and hostname targets fail closed. |
+| Recovery UX | A valid but temporarily unreachable discovery remains on the `hassio_confirm` form with `cannot_connect`; retries revalidate authenticated readiness, and no new/replacement config-entry data is written before success. |
+| Panel UX | Transport failures receive an accessible retry/dismiss surface; local validation and sign-in guidance remain dismiss-only; retryable prompt state is visible at desktop and mobile widths. |
+| Current App metadata | `app_config:rw` replaces the legacy map name. App `0.6.4`, Integration `0.6.3`, Bridge `0.5.4`, and Codex `0.144.4` projections are synchronized. |
+| Dependency policy | `httpx>=0.28.1` and Docker login-action updates merged independently; App build tools consolidate at supported `build==1.5.0`, `setuptools==83.0.0`, and `wheel==0.47.0`. Yanked `build==1.5.1` is rejected. Duplicate App pip ownership is removed, and pytest `>=9.1.0` is ignored while the pinned HA test plugin requires `pytest==9.0.3`. |
+| Full Integration | 170 passed in the pinned Home Assistant 2026.7.2 Linux test environment. |
+| Full Bridge | 1092 passed, 188 platform skips in the isolated pytest lifecycle. |
+| Frontend | ESLint passed; 142 unit tests and 11 Playwright flows passed; the generated bundle rebuilt byte-identically and passed `node --check`. |
+| App/release | 100 passed, 3 platform skips; a second protocol/App security slice passed 78 with 1 platform skip; Ruff, compileall, release projection sync, deterministic hash lock, and hash-locked dry-run installation passed. |
+| Production image | Hermetic amd64 staging and Docker build produced local image `sha256:86d0ec5fba3eba371699b208cd028e5e503148673a1840bdc336a658a60f9248`; its labels/runtime report App `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`, and its discovery publisher executes in the pinned HA base. |
+| Independent review | Review found and closed the consumer-side private-IP trust-boundary gap; no remaining correctness, deduplication, Bashio compatibility, retry, or credential/log-safety finding remained. |
+
 ## Evidence status
 
-This is draft evidence for continuation. It now proves host/container resource
-ceilings, safe archives, bounded app-server transport, structured ChatGPT auth,
-the single HA app-server owner plus durable global outbox, private resumable
-binary transport, dynamic model recovery, and fail-closed runtime readiness, but
-not yet the HA App image, target sandbox, proxy deployment, runtime attachment
-representation, release, or cutover.
+This remains active release evidence rather than a completion claim. Code,
+protocol, UI, dependency, and local production-image gates are green. GitHub
+review/CI, signed immutable publication, target-HA upgrade/discovery, live
+ChatGPT/model/limits/chat smoke tests, external blocked-network proof, cold
+restore, first automatic update, and previous-image recovery still require
+fresh evidence before the Windows rollback path can be retired.

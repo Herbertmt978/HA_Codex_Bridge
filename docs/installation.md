@@ -2,9 +2,9 @@
 
 ## Status before you start
 
-This guide targets the experimental, `amd64`-only App `0.6.3`, which bundles
+This guide targets the experimental, `amd64`-only App `0.6.4`, which bundles
 Bridge `0.5.4` and Codex `0.144.4`; the separately installed Integration is
-`0.6.2`. App `0.6.3` uses a signed immutable image with an SPDX SBOM and build
+`0.6.3`. App `0.6.4` uses a signed immutable image with an SPDX SBOM and build
 provenance. On target HAOS, Codex `0.144.4`'s official
 `--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
 namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
@@ -13,14 +13,15 @@ contract mismatch: it required `writableRoots` exactly `[workspace]`, while the
 real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
 (`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
 The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
-calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2`
-validates canonical contained supplemental roots and hardens
-`lsm_get_self_attr` record parsing. The published image passed target-HAOS
-startup, its production sandbox self-test and attestation, an authenticated API
-v1 readiness request, Supervisor discovery, Integration pairing, and panel
-loading. App `0.6.3` adds bounded recovery after device approval, immediate
-entitlement-aware model discovery, duration-aware usage windows, and resilient
-new-chat hydration. Integration `0.6.2` also introduces a more focused
+calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.6.4`
+retains canonical contained supplemental-root validation and hardened
+`lsm_get_self_attr` record parsing. The previously published image passed
+target-HAOS startup, its production sandbox self-test and attestation, an
+authenticated API v1 readiness request, Supervisor discovery, Integration
+pairing, and panel loading. App `0.6.4` adds private-IP Supervisor discovery and
+retains bounded recovery after device approval, immediate entitlement-aware
+model discovery, duration-aware usage windows, and resilient new-chat
+hydration. Integration `0.6.3` also introduces a more focused
 Codex-style chat canvas, composer, and accessible workspace navigation. Final
 ChatGPT account authorization still requires the user. Remote access, the first
 unattended automatic update, cold restore, and App-image rollback remain
@@ -53,7 +54,7 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install the latest **Codex Bridge** Integration release (`0.6.2`) and restart
+2. Install the latest **Codex Bridge** Integration release (`0.6.3`) and restart
    Home Assistant.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.
@@ -61,14 +62,24 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 The HACS link in the [repository README](../README.md) installs only the
 Integration. It neither installs nor publishes an App image.
 
+The App manifest uses Home Assistant's current `app_config:rw` map permission
+for its private state. Older `addon_config` wording refers to the legacy App
+model and should not be used when checking or editing this repository.
+
 ## Install the App
 
 Open **Settings -> Apps -> App store**, select the three-dot menu, then
 **Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait
-until the store offers App `0.6.3` or newer, then install and start **Codex
+until the store offers App `0.6.4` or newer, then install and start **Codex
 Bridge**. Do not install App `0.6.1`; it fails closed during target-HAOS
 readiness. The App has no ingress route, direct port, or browser-visible Bridge
-URL; Supervisor discovery supplies the private connection.
+URL; Supervisor discovery supplies the private connection using the App's
+assigned HA-network IP. The App publishes a bounded, non-secret marker on
+each start so Supervisor refreshes an unchanged record while retaining its
+stable identity. If Home Assistant starts the Integration before the App is
+reachable, wait until the App reports ready and retry the flow. The valid
+discovery form remains available during this temporary failure, and the
+Integration does not save an unverified endpoint.
 
 ## First run
 

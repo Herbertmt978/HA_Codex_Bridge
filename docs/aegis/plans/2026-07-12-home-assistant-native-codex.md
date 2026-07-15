@@ -230,7 +230,7 @@ Runtime queue/turn enforcement consumes these immutable limits in Task 7; event 
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_auth_coordinator.py bridge_service/tests/test_codex_auth.py bridge_service/tests/test_account.py`
 
-- [ ] Write failing tests for startup `account/read`, `chatgptDeviceCode` login, live code event, matching generation+`loginId`, stale completion rejection, cancel, explicit logout+final read, restart persistence, terminal code clearing, repeated identical expiry revision, zero-chat auth events, wrong auth modes, missing device authorization, and auth/run conflicts.
+- [x] Write failing tests for startup `account/read`, `chatgptDeviceCode` login, live code event, matching generation+`loginId`, stale completion rejection, cancel, explicit logout+final read, restart persistence, terminal code clearing, repeated identical expiry revision, zero-chat auth events, wrong auth modes, missing device authorization, and auth/run conflicts.
 - [x] Run focused tests and capture failures from the stdout parser/race behavior.
 - [x] Implement a lock-protected coordinator with monotonic revision, operation generation, `loginId`, normalized safe states, `busy`, `account/read`, `account/login/start`, `account/login/cancel`, and `account/logout`. Replace direct `auth.json` token decoding/rate-limit HTTP with `account/read` and `account/rateLimits/read` for HA mode.
 - [x] Run focused/full tests. Assert no raw app-server error, reusable token, email, or auth file contents enters events/logs.
@@ -560,13 +560,13 @@ docker compose -f tests/transport/compose.yaml up --build --abort-on-container-e
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_app_package.py`
 
-- [x] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, `all_addon_configs`, and obsolete `build.yaml`. Assert only `addon_config:rw`, cold backup, experimental stage, discovery, a generic multi-architecture immutable image, and the proven architecture.
+- [x] Obtain the target architecture with `ha info --raw-json`; write failing metadata tests for required repository/App fields and explicit absence of ports, Ingress, host network, Docker API, devices, full access, broad Supervisor roles, `/share`, `homeassistant_config`, `all_addon_configs`, and obsolete `build.yaml`. Assert only `app_config:rw`, cold backup, experimental stage, discovery, a generic multi-architecture immutable image, and the proven architecture.
 - [x] Run focused tests and confirm metadata is missing.
 - [x] Add App repository/metadata/translations/branding with `slug: codex_bridge`, App version `0.6.0`, semantic `startup: application` and `boot: auto` defaults omitted as required by the current linter, `init: false`, `stage: experimental`, `backup: cold`, and `ghcr.io/herbertmt978/ha-codex-bridge-app`.
 - [x] Run tests plus the current Home Assistant App/repository linter; render App Store metadata and inspect name/icon/descriptions.
 - [x] Commit with message `Add Codex Bridge Home Assistant App`.
 
-**Completed:** `d600a11` adds the single-App repository, `amd64`-only experimental metadata, generic immutable image reference, cold backup, Supervisor discovery, dedicated `addon_config:rw` workspace mapping, custom AppArmor profile, App documentation, translations, and reused branding. The production HAOS target reported `arch: amd64` through `ha info --raw-json`. Contract tests first failed 26 times against the absent package, then passed 32 tests; `frenck/action-addon-linter@v2.21`, Ruff, formatting, asset hash/dimension inspection, and diff hygiene passed. The profile permits only App-private state plus `/config/workspaces`, never broad Home Assistant configuration. Luna and Terra found no remaining P0-P2 issue.
+**Completed:** `d600a11` adds the single-App repository, `amd64`-only experimental metadata, generic immutable image reference, cold backup, Supervisor discovery, dedicated App workspace mapping (now named `app_config:rw`), custom AppArmor profile, App documentation, translations, and reused branding. The production HAOS target reported `arch: amd64` through `ha info --raw-json`. Contract tests first failed 26 times against the absent package, then passed 32 tests; `frenck/action-addon-linter@v2.21`, Ruff, formatting, asset hash/dimension inspection, and diff hygiene passed. The profile permits only App-private state plus `/config/workspaces`, never broad Home Assistant configuration. Luna and Terra found no remaining P0-P2 issue.
 
 ## Task 19: Lock and verify upstream Codex releases
 
@@ -642,11 +642,11 @@ docker buildx build --load -t codex-bridge:test .build/app-context
 
 **Verification:** `python -m pytest -q bridge_service/tests/test_app_sandbox_contract.py` plus the real protected-HA acceptance script.
 
-- [ ] Write failing static/runtime tests against the built Task 20 image for forbidden bypass/full-access flags, narrow AppArmor paths, non-root runtime, filesystem sentinels, parent `/proc/*/environ`, `auth.json`, Bridge token/state, outside workspace, and network attempts to Supervisor, Core, sibling App, LAN, internet, and OpenAI.
-- [ ] Run local/container tests and confirm failures are explicit rather than skipped as success.
-- [ ] Implement a self-test that proves the exact tool sandbox used by app-server; expose fatal/degraded details without paths/secrets. Permit only trusted Codex parent egress to OpenAI; decline all model-tool network elevation in API v1.
-- [ ] Run container tests, then install on protected target HA OS and record pass/fail evidence for the advertised architecture. If any isolation assertion fails, keep readiness fatal and do not proceed to cutover.
-- [ ] Commit passing code/evidence metadata with message `Fail closed when the Codex sandbox is unavailable`.
+- [x] Write failing static/runtime tests against the built Task 20 image for forbidden bypass/full-access flags, narrow AppArmor paths, non-root runtime, filesystem sentinels, parent `/proc/*/environ`, `auth.json`, Bridge token/state, outside workspace, and network attempts to Supervisor, Core, sibling App, LAN, internet, and OpenAI.
+- [x] Run local/container tests and confirm failures are explicit rather than skipped as success.
+- [x] Implement a self-test that proves the exact tool sandbox used by app-server; expose fatal/degraded details without paths/secrets. Permit only trusted Codex parent egress to OpenAI; decline all model-tool network elevation in API v1.
+- [x] Run container tests, then install on protected target HA OS and record pass/fail evidence for the advertised architecture. If any isolation assertion fails, keep readiness fatal and do not proceed to cutover.
+- [x] Commit passing code/evidence metadata with message `Fail closed when the Codex sandbox is unavailable`.
 
 ## Task 22: Add pinned CI, signed image publishing, and safe automatic updates
 
@@ -663,11 +663,11 @@ docker buildx build --load -t codex-bridge:test .build/app-context
 
 **Verification:** `actionlint`, `zizmor .github/workflows`, local test/build commands, GH Actions dry runs, Cosign verification, and immutable-tag checks.
 
-- [ ] Write failing policy tests that parse workflows and require full commit-SHA action pins, least permissions, target architecture build, lock verification, expected updater file allowlist, `CODEX_UPDATE_PAUSED` kill switch, concurrency, artifact attestations/SBOM, keyless signing, published digest verification, immutable tags, and no automatic merge before canary evidence.
-- [ ] Run tests plus actionlint/zizmor and confirm workflows are absent.
-- [ ] Implement PR CI for Python/HA/frontend/proxy/App lint/build/security; main image publication; Integration release; and daily stable Codex watcher that opens a narrowly scoped PR. Use official Home Assistant builder actions only where their pinned interface fits the staged context; otherwise use pinned Docker Buildx/Cosign actions.
-- [ ] Run local policy/lint/build suites, push the branch, inspect every workflow permission/resolved action SHA, and run a non-release `workflow_dispatch` build. Verify GHCR digest/signature/SBOM without overwriting a version.
-- [ ] Commit with message `Automate verified Codex App releases`.
+- [x] Write failing policy tests that parse workflows and require full commit-SHA action pins, least permissions, target architecture build, lock verification, expected updater file allowlist, `CODEX_UPDATE_PAUSED` kill switch, concurrency, artifact attestations/SBOM, keyless signing, published digest verification, immutable tags, and no automatic merge before canary evidence.
+- [x] Run tests plus actionlint/zizmor and confirm workflows are absent.
+- [x] Implement PR CI for Python/HA/frontend/proxy/App lint/build/security; main image publication; Integration release; and daily stable Codex watcher that opens a narrowly scoped PR. Use official Home Assistant builder actions only where their pinned interface fits the staged context; otherwise use pinned Docker Buildx/Cosign actions.
+- [x] Run local policy/lint/build suites, push the branch, inspect every workflow permission/resolved action SHA, and run a non-release `workflow_dispatch` build. Verify GHCR digest/signature/SBOM without overwriting a version.
+- [x] Commit with message `Automate verified Codex App releases`.
 
 ## Task 23: Deliver A-grade documentation, branding, and repository hygiene
 
@@ -687,11 +687,11 @@ docker buildx build --load -t codex-bridge:test .build/app-context
 
 **Verification:** Markdown/link/spelling/secret checks, rendered light/dark/mobile review, and fresh-install command walkthrough.
 
-- [ ] Write failing repository tests for required docs/sections, valid internal/external links, restrained real badges, HACS/App install links, ChatGPT-not-API-key wording, provider-neutral remote contract, backup/rollback/removal, third-party Apache notice, no private HA URLs/credentials/personal paths, no active VM-first Quick start, and no endorsement language.
-- [ ] Run checks and confirm current Windows-first README/repository files fail.
-- [ ] Rewrite the README in outcome-first order; add exact two-surface installation, first run, Cloudflare/Nabu/VPN/LAN guidance, WebSocket/chunk requirements, updates, recovery, security, troubleshooting, development, removal, support/governance, and verified screenshots. Reuse/refine existing brand assets; do not invent unsupported badges.
-- [ ] Render every document and App Store/HACS surface; execute every command/link on a fresh test setup; run secret/spelling/link checks and visual review in HA light/dark/mobile.
-- [ ] Commit with message `Document the Home Assistant-native experience`.
+- [x] Write failing repository tests for required docs/sections, valid internal/external links, restrained real badges, HACS/App install links, ChatGPT-not-API-key wording, provider-neutral remote contract, backup/rollback/removal, third-party Apache notice, no private HA URLs/credentials/personal paths, no active VM-first Quick start, and no endorsement language.
+- [x] Run checks and confirm current Windows-first README/repository files fail.
+- [x] Rewrite the README in outcome-first order; add exact two-surface installation, first run, Cloudflare/Nabu/VPN/LAN guidance, WebSocket/chunk requirements, updates, recovery, security, troubleshooting, development, removal, support/governance, and verified screenshots. Reuse/refine existing brand assets; do not invent unsupported badges.
+- [x] Render every document and App Store/HACS surface; execute every command/link on a fresh test setup; run secret/spelling/link checks and visual review in HA light/dark/mobile.
+- [x] Commit with message `Document the Home Assistant-native experience`.
 
 ## Task 24: Complete compatibility, migration, ADR, and architecture retirement records
 
@@ -709,11 +709,11 @@ docker buildx build --load -t codex-bridge:test .build/app-context
 
 **Verification:** Old Integration→new App, new Integration→old external Bridge, fresh HA state, Windows updater tests, Aegis index/link checks, and generated-artifact cleanliness.
 
-- [ ] Write failing compatibility tests for v0/v1 negotiation, additive legacy shapes, direct-chat model recovery, no old session resume, fresh state, deprecated external capability set, and unchanged Windows workspace files.
-- [ ] Run focused compatibility tests and record current contract gaps.
-- [ ] Implement the narrow v0 adapters/deprecation notices, remove checked-in build outputs, preserve PowerShell rollback behavior, write ADRs from proven outcomes, and write a new baseline ownership/contract snapshot. Include retirement triggers and the sandbox falsification result.
-- [ ] Run Python/HA/frontend/Windows compatibility suites and Aegis/link checks; verify no generated output or old VM instruction remains in primary install paths.
-- [ ] Commit with message `Record HA runtime ownership and legacy retirement`.
+- [x] Write failing compatibility tests for v0/v1 negotiation, additive legacy shapes, direct-chat model recovery, no old session resume, fresh state, deprecated external capability set, and unchanged Windows workspace files.
+- [x] Run focused compatibility tests and record current contract gaps.
+- [x] Implement the narrow v0 adapters/deprecation notices, remove checked-in build outputs, preserve PowerShell rollback behavior, write ADRs from proven outcomes, and write a new baseline ownership/contract snapshot. Include retirement triggers and the sandbox falsification result.
+- [x] Run Python/HA/frontend/Windows compatibility suites and Aegis/link checks; verify no generated output or old VM instruction remains in primary install paths.
+- [x] Commit with message `Record HA runtime ownership and legacy retirement`.
 
 ## Task 25: Full verification, target-HA cutover, release, and merge
 
@@ -730,7 +730,7 @@ docker buildx build --load -t codex-bridge:test .build/app-context
 **Verification commands:**
 
 ```powershell
-Set-Location 'C:\Users\Ashby\Dropbox\PC (3)\Documents\Code\ha-codex-bridge'
+Set-Location '<repository-root>'
 python -m pytest -q bridge_service/tests tests/custom_components/codex_bridge
 npm ci
 npm run lint

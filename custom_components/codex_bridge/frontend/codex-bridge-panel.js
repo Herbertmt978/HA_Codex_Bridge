@@ -1198,7 +1198,7 @@ function collectUserInputAnswers(container, model) {
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.2";
+var PANEL_VERSION = "0.6.3";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -3218,6 +3218,16 @@ template.innerHTML = `
       transform: translateY(-1px);
     }
 
+    .composer-shell.retry-ready {
+      border-color: color-mix(in srgb, var(--brand-amber) 50%, var(--border-color) 50%);
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--brand-amber) 12%, transparent);
+    }
+
+    .composer-shell.retry-ready .composer-status {
+      color: color-mix(in srgb, var(--brand-amber) 70%, var(--text-color) 30%);
+      font-weight: 650;
+    }
+
     .composer textarea {
       min-height: 88px;
       border-radius: 8px;
@@ -3344,6 +3354,72 @@ template.innerHTML = `
     .error-strip {
       background: var(--danger-surface);
       color: var(--text-color);
+    }
+
+    .error-strip.visible {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 11px;
+      border-color: color-mix(in srgb, var(--danger-color) 34%, var(--border-color) 66%);
+      border-left-width: 3px;
+    }
+
+    .error-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .error-title {
+      color: var(--text-color);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .error-message {
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .error-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .error-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 0 9px;
+      border-radius: 6px;
+      color: var(--text-color);
+      background: var(--surface-bg);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .error-action.primary {
+      border-color: color-mix(in srgb, var(--accent-color) 48%, var(--border-color) 52%);
+      background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-bg) 88%);
+    }
+
+    .error-action svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .status-banner {
@@ -3620,6 +3696,19 @@ template.innerHTML = `
       .decision-actions button {
         flex: 1 1 120px;
       }
+
+      .error-strip.visible {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .error-actions {
+        width: 100%;
+      }
+
+      .error-action.primary {
+        flex: 1 1 auto;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -3862,6 +3951,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._uploadAbortController = null;
     this._isLoading = false;
     this._error = "";
+    this._errorRetryable = false;
     this._dismissedBannerKey = "";
     this._renderedThreadId = null;
     this._renderedSequence = 0;
@@ -4112,6 +4202,13 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "refresh-thread":
         this._refreshActiveThread();
+        break;
+      case "retry-error":
+        this._retryError();
+        break;
+      case "dismiss-error":
+        this._clearError();
+        this._render();
         break;
       case "save-project":
         this._saveProject();
@@ -4461,9 +4558,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads ? this._uploadProgressText() : activeThread ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - paste screenshot` : "No chat selected";
     this._renderComposerState(activeThread);
-    const errorStrip = this.shadowRoot.getElementById("error-strip");
-    errorStrip.textContent = this._error;
-    errorStrip.classList.toggle("visible", Boolean(this._error));
+    this._renderErrorSurface();
     this._renderRuntimeSurface();
     this._renderOnboardingSurface();
     this._renderAuthSurface();
@@ -4487,13 +4582,44 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderContext();
     this._renderDiagnostics();
   }
+  _renderErrorSurface() {
+    const errorStrip = this.shadowRoot.getElementById("error-strip");
+    errorStrip.replaceChildren();
+    if (!this._error) {
+      errorStrip.className = "error-strip";
+      delete errorStrip.dataset.retryable;
+      return;
+    }
+    errorStrip.className = "error-strip visible";
+    errorStrip.dataset.retryable = String(this._errorRetryable);
+    const copy = document.createElement("div");
+    copy.className = "error-copy";
+    copy.append(
+      this._textElement("strong", "error-title", this._errorRetryable ? "Connection issue" : "Codex needs attention"),
+      this._textElement("span", "error-message", this._error)
+    );
+    const actions = document.createElement("div");
+    actions.className = "error-actions";
+    const dismiss = this._actionButton("error-action", "dismiss-error", "Dismiss error");
+    dismiss.textContent = "Dismiss";
+    if (this._errorRetryable) {
+      const retry = this._actionButton("error-action primary", "retry-error", "Retry connection");
+      this._appendTrustedIcon(retry, icons.refresh);
+      retry.append(this._textElement("span", "", "Retry"));
+      actions.append(retry);
+    }
+    actions.append(dismiss);
+    errorStrip.append(copy, actions);
+  }
   _renderComposerState(activeThread) {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
     const composerStatus = this.shadowRoot.getElementById("composer-status");
+    const composerShell = this.shadowRoot.querySelector(".composer-shell");
     const isRunning = activeThread?.status === "running";
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const retryable = mutation?.state === "retryable";
+    composerShell?.classList.toggle("retry-ready", retryable);
     const locked = Boolean(mutation);
     const draft = retryable ? mutation.prompt : this._draftForThread(this._selectedThreadId);
     if (promptInput.value !== draft) {
@@ -6155,6 +6281,29 @@ var CodexBridgePanel = class extends HTMLElement {
         this._setError(error);
       }
       return false;
+    }
+  }
+  async _retryError() {
+    if (this._isLoading || !this._errorRetryable) {
+      return;
+    }
+    this._clearError();
+    this._render();
+    if (!this._config) {
+      await this._bootstrap();
+      return;
+    }
+    if (this._selectedThreadId) {
+      await this._refreshActiveThread();
+      return;
+    }
+    try {
+      await Promise.all([this._loadStatus(), this._loadProjects()]);
+      await this._loadThreads();
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._setError(error);
     }
   }
   _openProjectFormForCreate() {
@@ -7963,9 +8112,30 @@ var CodexBridgePanel = class extends HTMLElement {
   _titleCase(value) {
     return String(value).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
   }
-  _setError(error) {
+  _setError(error, { retryable = null } = {}) {
     this._error = this._safeUiError(error);
+    this._errorRetryable = retryable === null ? this._isRetryableTransportError(error) : Boolean(retryable);
     this._render();
+  }
+  _isRetryableTransportError(error) {
+    if (typeof error?.retryable === "boolean") {
+      return error.retryable;
+    }
+    const candidate = typeof error === "string" ? error : error?.body?.message || error?.message || "";
+    const normalized = String(candidate).trim().toLowerCase();
+    return [
+      "bridge request failed",
+      "bridge event stream failed",
+      "bridge connection failed",
+      "bridge connection lost",
+      "network request failed",
+      "network error",
+      "connection reset",
+      "connection refused",
+      "connection timed out",
+      "request timed out",
+      "fetch failed"
+    ].some((message) => normalized.includes(message));
   }
   _safeUiError(error) {
     const candidate = typeof error === "string" ? error : error?.body?.message || error?.message || "The Codex request did not complete.";
@@ -7978,6 +8148,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _clearError() {
     this._error = "";
+    this._errorRetryable = false;
   }
   _textElement(tagName, className, value) {
     const element = document.createElement(tagName);

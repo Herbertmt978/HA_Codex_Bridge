@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 0.6.4
+
+- Publishes the Supervisor-assigned private App IP, rather than the App
+  hostname, so discovery reaches the Bridge on Home Assistant OS.
+- Adds a fresh, validated non-secret publication marker on each App start so
+  Supervisor re-pushes discovery while retaining its issued UUID.
+- Categorizes discovery failures without logging tokens or endpoint credentials,
+  and migrates the dedicated `/config` mapping to `app_config:rw`.
+- Keeps Bridge `0.5.4` and Codex `0.144.4` without changing Integration API
+  compatibility.
+
 ## 0.6.3
 
 - Recovers ChatGPT device sign-in automatically when Codex omits a login
@@ -53,7 +64,7 @@ All notable App changes are recorded here.
 - Introduces the experimental private Home Assistant Codex Bridge App for
   `amd64` and its private Supervisor connection to the independently released
   `0.5.4` Integration.
-- Limits the writable host mapping to `addon_config:rw`, with workspaces under
+- Limits the writable host mapping to `app_config:rw`, with workspaces under
   `/config/workspaces`, and fails closed when the locked tool sandbox cannot
   complete its boot-time attestation.
 - Selects and verifies separate managed Codex permission profiles: Observe is

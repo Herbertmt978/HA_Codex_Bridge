@@ -1,7 +1,7 @@
 """Safe, versioned protocol records for the private Codex Bridge API."""
 
 from dataclasses import dataclass, field
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 import re
 from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
@@ -20,6 +20,12 @@ from .const import (
 
 
 _DISCOVERY_UUID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+_PRIVATE_APP_NETWORKS = (
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("fc00::/7"),
+)
 _HOST_LABEL_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?$")
 _SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_VERSION_PATTERN = re.compile(
@@ -407,6 +413,23 @@ def _bridge_origin(host: str, port: int) -> str:
     return validate_bridge_url(f"http://{rendered_host}:{port}")
 
 
+def _validate_discovery_host(value: object) -> str:
+    """Require Supervisor discovery to identify a literal private App IP."""
+
+    if not isinstance(value, str) or value != value.strip():
+        raise EndpointError("discovery_invalid")
+    try:
+        address = ip_address(value)
+    except ValueError:
+        raise EndpointError("discovery_invalid") from None
+    normalized = str(address)
+    if normalized != value or not any(
+        address in network for network in _PRIVATE_APP_NETWORKS
+    ):
+        raise EndpointError("discovery_invalid")
+    return normalized
+
+
 def validate_bridge_token(value: object) -> str:
     """Validate an opaque App-issued token without ever echoing it."""
 
@@ -452,7 +475,7 @@ class DiscoveryRecord:
             or not 1 <= self.port <= 65535
         ):
             raise EndpointError("discovery_invalid")
-        _bridge_origin(self.host, self.port)
+        _bridge_origin(_validate_discovery_host(self.host), self.port)
         validate_bridge_token(self.token)
         negotiate_api(self.api)
 
