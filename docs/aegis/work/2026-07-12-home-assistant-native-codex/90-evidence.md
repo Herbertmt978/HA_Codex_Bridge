@@ -339,7 +339,17 @@ Task 14 establishes the private binary transport but deliberately does not ship
 an intermediate release. Task 15 must make the browser consume the resumable v1
 routes before the HA-native application can pass end-to-end acceptance.
 
-## Historical Integration 0.6.5 development / App 0.6.4 live acceptance
+## 0.6.6 release preparation
+
+The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+and Codex `0.144.4`. It includes the Codex-style panel refinement: a clean left
+navigation tree, title-first chat rows, one action menu, correct archive
+collapse/search and search icon, 44px mobile targets, transcript-adjacent
+decisions, and collapsed mobile settings/limits. Publication, signing, and target-Home-Assistant
+acceptance are pending. No `0.6.6` image digest or live-acceptance result is
+recorded here; the following `0.6.5` evidence is historical only.
+
+## Live Integration 0.6.5 / App 0.6.5 acceptance
 
 | Evidence | Result |
 | --- | --- |
@@ -348,39 +358,38 @@ routes before the HA-native application can pass end-to-end acceptance.
 | Integration confinement | Supervisor discovery now requires the same literal private App-IP policy before constructing or authenticating a Bridge client; loopback, link-local, public, documentation, and hostname targets fail closed. |
 | Recovery UX | A valid but temporarily unreachable discovery remains on the `hassio_confirm` form with `cannot_connect`; retries revalidate authenticated readiness, and no new/replacement config-entry data is written before success. |
 | Panel UX | Transport failures receive an accessible retry/dismiss surface; local validation and sign-in guidance remain dismiss-only; retryable prompt state is visible at desktop and mobile widths. |
-| Current release metadata | `app_config:rw` replaces the legacy map name. App `0.6.4`, Integration `0.6.5`, Bridge `0.5.4`, and Codex `0.144.4` projections are synchronized. Integration `0.6.4` was published from tag `979cd81`. The signed immutable App `0.6.4` image was published by [release workflow run `29417073488`](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29417073488) from `90af9a10291019d66116e2d81980a6ac0d5da68f`; its digest is `sha256:0fa57cba4a1b76dc673e8d79b098724a13b7d15e8541d6731d507da4cc72a863`. |
+| Current release metadata | `app_config:rw` replaces the legacy map name. App `0.6.5`, Integration `0.6.5`, Bridge `0.5.5`, and Codex `0.144.4` projections are synchronized. The signed immutable App `0.6.5` image digest is `sha256:d0bb3954f535324f174189f06a0256169dc08464897c64b4f5b5ffd99bfe5f60`. |
 | Dependency policy | `httpx>=0.28.1` and Docker login-action updates merged independently; App build tools consolidate at supported `build==1.5.0`, `setuptools==83.0.0`, and `wheel==0.47.0`. Yanked `build==1.5.1` is rejected. Duplicate App pip ownership is removed, and pytest `>=9.1.0` is ignored while the pinned HA test plugin requires `pytest==9.0.3`. |
 | Full Integration | 170 passed in the pinned Home Assistant 2026.7.2 Linux test environment. |
 | Full Bridge | 1092 passed, 188 platform skips in the isolated pytest lifecycle. |
 | Frontend | ESLint passed; 142 unit tests and 11 Playwright flows passed; the generated bundle rebuilt byte-identically and passed `node --check`. |
 | App/release | 100 passed, 3 platform skips; a second protocol/App security slice passed 78 with 1 platform skip; Ruff, compileall, release projection sync, deterministic hash lock, and hash-locked dry-run installation passed. |
-| Production image | Hermetic amd64 staging and Docker build produced local image `sha256:86d0ec5fba3eba371699b208cd028e5e503148673a1840bdc336a658a60f9248`; its labels/runtime report App `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`, and its discovery publisher executes in the pinned HA base. |
+| Production image | The signed immutable amd64 App `0.6.5` image is identified by digest `sha256:d0bb3954f535324f174189f06a0256169dc08464897c64b4f5b5ffd99bfe5f60`; its runtime reports App `0.6.5`, Bridge `0.5.5`, and Codex `0.144.4`. |
 | Independent review | Review found and closed the consumer-side private-IP trust-boundary gap; no remaining correctness, deduplication, Bashio compatibility, retry, or credential/log-safety finding remained. |
-| GitHub publication | Integration/App release `0.6.4` is published, not a draft or prerelease. Its CI and signed App release workflow passed. Main later advanced only for the grouped dependency maintenance PR. |
-| Target Home Assistant | Home Assistant restarted cleanly with exactly one installed/running Codex Bridge App. The live runtime strip reported App `0.6.4`, Integration `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`; Start on boot, Watchdog, and Auto update were enabled. |
-| Account and catalogue | ChatGPT device approval completed after bounded polling and the panel reported a connected Pro account. The installed Codex catalogue advertised `gpt-5.5` and `gpt-5.4-mini` with model-specific Minimal through Xhigh reasoning. The panel contains no hard-coded release list and will show GPT-5.6, Max, or Ultra when the account catalogue advertises them. |
-| Limits and chat | The live account rendered the disabled five-hour window as `Off` and the weekly window separately. An exact-response chat completed successfully. The run also exposed a false connection banner: a post-send artifact scan returned a transient `409` while the thread was active even though the prompt and response were authoritative. |
-| Earlier Integration `0.6.5` candidate | Full, live, and poll refreshes deferred only a typed `reservation_conflict` while the authoritative thread was queued, running, or cancelling, retained the previous artifact snapshot, and continued refreshing transcript/status. This narrower behavior was superseded after live acceptance showed that another chat can reserve the same project workspace while the selected chat is idle; see the current candidate section below. |
+| GitHub publication | Integration/App release `0.6.5` is published, not a draft or prerelease. Its CI and signed App release workflow passed. |
+| Target Home Assistant | Home Assistant ran exactly one installed/running Codex Bridge App. The live runtime strip reported App `0.6.5`, Integration `0.6.5`, Bridge `0.5.5`, and Codex `0.144.4`; Start on boot, Watchdog, and Auto update were enabled. The retained `0.6.4` backup was available. |
+| Account and catalogue | ChatGPT device approval completed and the panel reported a connected Pro account. After live discovery was unavailable, the dynamic bundled catalogue exposed GPT-5.6 Sol/Terra/Luna. Sol exposed low/medium/high/xhigh/max/ultra; Terra exposed the same levels; Luna exposed low/medium/high/xhigh/max. |
+| Limits and chat | The live account rendered the disabled five-hour window as `Off` and the weekly window separately. The exact reply `HA bridge 0.6.5 smoke test passed.` completed successfully. No Bridge request failed. |
+| Panel and restart recovery | The compact Codex-style sidebar was live. After an explicit App restart, the ChatGPT Pro session survived. A normal restart can briefly show a provisional disconnected state while discovery is republished, then recovers after about 15 seconds or a refresh. |
+| Superseded pre-release behavior | Full, live, and poll refreshes deferred only a typed `reservation_conflict` while the authoritative thread was queued, running, or cancelling, retained the previous artifact snapshot, and continued refreshing transcript/status. This narrower behavior was superseded after live acceptance showed that another chat can reserve the same project workspace while the selected chat is idle. |
 | Dependency notifications | All supported Dependabot ecosystems now feed one weekly maintenance group. Legacy PRs `#8`–`#14` were closed, grouped PR `#29` merged with green CI, and no dependency PR remains open. Security fixes remain enabled separately. |
 
-## Release candidate matrix: Integration 0.6.5 / App 0.6.5 / Bridge 0.5.5 / Codex 0.144.4
+## Live release matrix: Integration 0.6.5 / App 0.6.5 / Bridge 0.5.5 / Codex 0.144.4
 
-| Candidate scope | Status |
+| Release scope | Status |
 | --- | --- |
-| Release state | Source candidate only. Publication, image signing, target-Home-Assistant installation, ChatGPT sign-in, runtime chat, and recovery acceptance are pending. This section makes no published, signed, or live-accepted claim for `0.6.5`. |
+| Release state | Published and live-accepted within the boundaries recorded above. The signed immutable App image digest is `sha256:d0bb3954f535324f174189f06a0256169dc08464897c64b4f5b5ffd99bfe5f60`. |
 | Catalogue recovery | Live app-server discovery remains primary. On failure, a verified fresh catalogue is retained as stale last-known-good; otherwise the installed Codex `debug models --bundled` catalogue is read dynamically; only then is the static fallback used. Stale results retry after 15 seconds. |
-| Runtime-derived options | The candidate has no hardcoded GPT-5.6 or reasoning-level release list. GPT-5.6 and model-specific Max/Ultra are presented only when the installed Codex catalogue advertises them. |
-| Panel behavior | The candidate uses a compact Codex-style sidebar while retaining Home Assistant theme and accessibility behavior. A typed transient artifact `reservation_conflict` preserves the prior artifact snapshot and avoids a false connection error even when the selected chat is idle; unrelated artifact failures remain visible. |
+| Runtime-derived options | The release has no hardcoded GPT-5.6 or reasoning-level release list. GPT-5.6 and model-specific Max/Ultra were presented from the dynamically read bundled catalogue after live discovery was unavailable. |
+| Panel behavior | The release uses a compact Codex-style sidebar while retaining Home Assistant theme and accessibility behavior. A typed transient artifact `reservation_conflict` preserves the prior artifact snapshot and avoids a false connection error even when the selected chat is idle; unrelated artifact failures remain visible. |
 | Boundary unchanged | Browser and remote-proxy traffic remains terminated at Home Assistant. Nabu Casa, Cloudflare, VPN, and other HTTPS reverse proxies must not expose or forward a browser directly to the private App or Bridge. |
 
 ## Evidence status
 
-This remains active acceptance evidence rather than a completion claim. The
-signed App publication, target-HA installation/discovery, ChatGPT login,
-runtime catalogue, duration-aware limits, first chat, and dependency grouping
-are now evidenced for the historical App `0.6.4` acceptance record. The
-`0.6.5` candidate matrix above is pending publication, signing, GitHub review/CI,
-target-HA installation, and chat/stop-start recovery. External blocked-network
-proof, cold restore, the first unattended App update, and previous-image
-recovery still require fresh evidence before the Windows recovery path can be
-retired.
+This is bounded live acceptance evidence for the published `0.6.5` matrix. The
+signed App publication, target-HA installation/discovery, ChatGPT Pro login,
+runtime catalogue, duration-aware limits, exact-response chat, App update and
+restart recovery, and dependency grouping are evidenced above. External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
+unattended App update, and previous-image recovery still require fresh evidence;
+the optional external Bridge remains a compatibility/recovery path until then.

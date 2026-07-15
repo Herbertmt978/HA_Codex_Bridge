@@ -108,21 +108,20 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The release candidate matrix is Integration `0.6.5`, App `0.6.5`, Bridge
-`0.5.5`, and Codex `0.144.4`. It is experimental, `amd64` only, and pending
-publication, signing, and target-Home-Assistant acceptance. App `0.6.4` is the
-previously published signed immutable image with an SPDX SBOM and build
-provenance. App `0.6.1` is known-bad
+The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+and Codex `0.144.4`. It is experimental and `amd64` only; publication, signing,
+and target-Home-Assistant acceptance remain pending. The signed, live-accepted
+`0.6.5` matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
 bounded supplemental roots beneath the workspace. App `0.6.2` validates
 canonical contained supplemental roots and hardens `lsm_get_self_attr` record
-parsing. The published image passed target-HAOS startup, its production sandbox
+parsing. The historical `0.6.5` image passed target-HAOS startup, its production sandbox
 self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, and panel loading. A redacted
-ChatGPT device-login start/cancel cycle also passed; completing account
-authorization still requires the user. Remote access, the first unattended
-automatic update, cold restore, and App-image rollback remain acceptance work
-for the intended Home Assistant installation.
+ChatGPT device-login start/cancel cycle also passed. That historical acceptance
+does not accept `0.6.6`. External blocked-network/Nabu Casa/Cloudflare routing,
+cold restore, the first future unattended App update, and previous-image
+rollback remain unproven.
 
 For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).

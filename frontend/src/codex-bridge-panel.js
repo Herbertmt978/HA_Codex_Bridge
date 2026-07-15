@@ -8,7 +8,7 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 
-const PANEL_VERSION = "0.6.5";
+const PANEL_VERSION = "0.6.6";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -1195,6 +1195,14 @@ template.innerHTML = `
       align-items: stretch;
     }
 
+    .composer-diagnostics {
+      display: contents;
+    }
+
+    .composer-diagnostics > summary {
+      display: none;
+    }
+
     .toolbar-card {
       display: grid;
       gap: 6px;
@@ -1734,7 +1742,7 @@ template.innerHTML = `
      * These rules sit near the responsive rules so stateful controls above retain their
      * existing selectors and behaviour while sharing one visual language. */
     .shell {
-      grid-template-columns: 224px minmax(0, 1fr) 260px;
+      grid-template-columns: clamp(248px, 16vw, 268px) minmax(0, 1fr) 260px;
       gap: 0;
       padding: 0;
       background: var(--canvas-bg);
@@ -1771,9 +1779,43 @@ template.innerHTML = `
     .rail-header,
     .main-header,
     .side-header {
-      min-height: 56px;
+      min-height: 60px;
       padding: 12px 14px;
       background: transparent;
+    }
+
+    .rail-header {
+      display: flex;
+      align-items: center;
+    }
+
+    .rail-brand {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .rail-brand-icon {
+      display: inline-grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+      color: color-mix(in srgb, var(--accent-color) 72%, var(--text-color) 28%);
+    }
+
+    .rail-brand-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .main-header {
@@ -1811,7 +1853,13 @@ template.innerHTML = `
     }
 
     .account-pill {
-      border-color: var(--border-color);
+      width: fit-content;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      font-size: 11px;
+      line-height: 1.35;
     }
 
     .rail-actions,
@@ -1820,21 +1868,8 @@ template.innerHTML = `
       background: transparent;
     }
 
-    .tool-button {
-      min-height: 34px;
-      padding: 8px 9px;
-      border-radius: 6px;
-    }
-
-    #new-direct-chat-button {
-      border-color: color-mix(in srgb, var(--text-color) 12%, var(--border-color) 88%);
-      background: color-mix(in srgb, var(--text-color) 7%, var(--surface-bg) 93%);
-      font-weight: 650;
-    }
-
-    #new-direct-chat-button:hover {
-      border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color) 62%);
-      background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-bg) 90%);
+    .forms-stack:not(:has(.panel-form.visible)) {
+      display: none;
     }
 
     /* Navigation is deliberately a tree, not a stack of mini cards.  The primary
@@ -1843,215 +1878,343 @@ template.innerHTML = `
      * row of competing icons. */
     .rail-actions {
       gap: 6px;
-      padding: 10px;
+      padding: 8px 10px 10px;
+      border-bottom: 1px solid var(--border-color);
     }
 
     .rail-actions .tool-button {
       min-height: 36px;
       padding: 8px 10px;
+      border-radius: 7px;
     }
 
-    #new-project-button {
-      color: var(--muted-color);
+    #new-direct-chat-button {
+      border-color: transparent;
+      background: var(--surface-muted);
+      font-weight: 650;
+    }
+
+    #new-direct-chat-button:hover,
+    #new-direct-chat-button:focus-visible {
+      border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
+      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+    }
+
+    .search-shell {
+      height: 34px;
+      padding: 0 9px;
+      border-color: transparent;
+      border-radius: 7px;
+      background: var(--surface-muted);
+      box-shadow: none;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+
+    .search-shell:focus-within {
+      border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%);
+      background: var(--surface-bg);
+    }
+
+    .search-shell svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .search-shell input {
+      font-size: 13px;
+      outline: 0;
+    }
+
+    .search-shell input::-webkit-search-cancel-button {
+      opacity: 0.62;
     }
 
     .rail-sections {
-      gap: 10px;
-      padding: 10px 8px 16px;
+      gap: 8px;
+      padding: 8px 8px 18px;
+    }
+
+    .rail-section {
+      overflow: visible;
     }
 
     .section-head {
-      min-height: 30px;
-      padding: 6px 6px 3px;
+      min-height: 34px;
+      padding: 2px 4px;
     }
 
     .section-head-button {
-      min-height: 28px;
+      width: 100%;
+      min-height: 30px;
+      padding: 0 2px;
+      border-radius: 6px;
+    }
+
+    .section-head-button:hover {
+      background: var(--surface-muted);
+    }
+
+    .section-name {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .section-count {
+      display: inline-flex;
+      min-width: 18px;
+      height: 18px;
+      margin-left: 2px;
+      padding: 0 5px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: var(--surface-muted);
+      color: var(--muted-color);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .section-action {
+      width: 30px;
+      height: 30px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .section-action:hover,
+    .section-action:focus-visible {
+      border-color: var(--border-color);
+      background: var(--surface-bg);
     }
 
     .project-list,
-    .chat-list {
+    .chat-list,
+    .archive-list {
+      display: grid;
       gap: 2px;
+    }
+
+    .chat-list[hidden],
+    .archive-list[hidden] {
+      display: none;
     }
 
     .project-shell {
-      padding: 2px 0;
+      position: relative;
+      padding: 1px 0;
     }
 
     .project-head {
-      align-items: start;
-      gap: 6px;
-      padding: 7px 7px 5px;
+      position: relative;
+      grid-template-columns: 28px minmax(0, 1fr) 28px;
+      align-items: center;
+      gap: 2px;
+      min-height: 38px;
+      padding: 2px 4px;
+      border-radius: 7px;
     }
 
     .project-button {
-      min-height: 32px;
-      padding: 2px 0;
+      width: 100%;
+      min-height: 34px;
+      padding: 0 4px;
+      border-radius: 6px;
     }
 
-    .project-meta {
-      gap: 2px;
+    .project-button .section-title-line {
+      width: 100%;
     }
 
-    .project-meta .row-meta {
-      font-size: 11px;
+    .project-name,
+    .thread-name {
+      font-size: 13px;
+      font-weight: 560;
       line-height: 1.25;
     }
 
     .project-head .project-actions {
-      display: grid;
-      grid-template-columns: repeat(3, 28px);
-      justify-content: end;
-      gap: 4px;
+      display: flex;
+      justify-content: center;
     }
 
-    .project-head .project-actions > .icon-button.small {
+    .project-head .project-actions > .icon-button.small,
+    .project-collapse-button,
+    .thread-actions-toggle {
       width: 28px;
       height: 28px;
       border-color: transparent;
       background: transparent;
+      opacity: 0.58;
     }
 
     .project-head .project-actions > .icon-button.small:hover,
-    .project-head .project-actions > .icon-button.small:focus-visible {
+    .project-head .project-actions > .icon-button.small:focus-visible,
+    .project-collapse-button:hover,
+    .project-collapse-button:focus-visible,
+    .thread-actions-toggle:hover,
+    .thread-actions-toggle:focus-visible,
+    .actions-open .thread-actions-toggle {
       border-color: var(--border-color);
       background: var(--surface-bg);
+      opacity: 1;
     }
 
-    .project-primary-action {
-      color: color-mix(in srgb, var(--accent-color) 76%, var(--text-color) 24%);
-    }
-
-    .project-head .project-actions-toggle svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    .project-secondary-actions {
-      grid-column: 1 / -1;
-      display: flex;
-      justify-content: flex-end;
-      gap: 4px;
-      padding-top: 3px;
-      border-top: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
-    }
-
-    .project-secondary-actions[hidden] {
-      display: none;
-    }
-
-    .project-secondary-actions .icon-button.small {
-      width: 28px;
-      height: 28px;
-      border-color: var(--border-color);
-      background: var(--surface-bg);
-    }
-
-    .project-secondary-actions .icon-button.small:last-child {
-      color: var(--danger-color);
+    .project-collapse-button svg,
+    .project-actions-toggle svg,
+    .thread-actions-toggle svg {
+      width: 15px;
+      height: 15px;
     }
 
     .chat-list {
-      margin-left: 12px;
-      padding: 1px 0 6px 10px;
+      margin-left: 18px;
+      padding: 1px 0 5px 10px;
+      border-left: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
+    }
+
+    .direct-chat-list,
+    .archive-list {
+      margin-left: 0;
+      padding: 0;
+      border-left: 0;
     }
 
     .chat-row {
-      gap: 4px;
-      padding: 0;
+      position: relative;
+      grid-template-columns: minmax(0, 1fr) 28px;
+      gap: 2px;
+      min-height: 38px;
+      padding: 1px 0;
     }
 
     .chat-select {
-      display: block;
-      min-height: 48px;
-      padding: 8px 9px;
+      display: grid;
+      grid-template-columns: 8px minmax(0, 1fr);
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 7px;
       border-radius: 7px;
     }
 
-    .thread-title-block {
-      gap: 3px;
-    }
-
-    .thread-name {
-      display: block;
-      line-height: 1.25;
-    }
-
-    .chat-meta-line {
+    .chat-row .row-actions {
       display: flex;
-      align-items: center;
-      min-width: 0;
-      gap: 6px;
-      color: var(--muted-color);
-      white-space: nowrap;
-    }
-
-    .chat-meta-line .row-meta,
-    .chat-meta-line .timestamp {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 11px;
-      line-height: 1.25;
-    }
-
-    .chat-meta-line .row-meta {
-      flex: 1 1 auto;
-    }
-
-    .chat-meta-line .timestamp {
-      flex: 0 0 auto;
-    }
-
-    .status-pill.idle,
-    .status-pill.running {
-      box-shadow: none;
+      justify-content: center;
+      gap: 0;
     }
 
     .status-pill {
-      width: 8px;
-      height: 8px;
-      min-width: 8px;
+      width: 7px;
+      height: 7px;
+      min-width: 7px;
+      border: 0;
+      box-shadow: none;
     }
 
-    .thread-actions {
-      gap: 3px;
+    .thread-actions-toggle {
+      opacity: 0.34;
     }
 
-    .thread-actions .action-button.small {
-      width: 26px;
-      height: 26px;
+    .chat-row:hover .thread-actions-toggle,
+    .chat-row:focus-within .thread-actions-toggle,
+    .chat-row.selected .thread-actions-toggle {
+      opacity: 0.76;
+    }
+
+    .rail-action-menu {
+      display: grid;
+      grid-column: 1 / -1;
+      width: auto;
+      min-width: 0;
+      max-width: none;
+      gap: 2px;
+      margin: 2px 4px 4px;
+      padding: 3px;
+      border: 0;
+      border-left: 1px solid var(--border-color);
+      border-radius: 0;
+      background: var(--surface-muted);
+      box-shadow: none;
+      opacity: 1;
+      pointer-events: auto;
+      transition: none;
+    }
+
+    .rail-action-menu[hidden] {
+      display: none;
+    }
+
+    .rail-menu-item {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 9px;
       border-color: transparent;
+      border-radius: 6px;
       background: transparent;
+      color: var(--text-color);
+      text-align: left;
+      font-size: 12px;
+      font-weight: 560;
     }
 
-    .thread-actions .action-button.small:hover,
-    .thread-actions .action-button.small:focus-visible {
-      border-color: var(--border-color);
-      background: var(--surface-bg);
+    .rail-menu-item:hover,
+    .rail-menu-item:focus-visible {
+      border-color: transparent;
+      background: var(--surface-muted);
+    }
+
+    .rail-menu-item svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .rail-menu-item[data-action="delete-project"],
+    .rail-menu-item[data-action="delete-thread"] {
+      color: var(--danger-color);
+    }
+
+    .section-empty,
+    .rail-search-empty {
+      margin: 2px 8px 6px;
+      padding: 7px 8px;
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .rail-search-empty {
+      border-top: 1px solid var(--border-color);
+      padding-top: 12px;
     }
 
     .tool-button:hover,
     .chat-select:hover {
-      background: color-mix(in srgb, var(--accent-color) 7%, var(--surface-bg) 93%);
+      background: var(--surface-muted);
     }
 
     .project-head.active,
     .chat-select.active {
-      background: color-mix(in srgb, var(--accent-color) 13%, var(--surface-bg) 87%);
-      box-shadow: inset 3px 0 0 var(--accent-color);
+      background: color-mix(in srgb, var(--accent-color) 9%, var(--surface-bg) 91%);
+      box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent-color) 74%, var(--text-color) 26%);
     }
 
     .project-head.active .project-name,
     .chat-select.active .thread-name {
       font-weight: 700;
-    }
-
-    .project-head.active .row-meta,
-    .chat-select.active .row-meta,
-    .chat-select.active .timestamp {
-      color: var(--text-color);
     }
 
     .chat-select.active {
@@ -2085,7 +2248,10 @@ template.innerHTML = `
     }
 
     .runtime-item {
-      min-height: 24px;
+      min-height: 22px;
+      padding-inline: 7px;
+      border-color: color-mix(in srgb, var(--border-color) 72%, transparent);
+      background: transparent;
       font-weight: 600;
     }
 
@@ -2099,9 +2265,7 @@ template.innerHTML = `
     }
 
     .onboarding-shell:not(:has(.onboarding-stage.pending)) {
-      display: flex;
-      align-items: center;
-      min-height: 34px;
+      display: none;
     }
 
     .onboarding-shell:not(:has(.onboarding-stage.pending)) #onboarding {
@@ -2124,8 +2288,8 @@ template.innerHTML = `
 
     .compact-toolbar {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-      gap: 8px;
-      padding-top: 2px;
+      gap: 10px;
+      padding-top: 7px;
       border-top: 1px solid var(--border-color);
     }
 
@@ -2159,10 +2323,15 @@ template.innerHTML = `
     }
 
     .send-button {
-      min-width: 42px;
-      height: 42px;
-      padding: 0 13px;
-      border-radius: 8px;
+      width: 38px;
+      min-width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 10px;
+    }
+
+    #send-button span {
+      display: none;
     }
 
     .send-button:hover {
@@ -2228,18 +2397,19 @@ template.innerHTML = `
       z-index: 2;
       bottom: 12px;
       width: min(calc(100% - 32px), 900px);
-      margin: 8px auto 12px;
-      padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+      gap: 8px;
+      margin: 10px auto 14px;
+      padding: 8px 9px max(8px, env(safe-area-inset-bottom));
       border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
-      border-radius: 12px;
+      border-radius: 16px;
       background: var(--surface-bg);
-      box-shadow: 0 12px 30px color-mix(in srgb, var(--text-color) 13%, transparent);
+      box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 11%, transparent);
       transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
     }
 
     .composer-shell:focus-within {
       border-color: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
-      box-shadow: 0 14px 34px color-mix(in srgb, var(--text-color) 15%, transparent), 0 0 0 3px color-mix(in srgb, var(--accent-color) 12%, transparent);
+      box-shadow: 0 12px 30px color-mix(in srgb, var(--text-color) 13%, transparent), 0 0 0 2px color-mix(in srgb, var(--accent-color) 10%, transparent);
       transform: translateY(-1px);
     }
 
@@ -2254,10 +2424,17 @@ template.innerHTML = `
     }
 
     .composer textarea {
-      min-height: 88px;
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--surface-muted) 86%, var(--surface-bg) 14%);
+      min-height: 64px;
+      padding: 10px 11px;
+      border: 0;
+      border-radius: 10px;
+      outline: 0;
+      background: transparent;
       box-shadow: none;
+    }
+
+    .composer-status:empty {
+      display: none;
     }
 
     .empty-state.empty-state-main {
@@ -2538,7 +2715,7 @@ template.innerHTML = `
 
     @media (max-width: 1120px) {
       .shell {
-        grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
+        grid-template-columns: minmax(236px, 256px) minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) clamp(260px, 34vh, 340px);
       }
 
@@ -2608,7 +2785,7 @@ template.innerHTML = `
         top: 0;
         bottom: 0;
         z-index: 4;
-        width: min(86vw, 324px);
+        width: min(88vw, 360px);
         min-height: 100dvh;
         height: 100dvh;
         transition: transform 180ms ease, box-shadow 180ms ease;
@@ -2667,12 +2844,89 @@ template.innerHTML = `
         grid-template-columns: 1fr;
       }
 
+      .composer-diagnostics {
+        display: block;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .composer-diagnostics > summary {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 2px;
+        color: var(--muted-color);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        list-style: none;
+      }
+
+      .composer-diagnostics > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .composer-diagnostics > summary::after {
+        content: "Show";
+        margin-left: auto;
+        color: var(--accent-color);
+        font-size: 11px;
+      }
+
+      .composer-diagnostics[open] > summary::after {
+        content: "Hide";
+      }
+
+      .composer-diagnostics > .compact-toolbar {
+        padding: 0 0 8px;
+      }
+
       .field-grid {
         grid-template-columns: 1fr;
       }
 
       .composer {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .rail-pane .search-shell {
+        height: 44px;
+      }
+
+      .rail-pane button[data-action] {
+        min-height: 44px;
+      }
+
+      .rail-pane .icon-button.small,
+      .rail-pane .project-collapse-button,
+      .rail-pane .thread-actions-toggle,
+      .rail-pane .section-action {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+      }
+
+      .rail-pane .section-head {
+        min-height: 48px;
+      }
+
+      .rail-pane .project-head {
+        grid-template-columns: 44px minmax(0, 1fr) 44px;
+        min-height: 48px;
+        padding-block: 0;
+      }
+
+      .rail-pane .project-button,
+      .rail-pane .chat-select,
+      .rail-pane .chat-row {
+        min-height: 44px;
+      }
+
+      .rail-pane .chat-row {
+        grid-template-columns: minmax(0, 1fr) 44px;
+      }
+
+      .rail-pane .rail-menu-item {
+        min-height: 44px;
       }
 
       .onboarding-checklist {
@@ -2686,10 +2940,11 @@ template.innerHTML = `
       }
 
       .interaction-region {
-        flex: 0 1 auto;
-        max-height: 38vh;
+        flex: 0 0 auto;
+        max-height: none;
         min-height: 0;
         padding-inline: 0;
+        overflow: visible;
       }
 
       .interaction-summary {
@@ -2709,8 +2964,18 @@ template.innerHTML = `
       }
 
       .message-list {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         min-height: 0;
+        overflow: visible;
+      }
+
+      .interaction-card {
+        scroll-margin-block: 52px 160px;
+      }
+
+      .main-pane {
+        overflow-y: auto;
+        overscroll-behavior: contain;
       }
 
       .composer-shell {
@@ -2748,20 +3013,21 @@ template.innerHTML = `
     }
   </style>
   <div class="shell">
-    <aside class="pane rail-pane" id="workspace-drawer">
+    <aside class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
       <div class="rail-header">
-        <div class="title-block">
-          <span class="eyeline">Workspace</span>
-          <span class="title" id="panel-title">Codex Bridge</span>
-          <span class="account-pill unavailable" id="account-pill">Account unavailable</span>
+        <div class="rail-brand">
+          <span class="rail-brand-icon" id="rail-brand-icon" aria-hidden="true"></span>
+          <div class="title-block">
+            <span class="title" id="panel-title">Codex Bridge</span>
+            <span class="account-pill unavailable" id="account-pill">Account unavailable</span>
+          </div>
         </div>
       </div>
       <div class="rail-actions">
-        <button class="tool-button" type="button" data-action="new-direct-chat" id="new-direct-chat-button"></button>
-        <button class="tool-button" type="button" data-action="toggle-project-form" id="new-project-button"></button>
+        <button class="tool-button" type="button" data-action="new-direct-chat" id="new-direct-chat-button" title="New chat" aria-label="New chat"></button>
         <label class="search-shell" for="search-input">
           <span id="search-icon"></span>
-          <input id="search-input" type="text" placeholder="Search chats and projects" />
+          <input id="search-input" type="search" placeholder="Search" aria-label="Search chats and projects" autocomplete="off" />
         </label>
       </div>
       <div class="forms-stack">
@@ -2773,6 +3039,7 @@ template.innerHTML = `
           <section class="rail-section" id="direct-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
+          <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
     </aside>
@@ -2806,8 +3073,8 @@ template.innerHTML = `
         </section>
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       </div>
-      <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       <div class="composer-shell">
         <div class="attachment-toolbar">
           <div class="attachment-actions">
@@ -2819,9 +3086,12 @@ template.innerHTML = `
         </div>
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-status"></textarea>
-          <button class="send-button" type="button" data-action="send-prompt" id="send-button" aria-describedby="composer-status"></button>
+          <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
         </div>
-        <div class="compact-toolbar" id="compact-toolbar"></div>
+        <details class="composer-diagnostics" id="composer-diagnostics" open>
+          <summary>Chat settings and limits</summary>
+          <div class="compact-toolbar" id="compact-toolbar"></div>
+        </details>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
@@ -3002,6 +3272,7 @@ class CodexBridgePanel extends HTMLElement {
     this._queuedRender = false;
     this._collapsedProjects = {};
     this._expandedProjectActions = {};
+    this._expandedThreadActions = {};
     this._collapsedSections = {
       direct: false,
       archived: true,
@@ -3105,8 +3376,8 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     this._staticUiInstalled = true;
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.chat, "New chat");
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("new-project-button"), icons.plus, "New project");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("rail-brand-icon"), icons.brand);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("refresh-thread-button"), icons.refresh);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
@@ -3134,11 +3405,13 @@ class CodexBridgePanel extends HTMLElement {
       };
     this._mobileDrawerMediaListener = () => {
       this._syncMobileDrawer();
+      this._syncComposerDiagnostics();
       queueMicrotask(() => this._scrollInteractionTargetIntoView(this.shadowRoot.activeElement));
     };
     this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = true;
     this._syncMobileDrawer();
+    this._syncComposerDiagnostics();
 
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
@@ -3235,13 +3508,36 @@ class CodexBridgePanel extends HTMLElement {
     contextToggle?.setAttribute("aria-expanded", String(contextOpen));
   }
 
+  _syncComposerDiagnostics() {
+    const details = this.shadowRoot.getElementById("composer-diagnostics");
+    if (!details) {
+      return;
+    }
+    const layout = this._mobileDrawerMedia?.matches ? "mobile" : "desktop";
+    if (details.dataset.layout === layout) {
+      return;
+    }
+    details.dataset.layout = layout;
+    details.open = layout === "desktop";
+  }
+
   _handleClick(event) {
-    const actionTarget = event.target.closest("[data-action]");
+    const eventTarget = event.target instanceof Element ? event.target : null;
+    const actionTarget = eventTarget?.closest("[data-action]");
     if (!actionTarget) {
+      if (this._hasOpenRailMenu()) {
+        this._closeRailMenus();
+      }
       return;
     }
 
     const action = actionTarget.dataset.action;
+    if (
+      actionTarget.closest(".rail-pane")
+      && !["toggle-project-actions", "toggle-thread-actions"].includes(action)
+    ) {
+      this._closeRailMenus();
+    }
     switch (action) {
       case "toggle-mobile-nav":
         this._toggleMobileDrawer("navigation", actionTarget);
@@ -3304,6 +3600,9 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "toggle-project-actions":
         this._toggleProjectActions(actionTarget.dataset.projectId || "");
+        break;
+      case "toggle-thread-actions":
+        this._toggleThreadActions(actionTarget.dataset.threadId || "");
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
@@ -3423,6 +3722,8 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (target.id === "search-input") {
       this._searchQuery = target.value;
+      this._expandedProjectActions = {};
+      this._expandedThreadActions = {};
       this._render();
       return;
     }
@@ -3532,6 +3833,11 @@ class CodexBridgePanel extends HTMLElement {
   _handleKeyDown(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (event.key === "Escape" && this._hasOpenRailMenu()) {
+      event.preventDefault();
+      this._closeRailMenus({ restoreFocus: true });
       return;
     }
     if (event.key === "Escape" && this._mobileDrawer) {
@@ -3651,7 +3957,7 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
       ? this._uploadProgressText()
       : activeThread
-        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - paste screenshot`
+        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - add files or paste a screenshot`
         : "No chat selected";
     this._renderComposerState(activeThread);
 
@@ -3670,10 +3976,11 @@ class CodexBridgePanel extends HTMLElement {
     this._renderDirectSection();
     this._renderProjectList();
     this._renderArchivedSection();
+    this._renderNavigationEmptyState();
     this._renderToolbar();
     this._renderAttachmentChips();
-    this._renderInteractions();
     this._renderMessages();
+    this._renderInteractions();
     this._renderProgress();
     this._renderArtifacts();
     this._renderArtifactPreview();
@@ -4550,11 +4857,10 @@ class CodexBridgePanel extends HTMLElement {
   _renderDirectSection() {
     const section = this.shadowRoot.getElementById("direct-section");
     const directThreads = this._directThreads(false);
-    const collapsed = Boolean(this._collapsedSections.direct);
-    const directProject = this._directProject();
-    const hasMatches = directThreads.length || !this._searchQuery.trim();
+    const searchActive = Boolean(this._searchQuery.trim());
+    const collapsed = Boolean(this._collapsedSections.direct) && !searchActive;
 
-    if (!directProject && !hasMatches) {
+    if (searchActive && !directThreads.length) {
       section.replaceChildren();
       return;
     }
@@ -4562,21 +4868,26 @@ class CodexBridgePanel extends HTMLElement {
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
-    const toggle = this._actionButton("section-head-button", "toggle-section", "Toggle direct chats");
+    const toggle = this._actionButton(
+      "section-head-button",
+      "toggle-section",
+      `${collapsed ? "Expand" : "Collapse"} direct chats`
+    );
     toggle.dataset.section = "direct";
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute("aria-controls", "direct-chat-list");
-    toggle.append(this._sectionTitleLine(collapsed ? icons.chevronRight : icons.chevronDown, icons.chat, "Direct chats"));
-    const actions = document.createElement("div");
-    actions.className = "project-actions";
-    const newChat = this._actionButton("icon-button small", "new-direct-chat", "New direct chat");
-    this._setTrustedButtonContent(newChat, icons.plus);
-    actions.append(newChat);
-    sectionHead.append(toggle, actions);
+    const titleLine = this._sectionTitleLine(
+      collapsed ? icons.chevronRight : icons.chevronDown,
+      icons.chat,
+      "Direct chats"
+    );
+    titleLine.append(this._textElement("span", "section-count", ` ${directThreads.length} `));
+    toggle.append(titleLine);
+    sectionHead.append(toggle);
     section.append(sectionHead);
     const chatList = document.createElement("div");
     chatList.id = "direct-chat-list";
-    chatList.className = "chat-list";
+    chatList.className = "chat-list direct-chat-list";
     chatList.hidden = collapsed;
     if (directThreads.length) {
       for (const thread of directThreads) {
@@ -4597,9 +4908,19 @@ class CodexBridgePanel extends HTMLElement {
     const sectionHead = document.createElement("div");
     sectionHead.className = "section-head compact";
     sectionHead.append(this._sectionTitleLine(null, icons.folder, "Projects"));
+    const newProject = this._actionButton(
+      "icon-button small section-action",
+      "toggle-project-form",
+      "New project"
+    );
+    newProject.id = "new-project-button";
+    this._setTrustedButtonContent(newProject, icons.plus);
+    sectionHead.append(newProject);
     section.append(sectionHead);
     if (!projects.length) {
-      section.append(this._emptyStateNode("No projects yet", "Create a project to provision a private App workspace."));
+      if (!this._searchQuery.trim()) {
+        section.append(this._textElement("div", "empty-note section-empty", "No projects yet."));
+      }
       return;
     }
 
@@ -4609,34 +4930,20 @@ class CodexBridgePanel extends HTMLElement {
       for (const project of visibleProjects) {
         projectList.append(this._projectSection(project));
       }
-    } else {
-      projectList.append(this._emptyStateNode("No matches", "Try a broader search."));
     }
     section.append(projectList);
   }
 
   _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
     const threads = this._projectThreads(project.project_id, includeArchivedThreads);
-    const collapsed = Boolean(this._collapsedProjects[project.project_id]);
+    const searchActive = Boolean(this._searchQuery.trim());
+    const collapsed = Boolean(this._collapsedProjects[project.project_id]) && !searchActive;
     const active = this._selectedProjectId === project.project_id || this._activeThread?.project_id === project.project_id;
     const chatCount = threads.length === 1 ? "1 chat" : `${threads.length} chats`;
     const shell = document.createElement("section");
     shell.className = `project-shell${archived ? " archived" : ""}`;
     const projectHead = document.createElement("div");
     projectHead.className = `project-head${active ? " active" : ""}`;
-    const projectButton = this._actionButton("project-button", "select-project", `Select ${project.name || "project"}`);
-    projectButton.dataset.projectId = String(project.project_id || "");
-    const projectMeta = document.createElement("div");
-    projectMeta.className = "project-meta";
-    const titleLine = document.createElement("div");
-    titleLine.className = "section-title-line";
-    const projectName = this._textElement("span", "project-name", project.name || "");
-    this._appendTrustedIcon(titleLine, icons.folder);
-    titleLine.append(projectName);
-    projectMeta.append(titleLine, this._textElement("span", "row-meta", chatCount));
-    projectButton.append(projectMeta);
-    const projectActions = document.createElement("div");
-    projectActions.className = "project-actions";
     const chatListId = this._projectChatListId(project.project_id);
     const collapse = this._actionButton(
       "icon-button small project-collapse-button",
@@ -4647,18 +4954,29 @@ class CodexBridgePanel extends HTMLElement {
     collapse.setAttribute("aria-expanded", String(!collapsed));
     collapse.setAttribute("aria-controls", chatListId);
     this._setTrustedButtonContent(collapse, collapsed ? icons.chevronRight : icons.chevronDown);
-    projectActions.append(collapse);
-    if (project.kind === "project" && !archived) {
-      const newChat = this._actionButton("icon-button small project-primary-action", "new-chat", "New chat");
-      newChat.dataset.projectId = String(project.project_id || "");
-      this._setTrustedButtonContent(newChat, icons.plus);
-      projectActions.append(newChat);
-    }
+
+    const projectButton = this._actionButton(
+      "project-button",
+      "select-project",
+      `Select ${project.name || "project"}, ${chatCount}`
+    );
+    projectButton.dataset.projectId = String(project.project_id || "");
+    projectButton.title = `${project.name || "Untitled project"} · ${chatCount}`;
+    const titleLine = document.createElement("span");
+    titleLine.className = "section-title-line";
+    const projectName = this._textElement("span", "project-name", project.name || "Untitled project");
+    this._appendTrustedIcon(titleLine, icons.folder);
+    titleLine.append(projectName);
+    projectButton.append(titleLine);
+
+    const projectActions = document.createElement("div");
+    projectActions.className = "project-actions";
 
     const secondaryActions = project.kind === "project"
       ? archived
         ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]]
         : [
+            ["new-chat", "New chat", icons.plus],
             ...(this._isLegacyConnection() ? [] : [["edit-project", "Edit project", icons.edit]]),
             ["archive-project", "Archive project", icons.archive],
             ["delete-project", "Delete project", icons.trash],
@@ -4676,22 +4994,24 @@ class CodexBridgePanel extends HTMLElement {
       more.id = `project-actions-toggle-${project.project_id}`;
       more.setAttribute("aria-expanded", String(expanded));
       more.setAttribute("aria-controls", secondaryId);
+      more.setAttribute("aria-haspopup", "true");
       this._setTrustedButtonContent(more, icons.more);
       projectActions.append(more);
 
       const secondary = document.createElement("div");
       secondary.id = secondaryId;
-      secondary.className = "project-secondary-actions";
+      secondary.className = "rail-action-menu project-secondary-actions";
+      secondary.setAttribute("aria-label", `Actions for ${project.name || "project"}`);
       secondary.hidden = !expanded;
       for (const [action, label, icon] of secondaryActions) {
-        const button = this._actionButton("icon-button small", action, label);
+        const button = this._actionButton("rail-menu-item", action, label);
         button.dataset.projectId = String(project.project_id || "");
-        this._setTrustedButtonContent(button, icon);
+        this._setTrustedButtonContent(button, icon, label);
         secondary.append(button);
       }
-      projectActions.append(secondary);
+      projectHead.append(secondary);
     }
-    projectHead.append(projectButton, projectActions);
+    projectHead.prepend(collapse, projectButton, projectActions);
     shell.append(projectHead);
     const chatList = document.createElement("div");
     chatList.id = chatListId;
@@ -4718,7 +5038,8 @@ class CodexBridgePanel extends HTMLElement {
         !archivedProjectIds.has(thread.project_id) &&
         this._threadMatchesQuery(thread)
     );
-    const collapsed = Boolean(this._collapsedSections.archived);
+    const searchActive = Boolean(this._searchQuery.trim());
+    const collapsed = Boolean(this._collapsedSections.archived) && !searchActive;
 
     if (!archivedProjects.length && !archivedThreads.length) {
       section.replaceChildren();
@@ -4728,16 +5049,28 @@ class CodexBridgePanel extends HTMLElement {
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
-    const toggle = this._actionButton("section-head-button", "toggle-section", "Toggle archived chats");
+    const toggle = this._actionButton(
+      "section-head-button",
+      "toggle-section",
+      `${collapsed ? "Expand" : "Collapse"} archived chats`
+    );
     toggle.dataset.section = "archived";
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute("aria-controls", "archived-chat-list");
-    toggle.append(this._sectionTitleLine(collapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived"));
+    const titleLine = this._sectionTitleLine(
+      collapsed ? icons.chevronRight : icons.chevronDown,
+      icons.archive,
+      "Archived"
+    );
+    titleLine.append(
+      this._textElement("span", "section-count", ` ${archivedProjects.length + archivedThreads.length} `)
+    );
+    toggle.append(titleLine);
     sectionHead.append(toggle);
     section.append(sectionHead);
     const chatList = document.createElement("div");
     chatList.id = "archived-chat-list";
-    chatList.className = "chat-list";
+    chatList.className = "archive-list";
     chatList.hidden = collapsed;
     for (const project of archivedProjects) {
       chatList.append(this._projectSection(project, { archived: true, includeArchivedThreads: true }));
@@ -4748,53 +5081,90 @@ class CodexBridgePanel extends HTMLElement {
     section.append(chatList);
   }
 
+  _renderNavigationEmptyState() {
+    const empty = this.shadowRoot.getElementById("rail-search-empty");
+    const query = this._searchQuery.trim();
+    if (!query) {
+      empty.hidden = true;
+      empty.textContent = "";
+      return;
+    }
+    const activeProjects = this._projects.filter(
+      (project) => project.kind !== "direct" && !project.archived_at && this._projectIsVisible(project)
+    );
+    const archivedProjects = this._projects.filter(
+      (project) => Boolean(project.archived_at) && this._projectMatchesQuery(project)
+    );
+    const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
+    const archivedThreads = this._threads.filter(
+      (thread) => Boolean(thread.archived_at)
+        && !archivedProjectIds.has(thread.project_id)
+        && this._threadMatchesQuery(thread)
+    );
+    const hasMatch = Boolean(
+      this._directThreads(false).length
+      || activeProjects.length
+      || archivedProjects.length
+      || archivedThreads.length
+    );
+    empty.hidden = hasMatch;
+    empty.textContent = hasMatch ? "" : `No chats or projects match “${query}”.`;
+  }
+
   _threadRow(thread, { archived = false } = {}) {
     const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
     const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
     const selected = thread.thread_id === this._selectedThreadId;
+    const expanded = Boolean(this._expandedThreadActions[thread.thread_id]);
     const row = document.createElement("div");
-    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}`;
+    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}${expanded ? " actions-open" : ""}`;
     const select = this._actionButton(
       `chat-select${selected ? " active" : ""}`,
       "select-thread",
-      `Select chat ${thread.title || "Untitled chat"}`
+      `Select chat ${thread.title || "Untitled chat"}, ${meta}, status ${thread.status || "unknown"}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
+    select.title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
     if (selected) {
       select.setAttribute("aria-current", "page");
     }
-    const titleBlock = document.createElement("div");
-    titleBlock.className = "title-block thread-title-block";
-    const metaLine = document.createElement("div");
-    metaLine.className = "chat-meta-line";
-    metaLine.append(
-      this._textElement("span", "row-meta", meta),
-      this._textElement("span", "timestamp", timestamp)
-    );
-    titleBlock.append(this._textElement("span", "thread-name", thread.title || ""), metaLine);
-    select.append(titleBlock);
-    const rowActions = document.createElement("div");
-    rowActions.className = "row-actions";
     const status = document.createElement("span");
     status.className = `status-pill ${statusClass}`;
-    status.title = `Status: ${thread.status || ""}`;
-    status.setAttribute("role", "img");
-    status.setAttribute("aria-label", `Status ${thread.status || ""}`);
+    status.setAttribute("aria-hidden", "true");
+    select.append(status, this._textElement("span", "thread-name", thread.title || "Untitled chat"));
+    const rowActions = document.createElement("div");
+    rowActions.className = "row-actions";
+    const menuId = `thread-secondary-actions-${thread.thread_id}`;
+    const more = this._actionButton(
+      "icon-button small thread-actions-toggle",
+      "toggle-thread-actions",
+      `${expanded ? "Hide" : "Show"} actions for ${thread.title || "chat"}`
+    );
+    more.dataset.threadId = String(thread.thread_id || "");
+    more.id = `thread-actions-toggle-${thread.thread_id}`;
+    more.setAttribute("aria-expanded", String(expanded));
+    more.setAttribute("aria-controls", menuId);
+    more.setAttribute("aria-haspopup", "true");
+    this._setTrustedButtonContent(more, icons.more);
+    rowActions.append(more);
+
     const threadActions = document.createElement("div");
-    threadActions.className = "thread-actions";
+    threadActions.id = menuId;
+    threadActions.className = "rail-action-menu thread-actions";
+    threadActions.setAttribute("aria-label", `Actions for ${thread.title || "chat"}`);
+    threadActions.hidden = !expanded;
     const archiveAction = archived ? "restore-thread" : "archive-thread";
     const archiveLabel = archived ? "Restore chat" : "Archive chat";
     const archiveIcon = archived ? icons.restore : icons.archive;
-    const archiveButton = this._actionButton("action-button small", archiveAction, archiveLabel);
+    const archiveButton = this._actionButton("rail-menu-item", archiveAction, archiveLabel);
     archiveButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(archiveButton, archiveIcon);
-    const deleteButton = this._actionButton("action-button small", "delete-thread", "Delete chat");
+    this._setTrustedButtonContent(archiveButton, archiveIcon, archiveLabel);
+    const deleteButton = this._actionButton("rail-menu-item", "delete-thread", "Delete chat");
     deleteButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(deleteButton, icons.trash);
+    this._setTrustedButtonContent(deleteButton, icons.trash, "Delete chat");
     threadActions.append(archiveButton, deleteButton);
-    rowActions.append(status, threadActions);
-    row.append(select, rowActions);
+    row.append(select, rowActions, threadActions);
     return row;
   }
 
@@ -5772,9 +6142,70 @@ class CodexBridgePanel extends HTMLElement {
     if (!projectId) {
       return;
     }
-    this._expandedProjectActions[projectId] = !this._expandedProjectActions[projectId];
-    this._render();
+    const expanded = !this._expandedProjectActions[projectId];
+    this._expandedProjectActions = expanded ? { [projectId]: true } : {};
+    this._expandedThreadActions = {};
+    this._syncRailMenus();
     this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
+  }
+
+  _toggleThreadActions(threadId) {
+    if (!threadId) {
+      return;
+    }
+    const expanded = !this._expandedThreadActions[threadId];
+    this._expandedThreadActions = expanded ? { [threadId]: true } : {};
+    this._expandedProjectActions = {};
+    this._syncRailMenus();
+    this.shadowRoot.getElementById(`thread-actions-toggle-${threadId}`)?.focus();
+  }
+
+  _hasOpenRailMenu() {
+    return Object.values(this._expandedProjectActions).some(Boolean)
+      || Object.values(this._expandedThreadActions).some(Boolean);
+  }
+
+  _closeRailMenus({ restoreFocus = false } = {}) {
+    const projectId = Object.keys(this._expandedProjectActions).find(
+      (candidate) => this._expandedProjectActions[candidate]
+    );
+    const threadId = Object.keys(this._expandedThreadActions).find(
+      (candidate) => this._expandedThreadActions[candidate]
+    );
+    if (!projectId && !threadId) {
+      return;
+    }
+    this._expandedProjectActions = {};
+    this._expandedThreadActions = {};
+    this._syncRailMenus();
+    if (restoreFocus) {
+      const toggleId = projectId
+        ? `project-actions-toggle-${projectId}`
+        : `thread-actions-toggle-${threadId}`;
+      this.shadowRoot.getElementById(toggleId)?.focus();
+    }
+  }
+
+  _syncRailMenus() {
+    for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-project-actions"]')) {
+      const expanded = Boolean(this._expandedProjectActions[toggle.dataset.projectId]);
+      const projectName = toggle.closest(".project-head")?.querySelector(".project-name")?.textContent || "project";
+      const label = `${expanded ? "Hide" : "Show"} more actions for ${projectName}`;
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-label", label);
+      toggle.title = label;
+      this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
+    }
+    for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-thread-actions"]')) {
+      const expanded = Boolean(this._expandedThreadActions[toggle.dataset.threadId]);
+      const threadName = toggle.closest(".chat-row")?.querySelector(".thread-name")?.textContent || "chat";
+      const label = `${expanded ? "Hide" : "Show"} actions for ${threadName}`;
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-label", label);
+      toggle.title = label;
+      toggle.closest(".chat-row")?.classList.toggle("actions-open", expanded);
+      this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
+    }
   }
 
   _selectProject(projectId) {
@@ -7583,10 +8014,11 @@ class CodexBridgePanel extends HTMLElement {
     if (haystack.includes(query)) {
       return true;
     }
+    const includeArchivedThreads = Boolean(project.archived_at);
     return this._threads.some(
       (thread) =>
         thread.project_id === project.project_id &&
-        !thread.archived_at &&
+        (includeArchivedThreads || !thread.archived_at) &&
         this._threadMatchesQuery(thread)
     );
   }
@@ -7987,7 +8419,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _sectionTitleLine(chevron, iconMarkup, label) {
-    const line = document.createElement("div");
+    const line = document.createElement("span");
     line.className = "section-title-line";
     if (chevron) {
       this._appendTrustedIcon(line, chevron);

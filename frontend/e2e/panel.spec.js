@@ -191,7 +191,9 @@ test("creates a workspace project and first chat at compact widths in both colou
   await panel.locator('button[data-action="save-project"]').click();
   await expect(panel.locator("#project-section")).toContainText("Home lab notes");
 
-  await panel.locator('button[data-action="new-chat"]').last().click();
+  const createdProject = panel.locator(".project-shell").filter({ hasText: "Home lab notes" });
+  await createdProject.locator('button[data-action="toggle-project-actions"]').click();
+  await createdProject.locator('button[data-action="new-chat"]').click();
   await panel.locator("#thread-title-input").fill("First Home Assistant chat");
   await panel.locator('button[data-action="save-thread"]').click();
   await expect(panel.locator("#thread-title-label")).toContainText("First Home Assistant chat");
@@ -271,6 +273,8 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
   const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#archived-chat-list")).toBeHidden();
+  await expect(panel.locator("#onboarding-shell")).toBeHidden();
 
   const desktop = await page.evaluate(() => {
     const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
@@ -337,6 +341,18 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   await expect(navigation).toHaveAttribute("aria-hidden", "false");
   await expect(scrim).toBeVisible();
   await expect(navigation.locator("#new-direct-chat-button")).toBeFocused();
+  const reachableNavigationActions = await navigation.locator("button[data-action]").evaluateAll((buttons) => buttons
+    .filter((button) => !button.hidden && button.getClientRects().length)
+    .map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        action: button.dataset.action,
+        width: rect.width,
+        height: rect.height,
+      };
+    }));
+  expect(reachableNavigationActions.length).toBeGreaterThan(0);
+  expect(reachableNavigationActions.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
   await page.keyboard.press("Escape");
   await expect(navigationToggle).toHaveAttribute("aria-expanded", "false");
   await expect(scrim).toBeHidden();
@@ -457,11 +473,24 @@ test("keeps every pending decision action reachable at desktop and mobile widths
       for (let index = 0; index < await commandActions.count(); index += 1) {
         const action = commandActions.nth(index);
         await action.focus();
+        await action.evaluate((node) => node.scrollIntoView({ block: "center" }));
         await expect(action).toBeFocused();
         await expect.poll(() => action.evaluate((node) => {
           const regionBox = node.closest("#interaction-region")?.getBoundingClientRect();
+          const main = node.closest(".main-pane");
+          const mainBox = main?.getBoundingClientRect();
+          const composerBox = main?.querySelector(".composer-shell")?.getBoundingClientRect();
           const actionBox = node.getBoundingClientRect();
-          return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+          if (window.innerWidth > 880) {
+            return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+          }
+          return Boolean(
+            mainBox &&
+            composerBox &&
+            getComputedStyle(node.closest("#interaction-region")).overflowY === "visible" &&
+            actionBox.top >= mainBox.top &&
+            actionBox.bottom <= Math.min(mainBox.bottom, composerBox.top - 4)
+          );
         })).toBe(true);
       }
 
@@ -469,14 +498,54 @@ test("keeps every pending decision action reachable at desktop and mobile widths
       await question.getByLabel("Source and tests").check();
       const answer = question.locator('[data-action="answer-interaction"]');
       await answer.focus();
+      await answer.evaluate((node) => node.scrollIntoView({ block: "center" }));
       await expect(answer).toBeFocused();
       await expect.poll(() => answer.evaluate((node) => {
         const regionBox = node.closest("#interaction-region")?.getBoundingClientRect();
+        const main = node.closest(".main-pane");
+        const mainBox = main?.getBoundingClientRect();
+        const composerBox = main?.querySelector(".composer-shell")?.getBoundingClientRect();
         const actionBox = node.getBoundingClientRect();
-        return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+        if (window.innerWidth > 880) {
+          return Boolean(regionBox && actionBox.top >= regionBox.top && actionBox.bottom <= regionBox.bottom);
+        }
+        return Boolean(
+          mainBox &&
+          composerBox &&
+          getComputedStyle(node.closest("#interaction-region")).overflowY === "visible" &&
+          actionBox.top >= mainBox.top &&
+          actionBox.bottom <= Math.min(mainBox.bottom, composerBox.top - 4)
+        );
       })).toBe(true);
     }
   }
+});
+
+test("keeps the mobile composer focused and folds diagnostics behind an accessible disclosure", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const settings = panel.locator("#composer-diagnostics");
+  const summary = settings.locator("summary");
+  const toolbar = panel.locator("#compact-toolbar");
+  const composer = panel.locator(".composer-shell");
+
+  await expect(settings).toHaveAttribute("open", "");
+  await expect(toolbar).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(summary).toHaveText("Chat settings and limits");
+  await expect(settings).not.toHaveAttribute("open", "");
+  await expect(toolbar).toBeHidden();
+  const collapsedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
+
+  await summary.click();
+  await expect(settings).toHaveAttribute("open", "");
+  await expect(toolbar).toBeVisible();
+  const expandedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
+  expect(collapsedHeight).toBeLessThan(844 * 0.34);
+  expect(expandedHeight - collapsedHeight).toBeGreaterThan(100);
 });
 
 test("passes axe checks with live decisions at desktop and mobile widths", async ({ page }, testInfo) => {

@@ -30,13 +30,13 @@ configuration, host filesystems, or broad shares. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
 
-The release candidate matrix (Integration `0.6.5`, App `0.6.5`, Bridge
-`0.5.5`, Codex `0.144.4`) is experimental and `amd64` only; it is pending
-publication, signing, and target-Home-Assistant acceptance. App `0.6.4` is the
-previously published signed immutable image with an SPDX SBOM and build
-provenance, but arbitrary prior-image selection is not a validated Supervisor
-rollback mechanism. Until an update and restore canary is complete, recover
-with a cold backup or an existing private external Bridge.
+The release being shipped (Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+Codex `0.144.4`) is experimental and `amd64` only; it is pending publication,
+signing, and target-Home-Assistant acceptance. The signed, live-accepted
+`0.6.5` matrix remains historical evidence and does not accept `0.6.6`.
+Arbitrary prior-image selection is not a validated Supervisor rollback
+mechanism. Until an update and restore canary is complete, recover with a cold
+backup or an existing private external Bridge.
 
 ## Scope notes
 

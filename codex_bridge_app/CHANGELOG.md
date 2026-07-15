@@ -2,6 +2,20 @@
 
 All notable App changes are recorded here.
 
+## 0.6.6
+
+- Reworks the panel around a clean Codex-style left navigation tree with
+  title-first chat rows and one action menu per chat.
+- Makes archive groups collapse and search correctly, including the corrected
+  search icon, while retaining accessible status and selection cues.
+- Places approvals and questions after the active transcript, keeps every
+  decision reachable in the natural mobile scroll flow, and removes clipped or
+  stale navigation action menus.
+- Enlarges mobile controls to 44px targets and folds limits, model, and thinking
+  controls behind a compact mobile disclosure so chat work remains the focus.
+- Keeps the paired Integration/App/package/panel asset release at `0.6.6`,
+  Bridge at `0.5.5`, and the Sigstore-verified Codex runtime at `0.144.4`.
+
 ## 0.6.5
 
 - Recovers visible model and reasoning-level choices from Codex's bundled

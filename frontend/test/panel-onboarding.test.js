@@ -660,9 +660,17 @@ describe("HA-first panel integration", () => {
       default_model: "gpt-5.6-sol",
       default_thinking_level: "medium",
     };
+    const directProject = {
+      project_id: "prj_direct_compact_navigation",
+      kind: "direct",
+      name: "Direct chats",
+      root_path: ".",
+      default_model: "gpt-5.6-sol",
+      default_thinking_level: "medium",
+    };
     panel._config = { connection_type: "supervisor", api_version: 1 };
     panel._status = status();
-    panel._projects = [project];
+    panel._projects = [directProject, project];
     panel._threads = [{
       thread_id: "thr_compact_navigation",
       project_id: project.project_id,
@@ -681,11 +689,9 @@ describe("HA-first panel integration", () => {
 
     const secondary = panel.shadowRoot.getElementById("project-secondary-actions-prj_compact_navigation");
     const more = panel.shadowRoot.querySelector('[data-action="toggle-project-actions"]');
-    const chatMeta = panel.shadowRoot.querySelector(".chat-meta-line");
     expect(more?.getAttribute("aria-expanded")).toBe("false");
     expect(secondary?.hidden).toBe(true);
     expect(panel.shadowRoot.querySelector('[data-action="new-chat"]')).toBeTruthy();
-    expect(chatMeta?.textContent).toContain("gpt-5.6-sol / medium");
 
     more.focus();
     panel._toggleProjectActions(project.project_id);
@@ -697,6 +703,118 @@ describe("HA-first panel integration", () => {
     expect(panel.shadowRoot.querySelector('[data-action="edit-project"]')).toBeTruthy();
     expect(panel.shadowRoot.querySelector('[data-action="archive-project"]')).toBeTruthy();
     expect(panel.shadowRoot.querySelector('[data-action="delete-project"]')).toBeTruthy();
+    expect(panel.shadowRoot.querySelectorAll('[data-action="toggle-project-actions"]')).toHaveLength(1);
+
+    const projectButton = panel.shadowRoot.querySelector('[data-action="select-project"]');
+    expect(projectButton?.textContent).toContain(project.name);
+    expect(`${projectButton?.getAttribute("title") || ""} ${projectButton?.getAttribute("aria-label") || ""}`).toContain(project.name);
+
+    const directNewChats = panel.shadowRoot.querySelectorAll('[data-action="new-direct-chat"]');
+    expect(directNewChats).toHaveLength(1);
+    expect(panel.shadowRoot.querySelector('#new-direct-chat-button')?.getAttribute("aria-label")).toBe("New chat");
+    const projectsHeader = panel.shadowRoot.querySelector("#project-section .section-head");
+    expect(projectsHeader?.querySelector('[data-action="toggle-project-form"]')).toBeTruthy();
+
+    const chatRow = panel.shadowRoot.querySelector('[data-thread-id="thr_compact_navigation"]')?.closest(".chat-row");
+    const chatSelect = chatRow?.querySelector('[data-action="select-thread"]');
+    expect(chatSelect?.textContent).toContain("A chat title that remains a single compact row");
+    expect(`${chatSelect?.getAttribute("title") || ""} ${chatSelect?.getAttribute("aria-label") || ""}`).toContain("A chat title that remains a single compact row");
+    expect(chatRow?.textContent).not.toContain("gpt-5.6-sol / medium");
+    expect(chatRow?.querySelector(".timestamp")).toBeNull();
+    const chatMore = chatRow?.querySelector('[data-action="toggle-thread-actions"]');
+    expect(panel.shadowRoot.querySelectorAll('[data-action="toggle-thread-actions"]')).toHaveLength(1);
+    expect(chatMore?.getAttribute("aria-expanded")).toBe("false");
+    const chatSecondaryId = chatMore?.getAttribute("aria-controls");
+    expect(chatSecondaryId).toBeTruthy();
+    expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(true);
+    chatMore?.click();
+    expect(chatMore?.getAttribute("aria-expanded")).toBe("true");
+    expect(chatMore?.getAttribute("aria-label")).toContain("Hide actions");
+    expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(false);
+    chatMore?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(chatMore?.getAttribute("aria-expanded")).toBe("false");
+    expect(chatMore?.getAttribute("aria-label")).toContain("Show actions");
+    expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(true);
+    expect(panel.shadowRoot.activeElement).toBe(chatMore);
+  });
+
+  it("keeps archived chat search results grouped under their archived project", () => {
+    const panel = createPanel();
+    const archivedProject = {
+      project_id: "prj_archived_search",
+      kind: "project",
+      name: "Archived workspace",
+      root_path: "team/archive",
+      archived_at: "2026-07-15T10:00:00Z",
+    };
+    panel._projects = [archivedProject];
+    panel._threads = [{
+      thread_id: "thr_archived_search",
+      project_id: archivedProject.project_id,
+      project_kind: "project",
+      title: "Retained migration notes",
+      status: "idle",
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "high",
+      archived_at: "2026-07-15T10:05:00Z",
+    }, {
+      thread_id: "thr_live_child",
+      project_id: archivedProject.project_id,
+      project_kind: "project",
+      title: "Live child retained with its archived project",
+      status: "idle",
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "high",
+      archived_at: null,
+    }];
+    panel._searchQuery = "Retained migration notes";
+
+    panel._render();
+
+    const archivedList = panel.shadowRoot.getElementById("archived-chat-list");
+    expect(archivedList?.hidden).toBe(false);
+    expect(archivedList?.querySelector(".project-shell .project-name")?.textContent).toBe("Archived workspace");
+    expect(archivedList?.querySelector(".project-shell .chat-row .thread-name")?.textContent).toBe(
+      "Retained migration notes"
+    );
+    expect(archivedList?.textContent).not.toContain("Live child retained with its archived project");
+    expect(archivedList?.querySelector(":scope > .chat-row")).toBeNull();
+  });
+
+  it("keeps active child chats searchable inside their archived project", () => {
+    const panel = createPanel();
+    const archivedProject = {
+      project_id: "prj_archived_active_child",
+      kind: "project",
+      name: "Archived workspace",
+      root_path: "team/archive",
+      archived_at: "2026-07-15T10:00:00Z",
+    };
+    panel._projects = [archivedProject];
+    panel._threads = [{
+      thread_id: "thr_active_child",
+      project_id: archivedProject.project_id,
+      project_kind: "project",
+      title: "Live child retained with its archived project",
+      status: "idle",
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "high",
+      archived_at: null,
+    }];
+    panel._searchQuery = "Live child retained";
+
+    panel._render();
+
+    const archivedList = panel.shadowRoot.getElementById("archived-chat-list");
+    expect(archivedList?.hidden).toBe(false);
+    expect(archivedList?.querySelector(".project-shell .project-name")?.textContent).toBe("Archived workspace");
+    expect(archivedList?.querySelector(".project-shell .thread-name")?.textContent).toBe(
+      "Live child retained with its archived project"
+    );
+    const more = archivedList?.querySelector('[data-action="toggle-thread-actions"]');
+    more?.click();
+    expect(archivedList?.querySelector('[data-action="archive-thread"]')).toBeTruthy();
+    expect(archivedList?.querySelector('[data-action="restore-thread"]')).toBeNull();
   });
 
   it("renders a disabled short window separately from a full weekly allowance", () => {
