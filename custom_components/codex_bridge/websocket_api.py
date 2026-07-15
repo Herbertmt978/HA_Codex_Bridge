@@ -27,6 +27,9 @@ _INTERACTION_ERROR_MESSAGES = {
     "runtime_request_conflict": "This response conflicts with an earlier request",
     "turn_changed": "The active Codex turn has changed",
 }
+_ARTIFACT_ERROR_MESSAGES = {
+    "reservation_conflict": "Workspace files are temporarily unavailable while Codex is working",
+}
 
 
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
@@ -1037,6 +1040,7 @@ async def ws_list_artifacts(
         connection,
         msg,
         lambda client: client.async_list_artifacts(msg["thread_id"]),
+        safe_error_messages=_ARTIFACT_ERROR_MESSAGES,
     )
 
 

@@ -8,7 +8,9 @@ import pytest
 class ScriptedProcess:
     def __init__(self, responses: list[dict[str, object]]) -> None:
         self.stdin = io.StringIO()
-        self.stdout = io.StringIO("".join(f"{json.dumps(response)}\n" for response in responses))
+        self.stdout = io.StringIO(
+            "".join(f"{json.dumps(response)}\n" for response in responses)
+        )
         self.terminated = False
 
     def poll(self) -> int | None:
@@ -25,6 +27,23 @@ class ScriptedProcess:
         return 0
 
 
+class BundledProcess:
+    def __init__(self, output: bytes, *, returncode: int = 0) -> None:
+        self.stdout = io.BytesIO(output)
+        self.returncode = returncode
+        self.terminated = False
+
+    def poll(self) -> int | None:
+        return self.returncode if self.terminated else None
+
+    def kill(self) -> None:
+        self.terminated = True
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.terminated = True
+        return self.returncode
+
+
 def _load_model_catalog_module():
     try:
         from codex_bridge_service import model_catalog
@@ -33,7 +52,9 @@ def _load_model_catalog_module():
     return model_catalog
 
 
-def _model_payload(model: str, *, hidden: bool = False, is_default: bool = False) -> dict[str, object]:
+def _model_payload(
+    model: str, *, hidden: bool = False, is_default: bool = False
+) -> dict[str, object]:
     return {
         "id": model,
         "model": model,
@@ -47,6 +68,76 @@ def _model_payload(model: str, *, hidden: bool = False, is_default: bool = False
         ],
         "inputModalities": ["text"],
     }
+
+
+def _bundled_payload() -> dict[str, object]:
+    return {
+        "models": [
+            {
+                "slug": "hidden-model",
+                "display_name": "Hidden",
+                "visibility": "hide",
+                "default_reasoning_level": "max",
+                "supported_reasoning_levels": [{"effort": "max"}],
+            },
+            {
+                "slug": "gpt-5.6-sol",
+                "display_name": "GPT-5.6 Sol",
+                "description": "Frontier coding model",
+                "visibility": "list",
+                "default_reasoning_level": "low",
+                "supported_reasoning_levels": [
+                    {"effort": effort}
+                    for effort in ("low", "medium", "high", "xhigh", "max", "ultra")
+                ],
+                "input_modalities": ["text", "image", 42],
+            },
+            {
+                "slug": "gpt-5.6-terra",
+                "display_name": "GPT-5.6 Terra",
+                "visibility": "list",
+                "default_reasoning_level": "medium",
+                "supported_reasoning_levels": [
+                    {"effort": effort} for effort in ("medium", "high", "max", "ultra")
+                ],
+            },
+            {
+                "slug": "gpt-5.6-luna",
+                "display_name": "GPT-5.6 Luna",
+                "visibility": "list",
+                "default_reasoning_level": "medium",
+                "supported_reasoning_levels": [
+                    {"effort": effort} for effort in ("medium", "high", "max")
+                ],
+            },
+            {"slug": "", "visibility": "list"},
+            {"slug": 123, "visibility": "list"},
+        ]
+    }
+
+
+@pytest.mark.parametrize("invalid_timeout", [0, -1, float("nan"), float("inf"), True])
+def test_model_catalog_probes_reject_invalid_timeouts(invalid_timeout) -> None:
+    model_catalog = _load_model_catalog_module()
+
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        model_catalog.CodexModelCatalogProbe(timeout_seconds=invalid_timeout)
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        model_catalog.AppServerModelCatalogProbe(
+            object(), timeout_seconds=invalid_timeout
+        )
+
+
+@pytest.mark.parametrize("invalid_ttl", [-1, float("nan"), float("inf"), True])
+def test_model_catalog_probes_reject_invalid_cache_ttls(invalid_ttl) -> None:
+    model_catalog = _load_model_catalog_module()
+
+    with pytest.raises(ValueError, match="cache TTL must be non-negative"):
+        model_catalog.CodexModelCatalogProbe(cache_ttl_seconds=invalid_ttl)
+    with pytest.raises(ValueError, match="cache TTL must be non-negative"):
+        model_catalog.AppServerModelCatalogProbe(
+            object(), cache_ttl_seconds=invalid_ttl
+        )
 
 
 def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_codex(
@@ -89,7 +180,14 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
                             "defaultReasoningEffort": "medium",
                             "supportedReasoningEfforts": [
                                 {"reasoningEffort": effort, "description": effort}
-                                for effort in ("low", "medium", "high", "xhigh", "max", "ultra")
+                                for effort in (
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "xhigh",
+                                    "max",
+                                    "ultra",
+                                )
                             ],
                             "inputModalities": ["text", "image"],
                         }
@@ -134,7 +232,14 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
     assert catalog.configured_model == "gpt-5.6-sol"
     assert catalog.configured_thinking_level == "ultra"
     assert [model.model for model in catalog.models] == ["gpt-5.6-sol"]
-    assert catalog.models[0].thinking_levels == ["low", "medium", "high", "xhigh", "max", "ultra"]
+    assert catalog.models[0].thinking_levels == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+    ]
     assert catalog.models[0].input_modalities == ["text", "image"]
     requests = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
     assert [request["method"] for request in requests] == [
@@ -146,7 +251,9 @@ def test_probe_discovers_visible_models_and_reasoning_levels_from_configured_cod
     assert requests[0]["params"]["clientInfo"]["version"] == model_catalog.__version__
 
 
-def test_probe_follows_model_list_pagination_and_filters_hidden_models(tmp_path, monkeypatch) -> None:
+def test_probe_follows_model_list_pagination_and_filters_hidden_models(
+    tmp_path, monkeypatch
+) -> None:
     model_catalog = _load_model_catalog_module()
     process = ScriptedProcess(
         [
@@ -171,7 +278,9 @@ def test_probe_follows_model_list_pagination_and_filters_hidden_models(tmp_path,
             },
         ]
     )
-    monkeypatch.setattr(model_catalog.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
     probe = model_catalog.CodexModelCatalogProbe(
         codex_command=str(tmp_path / "codex.exe"),
         codex_home=tmp_path,
@@ -233,7 +342,9 @@ def test_probe_accepts_legacy_items_pages_and_deduplicates_models_and_efforts(
             },
         ]
     )
-    monkeypatch.setattr(model_catalog.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
     probe = model_catalog.CodexModelCatalogProbe(
         codex_command=str(tmp_path / "codex.exe"),
         codex_home=tmp_path,
@@ -284,7 +395,9 @@ def test_non_configured_model_does_not_inherit_configured_reasoning_effort(
             },
         ]
     )
-    monkeypatch.setattr(model_catalog.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
     probe = model_catalog.CodexModelCatalogProbe(
         codex_command=str(tmp_path / "codex.exe"),
         codex_home=tmp_path,
@@ -297,7 +410,9 @@ def test_non_configured_model_does_not_inherit_configured_reasoning_effort(
     assert luna.default_thinking_level == "medium"
 
 
-def test_probe_preserves_configured_model_when_catalog_does_not_list_it(tmp_path, monkeypatch) -> None:
+def test_probe_preserves_configured_model_when_catalog_does_not_list_it(
+    tmp_path, monkeypatch
+) -> None:
     model_catalog = _load_model_catalog_module()
     process = ScriptedProcess(
         [
@@ -321,7 +436,9 @@ def test_probe_preserves_configured_model_when_catalog_does_not_list_it(tmp_path
             },
         ]
     )
-    monkeypatch.setattr(model_catalog.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
     probe = model_catalog.CodexModelCatalogProbe(
         codex_command=str(tmp_path / "codex.exe"),
         codex_home=tmp_path,
@@ -338,7 +455,9 @@ def test_probe_preserves_configured_model_when_catalog_does_not_list_it(tmp_path
     assert configured.thinking_levels == ["ultra"]
 
 
-def test_probe_returns_safe_fallback_when_codex_discovery_fails(tmp_path, monkeypatch) -> None:
+def test_probe_returns_safe_fallback_when_codex_discovery_fails(
+    tmp_path, monkeypatch
+) -> None:
     model_catalog = _load_model_catalog_module()
 
     def fail_to_start(*args, **kwargs):
@@ -383,7 +502,9 @@ def test_repeated_discovery_failures_do_not_label_static_fallback_last_known_goo
     assert second.source == "fallback"
 
 
-def test_probe_caches_successful_catalog_between_status_polls(tmp_path, monkeypatch) -> None:
+def test_probe_caches_successful_catalog_between_status_polls(
+    tmp_path, monkeypatch
+) -> None:
     model_catalog = _load_model_catalog_module()
     process = ScriptedProcess(
         [
@@ -543,7 +664,9 @@ def test_concurrent_stale_refreshes_share_one_failed_attempt_then_allow_retry(
     assert launches == 3
 
 
-def test_probe_keeps_last_known_catalog_when_refresh_fails(tmp_path, monkeypatch) -> None:
+def test_probe_keeps_last_known_catalog_when_refresh_fails(
+    tmp_path, monkeypatch
+) -> None:
     model_catalog = _load_model_catalog_module()
     process = ScriptedProcess(
         [
@@ -578,8 +701,443 @@ def test_probe_keeps_last_known_catalog_when_refresh_fails(tmp_path, monkeypatch
     fresh = probe.probe()
     stale = probe.probe()
 
-    assert [model.model for model in stale.models] == [model.model for model in fresh.models]
+    assert [model.model for model in stale.models] == [
+        model.model for model in fresh.models
+    ]
     assert stale.source == "last-known-good"
     assert stale.stale is True
     assert "unavailable" in (stale.error or "")
     assert "temporary outage" not in (stale.error or "")
+
+
+def test_bundled_catalog_recovers_dynamic_models_and_reasoning_levels(
+    tmp_path, monkeypatch
+) -> None:
+    model_catalog = _load_model_catalog_module()
+    codex_path = tmp_path / "codex.exe"
+    codex_path.write_bytes(b"signed codex placeholder")
+    process = BundledProcess(json.dumps(_bundled_payload()).encode("utf-8"))
+    popen_calls: list[list[str]] = []
+
+    def fake_popen(command, **kwargs):
+        popen_calls.append(command)
+        assert kwargs["stdin"] is model_catalog.subprocess.DEVNULL
+        assert kwargs["stderr"] is model_catalog.subprocess.DEVNULL
+        assert kwargs["text"] is False
+        return process
+
+    monkeypatch.setattr(model_catalog.subprocess, "Popen", fake_popen)
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(codex_path),
+        codex_home=tmp_path,
+        timeout_seconds=1,
+    )
+    monkeypatch.setattr(
+        probe,
+        "_discover_from_app_server",
+        lambda: (_ for _ in ()).throw(model_catalog.ModelCatalogError("timeout")),
+    )
+
+    catalog = probe.probe()
+
+    assert catalog.source == "codex-bundled"
+    assert catalog.stale is True
+    assert catalog.default_model == "gpt-5.6-sol"
+    assert catalog.default_thinking_level == "low"
+    assert [model.model for model in catalog.models] == [
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+    ]
+    assert catalog.models[0].thinking_levels == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+    ]
+    assert catalog.models[0].input_modalities == ["text", "image"]
+    assert "using the bundled catalogue" in (catalog.error or "")
+    assert popen_calls == [[str(codex_path), "debug", "models", "--bundled"]]
+
+
+def test_shared_app_server_probe_uses_bundled_recovery(tmp_path, monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    codex_path = tmp_path / "codex.exe"
+    codex_path.write_bytes(b"signed codex placeholder")
+    process = BundledProcess(json.dumps(_bundled_payload()).encode("utf-8"))
+
+    class UnavailableClient:
+        generation = 1
+
+        def request(self, method, params=None, **kwargs):
+            raise model_catalog.ModelCatalogError("model/list timed out")
+
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
+    probe = model_catalog.AppServerModelCatalogProbe(
+        UnavailableClient(),
+        codex_command=str(codex_path),
+        codex_home=tmp_path,
+        timeout_seconds=1,
+    )
+
+    catalog = probe.probe()
+
+    assert catalog.source == "codex-bundled"
+    assert catalog.default_model == "gpt-5.6-sol"
+    assert catalog.stale is True
+
+
+def test_bundled_catalog_rejects_oversized_output_before_json_parse(
+    tmp_path, monkeypatch
+) -> None:
+    model_catalog = _load_model_catalog_module()
+    codex_path = tmp_path / "codex.exe"
+    codex_path.write_bytes(b"signed codex placeholder")
+    process = BundledProcess(b"{" + b"x" * (1_048_576 + 32))
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(codex_path),
+        timeout_seconds=1,
+    )
+
+    with pytest.raises(model_catalog.ModelCatalogError, match="size limit"):
+        probe._discover_from_bundled()
+
+    assert process.terminated is True
+
+
+def test_bundled_catalog_failure_uses_static_fallback(tmp_path, monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(tmp_path / "missing-codex.exe"),
+        timeout_seconds=0.1,
+    )
+    monkeypatch.setattr(
+        probe,
+        "_discover_from_app_server",
+        lambda: (_ for _ in ()).throw(model_catalog.ModelCatalogError("timeout")),
+    )
+    monkeypatch.setattr(
+        probe,
+        "_discover_from_bundled",
+        lambda: (_ for _ in ()).throw(model_catalog.ModelCatalogError("invalid")),
+    )
+
+    catalog = probe.probe()
+
+    assert catalog.source == "fallback"
+    assert catalog.stale is True
+    assert catalog.default_model == "gpt-5.5"
+    assert "unavailable" in (catalog.error or "")
+
+
+def test_verified_last_known_good_precedes_bundled_recovery(monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    probe = model_catalog.CodexModelCatalogProbe(cache_ttl_seconds=0)
+    fresh = model_catalog.CodexModelCatalogProbe._build_catalog(
+        {"config": {}},
+        {"data": [_model_payload("gpt-5.6-sol", is_default=True)]},
+    )
+    monkeypatch.setattr(probe, "_discover_from_app_server", lambda: fresh)
+    assert probe.probe().source == "codex-app-server"
+
+    monkeypatch.setattr(
+        probe,
+        "_discover_from_app_server",
+        lambda: (_ for _ in ()).throw(model_catalog.ModelCatalogError("timeout")),
+    )
+    monkeypatch.setattr(
+        probe,
+        "_discover_from_bundled",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("bundled recovery should not win")
+        ),
+    )
+
+    stale = probe.probe()
+    repeated = probe.probe(refresh_stale=True)
+
+    assert stale.source == "last-known-good"
+    assert stale.stale is True
+    assert stale.default_model == "gpt-5.6-sol"
+    assert repeated.source == "last-known-good"
+    assert repeated.default_model == "gpt-5.6-sol"
+
+
+def test_shared_probe_retains_last_known_good_across_repeated_failures(
+    monkeypatch,
+) -> None:
+    model_catalog = _load_model_catalog_module()
+
+    class RecoveringClient:
+        generation = 1
+
+        def __init__(self) -> None:
+            self.available = True
+
+        def request(self, method, params=None, **kwargs):
+            if not self.available:
+                raise model_catalog.ModelCatalogError("model/list timed out")
+            if method == "config/read":
+                return {"config": {}, "origins": {}}
+            if method == "model/list":
+                return {"data": [_model_payload("gpt-5.6-sol", is_default=True)]}
+            raise AssertionError(f"Unexpected request: {method}")
+
+    client = RecoveringClient()
+    probe = model_catalog.AppServerModelCatalogProbe(
+        client,
+        cache_ttl_seconds=0,
+    )
+    monkeypatch.setattr(
+        probe._bundled_probe,
+        "_discover_from_bundled",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("bundled recovery should not replace verified live data")
+        ),
+    )
+
+    fresh = probe.probe()
+    client.available = False
+    stale = probe.probe()
+    repeated = probe.probe(refresh_stale=True)
+
+    assert fresh.source == "codex-app-server"
+    assert stale.source == "last-known-good"
+    assert repeated.source == "last-known-good"
+    assert repeated.default_model == "gpt-5.6-sol"
+
+
+def test_stale_catalogue_retries_after_short_ttl_without_hammering(monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    clock = [0.0]
+    attempts = 0
+    monkeypatch.setattr(model_catalog, "monotonic", lambda: clock[0])
+    probe = model_catalog.CodexModelCatalogProbe(
+        cache_ttl_seconds=600,
+        stale_retry_ttl_seconds=5,
+    )
+
+    def unavailable():
+        nonlocal attempts
+        attempts += 1
+        raise model_catalog.ModelCatalogError("timeout")
+
+    monkeypatch.setattr(probe, "_discover_from_app_server", unavailable)
+    monkeypatch.setattr(probe, "_discover_from_bundled", unavailable)
+
+    first = probe.probe()
+    clock[0] = 4.9
+    cached = probe.probe()
+    clock[0] = 5.1
+    retried = probe.probe()
+
+    assert first.source == "fallback"
+    assert cached is first
+    assert retried.source == "fallback"
+    assert attempts == 4
+
+
+def test_direct_probe_rejects_an_oversized_aggregate_model_count(
+    tmp_path, monkeypatch
+) -> None:
+    model_catalog = _load_model_catalog_module()
+    process = ScriptedProcess(
+        [
+            {"id": 1, "result": {}},
+            {"id": 2, "result": {"config": {}, "origins": {}}},
+            {
+                "id": 3,
+                "result": {
+                    "data": [
+                        _model_payload(f"model-{index}")
+                        for index in range(model_catalog._MAX_MODEL_CATALOG_MODELS + 1)
+                    ]
+                },
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        model_catalog.subprocess, "Popen", lambda *args, **kwargs: process
+    )
+    probe = model_catalog.CodexModelCatalogProbe(
+        codex_command=str(tmp_path / "codex.exe"),
+        timeout_seconds=1,
+    )
+
+    with pytest.raises(model_catalog.ModelCatalogError, match="oversized"):
+        probe._discover_from_app_server()
+
+
+def test_direct_reader_bounds_messages_and_ignores_notification_floods() -> None:
+    model_catalog = _load_model_catalog_module()
+    messages = model_catalog.Queue(
+        maxsize=model_catalog._MAX_PENDING_APP_SERVER_MESSAGES
+    )
+    stream = io.StringIO(
+        "".join(
+            json.dumps({"method": "turn/progress", "params": {"index": index}})
+            + "\n"
+            for index in range(model_catalog._MAX_PENDING_APP_SERVER_MESSAGES * 2)
+        )
+        + json.dumps({"id": 7, "result": {"data": []}})
+        + "\n"
+    )
+
+    model_catalog.CodexModelCatalogProbe._read_messages(stream, messages)
+
+    assert model_catalog.CodexModelCatalogProbe._wait_for_response(
+        messages, 7, model_catalog.monotonic() + 1
+    ) == {"data": []}
+
+
+def test_direct_reader_rejects_an_oversized_json_line() -> None:
+    model_catalog = _load_model_catalog_module()
+    messages = model_catalog.Queue()
+    stream = io.StringIO(
+        "{" + "x" * model_catalog._MAX_APP_SERVER_MESSAGE_CHARS + "}\n"
+    )
+
+    model_catalog.CodexModelCatalogProbe._read_messages(stream, messages)
+
+    with pytest.raises(model_catalog.ModelCatalogError, match="size limit"):
+        model_catalog.CodexModelCatalogProbe._wait_for_response(
+            messages, 1, model_catalog.monotonic() + 1
+        )
+
+
+def test_shared_probe_starts_stale_retry_ttl_after_discovery(monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    clock = [0.0]
+    attempts = 0
+    monkeypatch.setattr(model_catalog, "monotonic", lambda: clock[0])
+
+    class SlowUnavailableClient:
+        generation = 1
+
+        def request(self, method, params=None, **kwargs):
+            nonlocal attempts
+            attempts += 1
+            clock[0] = 20.0
+            raise model_catalog.ModelCatalogError("model/list timed out")
+
+    probe = model_catalog.AppServerModelCatalogProbe(
+        SlowUnavailableClient(),
+        timeout_seconds=30,
+        stale_retry_ttl_seconds=15,
+    )
+    bundled = model_catalog.CodexModelCatalogProbe._build_bundled_catalog(
+        _bundled_payload()
+    )
+    monkeypatch.setattr(
+        probe._bundled_probe, "_discover_from_bundled", lambda: bundled
+    )
+
+    first = probe.probe()
+    cached = probe.probe()
+
+    assert first.source == "codex-bundled"
+    assert cached is first
+    assert attempts == 1
+
+
+def test_shared_probe_bounds_aggregate_catalogue_bytes(monkeypatch) -> None:
+    model_catalog = _load_model_catalog_module()
+    model_calls = 0
+    large_description = "x" * 900_000
+
+    class OversizedClient:
+        generation = 1
+
+        def request(self, method, params=None, **kwargs):
+            nonlocal model_calls
+            if method == "config/read":
+                return {"config": {}, "origins": {}}
+            if method == "model/list":
+                model_calls += 1
+                return {
+                    "data": [
+                        {
+                            **_model_payload(f"model-{model_calls}"),
+                            "description": large_description,
+                        }
+                    ],
+                    "nextCursor": f"cursor-{model_calls}",
+                }
+            raise AssertionError(f"Unexpected request: {method}")
+
+    probe = model_catalog.AppServerModelCatalogProbe(
+        OversizedClient(),
+        timeout_seconds=10,
+    )
+    monkeypatch.setattr(
+        probe._bundled_probe,
+        "_discover_from_bundled",
+        lambda: (_ for _ in ()).throw(model_catalog.ModelCatalogError("offline")),
+    )
+
+    catalog = probe.probe()
+
+    assert catalog.source == "fallback"
+    assert model_calls == 5
+
+
+def test_catalog_parsers_bound_fields_and_ignore_unsupported_defaults() -> None:
+    model_catalog = _load_model_catalog_module()
+    oversized_display = "d" * (model_catalog._MAX_MODEL_DISPLAY_NAME_CHARS + 1)
+    oversized_description = "x" * (model_catalog._MAX_MODEL_DESCRIPTION_CHARS + 1)
+    efforts = [
+        {"effort": f"level-{index}"}
+        for index in range(model_catalog._MAX_REASONING_LEVELS + 5)
+    ]
+    modalities = [
+        f"modality-{index}"
+        for index in range(model_catalog._MAX_INPUT_MODALITIES + 5)
+    ]
+
+    bundled = model_catalog.CodexModelCatalogProbe._build_bundled_catalog(
+        {
+            "models": [
+                {
+                    "slug": "bounded-model",
+                    "display_name": oversized_display,
+                    "description": oversized_description,
+                    "visibility": "list",
+                    "default_reasoning_level": "unsupported",
+                    "supported_reasoning_levels": efforts,
+                    "input_modalities": modalities,
+                }
+            ]
+        }
+    ).models[0]
+    live = model_catalog.CodexModelCatalogProbe._build_catalog(
+        {"config": {}},
+        {
+            "data": [
+                {
+                    "model": "bounded-model",
+                    "displayName": oversized_display,
+                    "description": oversized_description,
+                    "defaultReasoningEffort": "unsupported",
+                    "supportedReasoningEfforts": [
+                        {"reasoningEffort": entry["effort"]} for entry in efforts
+                    ],
+                    "inputModalities": modalities,
+                    "isDefault": True,
+                }
+            ]
+        },
+    ).models[0]
+
+    for record in (bundled, live):
+        assert record.display_name == "bounded-model"
+        assert record.description is None
+        assert record.default_thinking_level == "level-0"
+        assert len(record.thinking_levels) == model_catalog._MAX_REASONING_LEVELS
+        assert len(record.input_modalities) == model_catalog._MAX_INPUT_MODALITIES

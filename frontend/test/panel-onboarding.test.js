@@ -650,6 +650,55 @@ describe("HA-first panel integration", () => {
     }
   });
 
+  it("keeps the project tree compact while leaving secondary project actions discoverable", () => {
+    const panel = createPanel();
+    const project = {
+      project_id: "prj_compact_navigation",
+      kind: "project",
+      name: "A project with a deliberately long name",
+      root_path: "team/compact",
+      default_model: "gpt-5.6-sol",
+      default_thinking_level: "medium",
+    };
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._status = status();
+    panel._projects = [project];
+    panel._threads = [{
+      thread_id: "thr_compact_navigation",
+      project_id: project.project_id,
+      project_kind: "project",
+      title: "A chat title that remains a single compact row",
+      status: "idle",
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "medium",
+      created_at: "2026-07-15T10:00:00Z",
+      updated_at: "2026-07-15T10:00:00Z",
+    }];
+    panel._selectedProjectId = project.project_id;
+    panel._selectedThreadId = "thr_compact_navigation";
+
+    panel._render();
+
+    const secondary = panel.shadowRoot.getElementById("project-secondary-actions-prj_compact_navigation");
+    const more = panel.shadowRoot.querySelector('[data-action="toggle-project-actions"]');
+    const chatMeta = panel.shadowRoot.querySelector(".chat-meta-line");
+    expect(more?.getAttribute("aria-expanded")).toBe("false");
+    expect(secondary?.hidden).toBe(true);
+    expect(panel.shadowRoot.querySelector('[data-action="new-chat"]')).toBeTruthy();
+    expect(chatMeta?.textContent).toContain("gpt-5.6-sol / medium");
+
+    more.focus();
+    panel._toggleProjectActions(project.project_id);
+
+    expect(panel.shadowRoot.getElementById("project-secondary-actions-prj_compact_navigation")?.hidden).toBe(false);
+    expect(panel.shadowRoot.activeElement).toBe(
+      panel.shadowRoot.getElementById("project-actions-toggle-prj_compact_navigation")
+    );
+    expect(panel.shadowRoot.querySelector('[data-action="edit-project"]')).toBeTruthy();
+    expect(panel.shadowRoot.querySelector('[data-action="archive-project"]')).toBeTruthy();
+    expect(panel.shadowRoot.querySelector('[data-action="delete-project"]')).toBeTruthy();
+  });
+
   it("renders a disabled short window separately from a full weekly allowance", () => {
     const panel = createPanel();
     panel._config = { connection_type: "supervisor", api_version: 1 };
@@ -664,7 +713,7 @@ describe("HA-first panel integration", () => {
         default_model: "gpt-5.6-sol",
         default_thinking_level: "max",
         models: [
-          { model: "gpt-5.6-sol", display_name: "GPT-5.6 Sol", thinking_levels: ["medium", "max", "ultra"] },
+          { model: "gpt-5.6-sol", display_name: "GPT-5.6 Sol", thinking_levels: ["medium", "xhigh", "max", "ultra"] },
           { model: "gpt-5.6-terra", display_name: "GPT-5.6 Terra", thinking_levels: ["high", "max"] },
         ],
       },
@@ -698,6 +747,9 @@ describe("HA-first panel integration", () => {
     expect([...panel.shadowRoot.getElementById("thread-model-select").options].map((option) => option.value)).toContain("gpt-5.6-terra");
     expect([...panel.shadowRoot.getElementById("thread-thinking-select").options].map((option) => option.value)).toEqual(
       expect.arrayContaining(["max", "ultra"])
+    );
+    expect([...panel.shadowRoot.getElementById("thread-thinking-select").options].map((option) => option.textContent)).toEqual(
+      expect.arrayContaining(["XHigh", "Max", "Ultra"])
     );
   });
 

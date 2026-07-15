@@ -6,9 +6,10 @@ The App hosts the private Bridge and Codex runtime. Home Assistant remains the
 client-facing boundary: the Integration authorizes Home Assistant users and
 uses the Supervisor-managed private connection to the App.
 
-Do not publish the App or Bridge to a browser, LAN, or WAN. Remote users reach
-Home Assistant through Nabu Casa, Cloudflare, a VPN, or another correctly
-configured HTTPS route. The App does not request ingress, host networking,
+Do not publish the App or Bridge to a browser, LAN, or WAN. Nabu Casa,
+Cloudflare, a VPN, or another correctly configured HTTPS reverse proxy must
+terminate at Home Assistant; it must not proxy a browser to the App or Bridge.
+The App does not request ingress, host networking,
 Docker access, devices, `/share`, Home Assistant configuration, or broad
 Supervisor roles.
 
@@ -78,12 +79,17 @@ use **Sign out**, and revoke the ChatGPT session through normal account controls
 ## Model catalogue
 
 The App asks the installed Codex runtime for its model catalogue and each
-model's supported reasoning levels. During a transient discovery failure, the
-Bridge may expose a clearly marked last-known-good or fallback catalogue. It
-preserves configured selections rather than silently changing a chat to another
-model. A confirmed account or plan change expires the signed-out catalogue
-immediately, so newly entitled models and reasoning levels are fetched on the
-next status request rather than waiting for the normal cache lifetime.
+model's supported reasoning levels. If live app-server discovery fails, it
+dynamically reads the installed Codex bundled catalogue. Stale results retry
+after 15 seconds; a verified last-known-good catalogue is preferred over the
+bundled recovery, and the static fallback is used only if neither is available.
+Every recovery state is marked stale, and configured selections are preserved
+rather than silently changing a chat to another model. GPT-5.6 and
+model-specific Max/Ultra levels are displayable whenever Codex advertises them;
+the Bridge does not keep a hardcoded model-name list. A confirmed account or
+plan change expires the signed-out catalogue immediately, so newly entitled
+models and reasoning levels are fetched on the next status request rather than
+waiting for the normal cache lifetime.
 
 ## Updates and recovery
 
@@ -102,8 +108,11 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. App `0.6.4` is a signed
-immutable image with an SPDX SBOM and build provenance. App `0.6.1` is known-bad
+The release candidate matrix is Integration `0.6.5`, App `0.6.5`, Bridge
+`0.5.5`, and Codex `0.144.4`. It is experimental, `amd64` only, and pending
+publication, signing, and target-Home-Assistant acceptance. App `0.6.4` is the
+previously published signed immutable image with an SPDX SBOM and build
+provenance. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
 bounded supplemental roots beneath the workspace. App `0.6.2` validates

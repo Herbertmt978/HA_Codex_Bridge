@@ -154,6 +154,20 @@ def test_codex_wrapper_forces_modern_bwrap_and_rejects_all_bypass_flags() -> Non
     assert "CODEX_COMMAND" not in text
 
 
+def test_codex_wrapper_allows_only_the_offline_bundled_catalogue_without_strict_config() -> None:
+    text = CODEX_WRAPPER.read_text(encoding="utf-8")
+
+    assert '[ "$#" -eq 3 ]' in text
+    assert '[ "$1" = "debug" ]' in text
+    assert '[ "$2" = "models" ]' in text
+    assert '[ "$3" = "--bundled" ]' in text
+    bundled_exec = "exec /usr/local/bin/codex debug models --bundled"
+    strict_exec = "exec /usr/local/bin/codex \\\n    --strict-config"
+    assert text.count(bundled_exec) == 1
+    assert text.count("exec /usr/local/bin/codex") == 2
+    assert text.index(bundled_exec) < text.index(strict_exec)
+
+
 def test_bwrap_wrapper_filters_nested_namespaces_and_netlink() -> None:
     wrapper = LIBEXEC / "bwrap-wrapper.py"
     assert wrapper.is_file(), "the Bubblewrap hardening wrapper is missing"

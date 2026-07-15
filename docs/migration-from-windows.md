@@ -15,8 +15,8 @@ external Bridge conversations, project state, Codex login state, or credentials.
 2. Copy only deliberately selected workspace files into a new reviewed App
    workspace below `/config/workspaces`. Do not copy Codex homes, tokens,
    cookies, Bridge state, or host configuration files.
-3. Install the Integration and, when available, its matching App image as
-   described in [installation](installation.md).
+3. Install the current Integration and matching App image as described in
+   [installation](installation.md).
 4. In the Home Assistant panel, select **Sign in with ChatGPT** and complete a
    new approved ChatGPT device-auth flow. No OpenAI API key is needed.
 5. Start a new Project, confirm its workspace and effective model/reasoning

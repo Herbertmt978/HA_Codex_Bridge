@@ -7,7 +7,7 @@ texts included with an upstream distribution.
 
 | Component | Use in this project | Source / version reference |
 | --- | --- | --- |
-| Home Assistant | Hosts the Integration and, when available, the Supervisor App. | [Home Assistant](https://www.home-assistant.io/) |
+| Home Assistant | Hosts the Integration and Supervisor App. | [Home Assistant](https://www.home-assistant.io/) |
 | OpenAI Codex | Runtime used by the private App. | The App release lock pins `openai/codex` `0.144.4`; see [`codex_bridge_app/codex-release.json`](codex_bridge_app/codex-release.json). Codex source is licensed under Apache-2.0; retain its applicable notice and license with any redistribution. |
 | Bubblewrap | Tool-process sandbox component bundled from the locked Codex release. | The same release lock identifies the exact asset and verification metadata. |
 | Python packages | Run the Bridge service and tests. | Declared in [`bridge_service/pyproject.toml`](bridge_service/pyproject.toml) and generated App requirements files. |

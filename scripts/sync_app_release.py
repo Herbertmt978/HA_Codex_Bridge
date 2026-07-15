@@ -215,7 +215,7 @@ def _changelog_projected(
         raise ReleaseSyncError("App changelog release heading is ambiguous")
     entry = (
         f"## {app_version}{source.newline}{source.newline}"
-        f"- Updates the Sigstore-verified bundled Codex runtime to "
+        f"- Bundles the Sigstore-verified Codex runtime "
         f"`{codex_version}`.{source.newline}"
         f"- Keeps model and reasoning-level choices dynamically discovered from "
         f"that runtime.{source.newline}"

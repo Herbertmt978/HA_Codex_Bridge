@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 0.6.5
+
+- Recovers visible model and reasoning-level choices from Codex's bundled
+  catalogue when live app-server discovery is temporarily unavailable. This
+  remains dynamic and exposes the installed runtime's GPT-5.6 models plus
+  model-specific `max` and `ultra` levels without hard-coded model names.
+- Retries provisional catalogues quickly, prefers a verified last-known-good
+  catalogue, and keeps the small static list as the final emergency fallback.
+- Bundles Bridge `0.5.5` with the Sigstore-verified Codex `0.144.4` runtime;
+  the paired Integration `0.6.5` also introduces a compact chat tree and keeps
+  transient artifact reservations from becoming false connection failures.
+
 ## 0.6.4
 
 - Publishes the Supervisor-assigned private App IP, rather than the App

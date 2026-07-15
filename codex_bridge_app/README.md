@@ -6,14 +6,15 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Source release: App `0.6.4` (`amd64` only, experimental)
-- Integration: `0.6.4`
-- External Bridge: `0.5.4`
+- Source release candidate: App `0.6.5` (`amd64` only, experimental)
+- Integration: `0.6.5`
+- External Bridge: `0.5.5`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-App `0.6.4` uses a signed immutable image with an SPDX SBOM and build
-provenance. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc`
+The `0.6.5` matrix is pending publication, signing, and target-Home-Assistant
+acceptance. App `0.6.4` is the previously published signed immutable image with
+an SPDX SBOM and build provenance. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
 namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
 intentionally empty. App `0.6.1`'s fatal readiness cause was a sandbox-self-test
@@ -31,14 +32,22 @@ completing account authorization still requires the user. Remote access, the
 first unattended automatic update, cold restore, and App-image rollback remain
 acceptance checks for the intended Home Assistant installation.
 
-This release advertises the Supervisor-assigned private App IP and includes a
+The candidate advertises the Supervisor-assigned private App IP and includes a
 fresh non-secret publication marker on each start, so Home Assistant can
 recover discovery without changing the stable Supervisor identity. It retains
 bounded device-authorization recovery, immediate model-entitlement refresh,
 duration-based usage windows, and successful new chats while secondary
-snapshots retry. Model and reasoning choices remain dynamically discovered
-from Codex, including newly entitled levels such as `max` and `ultra` when the
-account and model advertise them.
+snapshots retry. When live app-server model discovery fails, the candidate reads
+the installed Codex bundled catalogue dynamically. Stale data retries after 15
+seconds; a verified last-known-good catalogue wins over bundled recovery, and
+the static fallback is last. Model and reasoning choices remain discovered from
+Codex, so GPT-5.6 and model-specific `max`/`ultra` levels appear only when the
+runtime advertises them.
+
+The companion candidate panel uses a compact Codex-style sidebar. A typed,
+transient artifact reservation keeps the previous artifact view and avoids a
+false connection error even if the selected chat is idle; unrelated failures
+remain visible.
 
 ## Installation model
 
@@ -64,6 +73,11 @@ panel use stays on Home Assistant, but re-authentication again needs access to
 the approved ChatGPT page. This flow does not use an OpenAI API key.
 
 ## Updates and recovery
+
+Update or redownload the Integration in HACS first, restart Home Assistant, and
+reload any panel tab that predates the restart. Check the
+[release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
+and the panel runtime strip before applying a separately offered App update.
 
 The running image never replaces Codex or itself. Home Assistant can install a
 newly released image and can apply it automatically after the App auto-update

@@ -13,12 +13,12 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function threadRecord(threadId, title) {
+function threadRecord(threadId, title, status = "idle") {
   return {
     thread_id: threadId,
     project_id: "project-safe",
     title,
-    status: "idle",
+    status,
     mode: "edit",
     attachments: [],
   };
@@ -347,6 +347,167 @@ describe("polling event fallback", () => {
     await Promise.resolve();
 
     expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("keeps live thread state healthy when artifacts are temporarily unavailable", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Before live refresh", "running");
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Live refresh", "running"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifacts are reserved"), {
+          code: "reservation_conflict",
+        }));
+      }
+      if (action === "get_status") return Promise.resolve({ runtime: { state: "running" } });
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(panel._activeThread?.title).toBe("Live refresh");
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+    vi.useRealTimers();
+  });
+
+  it("surfaces an artifact refresh failure once the live thread is idle", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Before live refresh");
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Idle refresh"));
+      if (action === "list_artifacts") return Promise.reject(new Error("Artifact scan failed"));
+      if (action === "get_status") return Promise.resolve({ runtime: { state: "idle" } });
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(panel._error).toBe("Artifact scan failed");
+    expect(panel._errorSource).toBe("poll");
+    expect(panel._activeThread?.title).toBe("Before live refresh");
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    vi.useRealTimers();
+  });
+
+  it("keeps an idle chat healthy when another run reserves its artifact workspace", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Before live refresh");
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Idle refresh"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifacts are reserved"), {
+          code: "reservation_conflict",
+        }));
+      }
+      if (action === "get_status") return Promise.resolve({ runtime: { state: "idle" } });
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(panel._activeThread?.title).toBe("Idle refresh");
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+    vi.useRealTimers();
+  });
+
+  it("surfaces a non-reservation artifact failure from a busy live refresh", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Before live refresh", "running");
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Live refresh", "running"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifact backend failed"), {
+          code: "workspace_error",
+        }));
+      }
+      if (action === "get_status") return Promise.resolve({ runtime: { state: "running" } });
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(panel._error).toBe("Artifact backend failed");
+    expect(panel._errorSource).toBe("poll");
+    vi.useRealTimers();
+  });
+
+  it("retains artifacts on a queued polling refresh with a reservation conflict", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Queued work" }));
+    panel._activeThread = threadRecord("thr_safe", "Queued", "queued");
+    panel._lastStatusRefreshAt = 0;
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Queued", "queued"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifacts are reserved"), {
+          code: "reservation_conflict",
+        }));
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._activeThread?.status).toBe("queued");
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel._error).toBe("");
   });
 
   it("clears a polling connection error after the next successful poll", async () => {
@@ -888,6 +1049,13 @@ describe("polling event fallback", () => {
     ];
     panel._selectedThreadId = "thread-alpha";
     panel._activeThread = threadRecord("thread-alpha", "Alpha");
+    panel._artifacts = [{
+      artifact_id: "artifact-alpha",
+      filename: "alpha.txt",
+      mime_type: "text/plain",
+      size: 5,
+    }];
+    panel._selectedArtifactId = "artifact-alpha";
     panel._pollActive = true;
     panel._pollGeneration = 1;
     panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
@@ -896,6 +1064,8 @@ describe("polling event fallback", () => {
     await run(panel);
 
     expect(panel._selectedThreadId).toBe("thread-beta");
+    expect(panel._artifacts).toEqual([]);
+    expect(panel._selectedArtifactId).toBeNull();
     expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
     expect(panel._startPolling).toHaveBeenCalledOnce();
   });
