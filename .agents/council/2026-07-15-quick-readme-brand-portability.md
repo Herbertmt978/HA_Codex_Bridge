@@ -10,7 +10,7 @@
 {
   "verdict": "PASS",
   "confidence": "HIGH",
-  "key_insight": "An absolute PNG source preserves the existing brand while removing the HACS viewer's broken relative-image resolution.",
+  "key_insight": "Standard Markdown image syntax with an absolute PNG source preserves the brand across GitHub and HACS renderers.",
   "findings": [],
   "recommendation": "Ship the portable image URL and verify it in both GitHub and the live HACS repository page."
 }
@@ -22,12 +22,12 @@ The README already leads with a plain-language outcome, separates the HACS
 Integration from the Supervisor App, puts the experimental-platform warning
 next to installation, and provides visible security, recovery, and uninstall
 guidance. The live HACS viewer exposed a renderer-specific defect rather than a
-content problem: its iframe did not resolve the repository-relative SVG source.
+content problem: its iframe stripped the source from the raw HTML image element.
 
-Using the repository's own absolute raw PNG keeps the same generated artwork,
-does not add a third-party brand dependency, and renders on surfaces that do not
-provide GitHub's relative Markdown context. The local source assets remain the
-authority and can still be regenerated with `npm run brand:render`.
+Using standard Markdown image syntax with the repository's own absolute raw PNG
+keeps the same generated artwork, does not add a third-party brand dependency,
+and renders on surfaces that sanitize raw HTML. The local source assets remain
+the authority and can still be regenerated with `npm run brand:render`.
 
 ---
 *Quick check -- for thorough multi-perspective review, run `$council validate` (default mode).*
