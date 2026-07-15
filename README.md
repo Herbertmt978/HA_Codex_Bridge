@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/logo.svg" alt="Home Assistant Codex Bridge" width="640">
+<img src="https://raw.githubusercontent.com/Herbertmt978/HA_Codex_Bridge/main/brand/logo.png" alt="Home Assistant Codex Bridge" width="640">
 
 # Home Assistant Codex Bridge
 
