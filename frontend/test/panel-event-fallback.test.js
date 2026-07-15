@@ -174,10 +174,10 @@ describe("polling event fallback", () => {
     });
 
     triggerSnapshot(panel);
-    expect(panel._refreshActiveThread).toHaveBeenCalledWith({
+    expect(panel._refreshActiveThread).toHaveBeenCalledWith(expect.objectContaining({
       errorSource: "poll",
       expectedErrorRevision: 0,
-    });
+    }));
 
     panel._setError("Upload network failed", { retryable: true });
     refresh.resolve();
@@ -236,6 +236,38 @@ describe("polling event fallback", () => {
 
     expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
     expect(panel._error).toBe("");
+  });
+
+  it.each([
+    ["poll", async (panel, _snapshot) => panel._runPollTick(1), controlEvent("bridge.snapshot_required")],
+    ["raw stream", async (panel, snapshot) => {
+      panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required", cursor: snapshot.sequence });
+      await vi.waitFor(() => expect(panel._eventStream.needsSnapshot).toBe(false));
+    }, { ...controlEvent("bridge.snapshot_required"), sequence: 7 }],
+  ])("retains the %s snapshot cursor through an empty authoritative replay", async (_label, triggerSnapshot, snapshot) => {
+    const panel = pollingPanel(snapshot);
+    let firstEventsRead = _label === "poll";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._retireEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") {
+        if (firstEventsRead) {
+          firstEventsRead = false;
+          return Promise.resolve([snapshot]);
+        }
+        return Promise.resolve([]);
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await triggerSnapshot(panel, snapshot);
+
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(snapshot.sequence);
   });
 
   it("retries transient snapshot failures quietly just after creating a chat", async () => {

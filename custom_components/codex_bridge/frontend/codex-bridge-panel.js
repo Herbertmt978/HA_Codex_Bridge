@@ -7424,7 +7424,8 @@ var CodexBridgePanel = class extends HTMLElement {
           this._stopEventSubscription();
           await this._refreshActiveThread({
             errorSource: "poll",
-            expectedErrorRevision: errorRevision
+            expectedErrorRevision: errorRevision,
+            cursorFloor: this._sequence
           });
           return;
         }
@@ -7450,7 +7451,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._stopEventSubscription();
         await this._refreshActiveThread({
           errorSource: "poll",
-          expectedErrorRevision: errorRevision
+          expectedErrorRevision: errorRevision,
+          cursorFloor: this._sequence
         });
         return;
       }
@@ -7754,7 +7756,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._retireEventSubscription({ reconnect: false });
       this._refreshActiveThread({
         errorSource: "poll",
-        expectedErrorRevision: errorRevision
+        expectedErrorRevision: errorRevision,
+        cursorFloor: cursor
       });
       return;
     }
@@ -7779,7 +7782,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._stopEventSubscription();
       this._refreshActiveThread({
         errorSource: "poll",
-        expectedErrorRevision: errorRevision
+        expectedErrorRevision: errorRevision,
+        cursorFloor: this._sequence
       });
       return;
     }

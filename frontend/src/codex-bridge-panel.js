@@ -6638,6 +6638,7 @@ class CodexBridgePanel extends HTMLElement {
           await this._refreshActiveThread({
             errorSource: "poll",
             expectedErrorRevision: errorRevision,
+            cursorFloor: this._sequence,
           });
           return;
         }
@@ -6670,6 +6671,7 @@ class CodexBridgePanel extends HTMLElement {
         await this._refreshActiveThread({
           errorSource: "poll",
           expectedErrorRevision: errorRevision,
+          cursorFloor: this._sequence,
         });
         return;
       }
@@ -7024,6 +7026,7 @@ class CodexBridgePanel extends HTMLElement {
       this._refreshActiveThread({
         errorSource: "poll",
         expectedErrorRevision: errorRevision,
+        cursorFloor: cursor,
       });
       return;
     }
@@ -7049,6 +7052,7 @@ class CodexBridgePanel extends HTMLElement {
       this._refreshActiveThread({
         errorSource: "poll",
         expectedErrorRevision: errorRevision,
+        cursorFloor: this._sequence,
       });
       return;
     }
