@@ -72,14 +72,236 @@ describe("polling event fallback", () => {
     expect(panel._events).toEqual([]);
   });
 
-  it("surfaces a broker error instead of silently advancing the cursor", async () => {
+  it("clears a recovered broker error instead of silently advancing the cursor", async () => {
     const panel = pollingPanel(controlEvent("bridge.error", { error: "broker stopped" }));
 
     await panel._runPollTick(1);
 
     expect(panel._error).toBe("broker stopped");
+    expect(panel._errorSource).toBe("poll");
     expect(panel._sequence).toBe(5);
     expect(panel._events).toEqual([]);
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("");
+  });
+
+  it("retains a broker boundary cursor through an empty authoritative replay", async () => {
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    const panel = pollingPanel(brokerError);
+    let firstEventsRead = true;
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") {
+        if (firstEventsRead) {
+          firstEventsRead = false;
+          return Promise.resolve([brokerError]);
+        }
+        return Promise.resolve([]);
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._sequence).toBe(brokerError.sequence);
+    expect(panel._error).toBe("");
+  });
+
+  it("does not replace a newer action error with a broker error from polling", async () => {
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    const panel = pollingPanel(brokerError);
+    const delayedEvents = deferred();
+    panel._callWS.mockReturnValueOnce(delayedEvents.promise);
+
+    const pending = panel._runPollTick(1);
+    panel._setError("Upload network failed", { retryable: true });
+    delayedEvents.resolve([brokerError]);
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("reconciles a broker replay boundary without replacing an action error", async () => {
+    const panel = pollingPanel(controlEvent("bridge.error", { error: "broker stopped" }));
+    panel._setError("Upload network failed", { retryable: true });
+    panel._refreshActiveThread = vi.fn(async () => {
+      panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+      return true;
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("clears recovered live stream errors without replacing action errors", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._retireEventSubscription = vi.fn();
+
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    expect(panel._error).toBe("Bridge event stream failed");
+    expect(panel._errorSource).toBe("poll");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+
+    panel._setError("Upload network failed", { retryable: true });
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("preserves a live broker error when its sticky snapshot recovery fails", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    panel._retireEventSubscription = vi.fn();
+    panel._handleSubscribedEvent("thr_safe", brokerError);
+    panel._lastStatusRefreshAt = 0;
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._error).toBe("broker stopped");
+
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([]);
+      if (action === "get_thread") return Promise.reject(new Error("Snapshot fetch failed"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("broker stopped");
+    expect(panel._errorSource).toBe("poll");
+
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+  });
+
+  it.each([
+    ["raw stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required" })],
+    ["accepted stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", controlEvent("bridge.snapshot_required"))],
+  ])("preserves a newer action error during a delayed %s refresh", async (_label, triggerSnapshot) => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const refresh = deferred();
+    panel._retireEventSubscription = vi.fn();
+    panel._stopEventSubscription = vi.fn();
+    panel._refreshActiveThread = vi.fn(async ({ errorSource }) => {
+      await refresh.promise;
+      panel._clearError({ source: errorSource });
+      return true;
+    });
+
+    triggerSnapshot(panel);
+    expect(panel._refreshActiveThread).toHaveBeenCalledWith(expect.objectContaining({
+      errorSource: "poll",
+      expectedErrorRevision: 0,
+    }));
+
+    panel._setError("Upload network failed", { retryable: true });
+    refresh.resolve();
+    await panel._refreshActiveThread.mock.results[0].value;
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("retries a failed snapshot replay before clearing its poll error", async () => {
+    const snapshot = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshot);
+    panel._refreshActiveThread = vi.fn()
+      .mockImplementationOnce(async () => {
+        panel._setError("Bridge request failed", { source: "poll" });
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+        panel._clearError({ source: "poll" });
+        return true;
+      });
+
+    await panel._runPollTick(1);
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._error).toBe("Bridge request failed");
+
+    panel._callWS.mockResolvedValue([controlEvent("message.created", { text: "Untrusted after snapshot" })]);
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
+    expect(panel._sequence).toBe(snapshot.sequence);
+    expect(panel._error).toBe("");
+    expect(panel._events).toEqual([]);
+  });
+
+  it("retries a failed raw stream snapshot replay on a later empty poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._retireEventSubscription = vi.fn();
+    panel._refreshActiveThread = vi.fn()
+      .mockImplementationOnce(async () => {
+        panel._setError("Bridge request failed", { source: "poll" });
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+        panel._clearError({ source: "poll" });
+        return true;
+      });
+
+    panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required", cursor: 7 });
+    await panel._refreshActiveThread.mock.results[0].value;
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._sequence).toBe(7);
+    expect(panel._error).toBe("Bridge request failed");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
+    expect(panel._error).toBe("");
+  });
+
+  it.each([
+    ["poll", async (panel, _snapshot) => panel._runPollTick(1), controlEvent("bridge.snapshot_required")],
+    ["raw stream", async (panel, snapshot) => {
+      panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required", cursor: snapshot.sequence });
+      await vi.waitFor(() => expect(panel._eventStream.needsSnapshot).toBe(false));
+    }, { ...controlEvent("bridge.snapshot_required"), sequence: 7 }],
+  ])("retains the %s snapshot cursor through an empty authoritative replay", async (_label, triggerSnapshot, snapshot) => {
+    const panel = pollingPanel(snapshot);
+    let firstEventsRead = _label === "poll";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._retireEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") {
+        if (firstEventsRead) {
+          firstEventsRead = false;
+          return Promise.resolve([snapshot]);
+        }
+        return Promise.resolve([]);
+      }
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await triggerSnapshot(panel, snapshot);
+
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(snapshot.sequence);
   });
 
   it("retries transient snapshot failures quietly just after creating a chat", async () => {
@@ -99,6 +321,251 @@ describe("polling event fallback", () => {
 
     expect(panel._error).toBe("");
     expect(panel._scheduleNextPoll).toHaveBeenCalled();
+  });
+
+  it("does not let a delayed live refresh failure replace a newer action error", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Alpha");
+    const delayedThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return delayedThread.promise;
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    panel._setError("Upload network failed", { retryable: true });
+    delayedThread.reject(new Error("Bridge request failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("clears a polling connection error after the next successful poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._callWS
+      .mockRejectedValueOnce(new Error("Bridge request failed"))
+      .mockResolvedValueOnce([]);
+
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("Bridge request failed");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).toContain("visible");
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+  });
+
+  it("does not let an older successful poll clear a newer stream error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const delayedStatus = deferred();
+    panel._eventSubscriptionActive = true;
+    panel._retireEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_status") return delayedStatus.promise;
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered"));
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._runPollTick(1);
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    delayedStatus.resolve({});
+    await pending;
+    expect(panel._error).toBe("Bridge event stream failed");
+
+    panel._eventSubscriptionActive = false;
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+  });
+
+  it("does not clear an unrelated retryable action error after a successful poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Healthy poll" }));
+    panel._callWS.mockResolvedValue([]);
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not overwrite an existing action error when a poll fails", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Failed poll" }));
+    panel._callWS.mockRejectedValue(new Error("Bridge request failed"));
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not let an older failed poll overwrite a newer action error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Delayed poll" }));
+    const delayedPoll = deferred();
+    panel._callWS
+      .mockReturnValueOnce(delayedPoll.promise)
+      .mockResolvedValueOnce([]);
+
+    const pending = panel._runPollTick(1);
+    panel._setError("Upload network failed", { retryable: true });
+    delayedPoll.reject(new Error("Bridge request failed"));
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("reports a delayed poll failure after a no-op error clear", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Delayed poll" }));
+    const delayedPoll = deferred();
+    panel._callWS.mockReturnValueOnce(delayedPoll.promise);
+
+    const pending = panel._runPollTick(1);
+    expect(panel._clearError()).toBe(false);
+    delayedPoll.reject(new Error("Bridge request failed"));
+    await pending;
+
+    expect(panel._error).toBe("Bridge request failed");
+    expect(panel._errorSource).toBe("poll");
+  });
+
+  it("does not clear a newer action error while reconciling a poll snapshot", async () => {
+    const snapshotEvent = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshotEvent);
+    const snapshotThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([snapshotEvent]);
+      if (action === "get_thread") return snapshotThread.promise;
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._runPollTick(1);
+    await vi.waitFor(() => expect(panel._callWS).toHaveBeenCalledWith("get_thread", { thread_id: "thr_safe" }));
+    panel._setError("Upload network failed", { retryable: true });
+    snapshotThread.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("does not clear a newer polling error while snapshot recovery succeeds", async () => {
+    const panel = pollingPanel(controlEvent("bridge.snapshot_required"));
+    const snapshotThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return snapshotThread.promise;
+      if (action === "get_events") return Promise.resolve([]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+    });
+    await vi.waitFor(() => expect(panel._callWS).toHaveBeenCalledWith("get_thread", { thread_id: "thr_safe" }));
+    panel._setError("Newer stream failure", { source: "poll" });
+    snapshotThread.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+    await pending;
+
+    expect(panel._error).toBe("Newer stream failure");
+
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+  });
+
+  it("does not loop snapshot recovery when an authoritative replay contains a bridge error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const historicalBridgeError = controlEvent("bridge.error", { error: "broker stopped" });
+    const laterMessage = {
+      ...controlEvent("message.created", { text: "Retained after broker error" }),
+      event_id: "evt_after_broker_error",
+      sequence: 6,
+    };
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events") return Promise.resolve([historicalBridgeError, laterMessage]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    const refresh = vi.spyOn(panel, "_refreshActiveThread");
+
+    await panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+      cursorFloor: historicalBridgeError.sequence,
+    });
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(6);
+    expect(panel._events).toEqual([laterMessage]);
+
+    panel._lastStatusRefreshAt = Date.now();
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("advances the cursor past control-only authoritative replays", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const historicalBridgeError = controlEvent("bridge.error", { error: "broker stopped" });
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events") return Promise.resolve([historicalBridgeError]);
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._refreshActiveThread({
+      errorSource: "poll",
+      expectedErrorRevision: panel._errorRevision,
+      cursorFloor: historicalBridgeError.sequence,
+    });
+
+    expect(panel._eventStream.needsSnapshot).toBe(false);
+    expect(panel._sequence).toBe(historicalBridgeError.sequence);
+  });
+
+  it("does not overwrite an existing action error when poll snapshot reconciliation fails", async () => {
+    const snapshotEvent = controlEvent("bridge.snapshot_required");
+    const panel = pollingPanel(snapshotEvent);
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([snapshotEvent]);
+      if (action === "get_thread") return Promise.reject(new Error("Bridge request failed"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._setError("Upload network failed", { retryable: true });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Upload network failed");
   });
 
   it("rejects a misrouted live event from another chat", () => {
