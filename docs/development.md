@@ -37,17 +37,19 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 `workspaceWrite` response includes bounded supplemental roots (`.agents`,
 `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The proc-less
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
-requesting `SYS_ADMIN` or weakening isolation; App `0.6.4` retains canonical
+requesting `SYS_ADMIN` or weakening isolation; App `0.6.6` retains canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-The published App `0.6.4` image passed target-HAOS startup, its production
+The historical App `0.6.5` image passed target-HAOS startup, its production
 sandbox self-test and attestation, an authenticated API v1 readiness request,
-Supervisor discovery, Integration pairing, and panel loading. Remote access,
-the first unattended automatic update, cold restore, and App-image rollback
-still need post-release validation.
+Supervisor discovery, Integration pairing, ChatGPT Pro sign-in, runtime chat,
+and explicit App update/restart recovery. That evidence does not accept `0.6.6`.
+External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
+unattended App update, and previous-image rollback remain unproven.
 
-The source release candidate matrix is Integration `0.6.5`, App `0.6.5`,
-Bridge `0.5.5`, and Codex `0.144.4`. It is pending publication, signing, and
-target-Home-Assistant acceptance. Its catalogue recovery must remain ordered:
+The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+and Codex `0.144.4`; publication, signing, and target-Home-Assistant acceptance
+remain pending. Its catalogue recovery must remain ordered:
 live app-server discovery first, then a verified last-known-good record, then
 the dynamically read installed Codex bundled catalogue, and static fallback
 last; stale records retry after 15 seconds. Do not add hardcoded model names:

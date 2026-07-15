@@ -151,6 +151,9 @@ describe("panel accessibility contract", () => {
 
     const dialogs = [...panel.shadowRoot.querySelectorAll("[role='alertdialog']")];
     expect(dialogs).toHaveLength(2);
+    const transcript = panel.shadowRoot.getElementById("message-list");
+    const interactions = panel.shadowRoot.getElementById("interaction-region");
+    expect(transcript?.compareDocumentPosition(interactions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const dialog of dialogs) {
       expect(dialog.tabIndex).toBe(-1);
       expect(dialog.getAttribute("aria-modal")).toBe("false");
@@ -261,6 +264,20 @@ describe("panel accessibility contract", () => {
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)/i);
   });
 
+  it("exposes the workspace drawer as a named navigation landmark with a semantic search field", () => {
+    const panel = createPanel();
+    panel._render(true);
+
+    const navigation = panel.shadowRoot.getElementById("workspace-drawer");
+    expect(navigation?.getAttribute("role") || navigation?.tagName.toLowerCase()).toBe("navigation");
+    expect(navigation?.getAttribute("aria-label")).toMatch(/workspace navigation/i);
+
+    const search = panel.shadowRoot.getElementById("search-input");
+    expect(search?.type).toBe("search");
+    expect(search?.getAttribute("aria-label")).toMatch(/search chats and projects/i);
+    expect(panel.shadowRoot.querySelector("#search-icon svg")).toBeTruthy();
+  });
+
   it("provides a semantic workspace tree and a new-chat action when nothing is selected", () => {
     const panel = createPanel();
     const project = {
@@ -311,6 +328,22 @@ describe("panel accessibility contract", () => {
     expect(panel.shadowRoot.getElementById("direct-chat-list")).toBeTruthy();
     expect(archivedToggle?.getAttribute("aria-controls")).toBe("archived-chat-list");
     expect(archivedToggle?.getAttribute("aria-expanded")).toBe("false");
+    const archivedSectionText = panel.shadowRoot.getElementById("archived-section")?.textContent || "";
+    expect(archivedSectionText).toMatch(/Archived/u);
+    expect(archivedSectionText).toMatch(/\b1\b/u);
+    expect(panel.shadowRoot.getElementById("archived-chat-list")?.hidden).toBe(true);
+
+    const search = panel.shadowRoot.getElementById("search-input");
+    search.value = "Archived direct chat";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    const matchingArchivedToggle = panel.shadowRoot.querySelector('[data-action="toggle-section"][data-section="archived"]');
+    expect(matchingArchivedToggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(panel.shadowRoot.getElementById("archived-chat-list")?.hidden).toBe(false);
+    expect(panel.shadowRoot.getElementById("archived-chat-list")?.textContent).toContain("Archived direct chat");
+
+    search.value = "";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(panel.shadowRoot.querySelector('[data-action="toggle-section"][data-section="archived"]')?.getAttribute("aria-expanded")).toBe("false");
     expect(panel.shadowRoot.getElementById("archived-chat-list")?.hidden).toBe(true);
 
     panel._selectedThreadId = null;

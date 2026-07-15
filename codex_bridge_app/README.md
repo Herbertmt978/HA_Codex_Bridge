@@ -6,15 +6,16 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Source release candidate: App `0.6.5` (`amd64` only, experimental)
-- Integration: `0.6.5`
+- Release being shipped: App `0.6.6` (`amd64` only, experimental)
+- Integration: `0.6.6`
 - External Bridge: `0.5.5`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-The `0.6.5` matrix is pending publication, signing, and target-Home-Assistant
-acceptance. App `0.6.4` is the previously published signed immutable image with
-an SPDX SBOM and build provenance. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc`
+Publication, signing, and target-Home-Assistant acceptance for `0.6.6` remain
+pending. The signed, live-accepted `0.6.5` matrix remains historical evidence;
+do not reuse its image digest or acceptance claims for this release. On target
+HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
 namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
 intentionally empty. App `0.6.1`'s fatal readiness cause was a sandbox-self-test
@@ -24,30 +25,32 @@ real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
 The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
 calls, without requesting `SYS_ADMIN` or weakening isolation. App `0.6.2`
 validates canonical contained supplemental roots and hardens
-`lsm_get_self_attr` record parsing. Its published image passed target-HAOS
+`lsm_get_self_attr` record parsing. The historical `0.6.5` image passed target-HAOS
 startup, the production sandbox self-test and attestation, an authenticated API
 v1 readiness request, Supervisor discovery, Integration pairing, and panel
-loading. A redacted ChatGPT device-login start/cancel cycle also passed;
-completing account authorization still requires the user. Remote access, the
-first unattended automatic update, cold restore, and App-image rollback remain
-acceptance checks for the intended Home Assistant installation.
+loading. Its live-acceptance evidence does not accept `0.6.6`. External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
+unattended App update, and previous-image rollback remain unproven.
 
-The candidate advertises the Supervisor-assigned private App IP and includes a
+The `0.6.6` release advertises the Supervisor-assigned private App IP and includes a
 fresh non-secret publication marker on each start, so Home Assistant can
 recover discovery without changing the stable Supervisor identity. It retains
 bounded device-authorization recovery, immediate model-entitlement refresh,
 duration-based usage windows, and successful new chats while secondary
-snapshots retry. When live app-server model discovery fails, the candidate reads
+snapshots retry. When live app-server model discovery fails, the release reads
 the installed Codex bundled catalogue dynamically. Stale data retries after 15
 seconds; a verified last-known-good catalogue wins over bundled recovery, and
 the static fallback is last. Model and reasoning choices remain discovered from
 Codex, so GPT-5.6 and model-specific `max`/`ultra` levels appear only when the
 runtime advertises them.
 
-The companion candidate panel uses a compact Codex-style sidebar. A typed,
-transient artifact reservation keeps the previous artifact view and avoids a
-false connection error even if the selected chat is idle; unrelated failures
-remain visible.
+The companion panel uses a clean Codex-style left navigation tree, title-first
+chat rows, one action menu, correct archive collapse/search, and a corrected
+search icon. Approvals follow the active transcript, decision controls remain
+reachable in the natural mobile scroll flow, and limits/model controls fold
+behind a compact mobile disclosure. Mobile targets are at least 44px; typed
+transient artifact reservations still preserve the prior artifact view without
+a false connection error.
 
 ## Installation model
 

@@ -24,12 +24,14 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The candidate matrix is Integration `0.6.5`, App `0.6.5`, Bridge `0.5.5`, and
-Codex `0.144.4`. It is experimental, `amd64` only, and pending publication,
-signing, and target-Home-Assistant acceptance. App `0.6.4` is the previously
-published signed immutable image, but a source checkout, local image, or unit
-test is not release evidence. Do not claim App-image rollback works; that
-requires a published prior immutable tag and a tested restore procedure.
+The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+and Codex `0.144.4`. It is experimental and `amd64` only; publication, signing,
+and target-Home-Assistant acceptance remain pending. The `0.6.5` signed,
+live-accepted matrix remains historical evidence only. A source checkout, local
+image, or unit test is not release evidence. Do not claim external
+blocked-network routing, cold restore, the first future unattended App-update
+canary, or App-image rollback works until each has its own target-system
+evidence.
 
 ## Local checks
 

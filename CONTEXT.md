@@ -25,12 +25,12 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Release candidate: Integration `0.6.5`, App `0.6.5` (experimental and
-  `amd64` only), optional external Bridge `0.5.5`, and bundled Codex
-  `0.144.4`. It is pending publication, signing, and target-Home-Assistant
-  acceptance.
-- The previously published App `0.6.4` uses a signed immutable image with an
-  SPDX SBOM and build provenance.
+- Current release being shipped: Integration `0.6.6`, App `0.6.6`
+  (experimental and `amd64` only), optional external Bridge `0.5.5`, and bundled
+  Codex `0.144.4`. Publication, signing, and target-Home-Assistant acceptance
+  remain pending; no App image digest is recorded for `0.6.6` yet.
+- The prior `0.6.5` matrix is signed and live-accepted within the historical
+  boundaries recorded in `90-evidence.md`; do not apply that evidence to `0.6.6`.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -39,7 +39,7 @@ to the App or Bridge.
 - Device-login recovery uses bounded authoritative account checks; account
   entitlement changes invalidate the signed-out model catalogue before project
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
-  If live app-server discovery fails, the `0.6.5` candidate uses the installed
+  If live app-server discovery fails, the `0.6.6` release uses the installed
   Codex bundled catalogue dynamically, retries stale data after 15 seconds,
   prefers a verified last-known-good record, and uses a static fallback only as
   the final recovery layer. GPT-5.6 and per-model Max/Ultra options appear only
@@ -49,11 +49,12 @@ to the App or Bridge.
 - A typed, temporary artifact-scan reservation preserves the previous artifact
   snapshot and does not turn a healthy chat or completed response into a false
   connection failure, even where the selected chat is idle.
-- The `0.6.5` candidate keeps the chat surface at a bounded reading width with
-  a compact Codex-style sidebar, derives
-  rail and context contrast from Home Assistant theme tokens, and exposes
-  disclosure, selection, progress, and retryable transport state to assistive
-  technology.
+- The `0.6.6` release keeps the chat surface at a bounded reading width with a
+  clean Codex-style left navigation tree, title-first chat rows, one action
+  menu, correct archive collapse/search and search icon, 44px mobile targets,
+  transcript-adjacent decisions, and collapsed mobile settings/limits. It
+  retains theme-derived contrast and accessible disclosure, selection,
+  progress, and retry state.
 - On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
   denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
   read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally
@@ -66,16 +67,12 @@ to the App or Bridge.
   without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
   canonical contained supplemental roots and hardens `lsm_get_self_attr` record
   parsing.
-- The published App `0.6.4` image passed target-HAOS startup, its production
-  sandbox self-test and attestation, an authenticated API v1 readiness request,
-  Supervisor discovery, Integration pairing, and panel loading. A redacted
-  ChatGPT device-login start/cancel cycle also passed; completing account
-  authorization still requires the user. Remote access, the first unattended
-  automatic update, cold restore, and App-image rollback on the intended
-  installation remain acceptance gates. The current recovery plan is a cold
-  backup and, if already operated, a private external Bridge. Do not claim
-  Supervisor can choose an arbitrary earlier image until a prior immutable tag
-  and restore procedure are published and exercised.
+- The live App `0.6.5` passed target-HAOS startup, production sandbox
+  self-test/attestation, authenticated API v1 readiness, Supervisor discovery,
+  Integration pairing, ChatGPT Pro sign-in, runtime chat, and explicit App
+  restart recovery. This historical result does not accept `0.6.6`; external
+  blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
+  unattended App update, and previous-image rollback remain unproven.
 
 ## Product language
 
