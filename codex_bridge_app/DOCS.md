@@ -65,7 +65,10 @@ The Integration starts Codex's ChatGPT device-login flow. From the panel, select
 a browser. **Cancel** ends only an unfinished sign-in; **Sign out** removes an
 established session. Initial sign-in and re-authentication require access to the
 approved ChatGPT page, while normal signed-in panel use remains on the Home
-Assistant origin.
+Assistant origin. While device approval is pending, the panel performs a
+bounded two-second account check and keeps the one-time code until Codex
+authoritatively confirms the session. Uncorrelated completion events are never
+allowed to replace a newer login.
 
 Credentials stay in private App state and are not entered in App options, Home
 Assistant configuration, or a browser URL. No OpenAI API key is part of this
@@ -78,7 +81,9 @@ The App asks the installed Codex runtime for its model catalogue and each
 model's supported reasoning levels. During a transient discovery failure, the
 Bridge may expose a clearly marked last-known-good or fallback catalogue. It
 preserves configured selections rather than silently changing a chat to another
-model.
+model. A confirmed account or plan change expires the signed-out catalogue
+immediately, so newly entitled models and reasoning levels are fetched on the
+next status request rather than waiting for the normal cache lifetime.
 
 ## Updates and recovery
 
@@ -91,7 +96,7 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. Public App `0.6.2` is a signed
+The App is experimental and `amd64` only. App `0.6.3` is a signed
 immutable image with an SPDX SBOM and build provenance. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes

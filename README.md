@@ -36,11 +36,12 @@ Home Assistant through its normal LAN or HTTPS remote-access route instead.
   alongside Home Assistant. Add this repository to the Home Assistant App
   store to install its published immutable image.
 
-This source release targets experimental, `amd64`-only App `0.6.2`; the
-Integration is `0.6.1`, the optional external Bridge is `0.5.3`, and the
-bundled Codex runtime is `0.144.4`. Public App `0.6.2` is a signed immutable
-image with an SPDX SBOM and build provenance. On target HAOS, the published
-image completed startup, its production sandbox self-test and attestation, an
+This source release targets experimental, `amd64`-only App `0.6.3`; the
+Integration is `0.6.2`, the optional external Bridge is `0.5.4`, and the
+bundled Codex runtime is `0.144.4`. The public App is distributed as a signed
+immutable image with an SPDX SBOM and build provenance; App `0.6.3` uses that
+release workflow. On target HAOS, App
+`0.6.2` completed startup, its production sandbox self-test and attestation, an
 authenticated API v1 readiness request, Supervisor discovery, Integration
 pairing, and panel loading. Codex uses its official `--no-proc`
 restrictive-container fallback there; user, PID, and network namespaces, the
@@ -52,9 +53,18 @@ passed; completing account authorization still requires the user. Remote-access
 acceptance, the first unattended automatic update, cold restore, and prior-image
 recovery remain validation work for the intended installation.
 
+App `0.6.3` adds bounded recovery for delayed ChatGPT device sign-in, expires
+the signed-out catalogue when account entitlements change, and continues to
+discover every model and reasoning level from Codex rather than hardcoding a
+release list. It also separates weekly-only usage from the disabled five-hour
+window and keeps a newly created chat usable while secondary snapshots retry.
+Integration `0.6.2` gives the panel a clearer Codex-style reading surface,
+stronger chat and composer hierarchy, intentional empty states, and improved
+keyboard and screen-reader navigation while retaining Home Assistant themes.
+
 The external Bridge remains an optional, private compatibility path for people
 who already operate one. Fresh Home Assistant OS installations should use App
-`0.6.2` or newer; App `0.6.1` must not be used. Keep an existing
+`0.6.3` or newer; App `0.6.1` must not be used. Keep an existing
 external Bridge as a recovery path until an App update and cold-restore
 exercise has passed on the intended installation.
 
@@ -68,7 +78,7 @@ exercise has passed on the intended installation.
 
 1. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
-   offers App `0.6.2` or newer, then install and start **Codex Bridge**. Do not
+   offers App `0.6.3` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
 2. Install the **Codex Bridge** Integration through HACS, restart Home
    Assistant, then add it in **Settings -> Devices & services**. App discovery
@@ -77,7 +87,8 @@ exercise has passed on the intended installation.
 3. Open the panel as a Home Assistant administrator. Select **Sign in with
    ChatGPT**, then use a browser to complete the approved ChatGPT device-auth
    page. **Cancel** only cancels an in-progress sign-in; **Sign out** removes an
-   established Codex session.
+   established Codex session. After approval, the panel checks the authoritative
+   account state every two seconds until Codex reports the session ready.
 4. Create a Project and grant a small workspace beneath `/config/workspaces` in
    App mode. Review changes before expanding that boundary.
 

@@ -82,6 +82,25 @@ describe("polling event fallback", () => {
     expect(panel._events).toEqual([]);
   });
 
+  it("retries transient snapshot failures quietly just after creating a chat", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thr_created";
+    panel._activeThread = threadRecord("thr_created", "Created");
+    panel._status = {};
+    panel._lastStatusRefreshAt = 0;
+    panel._pollActive = true;
+    panel._pollGeneration = 1;
+    panel._threadRefreshGraceUntil = Date.now() + 5000;
+    panel._scheduleNextPoll = vi.fn();
+    panel._callWS = vi.fn().mockRejectedValue(new Error("Bridge request failed"));
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("");
+    expect(panel._scheduleNextPoll).toHaveBeenCalled();
+  });
+
   it("rejects a misrouted live event from another chat", () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);

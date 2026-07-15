@@ -125,6 +125,13 @@ class AppServerModelCatalogProbe:
             self._generation = generation if type(generation) is int else None
             return result
 
+    def invalidate(self) -> None:
+        """Expire the catalogue while retaining it as a last-known-good fallback."""
+
+        with self._lock:
+            self._cached_at = 0.0
+            self._generation = None
+
     def _request(self, method: str, params: dict[str, Any], *, deadline: float) -> Any:
         remaining = deadline - monotonic()
         if remaining <= 0:
