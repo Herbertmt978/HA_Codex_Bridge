@@ -10,9 +10,9 @@
 {
   "verdict": "PASS",
   "confidence": "HIGH",
-  "key_insight": "A text-first header and absolute badge destinations preserve a polished README across GitHub and HACS without depending on HACS to embed repository-hosted artwork.",
+  "key_insight": "A text-first header and the four badges already proven in HACS preserve a polished README without depending on HACS to embed repository-hosted artwork or the two non-portable badges.",
   "findings": [],
-  "recommendation": "Keep the generated brand assets for the Integration, App, social preview, and repository media; omit the decorative README hero and verify the text-first header in both GitHub and the live HACS repository page."
+  "recommendation": "Keep the generated brand assets for the Integration, App, social preview, and repository media; omit the decorative README hero and redundant broken badge pair, then verify the released header in both GitHub and the live HACS repository page."
 }
 ```
 
@@ -27,11 +27,12 @@ Markdown, even though the PNG itself loaded directly. It also mishandled the
 two badge links whose destinations were relative, while the four badges with
 absolute destinations rendered normally.
 
-The robust header therefore uses a centered text identity, retains the useful
-badge row with absolute destinations, and keeps remote artwork out of the
-HACS-rendered README. The generated local assets remain authoritative for the
-Integration, App, repository media, and social preview and can still be
-regenerated with `npm run brand:render`.
+The robust header therefore uses a centered text identity, retains the four
+useful badges already proven to render in HACS, removes the redundant broken
+badge pair, and keeps repository-hosted artwork out of the HACS-rendered README.
+The generated local assets remain authoritative for the Integration, App,
+repository media, and social preview and can still be regenerated with
+`npm run brand:render`.
 
 ---
 *Quick check -- for thorough multi-perspective review, run `$council validate` (default mode).*

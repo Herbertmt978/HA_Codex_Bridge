@@ -8,8 +8,6 @@ Run and supervise Codex work from Home Assistant without publishing a coding-age
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
-[![App source: 0.6.2 experimental](https://img.shields.io/badge/App%20source-0.6.2%20Experimental-F59E0B)](https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/codex_bridge_app/README.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-00897B.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/LICENSE)
 
 [Installation](docs/installation.md) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
