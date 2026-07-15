@@ -1208,7 +1208,7 @@ function collectUserInputAnswers(container, model) {
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.4";
+var PANEL_VERSION = "0.6.5";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -1261,6 +1261,11 @@ var INTERACTION_ERROR_CODES = /* @__PURE__ */ new Set([
 ]);
 var ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 var ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
+var ARTIFACT_REFRESH_TRANSIENT_THREAD_STATUSES = /* @__PURE__ */ new Set(["queued", "running", "cancelling"]);
+var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
+function canDeferArtifactRefresh(thread, error) {
+  return ARTIFACT_REFRESH_TRANSIENT_THREAD_STATUSES.has(thread?.status) && error?.code === ARTIFACT_RESERVATION_CONFLICT_CODE;
+}
 function artifactPreviewSizeState(artifact) {
   const sizeBytes = artifact?.size_bytes;
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
@@ -6260,13 +6265,23 @@ var CodexBridgePanel = class extends HTMLElement {
       return true;
     }
     try {
-      const [thread, events, artifacts, status, interactions] = await Promise.all([
+      const [thread, events, status, interactions] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
         this._callWS("get_events", { thread_id: threadId, after: 0 }),
-        this._callWS("list_artifacts", { thread_id: threadId }),
         this._callWS("get_status"),
         this._listPendingInteractions(threadId)
       ]);
+      if (!isCurrent()) {
+        return false;
+      }
+      let artifacts;
+      try {
+        artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
+      } catch (error) {
+        if (!canDeferArtifactRefresh(thread, error)) {
+          throw error;
+        }
+      }
       if (!isCurrent()) {
         return false;
       }
@@ -6296,7 +6311,9 @@ var CodexBridgePanel = class extends HTMLElement {
       };
       this._events = replay.state.events;
       this._sequence = authoritativeCursor;
-      this._artifacts = artifacts;
+      if (artifacts) {
+        this._artifacts = artifacts;
+      }
       this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
       this._threadRefreshGraceUntil = 0;
@@ -7491,12 +7508,21 @@ var CodexBridgePanel = class extends HTMLElement {
         this._activeThread = refreshedThread;
         this._syncThreadListStatus();
         if (this._activeThread.status !== "running" && (hasNewEvents || previousStatus === "running" || shouldRefreshStatus)) {
-          const artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
+          let artifacts;
+          try {
+            artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
+          } catch (error) {
+            if (!canDeferArtifactRefresh(this._activeThread, error)) {
+              throw error;
+            }
+          }
           if (!isCurrent()) {
             return;
           }
-          this._artifacts = artifacts;
-          this._syncSelectedArtifact();
+          if (artifacts) {
+            this._artifacts = artifacts;
+            this._syncSelectedArtifact();
+          }
         }
         this._render();
       }
@@ -7848,17 +7874,29 @@ var CodexBridgePanel = class extends HTMLElement {
         return;
       }
       try {
-        const [thread, artifacts, status, interactions] = await Promise.all([
+        const [thread, status, interactions] = await Promise.all([
           this._callWS("get_thread", { thread_id: threadId }),
-          this._callWS("list_artifacts", { thread_id: threadId }),
           this._callWS("get_status"),
           this._listPendingInteractions(threadId)
         ]);
         if (!isCurrent()) {
           return;
         }
+        let artifacts;
+        try {
+          artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
+        } catch (error) {
+          if (!canDeferArtifactRefresh(thread, error)) {
+            throw error;
+          }
+        }
+        if (!isCurrent()) {
+          return;
+        }
         this._activeThread = thread;
-        this._artifacts = artifacts;
+        if (artifacts) {
+          this._artifacts = artifacts;
+        }
         this._replacePendingInteractions(interactions);
         this._mergeStatus(status);
         this._syncThreadListStatus();

@@ -7,7 +7,7 @@ administrator panel and connects to this App through Supervisor.
 ## Status
 
 - Source release: App `0.6.4` (`amd64` only, experimental)
-- Integration: `0.6.4`
+- Integration: `0.6.5`
 - External Bridge: `0.5.4`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
@@ -64,6 +64,11 @@ panel use stays on Home Assistant, but re-authentication again needs access to
 the approved ChatGPT page. This flow does not use an OpenAI API key.
 
 ## Updates and recovery
+
+Update or redownload the Integration in HACS first, restart Home Assistant, and
+reload any panel tab that predates the restart. Check the
+[release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
+and the panel runtime strip before applying a separately offered App update.
 
 The running image never replaces Codex or itself. Home Assistant can install a
 newly released image and can apply it automatically after the App auto-update

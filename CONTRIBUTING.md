@@ -24,10 +24,10 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The App is experimental and `amd64` only; its public image is not available yet.
-Do not describe a source checkout, local image, or unit test as a released App,
-or claim App-image rollback works. A rollback claim requires a published prior
-immutable tag and tested restore procedure.
+The App is experimental and `amd64` only. App `0.6.4` is published as a signed
+immutable image, but a source checkout, local image, or unit test is not release
+evidence. Do not claim App-image rollback works; that requires a published prior
+immutable tag and a tested restore procedure.
 
 ## Local checks
 

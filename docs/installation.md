@@ -4,7 +4,7 @@
 
 This guide targets the experimental, `amd64`-only App `0.6.4`, which bundles
 Bridge `0.5.4` and Codex `0.144.4`; the separately installed Integration is
-`0.6.4`. App `0.6.4` uses a signed immutable image with an SPDX SBOM and build
+`0.6.5`. App `0.6.4` uses a signed immutable image with an SPDX SBOM and build
 provenance. On target HAOS, Codex `0.144.4`'s official
 `--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
 namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
@@ -21,9 +21,10 @@ authenticated API v1 readiness request, Supervisor discovery, Integration
 pairing, and panel loading. App `0.6.4` adds private-IP Supervisor discovery and
 retains bounded recovery after device approval, immediate entitlement-aware
 model discovery, duration-aware usage windows, and resilient new-chat
-hydration. Integration `0.6.4` also introduces a more focused Codex-style chat
+hydration. Integration `0.6.5` also introduces a more focused Codex-style chat
 canvas, composer, and accessible workspace navigation, and clears recovered
-polling errors without masking unrelated action failures. Final
+polling errors without masking unrelated action failures. It also treats a
+temporarily reserved artifact scan as secondary to a healthy active chat. Final
 ChatGPT account authorization still requires the user. Remote access, the first
 unattended automatic update, cold restore, and App-image rollback remain
 acceptance checks for the intended Home Assistant installation.
@@ -55,8 +56,8 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install the latest **Codex Bridge** Integration release (`0.6.4`) and restart
-   Home Assistant.
+2. Install the latest released **Codex Bridge** Integration and restart Home
+   Assistant. This source candidate reports Integration `0.6.5`.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.
 
@@ -99,6 +100,20 @@ Integration does not save an unverified endpoint.
 After connection, normal panel use can remain on Home Assistant. Initial
 sign-in and re-authentication require browser access to the approved ChatGPT
 device-auth page.
+
+## Update an existing installation
+
+1. In HACS, open **Codex Bridge**, choose **Update** or **Redownload**, select
+   the latest Integration release, and restart Home Assistant.
+2. Reload panel tabs that were open before the restart, then verify the four
+   runtime versions shown at the top of the panel against the
+   [release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).
+3. Update the App separately from **Settings -> Apps -> Codex Bridge** when a
+   new App version is offered. The App's auto-update toggle may apply released
+   images automatically.
+4. Make a cold backup before an App change. The first unattended update and
+   restore canary remains open, and arbitrary prior-image selection is not a
+   validated rollback path.
 
 ## After installation
 

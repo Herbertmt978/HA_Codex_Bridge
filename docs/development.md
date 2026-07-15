@@ -39,7 +39,7 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
 requesting `SYS_ADMIN` or weakening isolation; App `0.6.4` retains canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-The previously published App image passed target-HAOS startup, its production
+The published App `0.6.4` image passed target-HAOS startup, its production
 sandbox self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, and panel loading. Remote access,
 the first unattended automatic update, cold restore, and App-image rollback

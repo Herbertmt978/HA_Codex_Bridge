@@ -21,6 +21,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_get_event_status,
     ws_get_events,
     ws_get_status,
+    ws_list_artifacts,
     ws_start_auth_login,
     ws_subscribe_events,
     ws_unsubscribe_events,
@@ -402,6 +403,59 @@ async def test_upstream_exception_details_are_not_sent_to_browser() -> None:
 
     assert connection.errors == [(12, "bridge_error", "Bridge request failed")]
     assert "private-token-sentinel" not in repr(connection.errors)
+
+
+async def test_list_artifacts_exposes_only_the_safe_reservation_conflict_code() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_list_artifacts = AsyncMock(
+        side_effect=BridgeApiConflictError(
+            problem=ProblemRecord.from_payload(
+                409,
+                {"detail": {"code": "reservation_conflict", "retryable": True}},
+            )
+        )
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_list_artifacts(
+        hass,
+        connection,
+        {"id": 121, "type": f"{DOMAIN}/list_artifacts", "thread_id": "thr_1"},
+    )
+    await hass.finish()
+
+    assert connection.errors == [
+        (
+            121,
+            "reservation_conflict",
+            "Workspace files are temporarily unavailable while Codex is working",
+        )
+    ]
+
+
+async def test_list_artifacts_redacts_unrecognized_busy_errors() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_list_artifacts = AsyncMock(
+        side_effect=BridgeApiConflictError(
+            problem=ProblemRecord.from_payload(
+                409,
+                {"detail": {"code": "private_workspace_conflict", "retryable": True}},
+            )
+        )
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_list_artifacts(
+        hass,
+        connection,
+        {"id": 122, "type": f"{DOMAIN}/list_artifacts", "thread_id": "thr_1"},
+    )
+    await hass.finish()
+
+    assert connection.errors == [(122, "bridge_error", "Bridge request failed")]
+    assert "private_workspace_conflict" not in repr(connection.errors)
 
 
 async def test_answer_interaction_forwards_exact_bounded_values_contract() -> None:

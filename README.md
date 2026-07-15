@@ -1,15 +1,20 @@
 <div align="center">
 
+<img src="brand/logo.png" alt="Codex Bridge — private code, home control" width="720">
+
 # Home Assistant Codex Bridge
 
-Use Codex through Home Assistant without publishing a coding-agent endpoint to the browser.
+Keep browser traffic on Home Assistant while a private HAOS App connects to
+Codex/OpenAI from your home network.
 
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
+[![App status](https://img.shields.io/badge/App-Experimental-F59E0B?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
 
-[Installation](docs/installation.md) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
+[Installation](docs/installation.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
 </div>
 
@@ -42,7 +47,7 @@ App and Bridge remain private to Home Assistant.
 <summary><b>Current release and validation details</b></summary>
 
 This source release targets experimental, `amd64`-only App `0.6.4`; the
-Integration is `0.6.4`, the optional external Bridge is `0.5.4`, and the
+Integration is `0.6.5`, the optional external Bridge is `0.5.4`, and the
 bundled Codex runtime is `0.144.4`. The public App is distributed as a signed
 immutable image with an SPDX SBOM and build provenance; App `0.6.4` uses that
 release workflow. The previously validated App release completed target-HAOS
@@ -65,11 +70,12 @@ account entitlements change, and discovers every model and reasoning level
 from Codex rather than hardcoding a release list. It also separates weekly-only
 usage from the disabled five-hour window and keeps a newly created chat usable
 while secondary snapshots retry.
-Integration `0.6.4` gives the panel a clearer Codex-style reading surface,
+Integration `0.6.5` gives the panel a clearer Codex-style reading surface,
 stronger chat and composer hierarchy, intentional empty states, and improved
 keyboard and screen-reader navigation while retaining Home Assistant themes.
-It also retires recovered polling errors automatically without hiding unrelated
-action failures.
+It also retires recovered polling errors automatically, keeps an in-progress
+artifact scan from becoming a false connection failure, and does not hide
+unrelated action failures.
 
 The App publishes discovery with the current Supervisor `app_config` map
 permission and its assigned private HA-network IP. A restart includes a bounded
@@ -101,24 +107,25 @@ exercise has passed on the intended installation.
 
 ## Install and first run
 
-1. In **Settings -> Apps -> App store -> Repositories**, add
+1. Install the **Codex Bridge** Integration through HACS, then restart Home
+   Assistant so its Supervisor discovery handler is active.
+2. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
    offers App `0.6.4` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
-2. Install the **Codex Bridge** Integration through HACS, restart Home
-   Assistant, then add it in **Settings -> Devices & services**. Supervisor
-   discovery advertises the App's private HA-network IP and port automatically;
-   there is no host, port, or bearer token to copy. If the App has just started
-   or restarted, discovery can take a few seconds to arrive. Retry the flow
-   after the App reports ready; the Integration keeps a valid discovery form
-   visible while that private endpoint is temporarily unreachable and does not
-   save an unverified connection.
-3. Open the panel as a Home Assistant administrator. Select **Sign in with
+3. In **Settings -> Devices & services**, confirm the discovered **Codex
+   Bridge** Integration. Supervisor advertises the App's private HA-network IP
+   and port automatically; there is no host, port, or bearer token to copy. If
+   the App has just started or restarted, discovery can take a few seconds to
+   arrive. Retry after the App reports ready; the Integration keeps a valid
+   discovery form visible while that private endpoint is temporarily
+   unreachable and does not save an unverified connection.
+4. Open the panel as a Home Assistant administrator. Select **Sign in with
    ChatGPT**, then use a browser to complete the approved ChatGPT device-auth
    page. **Cancel** only cancels an in-progress sign-in; **Sign out** removes an
    established Codex session. After approval, the panel checks the authoritative
    account state every two seconds until Codex reports the session ready.
-4. Create a Project and grant a small workspace beneath `/config/workspaces` in
+5. Create a Project and grant a small workspace beneath `/config/workspaces` in
    App mode. Review changes before expanding that boundary.
 
 The Home Assistant and ChatGPT sessions are separate. After a ChatGPT session
@@ -129,15 +136,25 @@ key.
 
 ## Updates and recovery
 
-App images are immutable: a running container does not update Codex or itself.
-Home Assistant can offer a released App update and can apply it automatically
-after the administrator enables the App's auto-update toggle. Upstream Codex
-updates first arrive as a verified, reviewable repository PR; unattended merge
-remains disabled until a real update/recovery canary passes. The Supervisor App
-does **not** currently provide a validated way to select an arbitrary prior
-image, so make a cold Home Assistant backup before an App change. Keep a private
-external Bridge where one already exists until cold restore has been exercised;
-see [backup and recovery](docs/backup-restore.md).
+The Integration and App update separately:
+
+1. In HACS, update or redownload the latest **Codex Bridge** Integration, then
+   restart Home Assistant. Reload any panel tab that was already open before
+   the restart.
+2. Read the matching [release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
+   and confirm the runtime strip in the panel shows the expected Integration,
+   App, Bridge, and Codex versions.
+3. If Home Assistant offers an App update, make a cold backup and apply it from
+   **Settings -> Apps -> Codex Bridge**. Auto update can do this after its toggle
+   is enabled, but the first unattended update/recovery canary is still open.
+
+App images are immutable: a running container does not replace Codex or itself.
+Upstream Codex updates first arrive as a verified, reviewable repository PR;
+unattended merge remains disabled until a real update/recovery canary passes.
+The Supervisor App does **not** currently provide a validated way to select an
+arbitrary prior image, so make a cold Home Assistant backup before an App
+change. Keep a private external Bridge where one already exists until cold
+restore has been exercised; see [backup and recovery](docs/backup-restore.md).
 
 ## Security boundary
 

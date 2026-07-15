@@ -77,6 +77,52 @@ describe("prompt composer mutation contract", () => {
     expect(panel._promptMutation).toBeNull();
   });
 
+  it("keeps a successful prompt refresh healthy when artifacts are temporarily unavailable", async () => {
+    const panel = createPanel();
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    const previousArtifacts = [{
+      artifact_id: "artifact-existing",
+      filename: "existing.txt",
+      mime_type: "text/plain",
+      size: 12,
+    }];
+    panel._artifacts = previousArtifacts;
+    panel._selectedArtifactId = "artifact-existing";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "send_prompt") return Promise.resolve({ accepted: true });
+      if (action === "get_thread") {
+        return Promise.resolve({ ...panel._activeThread, status: "running" });
+      }
+      if (action === "get_events") {
+        return Promise.resolve([{
+          event_id: "event-prompt-success",
+          sequence: 1,
+          thread_id: "thread-alpha",
+          event_type: "message.created",
+          payload: { text: "Inspect the workspace" },
+          timestamp: "2026-07-15T12:00:00Z",
+        }]);
+      }
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Artifacts are reserved"), {
+          code: "reservation_conflict",
+        }));
+      }
+      if (action === "get_status") return Promise.resolve(panel._status);
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    prompt.value = "Inspect the workspace";
+
+    await panel._sendPrompt();
+
+    expect(panel._activeThread?.status).toBe("running");
+    expect(panel._events).toHaveLength(1);
+    expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+  });
+
   it("reuses the same request id after an uncertain response and clears on a matching event", async () => {
     const panel = createPanel();
     const prompt = panel.shadowRoot.getElementById("prompt-input");

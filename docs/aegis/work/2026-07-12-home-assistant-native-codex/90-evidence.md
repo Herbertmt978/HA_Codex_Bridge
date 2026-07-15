@@ -339,7 +339,7 @@ Task 14 establishes the private binary transport but deliberately does not ship
 an intermediate release. Task 15 must make the browser consume the resumable v1
 routes before the HA-native application can pass end-to-end acceptance.
 
-## Integration 0.6.3 / App 0.6.4 discovery recovery
+## Integration 0.6.5 / App 0.6.4 live acceptance
 
 | Evidence | Result |
 | --- | --- |
@@ -348,7 +348,7 @@ routes before the HA-native application can pass end-to-end acceptance.
 | Integration confinement | Supervisor discovery now requires the same literal private App-IP policy before constructing or authenticating a Bridge client; loopback, link-local, public, documentation, and hostname targets fail closed. |
 | Recovery UX | A valid but temporarily unreachable discovery remains on the `hassio_confirm` form with `cannot_connect`; retries revalidate authenticated readiness, and no new/replacement config-entry data is written before success. |
 | Panel UX | Transport failures receive an accessible retry/dismiss surface; local validation and sign-in guidance remain dismiss-only; retryable prompt state is visible at desktop and mobile widths. |
-| Current App metadata | `app_config:rw` replaces the legacy map name. App `0.6.4`, Integration `0.6.3`, Bridge `0.5.4`, and Codex `0.144.4` projections are synchronized. |
+| Current release metadata | `app_config:rw` replaces the legacy map name. App `0.6.4`, Integration `0.6.5`, Bridge `0.5.4`, and Codex `0.144.4` projections are synchronized. Integration `0.6.4` was published from tag `979cd81`. The signed immutable App `0.6.4` image was published by [release workflow run `29417073488`](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29417073488) from `90af9a10291019d66116e2d81980a6ac0d5da68f`; its digest is `sha256:0fa57cba4a1b76dc673e8d79b098724a13b7d15e8541d6731d507da4cc72a863`. |
 | Dependency policy | `httpx>=0.28.1` and Docker login-action updates merged independently; App build tools consolidate at supported `build==1.5.0`, `setuptools==83.0.0`, and `wheel==0.47.0`. Yanked `build==1.5.1` is rejected. Duplicate App pip ownership is removed, and pytest `>=9.1.0` is ignored while the pinned HA test plugin requires `pytest==9.0.3`. |
 | Full Integration | 170 passed in the pinned Home Assistant 2026.7.2 Linux test environment. |
 | Full Bridge | 1092 passed, 188 platform skips in the isolated pytest lifecycle. |
@@ -356,12 +356,20 @@ routes before the HA-native application can pass end-to-end acceptance.
 | App/release | 100 passed, 3 platform skips; a second protocol/App security slice passed 78 with 1 platform skip; Ruff, compileall, release projection sync, deterministic hash lock, and hash-locked dry-run installation passed. |
 | Production image | Hermetic amd64 staging and Docker build produced local image `sha256:86d0ec5fba3eba371699b208cd028e5e503148673a1840bdc336a658a60f9248`; its labels/runtime report App `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`, and its discovery publisher executes in the pinned HA base. |
 | Independent review | Review found and closed the consumer-side private-IP trust-boundary gap; no remaining correctness, deduplication, Bashio compatibility, retry, or credential/log-safety finding remained. |
+| GitHub publication | Integration/App release `0.6.4` is published, not a draft or prerelease. Its CI and signed App release workflow passed. Main later advanced only for the grouped dependency maintenance PR. |
+| Target Home Assistant | Home Assistant restarted cleanly with exactly one installed/running Codex Bridge App. The live runtime strip reported App `0.6.4`, Integration `0.6.4`, Bridge `0.5.4`, and Codex `0.144.4`; Start on boot, Watchdog, and Auto update were enabled. |
+| Account and catalogue | ChatGPT device approval completed after bounded polling and the panel reported a connected Pro account. The installed Codex catalogue advertised `gpt-5.5` and `gpt-5.4-mini` with model-specific Minimal through Xhigh reasoning. The panel contains no hard-coded release list and will show GPT-5.6, Max, or Ultra when the account catalogue advertises them. |
+| Limits and chat | The live account rendered the disabled five-hour window as `Off` and the weekly window separately. An exact-response chat completed successfully. The run also exposed a false connection banner: a post-send artifact scan returned a transient `409` while the thread was active even though the prompt and response were authoritative. |
+| Integration `0.6.5` fix | Full, live, and poll refreshes now defer only a typed `reservation_conflict` while the authoritative thread is queued, running, or cancelling, retain the previous artifact snapshot, and continue refreshing transcript/status. Idle and unrelated artifact failures still surface. Frontend lint, 171 unit tests, deterministic generation, and diff hygiene pass; target-HA installation and recovery acceptance remain the release gate. |
+| Dependency notifications | All supported Dependabot ecosystems now feed one weekly maintenance group. Legacy PRs `#8`–`#14` were closed, grouped PR `#29` merged with green CI, and no dependency PR remains open. Security fixes remain enabled separately. |
 
 ## Evidence status
 
-This remains active release evidence rather than a completion claim. Code,
-protocol, UI, dependency, and local production-image gates are green. GitHub
-review/CI, signed immutable publication, target-HA upgrade/discovery, live
-ChatGPT/model/limits/chat smoke tests, external blocked-network proof, cold
-restore, first automatic update, and previous-image recovery still require
-fresh evidence before the Windows rollback path can be retired.
+This remains active acceptance evidence rather than a completion claim. The
+signed App publication, target-HA installation/discovery, ChatGPT login,
+runtime catalogue, duration-aware limits, first chat, and dependency grouping
+are now evidenced. Integration `0.6.5` GitHub review/CI, target-HA installation,
+and stop/start chat recovery are the immediate gates. External blocked-network
+proof, cold restore, the first unattended App update, and previous-image
+recovery still require fresh evidence before the Windows recovery path can be
+retired.

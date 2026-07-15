@@ -6,7 +6,7 @@ Home Assistant Codex Bridge keeps Home Assistant as the browser-facing control
 plane for Codex:
 
 ```text
-Browser -> Home Assistant -> private Supervisor App or external Bridge -> Codex / OpenAI
+Browser -> Home Assistant -> Codex Bridge Integration -> private Supervisor App or external Bridge -> Codex / OpenAI
 ```
 
 Remote access terminates at Home Assistant. A browser must not connect directly
@@ -25,7 +25,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.6.4`; optional external Bridge: `0.5.4`.
+- Integration: `0.6.5`; optional external Bridge: `0.5.4`.
 - App: `0.6.4`, experimental and `amd64` only; bundled Codex: `0.144.4`.
 - App `0.6.4` uses a signed immutable image with an SPDX SBOM
   and build provenance.
@@ -39,6 +39,8 @@ to the App or Bridge.
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
 - Usage windows are classified by advertised duration, and a successful chat
   creation remains usable while secondary snapshots retry.
+- A temporary artifact-scan reservation during an active run does not turn a
+  healthy chat or completed response into a false connection failure.
 - The Integration keeps the chat surface at a bounded reading width, derives
   rail and context contrast from Home Assistant theme tokens, and exposes
   disclosure, selection, progress, and retryable transport state to assistive
@@ -55,7 +57,7 @@ to the App or Bridge.
   without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
   canonical contained supplemental roots and hardens `lsm_get_self_attr` record
   parsing.
-- The published App `0.6.2` image passed target-HAOS startup, its production
+- The published App `0.6.4` image passed target-HAOS startup, its production
   sandbox self-test and attestation, an authenticated API v1 readiness request,
   Supervisor discovery, Integration pairing, and panel loading. A redacted
   ChatGPT device-login start/cancel cycle also passed; completing account

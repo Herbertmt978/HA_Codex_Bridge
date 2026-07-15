@@ -29,10 +29,11 @@ configuration, host filesystems, or broad shares. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
 
-The App is experimental and `amd64` only; its public image is not available yet.
-Do not present Supervisor selection of an arbitrary prior image as a rollback
-mechanism. Until a prior immutable tag and restore procedure are published and
-tested, recover with a cold backup or an existing private external Bridge.
+The App is experimental and `amd64` only. App `0.6.4` is published as a signed
+immutable image with an SPDX SBOM and build provenance, but arbitrary
+prior-image selection is not a validated Supervisor rollback mechanism. Until
+an update and restore canary is complete, recover with a cold backup or an
+existing private external Bridge.
 
 ## Scope notes
 
