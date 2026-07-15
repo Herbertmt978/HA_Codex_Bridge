@@ -761,7 +761,7 @@ describe("HA-first panel integration", () => {
       thread_id: "thr_live_child",
       project_id: archivedProject.project_id,
       project_kind: "project",
-      title: "Live child hidden with its archived project",
+      title: "Live child retained with its archived project",
       status: "idle",
       effective_model: "gpt-5.6-sol",
       effective_thinking_level: "high",
@@ -777,8 +777,44 @@ describe("HA-first panel integration", () => {
     expect(archivedList?.querySelector(".project-shell .chat-row .thread-name")?.textContent).toBe(
       "Retained migration notes"
     );
-    expect(archivedList?.textContent).not.toContain("Live child hidden with its archived project");
+    expect(archivedList?.textContent).not.toContain("Live child retained with its archived project");
     expect(archivedList?.querySelector(":scope > .chat-row")).toBeNull();
+  });
+
+  it("keeps active child chats searchable inside their archived project", () => {
+    const panel = createPanel();
+    const archivedProject = {
+      project_id: "prj_archived_active_child",
+      kind: "project",
+      name: "Archived workspace",
+      root_path: "team/archive",
+      archived_at: "2026-07-15T10:00:00Z",
+    };
+    panel._projects = [archivedProject];
+    panel._threads = [{
+      thread_id: "thr_active_child",
+      project_id: archivedProject.project_id,
+      project_kind: "project",
+      title: "Live child retained with its archived project",
+      status: "idle",
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "high",
+      archived_at: null,
+    }];
+    panel._searchQuery = "Live child retained";
+
+    panel._render();
+
+    const archivedList = panel.shadowRoot.getElementById("archived-chat-list");
+    expect(archivedList?.hidden).toBe(false);
+    expect(archivedList?.querySelector(".project-shell .project-name")?.textContent).toBe("Archived workspace");
+    expect(archivedList?.querySelector(".project-shell .thread-name")?.textContent).toBe(
+      "Live child retained with its archived project"
+    );
+    const more = archivedList?.querySelector('[data-action="toggle-thread-actions"]');
+    more?.click();
+    expect(archivedList?.querySelector('[data-action="archive-thread"]')).toBeTruthy();
+    expect(archivedList?.querySelector('[data-action="restore-thread"]')).toBeNull();
   });
 
   it("renders a disabled short window separately from a full weekly allowance", () => {

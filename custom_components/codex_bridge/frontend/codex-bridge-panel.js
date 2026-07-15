@@ -5934,7 +5934,7 @@ var CodexBridgePanel = class extends HTMLElement {
     section.append(projectList);
   }
   _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
-    const threads = this._projectThreads(project.project_id, includeArchivedThreads, archived);
+    const threads = this._projectThreads(project.project_id, includeArchivedThreads);
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedProjects[project.project_id]) && !searchActive;
     const active = this._selectedProjectId === project.project_id || this._activeThread?.project_id === project.project_id;
@@ -6058,7 +6058,7 @@ var CodexBridgePanel = class extends HTMLElement {
     chatList.className = "archive-list";
     chatList.hidden = collapsed;
     for (const project of archivedProjects) {
-      chatList.append(this._projectSection(project, { archived: true }));
+      chatList.append(this._projectSection(project, { archived: true, includeArchivedThreads: true }));
     }
     for (const thread of archivedThreads) {
       chatList.append(this._threadRow(thread, { archived: true }));
@@ -8650,9 +8650,9 @@ var CodexBridgePanel = class extends HTMLElement {
       (thread) => thread.project_kind === "direct" && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
     );
   }
-  _projectThreads(projectId, includeArchived, archivedOnly = false) {
+  _projectThreads(projectId, includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_id === projectId && (archivedOnly ? Boolean(thread.archived_at) : includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_id === projectId && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
     );
   }
   _projectIsVisible(project) {
@@ -8673,8 +8673,9 @@ var CodexBridgePanel = class extends HTMLElement {
     if (haystack.includes(query)) {
       return true;
     }
+    const includeArchivedThreads = Boolean(project.archived_at);
     return this._threads.some(
-      (thread) => thread.project_id === project.project_id && (project.archived_at ? Boolean(thread.archived_at) : !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_id === project.project_id && (includeArchivedThreads || !thread.archived_at) && this._threadMatchesQuery(thread)
     );
   }
   _clearSelectionForProject(projectId, { preferProjectId = null } = {}) {
