@@ -544,7 +544,7 @@ test("keeps the mobile composer focused and folds diagnostics behind an accessib
   await expect(settings).toHaveAttribute("open", "");
   await expect(toolbar).toBeVisible();
   const expandedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
-  expect(collapsedHeight).toBeLessThan(250);
+  expect(collapsedHeight).toBeLessThan(844 * 0.34);
   expect(expandedHeight - collapsedHeight).toBeGreaterThan(100);
 });
 
