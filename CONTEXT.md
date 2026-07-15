@@ -25,7 +25,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.6.0`; optional external Bridge: `0.5.3`.
+- Integration: `0.6.1`; optional external Bridge: `0.5.3`.
 - App: `0.6.2`, experimental and `amd64` only; bundled Codex: `0.144.4`.
 - The public App `0.6.2` release is a signed immutable image with an SPDX SBOM
   and build provenance.
