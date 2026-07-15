@@ -163,6 +163,34 @@ describe("polling event fallback", () => {
     expect(panel._eventStream.needsSnapshot).toBe(true);
     expect(panel._error).toBe("Bridge request failed");
 
+    panel._callWS.mockResolvedValue([controlEvent("message.created", { text: "Untrusted after snapshot" })]);
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
+    expect(panel._error).toBe("");
+    expect(panel._events).toEqual([]);
+  });
+
+  it("retries a failed raw stream snapshot replay on a later empty poll", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    panel._retireEventSubscription = vi.fn();
+    panel._refreshActiveThread = vi.fn()
+      .mockImplementationOnce(async () => {
+        panel._setError("Bridge request failed", { source: "poll" });
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+        panel._clearError({ source: "poll" });
+        return true;
+      });
+
+    panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required", cursor: 7 });
+    await panel._refreshActiveThread.mock.results[0].value;
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._sequence).toBe(7);
+    expect(panel._error).toBe("Bridge request failed");
+
     panel._callWS.mockResolvedValue([]);
     await panel._runPollTick(1);
 
@@ -187,6 +215,32 @@ describe("polling event fallback", () => {
 
     expect(panel._error).toBe("");
     expect(panel._scheduleNextPoll).toHaveBeenCalled();
+  });
+
+  it("does not let a delayed live refresh failure replace a newer action error", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Alpha");
+    const delayedThread = deferred();
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return delayedThread.promise;
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    panel._setError("Upload network failed", { retryable: true });
+    delayedThread.reject(new Error("Bridge request failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(panel._error).toBe("Upload network failed");
   });
 
   it("clears a polling connection error after the next successful poll", async () => {

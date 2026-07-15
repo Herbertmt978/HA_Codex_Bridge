@@ -33,6 +33,14 @@ export function acceptEvent(state, value) {
       event,
     };
   }
+  if (current.needsSnapshot) {
+    return {
+      state: { ...current, cursor: event.sequence, needsSnapshot: true },
+      accepted: true,
+      control: "snapshot",
+      event,
+    };
+  }
   if (event.event_id && current.events.some((item) => item.event_id === event.event_id)) {
     // A duplicate event with a newer cursor must not mutate the stream state.
     return { state: current, accepted: false, reason: "duplicate" };

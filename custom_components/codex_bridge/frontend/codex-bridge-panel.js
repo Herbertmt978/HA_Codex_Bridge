@@ -188,6 +188,14 @@ function acceptEvent(state, value) {
       event
     };
   }
+  if (current.needsSnapshot) {
+    return {
+      state: { ...current, cursor: event.sequence, needsSnapshot: true },
+      accepted: true,
+      control: "snapshot",
+      event
+    };
+  }
   if (event.event_id && current.events.some((item) => item.event_id === event.event_id)) {
     return { state: current, accepted: false, reason: "duplicate" };
   }
@@ -7710,6 +7718,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (event?.type === "snapshot_required") {
       const errorRevision = this._errorRevision;
+      const cursor = Number.isSafeInteger(event.cursor) && event.cursor >= 0 ? Math.max(this._eventStream.cursor, event.cursor) : this._eventStream.cursor;
+      this._eventStream = { ...this._eventStream, cursor, needsSnapshot: true };
+      this._sequence = cursor;
       this._retireEventSubscription({ reconnect: false });
       this._refreshActiveThread({
         errorSource: "poll",
@@ -7780,6 +7791,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const selectionEpoch = this._threadSelectionEpoch;
     const refreshEpoch = ++this._threadSnapshotEpoch;
+    const errorRevision = this._errorRevision;
     const isCurrent = () => refreshEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(threadId, selectionEpoch);
     this._eventRefreshTimer = window.setTimeout(async () => {
       this._eventRefreshTimer = null;
@@ -7804,8 +7816,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._syncSelectedArtifact();
         this._render();
       } catch (error) {
-        if (isCurrent()) {
-          this._setError(error);
+        if (isCurrent() && this._errorRevision === errorRevision && this._canSetBackgroundError("poll")) {
+          this._setError(error, { source: "poll" });
         }
       }
     }, 250);
