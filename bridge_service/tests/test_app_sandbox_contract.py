@@ -17,7 +17,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-from pathlib import PurePosixPath
 import re
 import runpy
 import struct
@@ -696,12 +695,12 @@ def test_sandbox_probe_lsm_get_self_attr_parses_exact_apparmor_label(
 
 def test_bridge_profile_accepts_only_canonical_roots_inside_workspace(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     namespace = _sandbox_self_test_namespace(monkeypatch)
     assert_profile_thread = namespace["_assert_profile_thread"]
-    workspace = PurePosixPath(
-        "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef"
-    )
+    workspace = tmp_path / ".sandbox-self-test-0123456789abcdef0123456789abcdef"
+    workspace.mkdir()
     roots = [
         *(str(workspace / name) for name in (".agents", ".codex", ".cursor", ".git", ".vscode")),
     ]
@@ -728,41 +727,30 @@ def test_bridge_profile_accepts_only_canonical_roots_inside_workspace(
     assert namespace["_writable_roots_within_workspace"]([], workspace=workspace)
 
 
-@pytest.mark.parametrize(
-    "roots",
-    [
-        ["/config/workspaces/other"],
-        [
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef",
-            "/config/workspaces/sibling",
-        ],
-        [
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef",
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef/../escape",
-        ],
-        [
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef",
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef",
-        ],
-        [
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef",
-            "relative/path",
-        ],
-        [
-            "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef/invalid\0root"
-        ],
-    ],
-)
+@pytest.mark.parametrize("case", ["outside", "sibling", "traversal", "duplicate", "relative", "nul"])
 def test_bridge_profile_rejects_roots_outside_workspace_or_noncanonical(
     monkeypatch: pytest.MonkeyPatch,
-    roots: list[str],
+    tmp_path: Path,
+    case: str,
 ) -> None:
     namespace = _sandbox_self_test_namespace(monkeypatch)
     assert_profile_thread = namespace["_assert_profile_thread"]
     self_test_error = namespace["SelfTestError"]
-    workspace = PurePosixPath(
-        "/config/workspaces/.sandbox-self-test-0123456789abcdef0123456789abcdef"
-    )
+    workspace = tmp_path / ".sandbox-self-test-0123456789abcdef0123456789abcdef"
+    workspace.mkdir()
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    roots_by_case = {
+        "outside": [str(outside)],
+        "sibling": [str(workspace), str(sibling)],
+        "traversal": [str(workspace), str(workspace / ".." / "escape")],
+        "duplicate": [str(workspace), str(workspace)],
+        "relative": [str(workspace), "relative/path"],
+        "nul": [str(workspace / "invalid\0root")],
+    }
+    roots = roots_by_case[case]
 
     class FakeClient:
         def request(self, *_args: object, **_kwargs: object) -> dict[str, object]:
@@ -784,6 +772,44 @@ def test_bridge_profile_rejects_roots_outside_workspace_or_noncanonical(
         assert_profile_thread(
             FakeClient(), workspace=workspace, permission_profile="ha_bridge"
         )
+
+
+def test_bridge_profile_accepts_workspace_symlink_and_resolves_roots(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    real_workspace = tmp_path / "real-workspace"
+    real_workspace.mkdir()
+    workspace = tmp_path / "workspace-link"
+    try:
+        workspace.symlink_to(real_workspace, target_is_directory=True)
+    except OSError:
+        pytest.skip("host does not permit directory symlink creation")
+
+    assert namespace["_writable_roots_within_workspace"](
+        [str(workspace / ".codex")], workspace=workspace
+    )
+
+
+def test_bridge_profile_rejects_child_symlink_resolving_outside_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    real_workspace = tmp_path / "workspace"
+    real_workspace.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    child_link = real_workspace / "escape"
+    try:
+        child_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("host does not permit directory symlink creation")
+
+    assert not namespace["_writable_roots_within_workspace"](
+        [str(child_link)], workspace=real_workspace
+    )
 
 
 def test_init_invokes_self_test_and_preserves_fatal_readiness_on_failure() -> None:

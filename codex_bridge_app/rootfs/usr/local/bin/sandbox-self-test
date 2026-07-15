@@ -7,7 +7,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import pwd
 import grp
 import re
@@ -362,40 +362,38 @@ def _assert_permission_profile_catalog(
 
 
 def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
-    """Accept only canonical POSIX roots contained by the selected workspace."""
+    """Accept only canonical roots whose resolved paths stay in the workspace."""
 
-    if not isinstance(value, list) or len(value) > 64:
+    if type(value) is not list or len(value) > 64:
         return False
-    workspace_text = str(workspace)
-    workspace_root = PurePosixPath(workspace_text)
-    if (
-        not workspace_root.is_absolute()
-        or workspace_root.as_posix() != workspace_text
-        or ".." in workspace_root.parts
-    ):
+    try:
+        workspace_root = workspace.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
         return False
     seen: set[str] = set()
     for item in value:
         if (
-            not isinstance(item, str)
+            type(item) is not str
             or not item
             or "\0" in item
             or len(item) > 4096
-            or item in seen
         ):
             return False
-        candidate = PurePosixPath(item)
+        candidate = Path(item)
         if (
             not candidate.is_absolute()
-            or candidate.as_posix() != item
-            or ".." in candidate.parts
+            or str(candidate) != item
         ):
             return False
         try:
-            candidate.relative_to(workspace_root)
-        except ValueError:
+            resolved = candidate.resolve(strict=False)
+            resolved.relative_to(workspace_root)
+        except (OSError, RuntimeError, ValueError):
             return False
-        seen.add(item)
+        identity = os.path.normcase(str(resolved))
+        if identity in seen:
+            return False
+        seen.add(identity)
     return True
 
 
