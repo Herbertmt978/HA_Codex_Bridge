@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Home Assistant Codex Bridge</title>
+  <desc id="desc">Private Codex control through Home Assistant.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="32" x2="1200" y2="608" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#071522"/>
+      <stop offset=".58" stop-color="#0B2033"/>
+      <stop offset="1" stop-color="#121A31"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="156" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35D6F4"/>
+      <stop offset="1" stop-color="#18BCF2"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="156" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8290FF"/>
+      <stop offset="1" stop-color="#5B6CFF"/>
+    </linearGradient>
+    <linearGradient id="bridge" x1="0" y1="0" x2="58" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18BCF2"/>
+      <stop offset="1" stop-color="#5B6CFF"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0v40" fill="none" stroke="#D9F4FF" stroke-opacity=".035"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <circle cx="1130" cy="82" r="330" fill="#5B6CFF" opacity=".055"/>
+  <circle cx="68" cy="604" r="260" fill="#18BCF2" opacity=".04"/>
+  <g transform="translate(96 108) scale(1.58)">
+    <rect x="8" y="8" width="240" height="240" rx="56" fill="#091A2A" stroke="#B9ECFF" stroke-opacity=".15" stroke-width="1.5"/>
+    <path d="M110 48 52 88v76l58 40v-33l-31-21v-48l31-21V48Z" fill="url(#left)"/>
+    <path d="m146 48 58 40v76l-58 40v-33l31-21v-48l-31-21V48Z" fill="url(#right)"/>
+    <rect x="121" y="110" width="14" height="14" rx="4" fill="#F5F8FA"/>
+    <path d="M119 143h18M111 157h34M101 172h54" fill="none" stroke="url(#bridge)" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(556 0)">
+    <text x="0" y="218" fill="#89DDFB" font-family="Consolas, IBM Plex Mono, monospace" font-size="20" letter-spacing="4">HOME ASSISTANT · PRIVATE APP</text>
+    <text x="0" y="305" fill="#F5F8FA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="70" font-weight="700" letter-spacing="5">CODEX BRIDGE</text>
+    <text x="2" y="366" fill="#C4D1DD" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30">Codex, contained by Home Assistant.</text>
+    <rect x="2" y="404" width="94" height="5" rx="2.5" fill="#18BCF2"/>
+    <rect x="96" y="404" width="76" height="5" rx="2.5" fill="#5B6CFF"/>
+    <circle cx="178" cy="406.5" r="5" fill="#FF796D"/>
+  </g>
+  <g transform="translate(556 480)" font-family="Consolas, IBM Plex Mono, monospace" font-size="16" letter-spacing="2">
+    <rect width="146" height="48" rx="14" fill="#0E273A" stroke="#8ADDFB" stroke-opacity=".22"/>
+    <text x="73" y="30" fill="#DCEAF2" text-anchor="middle">BROWSER</text>
+    <path d="M158 24h32" stroke="#18BCF2" stroke-width="2"/>
+    <path d="m184 18 7 6-7 6" fill="none" stroke="#18BCF2" stroke-width="2"/>
+    <rect x="202" width="210" height="48" rx="14" fill="#0E273A" stroke="#8ADDFB" stroke-opacity=".22"/>
+    <text x="307" y="30" fill="#DCEAF2" text-anchor="middle">HOME ASSISTANT</text>
+    <path d="M424 24h32" stroke="#6F84FF" stroke-width="2"/>
+    <path d="m450 18 7 6-7 6" fill="none" stroke="#6F84FF" stroke-width="2"/>
+    <rect x="468" width="168" height="48" rx="14" fill="#0E273A" stroke="#8ADDFB" stroke-opacity=".22"/>
+    <text x="552" y="30" fill="#DCEAF2" text-anchor="middle">PRIVATE APP</text>
+  </g>
+</svg>

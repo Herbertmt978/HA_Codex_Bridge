@@ -9,6 +9,8 @@ Task 21 sandbox boundary is installed.
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import importlib
 import importlib.util
@@ -18,6 +20,8 @@ from pathlib import Path
 import re
 import runpy
 import struct
+import sys
+import types
 
 import pytest
 
@@ -51,6 +55,27 @@ def _sandbox_module():
         return importlib.import_module("codex_bridge_service.sandbox_attestation")
     except ModuleNotFoundError as exc:
         pytest.fail(f"Task 21 sandbox_attestation module is missing: {exc}")
+
+
+def _sandbox_probe_module():
+    """Load the proc-less probe as a module for deterministic unit checks."""
+
+    spec = importlib.util.spec_from_file_location(
+        "sandbox_probe_under_test", SANDBOX_PROBE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _sandbox_self_test_namespace(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """Load the Linux self-test helpers without executing its CLI on Windows."""
+
+    monkeypatch.setitem(sys.modules, "pwd", types.SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "grp", types.SimpleNamespace())
+    monkeypatch.setattr(os, "O_DIRECTORY", 0, raising=False)
+    return runpy.run_path(str(SANDBOX_SELF_TEST))
 
 
 def _canonical_json(path: Path, value: object) -> bytes:
@@ -466,6 +491,337 @@ def test_sandbox_probe_attests_final_state_without_exposing_procfs() -> None:
     capability_checks = set(re.findall(r'"(zero_[a-z_]*capabilities)"', text))
     assert capability_checks
     assert capability_checks <= set(re.findall(r'"(zero_[a-z_]*capabilities)"', self_test))
+
+
+def test_sandbox_probe_prctl_attestation_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _sandbox_probe_module()
+
+    class FakeLibc:
+        def __init__(self, result: int) -> None:
+            self.result = result
+
+        def prctl(self, *_args: object) -> int:
+            return self.result
+
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(0))
+    assert module._prctl_value(module.PR_GET_NO_NEW_PRIVS) == 0
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(1))
+    assert module._prctl_value(module.PR_GET_NO_NEW_PRIVS) == 1
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(-1))
+    assert module._prctl_value(module.PR_GET_NO_NEW_PRIVS) is None
+
+
+def test_sandbox_probe_capability_range_requires_zero_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _sandbox_probe_module()
+
+    class FakeLibc:
+        def __init__(self, mode: str) -> None:
+            self.mode = mode
+
+        def prctl(
+            self, _option: object, capability_or_op: object, *_args: object
+        ) -> int:
+            capability = int(capability_or_op.value)  # type: ignore[attr-defined]
+            if self.mode == "nonzero" and capability == 3:
+                return 1
+            if self.mode == "error":
+                ctypes.set_errno(errno.EIO)
+                return -1
+            return 0
+
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc("zero"))
+    assert module._capability_range_zero(ambient=False)
+    assert module._capability_range_zero(ambient=True)
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc("nonzero"))
+    assert not module._capability_range_zero(ambient=False)
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc("error"))
+    assert not module._capability_range_zero(ambient=True)
+
+
+def test_sandbox_probe_capget_handles_zero_nonzero_and_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _sandbox_probe_module()
+    monkeypatch.setattr(
+        module.os,
+        "uname",
+        lambda: type("Uname", (), {"machine": "amd64"})(),
+        raising=False,
+    )
+
+    class FakeLibc:
+        def __init__(self, result: int, values: tuple[int, int, int]) -> None:
+            self.result = result
+            self.values = values
+
+        def syscall(self, *_args: object) -> int:
+            if self.result != 0:
+                return self.result
+            data = _args[2]._obj  # type: ignore[attr-defined]
+            data[0].effective, data[0].permitted, data[0].inheritable = self.values
+            return 0
+
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(0, (0, 0, 0)))
+    assert module._capability_sets() == {
+        "effective": 0,
+        "permitted": 0,
+        "inheritable": 0,
+    }
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(0, (1, 2, 4)))
+    assert module._capability_sets() == {
+        "effective": 1,
+        "permitted": 2,
+        "inheritable": 4,
+    }
+    monkeypatch.setattr(module, "_libc", lambda: FakeLibc(-1, (0, 0, 0)))
+    assert module._capability_sets() is None
+
+
+def test_sandbox_probe_lsm_get_self_attr_parses_exact_apparmor_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _sandbox_probe_module()
+    monkeypatch.setattr(
+        module.os,
+        "uname",
+        lambda: type("Uname", (), {"machine": "amd64"})(),
+        raising=False,
+    )
+    label = b"codex_bridge//codex_bwrap (enforce)\0"
+    alignment = ctypes.alignment(module._LsmContext)
+    unaligned_length = ctypes.sizeof(module._LsmContext) + len(label)
+    record_length = (unaligned_length + alignment - 1) // alignment * alignment
+    header = module._LsmContext(
+        id=module.LSM_ID_APPARMOR,
+        flags=0,
+        length=record_length,
+        context_length=len(label),
+    )
+    payload = bytes(header) + label + b"\0" * (record_length - unaligned_length)
+
+    class FakeLibc:
+        def __init__(self, response: bytes = payload, record_count: int = 1) -> None:
+            self.calls = 0
+            self.response = response
+            self.record_count = record_count
+
+        def syscall(self, *_args: object) -> int:
+            self.calls += 1
+            size = _args[3]._obj  # type: ignore[attr-defined]
+            if self.calls == 1:
+                size.value = len(self.response)
+                ctypes.set_errno(errno.E2BIG)
+                return -1
+            ctypes.memmove(_args[2], self.response, len(self.response))
+            size.value = len(self.response)
+            return self.record_count
+
+    fake = FakeLibc()
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    fake = FakeLibc()
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches("codex_bridge//other")
+
+    fake = FakeLibc(payload + payload, record_count=1)
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    fake = FakeLibc(payload, record_count=2)
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    unaligned_header = module._LsmContext(
+        id=module.LSM_ID_APPARMOR,
+        flags=0,
+        length=unaligned_length,
+        context_length=len(label),
+    )
+    fake = FakeLibc(bytes(unaligned_header) + label)
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    # Live HAOS AppArmor reports ctx_len without the NUL while the aligned
+    # record padding is zero-filled. This is a bounded terminator, not an
+    # unterminated context.
+    unpadded = label.removesuffix(b"\0")
+    live_length = ctypes.sizeof(module._LsmContext) + len(unpadded)
+    padded_length = (live_length + alignment - 1) // alignment * alignment
+    padding_length = padded_length - live_length
+    padded_header = module._LsmContext(
+        id=module.LSM_ID_APPARMOR,
+        flags=0,
+        length=padded_length,
+        context_length=len(unpadded),
+    )
+    fake = FakeLibc(bytes(padded_header) + unpadded + b"\0" * padding_length)
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    bad_padding = bytearray(b"\0" * padding_length)
+    bad_padding[-1] = ord("X")
+    fake = FakeLibc(bytes(padded_header) + unpadded + bytes(bad_padding))
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+    unterminated_profile = "codex"
+    while (
+        ctypes.sizeof(module._LsmContext)
+        + len(f"{unterminated_profile} (enforce)".encode("ascii"))
+    ) % alignment:
+        unterminated_profile += "x"
+    unterminated = f"{unterminated_profile} (enforce)".encode("ascii")
+    unterminated_header = module._LsmContext(
+        id=module.LSM_ID_APPARMOR,
+        flags=0,
+        length=ctypes.sizeof(module._LsmContext) + len(unterminated),
+        context_length=len(unterminated),
+    )
+    fake = FakeLibc(bytes(unterminated_header) + unterminated)
+    monkeypatch.setattr(module, "_libc", lambda: fake)
+    assert not module._apparmor_profile_matches(unterminated_profile)
+
+    class ErrorLibc(FakeLibc):
+        def syscall(self, *_args: object) -> int:
+            ctypes.set_errno(errno.EPERM)
+            return -1
+
+    monkeypatch.setattr(module, "_libc", lambda: ErrorLibc())
+    assert not module._apparmor_profile_matches("codex_bridge//codex_bwrap")
+
+
+def test_bridge_profile_accepts_only_canonical_roots_inside_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    assert_profile_thread = namespace["_assert_profile_thread"]
+    workspace = tmp_path / ".sandbox-self-test-0123456789abcdef0123456789abcdef"
+    workspace.mkdir()
+    roots = [
+        *(str(workspace / name) for name in (".agents", ".codex", ".cursor", ".git", ".vscode")),
+    ]
+
+    class FakeClient:
+        def request(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "approvalPolicy": "on-request",
+                "approvalsReviewer": "user",
+                "thread": {"ephemeral": True},
+                "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+                "sandbox": {
+                    "type": "workspaceWrite",
+                    "writableRoots": roots,
+                    "networkAccess": False,
+                    "excludeSlashTmp": True,
+                    "excludeTmpdirEnvVar": True,
+                },
+            }
+
+    assert_profile_thread(
+        FakeClient(), workspace=workspace, permission_profile="ha_bridge"
+    )
+    assert namespace["_writable_roots_within_workspace"]([], workspace=workspace)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "outside",
+        "sibling",
+        "traversal",
+        "contained-parent",
+        "duplicate",
+        "relative",
+        "nul",
+    ],
+)
+def test_bridge_profile_rejects_roots_outside_workspace_or_noncanonical(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    case: str,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    assert_profile_thread = namespace["_assert_profile_thread"]
+    self_test_error = namespace["SelfTestError"]
+    workspace = tmp_path / ".sandbox-self-test-0123456789abcdef0123456789abcdef"
+    workspace.mkdir()
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    roots_by_case = {
+        "outside": [str(outside)],
+        "sibling": [str(workspace), str(sibling)],
+        "traversal": [str(workspace), str(workspace / ".." / "escape")],
+        "contained-parent": [str(workspace / "sub" / ".." / ".codex")],
+        "duplicate": [str(workspace), str(workspace)],
+        "relative": [str(workspace), "relative/path"],
+        "nul": [str(workspace / "invalid\0root")],
+    }
+    roots = roots_by_case[case]
+
+    class FakeClient:
+        def request(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "approvalPolicy": "on-request",
+                "approvalsReviewer": "user",
+                "thread": {"ephemeral": True},
+                "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+                "sandbox": {
+                    "type": "workspaceWrite",
+                    "writableRoots": roots,
+                    "networkAccess": False,
+                    "excludeSlashTmp": True,
+                    "excludeTmpdirEnvVar": True,
+                },
+            }
+
+    with pytest.raises(self_test_error):
+        assert_profile_thread(
+            FakeClient(), workspace=workspace, permission_profile="ha_bridge"
+        )
+
+
+def test_bridge_profile_accepts_workspace_symlink_and_resolves_roots(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    real_workspace = tmp_path / "real-workspace"
+    real_workspace.mkdir()
+    workspace = tmp_path / "workspace-link"
+    try:
+        workspace.symlink_to(real_workspace, target_is_directory=True)
+    except OSError:
+        pytest.skip("host does not permit directory symlink creation")
+
+    assert namespace["_writable_roots_within_workspace"](
+        [str(workspace / ".codex")], workspace=workspace
+    )
+
+
+def test_bridge_profile_rejects_child_symlink_resolving_outside_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    real_workspace = tmp_path / "workspace"
+    real_workspace.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    child_link = real_workspace / "escape"
+    try:
+        child_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("host does not permit directory symlink creation")
+
+    assert not namespace["_writable_roots_within_workspace"](
+        [str(child_link)], workspace=real_workspace
+    )
 
 
 def test_init_invokes_self_test_and_preserves_fatal_readiness_on_failure() -> None:

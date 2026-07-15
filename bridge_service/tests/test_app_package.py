@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import struct
 
 import pytest
 import yaml
@@ -10,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = ROOT / "codex_bridge_app"
+BRAND_ROOT = ROOT / "brand"
+INTEGRATION_BRAND_ROOT = ROOT / "custom_components" / "codex_bridge" / "brand"
 
 
 def _yaml(path: Path) -> dict[str, object]:
@@ -36,7 +39,7 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
         "Run the Codex Bridge service privately inside Home Assistant."
     )
     assert config["slug"] == "codex_bridge"
-    assert config["version"] == "0.6.1"
+    assert config["version"] == "0.6.2"
     assert config.get("startup", "application") == "application"
     assert config.get("boot", "auto") == "auto"
     assert config["init"] is False
@@ -107,10 +110,22 @@ def test_apparmor_exposes_only_the_dedicated_workspace_mapping() -> None:
 
 
 def test_app_branding_assets_are_present() -> None:
-    for filename in ("icon.png", "logo.png"):
-        asset = APP_ROOT / filename
-        assert asset.is_file()
-        assert asset.stat().st_size > 0
+    expected = {"icon.png": (256, 256), "logo.png": (1024, 256)}
+    for filename, dimensions in expected.items():
+        source = BRAND_ROOT / filename
+        payload = source.read_bytes()
+        assert payload.startswith(b"\x89PNG\r\n\x1a\n")
+        assert struct.unpack(">II", payload[16:24]) == dimensions
+        assert (APP_ROOT / filename).read_bytes() == payload
+        assert (INTEGRATION_BRAND_ROOT / filename).read_bytes() == payload
+
+    social = (BRAND_ROOT / "social-preview.png").read_bytes()
+    assert social.startswith(b"\x89PNG\r\n\x1a\n")
+    assert struct.unpack(">II", social[16:24]) == (1280, 640)
+    for filename in ("icon.svg", "logo.svg", "social-preview.svg"):
+        source = BRAND_ROOT / filename
+        assert source.is_file()
+        assert "<svg" in source.read_text(encoding="utf-8")
 
 
 def test_translation_uses_the_supported_empty_shape() -> None:

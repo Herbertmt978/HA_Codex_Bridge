@@ -61,22 +61,40 @@ Home Assistant installation.
 
 The external Bridge and Windows route remain private compatibility/rollback
 carriers through 0.6.x. They are not stopped, deleted, migrated, or made public
-by this implementation. The protected HAOS sandbox gate has passed; retirement
-still requires remote-flow evidence, cold backup/restore and App update/rollback
-evidence, plus explicit user removal of the VM fallback. Deletion belongs no
-earlier than the next breaking release. See
+by this implementation. Codex `0.144.4`'s official `--no-proc` fallback worked
+on target HAOS: denial of a fresh `/proc` mount left the user, PID, and network
+namespaces, read-only filesystem, AppArmor, and seccomp intact. App 0.6.1's
+fatal readiness cause was a sandbox-self-test contract mismatch: it required
+`writableRoots` exactly `[workspace]`, while the real `ha_bridge` `workspaceWrite`
+response includes bounded supplemental roots (`.agents`, `.codex`, `.cursor`,
+`.git`, and `.vscode`) beneath the workspace. The proc-less probe already used
+direct `capget`/`prctl`/`lsm_get_self_attr` calls, without requesting `SYS_ADMIN`
+or weakening isolation. App 0.6.2 validates canonical contained supplemental
+roots and hardens `lsm_get_self_attr` record parsing;
+candidate files passed the complete production self-test on target HAOS, but
+immutable image startup and authenticated readiness remain pending
+release/post-release checks. Retirement still requires remote-flow evidence,
+cold backup/restore, first automatic update, and App-image rollback evidence,
+plus explicit user removal of the VM fallback.
+Deletion belongs no earlier than the next breaking release. See
 [ADR 0005](../adr/0005-external-bridge-retirement.md).
 
 ## 6. Evidence and open acceptance gates
 
 The repository contains focused App package, build-context, sandbox-contract,
-Integration protocol/configuration-flow, and release-workflow tests. A
-production amd64 App image also passed `/usr/local/bin/sandbox-self-test` on a
-protected HAOS target: the child AppArmor profile, zero capabilities,
-no-new-privileges/seccomp boundary, filesystem and mount isolation, process
-environment/private-state isolation, network denial, and namespace-operation
-denial all held. Authenticated readiness then passed with the runtime
-attestation present.
+Integration protocol/configuration-flow, and release-workflow tests. On a
+protected HAOS target, pinned Codex `0.144.4`'s official `--no-proc` fallback
+worked: denial of a fresh `/proc` mount left the user, PID, and network
+namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` was
+intentionally empty. App 0.6.1 readiness was fatal because its sandbox
+self-test required `writableRoots` exactly `[workspace]`, while the real
+`ha_bridge` `workspaceWrite` response includes bounded supplemental roots
+(`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
+Version 0.6.2 validates canonical contained supplemental roots and hardens
+`lsm_get_self_attr` record parsing without requesting `SYS_ADMIN` or weakening
+isolation; candidate files passed the complete
+production self-test on target HAOS. Immutable image startup and authenticated
+readiness remain pending release/post-release checks.
 
 This snapshot does **not** claim a cold backup/restore, a prior-image rollback,
 an externally hosted Home Assistant session on an OpenAI-blocked network, or

@@ -45,6 +45,19 @@ owned, or inconsistent with the running release, readiness reports the
 non-sensitive fatal state `sandbox_unavailable`. Do not broaden permissions to
 work around it.
 
+On target HAOS, Codex `0.144.4`'s official `--no-proc` fallback works: denial of
+a fresh `/proc` mount leaves user, PID, and network namespaces, the read-only
+filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally empty.
+Attestation inspects that state without requiring procfs or broader container
+privileges. App `0.6.1`'s fatal readiness cause was instead a
+sandbox-self-test contract mismatch: it required `writableRoots` exactly
+`[workspace]`, while the real `ha_bridge` `workspaceWrite` response includes
+bounded supplemental roots (`.agents`, `.codex`, `.cursor`, `.git`, and
+`.vscode`) beneath the workspace. The proc-less probe already used direct
+`capget`/`prctl`/`lsm_get_self_attr` calls, without requesting `SYS_ADMIN` or
+weakening isolation; App `0.6.2` validates canonical contained supplemental
+roots and hardens `lsm_get_self_attr` record parsing.
+
 ## Authentication
 
 The Integration starts Codex's ChatGPT device-login flow. From the panel, select
@@ -78,11 +91,16 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. App `0.6.1` is distributed as a
-signed immutable image with an SPDX SBOM and build provenance. A protected
-runtime running Codex `0.144.4` passed sandbox self-test and authenticated
-readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
-access, the first automatic update, and a tested prior-image recovery remain
-acceptance work for the intended Home Assistant installation.
+The App is experimental and `amd64` only. The public App `0.6.1` release is a
+signed immutable image with an SPDX SBOM and build provenance, but is known-bad
+on target HAOS because its sandbox self-test required `writableRoots` exactly
+`[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
+bounded supplemental roots beneath the workspace. Candidate `0.6.2` files
+validate canonical contained supplemental roots and harden
+`lsm_get_self_attr` record parsing; they passed the complete production
+self-test on target HAOS. Immutable App `0.6.2` image startup and authenticated
+readiness remain pending release/post-release checks. Remote access, the first
+automatic update, cold restore, and App-image rollback remain acceptance work
+for the intended Home Assistant installation.
 
 For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).

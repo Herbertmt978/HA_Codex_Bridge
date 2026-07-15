@@ -361,6 +361,43 @@ def _assert_permission_profile_catalog(
             raise SelfTestError
 
 
+def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
+    """Accept only canonical roots whose resolved paths stay in the workspace."""
+
+    if type(value) is not list or len(value) > 64:
+        return False
+    try:
+        workspace_root = workspace.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    seen: set[str] = set()
+    for item in value:
+        if (
+            type(item) is not str
+            or not item
+            or "\0" in item
+            or len(item) > 4096
+        ):
+            return False
+        candidate = Path(item)
+        if (
+            not candidate.is_absolute()
+            or str(candidate) != item
+            or ".." in candidate.parts
+        ):
+            return False
+        try:
+            resolved = candidate.resolve(strict=False)
+            resolved.relative_to(workspace_root)
+        except (OSError, RuntimeError, ValueError):
+            return False
+        identity = os.path.normcase(str(resolved))
+        if identity in seen:
+            return False
+        seen.add(identity)
+    return True
+
+
 def _assert_profile_thread(
     client: Any,
     *,
@@ -420,7 +457,9 @@ def _assert_profile_thread(
             "excludeTmpdirEnvVar",
         }
         or sandbox.get("type") != "workspaceWrite"
-        or sandbox.get("writableRoots") != [str(workspace)]
+        or not _writable_roots_within_workspace(
+            sandbox.get("writableRoots"), workspace=workspace
+        )
         or sandbox.get("networkAccess") is not False
         or sandbox.get("excludeSlashTmp") is not True
         or sandbox.get("excludeTmpdirEnvVar") is not True
