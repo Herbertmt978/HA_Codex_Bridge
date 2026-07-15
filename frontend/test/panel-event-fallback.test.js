@@ -1049,6 +1049,13 @@ describe("polling event fallback", () => {
     ];
     panel._selectedThreadId = "thread-alpha";
     panel._activeThread = threadRecord("thread-alpha", "Alpha");
+    panel._artifacts = [{
+      artifact_id: "artifact-alpha",
+      filename: "alpha.txt",
+      mime_type: "text/plain",
+      size: 5,
+    }];
+    panel._selectedArtifactId = "artifact-alpha";
     panel._pollActive = true;
     panel._pollGeneration = 1;
     panel._refreshActiveThread = vi.fn().mockResolvedValue(true);
@@ -1057,6 +1064,8 @@ describe("polling event fallback", () => {
     await run(panel);
 
     expect(panel._selectedThreadId).toBe("thread-beta");
+    expect(panel._artifacts).toEqual([]);
+    expect(panel._selectedArtifactId).toBeNull();
     expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
     expect(panel._startPolling).toHaveBeenCalledOnce();
   });

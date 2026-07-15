@@ -6708,10 +6708,6 @@ var CodexBridgePanel = class extends HTMLElement {
     const selectionEpoch = this._setSelectedThreadId(threadId, { force: true });
     this._resetEventState();
     this._activeThread = null;
-    this._artifacts = [];
-    this._selectedArtifactId = null;
-    this._revokePreviewUrl();
-    this._artifactPreview = null;
     this._forceMessageRebuild = true;
     await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
   }
@@ -6722,6 +6718,11 @@ var CodexBridgePanel = class extends HTMLElement {
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
       this._threadRefreshGraceUntil = 0;
+      this._artifacts = [];
+      this._selectedArtifactId = null;
+      this._previewToken += 1;
+      this._revokePreviewUrl();
+      this._artifactPreview = null;
     }
     this._selectedThreadId = nextThreadId;
     return this._threadSelectionEpoch;
