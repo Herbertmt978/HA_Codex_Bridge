@@ -1,6 +1,6 @@
 {
   "name": "ha-codex-bridge",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "type": "module",
   "description": "Build and security checks for the Home Assistant Codex Bridge panel.",

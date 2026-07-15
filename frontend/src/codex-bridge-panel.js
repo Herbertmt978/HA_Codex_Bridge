@@ -8,7 +8,7 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 
-const PANEL_VERSION = "0.6.3";
+const PANEL_VERSION = "0.6.4";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -2774,6 +2774,8 @@ class CodexBridgePanel extends HTMLElement {
     this._isLoading = false;
     this._error = "";
     this._errorRetryable = false;
+    this._errorSource = "";
+    this._errorRevision = 0;
     this._dismissedBannerKey = "";
     this._renderedThreadId = null;
     this._renderedSequence = 0;
@@ -3782,7 +3784,7 @@ class CodexBridgePanel extends HTMLElement {
           this._interactionMutations.get(interaction.interaction_id) === mutation &&
           interaction.thread_id === this._selectedThreadId
         ) {
-          this._error = "Home Assistant accepted this response. The request stays locked until its final state can be refreshed.";
+          this._assignError("Home Assistant accepted this response. The request stays locked until its final state can be refreshed.");
           this._render();
         }
         return;
@@ -3791,7 +3793,7 @@ class CodexBridgePanel extends HTMLElement {
         return;
       }
       if (items.some((item) => item.interaction_id === interaction.interaction_id)) {
-        this._error = "Home Assistant accepted this response. The request stays locked while Codex finishes reconciling it.";
+        this._assignError("Home Assistant accepted this response. The request stays locked while Codex finishes reconciling it.");
         this._render();
         return;
       }
@@ -3827,11 +3829,11 @@ class CodexBridgePanel extends HTMLElement {
         this._interactionMutations.delete(interaction.interaction_id);
         this._interactionAnswers.delete(interaction.interaction_id);
         if (errorCode === "interaction_outcome_unknown") {
-          this._error = "Codex received the response, but its final outcome could not be confirmed. Refresh before continuing.";
+          this._assignError("Codex received the response, but its final outcome could not be confirmed. Refresh before continuing.");
         } else if (stillPending) {
-          this._error = this._safeUiError(error);
+          this._assignError(error);
         } else {
-          this._error = "This Codex request is no longer pending.";
+          this._assignError("This Codex request is no longer pending.");
         }
         this._render();
         this._focusPrompt();
@@ -3839,14 +3841,14 @@ class CodexBridgePanel extends HTMLElement {
       }
       if (INTERACTION_ERROR_CODES.has(errorCode)) {
         mutation.state = "reconciling";
-        this._error = errorCode === "interaction_outcome_unknown"
+        this._assignError(errorCode === "interaction_outcome_unknown"
           ? "Codex received the response, but its final outcome could not be confirmed. This request stays locked while Home Assistant reconciles it."
-          : "This Codex response could not be applied. The request stays locked until Home Assistant refreshes it.";
+          : "This Codex response could not be applied. The request stays locked until Home Assistant refreshes it.");
         this._render();
         return;
       }
       mutation.state = "retryable";
-      this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+      this._assignError("The Home Assistant response was interrupted. Retry safely with the same request ID.");
       this._render();
     }
   }
@@ -5304,7 +5306,12 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  async _refreshActiveThread({ reportError = true } = {}) {
+  async _refreshActiveThread({
+    reportError = true,
+    errorSource = null,
+    expectedErrorRevision = null,
+    cursorFloor = null,
+  } = {}) {
     const threadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
     const refreshEpoch = ++this._threadSnapshotEpoch;
@@ -5342,13 +5349,33 @@ class CodexBridgePanel extends HTMLElement {
       }
       this._activeThread = thread;
       this._selectedProjectId = thread.project_id;
+      const authoritativeEvents = parseEvents(events).filter(
+        (event) => !event.thread_id || event.thread_id === threadId
+      );
       const replay = acceptEvents(
         createEventStreamState(),
-        parseEvents(events).filter((event) => !event.thread_id || event.thread_id === threadId)
+        authoritativeEvents.filter(
+          (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
+        )
       );
-      this._eventStream = replay.state;
+      const authoritativeCursor = authoritativeEvents.reduce(
+        (cursor, event) => Math.max(cursor, event.sequence),
+        Math.max(
+          replay.state.cursor,
+          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
+        )
+      );
+      // A full get_events replay is authoritative. Historical replay controls
+      // advance the cursor but cannot truncate later transcript events or
+      // permanently request another snapshot.
+      this._eventStream = {
+        ...replay.state,
+        cursor: authoritativeCursor,
+        needsSnapshot: false,
+        error: null,
+      };
       this._events = replay.state.events;
-      this._sequence = replay.state.cursor;
+      this._sequence = authoritativeCursor;
       this._artifacts = artifacts;
       this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
@@ -5359,13 +5386,23 @@ class CodexBridgePanel extends HTMLElement {
       if (this._promptMutationForThread(threadId)) {
         this._settlePromptMutationFromEvents();
       }
-      this._clearError();
+      if (
+        expectedErrorRevision === null
+        || this._errorRevision === expectedErrorRevision
+      ) {
+        this._clearError(errorSource === null ? {} : { source: errorSource });
+      }
       this._render();
       this._startEventSubscription();
       return true;
     } catch (error) {
-      if (isCurrent() && reportError) {
-        this._setError(error);
+      if (
+        isCurrent()
+        && reportError
+        && (expectedErrorRevision === null || this._errorRevision === expectedErrorRevision)
+        && (errorSource === null || this._canSetBackgroundError(errorSource))
+      ) {
+        this._setError(error, errorSource === null ? {} : { source: errorSource });
       }
       return false;
     }
@@ -5760,7 +5797,7 @@ class CodexBridgePanel extends HTMLElement {
       }
       mutation.state = "retryable";
       if (threadId === this._selectedThreadId) {
-        this._error = "The Home Assistant response was interrupted. Retry safely with the same request ID.";
+        this._assignError("The Home Assistant response was interrupted. Retry safely with the same request ID.");
         this._render();
       }
     }
@@ -6552,6 +6589,7 @@ class CodexBridgePanel extends HTMLElement {
     const polledThreadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
     const snapshotEpoch = ++this._threadSnapshotEpoch;
+    const errorRevision = this._errorRevision;
     const isCurrent = () => (
       this._pollActive
       && generation === this._pollGeneration
@@ -6597,14 +6635,45 @@ class CodexBridgePanel extends HTMLElement {
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();
-          await this._refreshActiveThread();
+          await this._refreshActiveThread({
+            errorSource: "poll",
+            expectedErrorRevision: errorRevision,
+            cursorFloor: this._sequence,
+          });
           return;
         }
         if (batch.controls.includes("error")) {
           this._stopEventSubscription();
-          this._setError(batch.state.error || "Bridge event stream failed");
+          let refreshErrorRevision = errorRevision;
+          let reportRefreshError = true;
+          if (
+            this._errorRevision === errorRevision
+            && this._canSetBackgroundError("poll")
+          ) {
+            this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
+            refreshErrorRevision = this._errorRevision;
+            // The broker error already describes this recovery attempt. Keep it
+            // if the authoritative replay fails instead of replacing it with a
+            // secondary fetch error.
+            reportRefreshError = false;
+          }
+          await this._refreshActiveThread({
+            errorSource: "poll",
+            expectedErrorRevision: refreshErrorRevision,
+            reportError: reportRefreshError,
+            cursorFloor: this._sequence,
+          });
           return;
         }
+      }
+      if (this._eventStream.needsSnapshot) {
+        this._stopEventSubscription();
+        await this._refreshActiveThread({
+          errorSource: "poll",
+          expectedErrorRevision: errorRevision,
+          cursorFloor: this._sequence,
+        });
+        return;
       }
       if (status) {
         this._mergeStatus(status);
@@ -6640,9 +6709,20 @@ class CodexBridgePanel extends HTMLElement {
         this._render();
       }
       this._threadRefreshGraceUntil = 0;
+      if (
+        this._errorRevision === errorRevision
+        && this._clearError({ source: "poll" })
+      ) {
+        this._render();
+      }
     } catch (error) {
-      if (isCurrent() && Date.now() >= this._threadRefreshGraceUntil) {
-        this._setError(error);
+      if (
+        isCurrent()
+        && this._errorRevision === errorRevision
+        && this._canSetBackgroundError("poll")
+        && Date.now() >= this._threadRefreshGraceUntil
+      ) {
+        this._setError(error, { source: "poll" });
       }
     } finally {
       if (generation === this._pollGeneration) {
@@ -6936,13 +7016,25 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (event?.type === "snapshot_required") {
+      const errorRevision = this._errorRevision;
+      const cursor = Number.isSafeInteger(event.cursor) && event.cursor >= 0
+        ? Math.max(this._eventStream.cursor, event.cursor)
+        : this._eventStream.cursor;
+      this._eventStream = { ...this._eventStream, cursor, needsSnapshot: true };
+      this._sequence = cursor;
       this._retireEventSubscription({ reconnect: false });
-      this._refreshActiveThread();
+      this._refreshActiveThread({
+        errorSource: "poll",
+        expectedErrorRevision: errorRevision,
+        cursorFloor: cursor,
+      });
       return;
     }
     if (event?.type === "error") {
       this._retireEventSubscription();
-      this._setError("Bridge event stream failed");
+      if (this._canSetBackgroundError("poll")) {
+        this._setError("Bridge event stream failed", { source: "poll" });
+      }
       return;
     }
     if (event?.thread_id && event.thread_id !== threadId) {
@@ -6955,13 +7047,20 @@ class CodexBridgePanel extends HTMLElement {
     this._eventStream = result.state;
     this._sequence = result.state.cursor;
     if (result.control === "snapshot") {
+      const errorRevision = this._errorRevision;
       this._stopEventSubscription();
-      this._refreshActiveThread();
+      this._refreshActiveThread({
+        errorSource: "poll",
+        expectedErrorRevision: errorRevision,
+        cursorFloor: this._sequence,
+      });
       return;
     }
     if (result.control === "error") {
       this._retireEventSubscription();
-      this._setError(result.state.error || "Bridge event stream failed");
+      if (this._canSetBackgroundError("poll")) {
+        this._setError(result.state.error || "Bridge event stream failed", { source: "poll" });
+      }
       return;
     }
     const acceptedEvent = result.event;
@@ -7003,6 +7102,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     const selectionEpoch = this._threadSelectionEpoch;
     const refreshEpoch = ++this._threadSnapshotEpoch;
+    const errorRevision = this._errorRevision;
     const isCurrent = () => (
       refreshEpoch === this._threadSnapshotEpoch
       && this._threadSelectionIsCurrent(threadId, selectionEpoch)
@@ -7030,8 +7130,12 @@ class CodexBridgePanel extends HTMLElement {
         this._syncSelectedArtifact();
         this._render();
       } catch (error) {
-        if (isCurrent()) {
-          this._setError(error);
+        if (
+          isCurrent()
+          && this._errorRevision === errorRevision
+          && this._canSetBackgroundError("poll")
+        ) {
+          this._setError(error, { source: "poll" });
         }
       }
     }, 250);
@@ -7444,10 +7548,20 @@ class CodexBridgePanel extends HTMLElement {
       .join(" ");
   }
 
-  _setError(error, { retryable = null } = {}) {
+  _assignError(error, { retryable = null, source = "" } = {}) {
     this._error = this._safeUiError(error);
     this._errorRetryable = retryable === null ? this._isRetryableTransportError(error) : Boolean(retryable);
+    this._errorSource = source;
+    this._errorRevision += 1;
+  }
+
+  _setError(error, options = {}) {
+    this._assignError(error, options);
     this._render();
+  }
+
+  _canSetBackgroundError(source) {
+    return !this._error || this._errorSource === source;
   }
 
   _isRetryableTransportError(error) {
@@ -7496,9 +7610,16 @@ class CodexBridgePanel extends HTMLElement {
     return (safe || "The Codex request did not complete.").slice(0, 240);
   }
 
-  _clearError() {
+  _clearError({ source = null } = {}) {
+    if (source !== null && this._errorSource !== source) {
+      return false;
+    }
+    const changed = Boolean(this._error);
     this._error = "";
     this._errorRetryable = false;
+    this._errorSource = "";
+    this._errorRevision += 1;
+    return changed;
   }
 
   _textElement(tagName, className, value) {

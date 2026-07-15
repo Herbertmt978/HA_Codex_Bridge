@@ -42,7 +42,7 @@ App and Bridge remain private to Home Assistant.
 <summary><b>Current release and validation details</b></summary>
 
 This source release targets experimental, `amd64`-only App `0.6.4`; the
-Integration is `0.6.3`, the optional external Bridge is `0.5.4`, and the
+Integration is `0.6.4`, the optional external Bridge is `0.5.4`, and the
 bundled Codex runtime is `0.144.4`. The public App is distributed as a signed
 immutable image with an SPDX SBOM and build provenance; App `0.6.4` uses that
 release workflow. The previously validated App release completed target-HAOS
@@ -65,9 +65,11 @@ account entitlements change, and discovers every model and reasoning level
 from Codex rather than hardcoding a release list. It also separates weekly-only
 usage from the disabled five-hour window and keeps a newly created chat usable
 while secondary snapshots retry.
-Integration `0.6.3` gives the panel a clearer Codex-style reading surface,
+Integration `0.6.4` gives the panel a clearer Codex-style reading surface,
 stronger chat and composer hierarchy, intentional empty states, and improved
 keyboard and screen-reader navigation while retaining Home Assistant themes.
+It also retires recovered polling errors automatically without hiding unrelated
+action failures.
 
 The App publishes discovery with the current Supervisor `app_config` map
 permission and its assigned private HA-network IP. A restart includes a bounded
