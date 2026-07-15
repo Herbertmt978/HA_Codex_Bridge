@@ -7402,7 +7402,9 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         if (batch.controls.includes("error")) {
           this._stopEventSubscription();
-          this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
+          if (this._errorRevision === errorRevision && this._canSetBackgroundError("poll")) {
+            this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
+          }
           return;
         }
       }

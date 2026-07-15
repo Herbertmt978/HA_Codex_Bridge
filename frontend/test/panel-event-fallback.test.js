@@ -88,6 +88,20 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("");
   });
 
+  it("does not replace a newer action error with a broker error from polling", async () => {
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    const panel = pollingPanel(brokerError);
+    const delayedEvents = deferred();
+    panel._callWS.mockReturnValueOnce(delayedEvents.promise);
+
+    const pending = panel._runPollTick(1);
+    panel._setError("Upload network failed", { retryable: true });
+    delayedEvents.resolve([brokerError]);
+    await pending;
+
+    expect(panel._error).toBe("Upload network failed");
+  });
+
   it("retries transient snapshot failures quietly just after creating a chat", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
