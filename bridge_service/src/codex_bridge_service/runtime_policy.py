@@ -328,8 +328,6 @@ def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
             resolved.relative_to(workspace_root)
         except (OSError, RuntimeError, ValueError):
             return False
-        if item != str(resolved):
-            return False
         canonical = os.path.normcase(str(resolved))
         if canonical in seen:
             return False

@@ -864,6 +864,41 @@ def test_thread_result_rejects_writable_root_symlink_outside_workspace(
         )
 
 
+def test_thread_result_accepts_selected_workspace_symlink(
+    tmp_path: Path,
+) -> None:
+    physical_workspace = (tmp_path / "physical-workspace").resolve()
+    physical_workspace.mkdir()
+    workspace = tmp_path / "workspace-link"
+    try:
+        workspace.symlink_to(physical_workspace, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable: {exc}")
+    policy = mode_policy(RunMode.EDIT, workspace)
+    sandbox = deepcopy(policy.sandbox_policy)
+    sandbox["writableRoots"] = [str(workspace), str(workspace / ".codex")]
+    result = {
+        "thread": _thread("symlink-workspace-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": "on-request",
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+        "sandbox": sandbox,
+    }
+
+    assert (
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=policy,
+        )
+        == "symlink-workspace-thread"
+    )
+
+
 @pytest.mark.parametrize("mode", [RunMode.OBSERVE, RunMode.EDIT])
 def test_thread_result_rejects_extra_sandbox_fields(
     tmp_path: Path,
