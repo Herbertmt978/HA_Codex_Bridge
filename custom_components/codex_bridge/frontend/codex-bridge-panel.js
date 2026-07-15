@@ -7390,6 +7390,17 @@ var CodexBridgePanel = class extends HTMLElement {
     const errorRevision = this._errorRevision;
     const isCurrent = () => this._pollActive && generation === this._pollGeneration && snapshotEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(polledThreadId, selectionEpoch);
     try {
+      if (this._eventStream.needsSnapshot) {
+        this._stopEventSubscription();
+        const preservesLiveBrokerError = this._errorSource === "poll" && this._eventStream.error && this._error;
+        await this._refreshActiveThread({
+          errorSource: "poll",
+          expectedErrorRevision: errorRevision,
+          cursorFloor: this._sequence,
+          reportError: !preservesLiveBrokerError
+        });
+        return;
+      }
       this._pollTick += 1;
       const previousSequence = this._sequence;
       const previousStatus = this._activeThread?.status;
@@ -7451,10 +7462,12 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       if (this._eventStream.needsSnapshot) {
         this._stopEventSubscription();
+        const preservesLiveBrokerError = this._errorSource === "poll" && this._eventStream.error && this._error;
         await this._refreshActiveThread({
           errorSource: "poll",
           expectedErrorRevision: errorRevision,
-          cursorFloor: this._sequence
+          cursorFloor: this._sequence,
+          reportError: !preservesLiveBrokerError
         });
         return;
       }
@@ -8245,7 +8258,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._error = "";
     this._errorRetryable = false;
     this._errorSource = "";
-    this._errorRevision += 1;
+    if (changed) {
+      this._errorRevision += 1;
+    }
     return changed;
   }
   _textElement(tagName, className, value) {

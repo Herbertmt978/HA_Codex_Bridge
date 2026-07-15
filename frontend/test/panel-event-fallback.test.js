@@ -159,6 +159,39 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("Upload network failed");
   });
 
+  it("preserves a live broker error when its sticky snapshot recovery fails", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
+    panel._retireEventSubscription = vi.fn();
+    panel._handleSubscribedEvent("thr_safe", brokerError);
+    panel._lastStatusRefreshAt = 0;
+    expect(panel._eventStream.needsSnapshot).toBe(true);
+    expect(panel._error).toBe("broker stopped");
+
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([]);
+      if (action === "get_thread") return Promise.reject(new Error("Snapshot fetch failed"));
+      if (action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("broker stopped");
+    expect(panel._errorSource).toBe("poll");
+
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
+  });
+
   it.each([
     ["raw stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", { type: "snapshot_required" })],
     ["accepted stream snapshot", (panel) => panel._handleSubscribedEvent("thr_safe", controlEvent("bridge.snapshot_required"))],
@@ -392,6 +425,20 @@ describe("polling event fallback", () => {
     await panel._runPollTick(1);
 
     expect(panel._error).toBe("Upload network failed");
+  });
+
+  it("reports a delayed poll failure after a no-op error clear", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Delayed poll" }));
+    const delayedPoll = deferred();
+    panel._callWS.mockReturnValueOnce(delayedPoll.promise);
+
+    const pending = panel._runPollTick(1);
+    expect(panel._clearError()).toBe(false);
+    delayedPoll.reject(new Error("Bridge request failed"));
+    await pending;
+
+    expect(panel._error).toBe("Bridge request failed");
+    expect(panel._errorSource).toBe("poll");
   });
 
   it("does not clear a newer action error while reconciling a poll snapshot", async () => {
