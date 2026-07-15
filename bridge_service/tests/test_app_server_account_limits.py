@@ -318,6 +318,47 @@ def test_limits_probe_normalizes_primary_and_secondary_windows() -> None:
     assert status.updated_at is not None
 
 
+def test_limits_probe_classifies_a_weekly_only_primary_window_as_secondary() -> None:
+    response = _rate_limits(
+        primary={
+            "usedPercent": 0,
+            "windowDurationMins": 10_080,
+            "resetsAt": 1_789_404_800,
+        },
+    )
+    client = RecordingAppServerClient(response)
+    probe = _limits_probe(client)
+
+    status = probe.probe()
+
+    assert status is not None
+    assert status.primary is None
+    assert status.secondary is not None
+    assert status.secondary.used_percent == 0.0
+    assert status.secondary.remaining_percent == 100.0
+    assert status.secondary.window_minutes == 10_080
+    assert status.secondary.resets_at == 1_789_404_800
+
+
+def test_limits_probe_orders_known_windows_by_duration_not_protocol_position() -> None:
+    response = _rate_limits(
+        primary={"usedPercent": 65, "windowDurationMins": 10_080},
+        secondary={"usedPercent": 20, "windowDurationMins": 300},
+    )
+    client = RecordingAppServerClient(response)
+    probe = _limits_probe(client)
+
+    status = probe.probe()
+
+    assert status is not None
+    assert status.primary is not None
+    assert status.primary.window_minutes == 300
+    assert status.primary.remaining_percent == 80.0
+    assert status.secondary is not None
+    assert status.secondary.window_minutes == 10_080
+    assert status.secondary.remaining_percent == 35.0
+
+
 def test_limits_probe_marks_a_locked_reached_snapshot_with_a_generic_message() -> None:
     response = _rate_limits(
         primary={"usedPercent": 100},

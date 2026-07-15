@@ -220,4 +220,71 @@ describe("panel accessibility contract", () => {
     expect(stylesheet).toMatch(/prefers-reduced-motion\s*:\s*reduce/i);
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)/i);
   });
+
+  it("provides a semantic workspace tree and a new-chat action when nothing is selected", () => {
+    const panel = createPanel();
+    const project = {
+      project_id: "project_aria",
+      kind: "project",
+      name: "Accessible workspace",
+      archived_at: null,
+    };
+    panel._projects = [project];
+    panel._threads = [{
+      thread_id: "thread_aria",
+      project_id: project.project_id,
+      project_kind: "project",
+      title: "Selected chat",
+      effective_model: "gpt-5.6",
+      effective_thinking_level: "medium",
+      status: "idle",
+      archived_at: null,
+    }, {
+      thread_id: "thread_archived",
+      project_id: "direct_aria",
+      project_kind: "direct",
+      title: "Archived direct chat",
+      effective_model: "gpt-5.6",
+      effective_thinking_level: "medium",
+      status: "idle",
+      archived_at: "2026-07-15T12:00:00Z",
+    }];
+    panel._selectedProjectId = project.project_id;
+    panel._selectedThreadId = "thread_aria";
+    panel._activeThread = { ...panel._threads[0], attachments: [] };
+    panel._render(true);
+
+    const selectedChat = panel.shadowRoot.querySelector('[data-thread-id="thread_aria"]');
+    expect(selectedChat?.getAttribute("aria-current")).toBe("page");
+
+    const collapse = panel.shadowRoot.querySelector('[data-action="toggle-project-collapse"]');
+    const projectChatListId = collapse?.getAttribute("aria-controls");
+    expect(collapse?.tagName).toBe("BUTTON");
+    expect(collapse?.getAttribute("aria-expanded")).toBe("true");
+    expect(projectChatListId).toBeTruthy();
+    expect(panel.shadowRoot.getElementById(projectChatListId)).toBeTruthy();
+
+    const directToggle = panel.shadowRoot.querySelector('[data-action="toggle-section"][data-section="direct"]');
+    const archivedToggle = panel.shadowRoot.querySelector('[data-action="toggle-section"][data-section="archived"]');
+    expect(directToggle?.getAttribute("aria-controls")).toBe("direct-chat-list");
+    expect(directToggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(panel.shadowRoot.getElementById("direct-chat-list")).toBeTruthy();
+    expect(archivedToggle?.getAttribute("aria-controls")).toBe("archived-chat-list");
+    expect(archivedToggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(panel.shadowRoot.getElementById("archived-chat-list")?.hidden).toBe(true);
+
+    panel._selectedThreadId = null;
+    panel._activeThread = null;
+    panel._renderMessages();
+    const newChat = panel.shadowRoot.querySelector('.empty-state-main [data-action="new-direct-chat"]');
+    expect(newChat?.textContent).toContain("New chat");
+    newChat?.click();
+    expect(panel._showThreadForm).toBe(true);
+    expect(panel._threadForm.projectId).toBeNull();
+
+    panel._renderProgress();
+    const progress = panel.shadowRoot.getElementById("progress-list");
+    expect(progress?.getAttribute("role")).toBe("list");
+    expect(progress?.querySelector('[role="listitem"]')?.getAttribute("aria-label")).toMatch(/complete|active|error/i);
+  });
 });

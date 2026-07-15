@@ -122,10 +122,12 @@ def _device_login(
 def _coordinator(
     client: FakeAppServerClient,
     states: list[Any] | None = None,
+    **kwargs: Any,
 ) -> CodexAuthCoordinator:
     return CodexAuthCoordinator(
         client,
         state_listener=None if states is None else states.append,
+        **kwargs,
     )
 
 
@@ -332,6 +334,104 @@ def test_matching_generation_and_login_id_complete_login_with_final_read() -> No
         "account/read", {"refreshToken": False}, 5.0
     )
     _assert_monotonic(states)
+
+
+@pytest.mark.parametrize("login_id", [None, "missing"], ids=["null", "missing"])
+def test_uncorrelated_completion_cannot_replace_the_active_login(
+    login_id: str | None,
+) -> None:
+    client = FakeAppServerClient(generation=7)
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        _signed_out_account(),
+    )
+    client.script(
+        "account/login/start",
+        _device_login("login-a", user_code="AAAA-BBBB"),
+        _device_login("login-b", user_code="CCCC-DDDD"),
+    )
+    client.script("account/login/cancel", {})
+    coordinator = _coordinator(client)
+    coordinator.start()
+    coordinator.start_device_login()
+    coordinator.cancel_login()
+    active = coordinator.start_device_login()
+    payload: dict[str, Any] = {"success": True, "error": None}
+    if login_id != "missing":
+        payload["loginId"] = login_id
+
+    client.emit("account/login/completed", payload, generation=7)
+
+    status = coordinator.status()
+    assert active.state == status.state == "login_running"
+    assert status.revision == active.revision
+    assert status.user_code == "CCCC-DDDD"
+
+
+def test_status_poll_recovers_active_login_when_completion_notification_is_missed() -> None:
+    client = FakeAppServerClient(generation=7)
+    client.script(
+        "account/read", _signed_out_account(), _chatgpt_account(plan_type="pro")
+    )
+    client.script("account/login/start", _device_login("login-correct"))
+    coordinator = _coordinator(client, active_login_poll_interval_seconds=0)
+    coordinator.start()
+    pending = coordinator.start_device_login()
+
+    recovered = coordinator.status()
+
+    assert pending.state == "login_running"
+    assert recovered.state == "ok"
+    assert recovered.auth_mode == "chatgpt"
+    assert recovered.plan_type == "pro"
+    assert recovered.user_code is None
+
+
+def test_status_poll_keeps_device_code_until_account_is_authoritatively_signed_in() -> None:
+    client = FakeAppServerClient(generation=7)
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        _signed_out_account(),
+        _chatgpt_account(plan_type="pro"),
+    )
+    client.script("account/login/start", _device_login("login-correct"))
+    coordinator = _coordinator(client, active_login_poll_interval_seconds=0)
+    coordinator.start()
+    pending = coordinator.start_device_login()
+
+    still_pending = coordinator.status()
+    recovered = coordinator.status()
+
+    assert still_pending.state == "login_running"
+    assert still_pending.revision == pending.revision
+    assert still_pending.user_code == pending.user_code == "ABCD-EFGH"
+    assert recovered.state == "ok"
+    assert recovered.user_code is None
+
+
+def test_status_poll_retries_after_a_transport_failure_without_clearing_the_code() -> None:
+    client = FakeAppServerClient(generation=7)
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        RuntimeError("temporary private transport failure"),
+        _chatgpt_account(plan_type="pro"),
+    )
+    client.script("account/login/start", _device_login("login-correct"))
+    coordinator = _coordinator(client, active_login_poll_interval_seconds=0)
+    coordinator.start()
+    pending = coordinator.start_device_login()
+
+    failed_poll = coordinator.status()
+    recovered = coordinator.status()
+
+    assert failed_poll.state == "login_running"
+    assert failed_poll.revision == pending.revision
+    assert failed_poll.user_code == "ABCD-EFGH"
+    assert recovered.state == "ok"
+    assert recovered.user_code is None
 
 
 def test_stale_generation_or_wrong_login_id_cannot_complete_active_login() -> None:

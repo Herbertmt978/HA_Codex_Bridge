@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Callable
 from math import isfinite
 from threading import Lock
+from time import monotonic
 from typing import Any, Protocol
 
 from .codex_app_server import AppServerNotification
@@ -83,6 +84,7 @@ class CodexAuthCoordinator:
         state_listener_fatal: bool = False,
         runtime_gate: RuntimeGate | None = None,
         account_read_timeout_seconds: float = 5.0,
+        active_login_poll_interval_seconds: float = 2.0,
     ) -> None:
         if (
             isinstance(account_read_timeout_seconds, bool)
@@ -91,8 +93,18 @@ class CodexAuthCoordinator:
             or account_read_timeout_seconds <= 0
         ):
             raise ValueError("account read timeout must be positive")
+        if (
+            isinstance(active_login_poll_interval_seconds, bool)
+            or not isinstance(active_login_poll_interval_seconds, (int, float))
+            or not isfinite(active_login_poll_interval_seconds)
+            or active_login_poll_interval_seconds < 0
+        ):
+            raise ValueError("active login poll interval must be non-negative")
         self._client = client
         self._account_read_timeout_seconds = float(account_read_timeout_seconds)
+        self._active_login_poll_interval_seconds = float(
+            active_login_poll_interval_seconds
+        )
         self._state_listener = state_listener
         self._state_listener_fatal = state_listener_fatal
         self._runtime_gate = runtime_gate
@@ -110,6 +122,8 @@ class CodexAuthCoordinator:
         self._operation: tuple[int, str] | None = None
         self._active_login_id: str | None = None
         self._active_login_generation: int | None = None
+        self._active_login_polling = False
+        self._active_login_last_polled_at: float | None = None
         self._cancel_requested = False
         self._started = False
         self._handlers_registered = False
@@ -166,6 +180,7 @@ class CodexAuthCoordinator:
         """Return a detached public snapshot; legacy error text is never projected."""
 
         del last_error
+        login_poll: tuple[str, int] | None = None
         with self._lock:
             if self._closed:
                 return self._copy_status_locked()
@@ -178,6 +193,17 @@ class CodexAuthCoordinator:
             else:
                 retry_start = False
                 generation = self._client.generation
+                poll_due = (
+                    self._operation is None
+                    and not self._active_login_polling
+                    and self._active_login_id is not None
+                    and self._active_login_generation == generation
+                    and (
+                        self._active_login_last_polled_at is None
+                        or monotonic() - self._active_login_last_polled_at
+                        >= self._active_login_poll_interval_seconds
+                    )
+                )
                 needs_reconcile = self._operation is None and (
                     self._status.state == "unavailable"
                     or self._observed_generation != generation
@@ -186,28 +212,42 @@ class CodexAuthCoordinator:
                         and self._active_login_generation != generation
                     )
                 )
-                if not needs_reconcile:
+                if not needs_reconcile and not poll_due:
                     return self._copy_status_locked()
-                operation = self._begin_operation_locked("status_reconcile")
-                self._clear_active_login_locked()
-                checking = self._set_status_locked(
-                    state="checking",
-                    busy=True,
-                    message=MESSAGE_CHECKING,
-                    **cleared_device_fields(),
-                )
+                if poll_due:
+                    assert self._active_login_id is not None
+                    self._active_login_polling = True
+                    self._active_login_last_polled_at = monotonic()
+                    login_poll = (self._active_login_id, generation)
+                    operation = None
+                    checking = None
+                else:
+                    operation = self._begin_operation_locked("status_reconcile")
+                    self._clear_active_login_locked()
+                    checking = self._set_status_locked(
+                        state="checking",
+                        busy=True,
+                        message=MESSAGE_CHECKING,
+                        **cleared_device_fields(),
+                    )
         if retry_start:
             return self.start()
-        assert operation is not None and checking is not None
-        self._notify(checking)
+        if checking is not None:
+            self._notify(checking)
         try:
             generation, response = self._read_account()
         except Exception:
+            if login_poll is not None:
+                return self._finish_active_login_poll_failure(login_poll)
+            assert operation is not None
             return self._finish_with_failure(
                 operation,
                 state="unavailable",
                 message=MESSAGE_UNAVAILABLE,
             )
+        if login_poll is not None:
+            return self._finish_active_login_poll(login_poll, generation, response)
+        assert operation is not None
         return self._finish_account_read(operation, generation, response)
 
     def start_device_login(
@@ -279,6 +319,8 @@ class CodexAuthCoordinator:
             else:
                 self._active_login_id = login_id
                 self._active_login_generation = request_generation
+                self._active_login_polling = False
+                self._active_login_last_polled_at = monotonic()
                 self._operation = None
                 running = self._set_status_locked(
                     state="login_running",
@@ -624,6 +666,57 @@ class CodexAuthCoordinator:
             return published.model_copy(deep=True)
         return published.model_copy(deep=True)
 
+    def _finish_active_login_poll(
+        self,
+        login_poll: tuple[str, int],
+        generation: int,
+        response: Any,
+    ) -> CodexAuthStatusRecord:
+        try:
+            normalized = account_status(response)
+        except (TypeError, ValueError):
+            return self._finish_active_login_poll_failure(login_poll)
+        login_id, login_generation = login_poll
+        with self._lock:
+            if (
+                self._closed
+                or not self._active_login_polling
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+            ):
+                return self._copy_status_locked()
+            self._active_login_polling = False
+            if (
+                self._operation is not None
+                or generation != self._client.generation
+                or generation != login_generation
+            ):
+                return self._copy_status_locked()
+            self._observed_generation = generation
+            if normalized["state"] == "logged_out":
+                return self._copy_status_locked()
+            self._cancel_requested = False
+            self._clear_active_login_locked()
+            published = self._set_status_locked(**normalized)
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
+        self._notify(published)
+        return published.model_copy(deep=True)
+
+    def _finish_active_login_poll_failure(
+        self,
+        login_poll: tuple[str, int],
+    ) -> CodexAuthStatusRecord:
+        login_id, login_generation = login_poll
+        with self._lock:
+            if (
+                self._active_login_id == login_id
+                and self._active_login_generation == login_generation
+            ):
+                self._active_login_polling = False
+            return self._copy_status_locked()
+
     def _finish_with_failure(
         self,
         operation: tuple[int, str],
@@ -724,6 +817,8 @@ class CodexAuthCoordinator:
     def _clear_active_login_locked(self) -> None:
         self._active_login_id = None
         self._active_login_generation = None
+        self._active_login_polling = False
+        self._active_login_last_polled_at = None
 
     def _set_status_locked(self, **updates: Any) -> CodexAuthStatusRecord:
         self._revision += 1

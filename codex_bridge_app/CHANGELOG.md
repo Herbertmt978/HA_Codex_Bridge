@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 0.6.3
+
+- Recovers ChatGPT device sign-in automatically when Codex omits a login
+  correlation ID or a completion notification is delayed. A bounded account
+  check preserves the active one-time code until sign-in is authoritative.
+- Invalidates the signed-out model catalogue as soon as ChatGPT entitlements
+  change, so newly available Codex models and reasoning levels such as `max`
+  and `ultra` are discovered immediately instead of after the cache expires.
+- Classifies usage windows by their advertised duration, keeping a weekly-only
+  allowance under **Week** and reporting the absent five-hour window as off.
+- Keeps a successfully created chat selected and usable while secondary list,
+  event, artifact, status, or interaction snapshots retry.
+- Bundles Bridge `0.5.4` and the Sigstore-verified Codex `0.144.4` runtime
+  without changing the Integration API compatibility.
+
 ## 0.6.2
 
 - Fixes a false startup failure when Codex `0.144.4` reports its bounded

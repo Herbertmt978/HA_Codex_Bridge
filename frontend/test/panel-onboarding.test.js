@@ -168,6 +168,90 @@ describe("HA-first panel integration", () => {
     expect(panel._status.auth).toMatchObject({ revision: 7, state: "ok", auth_required: false });
   });
 
+  it("polls a pending device sign-in until the account becomes ready", async () => {
+    vi.useFakeTimers();
+    try {
+      const panel = createPanel();
+      panel._config = { connection_type: "supervisor", api_version: 1 };
+      panel._hass = {};
+      panel._callWS = vi.fn(async (action) => {
+        if (action === "get_auth_status") {
+          return { revision: 3, state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" };
+        }
+        if (action === "get_status") {
+          return status({ auth: { revision: 3, state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" } });
+        }
+        throw new Error(`Unexpected action: ${action}`);
+      });
+
+      panel._applyAuthStatus({
+        revision: 2,
+        state: "login_running",
+        auth_required: true,
+        user_code: "ABCD-EFGH",
+      });
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(panel._callWS).toHaveBeenCalledWith("get_auth_status");
+      expect(panel._callWS).toHaveBeenCalledWith("get_status");
+      expect(panel._status.auth).toMatchObject({ state: "ok", auth_mode: "chatgpt", plan_type: "pro" });
+      expect(panel._authPollTimer).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a dismissed pending-login banner dismissed during silent polling", async () => {
+    const panel = createPanel();
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._status = status({
+      auth: { revision: 2, state: "login_running", auth_required: true, user_code: "ABCD-EFGH" },
+    });
+    panel._dismissedBannerKey = "dismissed-login-banner";
+    panel._callWS = vi.fn(async (action) => {
+      if (action === "get_auth_status") return panel._status.auth;
+      if (action === "get_status") return panel._status;
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._refreshAuthStatus({ silent: true });
+
+    expect(panel._dismissedBannerKey).toBe("dismissed-login-banner");
+  });
+
+  it("restarts pending-login polling after reconnecting during an old request", async () => {
+    vi.useFakeTimers();
+    try {
+      const panel = createPanel();
+      panel._config = { connection_type: "supervisor", api_version: 1 };
+      panel._hass = {};
+      panel._status = status({
+        auth: { revision: 2, state: "login_running", auth_required: true, user_code: "ABCD-EFGH" },
+      });
+      let resolveOldRequest;
+      const oldRequest = new Promise((resolve) => {
+        resolveOldRequest = resolve;
+      });
+      panel._refreshAuthStatus = vi.fn()
+        .mockReturnValueOnce(oldRequest)
+        .mockResolvedValue(undefined);
+
+      panel._syncAuthPolling();
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(panel._authPollInFlight).toBe(true);
+
+      panel.remove();
+      document.body.append(panel);
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(panel._refreshAuthStatus).toHaveBeenCalledTimes(2);
+      resolveOldRequest();
+      await Promise.resolve();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("allows only one account mutation at a time", async () => {
     let resolveLogin;
     const login = new Promise((resolve) => {
@@ -472,5 +556,177 @@ describe("HA-first panel integration", () => {
     for (const id of ["thread-title-input", "thread-mode-select"]) {
       expect(panel.shadowRoot.getElementById(id)?.getAttribute("aria-label"), id).toBeTruthy();
     }
+  });
+
+  it("renders a disabled short window separately from a full weekly allowance", () => {
+    const panel = createPanel();
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._status = status({
+      limits: {
+        available: true,
+        plan_type: "pro",
+        primary: null,
+        secondary: { remaining_percent: 100, window_minutes: 10080, resets_at: null },
+      },
+      model_catalog: {
+        default_model: "gpt-5.6-sol",
+        default_thinking_level: "max",
+        models: [
+          { model: "gpt-5.6-sol", display_name: "GPT-5.6 Sol", thinking_levels: ["medium", "max", "ultra"] },
+          { model: "gpt-5.6-terra", display_name: "GPT-5.6 Terra", thinking_levels: ["high", "max"] },
+        ],
+      },
+    });
+    panel._projects = [{
+      project_id: "prj_direct",
+      kind: "direct",
+      name: "Direct chats",
+      root_path: ".",
+      default_model: "gpt-5.6-sol",
+      default_thinking_level: "max",
+    }];
+    panel._selectedProjectId = "prj_direct";
+    panel._activeThread = {
+      thread_id: "thr_limits",
+      project_id: "prj_direct",
+      title: "Limits",
+      status: "idle",
+      attachments: [],
+      effective_model: "gpt-5.6-sol",
+      effective_thinking_level: "max",
+    };
+
+    panel._renderToolbar();
+
+    const limitCards = [...panel.shadowRoot.querySelectorAll(".mini-limit")];
+    expect(limitCards[0].textContent).toContain("5h");
+    expect(limitCards[0].textContent).toContain("Off");
+    expect(limitCards[1].textContent).toContain("Week");
+    expect(limitCards[1].textContent).toContain("100%");
+    expect([...panel.shadowRoot.getElementById("thread-model-select").options].map((option) => option.value)).toContain("gpt-5.6-terra");
+    expect([...panel.shadowRoot.getElementById("thread-thinking-select").options].map((option) => option.value)).toEqual(
+      expect.arrayContaining(["max", "ultra"])
+    );
+  });
+
+  it("applies a refreshed model catalogue after a focused picker is closed", async () => {
+    vi.useFakeTimers();
+    try {
+      const panel = createPanel();
+      panel._config = { connection_type: "supervisor", api_version: 1 };
+      panel._status = status({
+        model_catalog: {
+          default_model: "gpt-5.5",
+          default_thinking_level: "medium",
+          models: [{ model: "gpt-5.5", display_name: "GPT-5.5", thinking_levels: ["medium", "xhigh"] }],
+        },
+      });
+      panel._projects = [{
+        project_id: "prj_direct",
+        kind: "direct",
+        name: "Direct chats",
+        root_path: ".",
+        default_model: "gpt-5.5",
+        default_thinking_level: "medium",
+      }];
+      panel._selectedProjectId = "prj_direct";
+      panel._activeThread = {
+        thread_id: "thr_focus",
+        project_id: "prj_direct",
+        title: "Focused picker",
+        status: "idle",
+        attachments: [],
+        effective_model: "gpt-5.5",
+        effective_thinking_level: "medium",
+      };
+      panel._render(true);
+      const originalSelect = panel.shadowRoot.getElementById("thread-model-select");
+      originalSelect.focus();
+
+      panel._status = status({
+        model_catalog: {
+          default_model: "gpt-5.6-sol",
+          default_thinking_level: "max",
+          models: [{ model: "gpt-5.6-sol", display_name: "GPT-5.6 Sol", thinking_levels: ["max", "ultra"] }],
+        },
+      });
+      panel._activeThread = {
+        ...panel._activeThread,
+        effective_model: "gpt-5.6-sol",
+        effective_thinking_level: "max",
+      };
+      panel._render();
+      expect([...originalSelect.options].map((option) => option.value)).not.toContain("gpt-5.6-sol");
+
+      originalSelect.blur();
+      await vi.runAllTimersAsync();
+
+      expect([...panel.shadowRoot.getElementById("thread-model-select").options].map((option) => option.value)).toContain("gpt-5.6-sol");
+      expect([...panel.shadowRoot.getElementById("thread-thinking-select").options].map((option) => option.value)).toEqual(
+        expect.arrayContaining(["max", "ultra"])
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes thinking choices immediately when a focused model picker changes model", async () => {
+    const panel = createPanel();
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._status = status({
+      model_catalog: {
+        default_model: "model-a",
+        default_thinking_level: "medium",
+        models: [
+          { model: "model-a", display_name: "Model A", thinking_levels: ["medium"] },
+          { model: "model-b", display_name: "Model B", thinking_levels: ["max", "ultra"] },
+        ],
+      },
+    });
+    panel._projects = [{
+      project_id: "prj_direct",
+      kind: "direct",
+      name: "Direct chats",
+      root_path: ".",
+      default_model: "model-a",
+      default_thinking_level: "medium",
+    }];
+    panel._selectedProjectId = "prj_direct";
+    panel._selectedThreadId = "thr_model_change";
+    panel._activeThread = {
+      thread_id: "thr_model_change",
+      project_id: "prj_direct",
+      title: "Model change",
+      status: "idle",
+      attachments: [],
+      model_override: "model-a",
+      thinking_override: "medium",
+      effective_model: "model-a",
+      effective_thinking_level: "medium",
+    };
+    panel._callWS = vi.fn(async () => ({
+      ...panel._activeThread,
+      model_override: "model-b",
+      thinking_override: "max",
+      effective_model: "model-b",
+      effective_thinking_level: "max",
+    }));
+    panel._render(true);
+    const modelSelect = panel.shadowRoot.getElementById("thread-model-select");
+    modelSelect.focus();
+    modelSelect.value = "model-b";
+
+    modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+    const thinkingValues = [...panel.shadowRoot.getElementById("thread-thinking-select").options]
+      .map((option) => option.value);
+    expect(thinkingValues).toEqual(["", "max", "ultra"]);
+    expect(thinkingValues).not.toContain("medium");
+    expect(panel.shadowRoot.getElementById("thread-thinking-select").value).toBe("max");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", {
+      thread_id: "thr_model_change",
+      model_override: "model-b",
+      thinking_override: "max",
+    });
   });
 });

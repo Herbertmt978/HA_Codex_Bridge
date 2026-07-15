@@ -250,17 +250,20 @@ test("keeps the active approval actions visible at the 1280px desktop layout", a
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
   const panel = page.locator("codex-bridge-panel");
-  const actionIsVisible = await panel.locator('[data-interaction-id="int_command_harness"] [data-action="accept-interaction"]').evaluate((action) => {
+  const approvalAction = panel.locator('[data-interaction-id="int_command_harness"] [data-action="accept-interaction"]');
+  await expect.poll(async () => approvalAction.evaluate((action) => {
     const region = action.closest("#interaction-region");
     const actionBox = action.getBoundingClientRect();
     const regionBox = region?.getBoundingClientRect();
     return Boolean(
       regionBox &&
+      action.isConnected &&
       actionBox.top >= regionBox.top &&
       actionBox.bottom <= Math.min(regionBox.bottom, window.innerHeight)
     );
-  });
-  expect(actionIsVisible).toBe(true);
+  }), {
+    message: "active approval action should settle inside its visible decision region",
+  }).toBe(true);
 });
 
 test("uses a Codex-like reading workspace with an adjacent context rail and mobile chat-first order", async ({ page }) => {
@@ -279,12 +282,18 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
     const composer = composerElement?.getBoundingClientRect();
     const toolbar = root?.querySelector("#compact-toolbar");
     const bubble = root?.querySelector(".bubble-text");
+    const railElement = root?.querySelector(".rail-pane");
+    const mainElement = root?.querySelector(".main-pane");
+    const sideElement = root?.querySelector(".side-pane");
     return {
       contextIsAdjacent: Boolean(main && side && side.left >= main.right - 1 && Math.abs(side.top - main.top) < 2),
       readingMeasure: messages?.width || 0,
       composerMeasure: composer?.width || 0,
       toolbarInComposer: Boolean(toolbar && composerElement?.contains(toolbar)),
       proseFont: bubble ? getComputedStyle(bubble).fontFamily : "",
+      railBackground: railElement ? getComputedStyle(railElement).backgroundColor : "",
+      mainBackground: mainElement ? getComputedStyle(mainElement).backgroundColor : "",
+      sideBackground: sideElement ? getComputedStyle(sideElement).backgroundColor : "",
     };
   });
   expect(desktop.contextIsAdjacent).toBe(true);
@@ -292,6 +301,8 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   expect(desktop.composerMeasure).toBeLessThanOrEqual(900);
   expect(desktop.toolbarInComposer).toBe(true);
   expect(desktop.proseFont).not.toMatch(/monospace|consolas|courier/i);
+  expect(desktop.railBackground).not.toBe(desktop.mainBackground);
+  expect(desktop.sideBackground).not.toBe(desktop.mainBackground);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(220);
@@ -342,6 +353,31 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   await scrim.click({ position: { x: 10, y: 420 } });
   await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
   await expect(contextToggle).toBeFocused();
+});
+
+test("renders an intentional empty workspace with a working new-chat action", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await page.evaluate(() => {
+    const bridgePanel = document.querySelector("codex-bridge-panel");
+    bridgePanel._stopPolling();
+    bridgePanel._stopEventSubscription();
+    bridgePanel._setSelectedThreadId(null);
+    bridgePanel._activeThread = null;
+    bridgePanel._render(true);
+  });
+
+  const emptyState = panel.locator(".empty-state-main");
+  await expect(emptyState).toContainText("Start a new chat");
+  await expect(emptyState.locator(".empty-state-mark svg")).toBeVisible();
+  const newChat = emptyState.getByRole("button", { name: "Create a new direct chat" });
+  await expect(newChat).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("empty-workspace.png"), fullPage: true });
+
+  await newChat.click();
+  await expect(panel.locator("#thread-form-panel")).toHaveClass(/visible/);
+  await expect(panel.locator("#thread-title-input")).toBeFocused();
 });
 
 test("retries a dropped prompt response with one stable client request id", async ({ page }) => {

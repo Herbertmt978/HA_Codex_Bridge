@@ -25,10 +25,18 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.6.1`; optional external Bridge: `0.5.3`.
-- App: `0.6.2`, experimental and `amd64` only; bundled Codex: `0.144.4`.
-- The public App `0.6.2` release is a signed immutable image with an SPDX SBOM
+- Integration: `0.6.2`; optional external Bridge: `0.5.4`.
+- App: `0.6.3`, experimental and `amd64` only; bundled Codex: `0.144.4`.
+- App `0.6.3` uses a signed immutable image with an SPDX SBOM
   and build provenance.
+- Device-login recovery uses bounded authoritative account checks; account
+  entitlement changes invalidate the signed-out model catalogue before project
+  defaults are reconciled. Model and reasoning choices stay runtime-discovered.
+- Usage windows are classified by advertised duration, and a successful chat
+  creation remains usable while secondary snapshots retry.
+- The Integration keeps the chat surface at a bounded reading width, derives
+  rail and context contrast from Home Assistant theme tokens, and exposes
+  disclosure, selection, and progress state to assistive technology.
 - On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
   denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
   read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally

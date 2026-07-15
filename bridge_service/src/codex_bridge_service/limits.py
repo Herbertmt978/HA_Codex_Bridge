@@ -13,6 +13,9 @@ from .models import LimitsStatusRecord, LimitsWindowRecord
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
 _MAX_SIGNED_64 = (1 << 63) - 1
+_LONG_RATE_LIMIT_WINDOW_MINUTES = 24 * 60
+
+
 class _AppServerClient(Protocol):
     @property
     def generation(self) -> int: ...
@@ -100,6 +103,7 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
 
     primary = _app_server_limits_window(snapshot.get("primary"))
     secondary = _app_server_limits_window(snapshot.get("secondary"))
+    primary, secondary = _classify_app_server_limits_windows(primary, secondary)
     reached_type = snapshot.get("rateLimitReachedType")
     blocked = reached_type is not None or any(
         window is not None and window.used_percent == 100.0
@@ -116,6 +120,34 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
         plan_type=normalize_chatgpt_plan_type(plan_type),
         updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     )
+
+
+def _classify_app_server_limits_windows(
+    primary: LimitsWindowRecord | None,
+    secondary: LimitsWindowRecord | None,
+) -> tuple[LimitsWindowRecord | None, LimitsWindowRecord | None]:
+    """Map protocol positions to the panel's short and long allowance slots."""
+
+    if primary is not None and secondary is not None:
+        primary_minutes = primary.window_minutes
+        secondary_minutes = secondary.window_minutes
+        if (
+            primary_minutes is not None
+            and secondary_minutes is not None
+            and primary_minutes != secondary_minutes
+        ):
+            return (
+                (primary, secondary)
+                if primary_minutes < secondary_minutes
+                else (secondary, primary)
+            )
+        return primary, secondary
+    window = primary or secondary
+    if window is None or window.window_minutes is None:
+        return primary, secondary
+    if window.window_minutes >= _LONG_RATE_LIMIT_WINDOW_MINUTES:
+        return None, window
+    return window, None
 
 
 def _app_server_limits_window(payload: object) -> LimitsWindowRecord | None:
