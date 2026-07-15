@@ -27,6 +27,7 @@ def get_status(
         if getattr(request.app.state, "diagnostics_probe", None) is not None
         else BridgeDiagnosticsRecord()
     )
+    auth = _auth_status(request, diagnostics.last_error)
     model_catalog = request.app.state.model_catalog_probe.probe()
     request.app.state.storage.reconcile_special_projects(
         default_model=model_catalog.default_model,
@@ -50,7 +51,7 @@ def get_status(
             if getattr(request.app.state, "account_probe", None) is not None
             else CodexAccountRecord()
         ),
-        auth=_auth_status(request, diagnostics.last_error),
+        auth=auth,
         diagnostics=diagnostics,
     )
 

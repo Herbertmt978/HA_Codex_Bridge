@@ -1,13 +1,13 @@
 [project]
 name = "codex-bridge-service"
-version = "0.5.3"
+version = "0.5.4"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.116.0",
   "uvicorn>=0.35.0",
   "pydantic>=2.11.0",
   "pydantic-settings>=2.10.0",
-  "httpx>=0.28.0",
+  "httpx>=0.28.1",
   "jsonschema>=4.23.0,<5",
   "python-multipart>=0.0.9",
 ]

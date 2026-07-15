@@ -2,13 +2,29 @@
 
 ## Status before you start
 
-The Supervisor App is experimental and `amd64` only. App `0.6.0` is distributed
-as a signed immutable image with an SPDX SBOM and build provenance. It bundles
-Bridge `0.5.3` and Codex `0.144.4`; the separately installed Integration is
-`0.5.4`. A protected-runtime image passed sandbox self-test and authenticated
-readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
-access, the first automatic update, and prior-image recovery remain acceptance
-checks for the intended Home Assistant installation.
+This guide targets the experimental, `amd64`-only App `0.6.3`, which bundles
+Bridge `0.5.4` and Codex `0.144.4`; the separately installed Integration is
+`0.6.2`. App `0.6.3` uses a signed immutable image with an SPDX SBOM and build
+provenance. On target HAOS, Codex `0.144.4`'s official
+`--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
+namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
+intentionally empty. App `0.6.1`'s fatal readiness cause was a sandbox-self-test
+contract mismatch: it required `writableRoots` exactly `[workspace]`, while the
+real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
+(`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
+The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
+calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2`
+validates canonical contained supplemental roots and hardens
+`lsm_get_self_attr` record parsing. The published image passed target-HAOS
+startup, its production sandbox self-test and attestation, an authenticated API
+v1 readiness request, Supervisor discovery, Integration pairing, and panel
+loading. App `0.6.3` adds bounded recovery after device approval, immediate
+entitlement-aware model discovery, duration-aware usage windows, and resilient
+new-chat hydration. Integration `0.6.2` also introduces a more focused
+Codex-style chat canvas, composer, and accessible workspace navigation. Final
+ChatGPT account authorization still requires the user. Remote access, the first
+unattended automatic update, cold restore, and App-image rollback remain
+acceptance checks for the intended Home Assistant installation.
 
 Codex Bridge has two separate surfaces:
 
@@ -37,7 +53,7 @@ App repository is <https://github.com/Herbertmt978/HA_Codex_Bridge>.
 
 1. In HACS, add this repository as a custom repository with category
    **Integration**.
-2. Install the latest **Codex Bridge** Integration release (`0.5.4`) and restart
+2. Install the latest **Codex Bridge** Integration release (`0.6.2`) and restart
    Home Assistant.
 3. Open **Settings -> Devices & services**, select **Add integration**, and add
    **Codex Bridge**.
@@ -48,10 +64,11 @@ Integration. It neither installs nor publishes an App image.
 ## Install the App
 
 Open **Settings -> Apps -> App store**, select the three-dot menu, then
-**Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>, install
-**Codex Bridge** `0.6.0`, and start it. The App has no ingress route, direct
-port, or browser-visible Bridge URL; Supervisor discovery supplies the private
-connection.
+**Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait
+until the store offers App `0.6.3` or newer, then install and start **Codex
+Bridge**. Do not install App `0.6.1`; it fails closed during target-HAOS
+readiness. The App has no ingress route, direct port, or browser-visible Bridge
+URL; Supervisor discovery supplies the private connection.
 
 ## First run
 
@@ -60,9 +77,11 @@ connection.
 2. Open the Codex Bridge panel as a Home Assistant administrator.
 3. Select **Sign in with ChatGPT**, then complete the displayed approved
    ChatGPT device-auth page in a browser signed in to the intended account.
-4. Wait for the connected state. Home Assistant and ChatGPT login are separate
-   sessions. **Cancel** stops only an active sign-in; **Sign out** removes an
-   established session.
+4. Wait for the connected state. The panel checks the authoritative account
+   state every two seconds while approval is pending, so a delayed completion
+   notification does not require a reload. Home Assistant and ChatGPT login are
+   separate sessions. **Cancel** stops only an active sign-in; **Sign out**
+   removes an established session.
 5. Create a Project and grant a small workspace below `/config/workspaces`.
 
 After connection, normal panel use can remain on Home Assistant. Initial

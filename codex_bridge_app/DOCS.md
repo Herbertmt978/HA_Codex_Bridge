@@ -45,6 +45,19 @@ owned, or inconsistent with the running release, readiness reports the
 non-sensitive fatal state `sandbox_unavailable`. Do not broaden permissions to
 work around it.
 
+On target HAOS, Codex `0.144.4`'s official `--no-proc` fallback works: denial of
+a fresh `/proc` mount leaves user, PID, and network namespaces, the read-only
+filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally empty.
+Attestation inspects that state without requiring procfs or broader container
+privileges. App `0.6.1`'s fatal readiness cause was instead a
+sandbox-self-test contract mismatch: it required `writableRoots` exactly
+`[workspace]`, while the real `ha_bridge` `workspaceWrite` response includes
+bounded supplemental roots (`.agents`, `.codex`, `.cursor`, `.git`, and
+`.vscode`) beneath the workspace. The proc-less probe already used direct
+`capget`/`prctl`/`lsm_get_self_attr` calls, without requesting `SYS_ADMIN` or
+weakening isolation; App `0.6.2` validates canonical contained supplemental
+roots and hardens `lsm_get_self_attr` record parsing.
+
 ## Authentication
 
 The Integration starts Codex's ChatGPT device-login flow. From the panel, select
@@ -52,7 +65,10 @@ The Integration starts Codex's ChatGPT device-login flow. From the panel, select
 a browser. **Cancel** ends only an unfinished sign-in; **Sign out** removes an
 established session. Initial sign-in and re-authentication require access to the
 approved ChatGPT page, while normal signed-in panel use remains on the Home
-Assistant origin.
+Assistant origin. While device approval is pending, the panel performs a
+bounded two-second account check and keeps the one-time code until Codex
+authoritatively confirms the session. Uncorrelated completion events are never
+allowed to replace a newer login.
 
 Credentials stay in private App state and are not entered in App options, Home
 Assistant configuration, or a browser URL. No OpenAI API key is part of this
@@ -65,7 +81,9 @@ The App asks the installed Codex runtime for its model catalogue and each
 model's supported reasoning levels. During a transient discovery failure, the
 Bridge may expose a clearly marked last-known-good or fallback catalogue. It
 preserves configured selections rather than silently changing a chat to another
-model.
+model. A confirmed account or plan change expires the signed-out catalogue
+immediately, so newly entitled models and reasoning levels are fetched on the
+next status request rather than waiting for the normal cache lifetime.
 
 ## Updates and recovery
 
@@ -78,11 +96,18 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The App is experimental and `amd64` only. App `0.6.0` is distributed as a
-signed immutable image with an SPDX SBOM and build provenance. A protected
-runtime running Codex `0.144.4` passed sandbox self-test and authenticated
-readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
-access, the first automatic update, and a tested prior-image recovery remain
-acceptance work for the intended Home Assistant installation.
+The App is experimental and `amd64` only. App `0.6.3` is a signed
+immutable image with an SPDX SBOM and build provenance. App `0.6.1` is known-bad
+on target HAOS because its sandbox self-test required `writableRoots` exactly
+`[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
+bounded supplemental roots beneath the workspace. App `0.6.2` validates
+canonical contained supplemental roots and hardens `lsm_get_self_attr` record
+parsing. The published image passed target-HAOS startup, its production sandbox
+self-test and attestation, an authenticated API v1 readiness request,
+Supervisor discovery, Integration pairing, and panel loading. A redacted
+ChatGPT device-login start/cancel cycle also passed; completing account
+authorization still requires the user. Remote access, the first unattended
+automatic update, cold restore, and App-image rollback remain acceptance work
+for the intended Home Assistant installation.
 
 For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).

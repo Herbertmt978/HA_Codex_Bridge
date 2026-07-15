@@ -359,9 +359,30 @@ def create_app(
             initial_auth_status = _load_durable_auth_status(
                 storage.root / _AUTH_STATE_FILENAME
             )
+            initial_auth_identity_status = (
+                initial_auth_status or CodexAuthStatusRecord()
+            )
+            auth_catalog_identity = (
+                initial_auth_identity_status.auth_mode,
+                initial_auth_identity_status.auth_required,
+                initial_auth_identity_status.plan_type,
+            )
 
             def persist_auth_status(status: CodexAuthStatusRecord) -> None:
+                nonlocal auth_catalog_identity
                 payload = status.model_dump(mode="json")
+                next_catalog_identity = (
+                    status.auth_mode,
+                    status.auth_required,
+                    status.plan_type,
+                )
+                if next_catalog_identity != auth_catalog_identity:
+                    invalidate_catalog = getattr(
+                        resolved_model_catalog_probe, "invalidate", None
+                    )
+                    if callable(invalidate_catalog):
+                        invalidate_catalog()
+                    auth_catalog_identity = next_catalog_identity
                 storage.durable_outbox.commit_json(
                     operation_id=f"auth-status:{status.revision}",
                     relative_path=_AUTH_STATE_FILENAME,

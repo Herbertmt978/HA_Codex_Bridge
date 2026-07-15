@@ -1198,7 +1198,7 @@ function collectUserInputAnswers(container, model) {
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.0";
+var PANEL_VERSION = "0.6.2";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -1214,6 +1214,8 @@ var AUTH_ACTION_IDS = /* @__PURE__ */ new Set([
   "refresh-auth-status",
   "copy-auth-code"
 ]);
+var AUTH_POLL_INTERVAL_MS = 2e3;
+var CREATED_THREAD_REFRESH_GRACE_MS = 5e3;
 var MODE_OPTIONS = [
   {
     value: "observe",
@@ -1277,6 +1279,11 @@ template.innerHTML = `
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
+      --rail-bg: color-mix(in srgb, var(--surface-bg) 94%, var(--text-color) 6%);
+      --canvas-bg: color-mix(in srgb, var(--surface-bg) 99%, var(--text-color) 1%);
+      --context-bg: color-mix(in srgb, var(--surface-bg) 96%, var(--text-color) 4%);
+      --focus-ring-color: color-mix(in srgb, var(--accent-color) 74%, var(--surface-bg) 26%);
+      --focus-ring-contrast: var(--surface-bg);
       --brand-cyan: #64748b;
       --brand-blue: #475569;
       --brand-violet: #475569;
@@ -1341,7 +1348,7 @@ template.innerHTML = `
     input:focus,
     textarea:focus,
     select:focus {
-      border-color: color-mix(in srgb, var(--accent-color) 68%, white 32%);
+      border-color: color-mix(in srgb, var(--accent-color) 68%, var(--surface-bg) 32%);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
     }
 
@@ -1349,8 +1356,9 @@ template.innerHTML = `
     input:focus-visible,
     textarea:focus-visible,
     select:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--accent-color) 64%, white 36%);
+      outline: 2px solid var(--focus-ring-contrast);
       outline-offset: 2px;
+      box-shadow: 0 0 0 4px var(--focus-ring-color);
     }
 
     .shell {
@@ -2899,7 +2907,7 @@ template.innerHTML = `
       grid-template-columns: 224px minmax(0, 1fr) 260px;
       gap: 0;
       padding: 0;
-      background: var(--panel-bg);
+      background: var(--canvas-bg);
     }
 
     .pane {
@@ -2915,7 +2923,11 @@ template.innerHTML = `
 
     .rail-pane,
     .side-pane {
-      background: var(--surface-muted);
+      background: var(--rail-bg);
+    }
+
+    .side-pane {
+      background: var(--context-bg);
     }
 
     .rail-pane {
@@ -2963,6 +2975,11 @@ template.innerHTML = `
       color: var(--muted-color);
     }
 
+    .artifact-preview:has(.preview-empty),
+    .artifact-preview:has(.preview-empty) .preview-empty {
+      min-height: 96px;
+    }
+
     .account-pill {
       border-color: var(--border-color);
     }
@@ -2979,6 +2996,17 @@ template.innerHTML = `
       border-radius: 6px;
     }
 
+    #new-direct-chat-button {
+      border-color: color-mix(in srgb, var(--text-color) 12%, var(--border-color) 88%);
+      background: color-mix(in srgb, var(--text-color) 7%, var(--surface-bg) 93%);
+      font-weight: 650;
+    }
+
+    #new-direct-chat-button:hover {
+      border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color) 62%);
+      background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-bg) 90%);
+    }
+
     .tool-button:hover,
     .chat-select:hover {
       background: color-mix(in srgb, var(--accent-color) 7%, var(--surface-bg) 93%);
@@ -2986,8 +3014,13 @@ template.innerHTML = `
 
     .project-head.active,
     .chat-select.active {
-      background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-bg) 90%);
-      box-shadow: inset 2px 0 0 var(--accent-color);
+      background: color-mix(in srgb, var(--accent-color) 13%, var(--surface-bg) 87%);
+      box-shadow: inset 3px 0 0 var(--accent-color);
+    }
+
+    .project-head.active .project-name,
+    .chat-select.active .thread-name {
+      font-weight: 700;
     }
 
     .project-head.active .row-meta,
@@ -3001,7 +3034,17 @@ template.innerHTML = `
     }
 
     .main-pane {
+      background: var(--canvas-bg);
+    }
+
+    #thread-status-text:not(:empty) {
+      padding: 4px 7px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
       background: var(--surface-bg);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
     }
 
     .main-top,
@@ -3103,8 +3146,8 @@ template.innerHTML = `
     }
 
     .message-list {
-      padding: 14px 0 6px;
-      gap: 16px;
+      padding: 20px 0 8px;
+      gap: 18px;
     }
 
     .message {
@@ -3135,15 +3178,18 @@ template.innerHTML = `
     .bubble,
     .message.user .bubble {
       max-width: min(760px, 100%);
-      padding: 11px 12px;
-      border-radius: 8px;
-      background: var(--surface-bg);
-      border-color: var(--border-color);
+      padding: 8px 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
       box-shadow: none;
     }
 
     .message.user .bubble {
-      background: var(--accent-surface);
+      padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color) 82%);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
     }
 
     .bubble-text {
@@ -3159,17 +3205,111 @@ template.innerHTML = `
       width: min(calc(100% - 32px), 900px);
       margin: 8px auto 12px;
       padding: 10px 10px max(10px, env(safe-area-inset-bottom));
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
+      border-radius: 12px;
       background: var(--surface-bg);
-      box-shadow: 0 8px 24px color-mix(in srgb, var(--text-color) 10%, transparent);
+      box-shadow: 0 12px 30px color-mix(in srgb, var(--text-color) 13%, transparent);
+      transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+
+    .composer-shell:focus-within {
+      border-color: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
+      box-shadow: 0 14px 34px color-mix(in srgb, var(--text-color) 15%, transparent), 0 0 0 3px color-mix(in srgb, var(--accent-color) 12%, transparent);
+      transform: translateY(-1px);
     }
 
     .composer textarea {
       min-height: 88px;
-      border-radius: 7px;
-      background: var(--surface-muted);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--surface-muted) 86%, var(--surface-bg) 14%);
       box-shadow: none;
+    }
+
+    .empty-state.empty-state-main {
+      align-content: center;
+      justify-items: center;
+      min-height: clamp(280px, 48vh, 520px);
+      padding: 48px 24px;
+      color: var(--text-color);
+    }
+
+    .empty-state-main .empty-state-body {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      max-width: 440px;
+    }
+
+    .empty-state-mark {
+      display: inline-grid;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 6px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--accent-color) 9%, var(--surface-bg) 91%);
+      color: color-mix(in srgb, var(--accent-color) 70%, var(--text-color) 30%);
+      box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 10%, transparent);
+    }
+
+    .empty-state-mark svg {
+      width: 28px;
+      height: 28px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .empty-state-main .empty-state-kicker {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .empty-state-main .title {
+      font-size: clamp(22px, 3vw, 30px);
+      letter-spacing: -0.025em;
+      white-space: normal;
+    }
+
+    .empty-state-main .empty-note {
+      max-width: 360px;
+      font-size: 14px;
+    }
+
+    .empty-state-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      margin-top: 6px;
+      padding: 0 14px;
+      border-color: transparent;
+      border-radius: 8px;
+      color: var(--surface-bg);
+      background: color-mix(in srgb, var(--accent-color) 64%, var(--text-color) 36%);
+      font-weight: 650;
+    }
+
+    .empty-state-cta svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .empty-state-cta:hover {
+      border-color: transparent;
+      background: color-mix(in srgb, var(--accent-color) 72%, var(--text-color) 28%);
     }
 
     .interaction-summary {
@@ -3530,7 +3670,7 @@ template.innerHTML = `
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
         </div>
-        <div class="mobile-header-actions" aria-label="Panel navigation">
+        <div class="mobile-header-actions" role="group" aria-label="Panel navigation">
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-context" id="mobile-context-toggle" aria-label="Context" aria-controls="context-drawer" aria-expanded="false"></button>
         </div>
@@ -3590,7 +3730,7 @@ template.innerHTML = `
         </section>
         <section class="side-section">
           <span class="section-label">Progress</span>
-          <div class="progress-list" id="progress-list"></div>
+          <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
         </section>
         <section class="side-section">
           <div class="section-head-row">
@@ -3621,6 +3761,7 @@ var iconSvg = (path) => `
   </svg>
 `;
 var icons = {
+  brand: iconSvg('<path d="m10 4-6 4v8l6 4v-3l-3-2V9l3-2Z"></path><path d="m14 4 6 4v8l-6 4v-3l3-2V9l-3-2Z"></path><path d="M10 12h4"></path><path d="M9 15h6"></path><path d="M8 18h8"></path>'),
   plus: iconSvg('<path d="M12 5v14"></path><path d="M5 12h14"></path>'),
   refresh: iconSvg('<path d="M20 11a8 8 0 1 0 2 5.3"></path><path d="M20 4v7h-7"></path>'),
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
@@ -3662,6 +3803,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._selectedThreadId = null;
     this._threadSelectionEpoch = 0;
     this._threadSnapshotEpoch = 0;
+    this._threadRefreshGraceUntil = 0;
     this._activeThread = null;
     this._events = [];
     this._artifacts = [];
@@ -3713,6 +3855,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._systemReconnectAttempt = 0;
     this._confirmSignOut = false;
     this._authActionPending = false;
+    this._authPollTimer = null;
+    this._authPollInFlight = false;
+    this._authPollGeneration = 0;
     this._uploadProgress = null;
     this._uploadAbortController = null;
     this._isLoading = false;
@@ -3757,12 +3902,14 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._selectedThreadId && this._hass) {
       this._startEventSubscription();
     }
+    this._syncAuthPolling();
     this._render();
   }
   disconnectedCallback() {
     this._stopPolling();
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
+    this._stopAuthPolling();
     this._clearInteractionExpiryTimer();
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
@@ -4176,6 +4323,16 @@ var CodexBridgePanel = class extends HTMLElement {
       const advertisedLevels = Array.isArray(modelRecord?.thinking_levels) ? modelRecord.thinking_levels : [];
       if (advertisedLevels.length && !advertisedLevels.includes(effectiveThinkingLevel)) {
         updates.thinking_override = this._defaultThinkingLevel(effectiveModel);
+      }
+      const thinkingSelect = this.shadowRoot.getElementById("thread-thinking-select");
+      if (thinkingSelect) {
+        const selectedThinkingOverride = Object.hasOwn(updates, "thinking_override") ? updates.thinking_override : this._activeThread?.thinking_override || null;
+        this._populateThreadThinkingSelect(
+          thinkingSelect,
+          selectedThinkingOverride,
+          effectiveModel,
+          project?.default_thinking_level || null
+        );
       }
       this._updateThreadSettings(updates);
       return;
@@ -5064,8 +5221,10 @@ var CodexBridgePanel = class extends HTMLElement {
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
-    const toggle = this._actionButton("section-head-button", "toggle-section");
+    const toggle = this._actionButton("section-head-button", "toggle-section", "Toggle direct chats");
     toggle.dataset.section = "direct";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-controls", "direct-chat-list");
     toggle.append(this._sectionTitleLine(collapsed ? icons.chevronRight : icons.chevronDown, icons.chat, "Direct chats"));
     const actions = document.createElement("div");
     actions.className = "project-actions";
@@ -5074,18 +5233,18 @@ var CodexBridgePanel = class extends HTMLElement {
     actions.append(newChat);
     sectionHead.append(toggle, actions);
     section.append(sectionHead);
-    if (!collapsed) {
-      const chatList = document.createElement("div");
-      chatList.className = "chat-list";
-      if (directThreads.length) {
-        for (const thread of directThreads) {
-          chatList.append(this._threadRow(thread));
-        }
-      } else {
-        chatList.append(this._textElement("div", "empty-note", "No direct chats yet."));
+    const chatList = document.createElement("div");
+    chatList.id = "direct-chat-list";
+    chatList.className = "chat-list";
+    chatList.hidden = collapsed;
+    if (directThreads.length) {
+      for (const thread of directThreads) {
+        chatList.append(this._threadRow(thread));
       }
-      section.append(chatList);
+    } else {
+      chatList.append(this._textElement("div", "empty-note", "No direct chats yet."));
     }
+    section.append(chatList);
   }
   _renderProjectList() {
     const section = this.shadowRoot.getElementById("project-section");
@@ -5120,24 +5279,30 @@ var CodexBridgePanel = class extends HTMLElement {
     shell.className = `project-shell${archived ? " archived" : ""}`;
     const projectHead = document.createElement("div");
     projectHead.className = `project-head${active ? " active" : ""}`;
-    const projectButton = this._actionButton("project-button", "select-project");
+    const projectButton = this._actionButton("project-button", "select-project", `Select ${project.name || "project"}`);
     projectButton.dataset.projectId = String(project.project_id || "");
     const projectMeta = document.createElement("div");
     projectMeta.className = "project-meta";
     const titleLine = document.createElement("div");
     titleLine.className = "section-title-line";
-    const collapse = document.createElement("span");
-    collapse.dataset.action = "toggle-project-collapse";
-    collapse.dataset.projectId = String(project.project_id || "");
-    this._appendTrustedIcon(collapse, collapsed ? icons.chevronRight : icons.chevronDown);
     const projectName = this._textElement("span", "project-name", project.name || "");
-    titleLine.append(collapse);
     this._appendTrustedIcon(titleLine, icons.folder);
     titleLine.append(projectName);
     projectMeta.append(titleLine, this._textElement("span", "row-meta", chatCount));
     projectButton.append(projectMeta);
     const projectActions = document.createElement("div");
     projectActions.className = "project-actions";
+    const chatListId = this._projectChatListId(project.project_id);
+    const collapse = this._actionButton(
+      "icon-button small project-collapse-button",
+      "toggle-project-collapse",
+      `${collapsed ? "Expand" : "Collapse"} ${project.name || "project"}`
+    );
+    collapse.dataset.projectId = String(project.project_id || "");
+    collapse.setAttribute("aria-expanded", String(!collapsed));
+    collapse.setAttribute("aria-controls", chatListId);
+    this._setTrustedButtonContent(collapse, collapsed ? icons.chevronRight : icons.chevronDown);
+    projectActions.append(collapse);
     if (project.kind === "project") {
       const actions = archived ? [["restore-project", "Restore project", icons.restore], ["delete-project", "Delete project", icons.trash]] : [
         ["new-chat", "New chat", icons.plus],
@@ -5154,18 +5319,18 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     projectHead.append(projectButton, projectActions);
     shell.append(projectHead);
-    if (!collapsed) {
-      const chatList = document.createElement("div");
-      chatList.className = "chat-list";
-      if (threads.length) {
-        for (const thread of threads) {
-          chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) }));
-        }
-      } else {
-        chatList.append(this._textElement("div", "empty-note", "No chats yet."));
+    const chatList = document.createElement("div");
+    chatList.id = chatListId;
+    chatList.className = "chat-list";
+    chatList.hidden = collapsed;
+    if (threads.length) {
+      for (const thread of threads) {
+        chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) }));
       }
-      shell.append(chatList);
+    } else {
+      chatList.append(this._textElement("div", "empty-note", "No chats yet."));
     }
+    shell.append(chatList);
     return shell;
   }
   _renderArchivedSection() {
@@ -5183,22 +5348,24 @@ var CodexBridgePanel = class extends HTMLElement {
     section.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
-    const toggle = this._actionButton("section-head-button", "toggle-section");
+    const toggle = this._actionButton("section-head-button", "toggle-section", "Toggle archived chats");
     toggle.dataset.section = "archived";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-controls", "archived-chat-list");
     toggle.append(this._sectionTitleLine(collapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived"));
     sectionHead.append(toggle);
     section.append(sectionHead);
-    if (!collapsed) {
-      const chatList = document.createElement("div");
-      chatList.className = "chat-list";
-      for (const project of archivedProjects) {
-        chatList.append(this._projectSection(project, { archived: true, includeArchivedThreads: true }));
-      }
-      for (const thread of archivedThreads) {
-        chatList.append(this._threadRow(thread, { archived: true }));
-      }
-      section.append(chatList);
+    const chatList = document.createElement("div");
+    chatList.id = "archived-chat-list";
+    chatList.className = "chat-list";
+    chatList.hidden = collapsed;
+    for (const project of archivedProjects) {
+      chatList.append(this._projectSection(project, { archived: true, includeArchivedThreads: true }));
     }
+    for (const thread of archivedThreads) {
+      chatList.append(this._threadRow(thread, { archived: true }));
+    }
+    section.append(chatList);
   }
   _threadRow(thread, { archived = false } = {}) {
     const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
@@ -5209,6 +5376,9 @@ var CodexBridgePanel = class extends HTMLElement {
     row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}`;
     const select = this._actionButton(`chat-select${selected ? " active" : ""}`, "select-thread");
     select.dataset.threadId = String(thread.thread_id || "");
+    if (selected) {
+      select.setAttribute("aria-current", "page");
+    }
     const titleBlock = document.createElement("div");
     titleBlock.className = "title-block";
     titleBlock.append(
@@ -5272,7 +5442,11 @@ var CodexBridgePanel = class extends HTMLElement {
     limitsCard.className = "toolbar-card limits";
     const limitPair = document.createElement("div");
     limitPair.className = "limit-pair";
-    limitPair.append(this._compactLimitCard("5h", limits?.primary), this._compactLimitCard("Week", limits?.secondary));
+    const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary ? "Off" : "Unavailable";
+    limitPair.append(
+      this._compactLimitCard("5h", limits?.primary, shortWindowEmptyLabel),
+      this._compactLimitCard("Week", limits?.secondary)
+    );
     limitsCard.append(
       this._textElement("span", "setting-label", "Limits"),
       limitPair,
@@ -5293,17 +5467,20 @@ var CodexBridgePanel = class extends HTMLElement {
           "thread-thinking-select",
           "Chat thinking level override"
         );
-        this._appendOption(select, "", project?.default_thinking_level ? `Inherit (${project.default_thinking_level})` : "Inherit default", !thinkingValue);
-        for (const level of thinkingLevels) {
-          this._appendOption(select, level, this._titleCase(level), level === thinkingValue);
-        }
+        this._populateThreadThinkingSelect(
+          select,
+          thinkingValue || null,
+          effectiveModel,
+          project?.default_thinking_level || null,
+          thinkingLevels
+        );
         return [select, `Effective ${thread.effective_thinking_level || project?.default_thinking_level || "medium"}`];
       })
     );
     container.append(limitsCard, controlsCard);
     this._renderedToolbarKey = toolbarKey;
   }
-  _compactLimitCard(label, windowInfo) {
+  _compactLimitCard(label, windowInfo, emptyLabel = "Unavailable") {
     const card = document.createElement("div");
     card.className = "mini-limit";
     const head = document.createElement("div");
@@ -5317,7 +5494,7 @@ var CodexBridgePanel = class extends HTMLElement {
       fill.style.setProperty("--limit-width", "0%");
       fill.style.setProperty("--limit-color", "var(--muted-color)");
       head.append(this._textElement("span", "mini-limit-name", label), this._textElement("span", "limit-value", "--"));
-      card.append(head, bar, this._textElement("span", "limit-subline", "Unavailable"));
+      card.append(head, bar, this._textElement("span", "limit-subline", emptyLabel));
       return card;
     }
     const remaining = typeof windowInfo.remaining_percent === "number" ? Math.max(0, Math.min(100, windowInfo.remaining_percent)) : 0;
@@ -5496,11 +5673,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!this._selectedThreadId) {
       this._renderedThreadId = null;
       this._renderedSequence = 0;
-      this._renderEmptyState(
-        messageList,
-        "Start from Home Assistant",
-        "Choose a direct chat or a project chat and send your first prompt."
-      );
+      messageList.replaceChildren(this._mainEmptyState());
       return;
     }
     const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
@@ -5661,7 +5834,11 @@ var CodexBridgePanel = class extends HTMLElement {
       const row = document.createElement("div");
       row.className = "progress-row";
       const state = ["active", "complete", "error"].includes(item.state) ? item.state : "active";
-      row.append(this._textElement("span", `progress-dot ${state}`, ""));
+      row.setAttribute("role", "listitem");
+      row.setAttribute("aria-label", `${item.title}${item.meta ? `: ${item.meta}` : ""}. ${state}.`);
+      const dot = this._textElement("span", `progress-dot ${state}`, "");
+      dot.setAttribute("aria-hidden", "true");
+      row.append(dot);
       const titleBlock = document.createElement("div");
       titleBlock.className = "title-block";
       titleBlock.append(this._textElement("span", "thread-name", item.title));
@@ -5893,10 +6070,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._selectedProjectId = this._directProject()?.project_id || this._projects[0]?.project_id || null;
     }
   }
-  async _loadThreads() {
-    this._threads = await this._callWS("list_threads", {
+  async _loadThreads({ reportRefreshError = true, preserveThread = null } = {}) {
+    const listedThreads = await this._callWS("list_threads", {
       include_archived: true
     });
+    this._threads = preserveThread && !listedThreads.some(
+      (thread) => thread.thread_id === preserveThread.thread_id
+    ) ? [preserveThread, ...listedThreads] : listedThreads;
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
       this._setSelectedThreadId(null);
     }
@@ -5910,10 +6090,12 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._selectedThreadId) {
       const threadId = this._selectedThreadId;
       const selectionEpoch = this._threadSelectionEpoch;
-      await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
+      await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch, {
+        reportError: reportRefreshError
+      });
     }
   }
-  async _refreshActiveThread() {
+  async _refreshActiveThread({ reportError = true } = {}) {
     const threadId = this._selectedThreadId;
     const selectionEpoch = this._threadSelectionEpoch;
     const refreshEpoch = ++this._threadSnapshotEpoch;
@@ -5957,6 +6139,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._artifacts = artifacts;
       this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
+      this._threadRefreshGraceUntil = 0;
       this._forceMessageRebuild = true;
       this._syncThreadListStatus();
       this._syncSelectedArtifact();
@@ -5968,7 +6151,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._startEventSubscription();
       return true;
     } catch (error) {
-      if (isCurrent()) {
+      if (isCurrent() && reportError) {
         this._setError(error);
       }
       return false;
@@ -6031,6 +6214,7 @@ var CodexBridgePanel = class extends HTMLElement {
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
     this._render();
+    queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
   }
   _toggleSection(section) {
     if (!section) {
@@ -6092,6 +6276,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._stopPolling();
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
+      this._threadRefreshGraceUntil = 0;
     }
     this._selectedThreadId = nextThreadId;
     return this._threadSelectionEpoch;
@@ -6099,11 +6284,12 @@ var CodexBridgePanel = class extends HTMLElement {
   _threadSelectionIsCurrent(threadId, selectionEpoch) {
     return threadId === this._selectedThreadId && selectionEpoch === this._threadSelectionEpoch;
   }
-  async _refreshSelectedThreadAndStartPolling(threadId, selectionEpoch) {
-    await this._refreshActiveThread();
+  async _refreshSelectedThreadAndStartPolling(threadId, selectionEpoch, options = {}) {
+    const refreshed = await this._refreshActiveThread(options);
     if (this._threadSelectionIsCurrent(threadId, selectionEpoch)) {
       this._startPolling();
     }
+    return refreshed;
   }
   _retireThreadInteractionState(nextThreadId) {
     this._clearInteractionExpiryTimer();
@@ -6194,14 +6380,40 @@ var CodexBridgePanel = class extends HTMLElement {
       const thread = await this._callWS("create_thread", payload);
       this._threadForm.title = "";
       this._showThreadForm = false;
-      this._setSelectedThreadId(thread.thread_id);
-      this._selectedProjectId = thread.project_id;
+      this._adoptCreatedThread(thread);
       this._clearError();
-      await this._loadThreads();
+      try {
+        await this._loadThreads({ reportRefreshError: false, preserveThread: thread });
+      } catch {
+        this._startEventSubscription();
+        this._startPolling();
+      }
+      this._clearError();
       this._render();
     } catch (error) {
       this._setError(error);
     }
+  }
+  _adoptCreatedThread(thread) {
+    this._stopEventSubscription();
+    this._setSelectedThreadId(thread.thread_id);
+    this._selectedProjectId = thread.project_id;
+    this._retireThreadInteractionState(thread.thread_id);
+    this._threads = [
+      thread,
+      ...this._threads.filter((candidate) => candidate.thread_id !== thread.thread_id)
+    ];
+    this._activeThread = thread;
+    this._resetEventState();
+    this._artifacts = [];
+    this._selectedArtifactId = null;
+    this._revokePreviewUrl();
+    this._artifactPreview = null;
+    this._forceMessageRebuild = true;
+    this._threadRefreshGraceUntil = Date.now() + CREATED_THREAD_REFRESH_GRACE_MS;
+    this._render();
+    this._startEventSubscription();
+    this._startPolling();
   }
   async _updateThreadSettings(updates) {
     if (!this._selectedThreadId) {
@@ -6430,6 +6642,7 @@ var CodexBridgePanel = class extends HTMLElement {
       ...this._status || {},
       auth: next
     };
+    this._syncAuthPolling();
   }
   _normalizedAuthStatus(auth) {
     const next = auth && typeof auth === "object" && !Array.isArray(auth) ? { ...auth } : { state: "unknown" };
@@ -6459,13 +6672,18 @@ var CodexBridgePanel = class extends HTMLElement {
       ...status,
       auth: this._normalizedAuthStatus(newestAuth)
     };
+    this._syncAuthPolling();
   }
-  async _refreshAuthStatus() {
+  async _refreshAuthStatus({ silent = false, pollGeneration = null } = {}) {
     try {
-      const [auth, status] = await Promise.all([
-        this._callWS("get_auth_status"),
-        this._callWS("get_status")
-      ]);
+      const auth = await this._callWS("get_auth_status");
+      if (pollGeneration !== null && pollGeneration !== this._authPollGeneration) {
+        return;
+      }
+      const status = await this._callWS("get_status");
+      if (pollGeneration !== null && pollGeneration !== this._authPollGeneration) {
+        return;
+      }
       const newestAuth = this._selectNewestAuthStatus(auth, status?.auth);
       this._mergeStatus({
         ...status || this._status || {},
@@ -6474,12 +6692,54 @@ var CodexBridgePanel = class extends HTMLElement {
       if (!this._authViewModel().signedIn) {
         this._confirmSignOut = false;
       }
-      this._dismissedBannerKey = "";
-      this._clearError();
+      if (!silent) {
+        this._dismissedBannerKey = "";
+        this._clearError();
+      }
       this._render();
     } catch (error) {
-      this._setError(error);
+      if (!silent) {
+        this._setError(error);
+      }
     }
+  }
+  _authLoginIsPending() {
+    return ["login_starting", "login_running", "login_completing"].includes(
+      this._status?.auth?.state
+    );
+  }
+  _syncAuthPolling() {
+    if (!this.isConnected || !this._hass || this._isLegacyConnection() || !this._authLoginIsPending()) {
+      this._stopAuthPolling();
+      return;
+    }
+    if (this._authPollTimer || this._authPollInFlight) {
+      return;
+    }
+    const generation = this._authPollGeneration;
+    this._authPollTimer = window.setTimeout(async () => {
+      this._authPollTimer = null;
+      if (generation !== this._authPollGeneration || !this.isConnected || !this._authLoginIsPending()) {
+        return;
+      }
+      this._authPollInFlight = true;
+      try {
+        await this._refreshAuthStatus({ silent: true, pollGeneration: generation });
+      } finally {
+        if (generation === this._authPollGeneration) {
+          this._authPollInFlight = false;
+          this._syncAuthPolling();
+        }
+      }
+    }, AUTH_POLL_INTERVAL_MS);
+  }
+  _stopAuthPolling() {
+    this._authPollGeneration += 1;
+    if (this._authPollTimer) {
+      window.clearTimeout(this._authPollTimer);
+      this._authPollTimer = null;
+    }
+    this._authPollInFlight = false;
   }
   async _copyAuthCode() {
     const code = this._authViewModel().code;
@@ -6919,6 +7179,9 @@ var CodexBridgePanel = class extends HTMLElement {
     if (document.visibilityState === "hidden") {
       return 8e3;
     }
+    if (Date.now() < this._threadRefreshGraceUntil) {
+      return 1e3;
+    }
     if (this._activeThread?.status === "running") {
       return 900;
     }
@@ -7013,8 +7276,9 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         this._render();
       }
+      this._threadRefreshGraceUntil = 0;
     } catch (error) {
-      if (isCurrent()) {
+      if (isCurrent() && Date.now() >= this._threadRefreshGraceUntil) {
         this._setError(error);
       }
     } finally {
@@ -7677,6 +7941,18 @@ var CodexBridgePanel = class extends HTMLElement {
       this._appendOption(select, level, this._titleCase(level), level === selectedValue);
     }
   }
+  _populateThreadThinkingSelect(select, selectedValue, model, inheritedValue = null, levels = this._thinkingLevelsForModel(model, selectedValue)) {
+    select.replaceChildren();
+    this._appendOption(
+      select,
+      "",
+      inheritedValue ? `Inherit (${inheritedValue})` : "Inherit default",
+      !selectedValue
+    );
+    for (const level of levels) {
+      this._appendOption(select, level, this._titleCase(level), level === selectedValue);
+    }
+  }
   _appendOption(select, value, label, selected = false) {
     const option = document.createElement("option");
     option.value = String(value ?? "");
@@ -7765,6 +8041,29 @@ var CodexBridgePanel = class extends HTMLElement {
     body.append(this._textElement("div", "title", title), this._textElement("div", "empty-note", note));
     state.append(body);
     return state;
+  }
+  _mainEmptyState() {
+    const state = document.createElement("div");
+    state.className = "empty-state empty-state-main";
+    const body = document.createElement("div");
+    body.className = "empty-state-body";
+    const mark = this._textElement("span", "empty-state-mark", "");
+    this._appendTrustedIcon(mark, icons.brand);
+    body.append(
+      mark,
+      this._textElement("div", "empty-state-kicker", "Codex Bridge"),
+      this._textElement("div", "title", "Start a new chat"),
+      this._textElement("div", "empty-note", "Create a direct chat to work with Codex, or choose a project chat from the workspace rail.")
+    );
+    const action = this._actionButton("empty-state-cta", "new-direct-chat", "Create a new direct chat");
+    this._appendTrustedIcon(action, icons.chat);
+    action.append(this._textElement("span", "", "New chat"));
+    body.append(action);
+    state.append(body);
+    return state;
+  }
+  _projectChatListId(projectId) {
+    return `project-chat-list-${encodeURIComponent(String(projectId || "project"))}`;
   }
   _toolbarControl(label, thread, renderControl) {
     const control = document.createElement("div");

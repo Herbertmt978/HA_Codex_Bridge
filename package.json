@@ -1,6 +1,6 @@
 {
   "name": "ha-codex-bridge",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "description": "Build and security checks for the Home Assistant Codex Bridge panel.",
@@ -14,7 +14,8 @@
     "test": "npm run lint && npm run test:unit",
     "test:unit": "vitest run frontend/test --environment jsdom",
     "test:e2e": "playwright test frontend/e2e/panel.spec.js",
-    "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js"
+    "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js",
+    "brand:render": "node scripts/render-brand-assets.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",

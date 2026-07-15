@@ -25,18 +25,40 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Integration: `0.5.4`; optional external Bridge: `0.5.3`.
-- App: `0.6.0`, experimental and `amd64` only; bundled Codex: `0.144.4`.
-- The App is distributed as a signed immutable image with an SPDX SBOM and
-  build provenance. A protected-runtime image passed sandbox self-test and
-  authenticated readiness on an amd64 Home Assistant OS development VM on
-  14 July 2026.
-- That result does not validate remote access, the first automatic update, or
-  App-image recovery on the intended installation. The current recovery plan
-  is a cold backup and, if already operated, a private external Bridge; cold
-  restore remains an acceptance gate. Do not claim Supervisor can choose an
-  arbitrary earlier image until a prior immutable tag and restore procedure are
-  published and exercised.
+- Integration: `0.6.2`; optional external Bridge: `0.5.4`.
+- App: `0.6.3`, experimental and `amd64` only; bundled Codex: `0.144.4`.
+- App `0.6.3` uses a signed immutable image with an SPDX SBOM
+  and build provenance.
+- Device-login recovery uses bounded authoritative account checks; account
+  entitlement changes invalidate the signed-out model catalogue before project
+  defaults are reconciled. Model and reasoning choices stay runtime-discovered.
+- Usage windows are classified by advertised duration, and a successful chat
+  creation remains usable while secondary snapshots retry.
+- The Integration keeps the chat surface at a bounded reading width, derives
+  rail and context contrast from Home Assistant theme tokens, and exposes
+  disclosure, selection, and progress state to assistive technology.
+- On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
+  denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
+  read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally
+  empty.
+- App `0.6.1`'s fatal readiness cause was a sandbox-self-test contract mismatch:
+  it required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
+  `workspaceWrite` response includes bounded supplemental roots (`.agents`,
+  `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The
+  proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls,
+  without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
+  canonical contained supplemental roots and hardens `lsm_get_self_attr` record
+  parsing.
+- The published App `0.6.2` image passed target-HAOS startup, its production
+  sandbox self-test and attestation, an authenticated API v1 readiness request,
+  Supervisor discovery, Integration pairing, and panel loading. A redacted
+  ChatGPT device-login start/cancel cycle also passed; completing account
+  authorization still requires the user. Remote access, the first unattended
+  automatic update, cold restore, and App-image rollback on the intended
+  installation remain acceptance gates. The current recovery plan is a cold
+  backup and, if already operated, a private external Bridge. Do not claim
+  Supervisor can choose an arbitrary earlier image until a prior immutable tag
+  and restore procedure are published and exercised.
 
 ## Product language
 

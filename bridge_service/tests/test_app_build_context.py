@@ -252,7 +252,7 @@ def test_dockerfile_uses_an_explicit_pinned_home_assistant_base() -> None:
         for image in from_lines
     ), "Home Assistant base image must be pinned by immutable digest"
     assert not re.search(r"(?im)^\s*ARG\s+BUILD_FROM\b", text)
-    assert 'io.hass.version="0.6.0"' in text
+    assert 'io.hass.version="0.6.3"' in text
 
 
 def test_dockerfile_never_copies_from_parent_or_repository_source() -> None:

@@ -12,8 +12,12 @@ from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.build_info import BuildInfo
-from codex_bridge_service.codex_app_server import AppServerUnavailableError
+from codex_bridge_service.codex_app_server import (
+    AppServerNotification,
+    AppServerUnavailableError,
+)
 from codex_bridge_service.limits import AppServerLimitsProbe
+from codex_bridge_service.model_catalog import AppServerModelCatalogProbe
 from codex_bridge_service.models import CodexAuthStatusRecord, RunMode, RuntimeProfile
 
 
@@ -47,6 +51,7 @@ class _SharedClient:
         self.turn_in_progress = False
         self._thread_number = 0
         self._turn_number = 0
+        self.notification_handlers: dict[str, Any] = {}
 
     def start(self) -> None:
         self.calls.append("start")
@@ -54,8 +59,8 @@ class _SharedClient:
     def close(self) -> None:
         self.calls.append("close")
 
-    def register_notification_handler(self, _method, _handler) -> None:
-        pass
+    def register_notification_handler(self, method, handler) -> None:
+        self.notification_handlers[method] = handler
 
     def register_request_handler(self, _method, _handler) -> None:
         pass
@@ -393,6 +398,104 @@ def test_shared_catalogue_paginates_and_invalidates_on_generation_change(
     client.generation = 2
     assert probe.probe() is not first
     assert client.calls.count("model/list") == model_calls * 2
+
+
+def test_shared_catalogue_can_be_invalidated_without_generation_change() -> None:
+    client = _SharedClient()
+    probe = AppServerModelCatalogProbe(client, cache_ttl_seconds=600)
+
+    first = probe.probe()
+    model_calls = client.calls.count("model/list")
+    client.model = "gpt-5.6-terra"
+    client.effort = "max"
+
+    probe.invalidate()
+    refreshed = probe.probe()
+
+    assert refreshed is not first
+    assert refreshed.default_model == "gpt-5.6-terra"
+    assert refreshed.default_thinking_level == "max"
+    assert client.calls.count("model/list") == model_calls * 2
+
+
+def test_account_entitlement_change_invalidates_shared_catalogue(
+    tmp_path: Path,
+) -> None:
+    client = _SharedClient()
+    client.authenticated = False
+    client.model = "gpt-5.5"
+    client.effort = "medium"
+    app = _ha_app(tmp_path, client)
+
+    with TestClient(app):
+        probe = app.state.model_catalog_probe
+        signed_out_catalogue = probe.probe()
+        model_calls = client.calls.count("model/list")
+        client.authenticated = True
+        client.model = "gpt-5.6-terra"
+        client.effort = "max"
+        notification = AppServerNotification(
+            method="account/updated",
+            params={"authMode": "chatgpt", "planType": "pro"},
+            generation=client.generation,
+        )
+
+        client.notification_handlers["account/updated"](notification)
+        refreshed = probe.probe()
+        client.notification_handlers["account/updated"](notification)
+        cached = probe.probe()
+
+    assert signed_out_catalogue.default_model == "gpt-5.5"
+    assert refreshed.default_model == "gpt-5.6-terra"
+    assert refreshed.default_thinking_level == "max"
+    assert cached is refreshed
+    assert client.calls.count("model/list") == model_calls * 2
+
+
+def test_first_status_after_auth_recovery_uses_the_refreshed_catalogue(
+    tmp_path: Path,
+) -> None:
+    client = _SharedClient()
+    client.model = "gpt-5.5"
+    client.effort = "medium"
+    probe = AppServerModelCatalogProbe(client, cache_ttl_seconds=600)
+    cached = probe.probe()
+
+    class RecoveringAuth(_Auth):
+        def status(self) -> CodexAuthStatusRecord:
+            client.model = "gpt-5.6-terra"
+            client.effort = "max"
+            probe.invalidate()
+            return CodexAuthStatusRecord(
+                state="ok",
+                auth_required=False,
+                auth_mode="chatgpt",
+                plan_type="pro",
+            )
+
+    app = _ha_app(
+        tmp_path,
+        client,
+        model_catalog_probe=probe,
+        auth_coordinator_factory=lambda _client: RecoveringAuth(),
+    )
+
+    with TestClient(app) as http:
+        response = http.get(
+            "/status",
+            headers={
+                "Authorization": "Bearer secret",
+                "X-Codex-Bridge-Api": "1",
+            },
+        )
+        direct = app.state.storage.load_project("prj_direct")
+
+    assert cached.default_model == "gpt-5.5"
+    assert response.status_code == 200
+    assert response.json()["model_catalog"]["default_model"] == "gpt-5.6-terra"
+    assert response.json()["model_catalog"]["default_thinking_level"] == "max"
+    assert direct.default_model == "gpt-5.6-terra"
+    assert direct.default_thinking_level == "max"
 
 
 def test_shared_catalogue_redacts_transport_failures(tmp_path: Path) -> None:

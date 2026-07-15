@@ -2,6 +2,52 @@
 
 All notable App changes are recorded here.
 
+## 0.6.3
+
+- Recovers ChatGPT device sign-in automatically when Codex omits a login
+  correlation ID or a completion notification is delayed. A bounded account
+  check preserves the active one-time code until sign-in is authoritative.
+- Invalidates the signed-out model catalogue as soon as ChatGPT entitlements
+  change, so newly available Codex models and reasoning levels such as `max`
+  and `ultra` are discovered immediately instead of after the cache expires.
+- Classifies usage windows by their advertised duration, keeping a weekly-only
+  allowance under **Week** and reporting the absent five-hour window as off.
+- Keeps a successfully created chat selected and usable while secondary list,
+  event, artifact, status, or interaction snapshots retry.
+- Bundles Bridge `0.5.4` and the Sigstore-verified Codex `0.144.4` runtime
+  without changing the Integration API compatibility.
+
+## 0.6.2
+
+- Fixes a false startup failure when Codex `0.144.4` reports its bounded
+  supplemental tool directories in `writableRoots`. Every reported root must
+  now be canonical and contained by the selected workspace; sibling, parent,
+  relative, duplicate, traversal, and malformed roots remain rejected. The
+  same rule now protects both startup attestation and normal thread
+  start/resume validation.
+- Hardens `lsm_get_self_attr` parsing by consuming the complete variable-length
+  record stream and rejecting mismatched counts, trailing bytes, malformed
+  contexts, and unexpected AppArmor state.
+- Preserves Codex's official `--no-proc` restrictive-container fallback on
+  HAOS. User, PID, and network namespaces, the read-only filesystem, AppArmor,
+  seccomp, zero capabilities, and `no_new_privs` remain enforced without
+  requesting `SYS_ADMIN`.
+- Adds a distinctive Codex Bridge SVG identity, generated Home Assistant PNG
+  assets, and a repository social-preview card.
+- The candidate files passed the complete production sandbox self-test on the
+  target HAOS host. Immutable-image startup and authenticated readiness remain
+  post-release gates.
+
+## 0.6.1
+
+- Fixes Supervisor discovery on Home Assistant OS by using Bashio's supported
+  App-hostname helper. The ready Bridge can now publish its private endpoint
+  instead of remaining in a retry loop.
+- Verifies at image-build time that the pinned Home Assistant base exports the
+  required discovery helper.
+- Continues to bundle Bridge `0.5.3` and Codex `0.144.4` without changing the
+  Integration API contract.
+
 ## 0.6.0
 
 - Introduces the experimental private Home Assistant Codex Bridge App for
@@ -21,7 +67,11 @@ All notable App changes are recorded here.
   existing private external Bridge until an earlier immutable tag and restore
   procedure are published and tested.
 
-This release remains experimental. Its public immutable image is signed and is
-accompanied by an SPDX SBOM and build provenance. A protected-runtime image
-completed sandbox self-test and authenticated readiness on an amd64 Home
-Assistant OS development VM on 14 July 2026.
+The public App 0.6.1 release is a signed immutable image with an SPDX SBOM and
+build provenance, but remains experimental and is known-bad on target HAOS.
+Pinned Codex `0.144.4` correctly rebuilt its sandbox in official `--no-proc`
+restrictive-container mode. Readiness instead failed because App 0.6.1 required
+`writableRoots` to equal the workspace exactly, while Codex reports bounded
+supplemental tool directories beneath it. The candidate 0.6.2 files passed the
+complete production sandbox self-test on the target host; the released
+immutable image remains the authoritative startup and readiness gate.

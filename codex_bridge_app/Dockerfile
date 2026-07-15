@@ -5,7 +5,7 @@ ARG TARGETARCH
 LABEL \
     io.hass.type="app" \
     io.hass.arch="amd64" \
-    io.hass.version="0.6.0"
+    io.hass.version="0.6.3"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -16,6 +16,7 @@ COPY rootfs/ /
 
 RUN set -eux; \
     test "${TARGETARCH}" = "amd64"; \
+    /bin/bash -c 'source /usr/lib/bashio/bashio.sh; declare -F bashio::addon.hostname >/dev/null'; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
     python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \
@@ -42,8 +43,8 @@ RUN set -eux; \
 
 EXPOSE 8766
 
-ENV CODEX_BRIDGE_APP_VERSION="0.6.0" \
-    CODEX_BRIDGE_VERSION="0.5.3" \
+ENV CODEX_BRIDGE_APP_VERSION="0.6.3" \
+    CODEX_BRIDGE_VERSION="0.5.4" \
     CODEX_BRIDGE_CODEX_VERSION="0.144.4" \
     CODEX_BRIDGE_ARCH="amd64" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="108279827b874b92b734799097137f34f46752d9c653a7ad596c10723f20afb0" \

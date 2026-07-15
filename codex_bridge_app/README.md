@@ -6,17 +6,37 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- App version: `0.6.0` (`amd64` only, experimental)
-- Integration: `0.5.4`
-- External Bridge: `0.5.3`
+- Source release: App `0.6.3` (`amd64` only, experimental)
+- Integration: `0.6.2`
+- External Bridge: `0.5.4`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-The public immutable image is signed and accompanied by an SPDX SBOM and build
-provenance. A protected-runtime image passed sandbox self-test and authenticated
-readiness on an amd64 Home Assistant OS development VM on 14 July 2026. Remote
-access, the first automatic update, and prior-image recovery remain acceptance
-checks for the intended Home Assistant installation.
+App `0.6.3` uses a signed immutable image with an SPDX SBOM and build
+provenance. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc`
+fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
+namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
+intentionally empty. App `0.6.1`'s fatal readiness cause was a sandbox-self-test
+contract mismatch: it required `writableRoots` exactly `[workspace]`, while the
+real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
+(`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
+The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
+calls, without requesting `SYS_ADMIN` or weakening isolation. App `0.6.2`
+validates canonical contained supplemental roots and hardens
+`lsm_get_self_attr` record parsing. Its published image passed target-HAOS
+startup, the production sandbox self-test and attestation, an authenticated API
+v1 readiness request, Supervisor discovery, Integration pairing, and panel
+loading. A redacted ChatGPT device-login start/cancel cycle also passed;
+completing account authorization still requires the user. Remote access, the
+first unattended automatic update, cold restore, and App-image rollback remain
+acceptance checks for the intended Home Assistant installation.
+
+This release recovers delayed device authorization through bounded account
+checks, refreshes model entitlements immediately after sign-in, classifies
+usage windows by duration, and preserves a successful new chat while its
+secondary snapshots retry. Model and reasoning choices remain dynamically
+discovered from Codex, including newly entitled levels such as `max` and
+`ultra` when the account and model advertise them.
 
 ## Installation model
 
