@@ -164,6 +164,7 @@ describe("polling event fallback", () => {
     const brokerError = controlEvent("bridge.error", { error: "broker stopped" });
     panel._retireEventSubscription = vi.fn();
     panel._handleSubscribedEvent("thr_safe", brokerError);
+    panel._lastStatusRefreshAt = 0;
     expect(panel._eventStream.needsSnapshot).toBe(true);
     expect(panel._error).toBe("broker stopped");
 
@@ -180,6 +181,15 @@ describe("polling event fallback", () => {
 
     expect(panel._error).toBe("broker stopped");
     expect(panel._errorSource).toBe("poll");
+
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered snapshot"));
+      if (action === "get_events" || action === "list_artifacts") return Promise.resolve([]);
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
   });
 
   it.each([
