@@ -38,7 +38,7 @@ describe("event stream", () => {
 
     expect(laterEvent.control).toBe("snapshot");
     expect(laterEvent.state.needsSnapshot).toBe(true);
-    expect(laterEvent.state.cursor).toBe(6);
+    expect(laterEvent.state.cursor).toBe(5);
     expect(laterEvent.state.events).toEqual([]);
   });
 

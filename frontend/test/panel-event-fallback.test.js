@@ -207,6 +207,7 @@ describe("polling event fallback", () => {
     await panel._runPollTick(1);
 
     expect(panel._refreshActiveThread).toHaveBeenCalledTimes(2);
+    expect(panel._sequence).toBe(snapshot.sequence);
     expect(panel._error).toBe("");
     expect(panel._events).toEqual([]);
   });

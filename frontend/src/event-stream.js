@@ -35,7 +35,9 @@ export function acceptEvent(state, value) {
   }
   if (current.needsSnapshot) {
     return {
-      state: { ...current, cursor: event.sequence, needsSnapshot: true },
+      // Events after a replay boundary are untrusted until the authoritative
+      // snapshot succeeds; advancing the cursor here could skip them forever.
+      state: current,
       accepted: true,
       control: "snapshot",
       event,
