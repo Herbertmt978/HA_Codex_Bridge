@@ -727,7 +727,18 @@ def test_bridge_profile_accepts_only_canonical_roots_inside_workspace(
     assert namespace["_writable_roots_within_workspace"]([], workspace=workspace)
 
 
-@pytest.mark.parametrize("case", ["outside", "sibling", "traversal", "duplicate", "relative", "nul"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "outside",
+        "sibling",
+        "traversal",
+        "contained-parent",
+        "duplicate",
+        "relative",
+        "nul",
+    ],
+)
 def test_bridge_profile_rejects_roots_outside_workspace_or_noncanonical(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -746,6 +757,7 @@ def test_bridge_profile_rejects_roots_outside_workspace_or_noncanonical(
         "outside": [str(outside)],
         "sibling": [str(workspace), str(sibling)],
         "traversal": [str(workspace), str(workspace / ".." / "escape")],
+        "contained-parent": [str(workspace / "sub" / ".." / ".codex")],
         "duplicate": [str(workspace), str(workspace)],
         "relative": [str(workspace), "relative/path"],
         "nul": [str(workspace / "invalid\0root")],

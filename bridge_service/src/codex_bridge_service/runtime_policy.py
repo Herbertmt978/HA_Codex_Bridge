@@ -321,7 +321,11 @@ def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
         if type(item) is not str or not item or "\0" in item or len(item) > 4096:
             return False
         candidate = Path(item)
-        if not candidate.is_absolute() or item != str(candidate):
+        if (
+            not candidate.is_absolute()
+            or item != str(candidate)
+            or ".." in candidate.parts
+        ):
             return False
         try:
             resolved = candidate.resolve(strict=False)

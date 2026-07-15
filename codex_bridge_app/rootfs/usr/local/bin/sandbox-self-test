@@ -383,6 +383,7 @@ def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
         if (
             not candidate.is_absolute()
             or str(candidate) != item
+            or ".." in candidate.parts
         ):
             return False
         try:
