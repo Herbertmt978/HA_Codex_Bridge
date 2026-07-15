@@ -6676,10 +6676,11 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   async _refreshAuthStatus({ silent = false, pollGeneration = null } = {}) {
     try {
-      const [auth, status] = await Promise.all([
-        this._callWS("get_auth_status"),
-        this._callWS("get_status")
-      ]);
+      const auth = await this._callWS("get_auth_status");
+      if (pollGeneration !== null && pollGeneration !== this._authPollGeneration) {
+        return;
+      }
+      const status = await this._callWS("get_status");
       if (pollGeneration !== null && pollGeneration !== this._authPollGeneration) {
         return;
       }

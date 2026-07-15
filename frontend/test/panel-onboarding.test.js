@@ -304,6 +304,45 @@ describe("HA-first panel integration", () => {
     expect(panel._status.model_catalog.default_model).toBe("gpt-5.6-sol");
   });
 
+  it("refreshes status only after an auth poll recovers the account", async () => {
+    const panel = createPanel();
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._hass = {};
+    panel._status = status({
+      auth: { revision: 2, state: "login_running", auth_required: true },
+    });
+    let resolveAuth;
+    const authResponse = new Promise((resolve) => {
+      resolveAuth = resolve;
+    });
+    const calls = [];
+    panel._callWS = vi.fn((action) => {
+      calls.push(action);
+      if (action === "get_auth_status") {
+        return authResponse;
+      }
+      return Promise.resolve(status({
+        auth: { revision: 3, state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" },
+        model_catalog: {
+          default_model: "gpt-5.6-sol",
+          default_thinking_level: "max",
+          models: [{ model: "gpt-5.6-sol", thinking_levels: ["max", "ultra"] }],
+        },
+      }));
+    });
+
+    const refresh = panel._refreshAuthStatus({ silent: true });
+    await Promise.resolve();
+    expect(calls).toEqual(["get_auth_status"]);
+
+    resolveAuth({ revision: 3, state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" });
+    await refresh;
+
+    expect(calls).toEqual(["get_auth_status", "get_status"]);
+    expect(panel._status.auth).toMatchObject({ revision: 3, state: "ok", auth_required: false });
+    expect(panel._status.model_catalog.default_model).toBe("gpt-5.6-sol");
+  });
+
   it("allows only one account mutation at a time", async () => {
     let resolveLogin;
     const login = new Promise((resolve) => {
@@ -362,6 +401,7 @@ describe("HA-first panel integration", () => {
       auth_required: true,
       user_code: "STALE-CODE",
     });
+    await Promise.resolve();
     resolveStatus(status({
       auth: {
         revision: 7,
