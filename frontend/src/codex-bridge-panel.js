@@ -5809,12 +5809,18 @@ class CodexBridgePanel extends HTMLElement {
     this._syncAuthPolling();
   }
 
-  async _refreshAuthStatus({ silent = false } = {}) {
+  async _refreshAuthStatus({ silent = false, pollGeneration = null } = {}) {
     try {
       const [auth, status] = await Promise.all([
         this._callWS("get_auth_status"),
         this._callWS("get_status"),
       ]);
+      if (
+        pollGeneration !== null
+        && pollGeneration !== this._authPollGeneration
+      ) {
+        return;
+      }
       const newestAuth = this._selectNewestAuthStatus(auth, status?.auth);
       this._mergeStatus({
         ...(status || this._status || {}),
@@ -5866,7 +5872,7 @@ class CodexBridgePanel extends HTMLElement {
       }
       this._authPollInFlight = true;
       try {
-        await this._refreshAuthStatus({ silent: true });
+        await this._refreshAuthStatus({ silent: true, pollGeneration: generation });
       } finally {
         if (generation === this._authPollGeneration) {
           this._authPollInFlight = false;

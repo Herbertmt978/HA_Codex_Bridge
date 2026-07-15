@@ -252,6 +252,58 @@ describe("HA-first panel integration", () => {
     }
   });
 
+  it("discards an obsolete auth poll response after reconnecting", async () => {
+    const panel = createPanel();
+    panel._config = { connection_type: "supervisor", api_version: 1 };
+    panel._hass = {};
+    panel._status = status({
+      auth: { revision: 2, state: "login_running", auth_required: true },
+      model_catalog: {
+        default_model: "gpt-5.5",
+        default_thinking_level: "medium",
+        models: [{ model: "gpt-5.5", thinking_levels: ["medium"] }],
+      },
+    });
+    let resolveAuth;
+    let resolveStatus;
+    const authResponse = new Promise((resolve) => {
+      resolveAuth = resolve;
+    });
+    const statusResponse = new Promise((resolve) => {
+      resolveStatus = resolve;
+    });
+    panel._callWS = vi.fn((action) => (
+      action === "get_auth_status" ? authResponse : statusResponse
+    ));
+    const stalePoll = panel._refreshAuthStatus({
+      silent: true,
+      pollGeneration: panel._authPollGeneration,
+    });
+
+    panel._authPollGeneration += 1;
+    panel._status = status({
+      auth: { revision: 3, state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" },
+      model_catalog: {
+        default_model: "gpt-5.6-sol",
+        default_thinking_level: "max",
+        models: [{ model: "gpt-5.6-sol", thinking_levels: ["max", "ultra"] }],
+      },
+    });
+    resolveAuth({ revision: 2, state: "login_running", auth_required: true });
+    resolveStatus(status({
+      auth: { revision: 2, state: "login_running", auth_required: true },
+      model_catalog: {
+        default_model: "gpt-5.5",
+        default_thinking_level: "medium",
+        models: [{ model: "gpt-5.5", thinking_levels: ["medium"] }],
+      },
+    }));
+    await stalePoll;
+
+    expect(panel._status.auth).toMatchObject({ revision: 3, state: "ok", auth_required: false });
+    expect(panel._status.model_catalog.default_model).toBe("gpt-5.6-sol");
+  });
+
   it("allows only one account mutation at a time", async () => {
     let resolveLogin;
     const login = new Promise((resolve) => {
