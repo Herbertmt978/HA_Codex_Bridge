@@ -182,7 +182,7 @@ function acceptEvent(state, value) {
   if (event.event_type === "bridge.error") {
     const message = typeof event.payload?.error === "string" ? event.payload.error.slice(0, 1e3) : "Bridge event stream failed";
     return {
-      state: { ...current, cursor: event.sequence, error: message },
+      state: { ...current, cursor: event.sequence, needsSnapshot: true, error: message },
       accepted: true,
       control: "error",
       event
@@ -7413,6 +7413,10 @@ var CodexBridgePanel = class extends HTMLElement {
           if (this._errorRevision === errorRevision && this._canSetBackgroundError("poll")) {
             this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
           }
+          await this._refreshActiveThread({
+            errorSource: "poll",
+            expectedErrorRevision: errorRevision
+          });
           return;
         }
       }
@@ -7454,7 +7458,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._render();
       }
       this._threadRefreshGraceUntil = 0;
-      if (this._clearError({ source: "poll" })) {
+      if (this._errorRevision === errorRevision && this._clearError({ source: "poll" })) {
         this._render();
       }
     } catch (error) {

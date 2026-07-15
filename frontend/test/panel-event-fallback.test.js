@@ -102,6 +102,20 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("Upload network failed");
   });
 
+  it("reconciles a broker replay boundary without replacing an action error", async () => {
+    const panel = pollingPanel(controlEvent("bridge.error", { error: "broker stopped" }));
+    panel._setError("Upload network failed", { retryable: true });
+    panel._refreshActiveThread = vi.fn(async () => {
+      panel._eventStream = { ...panel._eventStream, needsSnapshot: false };
+      return true;
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._refreshActiveThread).toHaveBeenCalledOnce();
+    expect(panel._error).toBe("Upload network failed");
+  });
+
   it("clears recovered live stream errors without replacing action errors", async () => {
     const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
     panel._retireEventSubscription = vi.fn();
@@ -257,6 +271,29 @@ describe("polling event fallback", () => {
 
     expect(panel._error).toBe("");
     expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+  });
+
+  it("does not let an older successful poll clear a newer stream error", async () => {
+    const panel = pollingPanel(controlEvent("message.created", { text: "Recovered" }));
+    const delayedStatus = deferred();
+    panel._eventSubscriptionActive = true;
+    panel._retireEventSubscription = vi.fn();
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_status") return delayedStatus.promise;
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "Recovered"));
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    const pending = panel._runPollTick(1);
+    panel._handleSubscribedEvent("thr_safe", { type: "error" });
+    delayedStatus.resolve({});
+    await pending;
+    expect(panel._error).toBe("Bridge event stream failed");
+
+    panel._eventSubscriptionActive = false;
+    panel._callWS.mockResolvedValue([]);
+    await panel._runPollTick(1);
+    expect(panel._error).toBe("");
   });
 
   it("does not clear an unrelated retryable action error after a successful poll", async () => {

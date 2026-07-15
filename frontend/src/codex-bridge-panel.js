@@ -6623,6 +6623,10 @@ class CodexBridgePanel extends HTMLElement {
           ) {
             this._setError(batch.state.error || "Bridge event stream failed", { source: "poll" });
           }
+          await this._refreshActiveThread({
+            errorSource: "poll",
+            expectedErrorRevision: errorRevision,
+          });
           return;
         }
       }
@@ -6668,7 +6672,10 @@ class CodexBridgePanel extends HTMLElement {
         this._render();
       }
       this._threadRefreshGraceUntil = 0;
-      if (this._clearError({ source: "poll" })) {
+      if (
+        this._errorRevision === errorRevision
+        && this._clearError({ source: "poll" })
+      ) {
         this._render();
       }
     } catch (error) {

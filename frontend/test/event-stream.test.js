@@ -29,6 +29,7 @@ describe("event stream", () => {
     const error = acceptEvent(snapshot.state, makeEvent({ sequence: 6, event_type: "bridge.error", payload: { error: "bad bridge" } }));
     expect(error.control).toBe("error");
     expect(error.state.error).toBe("bad bridge");
+    expect(error.state.needsSnapshot).toBe(true);
   });
 
   it("keeps the snapshot boundary sticky until an authoritative replay", () => {

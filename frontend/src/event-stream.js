@@ -27,7 +27,7 @@ export function acceptEvent(state, value) {
   if (event.event_type === "bridge.error") {
     const message = typeof event.payload?.error === "string" ? event.payload.error.slice(0, 1000) : "Bridge event stream failed";
     return {
-      state: { ...current, cursor: event.sequence, error: message },
+      state: { ...current, cursor: event.sequence, needsSnapshot: true, error: message },
       accepted: true,
       control: "error",
       event,
