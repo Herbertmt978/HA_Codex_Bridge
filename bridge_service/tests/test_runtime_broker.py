@@ -280,7 +280,10 @@ class ValidatorBackedAppServer:
                 else {
                     "type": "workspaceWrite",
                     "networkAccess": False,
-                    "writableRoots": [params["cwd"]],
+                    "writableRoots": [
+                        str(Path(params["cwd"]) / name)
+                        for name in (".agents", ".codex", ".cursor", ".git", ".vscode")
+                    ],
                     "excludeSlashTmp": True,
                     "excludeTmpdirEnvVar": True,
                 }
@@ -698,6 +701,166 @@ def test_thread_result_rejects_bare_sandbox_echo(tmp_path: Path) -> None:
             expected_cwd=workspace,
             expected_model="gpt-5.6-codex",
             policy=mode_policy(RunMode.EDIT, workspace),
+        )
+
+
+@pytest.mark.parametrize("mode", [RunMode.EDIT, RunMode.FULL_AUTO])
+@pytest.mark.parametrize(
+    "root_shape",
+    ["empty", "workspace", "supplemental", "workspace-plus", "maximum"],
+)
+def test_thread_result_accepts_bounded_supplemental_writable_roots(
+    tmp_path: Path,
+    mode: RunMode,
+    root_shape: str,
+) -> None:
+    workspace = (tmp_path / "workspace").resolve()
+    policy = mode_policy(mode, workspace)
+    supplemental = [
+        str(workspace / name)
+        for name in (".agents", ".codex", ".cursor", ".git", ".vscode")
+    ]
+    if root_shape == "empty":
+        roots = []
+    elif root_shape == "workspace":
+        roots = [str(workspace)]
+    elif root_shape == "supplemental":
+        roots = supplemental
+    elif root_shape == "workspace-plus":
+        roots = [str(workspace), *supplemental]
+    else:
+        roots = [str(workspace / f"root-{index}") for index in range(64)]
+    sandbox = deepcopy(policy.sandbox_policy)
+    sandbox["writableRoots"] = roots
+    result = {
+        "thread": _thread("supplemental-roots-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": policy.approval_policy,
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {
+            "id": policy.permission_profile,
+            "extends": None,
+        },
+        "sandbox": sandbox,
+    }
+
+    assert (
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=policy,
+        )
+        == "supplemental-roots-thread"
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid_roots",
+    [
+        "not-a-list",
+        ("{workspace}/.codex",),
+        [1],
+        [""],
+        ["relative/path"],
+        ["{workspace}/./.codex"],
+        ["{workspace}/.."],
+        ["{workspace}/../sibling"],
+        ["{workspace}/../escape"],
+        ["{outside}"],
+        ["{workspace}/.codex", "{workspace}/.codex"],
+        ["{workspace}/invalid\0root"],
+        ["{workspace}//double-separator"],
+        ["{workspace}/root-{index}" for index in range(65)],
+    ],
+    ids=[
+        "wrong-type",
+        "tuple",
+        "non-string",
+        "empty",
+        "relative",
+        "dot-component",
+        "parent",
+        "sibling",
+        "traversal",
+        "outside",
+        "duplicate",
+        "nul",
+        "noncanonical-separator",
+        "too-many",
+    ],
+)
+def test_thread_result_rejects_unbounded_or_noncanonical_writable_roots(
+    tmp_path: Path,
+    invalid_roots: object,
+) -> None:
+    workspace = (tmp_path / "workspace").resolve()
+    outside = (tmp_path / "outside").resolve()
+    policy = mode_policy(RunMode.EDIT, workspace)
+    roots = invalid_roots
+    if isinstance(roots, list):
+        roots = [
+            value.format(workspace=workspace, outside=outside, index=index)
+            if isinstance(value, str)
+            else value
+            for index, value in enumerate(roots)
+        ]
+    sandbox = deepcopy(policy.sandbox_policy)
+    sandbox["writableRoots"] = roots
+    result = {
+        "thread": _thread("unsafe-roots-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": policy.approval_policy,
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+        "sandbox": sandbox,
+    }
+
+    with pytest.raises(RuntimeProtocolMismatchError):
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=policy,
+        )
+
+
+def test_thread_result_rejects_writable_root_symlink_outside_workspace(
+    tmp_path: Path,
+) -> None:
+    workspace = (tmp_path / "workspace").resolve()
+    outside = (tmp_path / "outside").resolve()
+    workspace.mkdir()
+    outside.mkdir()
+    linked = workspace / "linked"
+    try:
+        linked.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable: {exc}")
+    policy = mode_policy(RunMode.EDIT, workspace)
+    sandbox = deepcopy(policy.sandbox_policy)
+    sandbox["writableRoots"] = [str(linked)]
+    result = {
+        "thread": _thread("symlink-root-thread", cwd=str(workspace)),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "cwd": str(workspace),
+        "approvalPolicy": "on-request",
+        "approvalsReviewer": "user",
+        "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+        "sandbox": sandbox,
+    }
+
+    with pytest.raises(RuntimeProtocolMismatchError):
+        validate_thread_result(
+            result,
+            expected_cwd=workspace,
+            expected_model="gpt-5.6-codex",
+            policy=policy,
         )
 
 

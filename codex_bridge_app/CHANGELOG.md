@@ -7,7 +7,9 @@ All notable App changes are recorded here.
 - Fixes a false startup failure when Codex `0.144.4` reports its bounded
   supplemental tool directories in `writableRoots`. Every reported root must
   now be canonical and contained by the selected workspace; sibling, parent,
-  relative, duplicate, traversal, and malformed roots remain rejected.
+  relative, duplicate, traversal, and malformed roots remain rejected. The
+  same rule now protects both startup attestation and normal thread
+  start/resume validation.
 - Hardens `lsm_get_self_attr` parsing by consuming the complete variable-length
   record stream and rejecting mismatched counts, trailing bytes, malformed
   contexts, and unexpected AppArmor state.

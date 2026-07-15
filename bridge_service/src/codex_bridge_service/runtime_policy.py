@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Literal
@@ -73,7 +74,9 @@ def validate_thread_result(
         or not _active_permission_profile_matches(
             result.get("activePermissionProfile"), policy
         )
-        or not _sandbox_matches(result.get("sandbox"), policy)
+        or not _sandbox_matches(
+            result.get("sandbox"), policy, workspace=expected_cwd
+        )
         or not _thread_environment_matches(thread, expected_cwd)
         or not _instruction_sources_match(
             result.get("instructionSources", []), expected_cwd
@@ -283,16 +286,54 @@ def _active_permission_profile_matches(
     )
 
 
-def _sandbox_matches(value: object, policy: RuntimeModePolicy) -> bool:
+def _sandbox_matches(
+    value: object,
+    policy: RuntimeModePolicy,
+    *,
+    workspace: Path,
+) -> bool:
     if not isinstance(value, dict) or set(value) != set(policy.sandbox_policy):
         return False
     for key, expected in policy.sandbox_policy.items():
         actual = value.get(key)
-        if isinstance(expected, bool):
+        if key == "writableRoots":
+            if not _writable_roots_within_workspace(actual, workspace=workspace):
+                return False
+        elif isinstance(expected, bool):
             if actual is not expected:
                 return False
         elif type(actual) is not type(expected) or actual != expected:
             return False
+    return True
+
+
+def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
+    """Accept only canonical absolute roots contained by the selected workspace."""
+
+    if type(value) is not list or len(value) > 64:
+        return False
+    try:
+        workspace_root = workspace.resolve(strict=False)
+    except (OSError, RuntimeError):
+        return False
+    seen: set[str] = set()
+    for item in value:
+        if type(item) is not str or not item or "\0" in item or len(item) > 4096:
+            return False
+        candidate = Path(item)
+        if not candidate.is_absolute() or item != str(candidate):
+            return False
+        try:
+            resolved = candidate.resolve(strict=False)
+            resolved.relative_to(workspace_root)
+        except (OSError, RuntimeError, ValueError):
+            return False
+        if item != str(resolved):
+            return False
+        canonical = os.path.normcase(str(resolved))
+        if canonical in seen:
+            return False
+        seen.add(canonical)
     return True
 
 
