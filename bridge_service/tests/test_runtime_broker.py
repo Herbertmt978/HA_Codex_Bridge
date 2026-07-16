@@ -1399,6 +1399,11 @@ def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
             client_request_id="client-steer",
         )
         _wait_until(lambda: len(_requests(client, "turn/steer")) == 1)
+        assert [
+            timeout
+            for method, timeout in client.request_timeouts
+            if method == "turn/steer"
+        ] == [pytest.approx(30.0)]
         assert steered.run_id == first.run_id
         assert _requests(client, "turn/steer") == [
             {
@@ -1601,10 +1606,20 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
             remote_thread_id=remote_thread_id,
             turn_id=turn_id,
         )
+
+        def queued_terminal_events() -> list[Any]:
+            return [
+                event
+                for event in storage.list_thread_events(second_thread.thread_id)
+                if event.event_type
+                in {"run.cancelled", "run.failed", "run.interrupted"}
+                and event.payload.get("run_id") == queued.run_id
+            ]
+
         _wait_until(
             lambda: (
                 len(_requests(client, "turn/start")) == 2
-                or storage.load_thread(second_thread.thread_id).status == "error"
+                or bool(queued_terminal_events())
             ),
             timeout=3.0,
             message="queued run neither started nor exhausted its total budget",
@@ -1621,11 +1636,29 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
             assert len(turn_start_timeouts) == 1
 
         _wait_until(
-            lambda: storage.load_thread(second_thread.thread_id).status == "error",
+            lambda: bool(queued_terminal_events()),
             timeout=3.0,
             message="queued and active phases received separate total-timeout budgets",
         )
+        terminal_event = queued_terminal_events()[-1]
+        thread_record = storage.load_thread(second_thread.thread_id)
+        if terminal_event.event_type == "run.cancelled":
+            assert len(turn_start_timeouts) == 1
+            assert terminal_event.payload.get("message") == (
+                "The queued prompt expired."
+            )
+            assert thread_record.status == "idle"
+        elif terminal_event.event_type == "run.failed":
+            assert terminal_event.payload.get("error") == "The Codex turn timed out."
+            assert thread_record.status == "error"
+        else:
+            assert len(turn_start_timeouts) == 1
+            assert terminal_event.payload.get("message") == (
+                "The Codex runtime restarted before the queued turn began."
+            )
+            assert thread_record.status == "error"
         assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
     finally:
         broker.close()
 

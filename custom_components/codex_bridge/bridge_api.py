@@ -17,12 +17,14 @@ from .const import (
     BRIDGE_EVENT_BATCH_MAX_BYTES,
     BRIDGE_EVENT_CURSOR_MAX,
     BRIDGE_EVENT_WAIT_SECONDS,
+    BRIDGE_PLUGIN_LIST_MAX_BYTES,
+    BRIDGE_PLUGIN_LIST_TIMEOUT_READ_SECONDS,
+    BRIDGE_PLUGIN_LIST_TIMEOUT_TOTAL_SECONDS,
     BRIDGE_PROBLEM_BODY_MAX_BYTES,
     BRIDGE_TIMEOUT_CONNECT_SECONDS,
     BRIDGE_TIMEOUT_POOL_SECONDS,
     BRIDGE_TIMEOUT_READ_SECONDS,
     BRIDGE_TIMEOUT_TOTAL_SECONDS,
-    BRIDGE_TIMEOUT_WRITE_SECONDS,
 )
 from .protocol import (
     ApiIncompatibleError,
@@ -46,7 +48,15 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(
     sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS,
     sock_read=BRIDGE_TIMEOUT_READ_SECONDS,
 )
-WRITE_TIMEOUT_SECONDS = BRIDGE_TIMEOUT_WRITE_SECONDS
+# A cold Codex plugin catalogue can take roughly 36 seconds to produce. The App
+# bounds its own request at 60 seconds, so leave response headroom while keeping
+# this Integration-only policy finite and scoped to catalogue GET requests.
+PLUGIN_LIST_REQUEST_TIMEOUT = aiohttp.ClientTimeout(
+    total=BRIDGE_PLUGIN_LIST_TIMEOUT_TOTAL_SECONDS,
+    connect=BRIDGE_TIMEOUT_POOL_SECONDS,
+    sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS,
+    sock_read=BRIDGE_PLUGIN_LIST_TIMEOUT_READ_SECONDS,
+)
 _UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
 _FILE_METADATA_MAX_BYTES = 64 * 1024
 _ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
@@ -1215,6 +1225,8 @@ class BridgeApiClient:
         return await self._async_json(
             "GET",
             f"/capabilities/plugins?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}&installed_only={'true' if installed_only else 'false'}",
+            maximum_bytes=BRIDGE_PLUGIN_LIST_MAX_BYTES,
+            request_timeout=PLUGIN_LIST_REQUEST_TIMEOUT,
         )
 
     async def async_install_plugin(
@@ -1246,6 +1258,8 @@ class BridgeApiClient:
         return await self._async_json(
             "GET",
             f"/capabilities/marketplaces?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}",
+            maximum_bytes=BRIDGE_PLUGIN_LIST_MAX_BYTES,
+            request_timeout=PLUGIN_LIST_REQUEST_TIMEOUT,
         )
 
     async def async_add_marketplace(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1332,6 +1346,7 @@ class BridgeApiClient:
         expected_status: set[int] | None = None,
         maximum_bytes: int | None = None,
         request_headers: Mapping[str, str] | None = None,
+        request_timeout: aiohttp.ClientTimeout = REQUEST_TIMEOUT,
     ) -> Any:
         response = await self._async_request(
             method,
@@ -1340,6 +1355,7 @@ class BridgeApiClient:
             data=data,
             expected_status=expected_status,
             request_headers=request_headers,
+            request_timeout=request_timeout,
         )
         async with response:
             try:
@@ -1482,6 +1498,7 @@ class BridgeApiClient:
         data: Any = None,
         expected_status: set[int] | None = None,
         request_headers: Mapping[str, str] | None = None,
+        request_timeout: aiohttp.ClientTimeout = REQUEST_TIMEOUT,
     ) -> aiohttp.ClientResponse:
         if expected_status is None:
             expected_status = {200}
@@ -1489,7 +1506,9 @@ class BridgeApiClient:
             raise BridgeApiEndpointError("method_invalid")
         request_path = _request_path(path)
         try:
-            async with asyncio.timeout(WRITE_TIMEOUT_SECONDS):
+            # aiohttp's total timeout covers request writes and the wait for
+            # response headers, so apply the endpoint's selected policy once.
+            async with asyncio.timeout(request_timeout.total):
                 headers = {
                     "Authorization": f"Bearer {self._token}",
                     BRIDGE_API_HEADER: str(
@@ -1505,7 +1524,7 @@ class BridgeApiClient:
                     headers=headers,
                     json=json_body,
                     data=data,
-                    timeout=REQUEST_TIMEOUT,
+                    timeout=request_timeout,
                     allow_redirects=False,
                 )
         except aiohttp.ConnectionTimeoutError:

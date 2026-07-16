@@ -18,6 +18,24 @@ describe("desktop feature surfaces", () => {
     expect(buildAutomationPayload({ project_id: "p1", schedule_type: "rrule", rrule: "RRULE:FREQ=DAILY", run_at: "2026-01-01T00:00:00Z", timezone: "Europe/London" }).schedule).toEqual({ kind: "rrule", rule: "RRULE:FREQ=DAILY", start_at: "2026-01-01T00:00:00Z", timezone: "Europe/London" });
   });
 
+  it("loads plugins and marketplaces from one catalogue request", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._callWS = vi.fn().mockResolvedValue({
+      marketplaces: [{ name: "official", plugins: [{ id: "plugin-one", name: "Plugin one" }] }],
+    });
+
+    await panel._loadDesktopDestination("plugins");
+
+    expect(panel._callWS).toHaveBeenCalledTimes(1);
+    expect(panel._callWS).toHaveBeenCalledWith("list_plugins", { workspace_path: "." });
+    expect(panel._callWS).not.toHaveBeenCalledWith("list_marketplaces", { workspace_path: "." });
+    expect(panel._desktopFeatures.plugins.data).toEqual({
+      plugins: [{ id: "plugin-one", name: "Plugin one", marketplace_name: "official" }],
+      marketplaces: [{ name: "official", plugins: [{ id: "plugin-one", name: "Plugin one" }] }],
+    });
+  });
+
   it("redacts private details from feature errors before rendering them", () => {
     const message = normalizeDesktopError({
       message: "Failed at C:\\private\\workspace\\file.txt via https://private.example:8766/path token=secret owner@example.com",

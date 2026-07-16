@@ -6,18 +6,27 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Current candidate: App `0.7.1` (`amd64` only, experimental)
-- Integration candidate: `0.7.1`
+- Published/live-accepted App: `0.7.1` (`amd64` only, experimental)
+- Published/live-accepted Integration: `0.7.1`
 - External Bridge: `0.6.0`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-The public `0.7.0` baseline is signed and distributed as a generic image with digest
-`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+Candidate App/Integration `0.7.2` with Bridge `0.6.1` is pending plugin live
+acceptance; the published/live-accepted `0.7.1` release remains the historical
+live baseline. In a signed-in Codex `0.144.4` run, the candidate native plugin
+catalogue measured approximately `4,041,499` bytes, contained `1,916` plugins,
+and completed cold in `35.887s`. The candidate bounds the app-server message at
+`8MiB` and cold request at `60s`, gives the Integration plugin request a `75s`
+deadline and `8MiB` response cap, projects at most `4,096` plugins, and loads
+plugins and marketplaces with one frontend request.
+
+The published `0.7.1` image has generic digest
+`sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
 and amd64 child digest
-`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
-Main CI `29471288344` and publication `29471288457` succeeded; signature, SBOM,
-and provenance attestations are on the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+`sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
+Main CI rerun `29483810669` and App publication `29483810926` succeeded; see
+the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1).
 Target-Home-Assistant acceptance is bounded. On target
 HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
@@ -32,16 +41,21 @@ validates canonical contained supplemental roots and hardens
 `lsm_get_self_attr` record parsing. The historical `0.6.5` image passed target-HAOS
 startup, the production sandbox self-test and attestation, an authenticated API
 v1 readiness request, Supervisor discovery, Integration pairing, and panel
-loading. The target `0.7.0` run retained ChatGPT Pro, showed dynamic GPT-5.6,
-rendered the five-hour window `Off`, preserved chat/history, and persisted App
-auto-update plus MCP opt-in across restart. Management forms lose unsaved values
-during a background rerender; the `0.7.1` candidate contains the fix. Do not
-claim automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md`
-mutation acceptance until retested. The first unattended App update is proven;
-external blocked-network/Nabu Casa/Cloudflare routing, cold restore, and
-previous-image rollback remain unproven.
+loading. The target `0.7.1` run installed and ran App and Integration with
+Bridge `0.6.0` and Codex `0.144.4`; it retained ChatGPT Pro, showed dynamic
+GPT-5.6, rendered the five-hour window `Off`, and preserved existing
+chats/history. Scheduled form drafts survived rerenders; the Skills form draft
+survived and create/list/delete passed; the MCP form draft survived and was
+cancelled. A one-time Observe automation was claimed exactly at
+`2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted. The
+historical `0.7.1` live Plugins/marketplaces list returned
+`capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace
+list/mutation acceptance was claimed. The first unattended App auto-update remains proven, and this
+manual update kept the prior-version backup. External blocked-network/Nabu
+Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback
+remain unproven.
 
-The `0.7.0` release advertises the Supervisor-assigned private App IP and includes a
+The `0.7.1` release advertises the Supervisor-assigned private App IP and includes a
 fresh non-secret publication marker on each start, so Home Assistant can
 recover discovery without changing the stable Supervisor identity. It retains
 bounded device-authorization recovery, immediate model-entitlement refresh,
@@ -97,7 +111,9 @@ Skills are created below the selected workspace's `.agents/skills/` directory.
 Global instructions live in the private Codex home; project instructions live
 at the workspace root. Instruction writes are atomic and retain bounded private
 snapshots. Plugin and marketplace operations use Codex's runtime configuration
-and never accept arbitrary JSON or paths outside the workspace.
+and never accept arbitrary JSON or paths outside the workspace. The historical
+`0.7.1` live list returned `capabilities_unavailable` (HTTP 503); the `0.7.2`
+candidate catalogue measurement above is not live-acceptance evidence.
 
 MCP is disabled by default. Enable **Enable MCP** in the App configuration,
 save, and restart the App before adding servers. When it is off, Codex starts

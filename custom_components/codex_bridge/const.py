@@ -23,7 +23,12 @@ BRIDGE_TIMEOUT_TOTAL_SECONDS = 30
 BRIDGE_TIMEOUT_POOL_SECONDS = 10
 BRIDGE_TIMEOUT_CONNECT_SECONDS = 10
 BRIDGE_TIMEOUT_READ_SECONDS = 20
-BRIDGE_TIMEOUT_WRITE_SECONDS = 30
+# Plugin catalogues are populated by a cold Codex app-server request. Keep the
+# Integration responsive beyond the App's bounded 60-second request limit
+# without relaxing the shorter timeout applied to every other Bridge endpoint.
+BRIDGE_PLUGIN_LIST_MAX_BYTES = 8 * 1024 * 1024
+BRIDGE_PLUGIN_LIST_TIMEOUT_TOTAL_SECONDS = 75
+BRIDGE_PLUGIN_LIST_TIMEOUT_READ_SECONDS = 70
 
 CONF_BRIDGE_URL = "bridge_url"
 CONF_BRIDGE_TOKEN = "bridge_token"
@@ -39,7 +44,7 @@ PANEL_COMPONENT_NAME = "codex-bridge-panel"
 PANEL_URL_PATH = "codex-bridge"
 PANEL_ICON = "mdi:robot-outline"
 STATIC_URL_BASE = "/codex_bridge_static"
-PANEL_ASSET_VERSION = "0.7.1"
+PANEL_ASSET_VERSION = "0.7.2"
 PANEL_MODULE_URL = f"{STATIC_URL_BASE}/codex-bridge-panel.js?v={PANEL_ASSET_VERSION}"
 
 DATA_ENTRIES = "entries"

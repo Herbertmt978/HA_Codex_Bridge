@@ -2012,7 +2012,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.7.1";
+var PANEL_VERSION = "0.7.2";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -6797,9 +6797,9 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.skills = normalizeSkillsResponse(await this._callWS("list_skills", this._desktopWorkspace()));
       } else if (destination === "plugins") {
         const workspace = this._desktopWorkspace();
-        const [plugins, marketplaces] = await Promise.all([this._callWS("list_plugins", workspace), this._callWS("list_marketplaces", workspace)]);
-        state.data.plugins = normalizePluginsResponse(plugins);
-        state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
+        const catalogue = await this._callWS("list_plugins", workspace);
+        state.data.plugins = normalizePluginsResponse(catalogue);
+        state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
         const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");

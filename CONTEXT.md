@@ -29,12 +29,15 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Current candidate being shipped: Integration `0.7.1`, App `0.7.1`
+- Current published/live-accepted release: Integration `0.7.1`, App `0.7.1`
   (experimental and `amd64` only), optional external Bridge `0.6.0`, and bundled
-  Codex `0.144.4`. It carries the candidate fix for management forms losing
-  unsaved values during background rerender; target-HA mutation retest remains
-  open.
-- Published/signed baseline: Integration `0.7.0`, App `0.7.0`. Its generic image
+  Codex `0.144.4`. The generic App image digest is
+  `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
+  with amd64 child digest
+  `sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
+  Main CI rerun `29483810669` and App publication run `29483810926` succeeded
+  ([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1)).
+- Prior published/signed baseline: Integration `0.7.0`, App `0.7.0`. Its generic image
   digest is
   `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
   with amd64 child digest
@@ -46,8 +49,8 @@ to the App or Bridge.
   acceptance of every capability mutation.
 - App/Integration `0.6.6` is the prior signed publication. The `0.6.5` matrix
   remains live-accepted only within the historical boundaries recorded in
-  `90-evidence.md`; neither historical claim supersedes the bounded `0.7.0`
-  evidence above.
+  `90-evidence.md`; neither historical claim supersedes the current bounded
+  `0.7.1` evidence above.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -56,7 +59,7 @@ to the App or Bridge.
 - Device-login recovery uses bounded authoritative account checks; account
   entitlement changes invalidate the signed-out model catalogue before project
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
-  If live app-server discovery fails, the `0.7.0` release uses the installed
+  If live app-server discovery fails, the current App uses the installed
   Codex bundled catalogue dynamically, retries stale data after 15 seconds,
   prefers a verified last-known-good record, and uses a static fallback only as
   the final recovery layer. GPT-5.6 and per-model Max/Ultra options appear only
@@ -66,7 +69,7 @@ to the App or Bridge.
 - A typed, temporary artifact-scan reservation preserves the previous artifact
   snapshot and does not turn a healthy chat or completed response into a false
   connection failure, even where the selected chat is idle.
-- The `0.7.0` release keeps the chat surface at a bounded reading width with a
+- The current panel keeps the chat surface at a bounded reading width with a
   clean Codex-style left navigation tree, title-first chat rows, one action
   menu, correct archive collapse/search and search icon, 44px mobile targets,
   transcript-adjacent decisions, and collapsed mobile settings/limits. It
@@ -84,16 +87,37 @@ to the App or Bridge.
   without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
   canonical contained supplemental roots and hardens `lsm_get_self_attr` record
   parsing.
-- On target HA, App and Integration `0.7.0` reported Bridge `0.6.0` and Codex
-  `0.144.4`; ChatGPT Pro remained signed in, GPT-5.6 was visible from dynamic
-  runtime discovery, the five-hour window rendered `Off`, and chat/history were
-  preserved. App auto-update and MCP opt-in persistence after restart were also
-  observed. Management forms currently lose unsaved values during a background
-  rerender; the `0.7.1` candidate contains the fix. Do not claim automation,
-  skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation acceptance
-  until that candidate is retested. The first unattended App update is now
-  proven. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
-  and previous-image rollback remain unproven.
+- On target HA, App and Integration `0.7.1` were installed and running with
+  Bridge `0.6.0` and Codex `0.144.4`; ChatGPT Pro remained signed in,
+  GPT-5.6 was visible from dynamic runtime discovery, the five-hour window
+  rendered `Off`, and existing chats/history were preserved. The Scheduled form
+  draft survived background rerenders; the Skills form draft survived and
+  create/list/delete passed; the MCP form draft survived and cancellation
+  passed. A one-time Observe automation was claimed exactly at
+  `2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted.
+  The historical `0.7.1` Plugins/marketplaces list returned
+  `capabilities_unavailable` (HTTP 503); do not claim `0.7.1` plugin or
+  marketplace list/mutation acceptance. The first unattended App
+  auto-update remains proven, and this manual update kept the prior-version
+  backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
+  and arbitrary previous-image rollback remain unproven.
+- Candidate `0.7.2` updates the App and Integration with Bridge `0.6.1` while
+  retaining bundled Codex `0.144.4`; it is not published or live-accepted yet.
+  Against a signed-in Codex account, the candidate's native plugin catalogue
+  measured approximately `4,041,499` bytes, contained `1,916` plugins, and
+  completed cold in `35.887s`. The candidate bounds the app-server message at
+  `8MiB` with a `60s` cold request, gives the HA Integration plugin request a
+  `75s` deadline and `8MiB` response cap, projects at most `4,096` plugins, and
+  fetches plugins and marketplaces with one frontend request. The historical
+  `0.7.1` live list returned `capabilities_unavailable` (HTTP 503); that
+  observation is retained for history, while `0.7.2` catalogue verification is
+  candidate evidence only.
+- Native Codex `webSearch` items are accepted, safely projected, and labelled in
+  the activity timeline, but the HA App does not yet negotiate the runtime's
+  web-search capability or explicitly select `web_search = "live"`. The managed
+  configuration therefore relies on Codex's cached default. Model-controlled
+  shell networking remains intentionally disabled and is a separate boundary;
+  live-current web search has not yet been accepted on target HA.
 - The App includes administrator-only capability surfaces for durable
   automations, workspace skills, global/project `AGENTS.md`, plugins and
   marketplaces, and outbound MCP configuration. Automations are persisted in

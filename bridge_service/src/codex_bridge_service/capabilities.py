@@ -31,8 +31,11 @@ from .workspace import (
 _MAX_NAME_BYTES = 128
 _MAX_TEXT_BYTES = 4096
 _MAX_SKILLS = 512
-_MAX_PLUGINS = 512
+# Keep projection bounded while accommodating the current Codex marketplace
+# catalogue (which contains roughly 1,900 plugins).
+_MAX_PLUGINS = 4096
 _MAX_MARKETPLACES = 128
+_PLUGIN_CATALOGUE_TIMEOUT_SECONDS = 60.0
 _MAX_SKILL_DESCRIPTION = 4096
 _MAX_SKILL_INSTRUCTIONS = 256 * 1024
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z", re.ASCII)
@@ -356,7 +359,15 @@ class CapabilitiesManager:
         normalized, cwd = self.workspace_cwd(workspace_path)
         method = "plugin/installed" if installed_only else "plugin/list"
         params = {"cwds": [cwd]}
-        result = self._request(method, params)
+        # The native plugin catalogue can be several MiB and takes materially
+        # longer to produce on a cold Codex cache. Keep this longer deadline
+        # scoped to catalogue reads; ordinary app-server requests retain the
+        # client's 30-second default.
+        result = self._request(
+            method,
+            params,
+            timeout_seconds=_PLUGIN_CATALOGUE_TIMEOUT_SECONDS,
+        )
         if not isinstance(result, dict) or not isinstance(
             result.get("marketplaces"), list
         ):
@@ -504,6 +515,7 @@ class CapabilitiesManager:
         if not isinstance(values, list):
             return []
         output: list[dict[str, Any]] = []
+        remaining_plugins = _MAX_PLUGINS
         for value in values[:_MAX_MARKETPLACES]:
             if not isinstance(value, dict):
                 continue
@@ -512,11 +524,12 @@ class CapabilitiesManager:
                 continue
             plugins = value.get("plugins")
             projected_plugins: list[dict[str, Any]] = []
-            if isinstance(plugins, list):
-                for plugin in plugins[:_MAX_PLUGINS]:
+            if isinstance(plugins, list) and remaining_plugins:
+                for plugin in plugins[:remaining_plugins]:
                     projected = self._project_plugin(plugin)
                     if projected is not None:
                         projected_plugins.append(projected)
+            remaining_plugins -= len(projected_plugins)
             output.append({"name": name, "plugins": projected_plugins})
         return output
 
@@ -600,9 +613,21 @@ class CapabilitiesManager:
                 raise CapabilitiesInvalidError("marketplace source is invalid")
         return value
 
-    def _request(self, method: str, params: dict[str, Any]) -> object:
+    def _request(
+        self,
+        method: str,
+        params: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
         try:
-            return self.app_server.request(method, params)
+            if timeout_seconds is None:
+                return self.app_server.request(method, params)
+            return self.app_server.request(
+                method,
+                params,
+                timeout_seconds=timeout_seconds,
+            )
         except (CodexAppServerError, RuntimeError, OSError, ValueError):
             raise CapabilitiesUnavailableError() from None
 

@@ -2,6 +2,26 @@
 
 All notable App changes are recorded here.
 
+## 0.7.2
+
+- Fixes the signed-in Codex plugin catalogue failing with HTTP 503. The Bridge
+  now accepts a bounded 8 MiB app-server message and a bounded 60-second cold
+  catalogue request; the exact target catalogue is roughly 4 MiB and takes
+  about 36 seconds before its cache is warm.
+- Projects up to 4,096 plugins instead of silently stopping at 512, covering
+  the current 1,916-plugin ChatGPT catalogue while retaining a finite limit.
+- Gives only plugin catalogue HTTP reads a 75-second Integration deadline and
+  an 8 MiB response cap. Other private Bridge requests keep their shorter
+  timeout policy.
+- Loads plugins and marketplaces from one Codex catalogue request instead of
+  issuing two identical concurrent requests.
+- Stabilizes the queued-run total-deadline regression test across every valid
+  terminal race without weakening runtime deadline behavior.
+- Bundles the Sigstore-verified Codex runtime `0.144.4`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.6.1` and Integration `0.7.2` without changing API v1
+  compatibility.
+
 ## 0.7.1
 
 - Preserves unsaved Scheduled, Skill, marketplace, and MCP form values when

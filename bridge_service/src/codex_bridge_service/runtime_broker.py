@@ -575,6 +575,7 @@ class RuntimeBroker:
                         "input": [{"type": "text", "text": prompt}],
                         "clientUserMessageId": request_id,
                     },
+                    timeout_seconds=self.control_request_timeout_seconds,
                 )
                 validate_steer_result(result, turn_id)
             except Exception as exc:

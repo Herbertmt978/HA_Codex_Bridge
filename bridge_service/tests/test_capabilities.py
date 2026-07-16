@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import codex_bridge_service.capabilities as capabilities_module
 from codex_bridge_service.capabilities import (
     CapabilitiesInvalidError,
     CapabilitiesManager,
@@ -100,10 +101,18 @@ class Boundary:
 class FakeServer:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
+        self.request_timeouts: list[float | None] = []
         self.responses: dict[str, object] = {}
 
-    def request(self, method: str, params: object) -> object:
+    def request(
+        self,
+        method: str,
+        params: object,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
         self.calls.append((method, params))
+        self.request_timeouts.append(timeout_seconds)
         return self.responses.get(method, {})
 
 
@@ -264,6 +273,170 @@ def test_marketplace_source_rejects_private_dns_answer_without_network(
 
     with pytest.raises(CapabilitiesInvalidError):
         manager.add_marketplace("https://marketplace.vendor.example/index.git")
+
+
+def test_list_plugins_projects_payload_and_uses_workspace_cwd(tmp_path: Path) -> None:
+    storage = Storage(tmp_path)
+    (storage.workspace_boundary.root / "project").mkdir()
+    server = FakeServer()
+    server.responses["plugin/list"] = {
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {
+                        "id": "plugin.one",
+                        "name": "Plugin One",
+                        "interface": {"shortDescription": "A useful plugin"},
+                        "enabled": True,
+                        "installed": False,
+                        "version": "1.2.3",
+                        "localVersion": "1.1.0",
+                        "marketplaceName": "official",
+                        "privateField": "must not leak",
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = CapabilitiesManager(storage, server).list_plugins("project")
+
+    assert server.calls == [
+        (
+            "plugin/list",
+            {"cwds": [str(storage.workspace_boundary.root / "project")]},
+        )
+    ]
+    assert server.request_timeouts == [60.0]
+    assert result == {
+        "cwd": "project",
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {
+                        "id": "plugin.one",
+                        "name": "Plugin One",
+                        "description": "A useful plugin",
+                        "enabled": True,
+                        "installed": False,
+                        "version": "1.2.3",
+                        "local_version": "1.1.0",
+                        "marketplace_name": "official",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_list_plugins_installed_only_uses_installed_endpoint(tmp_path: Path) -> None:
+    storage = Storage(tmp_path)
+    (storage.workspace_boundary.root / "project").mkdir()
+    server = FakeServer()
+    server.responses["plugin/installed"] = {
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {
+                        "id": "installed.plugin",
+                        "name": "Installed Plugin",
+                        "installed": True,
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = CapabilitiesManager(storage, server).list_plugins(
+        "project", installed_only=True
+    )
+
+    assert server.calls == [
+        (
+            "plugin/installed",
+            {"cwds": [str(storage.workspace_boundary.root / "project")]},
+        )
+    ]
+    assert server.request_timeouts == [60.0]
+    assert result["marketplaces"][0]["plugins"][0]["installed"] is True
+
+
+def test_list_plugins_does_not_truncate_current_catalogue_above_512(
+    tmp_path: Path,
+) -> None:
+    storage = Storage(tmp_path)
+    (storage.workspace_boundary.root / "project").mkdir()
+    server = FakeServer()
+    server.responses["plugin/list"] = {
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {"id": f"plugin-{index}", "name": f"Plugin {index}"}
+                    for index in range(1_916)
+                ],
+            }
+        ]
+    }
+
+    result = CapabilitiesManager(storage, server).list_plugins("project")
+    plugins = result["marketplaces"][0]["plugins"]
+
+    assert len(plugins) == 1_916
+    assert plugins[0]["id"] == "plugin-0"
+    assert plugins[-1]["id"] == "plugin-1915"
+
+
+def test_list_plugins_enforces_total_projection_cap_across_marketplaces(
+    tmp_path: Path,
+) -> None:
+    storage = Storage(tmp_path)
+    (storage.workspace_boundary.root / "project").mkdir()
+    server = FakeServer()
+    server.responses["plugin/list"] = {
+        "marketplaces": [
+            {
+                "name": "first",
+                "plugins": [
+                    {"id": f"plugin-{index}", "name": f"Plugin {index}"}
+                    for index in range(capabilities_module._MAX_PLUGINS - 1)
+                ],
+            },
+            {
+                "name": "second",
+                "plugins": [
+                    {"id": f"second-{index}", "name": f"Second {index}"}
+                    for index in range(128)
+                ],
+            },
+            {
+                "name": "third",
+                "plugins": [{"id": "third-0", "name": "Third 0"}],
+            },
+        ]
+    }
+
+    result = CapabilitiesManager(storage, server).list_plugins("project")
+    marketplaces = result["marketplaces"]
+
+    assert capabilities_module._MAX_PLUGINS >= 1_916
+    assert [marketplace["name"] for marketplace in marketplaces] == [
+        "first",
+        "second",
+        "third",
+    ]
+    assert sum(len(marketplace["plugins"]) for marketplace in marketplaces) == (
+        capabilities_module._MAX_PLUGINS
+    )
+    assert len(marketplaces[0]["plugins"]) == capabilities_module._MAX_PLUGINS - 1
+    assert marketplaces[0]["plugins"][-1]["id"] == (
+        f"plugin-{capabilities_module._MAX_PLUGINS - 2}"
+    )
+    assert [plugin["id"] for plugin in marketplaces[1]["plugins"]] == ["second-0"]
+    assert marketplaces[2]["plugins"] == []
 
 
 def test_agents_are_atomic_backed_up_privately_and_gate_mutations(

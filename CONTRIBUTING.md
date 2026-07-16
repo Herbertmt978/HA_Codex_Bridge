@@ -26,22 +26,30 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current candidate is Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, and
-Codex `0.144.4` (experimental, `amd64` only), carrying the management-form
-rerender fix for target-HA retest. The published/signed `0.7.0` baseline has
+The current candidate is Integration `0.7.2`, App `0.7.2`, Bridge `0.6.1`, and
+Codex `0.144.4` (experimental, `amd64` only), pending plugin live acceptance.
+The signed-in candidate catalogue measured approximately `4,041,499` bytes,
+contained `1,916` plugins, and completed cold in `35.887s`. Its fixes bound the
+app-server message to `8MiB` and cold request to `60s`, give the HA Integration
+plugin request a `75s` deadline and `8MiB` response cap, project at most `4,096`
+plugins, and use one frontend request for plugins and marketplaces. The
+published/live-accepted `0.7.1` release remains historical, with its live list
+returning `capabilities_unavailable` (HTTP 503) and no plugin or marketplace
+list/mutation acceptance. The published/signed `0.7.0` baseline has
 generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
 main CI `29471288344` and publication `29471288457` succeeded, with signature,
 SBOM, and provenance attached to the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
-Target-Home-Assistant evidence is bounded: versions, ChatGPT Pro retention,
-dynamic GPT-5.6, five-hour `Off`, chat/history, App auto-update, and MCP opt-in
-persistence after restart were observed. Management forms lose unsaved values
-during a background rerender; the `0.7.1` candidate is the fix. Do not claim
-automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation
-acceptance until retested. The first unattended App update is proven; external
-blocked-network routing, cold restore, and previous-image rollback remain
-unproven. A source checkout, local image, or unit test is not release evidence.
+Target-Home-Assistant evidence for the published/live-accepted `0.7.1` release
+is bounded: versions, ChatGPT Pro retention, dynamic GPT-5.6, five-hour `Off`,
+chat/history, management-form retention, skill mutations, App auto-update, and
+MCP form cancellation were observed. Its live plugin/marketplace list returned
+`capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
+list/mutation acceptance was claimed. The `0.7.2` catalogue measurements and
+fixes above remain candidate evidence pending live acceptance. External blocked-
+network routing, cold restore, and previous-image rollback remain unproven. A
+source checkout, local image, or unit test is not release evidence.
 
 ## Local checks
 
