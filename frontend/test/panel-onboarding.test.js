@@ -856,12 +856,19 @@ describe("HA-first panel integration", () => {
     };
 
     panel._renderToolbar();
+    panel._renderUsagePanel();
 
-    const limitCards = [...panel.shadowRoot.querySelectorAll(".mini-limit")];
-    expect(limitCards[0].textContent).toContain("5h");
-    expect(limitCards[0].textContent).toContain("Off");
-    expect(limitCards[1].textContent).toContain("Week");
-    expect(limitCards[1].textContent).toContain("100%");
+    const toolbar = panel.shadowRoot.getElementById("compact-toolbar");
+    const usageButton = toolbar.querySelector('[data-action="open-usage"]');
+    expect(toolbar.querySelectorAll(".mini-limit")).toHaveLength(0);
+    expect(usageButton.textContent).toBe("5h off · Week 100%");
+    expect(usageButton.getAttribute("aria-label")).toMatch(/open usage details.*5h off.*week 100%/i);
+
+    const usageLimitCards = [...panel.shadowRoot.querySelectorAll("#usage-panel .mini-limit")];
+    expect(usageLimitCards[0].textContent).toContain("5 hours");
+    expect(usageLimitCards[0].textContent).toContain("Off");
+    expect(usageLimitCards[1].textContent).toContain("Weekly");
+    expect(usageLimitCards[1].textContent).toContain("100%");
     expect([...panel.shadowRoot.getElementById("thread-model-select").options].map((option) => option.value)).toContain("gpt-5.6-terra");
     expect([...panel.shadowRoot.getElementById("thread-thinking-select").options].map((option) => option.value)).toEqual(
       expect.arrayContaining(["max", "ultra"])

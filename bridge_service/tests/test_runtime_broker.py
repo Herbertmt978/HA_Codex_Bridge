@@ -1004,9 +1004,33 @@ def test_web_search_override_is_scoped_to_thread_start_config(tmp_path: Path) ->
             "default_permissions": "ha_bridge",
             "web_search": "live",
         }
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        turn = _requests(client, "turn/start")[0]
+        assert turn["input"] == [
+            {
+                "type": "text",
+                "text": (
+                    "Application web-search policy: Live web search is available. "
+                    "When the request depends on current, recent, changing, scheduled, "
+                    "price, weather, news, rules, or other time-sensitive information, "
+                    "use the native web-search tool before answering unless the user "
+                    "explicitly asks you not to. Use the native tool rather than shell "
+                    "commands for network access. Do not include credentials, private "
+                    "workspace contents, or unrelated personal data in search queries."
+                ),
+            },
+            {"type": "text", "text": "Search current information"},
+        ]
         saved = broker._state.runs[run.run_id]
         assert saved.web_search == "live"
         assert "networkAccess" not in start["config"]
+        user_messages = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "message.created"
+            and event.payload.get("role") == "user"
+        ]
+        assert user_messages[-1].payload["text"] == "Search current information"
     finally:
         broker.close()
 

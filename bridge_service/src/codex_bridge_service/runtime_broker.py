@@ -244,6 +244,15 @@ class _RuntimeTotalDeadlineExceeded(RuntimeError):
 
 _TERMINAL_RUN_STATES = {"completed", "cancelled", "failed", "interrupted"}
 _MANAGED_WEB_SEARCH_DEFAULT = "cached"
+_LIVE_WEB_SEARCH_GUIDANCE = (
+    "Application web-search policy: Live web search is available. "
+    "When the request depends on current, recent, changing, scheduled, price, "
+    "weather, news, rules, or other time-sensitive information, use the native "
+    "web-search tool before answering unless the user explicitly asks you not to. "
+    "Use the native tool rather than shell commands for network access. "
+    "Do not include credentials, private workspace contents, or unrelated personal "
+    "data in search queries."
+)
 _PENDING_INTERACTION_STATES = {"pending", "responding"}
 _MAX_REQUEST_OUTCOMES = 50_000
 _MAX_TERMINAL_RUNS = 1024
@@ -2456,7 +2465,11 @@ class RuntimeBroker:
     ) -> list[dict[str, object]]:
         if run.prompt is None:
             raise RuntimeStateError("The queued Codex prompt is unavailable.")
-        return [{"type": "text", "text": run.prompt}]
+        inputs: list[dict[str, object]] = []
+        if run.web_search == "live":
+            inputs.append({"type": "text", "text": _LIVE_WEB_SEARCH_GUIDANCE})
+        inputs.append({"type": "text", "text": run.prompt})
+        return inputs
 
     def _correlated_run_locked(
         self,

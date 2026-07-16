@@ -329,6 +329,18 @@ template.innerHTML = `
       display: none !important;
     }
 
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .confirmation-layer[hidden],
     .information-layer[hidden] {
       display: none !important;
@@ -1392,10 +1404,12 @@ template.innerHTML = `
     }
 
     .compact-toolbar {
-      display: grid;
-      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
-      gap: 6px;
-      align-items: stretch;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding-top: 6px;
+      border-top: 1px solid var(--border-color);
     }
 
     .composer-diagnostics {
@@ -1406,98 +1420,58 @@ template.innerHTML = `
       display: none;
     }
 
-    .toolbar-card {
-      display: grid;
-      gap: 6px;
-      min-width: 0;
-      padding: 7px 9px;
-      border: 1px solid var(--border-color);
-      border-radius: 9px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 98%, #f5faff 2%), var(--surface-bg));
-      box-shadow: 0 7px 18px rgba(15, 23, 42, 0.04);
-    }
-
-    .toolbar-card.limits {
-      align-content: start;
-    }
-
-    .toolbar-card.controls {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      align-items: start;
-    }
-
-    .limit-pair {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .mini-limit,
-    .mini-control {
-      display: grid;
-      gap: 3px;
-      min-width: 0;
-    }
-
-    .mini-limit-head {
+    .composer-utility {
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
+      align-items: center;
       gap: 8px;
       min-width: 0;
-    }
-
-    .mini-limit-name {
-      font-size: 11px;
       color: var(--muted-color);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      font-size: 12px;
+      line-height: 1.25;
     }
 
-    .limit-value {
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1;
+    .composer-utility + .composer-utility {
+      padding-left: 8px;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .composer-utility-label {
+      flex: 0 0 auto;
+      color: var(--muted-color);
+    }
+
+    .composer-limits-button {
+      min-width: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-color);
+      font-size: 12px;
+      line-height: 1.25;
+      padding: 4px 2px;
+      text-align: left;
       white-space: nowrap;
     }
 
-    .limit-subline,
-    .setting-foot {
-      font-size: 11px;
-      color: var(--muted-color);
-      line-height: 1.3;
-    }
-
-    .mini-limit-bar {
-      height: 4px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: color-mix(in srgb, var(--border-color) 68%, transparent);
-      margin-top: 1px;
-    }
-
-    .mini-limit-fill {
-      display: block;
-      height: 100%;
-      width: var(--limit-width, 0%);
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--limit-color, var(--brand-emerald)), color-mix(in srgb, var(--limit-color, var(--brand-emerald)) 72%, white 28%));
-      transition: width 220ms ease;
+    .composer-limits-button:hover {
+      border-color: transparent;
+      background: transparent;
+      color: var(--accent-color);
     }
 
     .compact-select {
-      width: 100%;
+      width: auto;
       min-width: 0;
       height: 30px;
-      padding: 0 8px;
-      border-radius: 8px;
-      background: linear-gradient(180deg, var(--surface-bg), color-mix(in srgb, var(--surface-bg) 96%, #f0f5fb 4%));
+      padding: 0 20px 0 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
       font-size: 12px;
     }
 
-    .mini-control .setting-label {
-      margin-bottom: 1px;
+    .compact-select:hover {
+      color: var(--accent-color);
     }
 
     .message-list {
@@ -2819,111 +2793,6 @@ template.innerHTML = `
       background: var(--surface-bg);
     }
 
-    .compact-toolbar {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-      gap: 10px;
-      padding-top: 7px;
-      border-top: 1px solid var(--border-color);
-    }
-
-    .toolbar-card {
-      padding: 7px 0 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
-    }
-
-    .toolbar-card.controls {
-      border-left: 1px solid var(--border-color);
-      padding-left: 10px;
-    }
-
-    .compact-select {
-      height: 28px;
-      border-radius: 6px;
-      background: var(--surface-bg);
-    }
-
-    /* A flat, three-region composer strip: full reset details live in the
-     * focusable tooltips and Usage panel rather than adding permanent height. */
-    .compact-toolbar {
-      grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
-      gap: 0;
-      min-height: 64px;
-      padding-top: 6px;
-    }
-
-    .toolbar-card {
-      align-content: start;
-      gap: 4px;
-      min-height: 58px;
-    }
-
-    .toolbar-card.limits {
-      grid-template-columns: auto minmax(0, 1fr);
-      column-gap: 12px;
-      align-items: center;
-    }
-
-    .toolbar-card.limits > .setting-label {
-      align-self: start;
-      padding-top: 3px;
-    }
-
-    .toolbar-card.limits > .setting-foot,
-    .limit-subline {
-      display: none;
-    }
-
-    .limit-pair { gap: 12px; }
-    .mini-limit { gap: 2px; }
-    .mini-limit-name { font-size: 10px; letter-spacing: 0.07em; }
-    .limit-value { font-size: 13px; }
-    .mini-limit-bar { height: 3px; margin-top: 0; }
-
-    .toolbar-card.controls {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0;
-      min-height: 58px;
-      padding-left: 14px;
-    }
-
-    .mini-control {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-rows: auto 32px;
-      gap: 2px 8px;
-      align-items: center;
-    }
-
-    .mini-control + .mini-control {
-      margin-left: 14px;
-      padding-left: 14px;
-      border-left: 1px solid var(--border-color);
-    }
-
-    .mini-control .setting-label {
-      grid-column: 1 / -1;
-      margin: 0;
-      font-size: 10px;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-    }
-
-    .compact-select {
-      height: 32px;
-      padding-inline: 9px;
-      font-size: 12px;
-    }
-
-    .mini-control .setting-foot {
-      overflow: hidden;
-      max-width: 94px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .mini-limit-fill,
     .send-button,
     .auth-actions button.primary,
     .decision-actions button[data-decision="accept"],
@@ -3557,6 +3426,48 @@ template.innerHTML = `
       gap: 10px;
     }
 
+    .usage-limit-grid .mini-limit {
+      display: grid;
+      gap: 5px;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .usage-limit-grid .mini-limit-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .usage-limit-grid .mini-limit-name,
+    .usage-limit-grid .limit-subline {
+      color: var(--muted-color);
+      font-size: 11px;
+    }
+
+    .usage-limit-grid .limit-value {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .usage-limit-grid .mini-limit-bar {
+      height: 4px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--border-color) 68%, transparent);
+    }
+
+    .usage-limit-grid .mini-limit-fill {
+      display: block;
+      width: var(--limit-width, 0%);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--limit-color, var(--brand-emerald));
+    }
+
     .usage-note {
       margin: 0;
       color: var(--muted-color);
@@ -3721,23 +3632,28 @@ template.innerHTML = `
       }
 
       .compact-toolbar {
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
       }
 
-      .toolbar-card.controls {
-        grid-template-columns: 1fr;
+      .composer-utility {
+        flex: 1 1 100%;
+        min-height: 44px;
+        justify-content: space-between;
+      }
+
+      .composer-utility + .composer-utility {
         padding-left: 0;
         border-left: 0;
         border-top: 1px solid var(--border-color);
-        padding-top: 9px;
       }
 
-      .mini-control + .mini-control {
-        margin-left: 0;
-        padding-left: 0;
-        border-left: 0;
-        border-top: 1px solid var(--border-color);
-        padding-top: 8px;
+      .composer-limits-button,
+      .compact-select {
+        min-height: 44px;
+        font-size: 14px;
       }
 
       .composer-diagnostics {
@@ -4008,7 +3924,7 @@ template.innerHTML = `
           <div class="attachment-chips" id="attachment-chip-list"></div>
         </div>
         <div class="composer">
-          <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-status"></textarea>
+          <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
           <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
         </div>
         <details class="composer-diagnostics" id="composer-diagnostics" open>
@@ -4016,6 +3932,7 @@ template.innerHTML = `
           <div class="compact-toolbar" id="compact-toolbar"></div>
         </details>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
+        <span class="sr-only" id="composer-shortcut-hint">Enter sends; Shift+Enter adds a new line.</span>
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
       </div>
@@ -4515,6 +4432,13 @@ class CodexBridgePanel extends HTMLElement {
           ? actionTarget.dataset.sideTab
           : "activity";
         this._renderSideTabs();
+        break;
+      case "open-usage":
+        this._sideTab = "usage";
+        this._renderSideTabs();
+        if (this._mobileDrawerMedia?.matches) {
+          this._toggleMobileDrawer("context", actionTarget);
+        }
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -5605,7 +5529,7 @@ class CodexBridgePanel extends HTMLElement {
       composerStatus.textContent = "The response was interrupted. Retry safely with the same request ID.";
     } else {
       composerStatus.textContent = activeThread
-        ? "Enter sends; Shift+Enter adds a new line."
+        ? ""
         : "Select a chat before sending a message.";
     }
   }
@@ -6750,61 +6674,51 @@ class CodexBridgePanel extends HTMLElement {
     const modelValue = thread?.model_override || "";
     const thinkingValue = thread?.thinking_override || "";
     container.replaceChildren();
-    const limitsCard = document.createElement("div");
-    limitsCard.className = "toolbar-card limits";
-    const limitsLabel = this._textElement("span", "setting-label", "Limits");
-    limitsLabel.tabIndex = 0;
-    limitsLabel.setAttribute("role", "note");
-    limitsLabel.setAttribute("aria-label", this._limitsFootnote(limits));
-    this._setTooltipTarget(limitsLabel, this._limitsFootnote(limits));
-    const limitPair = document.createElement("div");
-    limitPair.className = "limit-pair";
-    const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary
-      ? "Off"
-      : "Unavailable";
-    limitPair.append(
-      this._compactLimitCard("5h", limits?.primary, shortWindowEmptyLabel),
-      this._compactLimitCard("Week", limits?.secondary)
-    );
-    limitsCard.append(
-      limitsLabel,
-      limitPair,
-      this._textElement("span", "setting-foot", this._limitsFootnote(limits))
-    );
 
-    const controlsCard = document.createElement("div");
-    controlsCard.className = "toolbar-card controls";
-    controlsCard.append(
-      this._toolbarControl("Model", thread, () => {
-        const select = this._select("compact-select stable-select", "thread-model-select", "Chat model override");
-        this._appendOption(select, "", project?.default_model ? `Inherit (${project.default_model})` : "Inherit default", !modelValue);
-        this._appendModelOptions(select, modelValue);
-        return [select, `Effective ${thread.effective_model || project?.default_model || this._defaultModel()}`];
-      }),
-      this._toolbarControl("Thinking", thread, () => {
-        const select = this._select(
-          "compact-select stable-select",
-          "thread-thinking-select",
-          "Chat thinking level override"
-        );
-        this._populateThreadThinkingSelect(
-          select,
-          thinkingValue || null,
-          effectiveModel,
-          project?.default_thinking_level || null,
-          thinkingLevels
-        );
-        return [select, `Effective ${thread.effective_thinking_level || project?.default_thinking_level || "medium"}`];
-      })
-    );
-    container.append(limitsCard, controlsCard);
+    const limitsUtility = document.createElement("div");
+    limitsUtility.className = "composer-utility composer-limits";
+    limitsUtility.append(this._textElement("span", "composer-utility-label", "Limits"));
+    const limitsButton = this._actionButton("composer-limits-button", "open-usage", "Open usage details");
+    const limitsSummary = this._compactLimitsSummary(limits);
+    const limitsDescription = `${limitsSummary}. ${this._limitsFootnote(limits)}`;
+    limitsButton.textContent = limitsSummary;
+    limitsButton.setAttribute("aria-label", `Open usage details. ${limitsDescription}`);
+    limitsButton.title = limitsDescription;
+    this._setTooltipTarget(limitsButton, limitsDescription);
+    limitsUtility.append(limitsButton);
+
+    const modelUtility = this._toolbarUtility("Model", thread, () => {
+      const select = this._select("compact-select stable-select", "thread-model-select", "Chat model override");
+      this._appendOption(select, "", project?.default_model ? `Inherit (${project.default_model})` : "Inherit default", !modelValue);
+      this._appendModelOptions(select, modelValue);
+      return select;
+    });
+    const thinkingUtility = this._toolbarUtility("Thinking", thread, () => {
+      const select = this._select("compact-select stable-select", "thread-thinking-select", "Chat thinking level override");
+      this._populateThreadThinkingSelect(
+        select,
+        thinkingValue || null,
+        effectiveModel,
+        project?.default_thinking_level || null,
+        thinkingLevels
+      );
+      return select;
+    });
+    container.append(limitsUtility, modelUtility, thinkingUtility);
     this._renderedToolbarKey = toolbarKey;
+  }
+
+  _compactLimitsSummary(limits) {
+    const shortWindow = limits?.available && !limits?.primary && limits?.secondary
+      ? "5h off"
+      : `5h ${limits?.primary ? this._formatPercent(limits.primary.remaining_percent) : "--"}`;
+    const weeklyWindow = `Week ${limits?.secondary ? this._formatPercent(limits.secondary.remaining_percent) : "--"}`;
+    return `${shortWindow} · ${weeklyWindow}`;
   }
 
   _compactLimitCard(label, windowInfo, emptyLabel = "Unavailable") {
     const card = document.createElement("div");
     card.className = "mini-limit";
-    card.tabIndex = 0;
     card.setAttribute("role", "note");
     const head = document.createElement("div");
     head.className = "mini-limit-head";
@@ -10409,16 +10323,15 @@ class CodexBridgePanel extends HTMLElement {
     return `project-chat-list-${encodeURIComponent(String(projectId || "project"))}`;
   }
 
-  _toolbarControl(label, thread, renderControl) {
+  _toolbarUtility(label, thread, renderControl) {
     const control = document.createElement("div");
-    control.className = "mini-control";
-    control.append(this._textElement("span", "setting-label", label));
+    control.className = "composer-utility";
+    control.append(this._textElement("span", "composer-utility-label", label));
     if (!thread) {
-      control.append(this._textElement("span", "setting-foot", "Select a chat."));
+      control.append(this._textElement("span", "label-text", "Select a chat."));
       return control;
     }
-    const [select, effectiveLabel] = renderControl();
-    control.append(select, this._textElement("span", "setting-foot", effectiveLabel));
+    control.append(renderControl());
     return control;
   }
 
