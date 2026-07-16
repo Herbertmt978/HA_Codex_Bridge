@@ -41,11 +41,11 @@ workspace paths, or workspace secrets.
   network is separate from provider-side web search. Do not treat a plausible
   answer without web-search activity as a live result.
 
-The target-HA-accepted coordinated baseline is App/Integration `0.7.3` with
-Bridge `0.6.2` and Codex `0.144.4`. Signed App `0.7.4` bundles verified Codex
-`0.144.5` but was not the final UI/search acceptance candidate. Current
-App/Integration `0.7.5` (Bridge `0.6.3`, Codex `0.144.5`) is pending real Home
-Assistant acceptance. It retains provider-gated Live web search and signed-in
+The target-HA-accepted coordinated baseline is App/Integration `0.7.5` with
+Bridge `0.6.3` and Codex `0.144.5`. Candidate App/Integration `0.8.0` with
+Bridge `0.7.0` adds Codex-style run stages, bounded subagent status, and local
+PDF canvas preview but remains pending real Home Assistant acceptance. It
+retains provider-gated Live web search and signed-in
 image generation gated by both `imageGeneration` and `namespaceTools`; no API
 key is used, and generated PNG/JPEG/WebP artifacts remain private and bounded.
 The historical `0.7.1` live list returned `capabilities_unavailable` (HTTP

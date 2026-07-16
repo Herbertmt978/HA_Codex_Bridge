@@ -10,6 +10,7 @@ texts included with an upstream distribution.
 | Home Assistant | Hosts the Integration and Supervisor App. | [Home Assistant](https://www.home-assistant.io/) |
 | OpenAI Codex | Runtime used by the private App. | The App release lock pins `openai/codex` `0.144.5`; see [`codex_bridge_app/codex-release.json`](codex_bridge_app/codex-release.json). Codex source is licensed under Apache-2.0; retain its applicable notice and license with any redistribution. |
 | Bubblewrap | Tool-process sandbox component bundled from the locked Codex release. | The same release lock identifies the exact asset and verification metadata. |
+| pdfjs-dist | Local PDF parsing and canvas rendering for bounded artifact previews, including the bundled worker. | Version [`6.1.200`](https://www.npmjs.com/package/pdfjs-dist/v/6.1.200), [Apache-2.0](custom_components/codex_bridge/frontend/pdfjs-dist-LICENSE.txt). |
 | Python packages | Run the Bridge service and tests. | Declared in [`bridge_service/pyproject.toml`](bridge_service/pyproject.toml) and generated App requirements files. |
 | Home Assistant base image | Base image for the App build. | Declared in [`codex_bridge_app/Dockerfile`](codex_bridge_app/Dockerfile). |
 

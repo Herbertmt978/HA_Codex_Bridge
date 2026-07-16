@@ -43,6 +43,30 @@ const FILE_CHANGE_LABELS = Object.freeze({
   delete: "Deleting files",
 });
 
+const COLLAB_OPERATION_LABELS = Object.freeze({
+  spawnAgent: "Starting a sub-agent",
+  sendInput: "Steering a sub-agent",
+  resumeAgent: "Resuming a sub-agent",
+  wait: "Waiting for sub-agents",
+  closeAgent: "Closing a sub-agent",
+});
+
+const SUBAGENT_ACTIVITY_LABELS = Object.freeze({
+  started: "Sub-agent started",
+  interacted: "Sub-agent active",
+  interrupted: "Sub-agent interrupted",
+});
+
+const AGENT_STATE_KEYS = Object.freeze([
+  "pendingInit",
+  "running",
+  "interrupted",
+  "completed",
+  "errored",
+  "shutdown",
+  "notFound",
+]);
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -160,6 +184,12 @@ function joinActivityLabels(labels, fallback) {
 
 function itemLabel(payload = {}) {
   const itemType = payload.item_type;
+  if (itemType === "collabAgentToolCall" && Object.hasOwn(COLLAB_OPERATION_LABELS, payload.operation)) {
+    return COLLAB_OPERATION_LABELS[payload.operation];
+  }
+  if (itemType === "subAgentActivity" && Object.hasOwn(SUBAGENT_ACTIVITY_LABELS, payload.kind)) {
+    return SUBAGENT_ACTIVITY_LABELS[payload.kind];
+  }
   if (itemType === "commandExecution" && Array.isArray(payload.action_types)) {
     return joinActivityLabels(
       payload.action_types.slice(0, 3).filter((type) => Object.hasOwn(COMMAND_ACTION_LABELS, type)).map((type) => COMMAND_ACTION_LABELS[type]),
@@ -180,15 +210,63 @@ function itemLabel(payload = {}) {
     : "Working on the request";
 }
 
-function latestItemStart(events, runId) {
+function safeAgentStateCounts(value) {
+  if (!isRecord(value)) return null;
+  const counts = {};
+  let total = 0;
+  for (const state of AGENT_STATE_KEYS) {
+    const count = value[state];
+    if (!Number.isSafeInteger(count) || count < 1) continue;
+    counts[state] = Math.min(count, 1000000);
+    total += counts[state];
+  }
+  if (!total) return null;
+  const active = (counts.pendingInit || 0) + (counts.running || 0);
+  const completed = (counts.completed || 0) + (counts.shutdown || 0);
+  const attention = (counts.interrupted || 0) + (counts.errored || 0) + (counts.notFound || 0);
+  const labels = [];
+  if (active) labels.push(`${active} active`);
+  if (completed) labels.push(`${completed} complete`);
+  if (attention) labels.push(`${attention} need${attention === 1 ? "s" : ""} attention`);
+  return {
+    counts,
+    total,
+    active,
+    completed,
+    attention,
+    label: labels.join(" · "),
+  };
+}
+
+function latestSubagentSnapshot(events, runId) {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
-    if (event.event_type !== "item.started" || !eventBelongsToRun(event, runId)) {
+    if (runId ? eventRunId(event) !== runId : !eventBelongsToRun(event, runId)) continue;
+    const payload = eventPayload(event);
+    if (payload.item_type !== "collabAgentToolCall") continue;
+    const snapshot = safeAgentStateCounts(payload.agent_state_counts);
+    if (snapshot) return { ...snapshot, sourceSequence: event.sequence };
+  }
+  return null;
+}
+
+function latestItemStart(events, runId) {
+  const completedItemIds = new Set();
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const payload = eventPayload(event);
+    if (!eventBelongsToRun(event, runId)) continue;
+    if (event.event_type === "item.completed" && typeof payload.item_id === "string") {
+      completedItemIds.add(payload.item_id);
       continue;
     }
-    const payload = eventPayload(event);
+    if (event.event_type !== "item.started") continue;
     const type = payload.item_type;
-    if (typeof type === "string" && Object.hasOwn(ITEM_LABELS, type)) {
+    if (
+      typeof type === "string"
+      && Object.hasOwn(ITEM_LABELS, type)
+      && !(typeof payload.item_id === "string" && completedItemIds.has(payload.item_id))
+    ) {
       return { event, label: itemLabel(payload), itemType: type };
     }
   }
@@ -344,8 +422,11 @@ export function getRunActivityViewModel(thread = {}, events = []) {
       }
     } else if (event.event_type === "reasoning.summary_delta") {
       // Chunks are added as one bounded summary below.
-    } else if (event.event_type === "item.started" && Object.hasOwn(ITEM_LABELS, payload.item_type)) {
-      addHistory(history, seenHistory, itemLabel(payload), "item");
+    } else if ((event.event_type === "item.started" || event.event_type === "item.completed") && Object.hasOwn(ITEM_LABELS, payload.item_type)) {
+      const historyKind = payload.item_type === "collabAgentToolCall" || payload.item_type === "subAgentActivity"
+        ? "subagent"
+        : "item";
+      addHistory(history, seenHistory, itemLabel(payload), historyKind);
     } else if (event.event_type === "patch.updated") {
       addHistory(history, seenHistory, "Updating files", "patch");
     }
@@ -353,6 +434,7 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
   const assistant = assistantState(normalizedEvents, runId);
+  const subagents = latestSubagentSnapshot(normalizedEvents, runId);
   const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
   let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
   if (!action && state === "queued") action = "Waiting in queue";
@@ -371,8 +453,10 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     action: safeText(action),
     currentActivity: safeText(action),
     step: activeStep,
+    stages: plan.steps.map((step, index) => ({ ...step, index: index + 1 })),
     actionHistory: history,
     files,
+    subagents,
     assistant,
     assistantState: assistant,
   };

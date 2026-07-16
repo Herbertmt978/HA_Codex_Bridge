@@ -73,6 +73,12 @@ describe("panel run activity integration", () => {
         run_id: "run-activity",
         changes: [{ path: "frontend/src/example.js", kind: "update", diff: "@@\n-old\n+new\n" }],
       }),
+      event(5, "item.started", {
+        run_id: "run-activity",
+        item_type: "collabAgentToolCall",
+        operation: "wait",
+        agent_state_counts: { running: 2, completed: 1 },
+      }),
     ];
     const panel = createPanel({ events });
     panel._render(true);
@@ -85,10 +91,13 @@ describe("panel run activity integration", () => {
 
     const chip = activity?.querySelector(".run-step-chip");
     expect(chip).toBeTruthy();
+    expect(chip?.hasAttribute("data-tooltip")).toBe(false);
+    expect(chip?.hasAttribute("title")).toBe(false);
     expect(chip?.textContent).toMatch(/2\s*\/\s*3/);
     expect(chip?.textContent).toMatch(/1 file/i);
     expect(chip?.textContent).toContain("+1");
     expect(chip?.textContent).toContain("-1");
+    expect(chip?.textContent).toContain("2 agents active");
     expect(chip?.getAttribute("aria-expanded")).toBe("false");
 
     chip?.click();
@@ -98,6 +107,9 @@ describe("panel run activity integration", () => {
     expect(history?.length).toBeGreaterThan(0);
     expect(history?.length).toBeLessThanOrEqual(8);
     expect(activity?.querySelector(".run-step-tooltip")?.textContent).toMatch(/Inspect repository|Reading files/i);
+    expect(activity?.querySelectorAll(".run-stage-item")).toHaveLength(3);
+    expect(activity?.querySelector('.run-stage-item[aria-current="step"]')?.textContent).toContain("Implement the change");
+    expect(activity?.querySelector(".run-step-agent-summary")?.textContent).toMatch(/Subagents.*2 active.*1 complete/i);
   });
 
   it("sets transcript busy state while streaming and replaces the delta with completion", () => {

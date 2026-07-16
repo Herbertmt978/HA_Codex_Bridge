@@ -1,8 +1,23 @@
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
+import {
+  PDF_PREVIEW_MAX_SCALE,
+  PDF_PREVIEW_MIN_SCALE,
+  loadPdfDocument,
+  renderPdfPage,
+  visiblePdfPageCount,
+} from "./pdf-preview.js";
 import { getRunActivityViewModel } from "./run-activity.js";
-import { createPreviewElement, previewDescriptor, sanitizeFilename } from "./safe-dom.js";
+import {
+  PDF_MIME_TYPE,
+  createPreviewElement,
+  hasValidPdfHeader,
+  isPdfArtifactCandidate,
+  previewDescriptor,
+  sanitizeBlobUrl,
+  sanitizeFilename,
+} from "./safe-dom.js";
 import { uploadResumableFile } from "./uploads.js";
 import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
 import { getApprovalViewModel, renderApproval } from "./views/approval.js";
@@ -11,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.7.5";
+const PANEL_VERSION = "0.8.0";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -65,6 +80,8 @@ const INTERACTION_ERROR_CODES = new Set([
 ]);
 const ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 const ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
+const PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
+const PDF_PREVIEW_MAX_LABEL = "8 MB";
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
@@ -88,6 +105,9 @@ function canDeferArtifactRefresh(error) {
 }
 
 function artifactPreviewLimit(artifact) {
+  if (isPdfArtifactCandidate(artifact)) {
+    return { bytes: PDF_PREVIEW_MAX_BYTES, label: PDF_PREVIEW_MAX_LABEL };
+  }
   return isGeneratedImageArtifact(artifact)
     ? { bytes: GENERATED_IMAGE_PREVIEW_MAX_BYTES, label: GENERATED_IMAGE_PREVIEW_MAX_LABEL }
     : { bytes: ARTIFACT_PREVIEW_MAX_BYTES, label: ARTIFACT_PREVIEW_MAX_LABEL };
@@ -104,7 +124,10 @@ function artifactPreviewSizeState(artifact) {
 function isAutoPreviewCandidate(artifact) {
   return (
     artifactPreviewSizeState(artifact) === "within-limit"
-    && previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary"
+    && (
+      previewDescriptor(artifact, { type: artifact?.mime_type || "" }).kind !== "binary"
+      || isPdfArtifactCandidate(artifact)
+    )
   );
 }
 
@@ -113,6 +136,57 @@ function previewUnavailableMessage(artifact, sizeState) {
     return `Preview limited to files up to ${artifactPreviewLimit(artifact).label}. Download it to view the full file.`;
   }
   return "Preview unavailable because the file size is unknown. Download it to view the full file.";
+}
+
+async function readBoundedPreviewResponse(response, maximumBytes) {
+  const contentLengthValue = response.headers?.get?.("Content-Length");
+  if (typeof contentLengthValue === "string" && /^\d+$/u.test(contentLengthValue)) {
+    const contentLength = Number(contentLengthValue);
+    if (!Number.isSafeInteger(contentLength) || contentLength > maximumBytes) {
+      try {
+        await response.body?.cancel?.();
+      } catch {
+        // The response is being rejected; cancellation is best effort only.
+      }
+      return null;
+    }
+  }
+  const reader = response.body?.getReader?.();
+  if (!reader) return null;
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!ArrayBuffer.isView(value)) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The byte cap still wins when response cancellation is unavailable.
+        }
+        return null;
+      }
+      const chunk = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      total += chunk.byteLength;
+      if (total > maximumBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The byte cap still wins when response cancellation is unavailable.
+        }
+        return null;
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+  const contentType = String(response.headers?.get?.("Content-Type") || "application/octet-stream")
+    .split(";", 1)[0]
+    .trim()
+    .slice(0, 120) || "application/octet-stream";
+  return new Blob(chunks, { type: contentType });
 }
 
 const template = document.createElement("template");
@@ -1938,6 +2012,113 @@ template.innerHTML = `
       object-fit: contain;
     }
 
+    .pdf-preview-shell {
+      display: grid;
+      grid-template-rows: auto minmax(220px, 1fr);
+      min-height: 420px;
+      background: color-mix(in srgb, var(--surface-muted) 88%, var(--surface-bg) 12%);
+    }
+
+    .pdf-preview-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      min-height: 42px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+      background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
+      backdrop-filter: blur(10px);
+    }
+
+    .pdf-preview-toolbar button {
+      min-width: 30px;
+      min-height: 30px;
+      padding: 4px 8px;
+      border-radius: 7px;
+      color: var(--muted-color);
+      background: transparent;
+    }
+
+    .pdf-preview-toolbar button:hover:not(:disabled),
+    .pdf-preview-toolbar button:focus-visible {
+      color: var(--text-color);
+      background: var(--surface-muted);
+    }
+
+    .pdf-preview-toolbar button:disabled {
+      opacity: 0.38;
+    }
+
+    .pdf-preview-control-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .pdf-preview-action-group {
+      margin-left: auto;
+    }
+
+    .pdf-preview-page-status {
+      min-width: 72px;
+      text-align: center;
+      color: var(--muted-color);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pdf-preview-open,
+    .pdf-preview-retry,
+    .pdf-preview-download {
+      gap: 5px;
+      white-space: nowrap;
+      font-size: 11px;
+    }
+
+    .preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .pdf-preview-viewport {
+      position: relative;
+      display: grid;
+      place-items: start center;
+      min-height: 360px;
+      padding: 16px;
+      overflow: auto;
+    }
+
+    .pdf-preview-canvas {
+      display: block;
+      max-width: none;
+      background: white;
+      box-shadow: 0 10px 30px color-mix(in srgb, var(--text-color) 18%, transparent);
+    }
+
+    .pdf-preview-status {
+      position: absolute;
+      inset: 16px;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      color: var(--muted-color);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .pdf-preview-status[hidden] {
+      display: none;
+    }
+
     .preview-empty,
     .preview-binary {
       display: grid;
@@ -2944,12 +3125,19 @@ template.innerHTML = `
       font-variant-numeric: tabular-nums;
     }
 
+    .run-step-agents {
+      color: color-mix(in srgb, var(--accent-color) 74%, var(--text-color) 26%);
+      font-variant-numeric: tabular-nums;
+    }
+
     .run-step-tooltip {
       position: absolute;
       z-index: 12;
       right: 0;
       bottom: calc(100% + 9px);
       width: min(360px, calc(100vw - 32px));
+      max-height: min(480px, calc(100vh - 48px));
+      overflow: auto;
       display: grid;
       gap: 8px;
       padding: 12px;
@@ -2974,9 +3162,117 @@ template.innerHTML = `
       transform: translateY(0);
     }
 
+    .run-step-wrap.tooltip-below .run-step-tooltip {
+      top: calc(100% + 9px);
+      bottom: auto;
+      transform: translateY(-5px);
+    }
+
+    .run-step-wrap.tooltip-below:hover .run-step-tooltip,
+    .run-step-wrap.tooltip-below:focus-within .run-step-tooltip,
+    .run-step-wrap.tooltip-below.open .run-step-tooltip {
+      transform: translateY(0);
+    }
+
     .run-step-tooltip-title {
       font-size: 12px;
       font-weight: 700;
+    }
+
+    .run-step-section-label {
+      color: var(--muted-color);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .run-stage-list {
+      display: grid;
+      gap: 3px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .run-stage-item {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 28px;
+      padding: 3px 5px;
+      border-radius: 7px;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .run-stage-item.inProgress {
+      color: var(--text-color);
+      background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+    }
+
+    .run-stage-item.completed {
+      color: color-mix(in srgb, var(--text-color) 76%, var(--muted-color) 24%);
+    }
+
+    .run-stage-item:hover {
+      background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
+      color: var(--text-color);
+    }
+
+    .run-stage-marker {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: var(--surface-bg);
+      color: var(--muted-color);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .run-stage-item.inProgress .run-stage-marker {
+      border-color: color-mix(in srgb, var(--accent-color) 74%, var(--border-color) 26%);
+      color: var(--accent-color);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 11%, transparent);
+    }
+
+    .run-stage-item.completed .run-stage-marker {
+      border-color: color-mix(in srgb, var(--brand-emerald) 72%, var(--border-color) 28%);
+      background: color-mix(in srgb, var(--brand-emerald) 12%, var(--surface-bg) 88%);
+      color: color-mix(in srgb, var(--brand-emerald) 84%, var(--text-color) 16%);
+    }
+
+    .run-step-agent-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color) 82%);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent-color) 5%, var(--surface-muted) 95%);
+      color: var(--muted-color);
+      font-size: 11px;
+    }
+
+    .run-step-agent-glyph {
+      display: inline-flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .run-step-agent-glyph::before,
+    .run-step-agent-glyph::after {
+      width: 7px;
+      height: 7px;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 72%, var(--border-color) 28%);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent-color) 14%, var(--surface-bg) 86%);
+      content: "";
     }
 
     .run-step-history {
@@ -3003,6 +3299,19 @@ template.innerHTML = `
       margin-top: 5px;
       border-radius: 999px;
       background: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
+    }
+
+    .run-step-history-dot[data-kind="plan"] {
+      background: color-mix(in srgb, var(--brand-emerald) 70%, var(--border-color) 30%);
+    }
+
+    .run-step-history-dot[data-kind="patch"] {
+      background: color-mix(in srgb, var(--brand-amber) 74%, var(--border-color) 26%);
+    }
+
+    .run-step-history-dot[data-kind="subagent"] {
+      background: color-mix(in srgb, var(--accent-color) 82%, var(--border-color) 18%);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent);
     }
 
     .message.streaming .bubble {
@@ -3793,6 +4102,40 @@ template.innerHTML = `
         max-width: 100%;
       }
 
+      .run-step-chip {
+        min-height: 44px;
+      }
+
+      .pdf-preview-toolbar {
+        align-items: stretch;
+        gap: 4px;
+      }
+
+      .pdf-preview-toolbar button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px;
+      }
+
+      .pdf-preview-control-group {
+        flex: 1 1 auto;
+        justify-content: center;
+      }
+
+      .pdf-preview-action-group {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        margin-left: 0;
+        padding-top: 4px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .pdf-preview-open > span,
+      .pdf-preview-retry > span,
+      .pdf-preview-download > span {
+        display: none;
+      }
+
       .run-step-tooltip {
         right: auto;
         left: 0;
@@ -4027,7 +4370,9 @@ const icons = {
   browse: iconSvg('<path d="M3 12h18"></path><path d="M12 3v18"></path>'),
   search: iconSvg('<circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>'),
   chevronDown: iconSvg('<path d="m6 9 6 6 6-6"></path>'),
+  chevronLeft: iconSvg('<path d="m15 18-6-6 6-6"></path>'),
   chevronRight: iconSvg('<path d="m9 6 6 6-6 6"></path>'),
+  external: iconSvg('<path d="M14 3h7v7"></path><path d="M10 14 21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path>'),
   more: iconSvg('<circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle>'),
   archive: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="M9 11h6"></path><path d="M4 4h16v3H4z"></path>'),
   restore: iconSvg('<path d="M3 7h18"></path><path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path><path d="m9 14 3-3 3 3"></path><path d="M12 11v7"></path><path d="M4 4h16v3H4z"></path>'),
@@ -4060,6 +4405,19 @@ class CodexBridgePanel extends HTMLElement {
     this._artifactPreview = null;
     this._selectedArtifactId = null;
     this._previewToken = 0;
+    this._pdfPreviewDocument = null;
+    this._pdfPreviewLoadingTask = null;
+    this._pdfPreviewLoadPromise = null;
+    this._pdfPreviewArtifactId = null;
+    this._pdfPreviewPage = 1;
+    this._pdfPreviewZoom = 1;
+    this._pdfPreviewGeneration = 0;
+    this._pdfPreviewRenderGeneration = 0;
+    this._pdfPreviewRenderPromise = null;
+    this._pdfPreviewRenderController = null;
+    this._pdfPreviewRenderTask = null;
+    this._pdfPreviewRenderQueued = false;
+    this._pdfPreviewError = "";
     this._sequence = 0;
     this._draft = "";
     this._drafts = new Map();
@@ -4178,7 +4536,7 @@ class CodexBridgePanel extends HTMLElement {
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
     this._hideTooltip();
-    this._revokePreviewUrl();
+    this._clearArtifactPreview();
     this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = false;
   }
@@ -4566,6 +4924,27 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "download-artifact":
         this._downloadArtifact(actionTarget.dataset.artifactId || "");
+        break;
+      case "retry-artifact-preview":
+        this._retryArtifactPreview();
+        break;
+      case "pdf-previous":
+        this._setPdfPreviewPage(this._pdfPreviewPage - 1);
+        break;
+      case "pdf-next":
+        this._setPdfPreviewPage(this._pdfPreviewPage + 1);
+        break;
+      case "pdf-zoom-out":
+        this._setPdfPreviewZoom(this._pdfPreviewZoom - 0.15);
+        break;
+      case "pdf-zoom-in":
+        this._setPdfPreviewZoom(this._pdfPreviewZoom + 0.15);
+        break;
+      case "retry-pdf-preview":
+        this._retryPdfPreview();
+        break;
+      case "open-pdf-preview":
+        this._openPdfPreview();
         break;
       case "create-workspace-archive":
         this._createWorkspaceArchive();
@@ -6939,6 +7318,9 @@ class CodexBridgePanel extends HTMLElement {
     const region = this.shadowRoot.getElementById("run-activity");
     if (!region) return;
 
+    if (this._tooltipTarget && region.contains(this._tooltipTarget)) {
+      this._hideTooltip();
+    }
     region.replaceChildren();
     const activity = this._runActivityForThread();
     const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
@@ -6971,17 +7353,22 @@ class CodexBridgePanel extends HTMLElement {
     if (hasStepDetails || activity.busy) {
       const wrap = document.createElement("div");
       wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
+      wrap.dataset.state = activity.state;
       const tooltipId = "run-step-tooltip";
       const chip = this._actionButton(
         "run-step-chip",
         "toggle-run-activity-details",
         this._runStepAccessibleLabel(activity)
       );
+      // This control owns a rich activity popover. Suppress the generic and
+      // native tooltip paths so hover/focus never renders two tooltips.
+      delete chip.dataset.tooltip;
+      chip.removeAttribute("title");
       chip.id = "run-step-chip";
       chip.setAttribute("aria-expanded", String(this._runActivityDetailsOpen));
       chip.setAttribute("aria-haspopup", "true");
       chip.setAttribute("aria-controls", tooltipId);
-      chip.setAttribute("aria-describedby", tooltipId);
+      if (this._runActivityDetailsOpen) chip.setAttribute("aria-describedby", tooltipId);
 
       const stepIndicator = document.createElement("span");
       const stepState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
@@ -7001,12 +7388,59 @@ class CodexBridgePanel extends HTMLElement {
       }
       if (files.additions) chip.append(this._textElement("span", "run-step-additions", `+${files.additions}`));
       if (files.deletions) chip.append(this._textElement("span", "run-step-deletions", `-${files.deletions}`));
+      if (activity.subagents?.total) {
+        const count = activity.subagents.active || activity.subagents.total;
+        chip.append(
+          this._textElement("span", "run-step-separator", "·"),
+          this._textElement("span", "run-step-agents", `${count} agent${count === 1 ? "" : "s"}${activity.subagents.active ? " active" : ""}`)
+        );
+      }
 
       const tooltip = document.createElement("div");
       tooltip.id = tooltipId;
       tooltip.className = "run-step-tooltip";
       tooltip.setAttribute("role", "tooltip");
       tooltip.append(this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity"));
+      const stages = Array.isArray(activity.stages) ? activity.stages.slice(0, 12) : [];
+      if (stages.length) {
+        tooltip.append(this._textElement("span", "run-step-section-label", "Stages"));
+        const stageList = document.createElement("ol");
+        stageList.className = "run-stage-list";
+        for (const stage of stages) {
+          const item = document.createElement("li");
+          item.className = `run-stage-item ${stage.status}`;
+          const stageStatus = stage.status === "inProgress" ? "current" : stage.status;
+          item.setAttribute("aria-label", `${stage.label}, ${stageStatus}`);
+          if (stage.status === "inProgress") item.setAttribute("aria-current", "step");
+          const marker = this._textElement(
+            "span",
+            "run-stage-marker",
+            stage.status === "completed" ? "✓" : String(stage.index)
+          );
+          marker.setAttribute("aria-hidden", "true");
+          item.append(marker, this._textElement("span", "", stage.label));
+          stageList.append(item);
+        }
+        tooltip.append(stageList);
+        if (activity.stages.length > stages.length) {
+          tooltip.append(this._textElement("span", "empty-note", `+${activity.stages.length - stages.length} more stages`));
+        }
+      }
+      if (activity.subagents?.total) {
+        const summary = document.createElement("div");
+        summary.className = "run-step-agent-summary";
+        const glyph = this._textElement("span", "run-step-agent-glyph", "");
+        glyph.setAttribute("aria-hidden", "true");
+        summary.append(
+          glyph,
+          this._textElement("strong", "", "Subagents"),
+          this._textElement("span", "", activity.subagents.label)
+        );
+        tooltip.append(summary);
+      }
+      if (history.length || !stages.length) {
+        tooltip.append(this._textElement("span", "run-step-section-label", "Activity"));
+      }
       const list = document.createElement("ol");
       list.className = "run-step-history";
       const visibleHistory = history.length
@@ -7015,13 +7449,24 @@ class CodexBridgePanel extends HTMLElement {
       for (const entry of visibleHistory) {
         const item = document.createElement("li");
         const dot = this._textElement("span", "run-step-history-dot", "");
+        dot.dataset.kind = entry.kind;
         dot.setAttribute("aria-hidden", "true");
         item.append(dot, this._textElement("span", "", entry.label));
         list.append(item);
       }
-      tooltip.append(list);
+      if (history.length || !stages.length) tooltip.append(list);
       wrap.append(chip, tooltip);
       region.append(wrap);
+      const chipRect = chip.getBoundingClientRect();
+      const tooltipHeight = tooltip.scrollHeight;
+      if (
+        chipRect.height > 0
+        && tooltipHeight > 0
+        && chipRect.top - tooltipHeight - 9 < 8
+        && chipRect.bottom + tooltipHeight + 9 < window.innerHeight - 8
+      ) {
+        wrap.classList.add("tooltip-below");
+      }
     } else {
       this._runActivityDetailsOpen = false;
     }
@@ -7038,6 +7483,8 @@ class CodexBridgePanel extends HTMLElement {
     if (files.changed) parts.push(`${files.changed} files changed`);
     if (files.additions) parts.push(`${files.additions} additions`);
     if (files.deletions) parts.push(`${files.deletions} deletions`);
+    if (activity.subagents?.active) parts.push(`${activity.subagents.active} subagents active`);
+    else if (activity.subagents?.total) parts.push(`${activity.subagents.total} subagents`);
     parts.push(this._runActivityDetailsOpen ? "Hide activity details" : "Show activity details");
     return parts.join(". ");
   }
@@ -7537,6 +7984,19 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderArtifactPreview() {
     const container = this.shadowRoot.getElementById("artifact-preview");
+    if (!container) return;
+    const currentPreview = this._artifactPreview;
+    const existingPdfShell = container.querySelector(".pdf-preview-shell");
+    if (
+      currentPreview?.kind === "pdf"
+      && currentPreview.artifactId === this._selectedArtifactId
+      && existingPdfShell?.dataset.artifactId === currentPreview.artifactId
+    ) {
+      this._syncPdfPreviewControls(existingPdfShell);
+      void this._ensurePdfPreview(currentPreview);
+      return;
+    }
+
     container.replaceChildren();
     if (!this._selectedArtifactId) {
       const empty = document.createElement("div");
@@ -7554,6 +8014,11 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const preview = this._artifactPreview;
+    if (preview.kind === "pdf") {
+      this._renderPdfPreview(preview, container);
+      return;
+    }
+    if (this._pdfPreviewArtifactId) this._disposePdfPreview();
     if (preview.kind === "text" || preview.kind === "image") {
       const previewElement = createPreviewElement(document, preview, { blobUrl: preview.url });
       if (previewElement) {
@@ -7568,7 +8033,306 @@ class CodexBridgePanel extends HTMLElement {
       this._textElement("div", "", preview.filename || "Artifact preview unavailable"),
       this._textElement("div", "empty-note", preview.notice || preview.contentType || "Binary file")
     );
+    if (preview.retryable) {
+      const actions = document.createElement("div");
+      actions.className = "preview-actions";
+      actions.append(this._actionButton("secondary-button small", "retry-artifact-preview", "Retry preview"));
+      binary.append(actions);
+    }
     container.append(binary);
+  }
+
+  _renderPdfPreview(preview, container) {
+    if (!(preview?.blob instanceof Blob)) {
+      const unavailable = document.createElement("div");
+      unavailable.className = "preview-binary";
+      unavailable.append(
+        this._textElement("div", "", preview?.filename || "PDF preview unavailable"),
+        this._textElement("div", "empty-note", "Download the PDF to view it.")
+      );
+      container.append(unavailable);
+      return;
+    }
+    if (this._pdfPreviewArtifactId !== preview.artifactId) {
+      this._disposePdfPreview();
+      this._pdfPreviewArtifactId = preview.artifactId;
+      this._pdfPreviewPage = 1;
+      this._pdfPreviewZoom = 1;
+      this._pdfPreviewError = "";
+    }
+
+    const shell = document.createElement("section");
+    shell.className = "pdf-preview-shell";
+    shell.dataset.artifactId = preview.artifactId;
+    shell.setAttribute("aria-label", `PDF preview: ${preview.filename || "artifact.pdf"}`);
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "pdf-preview-toolbar";
+    toolbar.setAttribute("role", "toolbar");
+    toolbar.setAttribute("aria-label", "PDF preview controls");
+
+    const previous = this._actionButton("pdf-preview-previous", "pdf-previous", "Previous page");
+    this._appendTrustedIcon(previous, icons.chevronLeft);
+    const pageStatus = this._textElement("span", "pdf-preview-page-status", "Page 1");
+    pageStatus.setAttribute("aria-live", "polite");
+    const next = this._actionButton("pdf-preview-next", "pdf-next", "Next page");
+    this._appendTrustedIcon(next, icons.chevronRight);
+    const zoomOut = this._actionButton("pdf-preview-zoom-out", "pdf-zoom-out", "Zoom out");
+    zoomOut.append(this._textElement("span", "", "−"));
+    const zoomStatus = this._textElement("span", "pdf-preview-page-status pdf-preview-zoom-status", "100%");
+    const zoomIn = this._actionButton("pdf-preview-zoom-in", "pdf-zoom-in", "Zoom in");
+    zoomIn.append(this._textElement("span", "", "+"));
+    const open = this._actionButton("pdf-preview-open", "open-pdf-preview", "Open PDF in a new tab");
+    this._appendTrustedIcon(open, icons.external);
+    open.append(this._textElement("span", "", "Open"));
+    const retry = this._actionButton("pdf-preview-retry", "retry-pdf-preview", "Retry PDF preview");
+    this._appendTrustedIcon(retry, icons.refresh);
+    retry.append(this._textElement("span", "", "Retry"));
+    const download = this._actionButton("pdf-preview-download", "download-artifact", `Download ${preview.filename || "PDF"}`);
+    download.dataset.artifactId = preview.artifactId;
+    this._appendTrustedIcon(download, icons.download);
+    download.append(this._textElement("span", "", "Download"));
+    const pageControls = document.createElement("div");
+    pageControls.className = "pdf-preview-control-group";
+    pageControls.append(previous, pageStatus, next);
+    const zoomControls = document.createElement("div");
+    zoomControls.className = "pdf-preview-control-group";
+    zoomControls.append(zoomOut, zoomStatus, zoomIn);
+    const artifactControls = document.createElement("div");
+    artifactControls.className = "pdf-preview-control-group pdf-preview-action-group";
+    artifactControls.append(retry, open, download);
+    toolbar.append(pageControls, zoomControls, artifactControls);
+
+    const viewport = document.createElement("div");
+    viewport.className = "pdf-preview-viewport";
+    const canvas = document.createElement("canvas");
+    canvas.className = "pdf-preview-canvas";
+    canvas.hidden = true;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", `Page 1 of ${preview.filename || "PDF"}`);
+    const status = this._textElement("div", "pdf-preview-status", "Loading PDF…");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    viewport.append(canvas, status);
+    shell.append(toolbar, viewport);
+    container.append(shell);
+    this._syncPdfPreviewControls(shell);
+    void this._ensurePdfPreview(preview);
+  }
+
+  async _ensurePdfPreview(preview) {
+    if (
+      preview?.kind !== "pdf"
+      || !(preview.blob instanceof Blob)
+      || preview.artifactId !== this._pdfPreviewArtifactId
+    ) return;
+    if (this._pdfPreviewError) return;
+    if (this._pdfPreviewDocument) {
+      const canvas = this.shadowRoot.querySelector(".pdf-preview-shell .pdf-preview-canvas");
+      if (!canvas || canvas.hidden) await this._renderCurrentPdfPage();
+      return;
+    }
+    if (this._pdfPreviewLoadPromise) return this._pdfPreviewLoadPromise;
+
+    const generation = this._pdfPreviewGeneration;
+    const loadPromise = loadPdfDocument(preview.blob);
+    this._pdfPreviewLoadPromise = loadPromise;
+    let loadingTask = null;
+    try {
+      loadingTask = await loadPromise;
+      if (
+        generation !== this._pdfPreviewGeneration
+        || preview.artifactId !== this._pdfPreviewArtifactId
+        || !this.isConnected
+      ) {
+        await loadingTask.destroy().catch(() => {});
+        return;
+      }
+      this._pdfPreviewLoadingTask = loadingTask;
+      const pdfDocument = await loadingTask.promise;
+      if (
+        generation !== this._pdfPreviewGeneration
+        || preview.artifactId !== this._pdfPreviewArtifactId
+        || !this.isConnected
+      ) {
+        await pdfDocument.destroy().catch(() => {});
+        return;
+      }
+      this._pdfPreviewDocument = pdfDocument;
+      if (visiblePdfPageCount(pdfDocument) < 1) {
+        throw new Error("PDF contains no previewable pages");
+      }
+      this._pdfPreviewError = "";
+      await this._renderCurrentPdfPage();
+    } catch {
+      if (generation !== this._pdfPreviewGeneration) return;
+      const failedDocument = this._pdfPreviewDocument;
+      this._pdfPreviewDocument = null;
+      if (this._pdfPreviewLoadingTask === loadingTask) this._pdfPreviewLoadingTask = null;
+      const destroyTarget = failedDocument || loadingTask;
+      if (typeof destroyTarget?.destroy === "function") {
+        await Promise.resolve(destroyTarget.destroy()).catch(() => {});
+      }
+      this._pdfPreviewError = "PDF preview unavailable. Open or download the file to view it.";
+      const shell = this.shadowRoot.querySelector(".pdf-preview-shell");
+      this._syncPdfPreviewControls(shell);
+    } finally {
+      if (this._pdfPreviewLoadPromise === loadPromise) this._pdfPreviewLoadPromise = null;
+    }
+  }
+
+  async _renderCurrentPdfPage() {
+    if (this._pdfPreviewRenderPromise) {
+      this._pdfPreviewRenderQueued = true;
+      return this._pdfPreviewRenderPromise;
+    }
+    const shell = this.shadowRoot.querySelector(".pdf-preview-shell");
+    const canvas = shell?.querySelector(".pdf-preview-canvas");
+    const viewport = shell?.querySelector(".pdf-preview-viewport");
+    if (!this._pdfPreviewDocument || !shell || !canvas || !viewport) return;
+    const generation = ++this._pdfPreviewRenderGeneration;
+    const requestedPage = this._pdfPreviewPage;
+    const requestedZoom = this._pdfPreviewZoom;
+    const controller = new AbortController();
+    this._pdfPreviewRenderController = controller;
+    const status = shell.querySelector(".pdf-preview-status");
+    if (status) {
+      status.hidden = false;
+      status.textContent = `Rendering page ${this._pdfPreviewPage}…`;
+    }
+    const renderPromise = renderPdfPage({
+        document: this._pdfPreviewDocument,
+        pageNumber: requestedPage,
+        canvas,
+        availableWidth: Math.max(240, viewport.clientWidth - 32),
+        zoom: requestedZoom,
+        signal: controller.signal,
+        onRenderTask: (task) => {
+          if (generation === this._pdfPreviewRenderGeneration) this._pdfPreviewRenderTask = task;
+        },
+      });
+    this._pdfPreviewRenderPromise = renderPromise;
+    this._syncPdfPreviewControls(shell);
+    try {
+      const result = await renderPromise;
+      if (
+        generation !== this._pdfPreviewRenderGeneration
+        || !canvas.isConnected
+        || requestedPage !== this._pdfPreviewPage
+        || Math.abs(requestedZoom - this._pdfPreviewZoom) >= 0.001
+      ) return;
+      this._pdfPreviewPage = result.pageNumber;
+      canvas.hidden = false;
+      canvas.setAttribute("aria-label", `PDF page ${result.pageNumber} of ${result.pageCount}`);
+      if (status) status.hidden = true;
+      this._pdfPreviewError = "";
+      this._syncPdfPreviewControls(shell);
+    } catch {
+      if (generation !== this._pdfPreviewRenderGeneration || controller.signal.aborted) return;
+      canvas.hidden = true;
+      this._pdfPreviewError = "PDF page could not be rendered. Open or download the file to view it.";
+      this._syncPdfPreviewControls(shell);
+    } finally {
+      if (this._pdfPreviewRenderPromise === renderPromise) this._pdfPreviewRenderPromise = null;
+      if (this._pdfPreviewRenderController === controller) this._pdfPreviewRenderController = null;
+      this._pdfPreviewRenderTask = null;
+      this._syncPdfPreviewControls(shell);
+      if (this._pdfPreviewRenderQueued && this._pdfPreviewDocument && this.isConnected) {
+        this._pdfPreviewRenderQueued = false;
+        void this._renderCurrentPdfPage();
+      }
+    }
+  }
+
+  _syncPdfPreviewControls(shell) {
+    if (!shell) return;
+    const pageCount = visiblePdfPageCount(this._pdfPreviewDocument);
+    const loading = !this._pdfPreviewDocument && !this._pdfPreviewError;
+    const unavailable = !this._pdfPreviewDocument;
+    const rendering = Boolean(this._pdfPreviewRenderPromise);
+    const pageStatus = shell.querySelector(".pdf-preview-page-status:not(.pdf-preview-zoom-status)");
+    const zoomStatus = shell.querySelector(".pdf-preview-zoom-status");
+    const status = shell.querySelector(".pdf-preview-status");
+    if (pageStatus) pageStatus.textContent = pageCount ? `${this._pdfPreviewPage} / ${pageCount}` : "Page —";
+    if (zoomStatus) zoomStatus.textContent = `${Math.round(this._pdfPreviewZoom * 100)}%`;
+    const previous = shell.querySelector('[data-action="pdf-previous"]');
+    const next = shell.querySelector('[data-action="pdf-next"]');
+    const zoomOut = shell.querySelector('[data-action="pdf-zoom-out"]');
+    const zoomIn = shell.querySelector('[data-action="pdf-zoom-in"]');
+    const retry = shell.querySelector('[data-action="retry-pdf-preview"]');
+    if (previous) previous.disabled = loading || rendering || this._pdfPreviewPage <= 1;
+    if (next) next.disabled = loading || rendering || !pageCount || this._pdfPreviewPage >= pageCount;
+    if (zoomOut) zoomOut.disabled = unavailable || rendering || this._pdfPreviewZoom <= PDF_PREVIEW_MIN_SCALE;
+    if (zoomIn) zoomIn.disabled = unavailable || rendering || this._pdfPreviewZoom >= PDF_PREVIEW_MAX_SCALE;
+    if (retry) {
+      retry.hidden = !this._pdfPreviewError;
+      retry.disabled = loading || rendering;
+    }
+    if (status && this._pdfPreviewError) {
+      status.hidden = false;
+      status.textContent = this._pdfPreviewError;
+    }
+  }
+
+  _setPdfPreviewPage(value) {
+    const pageCount = visiblePdfPageCount(this._pdfPreviewDocument);
+    if (!pageCount) return;
+    const nextPage = Math.min(pageCount, Math.max(1, Number(value) || 1));
+    if (nextPage === this._pdfPreviewPage) return;
+    this._pdfPreviewPage = nextPage;
+    void this._renderCurrentPdfPage();
+  }
+
+  _setPdfPreviewZoom(value) {
+    const nextZoom = Math.min(PDF_PREVIEW_MAX_SCALE, Math.max(PDF_PREVIEW_MIN_SCALE, Number(value) || 1));
+    if (Math.abs(nextZoom - this._pdfPreviewZoom) < 0.001) return;
+    this._pdfPreviewZoom = nextZoom;
+    void this._renderCurrentPdfPage();
+  }
+
+  _openPdfPreview() {
+    const safeUrl = sanitizeBlobUrl(this._artifactPreview?.url, { origin: window.location.origin });
+    if (!safeUrl) return;
+    const opened = window.open(safeUrl, "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+  }
+
+  _retryPdfPreview() {
+    const preview = this._artifactPreview;
+    if (preview?.kind !== "pdf" || !(preview.blob instanceof Blob)) return;
+    this._disposePdfPreview();
+    this._pdfPreviewArtifactId = preview.artifactId;
+    const shell = this.shadowRoot.querySelector(".pdf-preview-shell");
+    const status = shell?.querySelector(".pdf-preview-status");
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Loading PDF…";
+    }
+    this._syncPdfPreviewControls(shell);
+    void this._ensurePdfPreview(preview);
+  }
+
+  _disposePdfPreview() {
+    this._pdfPreviewGeneration += 1;
+    this._pdfPreviewRenderGeneration += 1;
+    const loadingTask = this._pdfPreviewLoadingTask;
+    const pdfDocument = this._pdfPreviewDocument;
+    this._pdfPreviewLoadingTask = null;
+    this._pdfPreviewDocument = null;
+    this._pdfPreviewLoadPromise = null;
+    this._pdfPreviewRenderController?.abort();
+    this._pdfPreviewRenderController = null;
+    this._pdfPreviewRenderTask = null;
+    this._pdfPreviewRenderPromise = null;
+    this._pdfPreviewRenderQueued = false;
+    this._pdfPreviewArtifactId = null;
+    this._pdfPreviewPage = 1;
+    this._pdfPreviewZoom = 1;
+    this._pdfPreviewError = "";
+    const destroyTarget = pdfDocument || loadingTask;
+    if (typeof destroyTarget?.destroy === "function") {
+      void Promise.resolve(destroyTarget.destroy()).catch(() => {});
+    }
   }
 
   _renderUsagePanel() {
@@ -7706,8 +8470,7 @@ class CodexBridgePanel extends HTMLElement {
       this._resetEventState();
       this._artifacts = [];
       this._selectedArtifactId = null;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
       this._pendingInteractions = [];
       this._interactionMutations.clear();
       this._interactionAnswers.clear();
@@ -7994,8 +8757,7 @@ class CodexBridgePanel extends HTMLElement {
       this._resetEventState();
       this._artifacts = [];
       this._selectedArtifactId = null;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
       this._forceMessageRebuild = true;
     }
     this._render();
@@ -8024,9 +8786,7 @@ class CodexBridgePanel extends HTMLElement {
       this._threadRefreshGraceUntil = 0;
       this._artifacts = [];
       this._selectedArtifactId = null;
-      this._previewToken += 1;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
     }
     this._selectedThreadId = nextThreadId;
     return this._threadSelectionEpoch;
@@ -8170,8 +8930,7 @@ class CodexBridgePanel extends HTMLElement {
     this._resetEventState();
     this._artifacts = [];
     this._selectedArtifactId = null;
-    this._revokePreviewUrl();
-    this._artifactPreview = null;
+    this._clearArtifactPreview();
     this._forceMessageRebuild = true;
     this._threadRefreshGraceUntil = Date.now() + CREATED_THREAD_REFRESH_GRACE_MS;
     this._render();
@@ -8715,8 +9474,7 @@ class CodexBridgePanel extends HTMLElement {
           this._resetEventState();
           this._artifacts = [];
           this._selectedArtifactId = null;
-          this._revokePreviewUrl();
-          this._artifactPreview = null;
+          this._clearArtifactPreview();
           this._forceMessageRebuild = true;
         }
       }
@@ -8830,8 +9588,7 @@ class CodexBridgePanel extends HTMLElement {
           this._resetEventState();
           this._artifacts = [];
           this._selectedArtifactId = null;
-          this._revokePreviewUrl();
-          this._artifactPreview = null;
+          this._clearArtifactPreview();
           this._forceMessageRebuild = true;
         }
       }
@@ -8851,8 +9608,8 @@ class CodexBridgePanel extends HTMLElement {
         thread_id: this._selectedThreadId,
       });
       this._artifacts = await this._callWS("list_artifacts", { thread_id: this._selectedThreadId });
+      this._clearArtifactPreview();
       this._selectedArtifactId = artifact.artifact_id;
-      this._artifactPreview = null;
       await this._loadArtifactPreview(artifact.artifact_id);
       this._clearError();
       this._render();
@@ -8865,8 +9622,8 @@ class CodexBridgePanel extends HTMLElement {
     if (!artifactId || artifactId === this._selectedArtifactId) {
       return;
     }
+    this._clearArtifactPreview();
     this._selectedArtifactId = artifactId;
-    this._artifactPreview = null;
     this._render();
     await this._loadArtifactPreview(artifactId);
   }
@@ -8881,7 +9638,8 @@ class CodexBridgePanel extends HTMLElement {
     }
     const previewToken = ++this._previewToken;
     const advertisedDescriptor = previewDescriptor(artifact, { type: artifact.mime_type });
-    if (advertisedDescriptor.kind === "binary") {
+    const pdfCandidate = isPdfArtifactCandidate(artifact);
+    if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
       this._revokePreviewUrl();
       this._artifactPreview = advertisedDescriptor;
       this._render();
@@ -8901,6 +9659,10 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const limit = artifactPreviewLimit(artifact);
+      if (artifact.size_bytes > 0) {
+        headers.Range = `bytes=0-${Math.min(limit.bytes, artifact.size_bytes) - 1}`;
+      }
       const threadSegment = encodeURIComponent(this._selectedThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
       const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
@@ -8909,17 +9671,38 @@ class CodexBridgePanel extends HTMLElement {
       if (!response.ok) {
         throw new Error("Preview failed");
       }
-      const blob = await response.blob();
+      const blob = await readBoundedPreviewResponse(response, limit.bytes);
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) {
         return;
       }
 
       this._revokePreviewUrl();
-      const descriptor = previewDescriptor(artifact, blob);
+      if (!blob) {
+        this._artifactPreview = {
+          ...advertisedDescriptor,
+          kind: "binary",
+          notice: `Preview limited to files up to ${limit.label}. Download it to view the full file.`,
+        };
+        this._render();
+        return;
+      }
+      const validPdf = pdfCandidate && await hasValidPdfHeader(blob);
+      if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) {
+        return;
+      }
+      const previewBlob = validPdf ? new Blob([blob], { type: PDF_MIME_TYPE }) : blob;
+      const descriptor = previewDescriptor(artifact, previewBlob, { validatedPdf: validPdf });
       if (descriptor.kind === "text") {
         descriptor.text = await blob.text();
-      } else if (descriptor.kind === "image") {
-        descriptor.url = URL.createObjectURL(blob);
+      } else if (descriptor.kind === "image" || descriptor.kind === "pdf") {
+        descriptor.url = URL.createObjectURL(previewBlob);
+        if (descriptor.kind === "pdf") descriptor.blob = previewBlob;
+      } else if (pdfCandidate) {
+        descriptor.notice = "Preview blocked because the file did not contain a valid PDF header.";
+      }
+      if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) {
+        if (descriptor.url) URL.revokeObjectURL(descriptor.url);
+        return;
       }
       this._artifactPreview = descriptor;
       if (isGeneratedImageArtifact(artifact) && descriptor.kind === "image") {
@@ -8928,14 +9711,38 @@ class CodexBridgePanel extends HTMLElement {
       this._clearError();
       this._render();
     } catch (error) {
+      if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+      this._revokePreviewUrl();
+      this._artifactPreview = {
+        ...advertisedDescriptor,
+        kind: "binary",
+        notice: "Preview could not be loaded through Home Assistant. Retry or download the artifact.",
+        retryable: true,
+      };
       this._setError(error);
+      this._render();
     }
+  }
+
+  _retryArtifactPreview() {
+    const artifactId = this._selectedArtifactId;
+    if (!artifactId) return;
+    this._clearArtifactPreview();
+    this._renderArtifactPreview();
+    void this._loadArtifactPreview(artifactId);
   }
 
   _revokePreviewUrl() {
     if (this._artifactPreview?.url) {
       URL.revokeObjectURL(this._artifactPreview.url);
     }
+  }
+
+  _clearArtifactPreview() {
+    this._previewToken += 1;
+    this._disposePdfPreview();
+    this._revokePreviewUrl();
+    this._artifactPreview = null;
   }
 
   async _downloadArtifact(artifactId) {
@@ -9685,8 +10492,7 @@ class CodexBridgePanel extends HTMLElement {
   _syncSelectedArtifact() {
     if (!this._artifacts.length) {
       this._selectedArtifactId = null;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
       return;
     }
     const stillExists = this._artifacts.some((artifact) => artifact.artifact_id === this._selectedArtifactId);
@@ -9698,13 +10504,11 @@ class CodexBridgePanel extends HTMLElement {
       || this._artifacts.find((artifact) => artifactPreviewSizeState(artifact) === "within-limit");
     if (!previewCandidate) {
       this._selectedArtifactId = null;
-      this._previewToken += 1;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
       return;
     }
+    this._clearArtifactPreview();
     this._selectedArtifactId = previewCandidate.artifact_id;
-    this._artifactPreview = null;
     this._loadArtifactPreview(this._selectedArtifactId);
   }
 
@@ -9835,8 +10639,7 @@ class CodexBridgePanel extends HTMLElement {
       this._resetEventState();
       this._artifacts = [];
       this._selectedArtifactId = null;
-      this._revokePreviewUrl();
-      this._artifactPreview = null;
+      this._clearArtifactPreview();
       this._forceMessageRebuild = true;
       void this._refreshSelectedThreadAndStartPolling(replacement.thread_id, selectionEpoch);
       return;
@@ -9847,8 +10650,7 @@ class CodexBridgePanel extends HTMLElement {
     this._resetEventState();
     this._artifacts = [];
     this._selectedArtifactId = null;
-    this._revokePreviewUrl();
-    this._artifactPreview = null;
+    this._clearArtifactPreview();
     this._forceMessageRebuild = true;
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "ha-codex-bridge",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Build and security checks for the Home Assistant Codex Bridge panel.",
@@ -9,12 +9,14 @@
     "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
   "scripts": {
-    "build": "esbuild frontend/src/codex-bridge-panel.js --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --legal-comments=none --outfile=custom_components/codex_bridge/frontend/codex-bridge-panel.js",
+    "build": "npm run build:panel && npm run build:pdf-worker",
+    "build:panel": "esbuild frontend/src/codex-bridge-panel.js --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --legal-comments=eof --outfile=custom_components/codex_bridge/frontend/codex-bridge-panel.js",
+    "build:pdf-worker": "esbuild node_modules/pdfjs-dist/build/pdf.worker.min.mjs --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --legal-comments=eof --outfile=custom_components/codex_bridge/frontend/codex-bridge-pdf-worker.js",
     "lint": "eslint frontend/src frontend/test frontend/e2e/*.js",
     "test": "npm run lint && npm run test:unit",
     "test:unit": "vitest run frontend/test --environment jsdom",
     "test:e2e": "playwright test frontend/e2e/panel.spec.js",
-    "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js",
+    "check:generated": "npm run build && git diff --exit-code -- custom_components/codex_bridge/frontend/codex-bridge-panel.js custom_components/codex_bridge/frontend/codex-bridge-pdf-worker.js",
     "brand:render": "node scripts/render-brand-assets.mjs"
   },
   "devDependencies": {
@@ -25,6 +27,7 @@
     "eslint": "10.7.0",
     "globals": "17.7.0",
     "jsdom": "29.1.1",
+    "pdfjs-dist": "6.1.200",
     "vitest": "4.1.10"
   }
 }
