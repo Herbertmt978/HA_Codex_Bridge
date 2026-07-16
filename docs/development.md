@@ -53,15 +53,16 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current candidate is Integration/App `0.7.5`, Bridge `0.6.3`, and Codex
-`0.144.5`; it is pending real Home Assistant acceptance. Provider-gated native
-web search defaults to Live only for Supervisor prompts and automations,
-provider capabilities are re-negotiated after authentication, time-sensitive
-prompts receive bounded native-tool guidance, and model-controlled shell
-networking remains disabled. Signed-in image generation
-requires `imageGeneration` plus `namespaceTools`, uses no API key, and stores
-only private bounded PNG/JPEG/WebP artifacts. Preserve the compact composer and
-the canonical-version release tests. The
+The current target-HA-accepted matrix is Integration/App/panel `0.7.5`, Bridge
+`0.6.3`, and Codex `0.144.5`. On 2026-07-16 ChatGPT Pro remained connected; a
+fresh direct chat defaulted to `gpt-5.6-sol`/`low`; the runtime exposed Sol,
+Terra, Luna, and Low through Ultra where advertised; and the compact composer
+showed five-hour `Off` and Week `60%`. The natural Malta weather prompt recorded
+`Searching the web` and returned current live conditions. Provider-gated native
+search remains separate from the disabled model-controlled shell network.
+Image generation, plugins/marketplaces, MCP, external routing, cold restore,
+and arbitrary prior-image rollback were not exercised in this acceptance pass.
+Preserve the compact composer and canonical-version release tests. The
 published/signed `0.7.0` baseline has generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child

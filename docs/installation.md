@@ -2,23 +2,21 @@
 
 ## Status before you start
 
-This guide covers the current candidate: experimental, `amd64`-only App and
-Integration `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. It is pending final
-Home Assistant acceptance. Signed App `0.7.4` already publishes the verified
-Codex `0.144.5` runtime; `0.7.5` coordinates the Integration and compact panel.
+This guide covers the target-HA-accepted experimental, `amd64`-only App,
+Integration, and panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. The matrix
+was installed and running on target Home Assistant `192.168.50.20` on
+2026-07-16. App publication run `29511116947` produced immutable digest
+`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
+and attestation `35670902`.
+
 Provider-gated native web search defaults to Live for Supervisor prompts and
 automations, re-negotiates automatically after ChatGPT sign-in, and guides
 time-sensitive prompts toward the native tool; shell-command networking
-remains disabled. Signed-in image generation requires
-both `imageGeneration` and `namespaceTools`, uses no API key, and retains only
-private bounded PNG/JPEG/WebP artifacts. The compact composer is a candidate
-presentation change and does not expand authority. The
-published/signed `0.7.0` baseline has generic image digest
-`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
-with amd64 child
-`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
-main CI `29471288344` and publication `29471288457` succeeded, with signature,
-SBOM, and provenance on the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+remains disabled. The compact composer is part of the accepted release and does
+not expand authority. Signed-in image generation still requires both
+`imageGeneration` and `namespaceTools`, uses no API key, and retains only
+private bounded PNG/JPEG/WebP artifacts, but image generation was not exercised
+in this acceptance pass.
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix is historical evidence only. On target
 HAOS, Codex `0.144.4`'s official
@@ -44,11 +42,12 @@ limits/model controls. Its catalogue
 recovery remains dynamic; no model or reasoning list is hardcoded. The target
 run observed App and Integration `0.7.0`, Bridge `0.6.0`, Codex `0.144.4`,
 retained ChatGPT Pro, dynamic GPT-5.6, five-hour `Off`, preserved chat/history,
-and App auto-update plus MCP opt-in persistence after restart. Management forms
-lose unsaved values during a background rerender; the `0.7.1` candidate
-contains the fix. Do not claim automation, skills, plugins/marketplaces,
-MCP-server, or `AGENTS.md` mutation acceptance until retested. The `0.6.5`
-live acceptance is historical. The first unattended App update is proven;
+and App auto-update plus MCP opt-in persistence after restart. The historical
+management-form rerender defect was fixed and accepted in `0.7.1`; that pass
+also covered skills create/list/delete and a one-time Observe automation. It
+did not establish plugin/marketplace, MCP-server, or `AGENTS.md` mutation
+acceptance. The `0.6.5` live acceptance is historical. The first unattended App
+update is proven;
 external blocked-network/Nabu Casa/Cloudflare routing, cold restore, and
 previous-image rollback remain unproven.
 
@@ -154,8 +153,9 @@ device-auth page.
    new App version is offered. The App's auto-update toggle may apply released
    images automatically.
 4. Make a cold backup before an App change. The first unattended update is
-   proven, but restore and arbitrary prior-image selection are not validated
-   rollback paths.
+   proven, and the accepted `0.7.5` update retained automatic update plus the
+   prior-version backup. Restore and arbitrary prior-image selection are not
+   validated rollback paths.
 
 ## After installation
 

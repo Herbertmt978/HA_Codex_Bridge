@@ -460,7 +460,7 @@ and completed cold in `35.887s`.
 | Frontend request shape | Plugins and marketplaces load through one frontend request. |
 | Acceptance boundary | These are candidate facts only. The historical `0.7.1` live list returned `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace list/mutation acceptance was claimed. |
 
-## Evidence status
+## Evidence status through 0.7.3
 
 The historical `0.6.5` section remains bounded live-acceptance evidence for that
 matrix, and the `0.7.0` section is retained as the prior published baseline.
@@ -489,3 +489,18 @@ No target-HA acceptance, image digest, CI/publication run ID, or live feature
 result is recorded for `0.7.3`. The earlier published-but-not-target-accepted
 `0.7.2` catalogue section and the target-HA-accepted `0.7.1` evidence above
 remain unchanged historical records.
+
+## 0.7.5 published release and bounded target-HA evidence
+
+App, Integration, and panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5` were
+installed and running on target Home Assistant `192.168.50.20` on 2026-07-16.
+App publication run `29511116947` produced immutable digest
+`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
+with attestation `35670902`.
+
+| Evidence | Result |
+| --- | --- |
+| Account and composer | ChatGPT Pro remained connected. A fresh direct chat defaulted to `gpt-5.6-sol` with `low` thinking. The catalogue exposed Sol, Terra, and Luna with the advertised Low, Medium, High, XHigh, Max, and Ultra levels; the compact composer showed five-hour `Off` and Week `60%`. |
+| Native live search | The natural prompt `what is the weather in Malta like today` recorded `Searching the web` run activity and returned current live conditions. |
+| Update retention | The App update retained automatic update and kept the prior-version backup. |
+| Acceptance boundary | This run does not claim blocked-network/Nabu Casa/Cloudflare routing, cold restore, arbitrary previous-image rollback, image generation, plugins/marketplaces, or MCP acceptance. The historical `0.7.1` plugin/marketplace HTTP 503 result remains bounded historical evidence. |
