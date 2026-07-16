@@ -51,8 +51,8 @@ _UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
 _FILE_METADATA_MAX_BYTES = 64 * 1024
 _ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_CAPABILITY_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z", re.ASCII)
 _PLUGIN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}\Z", re.ASCII)
-_SKILL_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z", re.ASCII)
 _FORWARDED_REQUEST_HEADERS = {
     "content-length": "Content-Length",
     "content-type": "Content-Type",
@@ -82,13 +82,13 @@ def _plugin_path_segment(value: object) -> str:
     return quote(value, safe="")
 
 
-def _skill_path_segment(value: object) -> str:
-    """Encode a skill name accepted by the Bridge skills capability contract."""
+def _capability_name_path_segment(value: object) -> str:
+    """Encode a name accepted by the Bridge capability-name contract."""
 
     if (
         not isinstance(value, str)
         or len(value.encode("utf-8")) > 128
-        or _SKILL_NAME_PATTERN.fullmatch(value) is None
+        or _CAPABILITY_NAME_PATTERN.fullmatch(value) is None
     ):
         raise BridgeApiEndpointError()
     return quote(value, safe="")
@@ -1204,7 +1204,7 @@ class BridgeApiClient:
         suffix = f"?{urlencode(query)}" if query else ""
         await self._async_no_content(
             "DELETE",
-            f"/capabilities/skills/{_skill_path_segment(name)}{suffix}",
+            f"/capabilities/skills/{_capability_name_path_segment(name)}{suffix}",
             expected_status={204},
         )
 
@@ -1261,7 +1261,7 @@ class BridgeApiClient:
         self.require_capability("plugins_v1")
         await self._async_no_content(
             "DELETE",
-            f"/capabilities/marketplaces/{_path_segment(marketplace_name)}",
+            f"/capabilities/marketplaces/{_capability_name_path_segment(marketplace_name)}",
             expected_status={204},
         )
 
@@ -1269,7 +1269,7 @@ class BridgeApiClient:
         self.require_capability("plugins_v1")
         return await self._async_json(
             "POST",
-            f"/capabilities/marketplaces/{_path_segment(marketplace_name)}/upgrade",
+            f"/capabilities/marketplaces/{_capability_name_path_segment(marketplace_name)}/upgrade",
         )
 
     async def async_list_mcp(self) -> list[dict[str, Any]]:

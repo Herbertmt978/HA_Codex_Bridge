@@ -296,6 +296,90 @@ async def test_plugin_uninstall_rejects_unsafe_plugin_ids_before_network_access(
         await client.async_uninstall_plugin(plugin_id)
 
 
+async def test_marketplace_mutations_use_the_backend_capability_name_contract(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        if request.method == "DELETE":
+            return web.Response(status=204)
+        if request.path.endswith("/upgrade"):
+            return web.json_response({"marketplace_name": "official.tools"})
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_remove_marketplace("official.tools")
+        upgraded = await client.async_upgrade_marketplace("official.tools")
+
+    assert upgraded == {"marketplace_name": "official.tools"}
+    assert observed == [
+        ("GET", "/ready"),
+        ("DELETE", "/capabilities/marketplaces/official.tools"),
+        ("POST", "/capabilities/marketplaces/official.tools/upgrade"),
+    ]
+
+
+@pytest.mark.parametrize("operation", ["remove", "upgrade"])
+@pytest.mark.parametrize(
+    "marketplace_name",
+    [
+        "../official",
+        "official/child",
+        "official\\child",
+        "official\x00name",
+        "-official",
+        "official!",
+        "offici\u00e1l",
+        "a" * 129,
+    ],
+)
+async def test_marketplace_mutations_reject_invalid_names_before_network_access(
+    operation: str,
+    marketplace_name: str,
+) -> None:
+    class UnexpectedSession:
+        async def request(self, *args, **kwargs):
+            raise AssertionError("network must not be reached")
+
+    client = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"plugins_v1"})
+
+    with pytest.raises(BridgeApiEndpointError):
+        if operation == "remove":
+            await client.async_remove_marketplace(marketplace_name)
+        else:
+            await client.async_upgrade_marketplace(marketplace_name)
+
+
+async def test_marketplace_mutations_require_the_plugins_capability(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_remove_marketplace("official.tools")
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_upgrade_marketplace("official.tools")
+
+    assert observed == [("GET", "/ready")]
+
+
 async def test_explicit_legacy_client_uses_v0_header_after_legacy_readiness(
     bridge_server_factory,
 ) -> None:
