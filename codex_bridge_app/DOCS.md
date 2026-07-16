@@ -165,6 +165,12 @@ expose a browser, CDP, App, or Bridge endpoint. Browser automation needs the
 separate isolation recorded in
 [ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
 
+The panel options menu exposes **Focus mode** when the browser permits the
+standards fullscreen API. It can be entered only from that user gesture,
+leaves the existing Home Assistant transport and authorization path unchanged,
+uses the Codex-style tinted navigation and floating context treatment, and uses
+native Escape plus accessible focus restoration on exit.
+
 ## Updates and recovery
 
 On each App start, the ready Bridge publishes its Supervisor-assigned private
@@ -198,18 +204,23 @@ with attestation `35670902`. This acceptance does not establish image-
 generation, plugin/marketplace, MCP, external-routing, cold-restore, or
 arbitrary prior-image rollback acceptance.
 
-App/Integration/panel `0.8.1` with Bridge `0.7.1` and Codex `0.144.5` is a
+App/Integration/panel `0.8.2` with Bridge `0.7.2` and Codex `0.144.5` is a
 candidate only until signed publication and target-HA validation complete. It
-uses a bounded artifact manifest instead of the conflicting read-only global
-quota check, reconciles artifacts when terminal runs release capacity, and
-keeps a typed `reservation_conflict` local to **Files** through bounded retries
-and explicit retry control. It must not be represented as a general connection
-outage. The 0.8.0 live exercise passed installation/pairing, ChatGPT
-Pro/history, versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
-web-search source/stage history, and subagent stage history. PDF creation
-succeeded, but indexing/archive returned persistent HTTP 409 even after an App
-restart; PDF acceptance remains failed/pending. Issue #43 tracks the required
-secure App-owned browser worker; interactive Chromium remains deferred under
+restores operational aggregate workspace-scan failures to the typed, retryable
+local **Files** contract and adds a measured Codex-style wide-screen alignment
+pass with a theme-derived navigation plane, full-height context surface, and
+user-invoked standards-based Focus mode. Artifact-index and preview failures
+remain local to **Files** and cannot overwrite a valid reply or healthy chat
+state. Healthy component versions live under **Context -> System** while only
+runtime attention remains in the conversation. It must not represent a shared filesystem scan conflict as unsafe content
+in the selected chat or as a general connection outage. The 0.8.1 live exercise
+passed installation/pairing, ChatGPT Pro/history, versions, GPT-5.6 models,
+Max/Ultra, five-hour `Off`, native web-search source/stage history, and subagent
+stage history. PDF creation succeeded, but stale sandbox-test debris in the
+aggregate workspace root caused an operational scan failure that `0.8.1`
+misreported as HTTP 400; PDF acceptance remains failed/pending. Issue #43
+tracks the required secure App-owned browser worker; interactive Chromium
+remains deferred under
 [ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix remains historical evidence only. App `0.6.1` is known-bad

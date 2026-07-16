@@ -15,6 +15,7 @@ describe("runtime strip view", () => {
 
     expect(model.items.map((item) => item.label)).toEqual(["App", "Integration", "Bridge", "Codex"]);
     expect(model.items.map((item) => item.state)).toEqual(["ready", "ready", "ready", "ready"]);
+    expect(model.healthy).toBe(true);
     expect(JSON.stringify(model)).not.toContain("private.example");
     expect(JSON.stringify(model)).not.toContain("C:\\private");
   });
@@ -35,5 +36,27 @@ describe("runtime strip view", () => {
 
     expect(container.querySelector("img")).toBeNull();
     expect(container.textContent).not.toContain("onerror");
+  });
+
+  it("hides healthy telemetry from chat while keeping runtime attention visible", () => {
+    const healthyContainer = document.createElement("div");
+    renderRuntimeStrip(healthyContainer, getRuntimeStripViewModel({
+      api_version: 1,
+      app: { connected: true, version: "0.8.2" },
+      integration: { ready: true, version: "0.8.2" },
+      diagnostics: { bridge_version: "0.7.2", app_server_version: "0.144.5" },
+    }));
+    expect(healthyContainer.hidden).toBe(true);
+
+    const attentionContainer = document.createElement("div");
+    renderRuntimeStrip(attentionContainer, getRuntimeStripViewModel({
+      api_version: 1,
+      app: { connected: true, version: "0.8.2" },
+      integration: { ready: true, version: "0.8.2" },
+      bridge_ready: false,
+      diagnostics: { bridge_version: "0.7.2", app_server_version: "0.144.5" },
+    }));
+    expect(attentionContainer.hidden).toBe(false);
+    expect(attentionContainer.textContent).toContain("Bridge 0.7.2");
   });
 });

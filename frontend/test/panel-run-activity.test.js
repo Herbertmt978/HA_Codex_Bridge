@@ -121,6 +121,9 @@ describe("panel run activity integration", () => {
     let messageList = panel.shadowRoot.getElementById("message-list");
     expect(messageList?.getAttribute("aria-busy")).toBe("true");
     expect(messageList?.querySelector("article.message.assistant.streaming")?.textContent).toContain("Partial answer");
+    const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
+    expect(stylesheet).toContain("\\00B7 responding");
+    expect(stylesheet).not.toContain("Â·");
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-activity-copy")?.textContent).toContain("Generating a response");
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-step-chip")).toBeTruthy();
 
@@ -142,6 +145,7 @@ describe("panel run activity integration", () => {
     const panel = createPanel();
     const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
     expect(stylesheet).toMatch(/prefers-reduced-motion\s*:\s*reduce/i);
+    expect(stylesheet).toMatch(/--rail-bg:\s*color-mix\(in srgb,\s*var\(--surface-bg\)\s+95%,\s*var\(--accent-color\)\s+5%\)/);
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)/i);
     expect(stylesheet).toMatch(/run-activity-region|run-step-chip/);
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)[\s\S]*?\.run-activity-region/i);

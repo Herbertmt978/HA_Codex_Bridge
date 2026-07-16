@@ -16,19 +16,22 @@ export function getRuntimeStripViewModel(status = {}) {
   const codexVersion = diagnostics.app_server_version || diagnostics.active_codex_version;
   const codexReady = codexVersion ? bridgeReady : status.codex_ready === true && bridgeReady;
   const legacy = apiVersion === 0 || String(status.connection_type || "").startsWith("external");
+  const items = [
+    runtimeItem("App", appReady, status.app?.version || diagnostics.app_version),
+    runtimeItem("Integration", integrationReady, status.integration?.version),
+    runtimeItem("Bridge", bridgeReady, diagnostics.bridge_version),
+    runtimeItem("Codex", codexReady, codexVersion),
+  ];
   return {
-    items: [
-      runtimeItem("App", appReady, status.app?.version || diagnostics.app_version),
-      runtimeItem("Integration", integrationReady, status.integration?.version),
-      runtimeItem("Bridge", bridgeReady, diagnostics.bridge_version),
-      runtimeItem("Codex", codexReady, codexVersion),
-    ],
+    items,
+    healthy: items.every((item) => item.state === "ready"),
     notice: legacy ? "This older connection is capability-limited and supported for existing setups only." : "",
   };
 }
 
 export function renderRuntimeStrip(container, model) {
   container.replaceChildren();
+  container.hidden = Boolean(model.healthy && !model.notice);
   const strip = document.createElement("div");
   strip.className = "runtime-strip";
   for (const item of model.items) {

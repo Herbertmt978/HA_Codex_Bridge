@@ -429,6 +429,40 @@ def test_aggregate_workspace_measurement_does_not_use_archive_entry_limit(
     assert [artifact.filename for artifact in artifacts] == ["report.pdf"]
 
 
+def test_aggregate_workspace_scan_boundary_error_is_retryable_while_agents_skills_and_pdf_succeed(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, workspace = _home_assistant_thread(tmp_path, _limits())
+    skill = workspace / ".agents" / "skills" / "example" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("# Example\n", encoding="utf-8")
+    (workspace / "report.pdf").write_bytes(b"%PDF-1.7\n")
+    boundary = storage._home_assistant_boundary()
+    measure_regular_files = boundary.measure_regular_files
+    attempts = 0
+
+    def boundary_error_once(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise WorkspaceEscapeError()
+        return measure_regular_files(*args, **kwargs)
+
+    monkeypatch.setattr(boundary, "measure_regular_files", boundary_error_once)
+
+    with pytest.raises(ReservationConflictError) as error:
+        storage.sync_thread_artifacts(thread.thread_id)
+
+    assert error.value.resource == "filesystem_scan"
+    artifacts = storage.sync_thread_artifacts(thread.thread_id)
+
+    assert sorted(artifact.relative_path for artifact in artifacts) == [
+        ".agents/skills/example/SKILL.md",
+        "report.pdf",
+    ]
+
+
 def test_artifact_sync_uses_bounded_manifest_when_workspace_ledger_check_conflicts(
     tmp_path,
     monkeypatch,
@@ -678,6 +712,49 @@ def test_archive_output_quota_failure_removes_partial_file_and_reservation(tmp_p
     assert storage._home_assistant_artifacts_boundary().walk_regular_files(".") == ()
     assert storage.load_thread(thread.thread_id).artifacts == []
     assert storage.quota_manager.active_reservations == 0
+
+
+def test_artifact_scan_boundary_conflict_has_retryable_http_response(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    app = create_app(
+        root_path=tmp_path / "data" / "bridge",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=tmp_path / "config" / "workspaces",
+        resource_limits=_limits(),
+        runner_factory=lambda _storage: object(),
+    )
+    project = app.state.storage.create_project(name="API", root_path="projects/api")
+    thread = app.state.storage.create_thread(
+        title="API",
+        project_id=project.project_id,
+        mode=RunMode.EDIT,
+    )
+
+    def boundary_error(*_args, **_kwargs):
+        raise WorkspaceEscapeError()
+
+    monkeypatch.setattr(
+        app.state.storage._home_assistant_boundary(),
+        "measure_regular_files",
+        boundary_error,
+    )
+
+    response = TestClient(app).get(
+        f"/threads/{thread.thread_id}/artifacts",
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "code": "reservation_conflict",
+            "resource": "filesystem_scan",
+            "retryable": True,
+        }
+    }
 
 
 def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> None:

@@ -273,8 +273,7 @@ test("runs the Home Assistant first-run and ChatGPT device sign-in flow without 
   await expect(onboarding).toContainText("Integration confirmed");
   await expect(onboarding).toContainText("Bridge ready");
   await expect(onboarding).toContainText("Codex ready");
-  await expect(panel.locator("#runtime-strip")).toContainText("App 0.6.0");
-  await expect(panel.locator("#runtime-strip")).toContainText("Codex 0.144.1");
+  await expect(panel.locator("#runtime-strip")).toBeHidden();
   await expect
     .poll(() =>
       page.evaluate(() => window.__codexHarness.subscriptions.map((subscription) => subscription.scopes || [])),
@@ -342,10 +341,10 @@ test("creates a workspace project and first chat at compact widths in both colou
   await panel.locator('button[data-action="save-thread"]').click();
   await expect(panel.locator("#thread-title-label")).toContainText("First Home Assistant chat");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(panel.locator("#runtime-strip")).toBeVisible();
+  await expect(panel.locator("#runtime-strip")).toBeHidden();
 
   await page.emulateMedia({ colorScheme: "light" });
-  await expect(panel.locator("#runtime-strip")).toBeVisible();
+  await expect(panel.locator("#runtime-strip")).toBeHidden();
 });
 
 test("exposes run stages through one accessible tooltip in both colour schemes", async ({ page }) => {
@@ -625,6 +624,61 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   await scrim.click({ position: { x: 10, y: 420 } });
   await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
   await expect(contextToggle).toBeFocused();
+});
+
+test("aligns the desktop workspace rails and reading edges at wide widths", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+
+  const layout = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const rect = (selector) => root?.querySelector(selector)?.getBoundingClientRect();
+    const rail = rect(".rail-pane");
+    const side = rect(".side-pane");
+    const title = rect("#thread-title-label");
+    const actions = rect(".main-header .row-actions");
+    const messages = rect("#message-list");
+    const fontSize = (selector) => {
+      const element = root?.querySelector(selector);
+      return element ? getComputedStyle(element).fontSize : "";
+    };
+    return {
+      railWidth: rail?.width || 0,
+      sideWidth: side?.width || 0,
+      headerTitleAligned: Boolean(title && messages && Math.abs(title.left - messages.left) <= 1),
+      headerActionsAligned: Boolean(actions && messages && Math.abs(actions.right - messages.right) <= 1),
+      projectFontSize: fontSize(".project-name"),
+      threadFontSize: fontSize(".thread-name"),
+      mainTitleFontSize: fontSize(".main-header .title"),
+      sideTop: side?.top || 0,
+      mainTop: rect(".main-pane")?.top || 0,
+    };
+  });
+
+  expect(layout.railWidth).toBeGreaterThanOrEqual(300);
+  expect(layout.railWidth).toBeLessThanOrEqual(330);
+  expect(layout.sideWidth).toBeGreaterThanOrEqual(330);
+  expect(layout.sideWidth).toBeLessThanOrEqual(350);
+  expect(layout.headerTitleAligned).toBe(true);
+  expect(layout.headerActionsAligned).toBe(true);
+  expect(layout.projectFontSize).toBe("14px");
+  expect(layout.threadFontSize).toBe("14px");
+  expect(layout.mainTitleFontSize).toBe("16px");
+  expect(layout.sideTop).toBe(layout.mainTop);
+
+  const floating = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const side = root?.querySelector(".side-pane");
+    const scroll = root?.querySelector(".side-scroll");
+    const style = side ? getComputedStyle(side) : null;
+    return {
+      radius: style?.borderTopLeftRadius || "",
+      scrolling: scroll ? getComputedStyle(scroll).overflowY : "",
+    };
+  });
+  expect(floating.radius).toBe("0px");
+  expect(floating.scrolling).toMatch(/auto|scroll/);
 });
 
 test("renders an intentional empty workspace with a working new-chat action", async ({ page }, testInfo) => {

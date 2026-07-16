@@ -385,7 +385,7 @@ describe("polling event fallback", () => {
     vi.useRealTimers();
   });
 
-  it("surfaces an artifact refresh failure once the live thread is idle", async () => {
+  it("keeps an artifact refresh failure local once the live thread is idle", async () => {
     vi.useFakeTimers();
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
@@ -402,7 +402,9 @@ describe("polling event fallback", () => {
     panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
     panel._callWS = vi.fn((action) => {
       if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Idle refresh"));
-      if (action === "list_artifacts") return Promise.reject(new Error("Artifact scan failed"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Bridge request failed"), { code: "bridge_error" }));
+      }
       if (action === "get_status") return Promise.resolve({ runtime: { state: "idle" } });
       throw new Error(`Unexpected action: ${action}`);
     });
@@ -410,11 +412,60 @@ describe("polling event fallback", () => {
     panel._scheduleLiveRefresh("thread-alpha");
     await vi.advanceTimersByTimeAsync(250);
 
-    expect(panel._error).toBe("Artifact scan failed");
-    expect(panel._errorSource).toBe("poll");
-    expect(panel._activeThread?.title).toBe("Before live refresh");
+    expect(panel._error).toBe("");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
+    expect(panel._activeThread?.title).toBe("Idle refresh");
     expect(panel._artifacts).toEqual(previousArtifacts);
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
     vi.useRealTimers();
+  });
+
+  it("surfaces a primary websocket artifact failure during the initial refresh", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._startEventSubscription = vi.fn();
+    const primaryFailure = Object.assign(new Error("Bridge unavailable"), {
+      body: { error: { code: "cannot_connect" } },
+    });
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Initial"));
+      if (action === "get_events" || action === "get_status") return Promise.resolve([]);
+      if (action === "list_artifacts") return Promise.reject(primaryFailure);
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._refreshActiveThread();
+
+    expect(panel._error).toBe("Bridge unavailable");
+    expect(panel._artifactRefreshState.status).toBe("idle");
+  });
+
+  it("surfaces a primary websocket artifact failure during polling", async () => {
+    const event = controlEvent("message.created", { text: "Refresh" });
+    const panel = pollingPanel(event);
+    panel._activeThread = threadRecord("thr_safe", "Before poll");
+    panel._lastStatusRefreshAt = 0;
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_events") return Promise.resolve([event]);
+      if (action === "get_status") return Promise.resolve({});
+      if (action === "get_thread") return Promise.resolve(threadRecord("thr_safe", "After poll"));
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Bridge unavailable"), { code: "cannot_connect" }));
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._runPollTick(1);
+
+    expect(panel._error).toBe("Bridge unavailable");
+    expect(panel._errorSource).toBe("poll");
   });
 
   it("keeps an idle chat healthy when another run reserves its artifact workspace", async () => {
@@ -514,6 +565,20 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("");
     expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
     vi.useRealTimers();
+  });
+
+  it("surfaces a primary websocket failure during a manual artifact retry", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._callWS = vi.fn().mockRejectedValue(
+      Object.assign(new Error("Bridge unavailable"), { code: "cannot_connect" })
+    );
+
+    await panel._retryArtifactRefresh({ manual: true });
+
+    expect(panel._error).toBe("Bridge unavailable");
+    expect(panel._artifactRefreshState.status).toBe("idle");
   });
 
   it("cancels a pending artifact retry when the selected chat changes or disconnects", async () => {
@@ -626,7 +691,32 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("");
   });
 
-  it("surfaces a non-reservation artifact failure from a busy live refresh", async () => {
+  it("surfaces a primary websocket failure while listing an archived workspace", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const artifact = {
+      artifact_id: "archive-primary",
+      filename: "workspace.zip",
+      mime_type: "application/zip",
+      size_bytes: 12,
+    };
+    panel._callWS = vi.fn((action) => {
+      if (action === "create_workspace_archive") return Promise.resolve(artifact);
+      if (action === "list_artifacts") {
+        return Promise.reject(Object.assign(new Error("Bridge unavailable"), { code: "cannot_connect" }));
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._createWorkspaceArchive();
+
+    expect(panel._error).toBe("Bridge unavailable");
+    expect(panel._errorSource).toBe("");
+  });
+
+  it("keeps a non-reservation artifact failure local to Files during a live refresh", async () => {
     vi.useFakeTimers();
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
@@ -647,8 +737,14 @@ describe("polling event fallback", () => {
     panel._scheduleLiveRefresh("thread-alpha");
     await vi.advanceTimersByTimeAsync(250);
 
-    expect(panel._error).toBe("Artifact backend failed");
-    expect(panel._errorSource).toBe("poll");
+    expect(panel._error).toBe("");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
+    expect(panel._activeThread?.title).toBe("Live refresh");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
     vi.useRealTimers();
   });
 
