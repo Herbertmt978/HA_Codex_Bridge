@@ -220,7 +220,7 @@ class CodexAppServerClient:
         codex_home: Path | str | None = None,
         client_name: str = "ha_codex_bridge",
         client_title: str = "Home Assistant Codex Bridge",
-        client_version: str = "0.6.2",
+        client_version: str = "0.6.3",
         initialize_timeout_seconds: float = 10.0,
         request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
         max_message_bytes: int = _DEFAULT_MAX_MESSAGE_BYTES,

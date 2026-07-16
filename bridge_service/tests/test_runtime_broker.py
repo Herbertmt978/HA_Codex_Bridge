@@ -1656,6 +1656,62 @@ def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
         broker.close()
 
 
+def test_live_web_search_guidance_applies_to_steering_without_polluting_transcript(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Start a live search",
+            client_request_id="client-live-start",
+            web_search="live",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        broker.submit_prompt(
+            thread.thread_id,
+            "Search the current weather",
+            client_request_id="client-live-steer",
+            web_search="live",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/steer")) == 1)
+
+        steer_input = _requests(client, "turn/steer")[0]["input"]
+        assert len(steer_input) == 2
+        assert steer_input[0]["type"] == "text"
+        assert "native web-search tool" in steer_input[0]["text"]
+        assert steer_input[1] == {
+            "type": "text",
+            "text": "Search the current weather",
+        }
+        assert _requests(client, "turn/steer")[0] == {
+            "threadId": remote_thread_id,
+            "expectedTurnId": turn_id,
+            "input": steer_input,
+            "clientUserMessageId": "client-live-steer",
+        }
+
+        steer_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "message.created"
+            and event.payload.get("client_request_id") == "client-live-steer"
+        )
+        assert steer_event.payload["role"] == "user"
+        assert steer_event.payload["text"] == "Search the current weather"
+        assert steer_event.payload["text"] != steer_input[0]["text"]
+    finally:
+        broker.close()
+
+
 @pytest.mark.parametrize("failure", ["timeout", "mismatched_turn"])
 def test_unknown_steer_outcome_is_nonreplayable_and_aborts_generation(
     tmp_path: Path,

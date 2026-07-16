@@ -610,7 +610,7 @@ class RuntimeBroker:
                     {
                         "threadId": codex_thread_id,
                         "expectedTurnId": turn_id,
-                        "input": [{"type": "text", "text": prompt}],
+                        "input": self._prompt_input(prompt, web_search),
                         "clientUserMessageId": request_id,
                     },
                     timeout_seconds=self.control_request_timeout_seconds,
@@ -2465,10 +2465,17 @@ class RuntimeBroker:
     ) -> list[dict[str, object]]:
         if run.prompt is None:
             raise RuntimeStateError("The queued Codex prompt is unavailable.")
+        return self._prompt_input(run.prompt, run.web_search)
+
+    @staticmethod
+    def _prompt_input(
+        prompt: str,
+        web_search: Literal["live", "disabled"] | None,
+    ) -> list[dict[str, object]]:
         inputs: list[dict[str, object]] = []
-        if run.web_search == "live":
+        if web_search == "live":
             inputs.append({"type": "text", "text": _LIVE_WEB_SEARCH_GUIDANCE})
-        inputs.append({"type": "text", "text": run.prompt})
+        inputs.append({"type": "text", "text": prompt})
         return inputs
 
     def _correlated_run_locked(

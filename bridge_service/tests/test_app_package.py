@@ -16,15 +16,6 @@ BRAND_ROOT = ROOT / "brand"
 INTEGRATION_BRAND_ROOT = ROOT / "custom_components" / "codex_bridge" / "brand"
 
 
-def _canonical_app_version() -> str:
-    match = re.search(
-        r"(?m)^version\s*:\s*[\"']?([^\"'\s#]+)",
-        (APP_ROOT / "config.yaml").read_text(encoding="utf-8"),
-    )
-    assert match is not None
-    return match.group(1)
-
-
 def _yaml(path: Path) -> dict[str, object]:
     value = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict), f"{path} must contain a YAML mapping"
@@ -49,7 +40,8 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
         "Run the Codex Bridge service privately inside Home Assistant."
     )
     assert config["slug"] == "codex_bridge"
-    assert config["version"] == _canonical_app_version()
+    assert isinstance(config["version"], str)
+    assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", config["version"])
     assert config.get("startup", "application") == "application"
     assert config.get("boot", "auto") == "auto"
     assert config["init"] is False

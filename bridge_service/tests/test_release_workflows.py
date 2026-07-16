@@ -158,24 +158,140 @@ def test_codex_updater_is_scheduled_manual_paused_and_narrowly_scoped() -> None:
     assert "git ls-remote origin refs/heads/main" in normalized
 
 
-def test_codex_updater_opens_pr_without_main_push_or_auto_merge() -> None:
+def test_codex_updater_uses_scoped_app_token_and_guarded_auto_merge() -> None:
     document, source = _workflow("codex-update")
+    pull_request_job = document["jobs"]["pull-request"]
+    assert pull_request_job["permissions"] == {"contents": "read"}
+    steps = pull_request_job["steps"]
+    credential_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and step.get("id") == "updater-credentials"
+    ]
+    assert len(credential_steps) == 1
+    credential_step = credential_steps[0]
+    assert credential_step.get("env") == {
+        "UPDATER_APP_CLIENT_ID": "${{ vars.CODEX_UPDATER_APP_CLIENT_ID }}",
+        "UPDATER_APP_ACTOR": "${{ vars.CODEX_UPDATER_APP_ACTOR }}",
+        "UPDATER_APP_PRIVATE_KEY": "${{ secrets.CODEX_UPDATER_APP_PRIVATE_KEY }}",
+    }
+    credential_check = str(credential_step.get("run", ""))
+    assert '-z "${UPDATER_APP_ACTOR}"' in credential_check
+    assert 'echo "available=false" >> "$GITHUB_OUTPUT"' in credential_check
+    assert 'echo "available=true" >> "$GITHUB_OUTPUT"' in credential_check
+    assert "::notice title=Codex updater skipped::" in credential_check
+
+    token_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and str(step.get("uses", "")).startswith("actions/create-github-app-token@")
+    ]
+    assert len(token_steps) == 1, "the updater must mint one repository-scoped App token"
+    token_step = token_steps[0]
+    assert token_step.get("id") == "updater-token"
+    assert token_step.get("if") == (
+        "steps.updater-credentials.outputs.available == 'true'"
+    )
+    assert token_step.get("env") == {
+        "UPDATER_APP_PRIVATE_KEY": "${{ secrets.CODEX_UPDATER_APP_PRIVATE_KEY }}"
+    }
+    token_inputs = token_step.get("with", {})
+    assert token_inputs == {
+        "client-id": "${{ vars.CODEX_UPDATER_APP_CLIENT_ID }}",
+        "private-key": "${{ env.UPDATER_APP_PRIVATE_KEY }}",
+        "owner": "${{ github.repository_owner }}",
+        "repositories": "${{ github.event.repository.name }}",
+        "permission-contents": "write",
+        "permission-pull-requests": "write",
+    }
+
     pull_request_steps = [
         step
-        for job in document.get("jobs", {}).values()
-        if isinstance(job, dict)
-        for step in job.get("steps", [])
+        for step in steps
         if isinstance(step, dict)
         and str(step.get("uses", "")).startswith("peter-evans/create-pull-request@")
     ]
     assert pull_request_steps, "the updater must submit a reviewable pull request"
-    assert pull_request_steps[0].get("with", {}).get("base") == "main", (
+    pull_request_step = pull_request_steps[0]
+    assert pull_request_step.get("if") == (
+        "steps.updater-credentials.outputs.available == 'true'"
+    )
+    assert pull_request_step.get("with", {}).get("base") == "main", (
         "the updater must explicitly set the PR base because checkout uses an exact SHA"
     )
+    assert pull_request_step.get("id") == "create-update-pr"
+    assert pull_request_step.get("with", {}).get("token") == (
+        "${{ steps.updater-token.outputs.token }}"
+    )
+    assert pull_request_step.get("with", {}).get("sign-commits") is True
     normalized = source.lower()
     assert not re.search(r"git\s+push[^\n]*\bmain\b", normalized)
-    assert "gh pr merge" not in normalized
-    assert "enablepullrequestautomerge" not in normalized
+    assert "github.token" not in normalized
+    merge_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and "gh pr merge" in str(step.get("run", ""))
+    ]
+    assert len(merge_steps) == 1
+    merge_step = merge_steps[0]
+    merge_command = str(merge_step["run"]).lower()
+    assert "--auto" in merge_command and "--squash" in merge_command
+    assert "--match-head-commit" in merge_command
+    assert "${pr_head_sha}" in merge_command
+    assert merge_step.get("env", {}).get("PR_HEAD_SHA") == (
+        "${{ steps.create-update-pr.outputs.pull-request-head-sha }}"
+    )
+    merge_condition = str(merge_step.get("if", ""))
+    assert "steps.updater-credentials.outputs.available == 'true'" in merge_condition
+    assert "steps.create-update-pr.outputs.pull-request-number != ''" in merge_condition
+    assert "steps.create-update-pr.outputs.pull-request-commits-verified == 'true'" in merge_condition
+
+
+def test_workflow_policy_rejects_mutated_automation_update_pull_requests() -> None:
+    document, _ = _workflow("ci")
+    policy_job = document["jobs"]["workflow-policy"]
+    assert policy_job["permissions"] == {"contents": "read"}
+    steps = policy_job["steps"]
+    checkout_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert checkout_steps[0].get("with", {}).get("fetch-depth") == 0
+
+    gate_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and step.get("name") == "Enforce automatic Codex updater pull-request policy"
+    ]
+    assert len(gate_steps) == 1
+    gate = gate_steps[0]
+    assert gate.get("if") == "startsWith(github.head_ref, 'automation/codex-')"
+    assert gate.get("env") == {
+        "PR_AUTHOR": "${{ github.event.pull_request.user.login }}",
+        "PR_BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+        "PR_EVENT_ACTOR": "${{ github.actor }}",
+        "PR_HEAD_REF": "${{ github.head_ref }}",
+        "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+        "UPDATER_APP_ACTOR": "${{ vars.CODEX_UPDATER_APP_ACTOR }}",
+    }
+    gate_script = str(gate.get("run", ""))
+    assert 'git diff --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}"' in gate_script
+    assert 'git diff --diff-filter=D --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}"' in gate_script
+    assert "UPDATER_APP_ACTOR" in gate_script
+    assert "PR_AUTHOR" in gate_script and "PR_EVENT_ACTOR" in gate_script
+    for path_pattern in (
+        "codex-release\\.json",
+        "config\\.yaml",
+        "Dockerfile",
+        "CHANGELOG\\.md",
+        "rootfs/etc/s6-overlay/s6-rc\\.d/codex-bridge/run",
+        "codex_app_server_(contract\\.json|protocol\\.schema\\.json|protocol\\.v2\\.schema\\.json)",
+    ):
+        assert path_pattern in gate_script
 
 
 def test_release_validates_main_sha_and_version_without_hacs_release_tag() -> None:

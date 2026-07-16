@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/logo.png" alt="Codex Bridge — private code, home control" width="720">
+<img src="brand/logo.png" alt="Codex Bridge - private code, home control" width="720">
 
 # Home Assistant Codex Bridge
 
@@ -46,79 +46,28 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-The latest target-Home-Assistant-accepted release (historical for the current
-candidate) is experimental, `amd64`-only App `0.7.1`,
-Integration `0.7.1`, optional external Bridge `0.6.0`, and bundled Codex
-`0.144.4`. The distributed immutable App image has generic digest
-`sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
-and its amd64 child digest is
-`sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
-Main CI rerun `29483810669` and App publication run `29483810926` succeeded
-([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1)).
-On target HA, App and Integration `0.7.1` were installed and running with
-Bridge `0.6.0` and Codex `0.144.4`; ChatGPT Pro remained signed in, GPT-5.6
-was visible, the five-hour window rendered `Off`, and existing chats/history
-were preserved. Scheduled form drafts survived rerenders; the Skills form draft
-survived and create/list/delete passed; and the MCP form draft survived and was
-cancelled. A one-time Observe automation was claimed exactly at
-`2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted.
-The historical `0.7.1` Plugins/marketplaces list returned
-`capabilities_unavailable` (HTTP 503); do not claim `0.7.1` plugin or
-marketplace list/mutation acceptance. The first unattended App auto-update remains proven,
-and this manual update kept the prior-version backup. External blocked-network/
-Nabu Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback
-remain unproven.
+- **Target-HA accepted baseline:** App and Integration `0.7.3`, Bridge `0.6.2`,
+  and Codex `0.144.4`. ChatGPT Pro sign-in, dynamically discovered GPT-5.6
+  models, disabled five-hour limits, persisted chats, and native provider web
+  search were exercised on the test installation. Natural current-information
+  prompts did not reliably select the available search tool; that is the
+  specific behavior corrected by `0.7.5`.
+- **Latest signed App:** `0.7.4`, bundling Bridge `0.6.2` and Sigstore-verified
+  Codex `0.144.5`. Publication, SBOM, signature, and provenance verification
+  passed in [run 29507100716](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29507100716).
+  Immutable image digest:
+  `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
+- **Current candidate:** coordinated App/Integration/panel `0.7.5`, Bridge
+  `0.6.3`, and Codex `0.144.5`. It adds time-sensitive live-search guidance and
+  the compact Codex-style Limits/Model/Thinking composer row. Publication and
+  target-HA acceptance are release gates, not claims made by this source tree.
 
-App/Integration `0.7.2` with Bridge `0.6.1` was subsequently published and
-signed, but was not accepted on the target Home Assistant before this candidate
-superseded it. Its generic image digest is
-`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
-with amd64 child digest
-`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
-main CI `29491849347` and App publication `29491849502` succeeded
-([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2)).
-
-The `0.7.1` publication and target-HA acceptance above are historical for this
-candidate. App/Integration `0.7.3` with Bridge `0.6.2` is a candidate pending
-real Home Assistant acceptance, with bundled Codex `0.144.4`. It enables
-provider-gated native live web search by default for Supervisor-connected
-prompts and automations, including automatic capability recovery after a
-delayed ChatGPT sign-in; shell-command networking remains disabled. Signed-in
-ChatGPT-account image generation is available only when Codex advertises both
-`imageGeneration` and `namespaceTools`; it uses no API key and keeps bounded
-PNG, JPEG, or WebP results as private artifacts. The compact panel remains the
-primary UI. The candidate also retains the bounded plugin catalogue fixes and
-the updater's pinned `jsonschema` dependency installation fix; neither is
-live-acceptance evidence.
-
-App `0.7.0` uses private-IP Supervisor discovery. It retains bounded recovery
-for delayed ChatGPT device sign-in, expires the signed-out catalogue when
-account entitlements change, and discovers every model and reasoning level
-from Codex rather than hardcoding a release list. It also separates weekly-only
-usage from the disabled five-hour window and keeps a newly created chat usable
-while secondary snapshots retry.
-The `0.7.0` release extends the Codex-style surface with a clean left navigation
-tree, title-first chat rows, one action menu, correct archive collapse/search,
-and a corrected search icon. It adds Scheduled, Skills, Plugins, MCP,
-Instructions, About, Security, and system-information screens plus live action,
-streaming, and step/file metrics in the transcript. Approvals remain beside the
-active transcript, every decision stays reachable in the normal mobile scroll
-flow, and limits/model controls fold behind a compact mobile disclosure. Its
-catalogue recovery remains runtime-derived: live discovery, verified
-last-known-good data, the bundled Codex catalogue, then the static fallback.
-
-The App publishes discovery with the current Supervisor `app_config` map
-permission and its assigned private HA-network IP. A restart includes a bounded
-non-secret publication marker, which makes Supervisor refresh an otherwise
-unchanged record without changing its stable identity. If Core starts the
-Integration before the App is reachable, the flow shows a retryable connection
-state and does not save an unverified endpoint.
-
-The external Bridge remains an optional, private compatibility path for people
-who already operate one. Fresh Home Assistant OS installations should use the
-published App `0.7.1`. App `0.6.1` must not be used. Keep an existing external
-Bridge as a recovery path until the remaining blocked-network route, cold
-restore, and previous-image rollback are evidenced on the intended installation.
+The App remains experimental and `amd64` only. Nabu Casa and reverse-proxy
+routing preserve the same browser-to-HA trust boundary, but blocked-workplace
+routing, cold restore, and arbitrary previous-image rollback still require
+environment-specific acceptance. Historical details remain in the
+[changelog](codex_bridge_app/CHANGELOG.md) and signed
+[releases](https://github.com/Herbertmt978/HA_Codex_Bridge/releases).
 
 </details>
 
@@ -195,8 +144,8 @@ the selected App workspace:
   addresses, credentials, and arbitrary config payloads are rejected. In the
   historical `0.7.1` live-acceptance run, the list call returned
   `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or
-  marketplace list/mutation acceptance was claimed. The `0.7.3` candidate is
-  pending real Home Assistant acceptance.
+  marketplace list/mutation acceptance was claimed. The `0.7.5` candidate is
+  pending its final Home Assistant acceptance pass.
 - **MCP servers:** MCP is disabled by default. To use it, explicitly enable
   **Enable MCP** in the Codex Bridge App configuration, save, and restart the
   App. Configure outbound streamable-HTTP servers only with an HTTPS hostname.
@@ -226,13 +175,21 @@ The Integration and App update separately:
    App, Bridge, and Codex versions.
 3. If Home Assistant offers an App update, make a cold backup and apply it from
    **Settings -> Apps -> Codex Bridge**. Auto update can do this after its toggle
-   is enabled; the first unattended update is proven. The manual `0.7.1` update
-   retained the prior-version backup, while recovery and rollback remain
-   unproven.
+   is enabled; the first unattended device update is proven. Keep a cold backup
+   because recovery and arbitrary prior-image rollback remain unproven.
 
 App images are immutable: a running container does not replace Codex or itself.
-Upstream Codex updates first arrive as a verified, reviewable repository PR;
-unattended merge remains disabled until a real update/recovery canary passes.
+The scheduled updater verifies the upstream Codex release and Sigstore identity
+and regenerates only the allowlisted runtime projections. When the dedicated,
+repository-scoped GitHub App is configured, it opens the pull request with that
+token and branch protection gates guarded squash auto-merge on every required
+check. Its client ID, private key, and bot login are all required: if any is
+missing, the workflow emits an actionable notice and creates no pull request.
+It never falls back to `GITHUB_TOKEN`, because such a pull request would not
+start the required CI.
+`CODEX_UPDATE_PAUSED` is the maintainer kill switch. A successful main build
+then publishes and verifies the immutable signed App image before Home Assistant
+can offer it.
 The Supervisor App does **not** currently provide a validated way to select an
 arbitrary prior image, so make a cold Home Assistant backup before an App
 change. Keep a private external Bridge where one already exists until cold

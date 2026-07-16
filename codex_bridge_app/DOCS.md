@@ -94,7 +94,7 @@ The administrator-only panel exposes these App-backed surfaces:
   file path or JSON-RPC payload is passed through this API. The published/live-
   accepted `0.7.1` run returned `capabilities_unavailable` (HTTP 503); no
   `0.7.1` plugin or marketplace list/mutation acceptance was claimed. The
-  `0.7.3` candidate is pending real Home Assistant acceptance; it is not live
+  `0.7.5` candidate is pending real Home Assistant acceptance; it is not live
   publication evidence.
 - MCP is disabled by default. To opt in, set **Enable MCP** in the App
   configuration, save, and restart. Disabled startup suppresses MCP before
@@ -164,28 +164,20 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Candidate App/Integration `0.7.3` with Bridge `0.6.2` is pending real Home
-Assistant acceptance and retains bundled Codex `0.144.4`. It adds provider-
-gated Live web search by default for Supervisor prompts and automations,
-provider-gated signed-in image generation with private bounded PNG/JPEG/WebP
-artifacts, and compact panel controls; shell networking remains disabled and
-no OpenAI API key is used. It also includes the updater's pinned `jsonschema`
-dependency-installation fix. These are candidate facts only; the
-target-HA-accepted `0.7.1` release remains the historical live baseline.
+Candidate App/Integration `0.7.5` with Bridge `0.6.3` and Codex `0.144.5` is
+pending real Home Assistant acceptance. It retains capability-gated Live web
+search and signed-in image generation with private bounded PNG/JPEG/WebP
+artifacts, guides time-sensitive prompts toward the native search tool, and
+uses a compact Codex-style composer; shell networking remains disabled and no
+OpenAI API key is used. These are candidate facts only.
 
-The latest published signed release is Integration/App `0.7.2`, Bridge `0.6.1`,
-and Codex `0.144.4`. It was not target-HA accepted before the `0.7.3` candidate
-superseded it. Its generic image digest is
-`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
-with amd64 child
-`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
-main CI `29491849347` and App publication `29491849502` succeeded. The latest
-target-HA-accepted release is Integration `0.7.1`, App `0.7.1`, Bridge
-`0.6.0`, and Codex `0.144.4` (experimental, `amd64` only). The generic image
-digest is `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
-with amd64 child `sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
-Main CI rerun `29483810669` and App publication `29483810926` succeeded; see
-the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1).
+The latest published signed App is `0.7.4`, with Bridge `0.6.2` and Codex
+`0.144.5`. Publication run `29507100716` verified its signature, SBOM, and
+provenance. Its immutable digest is
+`sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
+The latest target-HA-accepted coordinated release is Integration/App `0.7.3`,
+Bridge `0.6.2`, and Codex `0.144.4` (experimental, `amd64` only). Acceptance is
+bounded to the recorded checks.
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly

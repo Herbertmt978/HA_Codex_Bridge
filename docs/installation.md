@@ -3,14 +3,16 @@
 ## Status before you start
 
 This guide covers the current candidate: experimental, `amd64`-only App and
-Integration `0.7.3`, Bridge `0.6.2`, and Codex `0.144.4`. It is pending real
-Home Assistant acceptance and is not a published release. Provider-gated native
-web search defaults to Live for Supervisor prompts and automations and
-re-negotiates automatically after ChatGPT sign-in; shell-command networking
+Integration `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. It is pending final
+Home Assistant acceptance. Signed App `0.7.4` already publishes the verified
+Codex `0.144.5` runtime; `0.7.5` coordinates the Integration and compact panel.
+Provider-gated native web search defaults to Live for Supervisor prompts and
+automations, re-negotiates automatically after ChatGPT sign-in, and guides
+time-sensitive prompts toward the native tool; shell-command networking
 remains disabled. Signed-in image generation requires
 both `imageGeneration` and `namespaceTools`, uses no API key, and retains only
-private bounded PNG/JPEG/WebP artifacts. The compact panel and updater
-`jsonschema` dependency-installation fix are candidate changes. The
+private bounded PNG/JPEG/WebP artifacts. The compact composer is a candidate
+presentation change and does not expand authority. The
 published/signed `0.7.0` baseline has generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child

@@ -35,22 +35,21 @@ workspace paths, or workspace secrets.
   Runtime discovery may show marked recovery data rather than a current list.
 - For current facts such as live weather, check the run activity for
   **Searching the web** or **Opening a web page**. On a Supervisor connection,
-  the `0.7.3` candidate defaults provider-advertised native search to Live for
-  prompts and automations and re-negotiates it after device login without an
-  Integration reload. The intentionally blocked shell-command network is
-  separate from provider-side web search. Do not treat a plausible answer
-  without web-search activity as a live result.
+  `0.7.5` defaults provider-advertised native search to Live for prompts and
+  automations, re-negotiates it after device login, and guides time-sensitive
+  requests toward the native tool. The intentionally blocked shell-command
+  network is separate from provider-side web search. Do not treat a plausible
+  answer without web-search activity as a live result.
 
-The target-HA-accepted App `0.7.1` image and its first unattended update are
-historical evidence. Published `0.7.2` was signed but not target-HA accepted.
-The current `0.7.3` App/Integration candidate
-(Bridge `0.6.2`, Codex `0.144.4`) is pending real Home Assistant acceptance.
-It adds provider-gated Live web search and signed-in image generation gated by
-both `imageGeneration` and `namespaceTools`; no API key is used, and generated
-PNG/JPEG/WebP artifacts remain private and bounded. The compact panel and
-updater `jsonschema` dependency-installation fix are candidate changes. The
-historical `0.7.1` live list returned `capabilities_unavailable` (HTTP 503),
-not a current `0.7.3` result.
+The target-HA-accepted coordinated baseline is App/Integration `0.7.3` with
+Bridge `0.6.2` and Codex `0.144.4`. Signed App `0.7.4` bundles verified Codex
+`0.144.5` but was not the final UI/search acceptance candidate. Current
+App/Integration `0.7.5` (Bridge `0.6.3`, Codex `0.144.5`) is pending real Home
+Assistant acceptance. It retains provider-gated Live web search and signed-in
+image generation gated by both `imageGeneration` and `namespaceTools`; no API
+key is used, and generated PNG/JPEG/WebP artifacts remain private and bounded.
+The historical `0.7.1` live list returned `capabilities_unavailable` (HTTP
+503); that is not a current result.
 For recovery, use a cold backup or an existing private external Bridge;
 external blocked-network routing, cold restore, and App-image rollback remain
 unproven.

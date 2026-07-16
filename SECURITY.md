@@ -71,17 +71,17 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The current candidate (Integration `0.7.3`, App `0.7.3`, Bridge `0.6.2`, Codex
-`0.144.4`) is experimental and `amd64` only and is pending real Home Assistant
+The current candidate (Integration/App `0.7.5`, Bridge `0.6.3`, Codex
+`0.144.5`) is experimental and `amd64` only and is pending real Home Assistant
 acceptance. Native Live web search is provider-gated for Supervisor prompts and
-automations; it does not relax the blocked model-controlled shell network.
+automations; bounded time-sensitive guidance does not relax the blocked
+model-controlled shell network.
 Image generation is gated by both `imageGeneration` and `namespaceTools`, uses
 a signed-in ChatGPT account rather than an API key, and keeps only bounded
-private PNG/JPEG/WebP artifacts. The compact panel and updater `jsonschema`
-dependency-installation fix are candidate changes. Published `0.7.2` was signed
-but not target-HA accepted; target-HA-accepted `0.7.1` remains historical;
-its live list returned `capabilities_unavailable` (HTTP 503), so no plugin or
-marketplace list/mutation acceptance was claimed. The published/signed `0.7.0` baseline has
+private PNG/JPEG/WebP artifacts. The compact composer is a presentation change,
+not an expansion of authority. Target-HA-accepted coordinated release `0.7.3`
+remains the live baseline; signed App `0.7.4` updates the verified runtime. The
+published/signed `0.7.0` baseline has
 generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
@@ -91,7 +91,7 @@ Target-Home-Assistant acceptance remains bounded. The target-HA-accepted
 `0.7.1` retest confirmed management-form retention, skill mutations, and MCP
 form cancellation; its live plugin/marketplace list returned
 `capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.3` changes above remain candidate
+list/mutation acceptance was claimed. The `0.7.5` changes above remain candidate
 evidence pending live acceptance. The first
 unattended App update is proven; external blocked-network routing, cold restore,
 and previous-image rollback remain unproven. Arbitrary prior-image selection is not a validated
