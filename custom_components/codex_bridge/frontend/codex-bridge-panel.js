@@ -22528,7 +22528,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.8.0";
+var PANEL_VERSION = "0.8.1";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -22586,6 +22586,8 @@ var PDF_PREVIEW_MAX_LABEL = "8 MB";
 var GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
+var ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
+var ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1e3, 2e3]);
 function isGeneratedImageArtifact(artifact) {
   return artifact?.source === "generated_image";
 }
@@ -24424,6 +24426,24 @@ template.innerHTML = `
       display: grid;
       gap: 2px;
       min-width: 0;
+    }
+
+    .artifact-refresh-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent-color) 5%, var(--surface-bg) 95%);
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .artifact-refresh-status .secondary-button {
+      flex: 0 0 auto;
     }
 
     .file-name {
@@ -26876,6 +26896,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this._activeThread = null;
     this._events = [];
     this._artifacts = [];
+    this._artifactRefreshState = { status: "idle", message: "" };
+    this._artifactRefreshRetryTimer = null;
+    this._artifactRefreshRetryGeneration = 0;
+    this._artifactRefreshRetryAttempts = 0;
+    this._workspaceArchivePending = false;
     this._artifactPreview = null;
     this._selectedArtifactId = null;
     this._previewToken = 0;
@@ -27003,6 +27028,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._stopPolling();
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
+    this._clearArtifactRefreshRetry();
     this._stopAuthPolling();
     this._clearInteractionExpiryTimer();
     this._uploadAbortController?.abort();
@@ -27366,6 +27392,12 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "download-artifact":
         this._downloadArtifact(actionTarget.dataset.artifactId || "");
+        break;
+      case "retry-artifacts":
+        this._retryArtifactRefresh({ manual: true });
+        break;
+      case "retry-archive":
+        this._createWorkspaceArchive({ retry: true });
         break;
       case "retry-artifact-preview":
         this._retryArtifactPreview();
@@ -30101,10 +30133,136 @@ var CodexBridgePanel = class extends HTMLElement {
       state: "complete"
     };
   }
+  _clearArtifactRefreshRetry({ resetState = true } = {}) {
+    this._artifactRefreshRetryGeneration += 1;
+    if (this._artifactRefreshRetryTimer) {
+      window.clearTimeout(this._artifactRefreshRetryTimer);
+      this._artifactRefreshRetryTimer = null;
+    }
+    this._artifactRefreshRetryAttempts = 0;
+    if (resetState) {
+      this._artifactRefreshState = { status: "idle", message: "" };
+    }
+  }
+  _noteArtifactReservationConflict(threadId = this._selectedThreadId, { manual = false, runStatus = null, retryArchive = false } = {}) {
+    if (!threadId || threadId !== this._selectedThreadId) {
+      return;
+    }
+    if (retryArchive) {
+      this._clearArtifactRefreshRetry({ resetState: false });
+      this._artifactRefreshState = {
+        status: "retryable",
+        message: "Workspace archive is still being prepared.",
+        action: "retry-archive"
+      };
+      this._render();
+      return;
+    }
+    if (!manual && (runStatus || this._activeThread?.status) === "running") {
+      this._artifactRefreshState = {
+        status: "waiting",
+        message: "Files will be available after this run finishes."
+      };
+      this._render();
+      return;
+    }
+    if (this._artifactRefreshRetryAttempts >= ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS) {
+      this._artifactRefreshState = {
+        status: "retryable",
+        message: "Files are still being prepared."
+      };
+      this._render();
+      return;
+    }
+    this._artifactRefreshState = {
+      status: "retrying",
+      message: "Files are still being prepared. Retrying…"
+    };
+    this._scheduleArtifactRefreshRetry(threadId);
+    this._render();
+  }
+  _scheduleArtifactRefreshRetry(threadId = this._selectedThreadId) {
+    if (this._artifactRefreshRetryTimer || !threadId || threadId !== this._selectedThreadId || !this.isConnected) {
+      return;
+    }
+    const attempt = this._artifactRefreshRetryAttempts;
+    const delay2 = ARTIFACT_REFRESH_RETRY_DELAYS_MS[Math.min(attempt, ARTIFACT_REFRESH_RETRY_DELAYS_MS.length - 1)];
+    const generation = this._artifactRefreshRetryGeneration;
+    this._artifactRefreshRetryTimer = window.setTimeout(() => {
+      this._artifactRefreshRetryTimer = null;
+      if (generation !== this._artifactRefreshRetryGeneration || threadId !== this._selectedThreadId || !this.isConnected) {
+        return;
+      }
+      this._artifactRefreshRetryAttempts += 1;
+      this._retryArtifactRefresh();
+    }, delay2);
+  }
+  async _retryArtifactRefresh({ manual = false } = {}) {
+    const threadId = this._selectedThreadId;
+    if (!threadId || !this.isConnected) {
+      return false;
+    }
+    if (manual) {
+      this._clearArtifactRefreshRetry({ resetState: false });
+      this._artifactRefreshState = {
+        status: "retrying",
+        message: "Refreshing files…"
+      };
+      this._render();
+    }
+    const generation = this._artifactRefreshRetryGeneration;
+    const isCurrent = () => generation === this._artifactRefreshRetryGeneration && threadId === this._selectedThreadId && this.isConnected;
+    try {
+      const artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
+      if (!isCurrent()) {
+        return false;
+      }
+      this._artifacts = Array.isArray(artifacts) ? artifacts : [];
+      this._clearArtifactRefreshRetry();
+      this._syncSelectedArtifact();
+      this._render();
+      return true;
+    } catch (error) {
+      if (!isCurrent()) {
+        return false;
+      }
+      if (canDeferArtifactRefresh(error)) {
+        this._noteArtifactReservationConflict(threadId, { manual });
+        return false;
+      }
+      this._clearArtifactRefreshRetry({ resetState: false });
+      this._artifactRefreshState = {
+        status: "retryable",
+        message: "Files could not be refreshed.",
+        action: "retry-artifacts"
+      };
+      this._render();
+      return false;
+    }
+  }
   _renderArtifacts() {
     const container = this.shadowRoot.getElementById("artifact-list");
+    const archiveButton = this.shadowRoot.getElementById("workspace-archive-button");
+    if (archiveButton) {
+      archiveButton.disabled = this._workspaceArchivePending;
+      archiveButton.setAttribute("aria-busy", String(this._workspaceArchivePending));
+    }
     this._syncSelectedArtifact();
     container.replaceChildren();
+    const refreshState = this._artifactRefreshState;
+    if (refreshState.status !== "idle") {
+      const status = document.createElement("div");
+      status.className = "artifact-refresh-status";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.append(this._textElement("span", "", refreshState.message));
+      if (refreshState.status !== "retrying") {
+        const action = refreshState.action || "retry-artifacts";
+        const label = action === "retry-archive" ? "Retry archive" : "Retry files";
+        status.append(this._actionButton("secondary-button small", action, label));
+      }
+      container.append(status);
+    }
     if (!this._artifacts.length) {
       container.append(this._textElement("div", "empty-note", "No files yet."));
       return;
@@ -30574,6 +30732,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const isCurrent = () => refreshEpoch === this._threadSnapshotEpoch && this._threadSelectionIsCurrent(threadId, selectionEpoch);
     if (!threadId) {
       this._stopEventSubscription();
+      this._clearArtifactRefreshRetry();
       this._clearInteractionExpiryTimer();
       this._activeThread = null;
       this._resetEventState();
@@ -30604,6 +30763,7 @@ var CodexBridgePanel = class extends HTMLElement {
         if (!canDeferArtifactRefresh(error)) {
           throw error;
         }
+        this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
       }
       if (!isCurrent()) {
         return false;
@@ -30636,6 +30796,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._sequence = authoritativeCursor;
       if (artifacts) {
         this._artifacts = artifacts;
+        this._clearArtifactRefreshRetry();
       }
       this._replacePendingInteractions(interactions);
       this._mergeStatus(status);
@@ -30856,6 +31017,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       this._stopPolling();
+      this._clearArtifactRefreshRetry();
       this._runActivityDetailsOpen = false;
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
@@ -31586,22 +31748,68 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
-  async _createWorkspaceArchive() {
-    if (!this._selectedThreadId) {
+  async _createWorkspaceArchive({ retry = false } = {}) {
+    if (!this._selectedThreadId || this._workspaceArchivePending) {
       return;
     }
+    const threadId = this._selectedThreadId;
+    const selectionEpoch = this._threadSelectionEpoch;
+    const isCurrent = () => threadId === this._selectedThreadId && selectionEpoch === this._threadSelectionEpoch && this.isConnected;
+    this._workspaceArchivePending = true;
+    this._clearArtifactRefreshRetry();
+    this._artifactRefreshState = {
+      status: "retrying",
+      message: retry ? "Retrying workspace archive..." : "Creating workspace archive..."
+    };
+    this._render();
     try {
       const artifact = await this._callWS("create_workspace_archive", {
-        thread_id: this._selectedThreadId
+        thread_id: threadId
       });
-      this._artifacts = await this._callWS("list_artifacts", { thread_id: this._selectedThreadId });
+      if (!isCurrent()) {
+        return;
+      }
+      let artifacts;
+      try {
+        artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
+      } catch (error) {
+        if (!isCurrent()) {
+          return;
+        }
+        if (!canDeferArtifactRefresh(error)) {
+          throw error;
+        }
+        this._noteArtifactReservationConflict(threadId);
+      }
+      if (!isCurrent()) {
+        return;
+      }
+      if (artifacts) {
+        this._artifacts = artifacts;
+        this._clearArtifactRefreshRetry();
+      }
       this._clearArtifactPreview();
       this._selectedArtifactId = artifact.artifact_id;
-      await this._loadArtifactPreview(artifact.artifact_id);
+      if (artifacts?.some((item) => item.artifact_id === artifact.artifact_id)) {
+        await this._loadArtifactPreview(artifact.artifact_id);
+      }
       this._clearError();
       this._render();
     } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
+      if (canDeferArtifactRefresh(error)) {
+        this._noteArtifactReservationConflict(threadId, { retryArchive: true });
+        return;
+      }
+      this._clearArtifactRefreshRetry();
       this._setError(error);
+    } finally {
+      this._workspaceArchivePending = false;
+      if (this.isConnected) {
+        this._render();
+      }
     }
   }
   async _selectArtifact(artifactId) {
@@ -31955,12 +32163,14 @@ var CodexBridgePanel = class extends HTMLElement {
             if (!canDeferArtifactRefresh(error)) {
               throw error;
             }
+            this._noteArtifactReservationConflict(polledThreadId);
           }
           if (!isCurrent()) {
             return;
           }
           if (artifacts) {
             this._artifacts = artifacts;
+            this._clearArtifactRefreshRetry();
             if (artifacts.some((artifact) => isGeneratedImageArtifact(artifact))) {
               this._forceMessageRebuild = true;
             }
@@ -32341,6 +32551,7 @@ var CodexBridgePanel = class extends HTMLElement {
           if (!canDeferArtifactRefresh(error)) {
             throw error;
           }
+          this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
         }
         if (!isCurrent()) {
           return;
@@ -32348,6 +32559,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._activeThread = thread;
         if (artifacts) {
           this._artifacts = artifacts;
+          this._clearArtifactRefreshRetry();
           if (artifacts.some((artifact) => isGeneratedImageArtifact(artifact))) {
             this._forceMessageRebuild = true;
           }

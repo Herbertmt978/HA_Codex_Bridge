@@ -29,11 +29,29 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed and target-HA-accepted coordinated release: App, Integration,
-  and panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5` (experimental and
-  `amd64` only). App publication run `29511116947` produced immutable digest
+- Latest target-HA-accepted coordinated release: App, Integration, and panel
+  `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5` (experimental and `amd64` only).
+  App publication run `29511116947` produced immutable digest
   `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
   and attestation `35670902`.
+- Latest signed publication: App/Integration/panel `0.8.0`, Bridge `0.7.0`,
+  and Codex `0.144.5`. App publication run `29520778281` produced immutable
+  digest
+  `sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`.
+- Candidate App/Integration/panel `0.8.1` with Bridge `0.7.1` and Codex
+  `0.144.5` is not target-HA accepted until it is installed and validated. It
+  replaces the persistent typed `reservation_conflict` path with a bounded
+  artifact manifest, terminal-run artifact reconciliation after capacity
+  release, and bounded typed-conflict retries that keep local Files status and
+  an explicit retry rather than a false global outage.
+- The 0.8.0 live exercise proved installation/pairing, ChatGPT Pro and history,
+  version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
+  web-search source/stage history, and subagent stage history. PDF creation
+  succeeded, but indexing/archive still returned persistent HTTP 409 after an
+  App restart; PDF acceptance is explicitly failed/pending.
+- Secure browser-worker follow-up is issue #43. Per ADR 0006, interactive
+  Chromium remains deferred pending its separate App-owned isolation and
+  enforced egress boundary.
 - Target Home Assistant `192.168.50.20` accepted that matrix on 2026-07-16.
   ChatGPT Pro remained connected; a fresh direct chat defaulted to
   `gpt-5.6-sol` with `low` thinking. The runtime catalogue exposed Sol, Terra,

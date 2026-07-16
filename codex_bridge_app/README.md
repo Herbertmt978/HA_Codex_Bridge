@@ -6,23 +6,34 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.7.5` (`amd64` only, experimental)
-- Published Integration: `0.7.5`
+- Published App: `0.8.0` (`amd64` only, experimental)
+- Published Integration: `0.8.0`
 - Latest target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.0`
-- Candidate Bridge: `0.7.0`
+- Candidate App/Integration: `0.8.1`
+- Candidate Bridge: `0.7.1`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.8.0` with Bridge `0.7.0` is pending real Home
-Assistant acceptance; coordinated `0.7.5` remains the live baseline. Signed
-App `0.7.5` carries the verified Codex `0.144.5` runtime. The candidate adds
-Codex-style stages, bounded subagent activity, and a local PDF.js canvas viewer
-while preserving the existing Live native-search behavior and blocked
-shell-command networking. Signed-in ChatGPT-account image generation needs
-both Codex `imageGeneration` and `namespaceTools` capabilities, uses no OpenAI
-API key, and keeps bounded PNG, JPEG, and WebP artifacts private. Its compact
-composer is a presentation change, not an authority change.
+Candidate App/Integration `0.8.1` with Bridge `0.7.1` is pending signed
+publication and real Home Assistant validation; coordinated `0.7.5` remains
+the fully accepted baseline. Signed App `0.8.0` carries the verified Codex
+`0.144.5` runtime and the bounded live results below. The candidate replaces
+the persistent typed `reservation_conflict`
+path with a bounded artifact manifest, reconciles artifacts after terminal runs
+release capacity, and uses bounded typed-conflict retries that retain local
+**Files** status and offer explicit retry instead of a false global outage.
+
+The 0.8.0 live exercise proved installation/pairing, ChatGPT Pro/history,
+version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
+web-search source/stage history, and subagent stage history. PDF creation
+succeeded, but indexing/archive returned persistent HTTP 409 after an App
+restart; PDF acceptance remains failed/pending. Secure App-owned browser-worker
+follow-up is issue #43; interactive Chromium remains deferred by ADR 0006.
+
+The published `0.8.0` image has immutable digest
+`sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`.
+Publication, signature, SBOM, and provenance verification passed in
+[run 29520778281](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29520778281).
 
 The published `0.7.4` image has immutable digest
 `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.

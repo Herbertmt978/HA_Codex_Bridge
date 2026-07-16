@@ -357,6 +357,119 @@ def test_workspace_quota_blocks_artifact_scan_without_publication(tmp_path) -> N
     assert storage.load_thread(thread.thread_id).artifacts == []
 
 
+def test_aggregate_workspace_quota_blocks_artifact_scan_without_publication(
+    tmp_path,
+) -> None:
+    storage, _thread, _workspace = _home_assistant_thread(
+        tmp_path,
+        _limits(max_workspace_bytes=5),
+    )
+    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
+    peer = storage.create_thread(
+        title="Peer quota",
+        mode=RunMode.EDIT,
+    )
+    workspace_root = storage.workspace_root
+    assert workspace_root is not None
+    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
+    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
+    (workspace / "report.pdf").write_bytes(b"123")
+    (peer_workspace / "peer.pdf").write_bytes(b"456")
+
+    with pytest.raises(QuotaExceededError) as error:
+        storage.sync_thread_artifacts(thread.thread_id)
+
+    assert error.value.resource == "workspace"
+    assert storage.load_thread(thread.thread_id).artifacts == []
+
+
+def test_aggregate_workspace_quota_blocks_archive_without_publication(tmp_path) -> None:
+    storage, _thread, _workspace = _home_assistant_thread(
+        tmp_path,
+        _limits(max_workspace_bytes=5),
+    )
+    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
+    peer = storage.create_thread(
+        title="Peer quota",
+        mode=RunMode.EDIT,
+    )
+    workspace_root = storage.workspace_root
+    assert workspace_root is not None
+    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
+    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
+    (workspace / "report.pdf").write_bytes(b"123")
+    (peer_workspace / "peer.pdf").write_bytes(b"456")
+
+    with pytest.raises(QuotaExceededError) as error:
+        storage.create_workspace_archive(thread.thread_id)
+
+    assert error.value.resource == "workspace"
+    assert storage.load_thread(thread.thread_id).artifacts == []
+    assert storage._home_assistant_artifacts_boundary().walk_regular_files(".") == ()
+
+
+def test_aggregate_workspace_measurement_does_not_use_archive_entry_limit(
+    tmp_path,
+) -> None:
+    storage, _thread, _workspace = _home_assistant_thread(
+        tmp_path,
+        _limits(max_workspace_bytes=10, max_archive_entries=1),
+    )
+    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
+    peer = storage.create_thread(title="Peer quota", mode=RunMode.EDIT)
+    workspace_root = storage.workspace_root
+    assert workspace_root is not None
+    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
+    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
+    (workspace / "report.pdf").write_bytes(b"123")
+    (peer_workspace / "peer.pdf").write_bytes(b"456")
+
+    artifacts = storage.sync_thread_artifacts(thread.thread_id)
+
+    assert [artifact.filename for artifact in artifacts] == ["report.pdf"]
+
+
+def test_artifact_sync_uses_bounded_manifest_when_workspace_ledger_check_conflicts(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, workspace = _home_assistant_thread(tmp_path, _limits())
+    (workspace / "report.pdf").write_bytes(b"%PDF-1.7\n")
+    quota_manager = storage.quota_manager
+    assert quota_manager is not None
+
+    def conflict(_pool: str, *, additional_bytes: int = 0) -> None:
+        raise ReservationConflictError("workspace")
+
+    monkeypatch.setattr(quota_manager, "check", conflict)
+
+    artifacts = storage.sync_thread_artifacts(thread.thread_id)
+
+    assert [(artifact.filename, artifact.size_bytes) for artifact in artifacts] == [
+        ("report.pdf", 9)
+    ]
+
+
+def test_workspace_archive_uses_its_bounded_manifest_when_workspace_ledger_check_conflicts(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    storage, thread, workspace = _home_assistant_thread(tmp_path, _limits())
+    (workspace / "report.pdf").write_bytes(b"%PDF-1.7\n")
+    quota_manager = storage.quota_manager
+    assert quota_manager is not None
+
+    def conflict(_pool: str, *, additional_bytes: int = 0) -> None:
+        raise ReservationConflictError("workspace")
+
+    monkeypatch.setattr(quota_manager, "check", conflict)
+
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    assert artifact.filename.endswith(".zip")
+    assert artifact.size_bytes is not None and artifact.size_bytes > 0
+
+
 def test_artifact_publication_never_exceeds_download_snapshot_ceiling(tmp_path) -> None:
     storage, thread, workspace = _home_assistant_thread(
         tmp_path,

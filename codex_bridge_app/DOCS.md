@@ -197,6 +197,20 @@ provenance. Its immutable digest is
 with attestation `35670902`. This acceptance does not establish image-
 generation, plugin/marketplace, MCP, external-routing, cold-restore, or
 arbitrary prior-image rollback acceptance.
+
+App/Integration/panel `0.8.1` with Bridge `0.7.1` and Codex `0.144.5` is a
+candidate only until signed publication and target-HA validation complete. It
+uses a bounded artifact manifest instead of the conflicting read-only global
+quota check, reconciles artifacts when terminal runs release capacity, and
+keeps a typed `reservation_conflict` local to **Files** through bounded retries
+and explicit retry control. It must not be represented as a general connection
+outage. The 0.8.0 live exercise passed installation/pairing, ChatGPT
+Pro/history, versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
+web-search source/stage history, and subagent stage history. PDF creation
+succeeded, but indexing/archive returned persistent HTTP 409 even after an App
+restart; PDF acceptance remains failed/pending. Issue #43 tracks the required
+secure App-owned browser worker; interactive Chromium remains deferred under
+[ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly

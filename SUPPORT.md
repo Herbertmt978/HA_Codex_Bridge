@@ -42,14 +42,17 @@ workspace paths, or workspace secrets.
   answer without web-search activity as a live result.
 
 The target-HA-accepted coordinated baseline is App/Integration `0.7.5` with
-Bridge `0.6.3` and Codex `0.144.5`. Candidate App/Integration `0.8.0` with
-Bridge `0.7.0` adds Codex-style run stages, bounded subagent status, and local
-PDF canvas preview but remains pending real Home Assistant acceptance. It
-retains provider-gated Live web search and signed-in
-image generation gated by both `imageGeneration` and `namespaceTools`; no API
-key is used, and generated PNG/JPEG/WebP artifacts remain private and bounded.
-The historical `0.7.1` live list returned `capabilities_unavailable` (HTTP
-503); that is not a current result.
+Bridge `0.6.3` and Codex `0.144.5`. Candidate App/Integration `0.8.1` with
+Bridge `0.7.1` resolves persistent typed `reservation_conflict` with a bounded
+artifact manifest, terminal-run reconciliation, and local **Files** retries;
+it remains pending signed publication and real Home Assistant acceptance. The
+0.8.0 live exercise passed install/pairing, ChatGPT Pro/history, versions,
+GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage
+history, and subagent stage history, but PDF indexing/archive returned
+persistent HTTP 409 after an App restart. PDF acceptance is failed/pending.
+Issue #43 tracks the secure App-owned browser-worker follow-up; interactive
+Chromium remains deferred under ADR 0006. The historical `0.7.1` live list
+returned `capabilities_unavailable` (HTTP 503); that is not a current result.
 For recovery, use a cold backup or an existing private external Bridge;
 external blocked-network routing, cold restore, and App-image rollback remain
 unproven.

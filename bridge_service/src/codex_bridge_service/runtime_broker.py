@@ -31,6 +31,7 @@ from .models import (
     ProjectKind,
     RunMode,
     RunRecord,
+    RuntimeProfile,
     ThreadRecord,
 )
 from .resource_limits import ResourceLimitError, ResourceLimits
@@ -398,6 +399,8 @@ class RuntimeBroker:
         self._inflight_publications: dict[str, int] = {}
         self._inflight_image_items: set[tuple[str, str]] = set()
         self._workers: set[Thread] = set()
+        self._pending_artifact_reconciliations: dict[str, int] = {}
+        self._artifact_reconciliation_worker: Thread | None = None
         self._activity: dict[str, float] = {}
         self._started = False
         self._closed = False
@@ -2220,6 +2223,9 @@ class RuntimeBroker:
         lease = self._leases.pop(run.run_id, None)
         if lease is not None:
             lease.release()
+        self._schedule_terminal_home_assistant_artifact_reconciliation_locked(
+            run.thread_id
+        )
         event = self._completion_events.pop(run.run_id, None)
         if event is not None:
             event.set()
@@ -2245,6 +2251,81 @@ class RuntimeBroker:
                 # Automation bookkeeping must never compromise the canonical
                 # runtime terminal transition or expose its private failure.
                 pass
+
+    def _schedule_terminal_home_assistant_artifact_reconciliation_locked(
+        self,
+        thread_id: str,
+    ) -> None:
+        if (
+            self._closed
+            or self.storage.runtime_profile is not RuntimeProfile.HOME_ASSISTANT
+        ):
+            return
+        self._pending_artifact_reconciliations[thread_id] = (
+            self._pending_artifact_reconciliations.get(thread_id, 0) + 1
+        )
+        if self._artifact_reconciliation_worker is not None:
+            return
+        worker = Thread(
+            target=self._reconcile_terminal_home_assistant_artifacts,
+            name="CodexArtifactReconcile",
+            daemon=True,
+        )
+        self._artifact_reconciliation_worker = worker
+        self._workers.add(worker)
+        worker.start()
+
+    def _reconcile_terminal_home_assistant_artifacts(self) -> None:
+        """Persist terminal workspace outputs without changing run outcome."""
+        try:
+            # The caller holds this lock while terminalizing.  Cross this
+            # barrier before scanning so up to 20,000 workspace entries never
+            # stall prompt admission or notification handling.
+            with self._lock:
+                if self._closed:
+                    self._pending_artifact_reconciliations.clear()
+                    self._artifact_reconciliation_worker = None
+                    self._workers.discard(current_thread())
+                    return
+            while True:
+                with self._lock:
+                    if self._closed:
+                        self._pending_artifact_reconciliations.clear()
+                        self._artifact_reconciliation_worker = None
+                        self._workers.discard(current_thread())
+                        return
+                    try:
+                        thread_id, revision = next(
+                            iter(self._pending_artifact_reconciliations.items())
+                        )
+                    except StopIteration:
+                        self._artifact_reconciliation_worker = None
+                        self._workers.discard(current_thread())
+                        return
+                try:
+                    self.storage.sync_thread_artifacts(thread_id)
+                except (
+                    ThreadNotFoundError,
+                    WorkspaceBoundaryError,
+                    ResourceLimitError,
+                    OSError,
+                ):
+                    # The terminal event and lease release have already
+                    # committed. A later artifact-list retry safely reconciles
+                    # transient storage contention without turning a
+                    # successful chat into a runtime connection failure.
+                    pass
+                with self._lock:
+                    if (
+                        self._pending_artifact_reconciliations.get(thread_id)
+                        == revision
+                    ):
+                        self._pending_artifact_reconciliations.pop(thread_id, None)
+        finally:
+            with self._lock:
+                if self._artifact_reconciliation_worker is current_thread():
+                    self._artifact_reconciliation_worker = None
+                self._workers.discard(current_thread())
 
     def _thread_projection_record_locked(
         self,

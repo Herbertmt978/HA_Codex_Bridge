@@ -504,3 +504,17 @@ with attestation `35670902`.
 | Native live search | The natural prompt `what is the weather in Malta like today` recorded `Searching the web` run activity and returned current live conditions. |
 | Update retention | The App update retained automatic update and kept the prior-version backup. |
 | Acceptance boundary | This run does not claim blocked-network/Nabu Casa/Cloudflare routing, cold restore, arbitrary previous-image rollback, image generation, plugins/marketplaces, or MCP acceptance. The historical `0.7.1` plugin/marketplace HTTP 503 result remains bounded historical evidence. |
+
+## 0.8.1 candidate: artifact reservation recovery
+
+App, Integration, and panel `0.8.1`, Bridge `0.7.1`, and Codex `0.144.5` are
+a candidate only. Signed publication and target-Home-Assistant validation have
+not occurred; no publication, image digest, or acceptance result is claimed.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| Artifact reservation recovery | Candidate implementation replaces the conflicting read-only global quota check with a bounded manifest and reconciles artifacts after a terminal run releases capacity. |
+| Panel recovery | Candidate implementation uses bounded retries only for typed `reservation_conflict`, keeps local **Files** status visible, and provides explicit retry. It must not show a false global connection outage. |
+| 0.8.0 live exercise passed | Installation/pairing, ChatGPT Pro/history, runtime versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage history, and subagent stage history. These observations do not accept 0.8.1. |
+| PDF acceptance | PDF creation succeeded, but indexing/archive returned persistent HTTP 409 after an App restart. PDF acceptance is explicitly failed/pending. |
+| Browser automation | Issue #43 tracks the required secure App-owned browser worker. Per ADR 0006, interactive Chromium remains deferred pending separate sandbox and enforced-egress acceptance. |
