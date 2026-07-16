@@ -56,11 +56,25 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed App:** `0.7.5`, bundling Bridge `0.6.3` and Codex `0.144.5`.
-  App publication [run 29511116947](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29511116947)
+- **Latest signed App:** `0.8.0`, bundling Bridge `0.7.0` and Codex `0.144.5`.
+  App publication [run 29520778281](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29520778281)
   produced immutable digest
-  `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
-  and [attestation 35670902](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35670902).
+  `sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`;
+  the signed [0.8.0 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.0)
+  remains published while the PDF finding below is corrected.
+- **Candidate, not yet accepted:** App, Integration, and panel `0.8.1`, Bridge
+  `0.7.1`, and Codex `0.144.5` replace the persistent typed
+  `reservation_conflict` path with a bounded artifact manifest, terminal-run
+  reconciliation, and bounded panel retries with local **Files** status and an
+  explicit retry. Signed publication and target-HA validation are still
+  required. The 0.8.0 exercise proved install/pairing, ChatGPT Pro/history,
+  versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search
+  source/stage history, and subagent stage history. PDF creation succeeded,
+  but indexing/archive returned persistent HTTP 409 after an App restart, so
+  PDF acceptance remains failed/pending.
+- **Browser automation:** secure App-owned browser-worker follow-up is tracked
+  in issue #43; interactive Chromium remains deferred by
+  [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).
 
 The App remains experimental and `amd64` only. Nabu Casa and reverse-proxy
 routing preserve the same browser-to-HA trust boundary, but blocked-workplace

@@ -5,7 +5,7 @@ ARG TARGETARCH
 LABEL \
     io.hass.type="app" \
     io.hass.arch="amd64" \
-    io.hass.version="0.8.0"
+    io.hass.version="0.8.1"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -43,8 +43,8 @@ RUN set -eux; \
 
 EXPOSE 8766
 
-ENV CODEX_BRIDGE_APP_VERSION="0.8.0" \
-    CODEX_BRIDGE_VERSION="0.7.0" \
+ENV CODEX_BRIDGE_APP_VERSION="0.8.1" \
+    CODEX_BRIDGE_VERSION="0.7.1" \
     CODEX_BRIDGE_CODEX_VERSION="0.144.5" \
     CODEX_BRIDGE_ARCH="amd64" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="0757937e7e7ecd07477f7ef7bd61d86edf43ac3181ef28353d139c6424580fed" \

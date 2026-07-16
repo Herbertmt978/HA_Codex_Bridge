@@ -2,6 +2,25 @@
 
 All notable App changes are recorded here.
 
+## 0.8.1
+
+- Replaces the conflicting read-only global artifact-quota check with a bounded
+  artifact manifest, so a typed `reservation_conflict` does not persist after
+  capacity is available.
+- Reconciles artifacts after a terminal run releases capacity.
+- Makes the panel perform bounded retries for typed artifact conflicts, retain
+  local **Files** status, and offer an explicit retry instead of presenting a
+  false global connection outage.
+- Remains a candidate pending installation and target-Home-Assistant
+  validation. The 0.8.0 PDF-creation check succeeded, but PDF indexing/archive
+  returned persistent HTTP 409 after an App restart; that acceptance remains
+  failed/pending.
+- Tracks secure App-owned browser-worker follow-up in issue #43. Interactive
+  Chromium remains deferred under ADR 0006.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.1` without changing its Integration API compatibility.
+
 ## 0.8.0
 
 - Adds Codex-style live run stages, current-action copy, file/line counters, and

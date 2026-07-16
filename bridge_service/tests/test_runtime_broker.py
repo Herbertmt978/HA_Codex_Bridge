@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import random
 from threading import Barrier, Event, Lock, RLock
@@ -27,8 +28,16 @@ from codex_bridge_service.codex_app_server_contract import (
     load_bundled_protocol_contract,
 )
 from codex_bridge_service.event_store import EventStoreAdmissionError
-from codex_bridge_service.models import ArtifactRecord, ArtifactSource, RunMode
-from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.models import (
+    ArtifactRecord,
+    ArtifactSource,
+    RunMode,
+    RuntimeProfile,
+)
+from codex_bridge_service.resource_limits import (
+    ReservationConflictError,
+    ResourceLimits,
+)
 from codex_bridge_service.runtime_broker import (
     RuntimeBroker,
     RuntimeBrokerError,
@@ -69,6 +78,18 @@ class _ContentionTrackingRLock:
         traceback: object | None,
     ) -> None:
         self._lock.release()
+
+
+class _HomeAssistantProfileStorage:
+    """Route broker-only profile checks through HA without changing test I/O."""
+
+    runtime_profile = RuntimeProfile.HOME_ASSISTANT
+
+    def __init__(self, storage: BridgeStorage) -> None:
+        self._storage = storage
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._storage, name)
 
 
 _PROTOCOL_VALIDATOR = AppServerProtocolValidator(load_bundled_protocol_contract())
@@ -547,6 +568,195 @@ def test_terminal_listener_receives_run_request_identity_and_unattended_flag(
                 True,
             )
         ]
+    finally:
+        broker.close()
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Home Assistant artifact sync requires POSIX descriptor operations",
+)
+def test_terminal_home_assistant_run_syncs_real_ha_workspace_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = BridgeStorage(
+        root_path=tmp_path / "state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=tmp_path / "workspaces",
+    )
+    project = storage.create_project(name="HA terminal", root_path="projects/ha")
+    thread = storage.create_thread(
+        title="HA terminal",
+        project_id=project.project_id,
+        mode=RunMode.EDIT,
+    )
+    workspace = storage.resolve_workspace_path(thread.workspace_path)
+    (workspace / "terminal-report.pdf").write_bytes(b"%PDF-1.7\nterminal artifact\n")
+    client = ValidatorBackedAppServer()
+    gate = RuntimeGate(limits=ResourceLimits())
+    sync_snapshots = []
+    real_sync_artifacts = storage.sync_thread_artifacts
+
+    def sync_artifacts_after_terminal_release(thread_id: str):
+        sync_snapshots.append(gate.snapshot())
+        return real_sync_artifacts(thread_id)
+
+    monkeypatch.setattr(storage, "sync_thread_artifacts", sync_artifacts_after_terminal_release)
+    broker = RuntimeBroker(
+        storage=storage,
+        app_server=client,
+        runtime_gate=gate,
+        watchdog_interval_seconds=0.01,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Create a report",
+            client_request_id="terminal-real-ha-artifact-sync",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+
+        _wait_until(
+            lambda: any(
+                artifact.filename == "terminal-report.pdf"
+                for artifact in storage.load_thread(thread.thread_id).artifacts
+            ),
+            message="terminal artifact sync did not register the real HA workspace file",
+        )
+
+        assert [(snapshot.active_turns, snapshot.queued_prompts) for snapshot in sync_snapshots] == [
+            (0, 0)
+        ]
+        event_types = [
+            event.event_type for event in storage.list_thread_events(thread.thread_id)
+        ]
+        assert event_types.index("run.completed") < event_types.index("artifact.added")
+    finally:
+        broker.close()
+
+
+def test_terminal_home_assistant_run_syncs_workspace_artifacts_after_lease_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    workspace = storage.resolve_workspace_path(thread.workspace_path)
+    artifact_path = workspace / "terminal-report.pdf"
+    artifact_path.write_bytes(b"%PDF-1.7\nterminal artifact\n")
+    client = ValidatorBackedAppServer()
+    gate = RuntimeGate(limits=ResourceLimits())
+    sync_snapshots = []
+    real_sync_artifacts = storage.sync_thread_artifacts
+
+    def sync_artifacts_after_terminal_release(thread_id: str):
+        sync_snapshots.append(gate.snapshot())
+        return real_sync_artifacts(thread_id)
+
+    monkeypatch.setattr(storage, "sync_thread_artifacts", sync_artifacts_after_terminal_release)
+    broker = RuntimeBroker(
+        storage=_HomeAssistantProfileStorage(storage),  # type: ignore[arg-type]
+        app_server=client,
+        runtime_gate=gate,
+        watchdog_interval_seconds=0.01,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Create a report",
+            client_request_id="terminal-artifact-sync",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+
+        _wait_until(
+            lambda: any(
+                artifact.filename == "terminal-report.pdf"
+                for artifact in storage.load_thread(thread.thread_id).artifacts
+            ),
+            message="terminal artifact sync did not register the workspace file",
+        )
+
+        assert [(snapshot.active_turns, snapshot.queued_prompts) for snapshot in sync_snapshots] == [
+            (0, 0)
+        ]
+        events = storage.list_thread_events(thread.thread_id)
+        event_types = [event.event_type for event in events]
+        assert event_types.index("run.completed") < event_types.index("artifact.added")
+    finally:
+        broker.close()
+
+
+def test_terminal_artifact_reservation_conflict_preserves_chat_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    workspace = storage.resolve_workspace_path(thread.workspace_path)
+    artifact_path = workspace / "retry-report.pdf"
+    artifact_path.write_bytes(b"%PDF-1.7\nretry artifact\n")
+    client = ValidatorBackedAppServer()
+    gate = RuntimeGate(limits=ResourceLimits())
+    attempts = 0
+    sync_snapshots = []
+    real_sync_artifacts = storage.sync_thread_artifacts
+
+    def conflict_then_sync(thread_id: str):
+        nonlocal attempts
+        attempts += 1
+        sync_snapshots.append(gate.snapshot())
+        if attempts == 1:
+            raise ReservationConflictError("workspace")
+        return real_sync_artifacts(thread_id)
+
+    monkeypatch.setattr(storage, "sync_thread_artifacts", conflict_then_sync)
+    broker = RuntimeBroker(
+        storage=_HomeAssistantProfileStorage(storage),  # type: ignore[arg-type]
+        app_server=client,
+        runtime_gate=gate,
+        watchdog_interval_seconds=0.01,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Create a report",
+            client_request_id="terminal-artifact-conflict",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+
+        _wait_until(
+            lambda: storage.load_thread(thread.thread_id).status == "idle",
+            message="reservation conflict changed the terminal chat state",
+        )
+        _wait_until(
+            lambda: attempts == 1,
+            message="terminal artifact reconciliation did not attempt the sync",
+        )
+        assert attempts == 1
+        assert broker.runtime_snapshot().active_turns == 0
+        assert storage.load_thread(thread.thread_id).artifacts == []
+
+        artifacts = storage.sync_thread_artifacts(thread.thread_id)
+
+        assert [artifact.filename for artifact in artifacts] == ["retry-report.pdf"]
+        assert [(snapshot.active_turns, snapshot.queued_prompts) for snapshot in sync_snapshots] == [
+            (0, 0),
+            (0, 0),
+        ]
+        events = storage.list_thread_events(thread.thread_id)
+        event_types = [event.event_type for event in events]
+        assert event_types.index("run.completed") < event_types.index("artifact.added")
     finally:
         broker.close()
 

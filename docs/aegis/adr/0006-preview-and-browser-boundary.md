@@ -45,3 +45,5 @@ boundary or give a model-controlled page a path to local services.
 - Chrome/Playwright UI design flows require a separately reviewed App release,
   immutable browser assets, HAOS sandbox acceptance, and an architecture-aware
   release track. The current App is `amd64` only and does not bundle Chromium.
+- Issue #43 tracks the secure App-owned browser-worker follow-up; it does not
+  authorize interactive Chromium before these conditions are met.

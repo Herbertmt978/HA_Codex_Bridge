@@ -73,6 +73,9 @@ _UPLOAD_MAX_RELATIVE_PATH_DEPTH = 16
 _UPLOAD_MAX_MIME_TYPE_BYTES = 255
 _UPLOAD_TERMINAL_SESSION_LIMIT = 128
 _UPLOAD_SESSION_LIMIT = 256
+# This is intentionally independent of the per-archive entry limit: an
+# aggregate workspace measurement spans many chats, but must still be bounded.
+_WORKSPACE_AGGREGATE_SCAN_MAX_ENTRIES = 100_000
 _UPLOAD_SESSION_FIELDS = frozenset(
     {
         "upload_id",
@@ -3799,16 +3802,18 @@ class BridgeStorage:
     ) -> list[ArtifactRecord]:
         snapshot = self.load_thread(thread_id)
         boundary = self._home_assistant_boundary()
+        limits = self._resource_limits()
         workspace = boundary.normalize(snapshot.workspace_path, allow_root=True)
+        self._enforce_aggregate_workspace_limit(boundary, limits)
         try:
             discovered = boundary.manifest_regular_files(
                 workspace,
                 reject_unsafe=True,
-                max_entries=self._resource_limits().max_archive_entries,
+                max_entries=limits.max_archive_entries,
+                max_bytes=limits.max_workspace_bytes,
             ).files
         except WorkspaceResourceLimitError:
             raise QuotaExceededError("workspace") from None
-        self._disk_quota().check("workspace")
         scanned: list[tuple[str, str, WorkspaceFileIdentity, int]] = []
         workspace_parts = PurePosixPath(workspace)
         for stored in discovered:
@@ -3835,7 +3840,6 @@ class BridgeStorage:
                 current = boundary.regular_file_stat(stored)
                 if current.identity != identity or current.size_bytes != size_bytes:
                     raise WorkspaceEscapeError()
-            self._disk_quota().check("workspace")
             record = self.load_thread(thread_id)
             known = {
                 (artifact.source, artifact.stored_path) for artifact in record.artifacts
@@ -3884,6 +3888,30 @@ class BridgeStorage:
                     ),
                 )
             return record.artifacts
+
+    def _enforce_aggregate_workspace_limit(
+        self,
+        boundary: WorkspaceBoundary,
+        limits: ResourceLimits,
+    ) -> None:
+        """Measure every workspace without touching the mutable quota ledger.
+
+        Archive entry limits describe a single user-requested archive, so they
+        must not constrain a healthy multi-chat workspace tree.  The separate
+        hard ceiling bounds this read-only aggregate traversal while retaining
+        the global workspace byte cap.  Callers publish only private metadata
+        or private archive output; a second aggregate scan cannot make an
+        external workspace mutation atomic and would duplicate this traversal.
+        """
+        try:
+            boundary.measure_regular_files(
+                ".",
+                reject_unsafe=False,
+                max_entries=_WORKSPACE_AGGREGATE_SCAN_MAX_ENTRIES,
+                max_bytes=limits.max_workspace_bytes,
+            )
+        except WorkspaceResourceLimitError:
+            raise QuotaExceededError("workspace") from None
 
     def open_artifact(
         self,
@@ -4019,6 +4047,7 @@ class BridgeStorage:
             snapshot.workspace_path,
             allow_root=True,
         )
+        self._enforce_aggregate_workspace_limit(workspace_boundary, limits)
         try:
             workspace_manifest = workspace_boundary.manifest_regular_files(
                 workspace,
@@ -4031,7 +4060,6 @@ class BridgeStorage:
                 "archive_entries" if error.resource == "entries" else "archive_expanded"
             )
             raise QuotaExceededError(resource) from None
-        disk_quota.check("workspace")
 
         attachment_stats: dict[str, int] = {}
         preflight_expanded = StreamingByteCounter(

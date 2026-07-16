@@ -453,6 +453,179 @@ describe("polling event fallback", () => {
     vi.useRealTimers();
   });
 
+  it("self-heals a terminal artifact reservation conflict without raising a connection error", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completing", "running");
+    panel._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    const artifacts = [{ artifact_id: "artifact-recovered", filename: "report.bin", mime_type: "application/octet-stream", size_bytes: 12 }];
+    let listAttempts = 0;
+    panel._callWS = vi.fn((action) => {
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Completed"));
+      if (action === "get_status") return Promise.resolve({});
+      if (action === "list_artifacts") {
+        listAttempts += 1;
+        return listAttempts === 1 ? Promise.reject(conflict) : Promise.resolve(artifacts);
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    panel._scheduleLiveRefresh("thread-alpha");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(listAttempts).toBe(1);
+    expect(panel._artifactRefreshState.status).toBe("retrying");
+    expect(panel._error).toBe("");
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(listAttempts).toBe(2);
+    expect(panel._artifacts).toEqual(artifacts);
+    expect(panel._artifactRefreshState.status).toBe("idle");
+    expect(panel._error).toBe("");
+    vi.useRealTimers();
+  });
+
+  it("settles an automatic artifact retry failure in Files with an explicit retry", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    const refreshFailure = Object.assign(new Error("Artifact service unavailable"), { code: "workspace_error" });
+    panel._callWS = vi.fn()
+      .mockRejectedValueOnce(conflict)
+      .mockRejectedValueOnce(refreshFailure);
+
+    await panel._retryArtifactRefresh({ manual: true });
+    expect(panel._artifactRefreshState.status).toBe("retrying");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(panel._callWS).toHaveBeenCalledTimes(2);
+    expect(panel._artifactRefreshRetryTimer).toBeNull();
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
+    expect(panel.shadowRoot.querySelector('[data-action="retry-artifacts"]')).not.toBeNull();
+    expect(panel._error).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+    vi.useRealTimers();
+  });
+
+  it("cancels a pending artifact retry when the selected chat changes or disconnects", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    panel._callWS = vi.fn((action) => {
+      if (action === "list_artifacts") return Promise.reject(conflict);
+      if (action === "get_thread") return Promise.resolve(threadRecord("thread-alpha", "Completed"));
+      if (action === "get_status") return Promise.resolve({});
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._retryArtifactRefresh({ manual: true });
+    expect(panel._artifactRefreshRetryTimer).not.toBeNull();
+    panel._setSelectedThreadId("thread-beta");
+    expect(panel._artifactRefreshRetryTimer).toBeNull();
+    expect(panel._artifactRefreshState.status).toBe("idle");
+
+    panel._selectedThreadId = "thread-beta";
+    panel._noteArtifactReservationConflict("thread-beta");
+    expect(panel._artifactRefreshRetryTimer).not.toBeNull();
+    panel.remove();
+    expect(panel._artifactRefreshRetryTimer).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("ignores an in-flight automatic artifact failure after the chat generation changes", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    const pendingRetry = deferred();
+    panel._callWS = vi.fn()
+      .mockRejectedValueOnce(conflict)
+      .mockReturnValueOnce(pendingRetry.promise);
+
+    await panel._retryArtifactRefresh({ manual: true });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel._callWS).toHaveBeenCalledTimes(2);
+
+    panel._setSelectedThreadId("thread-beta");
+    pendingRetry.reject(new Error("Artifact service unavailable"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(panel._selectedThreadId).toBe("thread-beta");
+    expect(panel._artifactRefreshState.status).toBe("idle");
+    expect(panel._error).toBe("");
+    vi.useRealTimers();
+  });
+
+  it("caps reservation retries and leaves a local Files retry action", async () => {
+    vi.useFakeTimers();
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    panel._callWS = vi.fn((action) => {
+      if (action === "list_artifacts") return Promise.reject(conflict);
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._retryArtifactRefresh({ manual: true });
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(panel._callWS.mock.calls.filter(([action]) => action === "list_artifacts")).toHaveLength(4);
+    expect(panel._artifactRefreshRetryTimer).toBeNull();
+    expect(panel._artifactRefreshState.status).toBe("retryable");
+    expect(panel.shadowRoot.querySelector('[data-action="retry-artifacts"]')).not.toBeNull();
+    expect(panel._error).toBe("");
+    vi.useRealTimers();
+  });
+
+  it("keeps an archive reservation conflict local and offers an explicit archive retry", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thread-alpha";
+    panel._activeThread = threadRecord("thread-alpha", "Completed");
+    const conflict = Object.assign(new Error("Artifacts are reserved"), { code: "reservation_conflict" });
+    const artifact = { artifact_id: "archive-recovered", filename: "workspace.zip", mime_type: "application/octet-stream", size_bytes: 12 };
+    let createAttempts = 0;
+    panel._callWS = vi.fn((action) => {
+      if (action === "create_workspace_archive") {
+        createAttempts += 1;
+        return createAttempts === 1 ? Promise.reject(conflict) : Promise.resolve(artifact);
+      }
+      if (action === "list_artifacts") return Promise.resolve([artifact]);
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    await panel._createWorkspaceArchive();
+    expect(createAttempts).toBe(1);
+    expect(panel._error).toBe("");
+    expect(panel._artifactRefreshState).toMatchObject({ status: "retryable", action: "retry-archive" });
+    expect(panel.shadowRoot.querySelector('[data-action="retry-archive"]')).not.toBeNull();
+
+    panel.shadowRoot.querySelector('[data-action="retry-archive"]').click();
+    await vi.waitFor(() => expect(panel._artifacts).toEqual([artifact]));
+    expect(panel._artifacts).toEqual([artifact]);
+    expect(panel._artifactRefreshState.status).toBe("idle");
+    expect(panel._error).toBe("");
+  });
+
   it("surfaces a non-reservation artifact failure from a busy live refresh", async () => {
     vi.useFakeTimers();
     const panel = document.createElement("codex-bridge-panel");
