@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 0.7.1
+
+- Preserves unsaved Scheduled, Skill, marketplace, and MCP form values when
+  live status refreshes re-render the administrator panel, preventing empty or
+  partial management requests.
+- Adds regression coverage for management-form drafts and clears each draft
+  only after cancellation or a confirmed successful mutation.
+- Bundles the Sigstore-verified Codex runtime `0.144.4`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.6.0` without changing its Integration API compatibility.
+
 ## 0.7.0
 
 - Adds administrator-only durable automations and scheduled-task controls.

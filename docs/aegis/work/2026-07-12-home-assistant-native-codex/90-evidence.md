@@ -384,12 +384,18 @@ recorded here; the following `0.6.5` evidence is historical only.
 | Panel behavior | The release uses a compact Codex-style sidebar while retaining Home Assistant theme and accessibility behavior. A typed transient artifact `reservation_conflict` preserves the prior artifact snapshot and avoids a false connection error even when the selected chat is idle; unrelated artifact failures remain visible. |
 | Boundary unchanged | Browser and remote-proxy traffic remains terminated at Home Assistant. Nabu Casa, Cloudflare, VPN, and other HTTPS reverse proxies must not expose or forward a browser directly to the private App or Bridge. |
 
-## 0.7.0 local release-candidate evidence
+## 0.7.0 release and bounded target-HA evidence
 
-The candidate matrix is Integration/App/panel `0.7.0`, Bridge `0.6.0`, and
-bundled Codex `0.144.4`. This section records source and local-container
-verification only; it does not claim published-image or target-Home-Assistant
-acceptance.
+The published matrix is Integration/App/panel `0.7.0`, Bridge `0.6.0`, and
+bundled Codex `0.144.4`. The signed generic image digest is
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`;
+the amd64 child is
+`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
+Main CI run `29471288344` and publication run `29471288457` succeeded, and the
+release carries signature, SBOM, and provenance attestations ([release
+page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0)).
+The local checks below remain source/package evidence; the target-HA rows record
+bounded live observations rather than blanket acceptance of every capability.
 
 | Evidence | Result |
 | --- | --- |
@@ -402,19 +408,20 @@ acceptance.
 | Reproducible App context | The amd64 context staged successfully with the locked build/runtime dependencies and Bridge `0.6.0` wheel. |
 | Local App image | Docker built the staged Home Assistant base image successfully. Inside that image `codex --version` reported `0.144.4`, and the locked app-server contract generator `--check` passed against that exact binary. |
 | Independent release review | Pre-release review found and closed the MCP capability-gate bypass, pre-service MCP activation, masked durable MCP cleanup, unlinked and terminal-before-link automation crash windows, retryable/post-mutation/post-claim scheduler gaps, root-workspace skill path, best-effort DNS screening gaps, mobile management-route trap, stale mutation refresh, desktop-error privacy leak, keyboard gaps, hidden-overlay hit testing, destructive-button contrast, and project-instruction scope/OAuth popup regressions. The final backend re-review was READY after 115 focused tests; the final frontend re-review was READY after 213 unit tests. |
+| Target Home Assistant | App and Integration `0.7.0` reported Bridge `0.6.0` and Codex `0.144.4`; ChatGPT Pro remained signed in, dynamic GPT-5.6 was visible, the five-hour window rendered `Off`, and chat/history were preserved. App auto-update and MCP opt-in persistence after restart were observed. |
+| Management mutation boundary | Forms lose unsaved values during a background rerender. The `0.7.1` candidate contains the fix; automation, skills, plugins/marketplaces, MCP-server, and global/project `AGENTS.md` mutation acceptance is superseded and must be retested. |
+| Recovery gates | The first unattended App update is proven. External blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image rollback remain unproven. |
 
-The remaining release gates are Linux CI, immutable image publication/signing,
-provenance and SBOM verification, installation on the target Home Assistant,
-and live acceptance of ChatGPT login persistence, dynamic models/limits, chat,
-automations, MCP administration, skills, plugins/marketplaces, and global plus
-project `AGENTS.md`.
+The remaining acceptance work is the `0.7.1` management-mutation retest and the
+external blocked-network, cold-restore, and previous-image recovery gates.
 
 ## Evidence status
 
-This is bounded live acceptance evidence for the published `0.6.5` matrix. The
-signed App publication, target-HA installation/discovery, ChatGPT Pro login,
-runtime catalogue, duration-aware limits, exact-response chat, App update and
-restart recovery, and dependency grouping are evidenced above. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
-unattended App update, and previous-image recovery still require fresh evidence;
-the optional external Bridge remains a compatibility/recovery path until then.
+The historical `0.6.5` section remains bounded live-acceptance evidence for that
+matrix. The `0.7.0` publication, signed digests, target-HA runtime versions,
+ChatGPT Pro login retention, dynamic catalogue, duration-aware limits,
+chat/history, App auto-update, and MCP opt-in persistence are evidenced above.
+Management mutation acceptance is superseded pending `0.7.1` retest. External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
+recovery remain unproven; the optional external Bridge remains a
+compatibility/recovery path until then.

@@ -43,17 +43,25 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
 requesting `SYS_ADMIN` or weakening isolation; App `0.7.0` retains canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-The historical App `0.6.5` image passed target-HAOS startup, its production
-sandbox self-test and attestation, an authenticated API v1 readiness request,
-Supervisor discovery, Integration pairing, ChatGPT Pro sign-in, runtime chat,
-and explicit App update/restart recovery. That evidence does not accept `0.7.0`.
-External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
-unattended App update, and previous-image rollback remain unproven.
+The published App/Integration `0.7.0` target run reported Bridge `0.6.0` and
+Codex `0.144.4`, retained ChatGPT Pro, showed dynamic GPT-5.6, rendered the
+five-hour window `Off`, preserved chat/history, and persisted App auto-update
+and MCP opt-in after restart. Management forms lose unsaved values during a
+background rerender; the `0.7.1` candidate contains the fix. Do not claim
+automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation
+acceptance until retested. The first unattended App update is proven. External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
+rollback remain unproven.
 
-The release being shipped is Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
-and Codex `0.144.4`; publication, signing, and target-Home-Assistant acceptance
-remain pending. Its catalogue recovery must remain ordered:
+The current candidate is Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, and
+Codex `0.144.4`; it carries the management-form rerender fix for target-HA
+retest. The published/signed `0.7.0` baseline has generic image digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+with amd64 child
+`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
+Main CI `29471288344` and publication `29471288457` succeeded, with signature,
+SBOM, and provenance on the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Its catalogue recovery must remain ordered:
 live app-server discovery first, then a verified last-known-good record, then
 the dynamically read installed Codex bundled catalogue, and static fallback
 last; stale records retry after 15 seconds. Do not add hardcoded model names:

@@ -29,13 +29,25 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Current release being shipped: Integration `0.7.0`, App `0.7.0`
+- Current candidate being shipped: Integration `0.7.1`, App `0.7.1`
   (experimental and `amd64` only), optional external Bridge `0.6.0`, and bundled
-  Codex `0.144.4`. Publication, signing, and target-Home-Assistant acceptance
-  remain pending; no App image digest is recorded for `0.7.0` yet.
-- App/Integration `0.6.6` is the signed published baseline. The prior `0.6.5`
-  matrix is live-accepted within the historical boundaries recorded in
-  `90-evidence.md`; do not apply either claim to `0.7.0`.
+  Codex `0.144.4`. It carries the candidate fix for management forms losing
+  unsaved values during background rerender; target-HA mutation retest remains
+  open.
+- Published/signed baseline: Integration `0.7.0`, App `0.7.0`. Its generic image
+  digest is
+  `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+  with amd64 child digest
+  `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
+  Main CI run `29471288344` and publication run `29471288457` succeeded; the
+  release includes signature, SBOM, and provenance attestations ([release
+  page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0)).
+  Target-Home-Assistant acceptance is bounded below; it is not a blanket
+  acceptance of every capability mutation.
+- App/Integration `0.6.6` is the prior signed publication. The `0.6.5` matrix
+  remains live-accepted only within the historical boundaries recorded in
+  `90-evidence.md`; neither historical claim supersedes the bounded `0.7.0`
+  evidence above.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -72,12 +84,16 @@ to the App or Bridge.
   without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
   canonical contained supplemental roots and hardens `lsm_get_self_attr` record
   parsing.
-- The live App `0.6.5` passed target-HAOS startup, production sandbox
-  self-test/attestation, authenticated API v1 readiness, Supervisor discovery,
-  Integration pairing, ChatGPT Pro sign-in, runtime chat, and explicit App
-  restart recovery. This historical result does not accept `0.7.0`; external
-  blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
-  unattended App update, and previous-image rollback remain unproven.
+- On target HA, App and Integration `0.7.0` reported Bridge `0.6.0` and Codex
+  `0.144.4`; ChatGPT Pro remained signed in, GPT-5.6 was visible from dynamic
+  runtime discovery, the five-hour window rendered `Off`, and chat/history were
+  preserved. App auto-update and MCP opt-in persistence after restart were also
+  observed. Management forms currently lose unsaved values during a background
+  rerender; the `0.7.1` candidate contains the fix. Do not claim automation,
+  skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation acceptance
+  until that candidate is retested. The first unattended App update is now
+  proven. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
+  and previous-image rollback remain unproven.
 - The App includes administrator-only capability surfaces for durable
   automations, workspace skills, global/project `AGENTS.md`, plugins and
   marketplaces, and outbound MCP configuration. Automations are persisted in

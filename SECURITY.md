@@ -71,14 +71,22 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The release being shipped (Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
-Codex `0.144.4`) is experimental and `amd64` only; it is pending publication,
-signing, and target-Home-Assistant acceptance. App/Integration `0.6.6` is the
-signed published baseline; the live-accepted `0.6.5` matrix remains historical
-evidence and neither accepts `0.7.0`.
-Arbitrary prior-image selection is not a validated Supervisor rollback
-mechanism. Until an update and restore canary is complete, recover with a cold
-backup or an existing private external Bridge.
+The current candidate (Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, Codex
+`0.144.4`) is experimental and `amd64` only and carries the management-form
+rerender fix for target-HA retest. The published/signed `0.7.0` baseline has
+generic image digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
+main CI `29471288344` and publication `29471288457` succeeded, and signature,
+SBOM, and provenance attestations are published with the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Target-Home-Assistant acceptance remains bounded. Management forms lose
+unsaved values during a background rerender, so do not claim automation,
+skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation acceptance
+until the `0.7.1` candidate fix is retested. The first unattended App update is
+proven; external blocked-network routing, cold restore, and previous-image
+rollback remain unproven. Arbitrary prior-image selection is not a validated
+Supervisor rollback mechanism; recover with a cold backup or an existing private
+external Bridge.
 
 ## Scope notes
 

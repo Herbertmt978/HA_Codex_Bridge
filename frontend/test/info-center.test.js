@@ -10,7 +10,7 @@ import {
 describe("information center view model", () => {
   it("projects allowlisted operational information into all four tabs", () => {
     const model = getInfoCenterViewModel({
-      panelVersion: "0.7.0",
+      panelVersion: "0.7.1",
       status: {
         api_version: 1,
         bridge_ready: true,
@@ -22,8 +22,8 @@ describe("information center view model", () => {
           primary: { remaining_percent: 72.4 },
           secondary: { remaining_percent: 41 },
         },
-        app: { connected: true, version: "0.7.0" },
-        integration: { ready: true, version: "0.7.0" },
+        app: { connected: true, version: "0.7.1" },
+        integration: { ready: true, version: "0.7.1" },
         diagnostics: { bridge_version: "0.6.0", app_server_version: "0.144.4" },
       },
       thread: { thread_id: "thread_1", status: "running", mode: "edit" },

@@ -11,7 +11,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.7.0";
+const PANEL_VERSION = "0.7.1";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -4501,6 +4501,8 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
+    this._captureDesktopFormDraft(target);
+
     if (target.id === "prompt-input") {
       this._draft = target.value;
       this._setDraftForThread(this._selectedThreadId, target.value);
@@ -4581,6 +4583,7 @@ class CodexBridgePanel extends HTMLElement {
       this._renderDesktopSurface();
       return;
     }
+    this._captureDesktopFormDraft(target);
     if (target.id === "thread-model-select") {
       const modelOverride = target.value || null;
       const project = this._activeProject();
@@ -4932,6 +4935,18 @@ class CodexBridgePanel extends HTMLElement {
     return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
   }
 
+  _captureDesktopFormDraft(target) {
+    const form = target.closest("form[data-desktop-form]");
+    const field = target.dataset.desktopField;
+    const state = this._desktopFeatures[this._activeDestination];
+    if (!form || !field || !state?.form) return;
+    state.formDraft = { ...(state.formDraft || {}), [field]: target.value };
+  }
+
+  _clearDesktopFormDraft(state) {
+    state.formDraft = {};
+  }
+
   _agentsDraftKey(scope, projectId = null) {
     return scope === "project" ? `project:${projectId || ""}` : "global";
   }
@@ -4990,27 +5005,27 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
-    if (action === "open-schedule-form") state.form = "schedule";
-    else if (action === "open-skill-form") state.form = "skill";
-    else if (action === "open-marketplace-form") state.form = "marketplace";
-    else if (action === "open-mcp-form") state.form = "mcp";
+    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = "schedule"; }
+    else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
+    else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
+    else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp"; }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
-    else if (action === "close-form") state.form = null;
-    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state);
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state);
-    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state);
+    else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
+    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
+    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
       const source = String(values.source || "");
       if (!source.startsWith("https://")) { state.error = "Marketplace source must use HTTPS."; }
-      else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state);
+      else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state, { clearFormDraft: true });
     }
     else if (action === "submit-mcp") {
       const payload = this._desktopFormValues(target);
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      await this._desktopMutation("add_mcp", payload, state);
+      await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
     }
     else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -5018,7 +5033,9 @@ class CodexBridgePanel extends HTMLElement {
     else if (action === "update-automation") {
       try {
         state.loading = true; this._renderDesktopSurface();
-        state.editingAutomation = await this._callWS("get_automation", { automation_id: dataset.id });
+        const automation = await this._callWS("get_automation", { automation_id: dataset.id });
+        this._clearDesktopFormDraft(state);
+        state.editingAutomation = automation;
         state.form = "schedule-edit";
       } catch (error) { state.error = normalizeDesktopError(error); }
       finally { state.loading = false; }
@@ -5073,17 +5090,19 @@ class CodexBridgePanel extends HTMLElement {
     this._renderDesktopSurface();
   }
 
-  async _desktopMutation(action, payload, state) {
+  async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {
+    const destination = this._activeDestination;
     let mutationSucceeded = false;
     state.loading = true; state.error = ""; this._renderDesktopSurface();
     try {
       await this._callWS(action, payload);
       mutationSucceeded = true;
+      if (clearFormDraft) this._clearDesktopFormDraft(state);
       state.notice = "Saved.";
       state.form = null;
       state.editingAutomation = null;
       state.loaded = false;
-      await this._loadDesktopDestination(this._activeDestination, { force: true });
+      await this._loadDesktopDestination(destination, { force: true });
     }
     catch (error) { state.error = normalizeDesktopError(error); }
     finally { state.loading = false; }

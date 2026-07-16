@@ -1663,10 +1663,17 @@ function createDesktopFeatureState() {
     data: {},
     form: null,
     notice: "",
+    // The desktop surface is rebuilt during status refreshes, so retain the
+    // active form's unsaved values independently of its DOM controls.
+    formDraft: {},
     // Keep unsaved instruction edits isolated by scope while the selector changes.
     agentsDrafts: {}
   };
 }
+var formValue = (state, name, fallback = "") => {
+  const drafts = asRecord(state.formDraft);
+  return Object.hasOwn(drafts, name) ? drafts[name] : fallback;
+};
 var text = (documentRef, tag, value, className = "") => {
   const node = documentRef.createElement(tag);
   if (className) node.className = className;
@@ -1788,19 +1795,19 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     form.className = "desktop-form";
     form.dataset.desktopForm = "schedule";
     form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", editing.name || ""));
-    form.append(input(documentRef, "Project ID", "project_id", editing.target?.project_id || ""));
-    form.append(input(documentRef, "Thread ID", "thread_id", editing.target?.thread_id || ""));
-    form.append(input(documentRef, "Prompt", "prompt", editing.prompt || "", "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], schedule.kind === "rrule" ? "rrule" : schedule.kind || "once"));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", schedule.at || schedule.start_at || schedule.anchor_at || ""));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", schedule.seconds || ""));
-    form.append(input(documentRef, "RRULE", "rrule", schedule.rule || ""));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", schedule.timezone || defaultTimezone));
-    form.append(input(documentRef, "Model", "model", editing.model || ""));
-    form.append(input(documentRef, "Reasoning", "thinking", editing.thinking || ""));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], editing.mode || "observe"));
-    form.append(input(documentRef, "Revision", "revision", editing.revision || ""));
+    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
+    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
+    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
+    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
+    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
+    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
+    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
+    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
+    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
+    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
+    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
+    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
+    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
@@ -1831,7 +1838,7 @@ function renderSkills(documentRef, state) {
     const form = documentRef.createElement("form");
     form.className = "desktop-form";
     form.dataset.desktopForm = "skill";
-    form.append(input(documentRef, "Name", "name"), input(documentRef, "Description", "description", "", "textarea"), input(documentRef, "Instructions", "instructions", "", "textarea"));
+    form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "Description", "description", formValue(state, "description"), "textarea"), input(documentRef, "Instructions", "instructions", formValue(state, "instructions"), "textarea"));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form"));
@@ -1869,7 +1876,7 @@ function renderPlugins(documentRef, state) {
     const form = documentRef.createElement("form");
     form.className = "desktop-form";
     form.dataset.desktopForm = "marketplace";
-    form.append(input(documentRef, "HTTPS source URL", "source", "", "url"), input(documentRef, "Ref (optional)", "ref_name"), input(documentRef, "Sparse paths (comma separated)", "sparse_paths"));
+    form.append(input(documentRef, "HTTPS source URL", "source", formValue(state, "source"), "url"), input(documentRef, "Ref (optional)", "ref_name", formValue(state, "ref_name")), input(documentRef, "Sparse paths (comma separated)", "sparse_paths", formValue(state, "sparse_paths")));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Add marketplace", "submit-marketplace"), button(documentRef, "Cancel", "close-form"));
@@ -1914,7 +1921,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       const form = documentRef.createElement("form");
       form.className = "desktop-form";
       form.dataset.desktopForm = "mcp";
-      form.append(input(documentRef, "Name", "name"), input(documentRef, "HTTPS URL", "url", "", "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id"), input(documentRef, "OAuth resource", "oauth_resource"));
+      form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource")));
       const actions = documentRef.createElement("div");
       actions.className = "desktop-form-actions";
       actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form"));
@@ -2005,7 +2012,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.7.0";
+var PANEL_VERSION = "0.7.1";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -6447,6 +6454,7 @@ var CodexBridgePanel = class extends HTMLElement {
       state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
       return;
     }
+    this._captureDesktopFormDraft(target);
     if (target.id === "prompt-input") {
       this._draft = target.value;
       this._setDraftForThread(this._selectedThreadId, target.value);
@@ -6526,6 +6534,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderDesktopSurface();
       return;
     }
+    this._captureDesktopFormDraft(target);
     if (target.id === "thread-model-select") {
       const modelOverride = target.value || null;
       const project = this._activeProject();
@@ -6840,6 +6849,16 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!form) return {};
     return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
   }
+  _captureDesktopFormDraft(target) {
+    const form = target.closest("form[data-desktop-form]");
+    const field = target.dataset.desktopField;
+    const state = this._desktopFeatures[this._activeDestination];
+    if (!form || !field || !state?.form) return;
+    state.formDraft = { ...state.formDraft || {}, [field]: target.value };
+  }
+  _clearDesktopFormDraft(state) {
+    state.formDraft = {};
+  }
   _agentsDraftKey(scope, projectId = null) {
     return scope === "project" ? `project:${projectId || ""}` : "global";
   }
@@ -6906,27 +6925,39 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
-    if (action === "open-schedule-form") state.form = "schedule";
-    else if (action === "open-skill-form") state.form = "skill";
-    else if (action === "open-marketplace-form") state.form = "marketplace";
-    else if (action === "open-mcp-form") state.form = "mcp";
-    else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
-    else if (action === "close-form") state.form = null;
-    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state);
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state);
-    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state);
+    if (action === "open-schedule-form") {
+      this._clearDesktopFormDraft(state);
+      state.editingAutomation = null;
+      state.form = "schedule";
+    } else if (action === "open-skill-form") {
+      this._clearDesktopFormDraft(state);
+      state.form = "skill";
+    } else if (action === "open-marketplace-form") {
+      this._clearDesktopFormDraft(state);
+      state.form = "marketplace";
+    } else if (action === "open-mcp-form") {
+      this._clearDesktopFormDraft(state);
+      state.form = "mcp";
+    } else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
+    else if (action === "close-form") {
+      this._clearDesktopFormDraft(state);
+      state.editingAutomation = null;
+      state.form = null;
+    } else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
+    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
       const source = String(values.source || "");
       if (!source.startsWith("https://")) {
         state.error = "Marketplace source must use HTTPS.";
-      } else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state);
+      } else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state, { clearFormDraft: true });
     } else if (action === "submit-mcp") {
       const payload = this._desktopFormValues(target);
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      await this._desktopMutation("add_mcp", payload, state);
+      await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
     } else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -6934,7 +6965,9 @@ var CodexBridgePanel = class extends HTMLElement {
       try {
         state.loading = true;
         this._renderDesktopSurface();
-        state.editingAutomation = await this._callWS("get_automation", { automation_id: dataset.id });
+        const automation = await this._callWS("get_automation", { automation_id: dataset.id });
+        this._clearDesktopFormDraft(state);
+        state.editingAutomation = automation;
         state.form = "schedule-edit";
       } catch (error) {
         state.error = normalizeDesktopError(error);
@@ -6996,7 +7029,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._renderDesktopSurface();
   }
-  async _desktopMutation(action, payload, state) {
+  async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {
+    const destination = this._activeDestination;
     let mutationSucceeded = false;
     state.loading = true;
     state.error = "";
@@ -7004,11 +7038,12 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       await this._callWS(action, payload);
       mutationSucceeded = true;
+      if (clearFormDraft) this._clearDesktopFormDraft(state);
       state.notice = "Saved.";
       state.form = null;
       state.editingAutomation = null;
       state.loaded = false;
-      await this._loadDesktopDestination(this._activeDestination, { force: true });
+      await this._loadDesktopDestination(destination, { force: true });
     } catch (error) {
       state.error = normalizeDesktopError(error);
     } finally {

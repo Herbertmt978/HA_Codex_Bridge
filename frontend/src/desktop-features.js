@@ -80,10 +80,18 @@ export function createDesktopFeatureState() {
     data: {},
     form: null,
     notice: "",
+    // The desktop surface is rebuilt during status refreshes, so retain the
+    // active form's unsaved values independently of its DOM controls.
+    formDraft: {},
     // Keep unsaved instruction edits isolated by scope while the selector changes.
     agentsDrafts: {},
   };
 }
+
+const formValue = (state, name, fallback = "") => {
+  const drafts = asRecord(state.formDraft);
+  return Object.hasOwn(drafts, name) ? drafts[name] : fallback;
+};
 
 const text = (documentRef, tag, value, className = "") => {
   const node = documentRef.createElement(tag);
@@ -203,19 +211,19 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     form.className = "desktop-form";
     form.dataset.desktopForm = "schedule";
     form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", editing.name || ""));
-    form.append(input(documentRef, "Project ID", "project_id", editing.target?.project_id || ""));
-    form.append(input(documentRef, "Thread ID", "thread_id", editing.target?.thread_id || ""));
-    form.append(input(documentRef, "Prompt", "prompt", editing.prompt || "", "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], schedule.kind === "rrule" ? "rrule" : schedule.kind || "once"));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", schedule.at || schedule.start_at || schedule.anchor_at || ""));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", schedule.seconds || ""));
-    form.append(input(documentRef, "RRULE", "rrule", schedule.rule || ""));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", schedule.timezone || defaultTimezone));
-    form.append(input(documentRef, "Model", "model", editing.model || ""));
-    form.append(input(documentRef, "Reasoning", "thinking", editing.thinking || ""));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], editing.mode || "observe"));
-    form.append(input(documentRef, "Revision", "revision", editing.revision || ""));
+    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
+    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
+    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
+    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
+    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
+    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
+    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
+    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
+    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
+    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
+    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
+    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
+    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
@@ -247,7 +255,7 @@ function renderSkills(documentRef, state) {
     const form = documentRef.createElement("form");
     form.className = "desktop-form";
     form.dataset.desktopForm = "skill";
-    form.append(input(documentRef, "Name", "name"), input(documentRef, "Description", "description", "", "textarea"), input(documentRef, "Instructions", "instructions", "", "textarea"));
+    form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "Description", "description", formValue(state, "description"), "textarea"), input(documentRef, "Instructions", "instructions", formValue(state, "instructions"), "textarea"));
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form")); form.append(actions); section.append(form);
   }
@@ -278,7 +286,7 @@ function renderPlugins(documentRef, state) {
   marketActions.append(button(documentRef, "Add marketplace", "open-marketplace-form")); section.append(marketActions);
   if (state.form === "marketplace") {
     const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "marketplace";
-    form.append(input(documentRef, "HTTPS source URL", "source", "", "url"), input(documentRef, "Ref (optional)", "ref_name"), input(documentRef, "Sparse paths (comma separated)", "sparse_paths"));
+    form.append(input(documentRef, "HTTPS source URL", "source", formValue(state, "source"), "url"), input(documentRef, "Ref (optional)", "ref_name", formValue(state, "ref_name")), input(documentRef, "Sparse paths (comma separated)", "sparse_paths", formValue(state, "sparse_paths")));
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add marketplace", "submit-marketplace"), button(documentRef, "Cancel", "close-form")); form.append(actions); section.append(form);
   }
   const marketRows = market.map((row) => ({ ...row, plugin_count: Array.isArray(row.plugins) ? row.plugins.length : 0 }));
@@ -297,7 +305,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
   if (tab === "mcp") {
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
-    if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name"), input(documentRef, "HTTPS URL", "url", "", "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id"), input(documentRef, "OAuth resource", "oauth_resource")); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
+    if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource"))); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
   }
   if (tab === "instructions") {
