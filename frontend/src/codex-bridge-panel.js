@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.1";
+const PANEL_VERSION = "0.8.2";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -85,6 +85,8 @@ const PDF_PREVIEW_MAX_LABEL = "8 MB";
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
+const ARTIFACT_PRIMARY_ERROR_CODES = new Set(["invalid_auth", "cannot_connect", "not_configured"]);
+const ARTIFACT_PRIMARY_HTTP_STATUSES = new Set([401, 403, 502, 503, 504]);
 const ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 const ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
 
@@ -103,7 +105,46 @@ function displayArtifactMime(value) {
 }
 
 function canDeferArtifactRefresh(error) {
-  return error?.code === ARTIFACT_RESERVATION_CONFLICT_CODE;
+  return artifactErrorCode(error) === ARTIFACT_RESERVATION_CONFLICT_CODE;
+}
+
+function artifactErrorCandidates(error) {
+  return [
+    error,
+    error?.body,
+    error?.body?.error,
+    error?.error,
+    error?.detail,
+  ];
+}
+
+function artifactErrorCode(error) {
+  for (const candidate of artifactErrorCandidates(error)) {
+    if (candidate && typeof candidate === "object" && candidate.code != null) {
+      return String(candidate.code).trim().toLowerCase();
+    }
+  }
+  return "";
+}
+
+function artifactErrorStatus(error) {
+  for (const candidate of artifactErrorCandidates(error)) {
+    if (candidate && typeof candidate === "object") {
+      const value = candidate.status ?? candidate.statusCode;
+      if (Number.isInteger(value)) return value;
+    }
+  }
+  return null;
+}
+
+function isArtifactDomainFailure(error) {
+  const code = artifactErrorCode(error);
+  const status = artifactErrorStatus(error);
+  return !ARTIFACT_PRIMARY_ERROR_CODES.has(code) && !ARTIFACT_PRIMARY_HTTP_STATUSES.has(status);
+}
+
+function hasStructuredArtifactError(error) {
+  return Boolean(artifactErrorCode(error)) || artifactErrorStatus(error) !== null;
 }
 
 function artifactPreviewLimit(artifact) {
@@ -203,7 +244,7 @@ template.innerHTML = `
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
-      --rail-bg: color-mix(in srgb, var(--surface-bg) 94%, var(--text-color) 6%);
+      --rail-bg: color-mix(in srgb, var(--surface-bg) 95%, var(--accent-color) 5%);
       --canvas-bg: color-mix(in srgb, var(--surface-bg) 99%, var(--text-color) 1%);
       --context-bg: color-mix(in srgb, var(--surface-bg) 96%, var(--text-color) 4%);
       --focus-ring-color: color-mix(in srgb, var(--accent-color) 74%, var(--surface-bg) 26%);
@@ -224,6 +265,29 @@ template.innerHTML = `
       display: block;
       height: 100%;
       color: var(--text-color);
+    }
+
+    :host(:fullscreen) {
+      width: 100vw;
+      height: 100dvh;
+    }
+
+    :host(:fullscreen) .rail-pane {
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-bg) 91%, #dff4c1 9%) 0%,
+        color-mix(in srgb, var(--surface-bg) 95%, #dff4c1 5%) 64%,
+        color-mix(in srgb, var(--surface-bg) 90%, #fff0a8 10%) 100%
+      );
+    }
+
+    @media (min-width: 1121px) {
+      :host(:fullscreen) .side-pane {
+        margin: 10px 10px 10px 0;
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        box-shadow: 0 10px 30px color-mix(in srgb, var(--text-color) 9%, transparent);
+      }
     }
 
     * {
@@ -1021,6 +1085,10 @@ template.innerHTML = `
     .runtime-shell {
       display: grid;
       gap: 6px;
+    }
+
+    .runtime-shell[hidden] {
+      display: none;
     }
 
     .runtime-strip {
@@ -2184,7 +2252,7 @@ template.innerHTML = `
      * These rules sit near the responsive rules so stateful controls above retain their
      * existing selectors and behaviour while sharing one visual language. */
     .shell {
-      grid-template-columns: clamp(248px, 16vw, 268px) minmax(0, 1fr) 260px;
+      grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr) clamp(260px, 18vw, 350px);
       gap: 0;
       padding: 0;
       background: var(--canvas-bg);
@@ -2288,6 +2356,18 @@ template.innerHTML = `
       font-size: 10px;
     }
 
+    .app-menu-feedback {
+      padding: 6px 9px 4px;
+      color: var(--muted-color);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    #app-menu-toggle {
+      width: 44px;
+      height: 44px;
+    }
+
     .rail-brand-icon {
       display: inline-grid;
       width: 28px;
@@ -2327,6 +2407,10 @@ template.innerHTML = `
     .title {
       font-size: 15px;
       font-weight: 650;
+    }
+
+    .main-header .title {
+      font-size: 16px;
     }
 
     .account-pill,
@@ -2415,7 +2499,7 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
-    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 268px) minmax(0, 1fr); }
+    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr); }
     .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
     .shell.desktop-route .side-pane { display: none !important; }
 
@@ -2729,7 +2813,7 @@ template.innerHTML = `
 
     .project-name,
     .thread-name {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 560;
       line-height: 1.25;
     }
@@ -3339,7 +3423,7 @@ template.innerHTML = `
     }
 
     .message.streaming .row-meta::after {
-      content: " · responding";
+      content: " \\00B7 responding";
       color: var(--muted-color);
       font-weight: 400;
     }
@@ -3381,9 +3465,9 @@ template.innerHTML = `
 
     .message.user .bubble {
       padding: 10px 12px;
-      border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color) 82%);
+      border: 1px solid var(--border-color);
       border-radius: 10px;
-      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+      background: var(--surface-muted);
     }
 
     .bubble-text {
@@ -3401,7 +3485,7 @@ template.innerHTML = `
       margin: 10px auto 14px;
       padding: 8px 9px max(8px, env(safe-area-inset-bottom));
       border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
-      border-radius: 16px;
+      border-radius: 20px;
       background: var(--surface-bg);
       box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 11%, transparent);
       transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -3711,8 +3795,8 @@ template.innerHTML = `
     .side-tab-list {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 3px;
-      padding: 0 10px 8px;
+      gap: 0;
+      padding: 0 10px;
       border-bottom: 1px solid var(--border-color);
     }
 
@@ -3721,7 +3805,7 @@ template.innerHTML = `
       min-height: 32px;
       padding: 0 6px;
       border: 0;
-      border-radius: 6px;
+      border-radius: 0;
       background: transparent;
       color: var(--muted-color);
       font-size: 11px;
@@ -3731,14 +3815,14 @@ template.innerHTML = `
     .side-tab:hover,
     .side-tab:focus-visible {
       border: 0;
-      background: var(--surface-muted);
+      background: transparent;
       color: var(--text-color);
     }
 
     .side-tab[aria-selected="true"] {
-      background: var(--surface-bg);
+      background: transparent;
       color: var(--text-color);
-      box-shadow: inset 0 0 0 1px var(--border-color);
+      box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent-color) 62%, var(--text-color) 38%);
     }
 
     [data-side-tab-panel][hidden] {
@@ -4221,6 +4305,14 @@ template.innerHTML = `
             <span class="account-pill unavailable" id="account-pill">Account unavailable</span>
           </div>
         </div>
+        <button class="icon-button" type="button" data-action="toggle-app-menu" id="app-menu-toggle" aria-label="Panel options" aria-controls="app-menu" aria-expanded="false"></button>
+        <div class="app-menu" id="app-menu" hidden>
+          <button class="app-menu-item" type="button" data-action="toggle-focus" id="focus-mode-button" aria-pressed="false">
+            <span>Focus mode</span>
+            <span class="menu-shortcut">Fullscreen</span>
+          </button>
+          <div class="app-menu-feedback" id="focus-mode-feedback" role="status" aria-live="polite"></div>
+        </div>
       </div>
       <div class="rail-actions">
         <button class="tool-button" type="button" data-action="new-direct-chat" id="new-direct-chat-button" title="New chat" aria-label="New chat"></button>
@@ -4533,11 +4625,17 @@ class CodexBridgePanel extends HTMLElement {
     this._tooltipTarget = null;
     this._runActivityDetailsOpen = false;
     this._activeDestination = "chats";
+    this._appMenuOpen = false;
+    this._focusMode = false;
+    this._focusInvoker = null;
+    this._focusFeedback = "";
+    this._fullscreenChangeListener = () => this._syncFocusMode();
     this._desktopFeatures = Object.fromEntries(DESTINATIONS.filter(({ id }) => id !== "chats").map(({ id }) => [id, createDesktopFeatureState()]));
   }
 
   connectedCallback() {
     this._installStaticUi();
+    document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
       this._mobileDrawerMediaListening = true;
@@ -4553,6 +4651,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     this._stopPolling();
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
@@ -4631,6 +4730,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     this._staticUiInstalled = true;
     this._setTrustedButtonContent(this.shadowRoot.getElementById("rail-brand-icon"), icons.brand);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("app-menu-toggle"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("refresh-thread-button"), icons.refresh);
@@ -4703,8 +4803,11 @@ class CodexBridgePanel extends HTMLElement {
     const drawerElement = this.shadowRoot.getElementById(
       drawer === "navigation" ? "workspace-drawer" : "context-drawer"
     );
+    const firstControl = drawer === "navigation"
+      ? this.shadowRoot.getElementById("new-direct-chat-button")
+      : drawerElement?.querySelector("button:not(:disabled), input:not(:disabled), select:not(:disabled)");
+    firstControl?.focus();
     queueMicrotask(() => {
-      const firstControl = drawerElement?.querySelector("button:not(:disabled), input:not(:disabled), select:not(:disabled)");
       firstControl?.focus();
     });
   }
@@ -4783,6 +4886,12 @@ class CodexBridgePanel extends HTMLElement {
   _handleClick(event) {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
+    if (
+      this._appMenuOpen
+      && !eventTarget?.closest("#app-menu, #app-menu-toggle")
+    ) {
+      this._closeAppMenu();
+    }
     if (!actionTarget) {
       if (this._runActivityDetailsOpen && !eventTarget?.closest(".run-step-wrap")) {
         this._runActivityDetailsOpen = false;
@@ -4802,6 +4911,16 @@ class CodexBridgePanel extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "toggle-app-menu":
+        this._appMenuOpen = !this._appMenuOpen;
+        this._renderAppMenu();
+        if (this._appMenuOpen) {
+          queueMicrotask(() => this.shadowRoot.getElementById("focus-mode-button")?.focus());
+        }
+        break;
+      case "toggle-focus":
+        this._toggleFocusMode(actionTarget);
+        break;
       case "select-desktop-destination":
         this._selectDesktopDestination(actionTarget.dataset.destination || "chats");
         break;
@@ -5269,6 +5388,11 @@ class CodexBridgePanel extends HTMLElement {
       this.shadowRoot.getElementById("run-step-chip")?.focus();
       return;
     }
+    if (event.key === "Escape" && this._appMenuOpen) {
+      event.preventDefault();
+      this._closeAppMenu({ restoreFocus: true });
+      return;
+    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -5378,6 +5502,71 @@ class CodexBridgePanel extends HTMLElement {
       control.textContent = destination.label;
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
       nav.append(control);
+    }
+  }
+
+  _renderAppMenu() {
+    const menu = this.shadowRoot.getElementById("app-menu");
+    const toggle = this.shadowRoot.getElementById("app-menu-toggle");
+    const focusButton = this.shadowRoot.getElementById("focus-mode-button");
+    const feedback = this.shadowRoot.getElementById("focus-mode-feedback");
+    if (!menu || !toggle || !focusButton || !feedback) return;
+    menu.hidden = !this._appMenuOpen;
+    toggle.setAttribute("aria-expanded", String(this._appMenuOpen));
+    focusButton.setAttribute("aria-pressed", String(this._focusMode));
+    const focusLabel = this._focusMode ? "Exit focus mode" : "Focus mode";
+    focusButton.setAttribute("aria-label", focusLabel);
+    focusButton.title = this._focusMode ? "Exit focus mode" : "Enter focus mode";
+    focusButton.firstElementChild.textContent = focusLabel;
+    focusButton.lastElementChild.textContent = this._focusMode ? "Esc to exit" : "Fullscreen";
+    feedback.textContent = this._focusFeedback;
+  }
+
+  _closeAppMenu({ restoreFocus = false } = {}) {
+    if (!this._appMenuOpen) return;
+    this._appMenuOpen = false;
+    this._renderAppMenu();
+    if (restoreFocus) {
+      this.shadowRoot.getElementById("app-menu-toggle")?.focus();
+    }
+  }
+
+  _syncFocusMode() {
+    const active = document.fullscreenElement === this;
+    const wasActive = this._focusMode;
+    this._focusMode = active;
+    if (active) {
+      this._focusFeedback = "";
+      this._appMenuOpen = false;
+    } else if (wasActive) {
+      this._appMenuOpen = true;
+    }
+    this._renderAppMenu();
+    if (wasActive && !active) {
+      const invoker = this._focusInvoker;
+      this._focusInvoker = null;
+      queueMicrotask(() => invoker?.isConnected && invoker.focus());
+    }
+  }
+
+  async _toggleFocusMode(invoker) {
+    if (this._focusMode) {
+      await document.exitFullscreen?.();
+      return;
+    }
+    this._focusInvoker = invoker;
+    if (!document.fullscreenEnabled || typeof this.requestFullscreen !== "function") {
+      this._focusFeedback = "Focus mode is unavailable in this browser.";
+      this._appMenuOpen = true;
+      this._renderAppMenu();
+      return;
+    }
+    try {
+      await this.requestFullscreen();
+    } catch {
+      this._focusFeedback = "Focus mode could not be opened.";
+      this._appMenuOpen = true;
+      this._renderAppMenu();
     }
   }
 
@@ -5743,6 +5932,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderContext();
     this._renderDiagnostics();
     this._renderSideTabs();
+    this._renderAppMenu();
     this._renderDesktopNavigation();
     this._renderDesktopSurface();
   }
@@ -8023,6 +8213,18 @@ class CodexBridgePanel extends HTMLElement {
     this._render();
   }
 
+  _noteArtifactRefreshFailure(threadId = this._selectedThreadId) {
+    if (!threadId || threadId !== this._selectedThreadId) {
+      return;
+    }
+    this._clearArtifactRefreshRetry({ resetState: false });
+    this._artifactRefreshState = {
+      status: "retryable",
+      message: "Files could not be refreshed.",
+      action: "retry-artifacts",
+    };
+  }
+
   _scheduleArtifactRefreshRetry(threadId = this._selectedThreadId) {
     if (
       this._artifactRefreshRetryTimer
@@ -8086,13 +8288,13 @@ class CodexBridgePanel extends HTMLElement {
         this._noteArtifactReservationConflict(threadId, { manual });
         return false;
       }
-      this._clearArtifactRefreshRetry({ resetState: false });
-      this._artifactRefreshState = {
-        status: "retryable",
-        message: "Files could not be refreshed.",
-        action: "retry-artifacts",
-      };
-      this._render();
+      if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
+        this._noteArtifactRefreshFailure(threadId);
+        this._render();
+      } else {
+        this._clearArtifactRefreshRetry();
+        this._setError(error);
+      }
       return false;
     }
   }
@@ -8670,10 +8872,13 @@ class CodexBridgePanel extends HTMLElement {
       try {
         artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
       } catch (error) {
-        if (!canDeferArtifactRefresh(error)) {
+        if (canDeferArtifactRefresh(error)) {
+          this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
+        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
+          this._noteArtifactRefreshFailure(threadId);
+        } else {
           throw error;
         }
-        this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
       }
       if (!isCurrent()) {
         return false;
@@ -9811,10 +10016,13 @@ class CodexBridgePanel extends HTMLElement {
         if (!isCurrent()) {
           return;
         }
-        if (!canDeferArtifactRefresh(error)) {
+        if (canDeferArtifactRefresh(error)) {
+          this._noteArtifactReservationConflict(threadId);
+        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
+          this._noteArtifactRefreshFailure(threadId);
+        } else {
           throw error;
         }
-        this._noteArtifactReservationConflict(threadId);
       }
       if (!isCurrent()) {
         return;
@@ -9899,7 +10107,7 @@ class CodexBridgePanel extends HTMLElement {
         headers,
       });
       if (!response.ok) {
-        throw new Error("Preview failed");
+        throw Object.assign(new Error("Preview failed"), { status: response.status });
       }
       const blob = await readBoundedPreviewResponse(response, limit.bytes);
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) {
@@ -9938,10 +10146,13 @@ class CodexBridgePanel extends HTMLElement {
       if (isGeneratedImageArtifact(artifact) && descriptor.kind === "image") {
         this._forceMessageRebuild = true;
       }
-      this._clearError();
       this._render();
     } catch (error) {
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+      if (!isArtifactDomainFailure(error) || (!hasStructuredArtifactError(error) && this._isRetryableTransportError(error))) {
+        this._setError(error);
+        return;
+      }
       this._revokePreviewUrl();
       this._artifactPreview = {
         ...advertisedDescriptor,
@@ -9949,7 +10160,6 @@ class CodexBridgePanel extends HTMLElement {
         notice: "Preview could not be loaded through Home Assistant. Retry or download the artifact.",
         retryable: true,
       };
-      this._setError(error);
       this._render();
     }
   }
@@ -10236,10 +10446,13 @@ class CodexBridgePanel extends HTMLElement {
           try {
             artifacts = await this._callWS("list_artifacts", { thread_id: polledThreadId });
           } catch (error) {
-            if (!canDeferArtifactRefresh(error)) {
+            if (canDeferArtifactRefresh(error)) {
+              this._noteArtifactReservationConflict(polledThreadId);
+            } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
+              this._noteArtifactRefreshFailure(polledThreadId);
+            } else {
               throw error;
             }
-            this._noteArtifactReservationConflict(polledThreadId);
           }
           if (!isCurrent()) {
             return;
@@ -10681,10 +10894,13 @@ class CodexBridgePanel extends HTMLElement {
         try {
           artifacts = await this._callWS("list_artifacts", { thread_id: threadId });
         } catch (error) {
-          if (!canDeferArtifactRefresh(error)) {
+          if (canDeferArtifactRefresh(error)) {
+            this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
+          } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
+            this._noteArtifactRefreshFailure(threadId);
+          } else {
             throw error;
           }
-          this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
         }
         if (!isCurrent()) {
           return;
@@ -11142,7 +11358,11 @@ class CodexBridgePanel extends HTMLElement {
     }
     const candidate = typeof error === "string"
       ? error
-      : error?.body?.message || error?.message || "";
+      : error?.body?.message
+        || error?.body?.error?.message
+        || error?.error?.message
+        || error?.message
+        || "";
     const normalized = String(candidate).trim().toLowerCase();
     return [
       "bridge request failed",
@@ -11156,13 +11376,18 @@ class CodexBridgePanel extends HTMLElement {
       "connection timed out",
       "request timed out",
       "fetch failed",
+      "failed to fetch",
     ].some((message) => normalized.includes(message));
   }
 
   _safeUiError(error) {
     const candidate = typeof error === "string"
       ? error
-      : error?.body?.message || error?.message || "The Codex request did not complete.";
+      : error?.body?.message
+        || error?.body?.error?.message
+        || error?.error?.message
+        || error?.message
+        || "The Codex request did not complete.";
     const withoutControlCharacters = Array.from(String(candidate), (character) => {
       const code = character.codePointAt(0);
       return code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127

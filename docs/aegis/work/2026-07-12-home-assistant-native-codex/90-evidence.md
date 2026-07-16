@@ -505,16 +505,37 @@ with attestation `35670902`.
 | Update retention | The App update retained automatic update and kept the prior-version backup. |
 | Acceptance boundary | This run does not claim blocked-network/Nabu Casa/Cloudflare routing, cold restore, arbitrary previous-image rollback, image generation, plugins/marketplaces, or MCP acceptance. The historical `0.7.1` plugin/marketplace HTTP 503 result remains bounded historical evidence. |
 
-## 0.8.1 candidate: artifact reservation recovery
+## 0.8.1 publication and failed bounded target exercise
 
-App, Integration, and panel `0.8.1`, Bridge `0.7.1`, and Codex `0.144.5` are
-a candidate only. Signed publication and target-Home-Assistant validation have
-not occurred; no publication, image digest, or acceptance result is claimed.
+App, Integration, and panel `0.8.1`, Bridge `0.7.1`, and Codex `0.144.5` were
+published and installed on the target Home Assistant. Publication run
+`29527193037` produced generic digest
+`sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`
+and amd64 payload digest
+`sha256:83074645bb03000884e5b13e05501899929dd41c99ef1aa228fccb636adae537`;
+signature, SBOM, and exact-main provenance verification passed. This is not an
+accepted release because the required PDF path failed.
 
 | Evidence or acceptance item | Status |
 | --- | --- |
-| Artifact reservation recovery | Candidate implementation replaces the conflicting read-only global quota check with a bounded manifest and reconciles artifacts after a terminal run releases capacity. |
-| Panel recovery | Candidate implementation uses bounded retries only for typed `reservation_conflict`, keeps local **Files** status visible, and provides explicit retry. It must not show a false global connection outage. |
-| 0.8.0 live exercise passed | Installation/pairing, ChatGPT Pro/history, runtime versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage history, and subagent stage history. These observations do not accept 0.8.1. |
-| PDF acceptance | PDF creation succeeded, but indexing/archive returned persistent HTTP 409 after an App restart. PDF acceptance is explicitly failed/pending. |
+| Installation and retained state | App and Integration `0.8.1` installed; Bridge `0.7.1` and Codex `0.144.5` reported. ChatGPT Pro, existing projects/chats, automatic App update, start-on-boot, watchdog, and prior-version backup were retained. |
+| Models and usage | Runtime discovery exposed GPT-5.6 Sol/Terra/Luna and the advertised reasoning levels; five-hour usage rendered `Off`. |
+| Artifact failure | The selected Test workspace contained only ordinary `.agents/skills` directories and a 622-byte PDF. The aggregate workspace root separately contained stale sandbox-test debris, including root-owned unreadable entries. Every artifact list failed before the selected workspace manifest and `0.8.1` misclassified the operational aggregate scan as HTTP 400 unsafe selected-workspace content. |
+| Acceptance result | Failed/pending. PDF indexing, archive, and preview did not pass; no 0.8.1 target-acceptance claim is made. |
 | Browser automation | Issue #43 tracks the required secure App-owned browser worker. Per ADR 0006, interactive Chromium remains deferred pending separate sandbox and enforced-egress acceptance. |
+
+## 0.8.2 candidate: scan contract and desktop alignment
+
+App, Integration, and panel `0.8.2`, Bridge `0.7.2`, and Codex `0.144.5` are a
+candidate only. Signed publication and target-Home-Assistant validation have
+not occurred; no 0.8.2 image digest or acceptance result is claimed.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| Aggregate scan contract | Candidate restores non-capacity `WorkspaceBoundaryError` failures to typed, retryable `reservation_conflict` with resource `filesystem_scan`; capacity violations remain `quota_exceeded`. |
+| Ordinary workspace regression | Candidate regression covers `.agents/skills/.../SKILL.md` plus a regular PDF and proves a retry succeeds after one operational aggregate scan failure. |
+| Artifact error containment | Candidate keeps generic artifact-index and preview failures in the **Files** surface, preserving the authoritative transcript, chat state, and any real global connection/authentication error. |
+| Desktop alignment | Candidate widens the desktop navigation/context rails at large viewports, retains a shared bounded conversation/composer axis, uses theme-derived navigation tint and a full-height structural context plane, moves healthy telemetry to System, and preserves narrow drawers, keyboard/touch actions, and reduced motion. |
+| Focus mode | Candidate exposes standards fullscreen only from an explicit panel control, reflects fullscreen state, uses native Escape, and restores keyboard focus without changing the HA/Integration/App trust boundary. |
+| Local verification | Clean Linux/Python 3.14 Bridge run: 1,450 passed and 13 skipped. Frontend: lint passed, 272 unit tests passed, generated bundle rebuilt, and 16/16 Playwright flows passed; release projections, Codex lock, Python compilation, Ruff, and diff checks passed. Independent re-review found no remaining release blocker in the requested scope. |
+| Required target gate | Install both components, observe typed local Files recovery while the preserved debris is present, remove only the known acceptance debris, then prove PDF indexing, archive, local PDF.js preview, retained models/limits/search/history, normal responsive layout, and Focus mode. |

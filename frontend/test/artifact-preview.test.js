@@ -61,6 +61,7 @@ describe("artifact previews", () => {
 
   it("settles a failed preview locally and offers a working retry", async () => {
     const panel = createPanel(createArtifact());
+    panel._setError("Bridge request failed", { source: "poll" });
     const fetchSpy = vi.spyOn(window, "fetch")
       .mockRejectedValueOnce(new Error("temporary HA preview failure"))
       .mockResolvedValueOnce(
@@ -70,11 +71,35 @@ describe("artifact previews", () => {
     await panel._loadArtifactPreview(panel._selectedArtifactId);
 
     expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
+    expect(panel._error).toBe("Bridge request failed");
+    expect(panel.shadowRoot.getElementById("error-strip").classList).toContain("visible");
     const retry = panel.shadowRoot.querySelector('[data-action="retry-artifact-preview"]');
     expect(retry).not.toBeNull();
     retry.click();
     await vi.waitFor(() => expect(panel._artifactPreview).toMatchObject({ kind: "text", text: "preview recovered" }));
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(panel._error).toBe("Bridge request failed");
+  });
+
+  it.each([401, 403, 502, 503, 504])("surfaces preview HTTP %s as a global error", async (status) => {
+    const panel = createPanel(createArtifact());
+    vi.spyOn(window, "fetch").mockResolvedValue(new Response("preview unavailable", { status }));
+
+    await panel._loadArtifactPreview(panel._selectedArtifactId);
+
+    expect(panel._error).toBe("Preview failed");
+    expect(panel._artifactPreview).toBeNull();
+    expect(panel.shadowRoot.getElementById("error-strip").classList).toContain("visible");
+  });
+
+  it("surfaces a browser preview network failure globally", async () => {
+    const panel = createPanel(createArtifact());
+    vi.spyOn(window, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await panel._loadArtifactPreview(panel._selectedArtifactId);
+
+    expect(panel._error).toBe("Failed to fetch");
+    expect(panel._artifactPreview).toBeNull();
   });
 
   it("fetches a capped image artifact and creates a local preview URL", async () => {

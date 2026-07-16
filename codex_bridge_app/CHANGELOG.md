@@ -2,6 +2,31 @@
 
 All notable App changes are recorded here.
 
+## 0.8.2
+
+- Restores aggregate workspace-scan failures to the typed, retryable
+  `filesystem_scan` conflict contract instead of misreporting an unrelated
+  root entry as unsafe content in the selected chat.
+- Adds regression coverage for ordinary `.agents/skills` trees and PDF
+  artifacts alongside operational aggregate-scan failures.
+- Keeps artifact-index and preview failures local to **Files**, preserving a
+  successful reply and healthy connection state while offering a bounded retry.
+- Calibrates the wide Home Assistant panel to Codex desktop geometry: a wider,
+  theme-derived navigation plane, one shared 900-pixel conversation axis, and
+  a full-height context surface that does not disturb tablet, mobile-drawer,
+  keyboard, or reduced-motion behavior.
+- Adds a user-invoked, standards-based **Focus mode** for the full Codex-style
+  three-pane canvas, with the desktop rail tint and floating context surface,
+  native Escape handling, and accessible focus restore.
+- Corrects the live-response activity suffix and strengthens semantic
+  navigation/header typography without inflating transcript density.
+- Moves healthy component telemetry into **Context -> System**, keeps runtime
+  warnings in the conversation, quiets user bubbles and Context tabs, and
+  rounds the compact composer to match the Codex desktop treatment.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.2` without changing its Integration API compatibility.
+
 ## 0.8.1
 
 - Replaces the conflicting read-only global artifact-quota check with a bounded

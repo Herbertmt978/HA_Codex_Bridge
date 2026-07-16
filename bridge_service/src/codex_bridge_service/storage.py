@@ -3912,6 +3912,8 @@ class BridgeStorage:
             )
         except WorkspaceResourceLimitError:
             raise QuotaExceededError("workspace") from None
+        except WorkspaceBoundaryError:
+            raise ReservationConflictError("filesystem_scan") from None
 
     def open_artifact(
         self,

@@ -56,22 +56,26 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed App:** `0.8.0`, bundling Bridge `0.7.0` and Codex `0.144.5`.
-  App publication [run 29520778281](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29520778281)
+- **Latest signed App:** `0.8.1`, bundling Bridge `0.7.1` and Codex `0.144.5`.
+  App publication [run 29527193037](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29527193037)
   produced immutable digest
-  `sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`;
-  the signed [0.8.0 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.0)
-  remains published while the PDF finding below is corrected.
-- **Candidate, not yet accepted:** App, Integration, and panel `0.8.1`, Bridge
-  `0.7.1`, and Codex `0.144.5` replace the persistent typed
-  `reservation_conflict` path with a bounded artifact manifest, terminal-run
-  reconciliation, and bounded panel retries with local **Files** status and an
-  explicit retry. Signed publication and target-HA validation are still
-  required. The 0.8.0 exercise proved install/pairing, ChatGPT Pro/history,
-  versions, GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search
-  source/stage history, and subagent stage history. PDF creation succeeded,
-  but indexing/archive returned persistent HTTP 409 after an App restart, so
-  PDF acceptance remains failed/pending.
+  `sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`;
+  signature, SBOM, and provenance verification passed for the signed
+  [0.8.1 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.1).
+  It installed successfully on the target HA, retained ChatGPT/history, and
+  reported the expected runtime models and limits, but bounded PDF acceptance
+  failed: stale sandbox-test debris in the aggregate workspace root produced
+  an operational scan failure that `0.8.1` misreported as HTTP 400 unsafe
+  selected-workspace content.
+- **Candidate, not yet accepted:** App, Integration, and panel `0.8.2`, Bridge
+  `0.7.2`, and Codex `0.144.5` restore that aggregate failure to the typed,
+  retryable local **Files** contract. Artifact-index and preview failures stay
+  in **Files** and cannot replace a successful reply with a false connection
+  outage. The same release adds measured desktop geometry, a theme-derived
+  navigation plane, and a user-invoked **Focus mode** that presents the full
+  Codex-style three-pane canvas without Home Assistant's surrounding chrome.
+  Signed publication and target-HA validation are still required; PDF indexing,
+  archive, preview, and Focus mode remain pending until that pass.
 - **Browser automation:** secure App-owned browser-worker follow-up is tracked
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).
@@ -195,9 +199,10 @@ The Integration and App update separately:
 1. In HACS, update or redownload the latest **Codex Bridge** Integration, then
    restart Home Assistant. Reload any panel tab that was already open before
    the restart.
-2. Read the matching [release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
-   and confirm the runtime strip in the panel shows the expected Integration,
-   App, Bridge, and Codex versions.
+2. Read the matching [release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest),
+   open **Context -> System**, and confirm the Versions section shows the
+   expected Integration, App, Bridge, and Codex versions. Healthy version chips
+   stay out of the conversation surface; runtime warnings still appear there.
 3. If Home Assistant offers an App update, make a cold backup and apply it from
    **Settings -> Apps -> Codex Bridge**. Auto update can do this after its toggle
    is enabled; the first unattended device update is proven. The accepted

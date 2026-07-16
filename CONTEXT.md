@@ -34,21 +34,28 @@ to the App or Bridge.
   App publication run `29511116947` produced immutable digest
   `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
   and attestation `35670902`.
-- Latest signed publication: App/Integration/panel `0.8.0`, Bridge `0.7.0`,
-  and Codex `0.144.5`. App publication run `29520778281` produced immutable
+- Latest signed publication: App/Integration/panel `0.8.1`, Bridge `0.7.1`,
+  and Codex `0.144.5`. App publication run `29527193037` produced immutable
   digest
-  `sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`.
-- Candidate App/Integration/panel `0.8.1` with Bridge `0.7.1` and Codex
-  `0.144.5` is not target-HA accepted until it is installed and validated. It
-  replaces the persistent typed `reservation_conflict` path with a bounded
-  artifact manifest, terminal-run artifact reconciliation after capacity
-  release, and bounded typed-conflict retries that keep local Files status and
-  an explicit retry rather than a false global outage.
-- The 0.8.0 live exercise proved installation/pairing, ChatGPT Pro and history,
-  version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
-  web-search source/stage history, and subagent stage history. PDF creation
-  succeeded, but indexing/archive still returned persistent HTTP 409 after an
-  App restart; PDF acceptance is explicitly failed/pending.
+  `sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`;
+  signature, SBOM, and provenance verification passed.
+- Candidate App/Integration/panel `0.8.2` with Bridge `0.7.2` and Codex
+  `0.144.5` is not published or target-HA accepted. It restores operational
+  aggregate workspace-scan failures to the typed, retryable local **Files**
+  contract, keeps every secondary artifact failure local to **Files**, and
+  calibrates the wide panel to the Codex desktop navigation, conversation,
+  composer, and full-height context geometry. A standards-based, user-invoked
+  Focus mode removes Home Assistant's surrounding chrome without weakening the
+  browser-to-HA boundary. Healthy component versions are available in the
+  System information tab while only runtime attention enters the transcript
+  surface.
+- The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
+  history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
+  native web-search source/stage history, and subagent stage history. Its PDF
+  acceptance failed: the aggregate workspace root contained stale
+  sandbox-test debris, including root-owned unreadable entries, and `0.8.1`
+  misreported that operational scan failure as HTTP 400 unsafe content in the
+  selected chat. PDF indexing, archive, and preview remain failed/pending.
 - Secure browser-worker follow-up is issue #43. Per ADR 0006, interactive
   Chromium remains deferred pending its separate App-owned isolation and
   enforced egress boundary.

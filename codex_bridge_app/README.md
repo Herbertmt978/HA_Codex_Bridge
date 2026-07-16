@@ -6,34 +6,37 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.8.0` (`amd64` only, experimental)
-- Published Integration: `0.8.0`
+- Published App: `0.8.1` (`amd64` only, experimental)
+- Published Integration: `0.8.1`
 - Latest target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.1`
-- Candidate Bridge: `0.7.1`
+- Candidate App/Integration: `0.8.2`
+- Candidate Bridge: `0.7.2`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.8.1` with Bridge `0.7.1` is pending signed
+Candidate App/Integration `0.8.2` with Bridge `0.7.2` is pending signed
 publication and real Home Assistant validation; coordinated `0.7.5` remains
-the fully accepted baseline. Signed App `0.8.0` carries the verified Codex
-`0.144.5` runtime and the bounded live results below. The candidate replaces
-the persistent typed `reservation_conflict`
-path with a bounded artifact manifest, reconciles artifacts after terminal runs
-release capacity, and uses bounded typed-conflict retries that retain local
-**Files** status and offer explicit retry instead of a false global outage.
+the fully accepted baseline. Signed App `0.8.1` carries the verified Codex
+`0.144.5` runtime and the bounded live results below. The candidate restores
+aggregate scan failures to the typed, retryable local **Files** contract and
+keeps secondary artifact failures out of global connection state. It also
+calibrates the wide panel to the Codex desktop rail, conversation, composer,
+and full-height context geometry, with an explicit standards-based Focus mode
+for a clean three-pane canvas inside Home Assistant.
 
-The 0.8.0 live exercise proved installation/pairing, ChatGPT Pro/history,
+The 0.8.1 live exercise proved installation/pairing, ChatGPT Pro/history,
 version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native
 web-search source/stage history, and subagent stage history. PDF creation
-succeeded, but indexing/archive returned persistent HTTP 409 after an App
-restart; PDF acceptance remains failed/pending. Secure App-owned browser-worker
-follow-up is issue #43; interactive Chromium remains deferred by ADR 0006.
+succeeded, but indexing/archive encountered stale sandbox-test debris in the
+aggregate workspace root; `0.8.1` misreported that operational scan failure as
+HTTP 400 unsafe selected-workspace content. PDF acceptance remains
+failed/pending. Secure App-owned browser-worker follow-up is issue #43;
+interactive Chromium remains deferred by ADR 0006.
 
-The published `0.8.0` image has immutable digest
-`sha256:a8c9308cbcb2b450974077d1bf2df588a1ef5a692d7bd859fbb20c37e2c3c80b`.
+The published `0.8.1` image has immutable digest
+`sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`.
 Publication, signature, SBOM, and provenance verification passed in
-[run 29520778281](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29520778281).
+[run 29527193037](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29527193037).
 
 The published `0.7.4` image has immutable digest
 `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
@@ -98,8 +101,12 @@ chat rows, one action menu, correct archive collapse/search, and a corrected
 search icon. Approvals follow the active transcript, decision controls remain
 reachable in the natural mobile scroll flow, and limits/model controls fold
 behind a compact mobile disclosure. Mobile targets are at least 44px; typed
-transient artifact reservations still preserve the prior artifact view without
-a false connection error.
+transient artifact reservations and other secondary Files failures preserve the
+prior artifact view without a false connection error. On supported browsers,
+open the panel options menu and choose **Focus mode** for the Codex-style
+three-pane canvas; native Escape exits and returns keyboard focus to the menu.
+Healthy component versions live under **Context -> System** so the transcript
+stays quiet; runtime warnings still surface beside the conversation.
 
 ## Installation model
 
@@ -172,7 +179,9 @@ browser.
 Update or redownload the Integration in HACS first, restart Home Assistant, and
 reload any panel tab that predates the restart. Check the
 [release notes](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
-and the panel runtime strip before applying a separately offered App update.
+and **Context -> System -> Versions** before applying a separately offered App
+update. The conversation runtime strip appears only when a component needs
+attention.
 
 The running image never replaces Codex or itself. Home Assistant can install a
 newly released image and can apply it automatically after the App auto-update
