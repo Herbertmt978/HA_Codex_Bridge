@@ -29,24 +29,23 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed App runtime update: App `0.7.4`, Bridge `0.6.2`, and
-  Sigstore-verified Codex `0.144.5`. Publication, SBOM, signature, and
-  provenance verification passed in run `29507100716`; the immutable image
-  digest is
-  `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
-- Latest target-HA-accepted coordinated release: Integration/App `0.7.3`,
-  Bridge `0.6.2`, and Codex `0.144.4` (experimental and `amd64` only). The
-  signed App digest is
-  `sha256:8f15aa8b74222c6df72209b8ee2766a18996e8e34b04797e2561501cf4c056d5`.
-  Natural current-information prompts did not reliably select the available
-  provider search tool; explicit live-search requests did.
+- Latest signed and target-HA-accepted coordinated release: App, Integration,
+  and panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5` (experimental and
+  `amd64` only). App publication run `29511116947` produced immutable digest
+  `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
+  and attestation `35670902`.
+- Target Home Assistant `192.168.50.20` accepted that matrix on 2026-07-16.
+  ChatGPT Pro remained connected; a fresh direct chat defaulted to
+  `gpt-5.6-sol` with `low` thinking. The runtime catalogue exposed Sol, Terra,
+  and Luna plus Low, Medium, High, XHigh, Max, and Ultra where advertised. The
+  compact composer rendered five-hour `Off` and Week `60%`.
 - Earlier signed release evidence remains in `codex_bridge_app/CHANGELOG.md`
   and the repository Releases page. Target-Home-Assistant acceptance is always
   bounded to the recorded checks rather than every capability mutation.
 - App/Integration `0.6.6` is the prior signed publication. The `0.6.5` matrix
   remains live-accepted only within the historical boundaries recorded in
   `90-evidence.md`; neither historical claim supersedes the current bounded
-  `0.7.1` evidence above.
+  `0.7.5` evidence above.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -97,16 +96,16 @@ to the App or Bridge.
   auto-update remains proven, and this manual update kept the prior-version
   backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
   and arbitrary previous-image rollback remain unproven.
-- Candidate `0.7.5` coordinates App/Integration/panel `0.7.5`, Bridge `0.6.3`,
-  and Codex `0.144.5`; it is not published or live-accepted yet. On a
-  Supervisor connection, native search remains capability-gated and defaults
-  to `live`; time-sensitive prompts now receive bounded guidance to use the
-  native search tool rather than the intentionally blocked shell network.
-  Signed-in image generation remains gated by both `imageGeneration` and
-  `namespaceTools`, uses no API key, and stores bounded PNG/JPEG/WebP results as
-  private artifacts. The composer now uses a compact Codex-style
-  Limits/Model/Thinking row with full details in Usage. No target-HA acceptance,
-  image digest, or run identifier is claimed for `0.7.5`.
+- Target-HA acceptance on `192.168.50.20` on 2026-07-16 confirmed coordinated
+  App/Integration/panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. ChatGPT
+  Pro remained connected; a fresh direct chat defaulted to `gpt-5.6-sol`/`low`.
+  The runtime catalogue showed Sol, Terra, and Luna and the advertised
+  Low/Medium/High/XHigh/Max/Ultra thinking levels; the compact composer showed
+  five-hour `Off` and Week `60%`. The natural prompt `what is the weather in
+  Malta like today` recorded `Searching the web` and returned current live
+  conditions. This acceptance does not cover image generation, plugins,
+  marketplaces, MCP, external blocked-network/Nabu Casa/Cloudflare routing,
+  cold restore, or arbitrary previous-image rollback.
 - The App includes administrator-only capability surfaces for durable
   automations, workspace skills, global/project `AGENTS.md`, plugins and
   marketplaces, and outbound MCP configuration. Automations are persisted in

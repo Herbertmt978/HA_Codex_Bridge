@@ -71,32 +71,27 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The current candidate (Integration/App `0.7.5`, Bridge `0.6.3`, Codex
-`0.144.5`) is experimental and `amd64` only and is pending real Home Assistant
-acceptance. Native Live web search is provider-gated for Supervisor prompts and
-automations; bounded time-sensitive guidance does not relax the blocked
-model-controlled shell network.
+The current target-HA-accepted matrix (Integration/App/panel `0.7.5`, Bridge
+`0.6.3`, Codex `0.144.5`) is experimental and `amd64` only. Native Live web
+search is provider-gated for Supervisor prompts and automations; bounded time-
+sensitive guidance does not relax the blocked model-controlled shell network.
 Image generation is gated by both `imageGeneration` and `namespaceTools`, uses
 a signed-in ChatGPT account rather than an API key, and keeps only bounded
 private PNG/JPEG/WebP artifacts. The compact composer is a presentation change,
-not an expansion of authority. Target-HA-accepted coordinated release `0.7.3`
-remains the live baseline; signed App `0.7.4` updates the verified runtime. The
-published/signed `0.7.0` baseline has
-generic image digest
-`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
-with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
-main CI `29471288344` and publication `29471288457` succeeded, and signature,
-SBOM, and provenance attestations are published with the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+not an expansion of authority. Signed App `0.7.5` has immutable digest
+`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`;
+publication run `29511116947` verified its signature, SBOM, and provenance.
 Target-Home-Assistant acceptance remains bounded. The target-HA-accepted
 `0.7.1` retest confirmed management-form retention, skill mutations, and MCP
 form cancellation; its live plugin/marketplace list returned
 `capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.5` changes above remain candidate
-evidence pending live acceptance. The first
-unattended App update is proven; external blocked-network routing, cold restore,
-and previous-image rollback remain unproven. Arbitrary prior-image selection is not a validated
-Supervisor rollback mechanism; recover with a cold backup or an existing private
-external Bridge.
+list/mutation acceptance was claimed. The `0.7.5` acceptance covered runtime,
+account, model catalogue, compact composer, and native live search only; it did
+not exercise image generation, plugins/marketplaces, or MCP. The first unattended
+App update is proven; external blocked-network routing, cold restore, and
+previous-image rollback remain unproven. Arbitrary prior-image selection is not
+a validated Supervisor rollback mechanism; recover with a cold backup or an
+existing private external Bridge.
 
 ## Scope notes
 

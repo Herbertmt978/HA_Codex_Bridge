@@ -46,21 +46,21 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-- **Target-HA accepted baseline:** App and Integration `0.7.3`, Bridge `0.6.2`,
-  and Codex `0.144.4`. ChatGPT Pro sign-in, dynamically discovered GPT-5.6
-  models, disabled five-hour limits, persisted chats, and native provider web
-  search were exercised on the test installation. Natural current-information
-  prompts did not reliably select the available search tool; that is the
-  specific behavior corrected by `0.7.5`.
-- **Latest signed App:** `0.7.4`, bundling Bridge `0.6.2` and Sigstore-verified
-  Codex `0.144.5`. Publication, SBOM, signature, and provenance verification
-  passed in [run 29507100716](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29507100716).
-  Immutable image digest:
-  `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
-- **Current candidate:** coordinated App/Integration/panel `0.7.5`, Bridge
-  `0.6.3`, and Codex `0.144.5`. It adds time-sensitive live-search guidance and
-  the compact Codex-style Limits/Model/Thinking composer row. Publication and
-  target-HA acceptance are release gates, not claims made by this source tree.
+- **Target-HA accepted release:** App, Integration, and panel `0.7.5`, Bridge
+  `0.6.3`, and Codex `0.144.5` were installed and running on target Home
+  Assistant `192.168.50.20` on 2026-07-16. ChatGPT Pro remained connected. A
+  fresh direct chat defaulted to `gpt-5.6-sol` with `low` thinking; the catalogue
+  exposed Sol, Terra, and Luna with Low, Medium, High, XHigh, Max, and Ultra
+  where advertised. The compact composer rendered five-hour `Off` and Week
+  `60%`.
+- **Native live search:** the natural prompt `what is the weather in Malta like
+  today` recorded `Searching the web` run activity and returned current live
+  conditions. This is provider-side search, not shell-command networking.
+- **Latest signed App:** `0.7.5`, bundling Bridge `0.6.3` and Codex `0.144.5`.
+  App publication [run 29511116947](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29511116947)
+  produced immutable digest
+  `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
+  and [attestation 35670902](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35670902).
 
 The App remains experimental and `amd64` only. Nabu Casa and reverse-proxy
 routing preserve the same browser-to-HA trust boundary, but blocked-workplace
@@ -143,9 +143,10 @@ the selected App workspace:
   Marketplace sources must use HTTPS hostnames; literal/known non-public
   addresses, credentials, and arbitrary config payloads are rejected. In the
   historical `0.7.1` live-acceptance run, the list call returned
-  `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or
-  marketplace list/mutation acceptance was claimed. The `0.7.5` candidate is
-  pending its final Home Assistant acceptance pass.
+  `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace
+  list/mutation acceptance was claimed. The `0.7.5` acceptance did not exercise
+  plugins or marketplaces, so no current plugin or marketplace acceptance is
+  claimed.
 - **MCP servers:** MCP is disabled by default. To use it, explicitly enable
   **Enable MCP** in the Codex Bridge App configuration, save, and restart the
   App. Configure outbound streamable-HTTP servers only with an HTTPS hostname.
@@ -175,8 +176,10 @@ The Integration and App update separately:
    App, Bridge, and Codex versions.
 3. If Home Assistant offers an App update, make a cold backup and apply it from
    **Settings -> Apps -> Codex Bridge**. Auto update can do this after its toggle
-   is enabled; the first unattended device update is proven. Keep a cold backup
-   because recovery and arbitrary prior-image rollback remain unproven.
+   is enabled; the first unattended device update is proven. The accepted
+   `0.7.5` update retained both automatic update and the prior-version backup.
+   Keep a cold backup because recovery and arbitrary prior-image rollback remain
+   unproven.
 
 App images are immutable: a running container does not replace Codex or itself.
 The scheduled updater verifies the upstream Codex release and Sigstore identity

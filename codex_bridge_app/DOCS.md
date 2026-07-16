@@ -94,8 +94,8 @@ The administrator-only panel exposes these App-backed surfaces:
   file path or JSON-RPC payload is passed through this API. The published/live-
   accepted `0.7.1` run returned `capabilities_unavailable` (HTTP 503); no
   `0.7.1` plugin or marketplace list/mutation acceptance was claimed. The
-  `0.7.5` candidate is pending real Home Assistant acceptance; it is not live
-  publication evidence.
+  `0.7.5` acceptance did not exercise plugins or marketplaces, so no current
+  plugin or marketplace acceptance is claimed.
 - MCP is disabled by default. To opt in, set **Enable MCP** in the App
   configuration, save, and restart. Disabled startup suppresses MCP before
   Codex reads saved configuration and removes the native MCP server table;
@@ -164,20 +164,21 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Candidate App/Integration `0.7.5` with Bridge `0.6.3` and Codex `0.144.5` is
-pending real Home Assistant acceptance. It retains capability-gated Live web
-search and signed-in image generation with private bounded PNG/JPEG/WebP
-artifacts, guides time-sensitive prompts toward the native search tool, and
-uses a compact Codex-style composer; shell networking remains disabled and no
-OpenAI API key is used. These are candidate facts only.
+App, Integration, and panel `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`
+were installed and running on target Home Assistant `192.168.50.20` on
+2026-07-16. ChatGPT Pro remained connected. A fresh direct chat defaulted to
+`gpt-5.6-sol` with `low` thinking; the runtime catalogue exposed Sol, Terra,
+and Luna plus Low, Medium, High, XHigh, Max, and Ultra where advertised. The
+compact composer showed five-hour `Off` and Week `60%`. The natural prompt
+`what is the weather in Malta like today` recorded `Searching the web` and
+returned current live conditions; shell networking remained disabled.
 
-The latest published signed App is `0.7.4`, with Bridge `0.6.2` and Codex
-`0.144.5`. Publication run `29507100716` verified its signature, SBOM, and
+App publication run `29511116947` verified the signed `0.7.5` image, SBOM, and
 provenance. Its immutable digest is
-`sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
-The latest target-HA-accepted coordinated release is Integration/App `0.7.3`,
-Bridge `0.6.2`, and Codex `0.144.4` (experimental, `amd64` only). Acceptance is
-bounded to the recorded checks.
+`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`,
+with attestation `35670902`. This acceptance does not establish image-
+generation, plugin/marketplace, MCP, external-routing, cold-restore, or
+arbitrary prior-image rollback acceptance.
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
