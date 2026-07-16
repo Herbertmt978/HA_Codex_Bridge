@@ -4493,6 +4493,14 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
+    if (target.dataset.desktopField === "agents_content") {
+      const state = this._desktopFeatures.settings;
+      const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
+      const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      return;
+    }
+
     if (target.id === "prompt-input") {
       this._draft = target.value;
       this._setDraftForThread(this._selectedThreadId, target.value);
@@ -4554,9 +4562,20 @@ class CodexBridgePanel extends HTMLElement {
       this._threadForm.mode = target.value;
       return;
     }
+    if (target.dataset.desktopField === "agents_content") {
+      const state = this._desktopFeatures.settings;
+      const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
+      const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      return;
+    }
     if (target.dataset.desktopField === "agents_scope") {
       const state = this._desktopFeatures.settings;
       const hasActiveProject = Boolean(this._activeProject()?.project_id);
+      const previousScope = state.agentsScope || (hasActiveProject ? "project" : "global");
+      const content = this.shadowRoot.querySelector('[data-desktop-field="agents_content"]');
+      const displayedProjectId = content?.dataset.agentsProjectId || target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      if (content) state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(previousScope, displayedProjectId)]: content.value };
       state.agentsScope = target.value === "project" && hasActiveProject ? "project" : "global";
       state.data.agents = state.data.agentsScopes?.[state.agentsScope] || {};
       this._renderDesktopSurface();
@@ -4829,9 +4848,26 @@ class CodexBridgePanel extends HTMLElement {
     this._render();
   }
 
+  _queueSettingsReload(state) {
+    if (state.agentsReloadQueued || this._activeDestination !== "settings") return;
+    state.agentsReloadQueued = true;
+    queueMicrotask(() => {
+      state.agentsReloadQueued = false;
+      if (this._activeDestination === "settings") void this._loadDesktopDestination("settings", { force: true });
+    });
+  }
+
   async _loadDesktopDestination(destination, { force = false } = {}) {
     const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
     if ((state.loading && !force) || (!force && state.loaded)) return;
+    const requestGeneration = destination === "settings" ? (state.agentsLoadGeneration || 0) + 1 : null;
+    const requestProjectId = destination === "settings" ? (this._activeProject()?.project_id || null) : null;
+    if (destination === "settings") {
+      state.agentsLoadGeneration = requestGeneration;
+      state.agentsRequestProjectId = requestProjectId;
+    }
+    const isCurrentSettingsRequest = () => destination !== "settings" || state.agentsLoadGeneration === requestGeneration;
+    const hasMovedProjects = () => destination === "settings" && (this._activeProject()?.project_id || null) !== requestProjectId;
     state.loading = true; state.error = ""; this._renderDesktopSurface();
     try {
       if (destination === "scheduled") {
@@ -4848,10 +4884,17 @@ class CodexBridgePanel extends HTMLElement {
         const [plugins, marketplaces] = await Promise.all([this._callWS("list_plugins", workspace), this._callWS("list_marketplaces", workspace)]);
         state.data.plugins = normalizePluginsResponse(plugins); state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
       } else if (destination === "settings") {
-        const projectId = this._activeProject()?.project_id;
+        const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
         const [globalAgents, projectAgents] = await Promise.all([globalAgentsCall, projectAgentsCall]);
+        if (!isCurrentSettingsRequest()) return;
+        if (hasMovedProjects()) {
+          state.loaded = false;
+          this._queueSettingsReload(state);
+          return;
+        }
+        state.agentsProjectId = projectId || null;
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
         if (capabilities.includes("mcp_admin_v1")) {
@@ -4860,11 +4903,26 @@ class CodexBridgePanel extends HTMLElement {
           state.data.mcp_servers = [];
         }
       }
+      if (destination === "settings" && (!isCurrentSettingsRequest() || hasMovedProjects())) {
+        if (isCurrentSettingsRequest()) {
+          state.loaded = false;
+          this._queueSettingsReload(state);
+        }
+        return;
+      }
       state.loaded = true;
     } catch (error) {
-      state.error = normalizeDesktopError(error);
+      if (!isCurrentSettingsRequest()) return;
+      if (hasMovedProjects()) {
+        state.loaded = false;
+        this._queueSettingsReload(state);
+      } else {
+        state.error = normalizeDesktopError(error);
+      }
     } finally {
-      state.loading = false; this._renderDesktopSurface();
+      if (isCurrentSettingsRequest()) {
+        state.loading = false; this._renderDesktopSurface();
+      }
     }
   }
 
@@ -4872,6 +4930,10 @@ class CodexBridgePanel extends HTMLElement {
     const form = target?.closest("form");
     if (!form) return {};
     return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+  }
+
+  _agentsDraftKey(scope, projectId = null) {
+    return scope === "project" ? `project:${projectId || ""}` : "global";
   }
 
   _desktopWorkspace() {
@@ -4903,7 +4965,8 @@ class CodexBridgePanel extends HTMLElement {
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
-      const projectId = dataset.projectId || this._activeProject()?.project_id;
+      const renderedProjectId = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.dataset.agentsProjectId || this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.dataset.agentsProjectId || state.agentsProjectId;
+      const projectId = dataset.projectId || renderedProjectId || this._activeProject()?.project_id;
       if (scope === "project" && !projectId) {
         state.error = "Select a workspace project before changing project instructions.";
         state.notice = "";
@@ -4920,6 +4983,7 @@ class CodexBridgePanel extends HTMLElement {
       }
       dataset = { ...dataset, agentsScope: scope };
       if (scope === "project") dataset.projectId = projectId;
+      dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
     const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
@@ -4989,20 +5053,32 @@ class CodexBridgePanel extends HTMLElement {
     } else if (action === "save-agents") {
       const payload = { content: this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.value || "" };
       if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
-      await this._desktopMutation("update_agents", payload, state);
+      const mutationSucceeded = await this._desktopMutation("update_agents", payload, state);
+      if (mutationSucceeded) {
+        const drafts = { ...(state.agentsDrafts || {}) };
+        delete drafts[dataset.agentsDraftKey || this._agentsDraftKey(dataset.agentsScope, dataset.projectId)];
+        state.agentsDrafts = drafts;
+      }
     }
     else if (action === "delete-agents") {
       const payload = {};
       if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
-      await this._desktopMutation("delete_agents", payload, state);
+      const mutationSucceeded = await this._desktopMutation("delete_agents", payload, state);
+      if (mutationSucceeded) {
+        const drafts = { ...(state.agentsDrafts || {}) };
+        delete drafts[dataset.agentsDraftKey || this._agentsDraftKey(dataset.agentsScope, dataset.projectId)];
+        state.agentsDrafts = drafts;
+      }
     }
     this._renderDesktopSurface();
   }
 
   async _desktopMutation(action, payload, state) {
+    let mutationSucceeded = false;
     state.loading = true; state.error = ""; this._renderDesktopSurface();
     try {
       await this._callWS(action, payload);
+      mutationSucceeded = true;
       state.notice = "Saved.";
       state.form = null;
       state.editingAutomation = null;
@@ -5011,6 +5087,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     catch (error) { state.error = normalizeDesktopError(error); }
     finally { state.loading = false; }
+    return mutationSucceeded;
   }
 
   _renderDesktopSurface() {
@@ -5019,7 +5096,17 @@ class CodexBridgePanel extends HTMLElement {
     const route = this._activeDestination !== "chats";
     shell?.classList.toggle("desktop-route", route);
     container?.classList.toggle("visible", route);
-    if (route) renderDesktopFeatureSurface(container, { destination: this._activeDestination, state: this._desktopFeatures[this._activeDestination], timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(this._activeProject()?.project_id), onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+    if (route) {
+      const state = this._desktopFeatures[this._activeDestination];
+      const activeProjectId = this._activeProject()?.project_id || null;
+      const requestedProjectId = state.agentsRequestProjectId ?? state.agentsProjectId;
+      const hasKnownSettingsProject = Object.hasOwn(state, "agentsRequestProjectId") || Object.hasOwn(state, "agentsProjectId");
+      if (this._activeDestination === "settings" && !state.loading && hasKnownSettingsProject && requestedProjectId !== activeProjectId) {
+        state.loaded = false;
+        void this._loadDesktopDestination("settings", { force: true });
+      }
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+    }
   }
 
   _handleTooltipPointerOver(event) {

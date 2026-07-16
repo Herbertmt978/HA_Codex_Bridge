@@ -80,6 +80,8 @@ export function createDesktopFeatureState() {
     data: {},
     form: null,
     notice: "",
+    // Keep unsaved instruction edits isolated by scope while the selector changes.
+    agentsDrafts: {},
   };
 }
 
@@ -284,7 +286,7 @@ function renderPlugins(documentRef, state) {
   return section;
 }
 
-function renderSettings(documentRef, state, hasActiveProject = false) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null) {
   const section = documentRef.createElement("div"); section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav"); tabs.className = "settings-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Settings sections");
   const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
@@ -301,8 +303,15 @@ function renderSettings(documentRef, state, hasActiveProject = false) {
   if (tab === "instructions") {
     panel.append(text(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
     const selectedScope = hasActiveProject && state.agentsScope !== "global" ? "project" : "global";
-    const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope); panel.append(scope);
-    const records = asRecord(state.data.agentsScopes); const agents = asRecord(records[selectedScope] || state.data.agents); panel.append(input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", agents.content || "", "textarea"));
+    const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope);
+    const scopeControl = scope.querySelector('[data-desktop-field="agents_scope"]');
+    if (scopeControl) scopeControl.dataset.agentsProjectId = activeProjectId || "";
+    panel.append(scope);
+    const records = asRecord(state.data.agentsScopes); const agents = asRecord(records[selectedScope] || state.data.agents); const draftKey = selectedScope === "project" ? `project:${activeProjectId || state.agentsProjectId || ""}` : "global"; const drafts = asRecord(state.agentsDrafts); const content = Object.hasOwn(drafts, draftKey) ? drafts[draftKey] : agents.content || "";
+    const contentField = input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", content, "textarea");
+    const contentControl = contentField.querySelector('[data-desktop-field="agents_content"]');
+    if (contentControl) contentControl.dataset.agentsProjectId = activeProjectId || "";
+    panel.append(contentField);
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents")); panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
@@ -311,7 +320,7 @@ function renderSettings(documentRef, state, hasActiveProject = false) {
   return section;
 }
 
-export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false } = {}) {
+export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.replaceChildren();
@@ -335,7 +344,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId);
   container.append(content);
 }
 

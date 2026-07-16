@@ -149,6 +149,183 @@ describe("desktop feature surfaces", () => {
     expect(panel._desktopFeatures.settings.confirmAction).toBeNull();
   });
 
+  it("switches instruction scopes without cross-saving content and preserves scoped drafts", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "project";
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: { content: "global server" }, project: { content: "project server" } } };
+    panel._projects = [{ project_id: "project-one", kind: "project", name: "Project one" }];
+    panel._activeThread = { thread_id: "thread-one", project_id: "project-one", attachments: [] };
+    panel._callWS = vi.fn().mockResolvedValue({});
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue(undefined);
+    panel._render(true);
+
+    const scope = panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]');
+    const content = panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]');
+    expect(content.value).toBe("project server");
+    content.value = "unsaved project";
+    scope.value = "global";
+    scope.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(panel._desktopFeatures.settings.agentsDrafts["project:project-one"]).toBe("unsaved project");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]').value).toBe("global server");
+
+    await panel._handleDesktopAction("save-agents", {}, panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]'));
+    expect(panel._callWS).toHaveBeenCalledWith("update_agents", { content: "global server" });
+
+    const globalScope = panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]');
+    globalScope.value = "project";
+    globalScope.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]').value).toBe("unsaved project");
+  });
+
+  it("preserves typed instruction edits across rerenders", () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "global";
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: { content: "server global" }, project: {} } };
+    panel._projects = [];
+    panel._render(true);
+
+    const content = panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]');
+    content.value = "typed but not saved";
+    content.dispatchEvent(new Event("input", { bubbles: true }));
+    panel._renderDesktopSurface();
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]').value).toBe("typed but not saved");
+  });
+
+  it("reloads project instructions when switching projects and binds saves to the displayed project", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "project";
+    panel._desktopFeatures.settings.agentsProjectId = "project-a";
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: { content: "global" }, project: { content: "Project A" } } };
+    panel._projects = [
+      { project_id: "project-a", kind: "project", name: "Project A" },
+      { project_id: "project-b", kind: "project", name: "Project B" },
+    ];
+    panel._activeThread = null;
+    panel._selectedProjectId = "project-a";
+    panel._threads = [];
+    panel._callWS = vi.fn().mockImplementation((action, payload = {}) => {
+      if (action === "get_agents" && payload.project_id === "project-b") return Promise.resolve({ content: "Project B" });
+      if (action === "get_agents" && payload.project_id === "project-a") return Promise.resolve({ content: "Project A" });
+      if (action === "get_agents") return Promise.resolve({ content: "global" });
+      return Promise.resolve({});
+    });
+    panel._render(true);
+
+    panel._selectProject("project-b");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(panel._desktopFeatures.settings.agentsProjectId).toBe("project-b");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]').value).toBe("Project B");
+
+    const content = panel.shadowRoot.querySelector('[data-desktop-field="agents_content"]');
+    content.value = "edited B";
+    content.dispatchEvent(new Event("input", { bubbles: true }));
+    await panel._handleDesktopAction("save-agents", {}, panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]'));
+    expect(panel._callWS).toHaveBeenCalledWith("update_agents", { content: "edited B", project_id: "project-b" });
+  });
+
+  it("discards a stale settings rejection and reloads the newly selected project", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._projects = [
+      { project_id: "project-a", kind: "project", name: "Project A" },
+      { project_id: "project-b", kind: "project", name: "Project B" },
+    ];
+    panel._activeThread = null;
+    panel._selectedProjectId = "project-a";
+    panel._config = { capabilities: [] };
+    let rejectProjectA;
+    panel._callWS = vi.fn().mockImplementation((action, payload = {}) => {
+      if (action === "get_agents" && payload.project_id === "project-a") return new Promise((resolve, reject) => { rejectProjectA = reject; });
+      if (action === "get_agents" && payload.project_id === "project-b") return Promise.resolve({ content: "Project B" });
+      if (action === "get_agents") return Promise.resolve({ content: "global" });
+      return Promise.resolve({});
+    });
+
+    const firstLoad = panel._loadDesktopDestination("settings", { force: true });
+    await Promise.resolve();
+    panel._selectedProjectId = "project-b";
+    rejectProjectA(new Error("Project A request failed"));
+    await firstLoad;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(panel._desktopFeatures.settings.error).toBe("");
+    expect(panel._desktopFeatures.settings.agentsProjectId).toBe("project-b");
+    expect(panel._desktopFeatures.settings.data.agentsScopes.project.content).toBe("Project B");
+  });
+
+  it("clears a saved scope draft when the mutation succeeds but refresh fails", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "project";
+    panel._desktopFeatures.settings.agentsProjectId = "project-a";
+    panel._desktopFeatures.settings.agentsDrafts = { "project:project-a": "draft" };
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: {}, project: { content: "server" } } };
+    panel._projects = [{ project_id: "project-a", kind: "project", name: "Project A" }];
+    panel._activeThread = null;
+    panel._selectedProjectId = "project-a";
+    panel._callWS = vi.fn().mockResolvedValue({});
+    panel._loadDesktopDestination = vi.fn().mockRejectedValue(new Error("refresh failed"));
+    panel._render(true);
+
+    await panel._handleDesktopAction("save-agents", {}, panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]'));
+    expect(panel._desktopFeatures.settings.agentsDrafts["project:project-a"]).toBeUndefined();
+    expect(panel._desktopFeatures.settings.error).toMatch(/refresh failed/i);
+  });
+
+  it("clears a deleted scope draft when the mutation succeeds but refresh fails", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "project";
+    panel._desktopFeatures.settings.agentsProjectId = "project-a";
+    panel._desktopFeatures.settings.agentsDrafts = { "project:project-a": "draft" };
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: {}, project: { content: "server" } } };
+    panel._projects = [{ project_id: "project-a", kind: "project", name: "Project A" }];
+    panel._activeThread = null;
+    panel._selectedProjectId = "project-a";
+    panel._callWS = vi.fn().mockResolvedValue({});
+    panel._loadDesktopDestination = vi.fn().mockRejectedValue(new Error("refresh failed"));
+    panel._render(true);
+
+    await panel._handleDesktopAction("delete-agents", {}, panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]'), { confirmed: true });
+    expect(panel._desktopFeatures.settings.agentsDrafts["project:project-a"]).toBeUndefined();
+    expect(panel._desktopFeatures.settings.error).toMatch(/refresh failed/i);
+  });
+
+  it("preserves a scope draft when the mutation write fails", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "settings";
+    panel._desktopFeatures.settings.loaded = true;
+    panel._desktopFeatures.settings.settingsTab = "instructions";
+    panel._desktopFeatures.settings.agentsScope = "project";
+    panel._desktopFeatures.settings.agentsProjectId = "project-a";
+    panel._desktopFeatures.settings.agentsDrafts = { "project:project-a": "draft" };
+    panel._desktopFeatures.settings.data = { agentsScopes: { global: {}, project: { content: "server" } } };
+    panel._projects = [{ project_id: "project-a", kind: "project", name: "Project A" }];
+    panel._activeThread = null;
+    panel._selectedProjectId = "project-a";
+    panel._callWS = vi.fn().mockRejectedValue(new Error("write failed"));
+    panel._render(true);
+
+    await panel._handleDesktopAction("save-agents", {}, panel.shadowRoot.querySelector('[data-desktop-field="agents_scope"]'));
+    expect(panel._desktopFeatures.settings.agentsDrafts["project:project-a"]).toBe("draft");
+    expect(panel._desktopFeatures.settings.error).toMatch(/write failed/i);
+  });
+
   it("keeps the validated project instruction scope through delete confirmation", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._activeDestination = "settings";

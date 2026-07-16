@@ -1662,7 +1662,9 @@ function createDesktopFeatureState() {
     error: "",
     data: {},
     form: null,
-    notice: ""
+    notice: "",
+    // Keep unsaved instruction edits isolated by scope while the selector changes.
+    agentsDrafts: {}
   };
 }
 var text = (documentRef, tag, value, className = "") => {
@@ -1878,7 +1880,7 @@ function renderPlugins(documentRef, state) {
   section.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
   return section;
 }
-function renderSettings(documentRef, state, hasActiveProject = false) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null) {
   const section = documentRef.createElement("div");
   section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav");
@@ -1931,10 +1933,18 @@ function renderSettings(documentRef, state, hasActiveProject = false) {
     panel.append(text(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
     const selectedScope = hasActiveProject && state.agentsScope !== "global" ? "project" : "global";
     const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope);
+    const scopeControl = scope.querySelector('[data-desktop-field="agents_scope"]');
+    if (scopeControl) scopeControl.dataset.agentsProjectId = activeProjectId || "";
     panel.append(scope);
     const records = asRecord(state.data.agentsScopes);
     const agents = asRecord(records[selectedScope] || state.data.agents);
-    panel.append(input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", agents.content || "", "textarea"));
+    const draftKey = selectedScope === "project" ? `project:${activeProjectId || state.agentsProjectId || ""}` : "global";
+    const drafts = asRecord(state.agentsDrafts);
+    const content = Object.hasOwn(drafts, draftKey) ? drafts[draftKey] : agents.content || "";
+    const contentField = input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", content, "textarea");
+    const contentControl = contentField.querySelector('[data-desktop-field="agents_content"]');
+    if (contentControl) contentControl.dataset.agentsProjectId = activeProjectId || "";
+    panel.append(contentField);
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents"));
@@ -1945,7 +1955,7 @@ function renderSettings(documentRef, state, hasActiveProject = false) {
   if (tab === "general") panel.append(text(documentRef, "h3", "General", "desktop-subheading"), text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"));
   return section;
 }
-function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false } = {}) {
+function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.replaceChildren();
@@ -1990,7 +2000,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm);
   }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId);
   container.append(content);
 }
 
@@ -6430,6 +6440,13 @@ var CodexBridgePanel = class extends HTMLElement {
       this._captureInteractionAnswers(target);
       return;
     }
+    if (target.dataset.desktopField === "agents_content") {
+      const state = this._desktopFeatures.settings;
+      const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
+      const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      return;
+    }
     if (target.id === "prompt-input") {
       this._draft = target.value;
       this._setDraftForThread(this._selectedThreadId, target.value);
@@ -6490,9 +6507,20 @@ var CodexBridgePanel = class extends HTMLElement {
       this._threadForm.mode = target.value;
       return;
     }
+    if (target.dataset.desktopField === "agents_content") {
+      const state = this._desktopFeatures.settings;
+      const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
+      const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      return;
+    }
     if (target.dataset.desktopField === "agents_scope") {
       const state = this._desktopFeatures.settings;
       const hasActiveProject = Boolean(this._activeProject()?.project_id);
+      const previousScope = state.agentsScope || (hasActiveProject ? "project" : "global");
+      const content = this.shadowRoot.querySelector('[data-desktop-field="agents_content"]');
+      const displayedProjectId = content?.dataset.agentsProjectId || target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
+      if (content) state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(previousScope, displayedProjectId)]: content.value };
       state.agentsScope = target.value === "project" && hasActiveProject ? "project" : "global";
       state.data.agents = state.data.agentsScopes?.[state.agentsScope] || {};
       this._renderDesktopSurface();
@@ -6726,9 +6754,25 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
     this._render();
   }
+  _queueSettingsReload(state) {
+    if (state.agentsReloadQueued || this._activeDestination !== "settings") return;
+    state.agentsReloadQueued = true;
+    queueMicrotask(() => {
+      state.agentsReloadQueued = false;
+      if (this._activeDestination === "settings") void this._loadDesktopDestination("settings", { force: true });
+    });
+  }
   async _loadDesktopDestination(destination, { force = false } = {}) {
     const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
     if (state.loading && !force || !force && state.loaded) return;
+    const requestGeneration = destination === "settings" ? (state.agentsLoadGeneration || 0) + 1 : null;
+    const requestProjectId = destination === "settings" ? this._activeProject()?.project_id || null : null;
+    if (destination === "settings") {
+      state.agentsLoadGeneration = requestGeneration;
+      state.agentsRequestProjectId = requestProjectId;
+    }
+    const isCurrentSettingsRequest = () => destination !== "settings" || state.agentsLoadGeneration === requestGeneration;
+    const hasMovedProjects = () => destination === "settings" && (this._activeProject()?.project_id || null) !== requestProjectId;
     state.loading = true;
     state.error = "";
     this._renderDesktopSurface();
@@ -6748,10 +6792,17 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.plugins = normalizePluginsResponse(plugins);
         state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
       } else if (destination === "settings") {
-        const projectId = this._activeProject()?.project_id;
+        const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
         const [globalAgents, projectAgents] = await Promise.all([globalAgentsCall, projectAgentsCall]);
+        if (!isCurrentSettingsRequest()) return;
+        if (hasMovedProjects()) {
+          state.loaded = false;
+          this._queueSettingsReload(state);
+          return;
+        }
+        state.agentsProjectId = projectId || null;
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} };
         state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
@@ -6761,18 +6812,36 @@ var CodexBridgePanel = class extends HTMLElement {
           state.data.mcp_servers = [];
         }
       }
+      if (destination === "settings" && (!isCurrentSettingsRequest() || hasMovedProjects())) {
+        if (isCurrentSettingsRequest()) {
+          state.loaded = false;
+          this._queueSettingsReload(state);
+        }
+        return;
+      }
       state.loaded = true;
     } catch (error) {
-      state.error = normalizeDesktopError(error);
+      if (!isCurrentSettingsRequest()) return;
+      if (hasMovedProjects()) {
+        state.loaded = false;
+        this._queueSettingsReload(state);
+      } else {
+        state.error = normalizeDesktopError(error);
+      }
     } finally {
-      state.loading = false;
-      this._renderDesktopSurface();
+      if (isCurrentSettingsRequest()) {
+        state.loading = false;
+        this._renderDesktopSurface();
+      }
     }
   }
   _desktopFormValues(target) {
     const form = target?.closest("form");
     if (!form) return {};
     return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+  }
+  _agentsDraftKey(scope, projectId = null) {
+    return scope === "project" ? `project:${projectId || ""}` : "global";
   }
   _desktopWorkspace() {
     const project = this._activeProject();
@@ -6800,7 +6869,8 @@ var CodexBridgePanel = class extends HTMLElement {
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
-      const projectId = dataset.projectId || this._activeProject()?.project_id;
+      const renderedProjectId = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.dataset.agentsProjectId || this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.dataset.agentsProjectId || state.agentsProjectId;
+      const projectId = dataset.projectId || renderedProjectId || this._activeProject()?.project_id;
       if (scope === "project" && !projectId) {
         state.error = "Select a workspace project before changing project instructions.";
         state.notice = "";
@@ -6817,6 +6887,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       dataset = { ...dataset, agentsScope: scope };
       if (scope === "project") dataset.projectId = projectId;
+      dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
     const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
     if (action === "confirm-desktop") {
@@ -6907,20 +6978,32 @@ var CodexBridgePanel = class extends HTMLElement {
     } else if (action === "save-agents") {
       const payload = { content: this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.value || "" };
       if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
-      await this._desktopMutation("update_agents", payload, state);
+      const mutationSucceeded = await this._desktopMutation("update_agents", payload, state);
+      if (mutationSucceeded) {
+        const drafts = { ...state.agentsDrafts || {} };
+        delete drafts[dataset.agentsDraftKey || this._agentsDraftKey(dataset.agentsScope, dataset.projectId)];
+        state.agentsDrafts = drafts;
+      }
     } else if (action === "delete-agents") {
       const payload = {};
       if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
-      await this._desktopMutation("delete_agents", payload, state);
+      const mutationSucceeded = await this._desktopMutation("delete_agents", payload, state);
+      if (mutationSucceeded) {
+        const drafts = { ...state.agentsDrafts || {} };
+        delete drafts[dataset.agentsDraftKey || this._agentsDraftKey(dataset.agentsScope, dataset.projectId)];
+        state.agentsDrafts = drafts;
+      }
     }
     this._renderDesktopSurface();
   }
   async _desktopMutation(action, payload, state) {
+    let mutationSucceeded = false;
     state.loading = true;
     state.error = "";
     this._renderDesktopSurface();
     try {
       await this._callWS(action, payload);
+      mutationSucceeded = true;
       state.notice = "Saved.";
       state.form = null;
       state.editingAutomation = null;
@@ -6931,6 +7014,7 @@ var CodexBridgePanel = class extends HTMLElement {
     } finally {
       state.loading = false;
     }
+    return mutationSucceeded;
   }
   _renderDesktopSurface() {
     const container = this.shadowRoot.getElementById("desktop-feature-surface");
@@ -6938,7 +7022,17 @@ var CodexBridgePanel = class extends HTMLElement {
     const route = this._activeDestination !== "chats";
     shell?.classList.toggle("desktop-route", route);
     container?.classList.toggle("visible", route);
-    if (route) renderDesktopFeatureSurface(container, { destination: this._activeDestination, state: this._desktopFeatures[this._activeDestination], timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(this._activeProject()?.project_id), onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+    if (route) {
+      const state = this._desktopFeatures[this._activeDestination];
+      const activeProjectId = this._activeProject()?.project_id || null;
+      const requestedProjectId = state.agentsRequestProjectId ?? state.agentsProjectId;
+      const hasKnownSettingsProject = Object.hasOwn(state, "agentsRequestProjectId") || Object.hasOwn(state, "agentsProjectId");
+      if (this._activeDestination === "settings" && !state.loading && hasKnownSettingsProject && requestedProjectId !== activeProjectId) {
+        state.loaded = false;
+        void this._loadDesktopDestination("settings", { force: true });
+      }
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+    }
   }
   _handleTooltipPointerOver(event) {
     const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
