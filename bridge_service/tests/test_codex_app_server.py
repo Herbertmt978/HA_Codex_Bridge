@@ -12,6 +12,7 @@ import subprocess
 import sys
 from threading import Event
 import time
+import tomllib
 from types import ModuleType
 from typing import Any, Callable
 
@@ -23,6 +24,20 @@ from codex_bridge_service.models import RuntimeProfile
 
 
 FAKE_APP_SERVER = Path(__file__).with_name("fakes") / "fake_app_server.py"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _canonical_versions() -> tuple[str, str]:
+    lock = json.loads(
+        (ROOT / "codex_bridge_app/codex-release.json").read_text(encoding="utf-8")
+    )
+    project = tomllib.loads(
+        (ROOT / "bridge_service/pyproject.toml").read_text(encoding="utf-8")
+    )
+    return lock["release"]["version"], project["project"]["version"]
+
+
+CODEX_VERSION, BRIDGE_VERSION = _canonical_versions()
 
 
 class FakeAppServer:
@@ -35,6 +50,13 @@ class FakeAppServer:
         self.command = str(local_command)
 
     def configure(self, generation: int = 1, **scenario: Any) -> None:
+        if "initialize_result" not in scenario:
+            scenario["initialize_result"] = {
+                "codexHome": str(self.codex_home.resolve()),
+                "platformFamily": "windows" if os.name == "nt" else "unix",
+                "platformOs": "windows" if os.name == "nt" else "linux",
+                "userAgent": f"Codex Desktop/{CODEX_VERSION} (test; x86_64)",
+            }
         self._write_json(self.sidecars / f"scenario-{generation}.json", scenario)
 
     def release(self, generation: int, *control_keys: str) -> None:
@@ -89,7 +111,7 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "codex_home": fake_server.codex_home,
         "client_name": "ha_codex_bridge",
         "client_title": "HA Codex Bridge",
-        "client_version": "0.6.2",
+        "client_version": BRIDGE_VERSION,
         "initialize_timeout_seconds": 10.0,
         "request_timeout_seconds": 2.0,
         "max_message_bytes": 16 * 1024,
@@ -164,7 +186,7 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert client.ready is True
         assert client.generation == 1
         assert client.process_id == fake_server.process()["pid"]
-        assert client.server_version == "0.144.4"
+        assert client.server_version == CODEX_VERSION
         _wait_for_client_message(
             fake_server,
             lambda message: message.get("method") == "initialized",
@@ -179,7 +201,7 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert messages[0]["params"]["clientInfo"] == {
             "name": "ha_codex_bridge",
             "title": "HA Codex Bridge",
-            "version": "0.6.2",
+            "version": BRIDGE_VERSION,
         }
         assert fake_server.process()["argv"] == [
             "-c",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import struct
+import re
 
 import pytest
 import yaml
@@ -13,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = ROOT / "codex_bridge_app"
 BRAND_ROOT = ROOT / "brand"
 INTEGRATION_BRAND_ROOT = ROOT / "custom_components" / "codex_bridge" / "brand"
+
+
+def _canonical_app_version() -> str:
+    match = re.search(
+        r"(?m)^version\s*:\s*[\"']?([^\"'\s#]+)",
+        (APP_ROOT / "config.yaml").read_text(encoding="utf-8"),
+    )
+    assert match is not None
+    return match.group(1)
 
 
 def _yaml(path: Path) -> dict[str, object]:
@@ -39,7 +49,7 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
         "Run the Codex Bridge service privately inside Home Assistant."
     )
     assert config["slug"] == "codex_bridge"
-    assert config["version"] == "0.7.3"
+    assert config["version"] == _canonical_app_version()
     assert config.get("startup", "application") == "application"
     assert config.get("boot", "auto") == "auto"
     assert config["init"] is False
