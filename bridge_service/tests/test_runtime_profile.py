@@ -14,11 +14,7 @@ from codex_bridge_service.storage import BridgeStorage
 
 
 def _registered_paths(app) -> set[str]:
-    return {
-        path
-        for route in app.routes
-        if isinstance(path := getattr(route, "path", None), str)
-    }
+    return set(app.openapi()["paths"])
 
 
 def test_external_legacy_storage_keeps_existing_root_layout(tmp_path) -> None:

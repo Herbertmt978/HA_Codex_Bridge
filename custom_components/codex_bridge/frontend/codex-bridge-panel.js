@@ -6751,10 +6751,15 @@ var CodexBridgePanel = class extends HTMLElement {
         const projectId = this._activeProject()?.project_id;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
-        const [servers, globalAgents, projectAgents] = await Promise.all([this._callWS("list_mcp"), globalAgentsCall, projectAgentsCall]);
-        state.data.mcp_servers = normalizeDesktopList(servers);
+        const [globalAgents, projectAgents] = await Promise.all([globalAgentsCall, projectAgentsCall]);
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} };
         state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
+        const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
+        if (capabilities.includes("mcp_admin_v1")) {
+          state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
+        } else {
+          state.data.mcp_servers = [];
+        }
       }
       state.loaded = true;
     } catch (error) {

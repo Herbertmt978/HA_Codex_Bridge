@@ -51,16 +51,36 @@ describe("desktop feature surfaces", () => {
   it("exposes accessible destination navigation and calls the bridge suffix", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
-    panel._config = { panel_title: "Codex Bridge" };
+    panel._config = { panel_title: "Codex Bridge", capabilities: ["mcp_admin_v1"] };
     panel._callWS = vi.fn().mockResolvedValue([]);
     panel._render(true);
     const settings = panel.shadowRoot.querySelector('[data-destination="settings"]');
     expect(settings.getAttribute("aria-current")).toBe("false");
     settings.click();
     await Promise.resolve();
+    await Promise.resolve();
     expect(panel.shadowRoot.querySelector(".desktop-feature-surface").classList.contains("visible")).toBe(true);
     expect(panel._callWS).toHaveBeenCalledWith("list_mcp");
     expect(panel._callWS).toHaveBeenCalledWith("get_agents");
+  });
+
+  it("renders non-MCP settings when the default MCP capability is disabled", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._config = { panel_title: "Codex Bridge", capabilities: [] };
+    panel._callWS = vi.fn().mockImplementation((action) => {
+      if (action === "list_mcp") return Promise.reject(new Error("MCP is disabled"));
+      return Promise.resolve({});
+    });
+    panel._render(true);
+    panel.shadowRoot.querySelector('[data-destination="settings"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(panel._callWS).not.toHaveBeenCalledWith("list_mcp");
+    expect(panel._desktopFeatures.settings.error).toBe("");
+    expect(panel.shadowRoot.querySelector("[data-settings-tab=general]")).toBeTruthy();
+    expect(panel.shadowRoot.textContent).toContain("General");
   });
 
   it("opens an isolated OAuth popup synchronously and navigates it only after HTTPS validation", async () => {
