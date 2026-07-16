@@ -220,6 +220,7 @@ jobs:
             The running App never self-modifies. CI must pass, and the App update
             remains reviewable before Home Assistant Supervisor can offer it.
           branch: automation/codex-${{ needs.generate.outputs.codex_version }}
+          base: main
           commit-message: Update verified Codex to ${{ needs.generate.outputs.codex_version }}
           delete-branch: true
           signoff: true
