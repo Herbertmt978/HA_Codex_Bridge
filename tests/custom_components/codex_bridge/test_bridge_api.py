@@ -202,6 +202,48 @@ async def test_automation_and_mcp_client_routes_preserve_boundaries(
     assert observed[-1] == ("GET", "/automations/aut_1", None)
 
 
+async def test_plugin_uninstall_uses_the_backend_plugin_id_contract(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        if request.method == "DELETE":
+            return web.Response(status=204)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_uninstall_plugin("plugin.example@marketplace")
+
+    assert observed == [
+        ("GET", "/ready"),
+        ("DELETE", "/capabilities/plugins/plugin.example@marketplace"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "plugin_id",
+    ["../plugin", "plugin/child", "plugin\\child", "plugin\x00name", "a" * 129],
+)
+async def test_plugin_uninstall_rejects_unsafe_plugin_ids_before_network_access(
+    plugin_id: str,
+) -> None:
+    class UnexpectedSession:
+        async def request(self, *args, **kwargs):
+            raise AssertionError("network must not be reached")
+
+    client = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"plugins_v1"})
+
+    with pytest.raises(BridgeApiEndpointError):
+        await client.async_uninstall_plugin(plugin_id)
+
+
 async def test_explicit_legacy_client_uses_v0_header_after_legacy_readiness(
     bridge_server_factory,
 ) -> None:

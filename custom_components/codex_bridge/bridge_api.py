@@ -51,6 +51,7 @@ _UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
 _FILE_METADATA_MAX_BYTES = 64 * 1024
 _ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_PLUGIN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}\Z", re.ASCII)
 _FORWARDED_REQUEST_HEADERS = {
     "content-length": "Content-Length",
     "content-type": "Content-Type",
@@ -66,6 +67,18 @@ def _path_segment(value: object) -> str:
         return quote(validate_bridge_identifier(value), safe="")
     except EndpointError:
         raise BridgeApiEndpointError() from None
+
+
+def _plugin_path_segment(value: object) -> str:
+    """Encode a plugin identifier accepted by the Bridge plugin contract."""
+
+    if (
+        not isinstance(value, str)
+        or len(value.encode("utf-8")) > 128
+        or _PLUGIN_ID_PATTERN.fullmatch(value) is None
+    ):
+        raise BridgeApiEndpointError()
+    return quote(value, safe="")
 
 
 def _agents_path(project_id: str | None) -> str:
@@ -1209,7 +1222,7 @@ class BridgeApiClient:
         self.require_capability("plugins_v1")
         await self._async_no_content(
             "DELETE",
-            f"/capabilities/plugins/{_path_segment(plugin_id)}",
+            f"/capabilities/plugins/{_plugin_path_segment(plugin_id)}",
             expected_status={204},
         )
 
