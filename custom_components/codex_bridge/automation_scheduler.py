@@ -59,11 +59,18 @@ class AutomationScheduler:
             previous = self._callbacks.pop(automation_id, None)
             if previous is not None:
                 previous()
+
+            async def fire(
+                _when: datetime,
+                automation_id: str = automation_id,
+                revision: int = revision,
+                due: datetime = due,
+            ) -> None:
+                await self._async_fire(automation_id, revision, due)
+
             self._callbacks[automation_id] = async_track_point_in_time(
                 self.hass,
-                lambda _when, automation_id=automation_id, revision=revision, due=due: (
-                    self._async_fire(automation_id, revision, due)
-                ),
+                fire,
                 due,
             )
 

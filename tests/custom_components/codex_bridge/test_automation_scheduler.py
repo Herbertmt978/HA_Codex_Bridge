@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.core import HassJob, HassJobType, HomeAssistant
 
 from custom_components.codex_bridge.automation_scheduler import AutomationScheduler
 from custom_components.codex_bridge.bridge_api import (
@@ -17,8 +18,8 @@ class _Hass:
         self.config = SimpleNamespace(time_zone="Europe/London")
 
 
-async def test_scheduler_claims_due_run_with_a_stable_idempotency_key_and_rearms(
-    monkeypatch,
+async def test_scheduler_registers_a_coroutine_callback_ha_dispatches(
+    monkeypatch, tmp_path
 ):
     callbacks = []
 
@@ -43,19 +44,37 @@ async def test_scheduler_claims_due_run_with_a_stable_idempotency_key_and_rearms
         },
         {"automations": []},
     ]
-    scheduler = AutomationScheduler(_Hass(), client, "supervisor")
+    hass = HomeAssistant(str(tmp_path))
+    scheduler = AutomationScheduler(hass, client, "supervisor")
 
-    await scheduler.async_start()
-    action, due = callbacks[0]
-    await action(due)
+    try:
+        await scheduler.async_start()
+        action, due = callbacks[0]
 
-    client.async_claim_automation_run.assert_awaited_once_with(
-        "aut_1",
-        due_at="2026-07-15T10:00:00Z",
-        idempotency_key="automation:aut_1:4:2026-07-15T10:00:00Z",
-        expected_revision=4,
-    )
-    assert client.async_scheduler_automations.await_count == 2
+        async def returns_coroutine(_when: datetime) -> None:
+            return None
+
+        assert (
+            HassJob(lambda when: returns_coroutine(when)).job_type
+            is HassJobType.Executor
+        )
+
+        job = HassJob(action)
+        assert job.job_type is HassJobType.Coroutinefunction
+        task = hass.async_run_hass_job(job, due)
+        assert task is not None
+        await task
+
+        client.async_claim_automation_run.assert_awaited_once_with(
+            "aut_1",
+            due_at="2026-07-15T10:00:00Z",
+            idempotency_key="automation:aut_1:4:2026-07-15T10:00:00Z",
+            expected_revision=4,
+        )
+        assert client.async_scheduler_automations.await_count == 2
+    finally:
+        await scheduler.async_close()
+        await hass.async_stop(force=True)
 
 
 async def test_scheduler_is_disabled_for_external_legacy_without_contacting_bridge():
