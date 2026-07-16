@@ -206,7 +206,7 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     form.append(input(documentRef, "Thread ID", "thread_id", editing.target?.thread_id || ""));
     form.append(input(documentRef, "Prompt", "prompt", editing.prompt || "", "textarea"));
     form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], schedule.kind === "rrule" ? "rrule" : schedule.kind || "once"));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", schedule.at || schedule.start_at || ""));
+    form.append(input(documentRef, "Run at (ISO)", "run_at", schedule.at || schedule.start_at || schedule.anchor_at || ""));
     form.append(input(documentRef, "Interval seconds", "interval_seconds", schedule.seconds || ""));
     form.append(input(documentRef, "RRULE", "rrule", schedule.rule || ""));
     form.append(input(documentRef, "Home Assistant timezone", "timezone", schedule.timezone || defaultTimezone));

@@ -135,6 +135,55 @@ def test_claim_is_idempotent_and_rejects_stale_or_overlapping_dispatch(tmp_path)
         )
 
 
+@pytest.mark.parametrize("active_status", ["queued", "running"])
+def test_pruning_keeps_active_runs_and_bounds_terminal_history(tmp_path, active_status):
+    store = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=2,
+        max_total_runs=2,
+    )
+    automation = store.create(
+        _payload(schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"}),
+        now=NOW,
+    )
+    automation_id = automation["automation_id"]
+    active = store.run_now(automation_id, now=NOW)
+    if active_status == "running":
+        active = store.mark_running(
+            active["automation_run_id"],
+            bridge_run_id="run_pruning_regression",
+            now=NOW,
+        )
+
+    for minute in range(1, 5):
+        skipped = store.run_now(
+            automation_id,
+            now=NOW + timedelta(minutes=minute),
+        )
+        assert skipped["status"] == "skipped_overlap"
+
+    history = store.list_runs(automation_id)
+    assert active["automation_run_id"] in {run["automation_run_id"] for run in history}
+    assert [run["status"] for run in history].count(active_status) == 1
+    assert len([run for run in history if run["status"] != active_status]) == 2
+
+    running = active
+    if active_status == "queued":
+        running = store.mark_running(
+            active["automation_run_id"],
+            bridge_run_id="run_pruning_regression",
+            now=NOW + timedelta(minutes=5),
+        )
+    completed = store.complete(
+        running["automation_run_id"],
+        status="completed",
+        now=NOW + timedelta(minutes=6),
+    )
+
+    assert completed["status"] == "completed"
+    assert len(store.list_runs(automation_id)) == 2
+
+
 def test_restart_reconciles_an_unlinked_queued_run_after_dispatch_crash(tmp_path):
     first = AutomationStore(tmp_path)
     automation = first.create(
@@ -323,7 +372,11 @@ def test_bridge_run_completion_lookup_survives_a_store_restart(tmp_path):
 def test_fast_runtime_terminal_before_link_is_reconciled_without_overlap(
     tmp_path,
 ):
-    store = AutomationStore(tmp_path)
+    store = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=2,
+        max_total_runs=2,
+    )
     automation = store.create(
         _payload(
             schedule={
@@ -335,30 +388,218 @@ def test_fast_runtime_terminal_before_link_is_reconciled_without_overlap(
         now=NOW,
     )
     queued = store.run_now(automation["automation_id"], now=NOW)
+    for minute in range(1, 5):
+        skipped = store.run_now(
+            automation["automation_id"],
+            now=NOW + timedelta(minutes=minute),
+        )
+        assert skipped["status"] == "skipped_overlap"
 
     terminal = store.complete_runtime_run(
         "run_fast123",
         client_request_id=f"automation:{queued['automation_run_id']}",
         unattended=True,
         status="completed",
-        now=NOW,
+        now=NOW + timedelta(minutes=5),
     )
     linked = store.mark_running(
-        queued["automation_run_id"], bridge_run_id="run_fast123", now=NOW
+        queued["automation_run_id"],
+        bridge_run_id="run_fast123",
+        now=NOW + timedelta(minutes=5),
+    )
+    duplicate = store.mark_running(
+        queued["automation_run_id"],
+        bridge_run_id="run_fast123",
+        now=NOW + timedelta(minutes=6),
     )
 
     assert terminal["status"] == "completed"
-    assert linked == terminal
+    assert linked["automation_run_id"] == terminal["automation_run_id"]
+    assert linked["status"] == terminal["status"]
+    assert linked["bridge_run_id"] == terminal["bridge_run_id"]
+    assert linked["started_at"] == "2026-07-15T09:05:00Z"
+    assert duplicate == linked
+    assert len(store.list_runs(automation["automation_id"])) == 2
     restored = AutomationStore(tmp_path)
-    assert restored.list_runs(automation["automation_id"])[0] == terminal
+    assert linked in restored.list_runs(automation["automation_id"])
     fresh = restored.run_now(
-        automation["automation_id"], now=NOW + timedelta(minutes=1)
+        automation["automation_id"], now=NOW + timedelta(minutes=7)
     )
     overlap = restored.run_now(
-        automation["automation_id"], now=NOW + timedelta(minutes=2)
+        automation["automation_id"], now=NOW + timedelta(minutes=8)
     )
     assert fresh["status"] == "queued"
     assert overlap["status"] == "skipped_overlap"
+
+
+def test_restart_reconciles_a_pending_fast_runtime_link_before_pruning(tmp_path):
+    store = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=2,
+        max_total_runs=2,
+    )
+    automation = store.create(
+        _payload(schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"}),
+        now=NOW,
+    )
+    queued = store.run_now(automation["automation_id"], now=NOW)
+    for minute in range(1, 5):
+        store.run_now(
+            automation["automation_id"],
+            now=NOW + timedelta(minutes=minute),
+        )
+    terminal = store.complete_runtime_run(
+        "run_fast_restart",
+        client_request_id=f"automation:{queued['automation_run_id']}",
+        unattended=True,
+        status="completed",
+        now=NOW + timedelta(minutes=5),
+    )
+
+    assert terminal["started_at"] is None
+    assert len(store.list_runs(automation["automation_id"])) == 3
+
+    restored = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=2,
+        max_total_runs=2,
+    )
+    history = restored.list_runs(automation["automation_id"])
+    recovered = next(
+        run
+        for run in history
+        if run["automation_run_id"] == terminal["automation_run_id"]
+    )
+
+    assert len(history) == 2
+    assert recovered["started_at"] == recovered["completed_at"]
+    assert (
+        restored.mark_running(
+            recovered["automation_run_id"],
+            bridge_run_id="run_fast_restart",
+            now=NOW + timedelta(minutes=6),
+        )
+        == recovered
+    )
+
+
+def test_restart_preserves_pending_and_interrupted_claims_for_idempotent_replay(
+    tmp_path,
+):
+    store = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=1,
+        max_total_runs=1,
+    )
+    fast_automation = store.create(
+        _payload(name="Fast automation"),
+        now=NOW,
+    )
+    fast_queued = store.run_now(fast_automation["automation_id"], now=NOW)
+    fast_terminal = store.complete_runtime_run(
+        "run_fast_restart_replay",
+        client_request_id=f"automation:{fast_queued['automation_run_id']}",
+        unattended=True,
+        status="completed",
+        now=NOW,
+    )
+    scheduled_automation = store.create(
+        _payload(
+            name="Scheduled automation",
+            schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"},
+        ),
+        now=NOW,
+    )
+    scheduled = store.claim(
+        scheduled_automation["automation_id"],
+        due_at="2026-07-15T09:00:00Z",
+        idempotency_key="schedule:restart-replay",
+        expected_revision=1,
+        now=NOW,
+    )
+
+    restored = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=1,
+        max_total_runs=1,
+    )
+    interrupted = restored.list_runs(scheduled_automation["automation_id"])[0]
+    replay = restored.claim(
+        scheduled_automation["automation_id"],
+        due_at="2026-07-15T09:00:00Z",
+        idempotency_key="schedule:restart-replay",
+        expected_revision=1,
+        now=NOW + timedelta(minutes=1),
+    )
+
+    recovered_fast = restored.list_runs(fast_automation["automation_id"])[0]
+    assert recovered_fast["automation_run_id"] == fast_terminal["automation_run_id"]
+    assert recovered_fast["status"] == fast_terminal["status"]
+    assert interrupted["automation_run_id"] == scheduled["automation_run_id"]
+    assert interrupted["status"] == "interrupted_restart"
+    assert replay == interrupted
+
+    fresh = restored.run_now(
+        scheduled_automation["automation_id"],
+        now=NOW + timedelta(minutes=2),
+    )
+    terminal_history = [
+        run
+        for automation_id in (
+            fast_automation["automation_id"],
+            scheduled_automation["automation_id"],
+        )
+        for run in restored.list_runs(automation_id)
+        if run["status"] not in {"queued", "running"}
+    ]
+
+    assert fresh["status"] == "queued"
+    assert len(terminal_history) == 1
+
+
+def test_same_second_fast_runtime_reconciliation_retains_the_linked_tombstone(
+    tmp_path, monkeypatch
+):
+    identifiers = iter(value * 32 for value in ("a", "b", "0", "c", "f"))
+    monkeypatch.setattr(
+        "codex_bridge_service.automations.uuid4",
+        lambda: SimpleNamespace(hex=next(identifiers)),
+    )
+    store = AutomationStore(
+        tmp_path,
+        max_runs_per_automation=1,
+        max_total_runs=1,
+    )
+    automation = store.create(
+        _payload(schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"}),
+        now=NOW,
+    )
+    queued = store.run_now(automation["automation_id"], now=NOW)
+    skipped = store.run_now(automation["automation_id"], now=NOW)
+    terminal = store.complete_runtime_run(
+        "run_fast_same_second",
+        client_request_id=f"automation:{queued['automation_run_id']}",
+        unattended=True,
+        status="completed",
+        now=NOW,
+    )
+
+    linked = store.mark_running(
+        queued["automation_run_id"],
+        bridge_run_id="run_fast_same_second",
+        now=NOW,
+    )
+    duplicate = store.mark_running(
+        queued["automation_run_id"],
+        bridge_run_id="run_fast_same_second",
+        now=NOW,
+    )
+
+    assert skipped["status"] == "skipped_overlap"
+    assert terminal["started_at"] is None
+    assert linked["started_at"] == "2026-07-15T09:00:00Z"
+    assert duplicate == linked
+    assert store.list_runs(automation["automation_id"]) == [linked]
 
 
 def test_runtime_terminal_requires_unattended_automation_request_identity(tmp_path):

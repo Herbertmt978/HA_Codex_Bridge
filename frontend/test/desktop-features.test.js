@@ -204,6 +204,44 @@ describe("desktop feature surfaces", () => {
     expect(panel._desktopFeatures.scheduled.editingAutomation.prompt).toBe("keep me");
   });
 
+  it("preserves an interval anchor when saving an unchanged edit", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "scheduled";
+    panel._desktopFeatures.scheduled.loaded = true;
+    panel._desktopFeatures.scheduled.data = { automations: [{ automation_id: "a1", revision: 2, name: "Summary" }] };
+    const automation = {
+      automation_id: "a1",
+      revision: 2,
+      name: "Summary",
+      prompt: "keep me",
+      target: { kind: "standalone", project_id: "p1" },
+      schedule: { kind: "interval", seconds: 60, anchor_at: "2026-01-01T00:00:00Z" },
+      mode: "observe",
+    };
+    panel._callWS = vi.fn().mockImplementation((action) => {
+      if (action === "get_automation") return Promise.resolve(automation);
+      if (action === "list_automations") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    await panel._handleDesktopAction("update-automation", { id: "a1", revision: "2" }, null);
+    const runAt = panel.shadowRoot.querySelector('[data-desktop-field="run_at"]');
+    expect(runAt.value).toBe("2026-01-01T00:00:00Z");
+
+    await panel._handleDesktopAction("submit-schedule-update", {}, runAt);
+    expect(panel._callWS).toHaveBeenCalledWith("update_automation", {
+      automation_id: "a1",
+      expected_revision: 2,
+      name: "Summary",
+      prompt: "keep me",
+      target: { kind: "standalone", project_id: "p1" },
+      schedule: { kind: "interval", seconds: 60, anchor_at: "2026-01-01T00:00:00Z" },
+      mode: "observe",
+      model: null,
+      thinking: null,
+    });
+  });
+
   it("refreshes a desktop surface after a mutation while the mutation is loading", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._activeDestination = "skills";

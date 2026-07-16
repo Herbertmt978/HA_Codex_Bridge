@@ -70,6 +70,21 @@ _RUN_STATUSES = _ACTIVE_STATUSES | _TERMINAL_STATUSES | _SKIPPED_STATUSES
 _MODES = {"observe", "edit", "full-auto"}
 
 
+def _is_pending_runtime_link(run: Mapping[str, Any]) -> bool:
+    return (
+        run["status"] in _TERMINAL_STATUSES
+        and run["bridge_run_id"] is not None
+        and run["started_at"] is None
+    )
+
+
+def _terminal_retention_key(run: Mapping[str, Any]) -> tuple[str, str]:
+    return (
+        run["completed_at"] or run["created_at"],
+        run["automation_run_id"],
+    )
+
+
 class AutomationStore:
     """Small atomic JSON store with bounded run records and stable claims."""
 
@@ -94,27 +109,38 @@ class AutomationStore:
         self._misfire_grace = timedelta(seconds=misfire_grace_seconds)
         self._lock = RLock()
         self._state = self._load()
-        self._recover_unlinked_queued_runs()
+        self._recover_runs_after_restart()
 
-    def _recover_unlinked_queued_runs(self) -> None:
-        """Terminalize claims left between the durable stores by a restart.
+    def _recover_runs_after_restart(self) -> None:
+        """Settle claims left between durable dispatch writes by a restart.
 
         Prompt submission and automation linkage are separate durable writes.
         A process crash between them leaves an unlinked ``queued`` claim, so it
         must not reserve the automation forever. Runtime recovery independently
         stops interrupted prompts; this record preserves the safe outcome.
+
+        A fast runtime can also finish before dispatch records its start. No
+        delayed in-process linkage can survive a restart, so treat that durable
+        terminal record as reconciled before applying normal history bounds.
         """
 
         changed = False
+        protected_run_ids: set[str] = set()
         now = _iso(_now(None))
         with self._lock:
             for run in self._state["runs"].values():
+                if _is_pending_runtime_link(run):
+                    run["started_at"] = run["completed_at"] or now
+                    protected_run_ids.add(run["automation_run_id"])
+                    changed = True
+                    continue
                 if run["status"] != "queued" or run["bridge_run_id"] is not None:
                     continue
                 run["status"] = "interrupted_restart"
                 run["dispatchable"] = False
                 run["completed_at"] = now
                 run["error"] = "automation dispatch interrupted by bridge restart"
+                protected_run_ids.add(run["automation_run_id"])
                 automation = self._state["automations"].get(run["automation_id"])
                 if automation is not None:
                     automation["last_run_at"] = now
@@ -122,6 +148,7 @@ class AutomationStore:
                     automation["updated_at"] = now
                 changed = True
             if changed:
+                self._prune_runs(protected_run_ids=protected_run_ids)
                 self._save()
 
     def create(
@@ -294,6 +321,7 @@ class AutomationStore:
             automation["last_run_at"] = run["completed_at"]
             automation["last_status"] = status
             automation["updated_at"] = _iso(now)
+            self._prune_runs(protected_run_ids={automation_run_id})
             self._save()
             return _public_run(run)
 
@@ -381,6 +409,10 @@ class AutomationStore:
                     and normalized_bridge_run_id is not None
                     and run["bridge_run_id"] == normalized_bridge_run_id
                 ):
+                    if _is_pending_runtime_link(run):
+                        run["started_at"] = _iso(now)
+                        self._prune_runs(protected_run_ids={automation_run_id})
+                        self._save()
                     return _public_run(run)
                 raise AutomationConflictError("automation run is not queued")
             run["status"] = "running"
@@ -526,7 +558,7 @@ class AutomationStore:
                     max(due_at, now),
                 )
             record["updated_at"] = _iso(now)
-            self._prune_runs()
+            self._prune_runs(protected_run_ids={run_id})
             self._save()
             return _public_run(run)
 
@@ -601,29 +633,45 @@ class AutomationStore:
         ):
             raise AutomationConflictError("automation revision conflict")
 
-    def _prune_runs(self) -> None:
+    def _prune_runs(self, *, protected_run_ids: set[str] | None = None) -> None:
+        protected = protected_run_ids or set()
+
         runs = self._state["runs"]
         by_automation: dict[str, list[dict[str, Any]]] = {}
         for run in runs.values():
+            if run["status"] in _ACTIVE_STATUSES or _is_pending_runtime_link(run):
+                continue
             by_automation.setdefault(run["automation_id"], []).append(run)
         remove: set[str] = set()
         for values in by_automation.values():
-            values.sort(
-                key=lambda item: (item["created_at"], item["automation_run_id"]),
-                reverse=True,
+            protected_count = sum(
+                run["automation_run_id"] in protected for run in values
             )
-            remove.update(
-                item["automation_run_id"]
-                for item in values[self._max_runs_per_automation :]
+            candidates = [
+                run for run in values if run["automation_run_id"] not in protected
+            ]
+            candidates.sort(key=_terminal_retention_key, reverse=True)
+            available = max(
+                self._max_runs_per_automation - protected_count,
+                0,
             )
-        survivors = [run for run_id, run in runs.items() if run_id not in remove]
-        survivors.sort(
-            key=lambda item: (item["created_at"], item["automation_run_id"]),
-            reverse=True,
+            remove.update(item["automation_run_id"] for item in candidates[available:])
+        survivors = [
+            run
+            for run_id, run in runs.items()
+            if run_id not in remove
+            and run["status"] not in _ACTIVE_STATUSES
+            and not _is_pending_runtime_link(run)
+        ]
+        protected_count = sum(
+            run["automation_run_id"] in protected for run in survivors
         )
-        remove.update(
-            item["automation_run_id"] for item in survivors[self._max_total_runs :]
-        )
+        candidates = [
+            run for run in survivors if run["automation_run_id"] not in protected
+        ]
+        candidates.sort(key=_terminal_retention_key, reverse=True)
+        available = max(self._max_total_runs - protected_count, 0)
+        remove.update(item["automation_run_id"] for item in candidates[available:])
         for run_id in remove:
             runs.pop(run_id, None)
         if remove:
