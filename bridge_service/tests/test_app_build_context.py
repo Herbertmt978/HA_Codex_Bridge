@@ -36,6 +36,15 @@ ASSET_INSTALLER = (
 )
 
 
+def _canonical_app_version() -> str:
+    match = re.search(
+        r"(?m)^version\s*:\s*[\"']?([^\"'\s#]+)",
+        (APP_ROOT / "config.yaml").read_text(encoding="utf-8"),
+    )
+    assert match is not None
+    return match.group(1)
+
+
 def _stage(destination: Path, architecture: str = "amd64") -> Path:
     """Stage an App context without touching the repository's .build tree."""
 
@@ -252,7 +261,7 @@ def test_dockerfile_uses_an_explicit_pinned_home_assistant_base() -> None:
         for image in from_lines
     ), "Home Assistant base image must be pinned by immutable digest"
     assert not re.search(r"(?im)^\s*ARG\s+BUILD_FROM\b", text)
-    assert 'io.hass.version="0.7.3"' in text
+    assert f'io.hass.version="{_canonical_app_version()}"' in text
 
 
 def test_dockerfile_never_copies_from_parent_or_repository_source() -> None:

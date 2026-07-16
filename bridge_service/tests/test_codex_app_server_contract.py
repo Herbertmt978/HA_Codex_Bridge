@@ -21,6 +21,12 @@ from codex_bridge_service.codex_app_server import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = REPOSITORY_ROOT / "scripts" / "generate_codex_app_server_contract.py"
+LOCK = REPOSITORY_ROOT / "codex_bridge_app" / "codex-release.json"
+
+
+def _canonical_codex_version() -> str:
+    lock = json.loads(LOCK.read_text(encoding="utf-8"))
+    return lock["release"]["version"]
 
 
 def _write_schema(root: Path, filename: str, methods: list[str]) -> None:
@@ -108,7 +114,7 @@ def test_contract_rejects_duplicate_methods_and_noncanonical_manifest(tmp_path: 
 def test_bundled_contract_contains_required_stable_bridge_methods() -> None:
     contract = load_bundled_protocol_contract()
 
-    assert contract.codex_version == "codex-cli 0.144.4"
+    assert contract.codex_version == f"codex-cli {_canonical_codex_version()}"
     for method in {
         "initialize",
         "account/read",

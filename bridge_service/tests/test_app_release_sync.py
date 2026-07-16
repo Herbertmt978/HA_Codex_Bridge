@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
+import tomllib
 
 import pytest
 
@@ -14,6 +17,26 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "sync_app_release.py"
 APP = ROOT / "codex_bridge_app"
+
+
+def _canonical_versions(root: Path = ROOT) -> tuple[str, str, str]:
+    config = (root / "codex_bridge_app/config.yaml").read_text(encoding="utf-8")
+    app_match = re.search(
+        r"(?m)^version\s*:\s*[\"']?([^\"'\s#]+)", config
+    )
+    assert app_match is not None
+    lock = json.loads(
+        (root / "codex_bridge_app/codex-release.json").read_text(encoding="utf-8")
+    )
+    bridge = tomllib.loads(
+        (root / "bridge_service/pyproject.toml").read_text(encoding="utf-8")
+    )
+    return app_match.group(1), lock["release"]["version"], bridge["project"]["version"]
+
+
+def _next_patch(version: str) -> str:
+    major, minor, patch = version.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
 
 
 def _script_module():
@@ -63,6 +86,8 @@ def test_real_repository_release_projections_are_current() -> None:
 
 def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) -> None:
     root = _fixture(tmp_path)
+    app_version, codex_version, bridge_version = _canonical_versions()
+    next_app_version = _next_patch(app_version)
     untouched = {
         "package.json": (ROOT / "package.json").read_bytes(),
         "bridge_version": (
@@ -80,16 +105,18 @@ def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) ->
         root / "codex_bridge_app/rootfs/etc/s6-overlay/s6-rc.d/codex-bridge/run"
     ).read_text(encoding="utf-8")
     changelog = (root / "codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
-    assert 'version: "0.7.4"' in config
-    assert 'io.hass.version="0.7.4"' in dockerfile
-    assert 'CODEX_BRIDGE_APP_VERSION="0.7.4"' in dockerfile
-    assert "CODEX_BRIDGE_APP_VERSION=0.7.4" in run
-    assert changelog.index("## 0.7.4") < changelog.index("## 0.7.3")
-    assert "`0.144.4`" in changelog
+    assert f'version: "{next_app_version}"' in config
+    assert f'io.hass.version="{next_app_version}"' in dockerfile
+    assert f'CODEX_BRIDGE_APP_VERSION="{next_app_version}"' in dockerfile
+    assert f"CODEX_BRIDGE_APP_VERSION={next_app_version}" in run
+    assert changelog.index(f"## {next_app_version}") < changelog.index(
+        f"## {app_version}"
+    )
+    assert f"`{codex_version}`" in changelog
     assert "- Bundles the Sigstore-verified Codex runtime" in changelog
     assert "Updates the Sigstore-verified bundled Codex runtime" not in changelog
-    assert 'CODEX_BRIDGE_VERSION="0.6.2"' in dockerfile
-    assert "CODEX_BRIDGE_VERSION=0.6.2" in run
+    assert f'CODEX_BRIDGE_VERSION="{bridge_version}"' in dockerfile
+    assert f"CODEX_BRIDGE_VERSION={bridge_version}" in run
     assert (ROOT / "package.json").read_bytes() == untouched["package.json"]
     assert (
         ROOT / "bridge_service/src/codex_bridge_service/build_info.py"
@@ -98,11 +125,12 @@ def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) ->
 
 def test_check_fails_on_projection_drift_without_writing(tmp_path: Path) -> None:
     root = _fixture(tmp_path)
+    app_version, _codex_version, _bridge_version = _canonical_versions()
     path = root / "codex_bridge_app/Dockerfile"
     original = path.read_bytes()
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            'io.hass.version="0.7.3"', 'io.hass.version="0.7.9"'
+            f'io.hass.version="{app_version}"', 'io.hass.version="0.7.9"'
         ),
         encoding="utf-8",
     )
@@ -115,10 +143,11 @@ def test_check_fails_on_projection_drift_without_writing(tmp_path: Path) -> None
 
 def test_check_fails_when_bundled_bridge_version_drifts(tmp_path: Path) -> None:
     root = _fixture(tmp_path)
+    _app_version, _codex_version, bridge_version = _canonical_versions()
     project = root / "bridge_service" / "pyproject.toml"
     project.write_text(
         project.read_text(encoding="utf-8").replace(
-            'version = "0.6.2"', 'version = "0.6.3"'
+            f'version = "{bridge_version}"', 'version = "0.6.3"'
         ),
         encoding="utf-8",
     )
@@ -139,10 +168,11 @@ def test_malformed_or_ambiguous_sources_are_rejected(tmp_path: Path) -> None:
         module.synchronize(root, mode="check")
 
     root = _fixture(tmp_path / "prerelease")
+    app_version, _codex_version, _bridge_version = _canonical_versions()
     config = root / "codex_bridge_app/config.yaml"
     config.write_text(
         config.read_text(encoding="utf-8").replace(
-            'version: "0.7.3"', 'version: "0.7.3-rc.1"'
+            f'version: "{app_version}"', f'version: "{app_version}-rc.1"'
         ),
         encoding="utf-8",
     )
