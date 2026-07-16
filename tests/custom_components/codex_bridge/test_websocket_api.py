@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiConflictError,
     BridgeApiError,
     BridgeApiGoneError,
+    BridgeApiMcpDisabledError,
 )
 from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
 from custom_components.codex_bridge.event_broker import EventBroker, EventRecord
@@ -20,7 +24,10 @@ from custom_components.codex_bridge.websocket_api import (
     ws_get_config,
     ws_get_event_status,
     ws_get_events,
+    ws_get_automation,
     ws_get_status,
+    ws_create_automation,
+    ws_login_mcp,
     ws_list_artifacts,
     ws_start_auth_login,
     ws_subscribe_events,
@@ -87,9 +94,7 @@ def _runtime(*, queue_size: int = 256) -> tuple[CodexBridgeRuntime, EventBroker]
     client = AsyncMock()
     broker = EventBroker(client, initial_cursor=0, queue_size=queue_size)
     return (
-        CodexBridgeRuntime(
-            "entry", "Codex", client, "supervisor", "a" * 32, 1, broker
-        ),
+        CodexBridgeRuntime("entry", "Codex", client, "supervisor", "a" * 32, 1, broker),
         broker,
     )
 
@@ -152,6 +157,209 @@ async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:
 
     runtime.client.async_start_auth_login.assert_awaited_once_with(False)
     assert connection.results == [(4, {"state": "login_starting"})]
+
+
+async def test_create_automation_refreshes_the_local_scheduler() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_create_automation = AsyncMock(
+        return_value={"automation_id": "aut_1", "revision": 1}
+    )
+    refresh = AsyncMock()
+    runtime.automation_scheduler = SimpleNamespace(async_refresh=refresh)
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_create_automation(
+        hass,
+        connection,
+        {
+            "id": 51,
+            "type": f"{DOMAIN}/create_automation",
+            "name": "Daily check",
+            "prompt": "Check the workspace",
+            "target": {"workspace_path": "C:/work"},
+            "schedule": {"kind": "interval", "seconds": 3600},
+        },
+    )
+    await asyncio.sleep(0)
+
+    runtime.client.async_create_automation.assert_awaited_once_with(
+        {
+            "name": "Daily check",
+            "prompt": "Check the workspace",
+            "target": {"workspace_path": "C:/work"},
+            "schedule": {"kind": "interval", "seconds": 3600},
+            "mode": "observe",
+        }
+    )
+    refresh.assert_awaited_once()
+    assert connection.results == [(51, {"automation_id": "aut_1", "revision": 1})]
+
+
+@pytest.mark.parametrize(
+    "refresh_error",
+    [BridgeApiError("bridge_busy", retryable=True), ValueError("invalid snapshot")],
+)
+async def test_automation_mutation_refresh_failure_arms_bounded_reconciliation(
+    refresh_error: Exception,
+) -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_create_automation = AsyncMock(
+        return_value={"automation_id": "aut_1", "revision": 1}
+    )
+    refresh = AsyncMock(side_effect=refresh_error)
+    reconcile = Mock()
+    runtime.automation_scheduler = SimpleNamespace(
+        async_refresh=refresh,
+        schedule_reconciliation=reconcile,
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_create_automation(
+        hass,
+        connection,
+        {
+            "id": 55,
+            "type": f"{DOMAIN}/create_automation",
+            "name": "Daily check",
+            "prompt": "Check the workspace",
+            "target": {"workspace_path": "C:/work"},
+            "schedule": {"kind": "interval", "seconds": 3600},
+        },
+    )
+    await asyncio.sleep(0)
+
+    refresh.assert_awaited_once()
+    reconcile.assert_called_once_with()
+    assert connection.results == [(55, {"automation_id": "aut_1", "revision": 1})]
+
+
+async def test_mcp_elicitation_failure_uses_a_fixed_safe_websocket_message() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_login_mcp = AsyncMock(
+        side_effect=BridgeApiError("mcp_elicitation_unavailable", retryable=True)
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_login_mcp(
+        hass,
+        connection,
+        {"id": 56, "type": f"{DOMAIN}/login_mcp", "name": "remote_mcp"},
+    )
+    await asyncio.sleep(0)
+
+    assert connection.errors == [
+        (
+            56,
+            "mcp_elicitation_unavailable",
+            "MCP configuration is unavailable until server prompts can be safely declined",
+        )
+    ]
+
+
+async def test_get_automation_forwards_the_bounded_identifier() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_get_automation = AsyncMock(
+        return_value={"automation_id": "aut_1", "revision": 2}
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_get_automation(
+        hass,
+        connection,
+        {"id": 53, "type": f"{DOMAIN}/get_automation", "automation_id": "aut_1"},
+    )
+    await asyncio.sleep(0)
+
+    runtime.client.async_get_automation.assert_awaited_once_with("aut_1")
+    assert connection.results == [(53, {"automation_id": "aut_1", "revision": 2})]
+
+
+async def test_feature_commands_project_known_safe_problem_codes() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_create_automation = AsyncMock(
+        side_effect=BridgeApiConflictError(
+            problem=ProblemRecord.from_payload(
+                409,
+                {
+                    "detail": {
+                        "code": "automation_revision_conflict",
+                        "retryable": False,
+                    }
+                },
+            )
+        )
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_create_automation(
+        hass,
+        connection,
+        {
+            "id": 54,
+            "type": f"{DOMAIN}/create_automation",
+            "name": "Changed schedule",
+            "prompt": "Check the workspace",
+            "target": {"kind": "standalone", "project_id": "prj_one"},
+            "schedule": {"kind": "once", "at": "2026-07-15T12:00:00Z"},
+        },
+    )
+    await hass.finish()
+
+    assert connection.errors == [
+        (
+            54,
+            "automation_revision_conflict",
+            "The automation changed; refresh and try again",
+        )
+    ]
+
+
+async def test_mcp_login_returns_the_one_time_url_only_in_the_direct_response() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_login_mcp = AsyncMock(
+        return_value={"authorization_url": "https://auth.example.invalid/one-time"}
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_login_mcp(
+        hass,
+        connection,
+        {"id": 52, "type": f"{DOMAIN}/login_mcp", "name": "remote_mcp"},
+    )
+    await asyncio.sleep(0)
+
+    runtime.client.async_login_mcp.assert_awaited_once_with("remote_mcp")
+    assert connection.results == [
+        (52, {"authorization_url": "https://auth.example.invalid/one-time"})
+    ]
+
+
+async def test_disabled_mcp_reports_the_app_option_instead_of_an_outdated_app() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_login_mcp = AsyncMock(side_effect=BridgeApiMcpDisabledError())
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_login_mcp(
+        hass,
+        connection,
+        {"id": 52, "type": f"{DOMAIN}/login_mcp", "name": "remote_mcp"},
+    )
+    await asyncio.sleep(0)
+
+    assert connection.errors == [
+        (
+            52,
+            "mcp_disabled",
+            "Enable MCP in the Codex Bridge App configuration and restart",
+        )
+    ]
 
 
 async def test_singular_thread_filter_preserves_the_retiring_panel_contract() -> None:
@@ -381,7 +589,15 @@ async def test_event_status_and_config_never_expose_private_origin_or_errors() -
     await hass.finish()
 
     assert connection.results == [
-        (10, {"panel_title": "Codex", "connection_type": "supervisor", "api_version": 1}),
+        (
+            10,
+            {
+                "panel_title": "Codex",
+                "connection_type": "supervisor",
+                "api_version": 1,
+                "capabilities": [],
+            },
+        ),
         (
             11,
             {"state": "reconnecting", "phase": "wait", "retry_count": 2, "cursor": 0},
@@ -460,7 +676,9 @@ async def test_list_artifacts_redacts_unrecognized_busy_errors() -> None:
 
 async def test_answer_interaction_forwards_exact_bounded_values_contract() -> None:
     runtime, _broker = _runtime()
-    runtime.client.async_answer_interaction = AsyncMock(return_value={"status": "answered"})
+    runtime.client.async_answer_interaction = AsyncMock(
+        return_value={"status": "answered"}
+    )
     hass = _Hass(runtime)
     connection = _Connection()
     message = {
@@ -489,7 +707,9 @@ async def test_answer_interaction_forwards_exact_bounded_values_contract() -> No
     )
 
 
-async def test_interaction_commands_preserve_only_actionable_safe_problem_codes() -> None:
+async def test_interaction_commands_preserve_only_actionable_safe_problem_codes() -> (
+    None
+):
     runtime, _broker = _runtime()
     runtime.client.async_decide_interaction = AsyncMock(
         side_effect=BridgeApiGoneError(
@@ -613,7 +833,9 @@ async def test_explicit_unsubscribe_invokes_and_removes_subscription_callback() 
     assert connection.results == [(14, {"unsubscribed": True})]
 
 
-async def test_compacted_journal_returns_snapshot_for_v1_and_advances_legacy_panel() -> None:
+async def test_compacted_journal_returns_snapshot_for_v1_and_advances_legacy_panel() -> (
+    None
+):
     runtime, _broker = _runtime()
     problem = ProblemRecord(
         status=410,
@@ -678,7 +900,9 @@ async def test_compacted_journal_returns_snapshot_for_v1_and_advances_legacy_pan
     ]
 
 
-async def test_thread_ids_without_thread_scope_are_rejected_before_subscribing() -> None:
+async def test_thread_ids_without_thread_scope_are_rejected_before_subscribing() -> (
+    None
+):
     runtime, broker = _runtime()
     hass = _Hass(runtime)
     connection = _Connection()

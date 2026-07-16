@@ -8,6 +8,10 @@
 | `bridge_service` | Private Bridge API, runtime coordination, and tests. |
 | `codex_bridge_app` | Experimental Supervisor App definition, sandbox, and App documentation. |
 | `frontend` | Panel source and browser tests. |
+| `bridge_service/src/codex_bridge_service/automations.py` | Durable automation definitions, schedules, claims, and bounded run history. |
+| `bridge_service/src/codex_bridge_service/capabilities.py` | Workspace skills, plugins, and marketplace adapter. |
+| `bridge_service/src/codex_bridge_service/mcp_manager.py` | Constrained HTTPS MCP configuration and explicit OAuth lifecycle. |
+| `bridge_service/src/codex_bridge_service/routes/agents.py` | Global/project `AGENTS.md` persistence and private rollback snapshots. |
 
 Use [CONTEXT.md](../CONTEXT.md): Home Assistant, not the App, is the browser
 boundary; the Integration and App are distinct components.
@@ -37,17 +41,17 @@ required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
 `workspaceWrite` response includes bounded supplemental roots (`.agents`,
 `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The proc-less
 probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
-requesting `SYS_ADMIN` or weakening isolation; App `0.6.6` retains canonical
+requesting `SYS_ADMIN` or weakening isolation; App `0.7.0` retains canonical
 contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
 The historical App `0.6.5` image passed target-HAOS startup, its production
 sandbox self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, ChatGPT Pro sign-in, runtime chat,
-and explicit App update/restart recovery. That evidence does not accept `0.6.6`.
+and explicit App update/restart recovery. That evidence does not accept `0.7.0`.
 External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
 unattended App update, and previous-image rollback remain unproven.
 
-The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+The release being shipped is Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
 and Codex `0.144.4`; publication, signing, and target-Home-Assistant acceptance
 remain pending. Its catalogue recovery must remain ordered:
 live app-server discovery first, then a verified last-known-good record, then
@@ -56,6 +60,17 @@ last; stale records retry after 15 seconds. Do not add hardcoded model names:
 GPT-5.6 and model-specific Max/Ultra are runtime data. Preserve the typed
 artifact reservation behavior, including prior artifact preservation when the
 selected chat is idle.
+
+Capability changes need focused tests for the trust boundary as well as the
+happy path. Automations must remain Home Assistant-scheduled and idempotent;
+skills/plugins/marketplaces must remain workspace/config bounded; `AGENTS.md`
+writes must remain atomic with private backups; and MCP must continue rejecting
+literal/private endpoints, known non-public DNS answers, and bearer-token
+configuration while keeping OAuth URLs one-shot and elicitation decline-only.
+Because Codex owns the eventual connection and DNS may change after validation,
+document the administrator trust requirement. Document any target-system gap
+rather than implying that local tests prove unattended recovery or proxy
+behavior.
 
 ## Supervisor discovery contract
 

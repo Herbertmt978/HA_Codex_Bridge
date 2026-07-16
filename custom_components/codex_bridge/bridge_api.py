@@ -51,6 +51,8 @@ _UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
 _FILE_METADATA_MAX_BYTES = 64 * 1024
 _ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_CAPABILITY_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z", re.ASCII)
+_PLUGIN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}\Z", re.ASCII)
 _FORWARDED_REQUEST_HEADERS = {
     "content-length": "Content-Length",
     "content-type": "Content-Type",
@@ -66,6 +68,73 @@ def _path_segment(value: object) -> str:
         return quote(validate_bridge_identifier(value), safe="")
     except EndpointError:
         raise BridgeApiEndpointError() from None
+
+
+def _plugin_path_segment(value: object) -> str:
+    """Encode a plugin identifier accepted by the Bridge plugin contract."""
+
+    if (
+        not isinstance(value, str)
+        or len(value.encode("utf-8")) > 128
+        or _PLUGIN_ID_PATTERN.fullmatch(value) is None
+    ):
+        raise BridgeApiEndpointError()
+    return quote(value, safe="")
+
+
+def _capability_name_path_segment(value: object) -> str:
+    """Encode a name accepted by the Bridge capability-name contract."""
+
+    if (
+        not isinstance(value, str)
+        or len(value.encode("utf-8")) > 128
+        or _CAPABILITY_NAME_PATTERN.fullmatch(value) is None
+    ):
+        raise BridgeApiEndpointError()
+    return quote(value, safe="")
+
+
+def _agents_path(project_id: str | None) -> str:
+    if project_id is None:
+        return "/agents/global"
+    return f"/projects/{_path_segment(project_id)}/agents"
+
+
+def _bounded_text(value: object, maximum: int) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value.encode("utf-8")) > maximum
+        or any(ord(character) < 32 and character not in "\r\n\t" for character in value)
+    ):
+        raise BridgeApiEndpointError("payload_invalid")
+    return value
+
+
+def _bounded_content(value: object, maximum: int) -> str:
+    """Validate editable text without altering intentional whitespace."""
+
+    if (
+        not isinstance(value, str)
+        or len(value.encode("utf-8")) > maximum
+        or any(ord(character) < 32 and character not in "\r\n\t" for character in value)
+        or "\x7f" in value
+    ):
+        raise BridgeApiEndpointError("content_invalid")
+    return value
+
+
+def _bounded_mapping(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or len(value) > 16:
+        raise BridgeApiEndpointError("payload_invalid")
+    return value
+
+
+def _positive_int(value: object) -> int:
+    if type(value) is not int or value < 1:
+        raise BridgeApiEndpointError("revision_invalid")
+    return value
 
 
 def _request_path(value: object) -> str:
@@ -251,6 +320,10 @@ class BridgeApiCapabilityError(BridgeApiIncompatibleError):
     code = "capability_unavailable"
 
 
+class BridgeApiMcpDisabledError(BridgeApiCapabilityError):
+    code = "mcp_disabled"
+
+
 class BridgeApiConflictError(BridgeApiError):
     code = "conflict"
 
@@ -349,6 +422,7 @@ class BridgeApiClient:
             raise BridgeApiEndpointError() from None
         self._allow_legacy_v0 = allow_legacy_v0
         self._api_version: int | None = None
+        self._capabilities: frozenset[str] = frozenset()
 
     @property
     def base_url(self) -> str:
@@ -366,6 +440,12 @@ class BridgeApiClient:
     def supports_legacy_v0(self) -> bool:
         return self._allow_legacy_v0 and self._api_version == 0
 
+    @property
+    def capabilities(self) -> frozenset[str]:
+        """Capabilities authenticated from the most recent readiness record."""
+
+        return self._capabilities
+
     def require_api_v1(self) -> None:
         """Fail before invoking a v1-only capability on a legacy Bridge."""
 
@@ -378,6 +458,13 @@ class BridgeApiClient:
         if not self.supports_legacy_v0:
             raise BridgeApiCapabilityError("legacy_transport_unavailable")
 
+    def require_capability(self, capability: str) -> None:
+        """Fail locally when a compatible API lacks an optional feature."""
+
+        self.require_api_v1()
+        if capability not in self._capabilities:
+            raise BridgeApiCapabilityError()
+
     async def async_health(self) -> dict[str, Any]:
         return await self._async_json("GET", "/health")
 
@@ -388,6 +475,7 @@ class BridgeApiClient:
         discovery_api: ApiRange | None = None,
     ) -> ReadyRecord:
         self._api_version = None
+        self._capabilities = frozenset()
         payload = await self._async_json("GET", "/ready")
         try:
             ready = ReadyRecord.from_payload(
@@ -407,6 +495,7 @@ class BridgeApiClient:
         except (ApiIncompatibleError, EndpointError) as exc:
             raise BridgeApiIncompatibleError() from exc
         self._api_version = self._negotiate(ready.api)
+        self._capabilities = frozenset(ready.capabilities)
         return ready
 
     async def async_get_status(self) -> dict[str, Any]:
@@ -415,7 +504,9 @@ class BridgeApiClient:
     async def async_get_auth_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/auth/status")
 
-    async def async_start_auth_login(self, force_logout: bool = False) -> dict[str, Any]:
+    async def async_start_auth_login(
+        self, force_logout: bool = False
+    ) -> dict[str, Any]:
         return await self._async_json(
             "POST",
             "/auth/device-login",
@@ -812,9 +903,7 @@ class BridgeApiClient:
         self.require_api_v1()
         chunk_index = _upload_index(index)
         chunk_offset = _upload_index(offset)
-        chunk_length = _upload_size(
-            content_length, maximum=_UPLOAD_CHUNK_MAX_BYTES
-        )
+        chunk_length = _upload_size(content_length, maximum=_UPLOAD_CHUNK_MAX_BYTES)
         digest = _upload_sha256(sha256)
         return await self._async_json(
             "PUT",
@@ -969,6 +1058,270 @@ class BridgeApiClient:
         ) as response:
             yield response
 
+    # Home Assistant-owned Automations -------------------------------------------------
+    async def async_list_automations(self) -> list[dict[str, Any]]:
+        self.require_capability("automations_v1")
+        return await self._async_json("GET", "/automations")
+
+    async def async_get_automation(self, automation_id: str) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "GET", f"/automations/{_path_segment(automation_id)}"
+        )
+
+    async def async_create_automation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "POST",
+            "/automations",
+            json_body=_bounded_mapping(payload),
+            expected_status={201},
+        )
+
+    async def async_update_automation(
+        self, automation_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "PATCH",
+            f"/automations/{_path_segment(automation_id)}",
+            json_body=_bounded_mapping(payload),
+        )
+
+    async def async_pause_automation(
+        self, automation_id: str, expected_revision: int
+    ) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "POST",
+            f"/automations/{_path_segment(automation_id)}/pause",
+            json_body={"expected_revision": _positive_int(expected_revision)},
+        )
+
+    async def async_resume_automation(
+        self, automation_id: str, expected_revision: int
+    ) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "POST",
+            f"/automations/{_path_segment(automation_id)}/resume",
+            json_body={"expected_revision": _positive_int(expected_revision)},
+        )
+
+    async def async_delete_automation(
+        self, automation_id: str, expected_revision: int
+    ) -> None:
+        self.require_capability("automations_v1")
+        await self._async_no_content(
+            "DELETE",
+            f"/automations/{_path_segment(automation_id)}",
+            expected_status={204},
+            json_body={"expected_revision": _positive_int(expected_revision)},
+        )
+
+    async def async_run_automation(self, automation_id: str) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "POST",
+            f"/automations/{_path_segment(automation_id)}/runs",
+            json_body={"source": "manual"},
+            expected_status={202},
+        )
+
+    async def async_claim_automation_run(
+        self,
+        automation_id: str,
+        *,
+        due_at: str,
+        idempotency_key: str,
+        expected_revision: int,
+    ) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json(
+            "POST",
+            f"/automations/{_path_segment(automation_id)}/runs",
+            json_body={
+                "source": "scheduled",
+                "due_at": _bounded_text(due_at, 64),
+                "idempotency_key": _bounded_text(idempotency_key, 256),
+                "expected_revision": _positive_int(expected_revision),
+            },
+            expected_status={202},
+        )
+
+    async def async_list_automation_runs(
+        self, automation_id: str, *, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        self.require_capability("automations_v1")
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise BridgeApiEndpointError("automation_limit_invalid")
+        return await self._async_json(
+            "GET", f"/automations/{_path_segment(automation_id)}/runs?limit={limit}"
+        )
+
+    async def async_scheduler_automations(self) -> dict[str, Any]:
+        self.require_capability("automations_v1")
+        return await self._async_json("GET", "/automations/scheduler")
+
+    # Capability and AGENTS.md proxy ----------------------------------------------------
+    async def async_list_skills(
+        self, workspace_path: str, *, force_reload: bool = False
+    ) -> dict[str, Any]:
+        self.require_capability("skills_v1")
+        return await self._async_json(
+            "GET",
+            f"/capabilities/skills?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}&force_reload={'true' if force_reload else 'false'}",
+        )
+
+    async def async_set_skill(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("skills_v1")
+        return await self._async_json(
+            "PATCH", "/capabilities/skills", json_body=_bounded_mapping(payload)
+        )
+
+    async def async_create_skill(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("skills_v1")
+        return await self._async_json(
+            "POST",
+            "/capabilities/skills",
+            json_body=_bounded_mapping(payload),
+            expected_status={201},
+        )
+
+    async def async_delete_skill(
+        self,
+        name: str,
+        *,
+        workspace_path: str | None = None,
+        project_id: str | None = None,
+    ) -> None:
+        self.require_capability("skills_v1")
+        query: dict[str, str] = {}
+        if workspace_path is not None:
+            query["workspace_path"] = _bounded_text(workspace_path, 4096)
+        if project_id is not None:
+            query["project_id"] = _bounded_text(project_id, 128)
+        suffix = f"?{urlencode(query)}" if query else ""
+        await self._async_no_content(
+            "DELETE",
+            f"/capabilities/skills/{_capability_name_path_segment(name)}{suffix}",
+            expected_status={204},
+        )
+
+    async def async_list_plugins(
+        self, workspace_path: str, *, installed_only: bool = False
+    ) -> dict[str, Any]:
+        self.require_capability("plugins_v1")
+        return await self._async_json(
+            "GET",
+            f"/capabilities/plugins?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}&installed_only={'true' if installed_only else 'false'}",
+        )
+
+    async def async_install_plugin(
+        self, plugin_name: str, marketplace_name: str | None = None
+    ) -> dict[str, Any]:
+        self.require_capability("plugins_v1")
+        payload: dict[str, Any] = {"plugin_name": _bounded_text(plugin_name, 128)}
+        if marketplace_name is not None:
+            payload["marketplace_name"] = _bounded_text(marketplace_name, 128)
+        return await self._async_json(
+            "POST",
+            "/capabilities/plugins/install",
+            json_body=payload,
+            expected_status={201},
+        )
+
+    async def async_uninstall_plugin(self, plugin_id: str) -> None:
+        self.require_capability("plugins_v1")
+        await self._async_no_content(
+            "DELETE",
+            f"/capabilities/plugins/{_plugin_path_segment(plugin_id)}",
+            expected_status={204},
+        )
+
+    async def async_list_marketplaces(
+        self, workspace_path: str = "."
+    ) -> dict[str, Any]:
+        self.require_capability("plugins_v1")
+        return await self._async_json(
+            "GET",
+            f"/capabilities/marketplaces?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}",
+        )
+
+    async def async_add_marketplace(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("plugins_v1")
+        return await self._async_json(
+            "POST",
+            "/capabilities/marketplaces",
+            json_body=_bounded_mapping(payload),
+            expected_status={201},
+        )
+
+    async def async_remove_marketplace(self, marketplace_name: str) -> None:
+        self.require_capability("plugins_v1")
+        await self._async_no_content(
+            "DELETE",
+            f"/capabilities/marketplaces/{_capability_name_path_segment(marketplace_name)}",
+            expected_status={204},
+        )
+
+    async def async_upgrade_marketplace(self, marketplace_name: str) -> dict[str, Any]:
+        self.require_capability("plugins_v1")
+        return await self._async_json(
+            "POST",
+            f"/capabilities/marketplaces/{_capability_name_path_segment(marketplace_name)}/upgrade",
+        )
+
+    async def async_list_mcp(self) -> list[dict[str, Any]]:
+        self._require_mcp_capability()
+        return await self._async_json("GET", "/mcp/servers")
+
+    async def async_add_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_mcp_capability()
+        return await self._async_json(
+            "POST",
+            "/mcp/servers",
+            json_body=_bounded_mapping(payload),
+            expected_status={201},
+        )
+
+    async def async_remove_mcp(self, name: str) -> None:
+        self._require_mcp_capability()
+        await self._async_no_content(
+            "DELETE", f"/mcp/servers/{_path_segment(name)}", expected_status={204}
+        )
+
+    async def async_login_mcp(self, name: str) -> dict[str, Any]:
+        self._require_mcp_capability()
+        return await self._async_json(
+            "POST", f"/mcp/servers/{_path_segment(name)}/oauth/login"
+        )
+
+    def _require_mcp_capability(self) -> None:
+        self.require_api_v1()
+        if "mcp_admin_v1" not in self._capabilities:
+            raise BridgeApiMcpDisabledError()
+
+    async def async_get_agents(self, project_id: str | None = None) -> dict[str, Any]:
+        self.require_capability("agents_v1")
+        return await self._async_json("GET", _agents_path(project_id))
+
+    async def async_update_agents(
+        self, project_id: str | None, content: str
+    ) -> dict[str, Any]:
+        self.require_capability("agents_v1")
+        return await self._async_json(
+            "PUT",
+            _agents_path(project_id),
+            json_body={"content": _bounded_content(content, 256 * 1024)},
+        )
+
+    async def async_delete_agents(self, project_id: str | None = None) -> None:
+        self.require_capability("agents_v1")
+        await self._async_no_content(
+            "DELETE", _agents_path(project_id), expected_status={204}
+        )
+
     async def _async_json(
         self,
         method: str,
@@ -1018,9 +1371,10 @@ class BridgeApiClient:
         path: str,
         *,
         expected_status: set[int],
+        json_body: dict[str, Any] | None = None,
     ) -> None:
         response = await self._async_request(
-            method, path, expected_status=expected_status
+            method, path, expected_status=expected_status, json_body=json_body
         )
         async with response:
             return None

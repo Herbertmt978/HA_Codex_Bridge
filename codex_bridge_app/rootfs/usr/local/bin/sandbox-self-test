@@ -103,9 +103,7 @@ def _strict_json(payload: bytes, *, maximum: int) -> object:
         return value
 
     try:
-        return json.loads(
-            payload.decode("utf-8"), object_pairs_hook=reject_duplicates
-        )
+        return json.loads(payload.decode("utf-8"), object_pairs_hook=reject_duplicates)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SelfTestError from exc
 
@@ -135,9 +133,7 @@ def _sha256_executable(path: Path) -> str:
     try:
         descriptor = os.open(
             path,
-            os.O_RDONLY
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_NOFOLLOW", 0),
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
         )
         metadata = os.fstat(descriptor)
         if (
@@ -372,12 +368,7 @@ def _writable_roots_within_workspace(value: object, *, workspace: Path) -> bool:
         return False
     seen: set[str] = set()
     for item in value:
-        if (
-            type(item) is not str
-            or not item
-            or "\0" in item
-            or len(item) > 4096
-        ):
+        if type(item) is not str or not item or "\0" in item or len(item) > 4096:
             return False
         candidate = Path(item)
         if (
@@ -492,6 +483,7 @@ def _worker(arguments: argparse.Namespace) -> int:
         callback_workers=1,
         max_callback_queue=4,
         shutdown_grace_seconds=3,
+        enable_mcp=False,
         protocol_contract=None,
     )
     try:

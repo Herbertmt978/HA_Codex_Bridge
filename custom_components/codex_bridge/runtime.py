@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from .bridge_api import BridgeApiClient
 from .const import DATA_ENTRIES, DOMAIN
 from .event_broker import EventBroker
+from .automation_scheduler import AutomationScheduler
 
 
 @dataclass(slots=True)
@@ -17,11 +18,18 @@ class CodexBridgeRuntime:
     discovery_uuid: str | None
     api_version: int
     event_broker: EventBroker | None = None
+    automation_scheduler: AutomationScheduler | None = None
+    capabilities: tuple[str, ...] = ()
+
+    def supports_capability(self, capability: str) -> bool:
+        return capability in self.capabilities
 
     async def async_close(self) -> None:
         """Provide a lifecycle seam without taking ownership of HA's session."""
 
         try:
+            if self.automation_scheduler is not None:
+                await self.automation_scheduler.async_close()
             if self.event_broker is not None:
                 await self.event_broker.async_close()
         finally:

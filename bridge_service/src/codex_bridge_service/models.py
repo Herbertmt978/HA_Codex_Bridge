@@ -429,7 +429,18 @@ class BridgeReadinessRecord(BaseModel):
     codex: ComponentVersionRecord = Field(default_factory=ComponentVersionRecord)
     image: ImageBuildRecord = Field(default_factory=ImageBuildRecord)
     architecture: Literal["amd64", "aarch64", "unknown"] = "unknown"
-    capabilities: tuple[Literal["api_v1"], Literal["legacy_v0"]] = (
+    capabilities: tuple[
+        Literal[
+            "api_v1",
+            "legacy_v0",
+            "automations_v1",
+            "mcp_admin_v1",
+            "skills_v1",
+            "plugins_v1",
+            "agents_v1",
+        ],
+        ...,
+    ] = (
         "api_v1",
         "legacy_v0",
     )

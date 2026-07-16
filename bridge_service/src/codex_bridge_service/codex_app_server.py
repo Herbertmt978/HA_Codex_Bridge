@@ -219,6 +219,7 @@ class CodexAppServerClient:
         restart_stable_seconds: float = 60.0,
         shutdown_grace_seconds: float = 5.0,
         stderr_diagnostic_sink: Callable[[str], None] | None = None,
+        enable_mcp: bool = False,
         protocol_contract: AppServerProtocolContract
         | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
@@ -260,6 +261,9 @@ class CodexAppServerClient:
             "shutdown grace",
         )
         self._stderr_diagnostic_sink = stderr_diagnostic_sink
+        if type(enable_mcp) is not bool:
+            raise ValueError("MCP enabled state must be a boolean")
+        self.enable_mcp = enable_mcp
         self.protocol_contract = protocol_contract
         self._protocol_validator = (
             None
@@ -277,6 +281,13 @@ class CodexAppServerClient:
         self._closing = threading.Event()
         self._startup_complete = threading.Event()
         self._ready = threading.Event()
+        # MCP must never be loaded from a persisted configuration during the
+        # bootstrap generation.  The manager explicitly activates it only
+        # after it has replaced that persisted configuration with its validated
+        # projection.
+        self._mcp_startup_state: Literal["masked", "activating", "active"] = "masked"
+        self._mcp_activation_generation: int | None = None
+        self._mcp_activation_complete = threading.Event()
         self._closed = False
         self._ever_ready = False
         self._startup_error: CodexAppServerError | None = None
@@ -521,6 +532,75 @@ class CodexAppServerClient:
         stopper.start()
         return True
 
+    def activate_validated_mcp_config(self) -> None:
+        """Restart into the validated MCP configuration after a safe bootstrap.
+
+        The first generation is always launched with an empty session override.
+        Only the MCP manager may call this after it atomically replaces and
+        reloads the persisted MCP configuration.  A failed activation restores
+        the empty override before another generation can be launched.
+        """
+
+        if not self.enable_mcp:
+            raise AppServerUnavailableError()
+        with self._lifecycle_lock:
+            with self._state_lock:
+                if self._mcp_startup_state == "active":
+                    return
+                process = self._process
+                generation = self._generation
+                if (
+                    self._mcp_startup_state != "masked"
+                    or not self._ready.is_set()
+                    or process is None
+                    or process.poll() is not None
+                ):
+                    raise AppServerUnavailableError()
+                self._mcp_startup_state = "activating"
+                self._mcp_activation_generation = generation + 1
+                self._mcp_activation_complete.clear()
+            if not self.abort_generation(generation):
+                self._restore_mcp_bootstrap(generation + 1)
+                raise AppServerUnavailableError()
+
+        wait_seconds = (
+            self.initialize_timeout_seconds
+            + self.shutdown_grace_seconds
+            + self.restart_max_delay_seconds
+            + 1
+        )
+        if not self._mcp_activation_complete.wait(timeout=wait_seconds):
+            with self._state_lock:
+                generation = self._generation
+            # Cleanup can be delayed while the old bootstrap generation is
+            # still current.  Restore by activation state, rather than that
+            # generation number, before any later spawn can inspect it.
+            self._restore_mcp_bootstrap()
+            self.abort_generation(generation)
+            raise AppServerUnavailableError()
+        with self._state_lock:
+            if self._mcp_startup_state != "active" or not self._ready.is_set():
+                raise AppServerUnavailableError()
+
+    def _activate_mcp_generation(self, generation: int) -> None:
+        with self._state_lock:
+            if (
+                self._mcp_startup_state == "activating"
+                and self._mcp_activation_generation == generation
+            ):
+                self._mcp_startup_state = "active"
+                self._mcp_activation_generation = None
+                self._mcp_activation_complete.set()
+
+    def _restore_mcp_bootstrap(self, generation: int | None = None) -> None:
+        with self._state_lock:
+            if self._mcp_startup_state == "activating" and (
+                generation is None or self._mcp_activation_generation == generation
+            ):
+                self._mcp_startup_state = "masked"
+                self._mcp_activation_generation = None
+                self._mcp_activation_complete.set()
+
     def close(self) -> None:
         with self._lifecycle_lock:
             if self._closed:
@@ -529,6 +609,9 @@ class CodexAppServerClient:
             self._closing.set()
             self._ready.clear()
             with self._state_lock:
+                self._mcp_startup_state = "masked"
+                self._mcp_activation_generation = None
+                self._mcp_activation_complete.set()
                 process = self._process
                 supervisor = self._supervisor_thread
             if process is not None:
@@ -647,6 +730,7 @@ class CodexAppServerClient:
                     self._ever_ready = True
                     ready_at = monotonic()
                     reader = self._reader_thread
+                self._activate_mcp_generation(generation)
                 self._startup_complete.set()
                 if reader is not None:
                     reader.join()
@@ -658,11 +742,13 @@ class CodexAppServerClient:
                 if not self._closing.is_set():
                     self._fail_generation_pending(generation, type(failure))
             except CodexAppServerError as error:
+                self._restore_mcp_bootstrap(generation)
                 if not self._ever_ready:
                     self._startup_error = error
                     self._startup_complete.set()
                     return
             except BaseException:
+                self._restore_mcp_bootstrap(generation)
                 if not self._ever_ready:
                     self._startup_error = AppServerUnavailableError()
                     self._startup_complete.set()
@@ -705,7 +791,15 @@ class CodexAppServerClient:
             self._closing.wait(delay)
 
     def _spawn_generation(self) -> tuple[int, subprocess.Popen[bytes]]:
-        command = [*codex_command_prefix(self.codex_command), "app-server", "--stdio"]
+        command = [*codex_command_prefix(self.codex_command)]
+        with self._state_lock:
+            mcp_masked = self._mcp_startup_state == "masked"
+        if mcp_masked:
+            # This command-line layer is applied before Codex reads persisted
+            # MCP configuration.  It remains in place unless the manager's
+            # sanitized bootstrap completes and explicitly activates MCP.
+            command.extend(("-c", "mcp_servers={}"))
+        command.extend(("app-server", "--stdio"))
         kwargs: dict[str, Any] = {
             "stdin": subprocess.PIPE,
             "stdout": subprocess.PIPE,

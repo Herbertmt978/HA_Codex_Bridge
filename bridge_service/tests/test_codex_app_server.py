@@ -175,7 +175,12 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
             "title": "HA Codex Bridge",
             "version": "0.6.0",
         }
-        assert fake_server.process()["argv"] == ["app-server", "--stdio"]
+        assert fake_server.process()["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
         environment_keys = fake_server.process()["environmentKeys"]
         assert "CODEX_HOME" in environment_keys
         assert "HOME" in environment_keys
@@ -196,6 +201,130 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         ),
         message="app-server did not receive a graceful stdin EOF",
     )
+
+
+def test_disabled_mcp_adds_a_generation_scoped_empty_config_override(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    client = _client(module, fake_server, enable_mcp=False)
+
+    try:
+        client.start()
+        assert fake_server.process()["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
+    finally:
+        client.close()
+
+
+def test_enabled_mcp_bootstraps_masked_then_activates_a_clean_generation(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    fake_server.configure(2)
+    client = _client(module, fake_server, enable_mcp=True)
+
+    try:
+        client.start()
+        assert fake_server.process()["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
+
+        client.activate_validated_mcp_config()
+
+        assert client.ready is True
+        assert client.generation == 2
+        assert fake_server.process(2)["argv"] == ["app-server", "--stdio"]
+    finally:
+        client.close()
+
+
+def test_failed_mcp_activation_restores_the_empty_config_override(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    fake_server.configure(2, startup="stall_initialize")
+    fake_server.configure(3)
+    client = _client(
+        module,
+        fake_server,
+        enable_mcp=True,
+        initialize_timeout_seconds=0.2,
+    )
+
+    try:
+        client.start()
+        with pytest.raises(module.AppServerUnavailableError):
+            client.activate_validated_mcp_config()
+
+        _wait_until(
+            lambda: (fake_server.sidecars / "process-3.json").exists(),
+            message="masked recovery generation was not started",
+        )
+        assert fake_server.process(3)["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
+    finally:
+        client.close()
+
+
+def test_activation_timeout_before_restart_keeps_the_next_generation_masked(
+    fake_server: FakeAppServer,
+) -> None:
+    class _TimedOutEvent:
+        def clear(self) -> None:
+            pass
+
+        def set(self) -> None:
+            pass
+
+        def wait(self, timeout: float | None = None) -> bool:
+            del timeout
+            return False
+
+    module = _load_module()
+    fake_server.configure()
+    fake_server.configure(2)
+    client = _client(module, fake_server, enable_mcp=True)
+    original_abort = client.abort_generation
+
+    try:
+        client.start()
+        client._mcp_activation_complete = _TimedOutEvent()
+        client.abort_generation = lambda _generation: True
+
+        with pytest.raises(module.AppServerUnavailableError):
+            client.activate_validated_mcp_config()
+
+        assert not (fake_server.sidecars / "process-2.json").exists()
+        client.abort_generation = original_abort
+        assert client.abort_generation(client.generation) is True
+        _wait_until(
+            lambda: (fake_server.sidecars / "process-2.json").exists(),
+            message="recovery generation was not started",
+        )
+        assert fake_server.process(2)["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
+    finally:
+        client.abort_generation = original_abort
+        client.close()
 
 
 def test_application_requests_remain_closed_until_initialized_is_written(
@@ -317,9 +446,7 @@ def test_notification_handler_failure_restarts_generation_for_reconciliation(
     client.start()
     try:
         _wait_until(lambda: client.ready and client.generation == 2)
-        assert client.request("ping", {"generation": 2}) == {
-            "echo": {"generation": 2}
-        }
+        assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
     finally:
         client.close()
 

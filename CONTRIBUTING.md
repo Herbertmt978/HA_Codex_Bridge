@@ -7,6 +7,8 @@ works only in an explicitly granted workspace.
 
 ## Before opening an issue or pull request
 
+- Read [CONTEXT.md](CONTEXT.md) for shared product language and
+  [AGENTS.md](AGENTS.md) for repository-wide engineering and release rules.
 - Use [SUPPORT.md](SUPPORT.md) for setup and usage questions.
 - Use [SECURITY.md](SECURITY.md) for potential vulnerabilities; do not disclose
   them in a public issue.
@@ -24,10 +26,11 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+The release being shipped is Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
 and Codex `0.144.4`. It is experimental and `amd64` only; publication, signing,
-and target-Home-Assistant acceptance remain pending. The `0.6.5` signed,
-live-accepted matrix remains historical evidence only. A source checkout, local
+and target-Home-Assistant acceptance remain pending. App/Integration `0.6.6`
+is the signed published baseline; the `0.6.5` live-accepted matrix remains
+historical evidence only. A source checkout, local
 image, or unit test is not release evidence. Do not claim external
 blocked-network routing, cold restore, the first future unattended App-update
 canary, or App-image rollback works until each has its own target-system
@@ -65,3 +68,17 @@ Codex bundled catalogue, and static fallback is last. Do not hardcode GPT-5.6,
 Max, Ultra, or any other model-specific option. For panel changes, preserve the
 compact Codex-style sidebar and the typed transient artifact-reservation path,
 including prior-artifact preservation when the selected chat is idle.
+
+For capability surfaces, preserve these boundaries:
+
+- Home Assistant owns automation timing; Bridge claims are revision-checked and
+  idempotent, and skipped overlap/capacity/misfire outcomes remain visible.
+- Skills and plugins stay scoped to the selected workspace and runtime
+  configuration. Marketplace sources are HTTPS-only and must not contain
+  credentials or private addresses.
+- Global/project `AGENTS.md` writes are bounded, atomic, and backed up in
+  private storage. Do not turn instruction files into a filesystem escape.
+- MCP is outbound streamable HTTP to a trusted HTTPS endpoint. Preserve the
+  best-effort rejection of known non-public DNS answers. Do not add a
+  browser-facing MCP/App port, bearer-token setting, or persisted OAuth URL;
+  preserve explicit OAuth and decline-only elicitation behavior.

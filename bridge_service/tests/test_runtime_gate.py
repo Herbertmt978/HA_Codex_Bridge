@@ -39,12 +39,14 @@ def _assert_counts(
     active: int,
     queued: int,
     auth: bool = False,
+    config: bool = False,
     closed: bool = False,
 ) -> None:
     snapshot = gate.snapshot()
     assert snapshot.active_turns == active
     assert snapshot.queued_prompts == queued
     assert snapshot.auth_mutation_active is auth
+    assert snapshot.config_mutation_active is config
     assert snapshot.closed is closed
     assert snapshot.active_turns >= 0
     assert snapshot.queued_prompts >= 0
@@ -206,6 +208,23 @@ def test_new_prompt_fails_clearly_while_authentication_is_changing() -> None:
 
     _assert_counts(gate, active=0, queued=0, auth=True)
     auth.release()
+
+
+def test_config_mutation_is_exclusive_with_prompts_and_authentication() -> None:
+    gate = _gate()
+    config = gate.acquire_config_mutation()
+
+    with pytest.raises(RuntimeMutationConflictError):
+        gate.reserve_prompt(client_request_id="blocked-by-config")
+    with pytest.raises(RuntimeMutationConflictError):
+        gate.acquire_auth_mutation()
+    with pytest.raises(RuntimeMutationConflictError):
+        gate.acquire_config_mutation()
+
+    _assert_counts(gate, active=0, queued=0, config=True)
+    config.release()
+    prompt = gate.reserve_prompt(client_request_id="after-config")
+    prompt.release()
 
 
 def test_auth_and_prompt_race_has_exactly_one_owner_without_toctou() -> None:

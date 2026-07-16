@@ -16,6 +16,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiEndpointError,
     BridgeApiGoneError,
     BridgeApiIncompatibleError,
+    BridgeApiMcpDisabledError,
     BridgeApiPayloadTooLargeError,
     BridgeApiProblemError,
     BridgeApiRangeNotSatisfiableError,
@@ -90,6 +91,293 @@ async def test_start_auth_login_defaults_to_non_destructive_mode(
         await client.async_start_auth_login()
 
     assert bodies == [{"force_logout": False}]
+
+
+async def test_feature_client_route_fails_before_request_when_not_advertised(
+    bridge_server_factory,
+) -> None:
+    observed_paths: list[str] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed_paths.append(request.path)
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_list_automations()
+
+    assert observed_paths == ["/ready"]
+
+
+async def test_missing_mcp_capability_reports_the_app_option_instead_of_an_update(
+    bridge_server_factory,
+) -> None:
+    observed_paths: list[str] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed_paths.append(request.path)
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiMcpDisabledError) as error:
+            await client.async_list_mcp()
+
+    assert error.value.code == "mcp_disabled"
+    assert observed_paths == ["/ready"]
+
+
+async def test_automation_and_mcp_client_routes_preserve_boundaries(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str, object]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        body = (
+            await request.json()
+            if request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and request.content_length
+            else None
+        )
+        observed.append((request.method, request.path, body))
+        if request.path == "/automations/aut_1/runs":
+            return web.json_response(
+                {"automation_run_id": "autrun_1", "status": "queued"}, status=202
+            )
+        if request.path == "/automations/aut_1":
+            return web.json_response({"automation_id": "aut_1", "revision": 1})
+        if request.path == "/mcp/servers/mcp_1/oauth/login":
+            return web.json_response(
+                {"authorization_url": "https://auth.example.invalid/one-time"}
+            )
+        if request.path == "/capabilities/skills":
+            return web.json_response({"name": "review"}, status=201)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_claim_automation_run(
+            "aut_1",
+            due_at="2026-07-15T10:00:00Z",
+            idempotency_key="automation:aut_1:1:2026-07-15T10:00:00Z",
+            expected_revision=1,
+        )
+        login = await client.async_login_mcp("mcp_1")
+        skill = await client.async_create_skill(
+            {
+                "workspace_path": "C:/work",
+                "name": "review",
+                "description": "Review changes",
+                "instructions": "Be precise.",
+            }
+        )
+        await client.async_get_agents()
+        automation = await client.async_get_automation("aut_1")
+
+    assert observed[1] == (
+        "POST",
+        "/automations/aut_1/runs",
+        {
+            "source": "scheduled",
+            "due_at": "2026-07-15T10:00:00Z",
+            "idempotency_key": "automation:aut_1:1:2026-07-15T10:00:00Z",
+            "expected_revision": 1,
+        },
+    )
+    assert login == {"authorization_url": "https://auth.example.invalid/one-time"}
+    assert skill == {"name": "review"}
+    assert automation == {"automation_id": "aut_1", "revision": 1}
+    assert observed[-2] == ("GET", "/agents/global", None)
+    assert observed[-1] == ("GET", "/automations/aut_1", None)
+
+
+async def test_plugin_uninstall_uses_the_backend_plugin_id_contract(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        if request.method == "DELETE":
+            return web.Response(status=204)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_uninstall_plugin("plugin.example@marketplace")
+
+    assert observed == [
+        ("GET", "/ready"),
+        ("DELETE", "/capabilities/plugins/plugin.example@marketplace"),
+    ]
+
+
+@pytest.mark.parametrize("skill_name", ["review.python-3", "a..b"])
+async def test_skill_delete_uses_the_backend_skill_name_contract(
+    bridge_server_factory, skill_name: str
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        if request.method == "DELETE":
+            return web.Response(status=204)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_delete_skill(skill_name)
+
+    assert observed == [
+        ("GET", "/ready"),
+        ("DELETE", f"/capabilities/skills/{skill_name}"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "skill_name",
+    [
+        "../review",
+        "review/child",
+        "review\\child",
+        "review\x00name",
+        "-review",
+        "review!",
+        "r\u00e9view",
+        "a" * 129,
+    ],
+)
+async def test_skill_delete_rejects_invalid_backend_skill_names_before_network_access(
+    skill_name: str,
+) -> None:
+    class UnexpectedSession:
+        async def request(self, *args, **kwargs):
+            raise AssertionError("network must not be reached")
+
+    client = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"skills_v1"})
+
+    with pytest.raises(BridgeApiEndpointError):
+        await client.async_delete_skill(skill_name)
+
+
+@pytest.mark.parametrize(
+    "plugin_id",
+    ["../plugin", "plugin/child", "plugin\\child", "plugin\x00name", "a" * 129],
+)
+async def test_plugin_uninstall_rejects_unsafe_plugin_ids_before_network_access(
+    plugin_id: str,
+) -> None:
+    class UnexpectedSession:
+        async def request(self, *args, **kwargs):
+            raise AssertionError("network must not be reached")
+
+    client = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"plugins_v1"})
+
+    with pytest.raises(BridgeApiEndpointError):
+        await client.async_uninstall_plugin(plugin_id)
+
+
+async def test_marketplace_mutations_use_the_backend_capability_name_contract(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        if request.method == "DELETE":
+            return web.Response(status=204)
+        if request.path.endswith("/upgrade"):
+            return web.json_response({"marketplace_name": "official.tools"})
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_remove_marketplace("official.tools")
+        upgraded = await client.async_upgrade_marketplace("official.tools")
+
+    assert upgraded == {"marketplace_name": "official.tools"}
+    assert observed == [
+        ("GET", "/ready"),
+        ("DELETE", "/capabilities/marketplaces/official.tools"),
+        ("POST", "/capabilities/marketplaces/official.tools/upgrade"),
+    ]
+
+
+@pytest.mark.parametrize("operation", ["remove", "upgrade"])
+@pytest.mark.parametrize(
+    "marketplace_name",
+    [
+        "../official",
+        "official/child",
+        "official\\child",
+        "official\x00name",
+        "-official",
+        "official!",
+        "offici\u00e1l",
+        "a" * 129,
+    ],
+)
+async def test_marketplace_mutations_reject_invalid_names_before_network_access(
+    operation: str,
+    marketplace_name: str,
+) -> None:
+    class UnexpectedSession:
+        async def request(self, *args, **kwargs):
+            raise AssertionError("network must not be reached")
+
+    client = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"plugins_v1"})
+
+    with pytest.raises(BridgeApiEndpointError):
+        if operation == "remove":
+            await client.async_remove_marketplace(marketplace_name)
+        else:
+            await client.async_upgrade_marketplace(marketplace_name)
+
+
+async def test_marketplace_mutations_require_the_plugins_capability(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str]] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed.append((request.method, request.raw_path))
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_remove_marketplace("official.tools")
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_upgrade_marketplace("official.tools")
+
+    assert observed == [("GET", "/ready")]
 
 
 async def test_explicit_legacy_client_uses_v0_header_after_legacy_readiness(

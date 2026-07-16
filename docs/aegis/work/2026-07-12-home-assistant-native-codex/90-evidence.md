@@ -384,6 +384,31 @@ recorded here; the following `0.6.5` evidence is historical only.
 | Panel behavior | The release uses a compact Codex-style sidebar while retaining Home Assistant theme and accessibility behavior. A typed transient artifact `reservation_conflict` preserves the prior artifact snapshot and avoids a false connection error even when the selected chat is idle; unrelated artifact failures remain visible. |
 | Boundary unchanged | Browser and remote-proxy traffic remains terminated at Home Assistant. Nabu Casa, Cloudflare, VPN, and other HTTPS reverse proxies must not expose or forward a browser directly to the private App or Bridge. |
 
+## 0.7.0 local release-candidate evidence
+
+The candidate matrix is Integration/App/panel `0.7.0`, Bridge `0.6.0`, and
+bundled Codex `0.144.4`. This section records source and local-container
+verification only; it does not claim published-image or target-Home-Assistant
+acceptance.
+
+| Evidence | Result |
+| --- | --- |
+| Full Bridge | 1195 passed, 189 platform skips in 198.32 seconds. |
+| Integration capability slice | 107 passed across the Bridge client, protocol, administrator WebSocket surface, and automation scheduler. The full Home Assistant plugin requires Linux because Home Assistant 2026.7 imports `fcntl`; CI remains the full Integration gate. |
+| Frontend | ESLint passed; 213 unit tests passed; the generated bundle rebuilt and passed `node --check`; all 12 Playwright flows passed, including device login, mobile navigation, decisions, reconnect, hostile content, and axe checks. |
+| Documentation and App package | 94 passed, 2 platform skips across repository documentation, release synchronization, App package, build-context, and Codex-lock contracts. |
+| Static checks | Changed-file Ruff format/check, `compileall`, and `git diff --check` passed. |
+| Release projections | `sync_app_release.py --check` reports App `0.7.0`, Bridge `0.6.0`, Codex `0.144.4`; the verified Codex lock check passed. |
+| Reproducible App context | The amd64 context staged successfully with the locked build/runtime dependencies and Bridge `0.6.0` wheel. |
+| Local App image | Docker built the staged Home Assistant base image successfully. Inside that image `codex --version` reported `0.144.4`, and the locked app-server contract generator `--check` passed against that exact binary. |
+| Independent release review | Pre-release review found and closed the MCP capability-gate bypass, pre-service MCP activation, masked durable MCP cleanup, unlinked and terminal-before-link automation crash windows, retryable/post-mutation/post-claim scheduler gaps, root-workspace skill path, best-effort DNS screening gaps, mobile management-route trap, stale mutation refresh, desktop-error privacy leak, keyboard gaps, hidden-overlay hit testing, destructive-button contrast, and project-instruction scope/OAuth popup regressions. The final backend re-review was READY after 115 focused tests; the final frontend re-review was READY after 213 unit tests. |
+
+The remaining release gates are Linux CI, immutable image publication/signing,
+provenance and SBOM verification, installation on the target Home Assistant,
+and live acceptance of ChatGPT login persistence, dynamic models/limits, chat,
+automations, MCP administration, skills, plugins/marketplaces, and global plus
+project `AGENTS.md`.
+
 ## Evidence status
 
 This is bounded live acceptance evidence for the published `0.6.5` matrix. The

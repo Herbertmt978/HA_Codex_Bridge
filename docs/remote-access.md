@@ -13,6 +13,16 @@ Browser -> HTTPS proxy or Home Assistant remote service -> Home Assistant
 Do not publish the App, private Bridge, Supervisor endpoint, or a separate
 Codex endpoint to a LAN or WAN.
 
+MCP is a separate outbound integration, not a remote-access shortcut. It is
+disabled by default and must be explicitly enabled in the App configuration
+before restart. Configure only a trusted HTTPS MCP server from the administrator
+panel. Literal IPs, localhost/internal names, known non-public DNS answers, and
+bearer-token settings are rejected. DNS checks are best effort rather than a
+connection-time IP allowlist. OAuth login opens the provider's authorization
+flow from an explicit action; do not expose,
+bookmark, log, or cache the one-shot authorization URL. The App/Bridge still
+has no public listener.
+
 ## ChatGPT device authentication
 
 After the ChatGPT session is established, normal Codex Bridge panel use can
@@ -55,6 +65,10 @@ it with a harmless workspace:
    resumes after a brief browser/proxy interruption without submitting a second
    turn.
 4. Test a small import/download through the panel, never a direct App URL.
+5. If using MCP, first enable **Enable MCP** in the App configuration and
+   restart it. Add a harmless trusted HTTPS server and complete its explicit
+   OAuth flow through the panel; verify provider tools appear without changing
+   the browser origin. Do not test with a private-IP endpoint.
 
 If the panel loses connection, reload the Home Assistant page and use normal HA
 diagnostics. Do not expose the Bridge or create an alternate browser-to-Codex

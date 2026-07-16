@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -11,7 +11,9 @@ from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
 from .auth_coordinator import CodexAuthCoordinator
+from .automations import AutomationError, AutomationStore, AutomationValidationError
 from .build_info import BuildInfo
+from .capabilities import CapabilitiesManager
 from .codex_app_server import CodexAppServerClient, CodexAppServerError
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
@@ -24,7 +26,8 @@ from .event_store import (
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
-from .models import CodexAuthStatusRecord, RuntimeProfile
+from .mcp_manager import McpManager, McpManagerError
+from .models import CodexAuthStatusRecord, RunMode, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
     ResourceLimitError,
@@ -32,12 +35,16 @@ from .resource_limits import (
 )
 from .routes import (
     approvals,
+    agents,
     artifacts,
     attachments,
+    automations,
+    capabilities,
     uploads,
     codex_auth,
     events,
     health,
+    mcp,
     projects,
     prompts,
     runtime_events,
@@ -53,7 +60,8 @@ from .runtime_gate import (
     RuntimeMutationConflictError,
     RuntimeQueueFullError,
 )
-from .storage import BridgeStorage
+from .routes.agents import WorkspaceAgentsManager
+from .storage import BridgeStorage, ProjectMutationError
 
 
 class _AppServerLifecycle(Protocol):
@@ -132,7 +140,10 @@ def create_app(
     sandbox_ready: bool | None = None,
     model_discovery_timeout_seconds: float = 5.0,
     model_cache_ttl_seconds: float = 600.0,
+    enable_mcp: bool = False,
 ) -> FastAPI:
+    if type(enable_mcp) is not bool:
+        raise ValueError("MCP enabled state must be a boolean")
     resolved_runtime_profile = RuntimeProfile(runtime_profile)
     resolved_build_info = (
         build_info if build_info is not None else BuildInfo.from_environment()
@@ -170,6 +181,7 @@ def create_app(
                 # RuntimeBroker state transitions are ordered protocol events.
                 # One bounded callback worker preserves app-server FIFO order.
                 callback_workers=1,
+                enable_mcp=enable_mcp,
             )
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
@@ -194,6 +206,22 @@ def create_app(
                 _app.state.runtime_startup_failed = True
                 yield
                 return
+            if resolved_mcp_manager is not None:
+                try:
+                    await asyncio.to_thread(
+                        resolved_mcp_manager.sanitize_startup_servers
+                    )
+                    if resolved_mcp_manager.enabled:
+                        await asyncio.to_thread(
+                            resolved_mcp_manager.activate_validated_mcp_config
+                        )
+                except McpManagerError:
+                    # The generation-scoped CLI override remains in place
+                    # until the manager has durably sanitized native MCP
+                    # configuration and activated a clean generation.
+                    _app.state.runtime_startup_failed = True
+                    yield
+                    return
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
             runner_start = getattr(resolved_runner, "start", None)
@@ -354,6 +382,56 @@ def create_app(
         workspace_root=workspace_root,
         resource_limits=resolved_resource_limits,
     )
+    resolved_automations: AutomationStore | None = None
+    resolved_capabilities_manager: CapabilitiesManager | None = None
+    resolved_agents_manager: WorkspaceAgentsManager | None = None
+    resolved_mcp_manager: McpManager | None = None
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        assert resolved_app_server is not None
+        assert resolved_runtime_gate is not None
+
+        def validate_automation_target(target: Mapping[str, Any]) -> None:
+            try:
+                if target.get("kind") == "standalone":
+                    project = storage.load_project(str(target.get("project_id", "")))
+                    if project.archived_at is not None:
+                        raise AutomationValidationError(
+                            "automation project is archived"
+                        )
+                    return
+                if target.get("kind") == "continue_thread":
+                    thread = storage.load_thread(str(target.get("thread_id", "")))
+                    if thread.archived_at is not None:
+                        raise AutomationValidationError("automation thread is archived")
+                    return
+            except AutomationValidationError:
+                raise
+            except Exception:
+                raise AutomationValidationError(
+                    "automation target is invalid"
+                ) from None
+            raise AutomationValidationError("automation target is invalid")
+
+        resolved_automations = AutomationStore(
+            storage.root,
+            target_validator=validate_automation_target,
+        )
+        resolved_capabilities_manager = CapabilitiesManager(
+            storage,
+            cast(Any, resolved_app_server),
+            resolved_runtime_gate,
+        )
+        resolved_agents_manager = WorkspaceAgentsManager(
+            storage,
+            runtime_gate=resolved_runtime_gate,
+            private_backup_root=storage.root / "agent-backups",
+            codex_home=codex_home,
+        )
+        resolved_mcp_manager = McpManager(
+            cast(Any, resolved_app_server),
+            resolved_runtime_gate,
+            enabled=enable_mcp,
+        )
     if resolved_app_server is not None:
         if auth_coordinator_factory is not None:
             resolved_auth_coordinator = auth_coordinator_factory(resolved_app_server)
@@ -450,12 +528,33 @@ def create_app(
         codex_command=codex_command,
         codex_home=codex_home,
         runtime_version_provider=(
-            lambda: getattr(resolved_app_server, "server_version", None)
-            if resolved_app_server is not None
-            else None
+            lambda: (
+                getattr(resolved_app_server, "server_version", None)
+                if resolved_app_server is not None
+                else None
+            )
         ),
     )
     app.state.model_catalog_probe = resolved_model_catalog_probe
+    app.state.automations = resolved_automations
+    app.state.capabilities_manager = resolved_capabilities_manager
+    app.state.agents_manager = resolved_agents_manager
+    app.state.mcp_manager = resolved_mcp_manager
+    feature_capabilities = ["api_v1", "legacy_v0"]
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        feature_capabilities.extend(
+            ["automations_v1", "skills_v1", "plugins_v1", "agents_v1"]
+        )
+        # Elicitations must be rejected before we expose MCP administration.
+        # Without the app-server callback, an OAuth-enabled MCP server could
+        # request data through an interaction path the Bridge cannot control.
+        if (
+            resolved_mcp_manager is not None
+            and resolved_mcp_manager.enabled
+            and resolved_mcp_manager.elicitation_handler_registered
+        ):
+            feature_capabilities.append("mcp_admin_v1")
+    app.state.feature_capabilities = tuple(feature_capabilities)
     app.state.auth_manager = (
         None
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
@@ -465,6 +564,34 @@ def create_app(
             codex_home=codex_home,
         )
     )
+
+    def automation_run_terminal(
+        run_id: str,
+        status: str,
+        client_request_id: str,
+        unattended: bool,
+    ) -> None:
+        if resolved_automations is None:
+            return
+        automation_status = {
+            "completed": "completed",
+            "failed": "failed",
+            "cancelled": "cancelled",
+            "interrupted": "interrupted_restart",
+        }.get(status)
+        if automation_status is None:
+            return
+        try:
+            resolved_automations.complete_runtime_run(
+                run_id,
+                client_request_id=client_request_id,
+                unattended=unattended,
+                status=automation_status,
+            )
+        except AutomationError:
+            # Most interactive runs are not automation-owned.
+            return
+
     resolved_runner = (
         runner_factory(storage)
         if runner_factory is not None
@@ -473,6 +600,7 @@ def create_app(
             cast(Any, resolved_app_server),
             cast(RuntimeGate, resolved_runtime_gate),
             resource_limits=resolved_resource_limits,
+            run_terminal_listener=automation_run_terminal,
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(
@@ -490,9 +618,53 @@ def create_app(
             "Home Assistant runtime."
         )
     app.state.runner = resolved_runner
+
+    def dispatch_automation(claim: Mapping[str, Any]) -> object:
+        if resolved_automations is None or resolved_runner is None:
+            raise RuntimeError("automations are unavailable")
+        automation_id = str(claim.get("automation_id", ""))
+        automation_run_id = str(claim.get("automation_run_id", ""))
+        definition = resolved_automations.get(automation_id)
+        target = definition["target"]
+        # Targets are validated when an automation is created or updated, but
+        # the referenced project/thread can be archived or deleted while a
+        # claim is waiting for dispatch.  Revalidate immediately before any
+        # storage mutation or runtime submission so stale definitions fail
+        # closed without creating a thread, updating one, or starting Codex.
+        validate_automation_target(target)
+        mode = RunMode(definition["mode"])
+        try:
+            with storage.prepare_automation_target(
+                target,
+                title=definition["name"],
+                mode=mode,
+                model_override=definition.get("model"),
+                thinking_override=definition.get("thinking"),
+            ) as thread:
+                run = resolved_runner.submit_prompt(
+                    thread.thread_id,
+                    definition["prompt"],
+                    client_request_id=f"automation:{automation_run_id}",
+                    unattended=True,
+                )
+        except (ProjectMutationError, FileNotFoundError) as error:
+            raise AutomationValidationError(str(error)) from None
+        resolved_automations.mark_running(
+            automation_run_id,
+            bridge_run_id=run.run_id,
+        )
+        return run
+
+    app.state.automation_dispatch = (
+        dispatch_automation if resolved_automations is not None else None
+    )
     app.include_router(artifacts.router)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         app.include_router(approvals.router)
+        app.include_router(agents.router)
+        app.include_router(automations.router)
+        app.include_router(capabilities.router)
+        app.include_router(mcp.router)
         app.include_router(uploads.router)
     else:
         # The multipart endpoint is the external-v0 rollback adapter. HA uses

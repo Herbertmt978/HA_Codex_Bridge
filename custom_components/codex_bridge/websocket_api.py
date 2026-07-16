@@ -30,6 +30,24 @@ _INTERACTION_ERROR_MESSAGES = {
 _ARTIFACT_ERROR_MESSAGES = {
     "reservation_conflict": "Workspace files are temporarily unavailable while Codex is working",
 }
+_FEATURE_ERROR_MESSAGES = {
+    "capability_unavailable": "This App version does not support this feature. Update it and try again",
+    "automation_conflict": "The automation is busy or must be paused first",
+    "automation_invalid": "The automation settings are invalid",
+    "automation_not_found": "The automation no longer exists",
+    "automation_revision_conflict": "The automation changed; refresh and try again",
+    "capabilities_conflict": "Codex is busy; try this change after the current run finishes",
+    "capabilities_invalid": "The capability settings are invalid",
+    "capabilities_unavailable": "Codex capabilities are temporarily unavailable",
+    "agents_unavailable": "The selected AGENTS.md file is unavailable",
+    "mcp_config_conflict": "Codex is busy or the MCP configuration changed",
+    "mcp_disabled": "Enable MCP in the Codex Bridge App configuration and restart",
+    "mcp_elicitation_unavailable": "MCP configuration is unavailable until server prompts can be safely declined",
+    "mcp_request_invalid": "The MCP server settings are invalid",
+    "mcp_runtime_invalid": "Codex returned an invalid MCP response",
+    "mcp_server_not_found": "The MCP server no longer exists",
+    "mcp_unavailable": "MCP configuration is temporarily unavailable",
+}
 
 
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
@@ -66,6 +84,33 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_answer_interaction,
         ws_list_artifacts,
         ws_create_workspace_archive,
+        ws_list_automations,
+        ws_get_automation,
+        ws_create_automation,
+        ws_update_automation,
+        ws_pause_automation,
+        ws_resume_automation,
+        ws_delete_automation,
+        ws_run_automation,
+        ws_list_automation_runs,
+        ws_list_skills,
+        ws_set_skill,
+        ws_create_skill,
+        ws_delete_skill,
+        ws_list_plugins,
+        ws_install_plugin,
+        ws_uninstall_plugin,
+        ws_list_marketplaces,
+        ws_add_marketplace,
+        ws_remove_marketplace,
+        ws_upgrade_marketplace,
+        ws_list_mcp,
+        ws_add_mcp,
+        ws_remove_mcp,
+        ws_login_mcp,
+        ws_get_agents,
+        ws_update_agents,
+        ws_delete_agents,
     )
     for command in commands:
         websocket_api.async_register_command(hass, websocket_api.require_admin(command))
@@ -78,6 +123,7 @@ async def _async_handle(
     handler,
     *,
     safe_error_messages: dict[str, str] | None = None,
+    after_success=None,
 ) -> None:
     try:
         runtime = async_get_runtime(hass)
@@ -89,8 +135,12 @@ async def _async_handle(
     except EndpointError:
         connection.send_error(msg["id"], "bridge_error", "Bridge response is invalid")
     except BridgeApiError as err:
-        if safe_error_messages is not None and err.code in safe_error_messages:
-            connection.send_error(msg["id"], err.code, safe_error_messages[err.code])
+        messages = {
+            **_FEATURE_ERROR_MESSAGES,
+            **(safe_error_messages or {}),
+        }
+        if err.code in messages:
+            connection.send_error(msg["id"], err.code, messages[err.code])
         else:
             connection.send_error(msg["id"], "bridge_error", "Bridge request failed")
     except RuntimeError:
@@ -100,6 +150,8 @@ async def _async_handle(
     except ValueError:
         connection.send_error(msg["id"], "invalid_request", "Request is invalid")
     else:
+        if after_success is not None:
+            await after_success(runtime)
         connection.send_result(msg["id"], result)
 
 
@@ -116,6 +168,7 @@ async def ws_get_config(
             "panel_title": runtime.title,
             "connection_type": runtime.connection_type,
             "api_version": runtime.api_version,
+            "capabilities": list(runtime.capabilities),
         }
 
     await _async_handle(hass, connection, msg, _handler)
@@ -713,7 +766,10 @@ async def ws_subscribe_events(
                                 msg["id"],
                                 {"type": "event", "event": event.as_dict()},
                             )
-                    elif compatibility_mode and envelope.get("type") == "snapshot_required":
+                    elif (
+                        compatibility_mode
+                        and envelope.get("type") == "snapshot_required"
+                    ):
                         connection.send_event(
                             msg["id"],
                             _legacy_snapshot_event(
@@ -991,9 +1047,7 @@ def _snapshot_result(error: BridgeApiGoneError) -> dict[str, Any]:
     snapshot: dict[str, Any] = {
         "cursor": cursor,
         "minimum_cursor": (
-            problem.minimum_cursor
-            if problem.minimum_cursor is not None
-            else cursor
+            problem.minimum_cursor if problem.minimum_cursor is not None else cursor
         ),
         "scope": problem.scope or "global",
     }
@@ -1013,11 +1067,7 @@ def _legacy_snapshot_event(snapshot: dict[str, Any]) -> dict[str, Any]:
         "payload": {
             "code": "snapshot_required",
             "scope": snapshot["scope"],
-            **(
-                {"thread_id": snapshot["thread_id"]}
-                if "thread_id" in snapshot
-                else {}
-            ),
+            **({"thread_id": snapshot["thread_id"]} if "thread_id" in snapshot else {}),
         },
         "timestamp": "",
     }
@@ -1061,4 +1111,555 @@ async def ws_create_workspace_archive(
         connection,
         msg,
         lambda client: client.async_create_workspace_archive(msg["thread_id"]),
+    )
+
+
+async def _automation_refresh(runtime) -> None:
+    scheduler = getattr(runtime, "automation_scheduler", None)
+    if scheduler is not None:
+        try:
+            await scheduler.async_refresh()
+        except (BridgeApiError, ValueError):
+            # The Bridge mutation succeeded; a later scheduler retry can
+            # reconcile the local timer without turning it into a UI failure.
+            scheduler.schedule_reconciliation()
+            return
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_automations"})
+@websocket_api.async_response
+async def ws_list_automations(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg, lambda client: client.async_list_automations()
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/get_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_get_automation(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_get_automation(msg["automation_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/create_automation",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=160)),
+        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
+        vol.Required("target"): vol.All(dict, vol.Length(max=16)),
+        vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
+        vol.Optional("mode", default="observe"): vol.In(
+            ["observe", "edit", "full-auto"]
+        ),
+        vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
+        vol.Optional("thinking"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=160))
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_create_automation(hass, connection, msg) -> None:
+    payload = {
+        key: msg[key]
+        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking")
+        if key in msg
+    }
+    payload.setdefault("mode", "observe")
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_create_automation(payload),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/update_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+        vol.Optional("name"): vol.All(str, vol.Length(min=1, max=160)),
+        vol.Optional("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
+        vol.Optional("target"): vol.All(dict, vol.Length(max=16)),
+        vol.Optional("schedule"): vol.All(dict, vol.Length(max=16)),
+        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto"]),
+        vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
+        vol.Optional("thinking"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=160))
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_update_automation(hass, connection, msg) -> None:
+    payload = {
+        key: msg[key]
+        for key in (
+            "expected_revision",
+            "name",
+            "prompt",
+            "target",
+            "schedule",
+            "mode",
+            "model",
+            "thinking",
+        )
+        if key in msg
+    }
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_update_automation(msg["automation_id"], payload),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/pause_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+    }
+)
+@websocket_api.async_response
+async def ws_pause_automation(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_pause_automation(
+            msg["automation_id"], msg["expected_revision"]
+        ),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/resume_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+    }
+)
+@websocket_api.async_response
+async def ws_resume_automation(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_resume_automation(
+            msg["automation_id"], msg["expected_revision"]
+        ),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/delete_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+    }
+)
+@websocket_api.async_response
+async def ws_delete_automation(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_delete_automation(
+            msg["automation_id"], msg["expected_revision"]
+        ),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/run_automation",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_run_automation(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_run_automation(msg["automation_id"]),
+        after_success=_automation_refresh,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_automation_runs",
+        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Optional("limit", default=100): vol.All(int, vol.Range(min=1, max=200)),
+    }
+)
+@websocket_api.async_response
+async def ws_list_automation_runs(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_list_automation_runs(
+            msg["automation_id"], limit=msg["limit"]
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_skills",
+        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Optional("force_reload", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_list_skills(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_list_skills(
+            msg["workspace_path"], force_reload=msg["force_reload"]
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/set_skill",
+        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Required("enabled"): bool,
+        vol.Optional("name"): vol.Any(None, vol.All(str, vol.Length(min=1, max=128))),
+        vol.Optional("path"): vol.Any(None, vol.All(str, vol.Length(min=1, max=4096))),
+    }
+)
+@websocket_api.async_response
+async def ws_set_skill(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_set_skill(
+            {
+                key: msg[key]
+                for key in ("workspace_path", "enabled", "name", "path")
+                if key in msg
+            }
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/create_skill",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("description"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Required("instructions"): vol.All(str, vol.Length(max=256 * 1024)),
+        vol.Optional("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_create_skill(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_create_skill(
+            {
+                key: msg[key]
+                for key in (
+                    "workspace_path",
+                    "project_id",
+                    "name",
+                    "description",
+                    "instructions",
+                )
+                if key in msg
+            }
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/delete_skill",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Optional("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_delete_skill(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_delete_skill(
+            msg["name"],
+            workspace_path=msg.get("workspace_path"),
+            project_id=msg.get("project_id"),
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_plugins",
+        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
+        vol.Optional("installed_only", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_list_plugins(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_list_plugins(
+            msg["workspace_path"], installed_only=msg["installed_only"]
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/install_plugin",
+        vol.Required("plugin_name"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Optional("marketplace_name"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=128))
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_install_plugin(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_install_plugin(
+            msg["plugin_name"], msg.get("marketplace_name")
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/uninstall_plugin",
+        vol.Required("plugin_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_uninstall_plugin(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_uninstall_plugin(msg["plugin_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/list_marketplaces",
+        vol.Optional("workspace_path", default="."): vol.All(
+            str, vol.Length(min=1, max=4096)
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_list_marketplaces(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_list_marketplaces(msg["workspace_path"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/add_marketplace",
+        vol.Required("source"): vol.All(str, vol.Length(min=1, max=512)),
+        vol.Optional("ref_name"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=128))
+        ),
+        vol.Optional("sparse_paths"): vol.All(
+            [vol.All(str, vol.Length(min=1, max=256))], vol.Length(max=8)
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_add_marketplace(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_add_marketplace(
+            {
+                key: msg[key]
+                for key in ("source", "ref_name", "sparse_paths")
+                if key in msg
+            }
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/remove_marketplace",
+        vol.Required("marketplace_name"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_remove_marketplace(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_remove_marketplace(msg["marketplace_name"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/upgrade_marketplace",
+        vol.Required("marketplace_name"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_upgrade_marketplace(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_upgrade_marketplace(msg["marketplace_name"]),
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_mcp"})
+@websocket_api.async_response
+async def ws_list_mcp(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_list_mcp())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/add_mcp",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("url"): vol.All(str, vol.Length(min=1, max=2048)),
+        vol.Optional("oauth_client_id"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=256))
+        ),
+        vol.Optional("oauth_resource"): vol.Any(
+            None, vol.All(str, vol.Length(min=1, max=2048))
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_add_mcp(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_add_mcp(
+            {
+                key: msg[key]
+                for key in ("name", "url", "oauth_client_id", "oauth_resource")
+                if key in msg
+            }
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/remove_mcp",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_remove_mcp(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg, lambda client: client.async_remove_mcp(msg["name"])
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/login_mcp",
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_login_mcp(hass, connection, msg) -> None:
+    # OAuth state remains only in this direct WebSocket response.
+    await _async_handle(
+        hass, connection, msg, lambda client: client.async_login_mcp(msg["name"])
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/get_agents",
+        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_get_agents(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_get_agents(msg.get("project_id")),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/update_agents",
+        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("content"): vol.All(str, vol.Length(max=256 * 1024)),
+    }
+)
+@websocket_api.async_response
+async def ws_update_agents(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_update_agents(
+            msg.get("project_id"), msg["content"]
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/delete_agents",
+        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_delete_agents(hass, connection, msg) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_delete_agents(msg.get("project_id")),
     )

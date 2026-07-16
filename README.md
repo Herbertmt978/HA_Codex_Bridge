@@ -14,7 +14,7 @@ Codex/OpenAI from your home network.
 [![App status](https://img.shields.io/badge/App-Experimental-F59E0B?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
 
-[Installation](docs/installation.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
+[Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
 </div>
 
@@ -46,28 +46,28 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-The current release being shipped is experimental, `amd64`-only App `0.6.6`,
-Integration `0.6.6`, optional external Bridge `0.5.5`, and bundled Codex
+The current release being shipped is experimental, `amd64`-only App `0.7.0`,
+Integration `0.7.0`, optional external Bridge `0.6.0`, and bundled Codex
 `0.144.4`. Publication, image signing, and target-Home-Assistant acceptance for
-this release remain pending. The prior `0.6.5` matrix is the signed,
-live-accepted release recorded in the Aegis evidence; do not reuse its image
-digest or acceptance claims for `0.6.6`.
+this release remain pending. App/Integration `0.6.6` is the signed published
+baseline, while `0.6.5` remains the latest matrix with bounded live-acceptance
+evidence; do not reuse either image digest or acceptance claim for `0.7.0`.
 
-App `0.6.6` uses private-IP Supervisor discovery. It retains bounded recovery
+App `0.7.0` uses private-IP Supervisor discovery. It retains bounded recovery
 for delayed ChatGPT device sign-in, expires the signed-out catalogue when
 account entitlements change, and discovers every model and reasoning level
 from Codex rather than hardcoding a release list. It also separates weekly-only
 usage from the disabled five-hour window and keeps a newly created chat usable
 while secondary snapshots retry.
-The `0.6.6` release refines the Codex-style surface with a clean left navigation
+The `0.7.0` release extends the Codex-style surface with a clean left navigation
 tree, title-first chat rows, one action menu, correct archive collapse/search,
-and a corrected search icon. Approvals now follow the active transcript, every
-decision remains reachable in the normal mobile scroll flow, and limits/model
-controls fold behind a compact mobile disclosure. It also provides 44px mobile
-targets and a quieter completed-setup surface while retaining Home Assistant
-themes and accessible navigation. Its catalogue recovery remains runtime-derived: live
-discovery, verified last-known-good data, the bundled Codex catalogue, then the
-static fallback.
+and a corrected search icon. It adds Scheduled, Skills, Plugins, MCP,
+Instructions, About, Security, and system-information screens plus live action,
+streaming, and step/file metrics in the transcript. Approvals remain beside the
+active transcript, every decision stays reachable in the normal mobile scroll
+flow, and limits/model controls fold behind a compact mobile disclosure. Its
+catalogue recovery remains runtime-derived: live discovery, verified
+last-known-good data, the bundled Codex catalogue, then the static fallback.
 
 The App publishes discovery with the current Supervisor `app_config` map
 permission and its assigned private HA-network IP. A restart includes a bounded
@@ -78,7 +78,7 @@ state and does not save an unverified endpoint.
 
 The external Bridge remains an optional, private compatibility path for people
 who already operate one. Fresh Home Assistant OS installations should use the
-published App `0.6.5`; install App `0.6.6` once it is published. App `0.6.1`
+published App `0.6.6`; install App `0.7.0` once it is published. App `0.6.1`
 must not be used. Keep an existing external Bridge as a recovery path until the
 remaining blocked-network route, cold restore, previous-image rollback, and
 first future unattended App-update canary are evidenced on the intended
@@ -105,7 +105,7 @@ installation.
    Assistant so its Supervisor discovery handler is active.
 2. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
-   offers App `0.6.6` or newer, then install and start **Codex Bridge**. Do not
+   offers App `0.7.0` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
 3. In **Settings -> Devices & services**, confirm the discovered **Codex
    Bridge** Integration. Supervisor advertises the App's private HA-network IP
@@ -127,6 +127,44 @@ is established, normal panel use can remain on the Home Assistant origin.
 Initial sign-in and re-authentication still require browser access to the
 approved ChatGPT device-auth page. This account flow does not use an OpenAI API
 key.
+
+## Automations and Codex capabilities
+
+The panel also exposes administrator-only capabilities that remain bounded by
+the selected App workspace:
+
+- **Automations / scheduled tasks:** create a prompt targeting a project or
+  existing thread, choose `observe`, `edit`, or `full-auto`, and schedule a
+  one-time, interval, or RFC 5545 recurrence. Home Assistant owns the wall
+  clock; the Bridge persists definitions, uses revision checks and idempotent
+  claims, records overlap/capacity/misfire skips, and keeps run history bounded.
+  Pause an automation before deleting it.
+- **Skills:** list, enable/disable, create, and delete workspace skills under
+  the selected workspace's `.agents/skills/` tree. Paths outside that workspace
+  are rejected.
+- **Instructions (`AGENTS.md`):** edit a global Codex `AGENTS.md` or the
+  selected project's workspace-root `AGENTS.md`. Writes are atomic and prior
+  versions are retained in private, bounded rollback snapshots.
+- **Plugins and marketplaces:** inspect runtime-reported marketplaces and
+  plugins, install/uninstall plugins, and add/remove/upgrade a marketplace.
+  Marketplace sources must use HTTPS hostnames; literal/known non-public
+  addresses, credentials, and arbitrary config payloads are rejected.
+- **MCP servers:** MCP is disabled by default. To use it, explicitly enable
+  **Enable MCP** in the Codex Bridge App configuration, save, and restart the
+  App. Configure outbound streamable-HTTP servers only with an HTTPS hostname.
+  Literal IPs, local/internal hostnames, and known non-public DNS answers are
+  rejected; bearer-token configuration is not exposed. DNS checks are best
+  effort and do not form a connection-time IP allowlist, so enable MCP only for
+  providers you trust. OAuth is explicit: start login from the panel and treat
+  the returned authorization URL as one-shot sensitive data. MCP elicitation
+  requests are declined until a separately reviewed UX exists. Turning MCP off
+  suppresses and removes its saved server table without changing skills,
+  plugins, marketplaces, or instructions. Adding a server does not publish the
+  App or Bridge.
+
+These surfaces are runtime-derived and can be unavailable while Codex is busy,
+unauthenticated, or recovering. Failed mutations return bounded errors without
+leaking provider details or secrets.
 
 ## Updates and recovery
 

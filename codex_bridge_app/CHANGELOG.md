@@ -2,6 +2,36 @@
 
 All notable App changes are recorded here.
 
+## 0.7.0
+
+- Adds administrator-only durable automations and scheduled-task controls.
+  Home Assistant owns wall-clock scheduling; Bridge claims are revision-checked
+  and idempotent, with explicit pause, overlap, capacity, and misfire outcomes.
+- Adds workspace skills, global/project `AGENTS.md`, plugin and marketplace
+  management, with workspace confinement, bounded content, and private backup
+  snapshots for instruction files.
+- Adds explicitly opt-in outbound MCP server management, disabled by default.
+  Disabled startup suppresses and removes stale MCP server configuration while
+  preserving other Codex extensions. Enabled MCP applies HTTPS hostname and
+  best-effort DNS address validation, explicit OAuth login, no bearer-token
+  configuration, no-store authorization responses, and decline-only MCP
+  elicitation handling. Adding a server never publishes the App or Bridge.
+- Adds granular authenticated feature advertisement, so a newer Integration
+  reports an actionable App-update requirement instead of sending unsupported
+  automation, MCP, skill, plugin, or instruction requests to an older App.
+- Adds Codex-style live run feedback: a busy indicator on the active chat,
+  safe streamed assistant text, a quiet current-action line, and a step chip
+  with file/addition/deletion counts and an accessible activity-history popover.
+- Adds application-style Scheduled, Skills, Plugins, MCP, Instructions,
+  keyboard-shortcut, About, Security, and system-information surfaces while
+  preserving the Home Assistant theme, administrator boundary, and responsive
+  transcript/composer layout.
+- Keeps model and reasoning choices dynamically discovered from the bundled
+  Codex runtime, including GPT-5.6 and model-specific `max`/`ultra` levels when
+  the signed-in account and runtime advertise them.
+- Coordinates Integration/App/package/panel asset release `0.7.0`, Bridge
+  `0.6.0`, and the Sigstore-verified Codex runtime `0.144.4`.
+
 ## 0.6.6
 
 - Reworks the panel around a clean Codex-style left navigation tree with

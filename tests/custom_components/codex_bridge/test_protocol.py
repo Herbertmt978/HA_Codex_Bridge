@@ -50,7 +50,15 @@ def test_parses_a_typed_immutable_v1_ready_record() -> None:
     assert ready.image_revision == "a" * 40
     assert ready.architecture == "amd64"
     assert ready.is_v1 is True
-    assert ready.capabilities == ("api_v1", "legacy_v0")
+    assert ready.capabilities == (
+        "api_v1",
+        "legacy_v0",
+        "automations_v1",
+        "mcp_admin_v1",
+        "skills_v1",
+        "plugins_v1",
+        "agents_v1",
+    )
     assert ready.readiness_state == "ready"
     assert ready.readiness_reasons == ()
     with pytest.raises(AttributeError):
@@ -284,3 +292,20 @@ def test_problem_record_redacts_unknown_remote_codes_and_untrusted_fields() -> N
     assert problem.retryable is False
     assert problem.resource is None
     assert "secret-token" not in repr(problem)
+
+
+def test_problem_record_preserves_safe_mcp_elicitation_unavailable_code() -> None:
+    problem = ProblemRecord.from_payload(
+        503,
+        {
+            "detail": {
+                "code": "mcp_elicitation_unavailable",
+                "retryable": True,
+                "message": "private-provider-detail",
+            }
+        },
+    )
+
+    assert problem.code == "mcp_elicitation_unavailable"
+    assert problem.retryable is True
+    assert "private-provider-detail" not in repr(problem)

@@ -11,6 +11,7 @@ import re
 import secrets
 import stat
 import sys
+import tomllib
 
 
 DIRECTORY_FLAGS = (
@@ -57,7 +58,67 @@ enabled = false
 allow_local_binding = false
 allow_upstream_proxy = false
 """
-CONFIG_REQUIRED_LINES = tuple(CONFIG_PAYLOAD.splitlines())
+
+_MANAGED_PERMISSION_PROFILES = frozenset({"ha_observe", "ha_bridge"})
+
+
+def _managed_config_is_safe(payload: bytes) -> bool:
+    """Validate the security-owned settings without rejecting Codex extensions.
+
+    Codex owns the MCP, plugin, marketplace, and skill tables in this file.  The
+    App owns credential storage and both permission profiles.  Parsing the TOML
+    is important: a textual line-presence check cannot prove which table a key
+    belongs to and does not reject duplicate or otherwise invalid TOML.
+    """
+
+    try:
+        config = tomllib.loads(payload.decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    if config.get("cli_auth_credentials_store") != "file":
+        return False
+    if config.get("default_permissions") != "ha_bridge":
+        return False
+    permissions = config.get("permissions")
+    if (
+        not isinstance(permissions, dict)
+        or set(permissions) != _MANAGED_PERMISSION_PROFILES
+    ):
+        return False
+    expected = {
+        "ha_observe": {
+            "description": "Home Assistant read-only workspace sandbox",
+            "filesystem": {
+                ":minimal": "read",
+                ":workspace_roots": {".": "read"},
+            },
+            "network": {
+                "enabled": False,
+                "allow_local_binding": False,
+                "allow_upstream_proxy": False,
+            },
+        },
+        "ha_bridge": {
+            "description": "Home Assistant workspace-only sandbox",
+            "filesystem": {
+                ":minimal": "read",
+                ":workspace_roots": {
+                    ".": "write",
+                    ".codex": "write",
+                    ".git": "write",
+                    ".agents": "write",
+                    ".cursor": "write",
+                    ".vscode": "write",
+                },
+            },
+            "network": {
+                "enabled": False,
+                "allow_local_binding": False,
+                "allow_upstream_proxy": False,
+            },
+        },
+    }
+    return permissions == expected
 
 
 class BootstrapError(RuntimeError):
@@ -251,8 +312,7 @@ def initialize() -> None:
         gid=gid,
         maximum=1024 * 1024,
     )
-    config_lines = set(config.splitlines())
-    if not all(line in config_lines for line in CONFIG_REQUIRED_LINES if line):
+    if not _managed_config_is_safe(config):
         _atomic_write(
             config_parent,
             config_name,
@@ -269,10 +329,7 @@ def initialize() -> None:
             gid=gid,
             maximum=1024 * 1024,
         )
-        config_lines = set(config.splitlines())
-        if not all(
-            line in config_lines for line in CONFIG_REQUIRED_LINES if line
-        ):
+        if not _managed_config_is_safe(config):
             raise BootstrapError("managed Codex configuration could not be verified")
 
 

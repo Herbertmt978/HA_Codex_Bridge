@@ -485,7 +485,10 @@ class AuthLifecycleAppServer:
         *,
         timeout_seconds: float | None = None,
     ) -> dict[str, object]:
-        del params, timeout_seconds
+        del timeout_seconds
+        if method == "config/read":
+            assert params == {"includeLayers": True}
+            return {"config": {}, "layers": [], "origins": {}}
         assert method == "account/read"
         return {"account": None, "requiresOpenaiAuth": True}
 

@@ -76,6 +76,40 @@ Assistant configuration, or a browser URL. No OpenAI API key is part of this
 contract. If a device or credential is suspected compromised, stop the App,
 use **Sign out**, and revoke the ChatGPT session through normal account controls.
 
+## Automations and capability configuration
+
+The administrator-only panel exposes these App-backed surfaces:
+
+- Automations persist a prompt, target (project or existing thread), mode, and
+  schedule. Home Assistant's scheduler asks for the next due UTC occurrence;
+  the Bridge performs revision-checked, idempotent claims and records run
+  history. Once, interval, and RFC 5545 recurrence schedules are validated;
+  overlap, capacity, pause, and misfire skips are explicit outcomes.
+- Skills are listed or managed in the selected workspace and created under
+  `.agents/skills/`. Global `AGENTS.md` is kept in the private Codex home;
+  project `AGENTS.md` is kept at that project's workspace root. Writes are
+  atomic, bounded, and retain private rollback snapshots.
+- Plugins and marketplaces are projected from Codex's native configuration.
+  Sources and names are validated, credentials are rejected, and no arbitrary
+  file path or JSON-RPC payload is passed through this API.
+- MCP is disabled by default. To opt in, set **Enable MCP** in the App
+  configuration, save, and restart. Disabled startup suppresses MCP before
+  Codex reads saved configuration and removes the native MCP server table;
+  cleanup failure keeps readiness unavailable. Other Codex extensions are
+  preserved.
+- Enabled MCP servers are outbound streamable HTTP. The endpoint must use a
+  trusted HTTPS hostname; literal IPs, local/internal names, and known
+  non-public DNS answers fail validation. DNS checks are best effort and are
+  not a connection-time IP allowlist, so the provider remains an administrator
+  trust decision. Bearer-token configuration is unsupported. OAuth login is
+  explicit and the one-shot authorization URL is returned with `no-store`;
+  the Bridge never logs or stores it. MCP elicitation is handled by a
+  decline-only callback.
+
+These operations are not a second network boundary: the browser remains on
+Home Assistant, and a configured MCP server does not make the App or Bridge
+public.
+
 ## Model catalogue
 
 The App asks the installed Codex runtime for its model catalogue and each
@@ -108,7 +142,7 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The release being shipped is Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+The release being shipped is Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
 and Codex `0.144.4`. It is experimental and `amd64` only; publication, signing,
 and target-Home-Assistant acceptance remain pending. The signed, live-accepted
 `0.6.5` matrix remains historical evidence only. App `0.6.1` is known-bad
@@ -120,7 +154,7 @@ parsing. The historical `0.6.5` image passed target-HAOS startup, its production
 self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, and panel loading. A redacted
 ChatGPT device-login start/cancel cycle also passed. That historical acceptance
-does not accept `0.6.6`. External blocked-network/Nabu Casa/Cloudflare routing,
+does not accept `0.7.0`. External blocked-network/Nabu Casa/Cloudflare routing,
 cold restore, the first future unattended App update, and previous-image
 rollback remain unproven.
 

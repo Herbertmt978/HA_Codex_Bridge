@@ -9,6 +9,7 @@ Task 21 sandbox boundary is installed.
 
 from __future__ import annotations
 
+import ast
 import ctypes
 import errno
 import hashlib
@@ -22,6 +23,7 @@ import runpy
 import struct
 import sys
 import types
+import tomllib
 
 import pytest
 
@@ -154,7 +156,9 @@ def test_codex_wrapper_forces_modern_bwrap_and_rejects_all_bypass_flags() -> Non
     assert "CODEX_COMMAND" not in text
 
 
-def test_codex_wrapper_allows_only_the_offline_bundled_catalogue_without_strict_config() -> None:
+def test_codex_wrapper_allows_only_the_offline_bundled_catalogue_without_strict_config() -> (
+    None
+):
     text = CODEX_WRAPPER.read_text(encoding="utf-8")
 
     assert '[ "$#" -eq 3 ]' in text
@@ -259,6 +263,7 @@ def test_bwrap_seccomp_program_routes_every_locked_branch() -> None:
                 syscall_number=number,
                 argument_zero=argument,
             )
+
         assert run(table.unshare) == denied
         assert run(table.setns) == denied
         assert run(table.clone3) == unavailable
@@ -267,11 +272,14 @@ def test_bwrap_seccomp_program_routes_every_locked_branch() -> None:
         assert run(table.clone, namespace["CLONE_NEWUSER"]) == denied
         assert run(table.clone) == allowed
         assert run(0) == allowed
-        assert evaluate(
-            instructions,
-            architecture=0,
-            syscall_number=0,
-        ) == namespace["SECCOMP_RET_KILL_PROCESS"]
+        assert (
+            evaluate(
+                instructions,
+                architecture=0,
+                syscall_number=0,
+            )
+            == namespace["SECCOMP_RET_KILL_PROCESS"]
+        )
 
 
 def test_bridge_s6_service_uses_the_dedicated_workspace_cwd() -> None:
@@ -325,8 +333,7 @@ def test_apparmor_has_an_exact_bwrap_child_transition() -> None:
     codex_rules = re.findall(r"(?m)^\s*/usr/local/bin/codex\s+([^\n]+)", bwrap)
     assert codex_rules, "the bwrap profile must explicitly inherit for Codex"
     assert all(
-        not re.search(r"(?:\b[PCU]x\b|->|//codex)", rule)
-        for rule in codex_rules
+        not re.search(r"(?:\b[PCU]x\b|->|//codex)", rule) for rule in codex_rules
     ), "Codex must not use a fallback or nested AppArmor transition"
     assert not re.search(r"(?m)^\s*/data/\*\*", bwrap)
     assert "/config/**" not in bwrap
@@ -428,6 +435,12 @@ def test_sandbox_self_test_uses_managed_permission_profile_not_legacy_policy() -
     assert "sandboxPolicy" not in self_test
 
 
+def test_sandbox_self_test_always_starts_codex_with_mcp_disabled() -> None:
+    self_test = SANDBOX_SELF_TEST.read_text(encoding="utf-8")
+
+    assert re.search(r"CodexAppServerClient\([\s\S]*enable_mcp\s*=\s*False", self_test)
+
+
 def test_app_bakes_managed_permission_profile_requirements() -> None:
     requirements = ROOTFS / "etc" / "codex" / "requirements.toml"
     assert requirements.is_file(), "managed Codex requirements are missing"
@@ -444,7 +457,9 @@ def test_app_bakes_managed_permission_profile_requirements() -> None:
 
 
 def test_runtime_bootstrap_writes_the_locked_ha_bridge_profile() -> None:
-    bootstrap = ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    bootstrap = (
+        ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    )
     text = bootstrap.read_text(encoding="utf-8")
     assert "default_permissions" in text
     assert "ha_bridge" in text
@@ -459,8 +474,52 @@ def test_runtime_bootstrap_writes_the_locked_ha_bridge_profile() -> None:
     assert "managed Codex configuration could not be verified" in text
 
 
+def test_runtime_bootstrap_semantically_preserves_safe_codex_extensions() -> None:
+    bootstrap = (
+        ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    )
+    source = bootstrap.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    nodes = [
+        node
+        for node in tree.body
+        if (
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and any(
+                isinstance(target, ast.Name)
+                and target.id in {"CONFIG_PAYLOAD", "_MANAGED_PERMISSION_PROFILES"}
+                for target in (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+            )
+        )
+        or isinstance(node, ast.FunctionDef)
+        and node.name == "_managed_config_is_safe"
+    ]
+    namespace = {"tomllib": tomllib}
+    exec(
+        compile(ast.Module(body=nodes, type_ignores=[]), str(bootstrap), "exec"),
+        namespace,
+    )
+    payload = namespace["CONFIG_PAYLOAD"]
+    check = namespace["_managed_config_is_safe"]
+
+    assert check(payload)
+    assert check(
+        payload
+        + b'\n[mcp_servers.docs]\nurl = "https://example.com/mcp"\n'
+        + b'\n[plugins."sample@official"]\nenabled = true\n'
+        + b'\n[[skills.config]]\npath = "/config/workspaces/demo/.agents/skills/sample"\nenabled = false\n'
+    )
+    assert not check(payload.replace(b"enabled = false", b"enabled = true", 1))
+    assert not check(payload + b'\n[permissions.extra]\ndescription = "unsafe"\n')
+    assert not check(payload + b'\ndefault_permissions = ":danger-full-access"\n')
+
+
 def test_runtime_bootstrap_writes_a_read_only_observe_profile() -> None:
-    bootstrap = ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    bootstrap = (
+        ROOTFS / "usr" / "local" / "libexec" / "codex-bridge" / "initialize_runtime.py"
+    )
     text = bootstrap.read_text(encoding="utf-8")
     observe = text.split("[permissions.ha_observe]", 1)[1].split(
         "[permissions.ha_bridge]", 1
@@ -471,9 +530,9 @@ def test_runtime_bootstrap_writes_a_read_only_observe_profile() -> None:
     assert '":minimal" = "read"' in observe
     assert '[permissions.ha_observe.filesystem.":workspace_roots"]' in observe
     assert '"." = "read"' in observe
-    assert 'enabled = false' in observe
-    assert 'allow_local_binding = false' in observe
-    assert 'allow_upstream_proxy = false' in observe
+    assert "enabled = false" in observe
+    assert "allow_local_binding = false" in observe
+    assert "allow_upstream_proxy = false" in observe
     assert '"write"' not in observe
 
 
@@ -504,10 +563,14 @@ def test_sandbox_probe_attests_final_state_without_exposing_procfs() -> None:
     assert '"namespaces"' not in self_test
     capability_checks = set(re.findall(r'"(zero_[a-z_]*capabilities)"', text))
     assert capability_checks
-    assert capability_checks <= set(re.findall(r'"(zero_[a-z_]*capabilities)"', self_test))
+    assert capability_checks <= set(
+        re.findall(r'"(zero_[a-z_]*capabilities)"', self_test)
+    )
 
 
-def test_sandbox_probe_prctl_attestation_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sandbox_probe_prctl_attestation_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     module = _sandbox_probe_module()
 
     class FakeLibc:
@@ -716,7 +779,10 @@ def test_bridge_profile_accepts_only_canonical_roots_inside_workspace(
     workspace = tmp_path / ".sandbox-self-test-0123456789abcdef0123456789abcdef"
     workspace.mkdir()
     roots = [
-        *(str(workspace / name) for name in (".agents", ".codex", ".cursor", ".git", ".vscode")),
+        *(
+            str(workspace / name)
+            for name in (".agents", ".codex", ".cursor", ".git", ".vscode")
+        ),
     ]
 
     class FakeClient:
@@ -892,13 +958,13 @@ def test_generated_sandbox_contract_is_immutable_and_tied_to_task19_lock() -> No
     assert set(executables) == {"codex", "bwrap", "bwrap_launcher"}
     assert executables["bwrap"]["path"] == "/usr/local/bin/bwrap"
     assert executables["bwrap_launcher"]["path"] == "/opt/codex/bin/bwrap"
-    assert executables["bwrap"]["sha256"] != (
-        executables["bwrap_launcher"]["sha256"]
-    )
+    assert executables["bwrap"]["sha256"] != (executables["bwrap_launcher"]["sha256"])
     assert "os.replace" in stage or "write_bytes" in stage
 
 
-def test_attestation_reader_accepts_only_an_exact_bounded_contract(tmp_path: Path) -> None:
+def test_attestation_reader_accepts_only_an_exact_bounded_contract(
+    tmp_path: Path,
+) -> None:
     contract_path, attestation_path = _valid_attestation(tmp_path)
     assert _verify(contract_path, attestation_path)
 
@@ -972,7 +1038,9 @@ def test_attestation_reader_rejects_oversize_duplicate_and_mismatched_json(
     assert not _verify(contract_path, attestation_path)
 
 
-def test_build_info_and_readiness_expose_only_safe_sandbox_fields(tmp_path: Path) -> None:
+def test_build_info_and_readiness_expose_only_safe_sandbox_fields(
+    tmp_path: Path,
+) -> None:
     from fastapi.testclient import TestClient
 
     from codex_bridge_service.app import create_app
@@ -985,9 +1053,9 @@ def test_build_info_and_readiness_expose_only_safe_sandbox_fields(tmp_path: Path
         build_info=build_info,
         sandbox_ready=False,
     )
-    payload = TestClient(app).get(
-        "/ready", headers={"Authorization": "Bearer secret"}
-    ).json()
+    payload = (
+        TestClient(app).get("/ready", headers={"Authorization": "Bearer secret"}).json()
+    )
     assert payload["sandbox"] == {"contract_version": 2, "attested": False}
     assert set(payload["sandbox"]) == {"contract_version", "attested"}
     assert all(secret not in json.dumps(payload) for secret in ("/data", "token"))
@@ -1023,12 +1091,20 @@ def test_production_readiness_accepts_only_the_current_contract_version(
     assert not observed
 
 
-def test_build_info_sandbox_contract_version_is_bounded_and_environment_validated() -> None:
+def test_build_info_sandbox_contract_version_is_bounded_and_environment_validated() -> (
+    None
+):
     from codex_bridge_service.build_info import BuildInfo
 
-    assert BuildInfo.from_environment(
-        {"CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION": "7"}
-    ).sandbox_contract_version == 7
-    assert BuildInfo.from_environment(
-        {"CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION": "0;secret"}
-    ).sandbox_contract_version is None
+    assert (
+        BuildInfo.from_environment(
+            {"CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION": "7"}
+        ).sandbox_contract_version
+        == 7
+    )
+    assert (
+        BuildInfo.from_environment(
+            {"CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION": "0;secret"}
+        ).sandbox_contract_version
+        is None
+    )

@@ -1,0 +1,381 @@
+const MAX_ACTION_TEXT = 240;
+const MAX_HISTORY_ITEMS = 8;
+const MAX_EVENTS = 2000;
+const MAX_PLAN_STEPS = 128;
+const MAX_PATCH_CHANGES = 2048;
+
+const BUSY_STATUSES = new Set(["starting", "running", "cancelling", "in_progress", "inprogress"]);
+const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "interrupted"]);
+
+const ITEM_LABELS = Object.freeze({
+  agentMessage: "Preparing a response",
+  commandExecution: "Running a command",
+  contextCompaction: "Compacting context",
+  collabAgentToolCall: "Delegating to an agent",
+  dynamicToolCall: "Calling a tool",
+  fileChange: "Applying file changes",
+  imageGeneration: "Generating an image",
+  imageView: "Viewing an image",
+  mcpToolCall: "Calling an MCP tool",
+  plan: "Planning the work",
+  reasoning: "Thinking through the request",
+  sleep: "Waiting",
+  subAgentActivity: "Working with a sub-agent",
+  webSearch: "Searching the web",
+});
+
+const COMMAND_ACTION_LABELS = Object.freeze({
+  read: "Reading files",
+  listFiles: "Listing files",
+  search: "Searching files",
+});
+
+const WEB_ACTION_LABELS = Object.freeze({
+  search: "Searching the web",
+  openPage: "Opening a web page",
+  findInPage: "Finding text in a page",
+  other: "Using web search",
+});
+
+const FILE_CHANGE_LABELS = Object.freeze({
+  add: "Adding files",
+  update: "Updating files",
+  delete: "Deleting files",
+});
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function safeText(value, maximum = MAX_ACTION_TEXT) {
+  if (typeof value !== "string" || maximum < 1) {
+    return "";
+  }
+  const withoutControls = [...value]
+    .map((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint >= 32 && codePoint !== 127 ? character : " ";
+    })
+    .join("");
+  const normalized = withoutControls
+    .replace(/\s+/gu, " ")
+    .trim();
+  return normalized.length > maximum ? `${normalized.slice(0, maximum - 1)}…` : normalized;
+}
+
+function safeChunk(value, maximum = 320) {
+  if (typeof value !== "string" || maximum < 1) return "";
+  const normalized = [...value]
+    .map((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint >= 32 && codePoint !== 127 ? character : " ";
+    })
+    .join("");
+  return normalized.length > maximum ? normalized.slice(0, maximum) : normalized;
+}
+
+function eventPayload(event) {
+  return isRecord(event?.payload) ? event.payload : {};
+}
+
+function normalizeEvents(events) {
+  if (!Array.isArray(events)) {
+    return [];
+  }
+  return events
+    .filter((event) => (
+      isRecord(event)
+      && Number.isSafeInteger(event.sequence)
+      && event.sequence > 0
+      && typeof event.event_type === "string"
+      && event.event_type.length <= 120
+      && isRecord(event.payload)
+    ))
+    .sort((left, right) => left.sequence - right.sequence)
+    .slice(-MAX_EVENTS);
+}
+
+function eventRunId(event) {
+  const runId = eventPayload(event).run_id;
+  return typeof runId === "string" && /^[A-Za-z0-9_.:-]{1,256}$/u.test(runId) ? runId : "";
+}
+
+function latestEventRunId(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const runId = eventRunId(events[index]);
+    if (runId) return runId;
+  }
+  return "";
+}
+
+function eventBelongsToRun(event, runId) {
+  return !runId || !eventRunId(event) || eventRunId(event) === runId;
+}
+
+function currentPlan(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "plan.updated" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const plan = eventPayload(event).plan;
+    if (!Array.isArray(plan)) {
+      continue;
+    }
+    const steps = plan.slice(0, MAX_PLAN_STEPS).map((item) => {
+      if (!isRecord(item)) {
+        return null;
+      }
+      const label = safeText(item.step);
+      const status = item.status === "inProgress" || item.status === "in_progress"
+        ? "inProgress"
+        : item.status === "completed" ? "completed" : item.status === "pending" ? "pending" : "";
+      return label && status ? { label, status } : null;
+    }).filter(Boolean);
+    const activeIndex = steps.findIndex((step) => step.status === "inProgress");
+    const pendingIndex = steps.findIndex((step) => step.status === "pending");
+    const completedCount = steps.filter((step) => step.status === "completed").length;
+    const displayIndex = activeIndex >= 0
+      ? activeIndex
+      : pendingIndex >= 0
+        ? pendingIndex
+        : steps.length ? Math.min(completedCount, steps.length - 1) : null;
+    return {
+      steps,
+      activeIndex: displayIndex,
+      completedCount,
+      sourceSequence: event.sequence,
+    };
+  }
+  return { steps: [], activeIndex: null, sourceSequence: 0 };
+}
+
+function joinActivityLabels(labels, fallback) {
+  const unique = [...new Set(labels)].filter(Boolean);
+  if (!unique.length) return fallback;
+  if (unique.length === 1) return unique[0];
+  if (unique.length === 2) return `${unique[0]} and ${unique[1].toLowerCase()}`;
+  return `${unique[0]}, ${unique[1].toLowerCase()}, and more`;
+}
+
+function itemLabel(payload = {}) {
+  const itemType = payload.item_type;
+  if (itemType === "commandExecution" && Array.isArray(payload.action_types)) {
+    return joinActivityLabels(
+      payload.action_types.slice(0, 3).filter((type) => Object.hasOwn(COMMAND_ACTION_LABELS, type)).map((type) => COMMAND_ACTION_LABELS[type]),
+      ITEM_LABELS[itemType],
+    );
+  }
+  if (itemType === "webSearch" && Object.hasOwn(WEB_ACTION_LABELS, payload.action_type)) {
+    return WEB_ACTION_LABELS[payload.action_type];
+  }
+  if (itemType === "fileChange" && Array.isArray(payload.change_kinds)) {
+    return joinActivityLabels(
+      payload.change_kinds.slice(0, 3).filter((kind) => Object.hasOwn(FILE_CHANGE_LABELS, kind)).map((kind) => FILE_CHANGE_LABELS[kind]),
+      ITEM_LABELS[itemType],
+    );
+  }
+  return typeof itemType === "string" && Object.hasOwn(ITEM_LABELS, itemType)
+    ? ITEM_LABELS[itemType]
+    : "Working on the request";
+}
+
+function latestItemStart(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "item.started" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const payload = eventPayload(event);
+    const type = payload.item_type;
+    if (typeof type === "string" && Object.hasOwn(ITEM_LABELS, type)) {
+      return { event, label: itemLabel(payload), itemType: type };
+    }
+  }
+  return null;
+}
+
+function diffLineCounts(diff) {
+  if (typeof diff !== "string") return { additions: 0, deletions: 0 };
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diff.slice(0, 262144).split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) additions += 1;
+    if (line.startsWith("-")) deletions += 1;
+  }
+  return { additions, deletions };
+}
+
+function patchCounts(events, runId) {
+  const files = new Map();
+  let seen = 0;
+  for (const event of events) {
+    if (event.event_type !== "patch.updated" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const changes = eventPayload(event).changes;
+    if (!Array.isArray(changes)) {
+      continue;
+    }
+    for (const change of changes) {
+      if (seen >= MAX_PATCH_CHANGES || !isRecord(change)) {
+        break;
+      }
+      seen += 1;
+      const path = safeText(change.path, 512);
+      if (!path) {
+        continue;
+      }
+      const kind = isRecord(change.kind) ? change.kind.type : change.kind;
+      files.set(path, {
+        kind: kind === "add" || kind === "delete" || kind === "update" ? kind : "update",
+        ...diffLineCounts(change.diff),
+      });
+    }
+  }
+  let additions = 0;
+  let deletions = 0;
+  for (const file of files.values()) {
+    additions += file.additions;
+    deletions += file.deletions;
+  }
+  return { changed: files.size, additions, deletions };
+}
+
+function runEventState(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (!eventBelongsToRun(event, runId)) continue;
+    if (event.event_type === "run.completed") return "completed";
+    if (event.event_type === "run.failed") return "failed";
+    if (event.event_type === "run.cancelled") return "cancelled";
+    if (event.event_type === "run.interrupted") return "interrupted";
+    if (event.event_type === "run.started" || event.event_type === "run.dequeued") return "running";
+    if (event.event_type === "run.queued") return "queued";
+  }
+  return "";
+}
+
+function assistantState(events, runId) {
+  let latest = null;
+  for (const event of events) {
+    if ((event.event_type === "message.delta" || event.event_type === "message.completed") && eventBelongsToRun(event, runId)) {
+      latest = event;
+    }
+  }
+  return latest?.event_type === "message.delta"
+    ? "streaming"
+    : latest?.event_type === "message.completed" ? "complete" : "idle";
+}
+
+function reasoningSummary(events, runId) {
+  let latest = null;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type === "reasoning.summary_delta" && eventBelongsToRun(event, runId)) {
+      latest = event;
+      break;
+    }
+  }
+  if (!latest) return "";
+  const latestPayload = eventPayload(latest);
+  const itemId = latestPayload.item_id;
+  const summaryIndex = latestPayload.summary_index;
+  let joined = "";
+  for (const event of events) {
+    if (event.event_type !== "reasoning.summary_delta" || !eventBelongsToRun(event, runId)) continue;
+    const payload = eventPayload(event);
+    if (payload.item_id !== itemId || payload.summary_index !== summaryIndex) continue;
+    const chunk = safeChunk(payload.delta || payload.text, 320);
+    if (chunk) joined += chunk;
+    if (joined.length >= 2000) break;
+  }
+  return safeText(joined, 2000);
+}
+
+function addHistory(history, seen, label, kind) {
+  const text = safeText(label);
+  if (!text || seen.has(`${kind}:${text}`)) return;
+  seen.add(`${kind}:${text}`);
+  history.push({ label: text, kind });
+  if (history.length > MAX_HISTORY_ITEMS) history.shift();
+}
+
+/** Project a thread snapshot and its untrusted event history into safe activity UI data. */
+export function getRunActivityViewModel(thread = {}, events = []) {
+  const normalizedEvents = normalizeEvents(events);
+  const threadStatus = safeText(thread?.status, 40).toLowerCase();
+  const activeRunId = typeof thread?.active_run_id === "string"
+    && /^[A-Za-z0-9_.:-]{1,256}$/u.test(thread.active_run_id)
+    ? thread.active_run_id
+    : "";
+  const runId = activeRunId || latestEventRunId(normalizedEvents);
+  const eventState = runEventState(normalizedEvents, runId);
+  let state = "idle";
+  if (threadStatus === "queued") state = "queued";
+  else if (threadStatus === "error") state = "failed";
+  else if (TERMINAL_STATES.has(eventState) && (activeRunId || threadStatus === "idle" || !threadStatus)) state = eventState;
+  else if (activeRunId || BUSY_STATUSES.has(threadStatus)) state = "running";
+  else if (eventState === "queued") state = "queued";
+  else if (eventState === "running") state = "running";
+
+  const plan = currentPlan(normalizedEvents, runId);
+  const activeStep = plan.activeIndex === null ? null : {
+    index: plan.activeIndex + 1,
+    total: plan.steps.length,
+    label: plan.steps[plan.activeIndex].label,
+    status: plan.steps[plan.activeIndex].status,
+    completedCount: plan.completedCount,
+  };
+  const reasoningText = reasoningSummary(normalizedEvents, runId);
+  const startedItem = latestItemStart(normalizedEvents, runId);
+  const files = patchCounts(normalizedEvents, runId);
+  const history = [];
+  const seenHistory = new Set();
+  for (const event of normalizedEvents) {
+    if (!eventBelongsToRun(event, runId)) continue;
+    const payload = eventPayload(event);
+    if (event.event_type === "plan.updated" && Array.isArray(payload.plan)) {
+      for (const item of payload.plan.slice(0, MAX_PLAN_STEPS)) {
+        if (isRecord(item) && (item.status === "completed" || item.status === "inProgress" || item.status === "in_progress")) {
+          addHistory(history, seenHistory, item.step, "plan");
+        }
+      }
+    } else if (event.event_type === "reasoning.summary_delta") {
+      // Chunks are added as one bounded summary below.
+    } else if (event.event_type === "item.started" && Object.hasOwn(ITEM_LABELS, payload.item_type)) {
+      addHistory(history, seenHistory, itemLabel(payload), "item");
+    } else if (event.event_type === "patch.updated") {
+      addHistory(history, seenHistory, "Updating files", "patch");
+    }
+  }
+  addHistory(history, seenHistory, reasoningText, "reasoning");
+  const terminal = TERMINAL_STATES.has(state);
+  const assistant = assistantState(normalizedEvents, runId);
+  const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
+  let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
+  if (!action && state === "queued") action = "Waiting in queue";
+  if (!action && state === "running") action = assistant === "streaming" ? "Generating a response" : "Working on the request";
+  if (!action && state === "completed") action = "Run completed";
+  if (!action && state === "failed") action = "Run failed";
+  if (!action && state === "cancelled") action = "Run cancelled";
+  if (!action && state === "interrupted") action = "Run interrupted";
+
+  return {
+    state,
+    status: state,
+    busy: state === "queued" || state === "running",
+    terminal,
+    runId,
+    action: safeText(action),
+    currentActivity: safeText(action),
+    step: activeStep,
+    actionHistory: history,
+    files,
+    assistant,
+    assistantState: assistant,
+  };
+}
+
+export const deriveRunActivity = getRunActivityViewModel;

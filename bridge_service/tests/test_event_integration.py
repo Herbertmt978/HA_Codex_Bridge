@@ -93,8 +93,7 @@ def test_pending_outbox_envelope_projects_private_event_fields(
             )
         with sqlite3.connect(database) as connection:
             pending_payload = connection.execute(
-                "SELECT payload_json FROM outbox_operations "
-                "WHERE operation_id = ?",
+                "SELECT payload_json FROM outbox_operations WHERE operation_id = ?",
                 ("projection-pending",),
             ).fetchone()[0]
         assert private_root not in pending_payload
@@ -260,10 +259,13 @@ def test_deleting_thread_purges_its_global_journal_payloads(tmp_path: Path) -> N
             scopes=("thread",),
             thread_ids=(thread.thread_id,),
         )
-    assert storage.event_store.replay_thread(
-        thread.thread_id,
-        after_sequence=2,
-    ) == []
+    assert (
+        storage.event_store.replay_thread(
+            thread.thread_id,
+            after_sequence=2,
+        )
+        == []
+    )
     storage.event_store.close()
 
 
@@ -285,11 +287,14 @@ class _LifecycleAppServer:
     def request(
         self,
         method: str,
-        _params: object = None,
+        params: object = None,
         *,
         timeout_seconds: float | None = None,
     ) -> dict[str, object]:
         del timeout_seconds
+        if method == "config/read":
+            assert params == {"includeLayers": True}
+            return {"config": {}, "layers": [], "origins": {}}
         assert method == "account/read"
         return {"account": None, "requiresOpenaiAuth": True}
 

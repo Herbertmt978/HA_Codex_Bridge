@@ -3,10 +3,18 @@ import os
 import pytest
 
 from codex_bridge_service.app import create_app
+from codex_bridge_service.automations import AutomationStore
+from codex_bridge_service.capabilities import CapabilitiesManager
+from codex_bridge_service.mcp_manager import McpManager
 from codex_bridge_service.models import RuntimeProfile
 from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.routes.agents import WorkspaceAgentsManager
 from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
+
+
+def _registered_paths(app) -> set[str]:
+    return set(app.openapi()["paths"])
 
 
 def test_external_legacy_storage_keeps_existing_root_layout(tmp_path) -> None:
@@ -165,6 +173,62 @@ def test_create_app_passes_runtime_profile_to_storage(tmp_path) -> None:
 
     assert app.state.storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT
     assert app.state.storage.workspace_root == workspace_root.resolve()
+
+
+def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> None:
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+
+    app = create_app(
+        root_path=tmp_path / "state",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        codex_home=codex_home,
+    )
+
+    assert isinstance(app.state.automations, AutomationStore)
+    assert isinstance(app.state.capabilities_manager, CapabilitiesManager)
+    assert isinstance(app.state.agents_manager, WorkspaceAgentsManager)
+    assert isinstance(app.state.mcp_manager, McpManager)
+    assert app.state.mcp_manager.enabled is False
+    assert app.state.feature_capabilities == (
+        "api_v1",
+        "legacy_v0",
+        "automations_v1",
+        "skills_v1",
+        "plugins_v1",
+        "agents_v1",
+    )
+    paths = _registered_paths(app)
+    assert {
+        "/automations",
+        "/capabilities/skills",
+        "/agents/global",
+        "/mcp/servers",
+    } <= paths
+
+    opted_in = create_app(
+        root_path=tmp_path / "opted-in-state",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        codex_home=codex_home,
+        enable_mcp=True,
+    )
+    assert opted_in.state.mcp_manager.enabled is True
+    assert "mcp_admin_v1" in opted_in.state.feature_capabilities
+
+    external = create_app(root_path=tmp_path / "external", auth_token="secret")
+    external_paths = _registered_paths(external)
+    assert external.state.automations is None
+    assert external.state.capabilities_manager is None
+    assert external.state.agents_manager is None
+    assert external.state.mcp_manager is None
+    assert external.state.feature_capabilities == ("api_v1", "legacy_v0")
+    assert "/automations" not in external_paths
 
 
 def test_home_assistant_profile_rejects_legacy_exec_runner_before_composition(

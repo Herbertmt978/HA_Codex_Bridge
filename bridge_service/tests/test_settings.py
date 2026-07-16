@@ -41,6 +41,21 @@ def test_settings_accept_a_long_random_bridge_auth_token(monkeypatch) -> None:
     assert Settings().auth_token == "a" * 43
 
 
+def test_mcp_is_disabled_by_default_and_requires_an_explicit_boolean_opt_in(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    monkeypatch.delenv("CODEX_BRIDGE_ENABLE_MCP", raising=False)
+    assert Settings().enable_mcp is False
+
+    monkeypatch.setenv("CODEX_BRIDGE_ENABLE_MCP", "true")
+    assert Settings().enable_mcp is True
+
+    monkeypatch.setenv("CODEX_BRIDGE_ENABLE_MCP", "not-a-boolean")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [
