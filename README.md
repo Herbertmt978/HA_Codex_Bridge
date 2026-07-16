@@ -46,12 +46,26 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-The current release being shipped is experimental, `amd64`-only App `0.7.0`,
-Integration `0.7.0`, optional external Bridge `0.6.0`, and bundled Codex
-`0.144.4`. Publication, image signing, and target-Home-Assistant acceptance for
-this release remain pending. App/Integration `0.6.6` is the signed published
-baseline, while `0.6.5` remains the latest matrix with bounded live-acceptance
-evidence; do not reuse either image digest or acceptance claim for `0.7.0`.
+The current candidate is experimental, `amd64`-only App `0.7.1`, Integration
+`0.7.1`, optional external Bridge `0.6.0`, and bundled Codex `0.144.4`. It
+contains the management-form rerender fix and remains under target-HA retest.
+The published/signed `0.7.0` baseline has generic image digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+and its amd64 child digest is
+`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
+Main CI run `29471288344` and publication run `29471288457` succeeded; the
+release has signature, SBOM, and provenance attestations ([release
+page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0)).
+Target-Home-Assistant acceptance is bounded: App and Integration `0.7.0`
+reported Bridge `0.6.0` and Codex `0.144.4`, retained ChatGPT Pro, showed
+dynamic GPT-5.6, rendered the five-hour window as `Off`, preserved chat/history,
+and persisted App auto-update and MCP opt-in across restart.
+
+Management forms lose unsaved values during a background rerender. The `0.7.1`
+candidate contains the fix; do not claim automation, skills, plugins/marketplaces,
+MCP-server, or `AGENTS.md` mutation acceptance until it is retested. The first
+unattended App update is proven. External blocked-network/Nabu Casa/Cloudflare
+routing, cold restore, and previous-image rollback remain unproven.
 
 App `0.7.0` uses private-IP Supervisor discovery. It retains bounded recovery
 for delayed ChatGPT device sign-in, expires the signed-out catalogue when
@@ -78,11 +92,9 @@ state and does not save an unverified endpoint.
 
 The external Bridge remains an optional, private compatibility path for people
 who already operate one. Fresh Home Assistant OS installations should use the
-published App `0.6.6`; install App `0.7.0` once it is published. App `0.6.1`
-must not be used. Keep an existing external Bridge as a recovery path until the
-remaining blocked-network route, cold restore, previous-image rollback, and
-first future unattended App-update canary are evidenced on the intended
-installation.
+published App `0.7.0`. App `0.6.1` must not be used. Keep an existing external
+Bridge as a recovery path until the remaining blocked-network route, cold
+restore, and previous-image rollback are evidenced on the intended installation.
 
 </details>
 
@@ -178,7 +190,8 @@ The Integration and App update separately:
    App, Bridge, and Codex versions.
 3. If Home Assistant offers an App update, make a cold backup and apply it from
    **Settings -> Apps -> Codex Bridge**. Auto update can do this after its toggle
-   is enabled, but the first unattended update/recovery canary is still open.
+   is enabled; the first unattended update is proven, while recovery and
+   rollback remain unproven.
 
 App images are immutable: a running container does not replace Codex or itself.
 Upstream Codex updates first arrive as a verified, reviewable repository PR;

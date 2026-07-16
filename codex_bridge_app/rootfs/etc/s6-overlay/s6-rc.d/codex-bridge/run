@@ -32,7 +32,7 @@ exec s6-setuidgid codexbridge env -i \
     CODEX_BRIDGE_RUNTIME_PROFILE=home_assistant \
     CODEX_BRIDGE_ENABLE_MCP="${enable_mcp}" \
     CODEX_BRIDGE_CODEX_WRAPPER_PATH=/usr/local/bin/codex-ha \
-    CODEX_BRIDGE_APP_VERSION=0.7.0 \
+    CODEX_BRIDGE_APP_VERSION=0.7.1 \
     CODEX_BRIDGE_VERSION=0.6.0 \
     CODEX_BRIDGE_CODEX_VERSION=0.144.4 \
     CODEX_BRIDGE_ARCH=amd64 \

@@ -26,15 +26,22 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The release being shipped is Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
-and Codex `0.144.4`. It is experimental and `amd64` only; publication, signing,
-and target-Home-Assistant acceptance remain pending. App/Integration `0.6.6`
-is the signed published baseline; the `0.6.5` live-accepted matrix remains
-historical evidence only. A source checkout, local
-image, or unit test is not release evidence. Do not claim external
-blocked-network routing, cold restore, the first future unattended App-update
-canary, or App-image rollback works until each has its own target-system
-evidence.
+The current candidate is Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, and
+Codex `0.144.4` (experimental, `amd64` only), carrying the management-form
+rerender fix for target-HA retest. The published/signed `0.7.0` baseline has
+generic image digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
+main CI `29471288344` and publication `29471288457` succeeded, with signature,
+SBOM, and provenance attached to the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Target-Home-Assistant evidence is bounded: versions, ChatGPT Pro retention,
+dynamic GPT-5.6, five-hour `Off`, chat/history, App auto-update, and MCP opt-in
+persistence after restart were observed. Management forms lose unsaved values
+during a background rerender; the `0.7.1` candidate is the fix. Do not claim
+automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation
+acceptance until retested. The first unattended App update is proven; external
+blocked-network routing, cold restore, and previous-image rollback remain
+unproven. A source checkout, local image, or unit test is not release evidence.
 
 ## Local checks
 

@@ -6,16 +6,19 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Release being shipped: App `0.7.0` (`amd64` only, experimental)
-- Integration: `0.7.0`
+- Current candidate: App `0.7.1` (`amd64` only, experimental)
+- Integration candidate: `0.7.1`
 - External Bridge: `0.6.0`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Publication, signing, and target-Home-Assistant acceptance for `0.7.0` remain
-pending. App/Integration `0.6.6` is the signed published baseline, while the
-live-accepted `0.6.5` matrix remains historical evidence; do not reuse either
-image digest or acceptance claim for this release. On target
+The public `0.7.0` baseline is signed and distributed as a generic image with digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+and amd64 child digest
+`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
+Main CI `29471288344` and publication `29471288457` succeeded; signature, SBOM,
+and provenance attestations are on the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Target-Home-Assistant acceptance is bounded. On target
 HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
 namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
@@ -29,9 +32,14 @@ validates canonical contained supplemental roots and hardens
 `lsm_get_self_attr` record parsing. The historical `0.6.5` image passed target-HAOS
 startup, the production sandbox self-test and attestation, an authenticated API
 v1 readiness request, Supervisor discovery, Integration pairing, and panel
-loading. Its live-acceptance evidence does not accept `0.7.0`. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
-unattended App update, and previous-image rollback remain unproven.
+loading. The target `0.7.0` run retained ChatGPT Pro, showed dynamic GPT-5.6,
+rendered the five-hour window `Off`, preserved chat/history, and persisted App
+auto-update plus MCP opt-in across restart. Management forms lose unsaved values
+during a background rerender; the `0.7.1` candidate contains the fix. Do not
+claim automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md`
+mutation acceptance until retested. The first unattended App update is proven;
+external blocked-network/Nabu Casa/Cloudflare routing, cold restore, and
+previous-image rollback remain unproven.
 
 The `0.7.0` release advertises the Supervisor-assigned private App IP and includes a
 fresh non-secret publication marker on each start, so Home Assistant can

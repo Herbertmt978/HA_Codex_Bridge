@@ -34,6 +34,8 @@ workspace paths, or workspace secrets.
 - For a missing model or reasoning level, check the panel catalogue status.
   Runtime discovery may show marked recovery data rather than a current list.
 
-The App is experimental and its public image is not available yet. For current
-recovery, use a cold backup or an existing private external Bridge; App-image
-rollback awaits a published immutable prior tag and tested restore procedure.
+The App `0.7.0` image is published and signed, and its first unattended update
+has been observed. Management forms currently lose unsaved values during a
+background rerender; the `0.7.1` candidate contains the fix. For recovery, use
+a cold backup or an existing private external Bridge; external blocked-network
+routing, cold restore, and App-image rollback remain unproven.

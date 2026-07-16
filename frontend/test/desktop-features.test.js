@@ -372,6 +372,67 @@ describe("desktop feature surfaces", () => {
     });
   });
 
+  it("preserves scheduled form drafts across status renders, including selects and textareas", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "scheduled";
+    panel._desktopFeatures.scheduled.loaded = true;
+    panel._desktopFeatures.scheduled.data = { automations: [] };
+    panel._callWS = vi.fn().mockResolvedValue({});
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue(undefined);
+    panel._render(true);
+
+    await panel._handleDesktopAction("open-schedule-form", {}, null);
+    const prompt = panel.shadowRoot.querySelector('[data-desktop-field="prompt"]');
+    const scheduleType = panel.shadowRoot.querySelector('[data-desktop-field="schedule_type"]');
+    const mode = panel.shadowRoot.querySelector('[data-desktop-field="mode"]');
+    prompt.value = "Keep this prompt";
+    prompt.dispatchEvent(new Event("input", { bubbles: true }));
+    scheduleType.value = "interval";
+    scheduleType.dispatchEvent(new Event("change", { bubbles: true }));
+    mode.value = "full-auto";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+    panel.shadowRoot.querySelector('[data-desktop-field="interval_seconds"]').value = "60";
+    panel.shadowRoot.querySelector('[data-desktop-field="interval_seconds"]').dispatchEvent(new Event("input", { bubbles: true }));
+
+    panel._renderDesktopSurface();
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="prompt"]').value).toBe("Keep this prompt");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="schedule_type"]').value).toBe("interval");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="mode"]').value).toBe("full-auto");
+
+    const submitTarget = panel.shadowRoot.querySelector('[data-desktop-field="prompt"]');
+    await panel._handleDesktopAction("submit-schedule", {}, submitTarget);
+    expect(panel._callWS).toHaveBeenCalledWith("create_automation", expect.objectContaining({
+      prompt: "Keep this prompt",
+      schedule: expect.objectContaining({ kind: "interval", seconds: 60 }),
+      mode: "full-auto",
+    }));
+    expect(panel._desktopFeatures.scheduled.formDraft).toEqual({});
+  });
+
+  it("preserves skill form drafts across status renders and clears them when cancelled", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "skills";
+    panel._desktopFeatures.skills.loaded = true;
+    panel._desktopFeatures.skills.data = { skills: [] };
+    panel._render(true);
+
+    await panel._handleDesktopAction("open-skill-form", {}, null);
+    const name = panel.shadowRoot.querySelector('[data-desktop-field="name"]');
+    const instructions = panel.shadowRoot.querySelector('[data-desktop-field="instructions"]');
+    name.value = "Release checklist";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    instructions.value = "Check the release notes.";
+    instructions.dispatchEvent(new Event("input", { bubbles: true }));
+    panel._renderDesktopSurface();
+
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="name"]').value).toBe("Release checklist");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="instructions"]').value).toBe("Check the release notes.");
+    await panel._handleDesktopAction("close-form", {}, null);
+    await panel._handleDesktopAction("open-skill-form", {}, null);
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="name"]').value).toBe("");
+    expect(panel.shadowRoot.querySelector('[data-desktop-field="instructions"]').value).toBe("");
+  });
+
   it("fetches the full automation before opening the edit form", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._activeDestination = "scheduled"; panel._desktopFeatures.scheduled.loaded = true; panel._desktopFeatures.scheduled.data = { automations: [{ automation_id: "a1", revision: 2, name: "Summary" }] };
@@ -379,6 +440,21 @@ describe("desktop feature surfaces", () => {
     await panel._handleDesktopAction("update-automation", { id: "a1", revision: "2" }, null);
     expect(panel._callWS).toHaveBeenCalledWith("get_automation", { automation_id: "a1" });
     expect(panel._desktopFeatures.scheduled.editingAutomation.prompt).toBe("keep me");
+  });
+
+  it("keeps a schedule draft when loading the automation for edit fails", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "scheduled";
+    panel._desktopFeatures.scheduled.loaded = true;
+    panel._desktopFeatures.scheduled.form = "schedule";
+    panel._desktopFeatures.scheduled.formDraft = { prompt: "Do not lose this" };
+    panel._desktopFeatures.scheduled.data = { automations: [] };
+    panel._callWS = vi.fn().mockRejectedValue(new Error("detail unavailable"));
+
+    await panel._handleDesktopAction("update-automation", { id: "a1" }, null);
+
+    expect(panel._desktopFeatures.scheduled.formDraft).toEqual({ prompt: "Do not lose this" });
+    expect(panel._desktopFeatures.scheduled.error).toMatch(/detail unavailable/i);
   });
 
   it("preserves an interval anchor when saving an unchanged edit", async () => {
@@ -431,6 +507,22 @@ describe("desktop feature surfaces", () => {
     expect(panel._desktopFeatures.skills.data.skills).toEqual([{ name: "Refreshed", enabled: true, scope: "." }]);
     expect(panel._desktopFeatures.skills.loading).toBe(false);
     expect(panel._desktopFeatures.skills.loaded).toBe(true);
+  });
+
+  it("refreshes the mutation's originating destination after navigation", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "scheduled";
+    const state = panel._desktopFeatures.scheduled;
+    let resolveMutation;
+    panel._callWS = vi.fn().mockImplementation(() => new Promise((resolve) => { resolveMutation = resolve; }));
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue(undefined);
+
+    const mutation = panel._desktopMutation("create_automation", {}, state);
+    panel._activeDestination = "skills";
+    resolveMutation({});
+    await mutation;
+
+    expect(panel._loadDesktopDestination).toHaveBeenCalledWith("scheduled", { force: true });
   });
 
   it("keeps mobile desktop routes reopenable and supports settings tab keyboard navigation", async () => {

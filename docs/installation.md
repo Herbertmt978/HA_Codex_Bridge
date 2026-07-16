@@ -2,10 +2,17 @@
 
 ## Status before you start
 
-This guide covers the release being shipped: experimental, `amd64`-only App
-`0.7.0`, Integration `0.7.0`, Bridge `0.6.0`, and Codex `0.144.4`.
-Publication, signing, and target-Home-Assistant acceptance remain pending. The
-signed, live-accepted `0.6.5` matrix is historical evidence only. On target
+This guide covers the current candidate: experimental, `amd64`-only App
+`0.7.1`, Integration `0.7.1`, Bridge `0.6.0`, and Codex `0.144.4`; it carries
+the management-form rerender fix and remains under target-HA retest. The
+published/signed `0.7.0` baseline has generic image digest
+`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
+with amd64 child
+`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
+main CI `29471288344` and publication `29471288457` succeeded, with signature,
+SBOM, and provenance on the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
+matrix is historical evidence only. On target
 HAOS, Codex `0.144.4`'s official
 `--no-proc` fallback works: denial of a fresh `/proc` mount leaves the sandbox
 namespaces, read-only filesystem, AppArmor, and seccomp intact; `/proc` is
@@ -26,10 +33,16 @@ hydration. The `0.7.0` panel has a clean left navigation tree, title-first chat
 rows, one action menu, correct archive collapse/search and search icon, 44px
 mobile targets, transcript-adjacent decisions, and collapsed mobile
 limits/model controls. Its catalogue
-recovery remains dynamic; no model or reasoning list is hardcoded. The `0.6.5`
-live acceptance is historical and does not accept this release. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
-unattended App update, and previous-image rollback remain unproven.
+recovery remains dynamic; no model or reasoning list is hardcoded. The target
+run observed App and Integration `0.7.0`, Bridge `0.6.0`, Codex `0.144.4`,
+retained ChatGPT Pro, dynamic GPT-5.6, five-hour `Off`, preserved chat/history,
+and App auto-update plus MCP opt-in persistence after restart. Management forms
+lose unsaved values during a background rerender; the `0.7.1` candidate
+contains the fix. Do not claim automation, skills, plugins/marketplaces,
+MCP-server, or `AGENTS.md` mutation acceptance until retested. The `0.6.5`
+live acceptance is historical. The first unattended App update is proven;
+external blocked-network/Nabu Casa/Cloudflare routing, cold restore, and
+previous-image rollback remain unproven.
 
 Codex Bridge has two separate surfaces:
 
@@ -132,9 +145,9 @@ device-auth page.
 3. Update the App separately from **Settings -> Apps -> Codex Bridge** when a
    new App version is offered. The App's auto-update toggle may apply released
    images automatically.
-4. Make a cold backup before an App change. The first unattended update and
-   restore canary remains open, and arbitrary prior-image selection is not a
-   validated rollback path.
+4. Make a cold backup before an App change. The first unattended update is
+   proven, but restore and arbitrary prior-image selection are not validated
+   rollback paths.
 
 ## After installation
 
