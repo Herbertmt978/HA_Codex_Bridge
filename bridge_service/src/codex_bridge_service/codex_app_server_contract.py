@@ -50,6 +50,24 @@ _CLIENT_RESPONSE_TYPES = {
     "turn/start": "TurnStartResponse",
     "turn/interrupt": "TurnInterruptResponse",
     "turn/steer": "TurnSteerResponse",
+    "config/read": "ConfigReadResponse",
+    "config/value/write": "ConfigWriteResponse",
+    "config/batchWrite": "ConfigWriteResponse",
+    "config/mcpServer/reload": "McpServerRefreshResponse",
+    "mcpServerStatus/list": "ListMcpServerStatusResponse",
+    "mcpServer/oauth/login": "McpServerOauthLoginResponse",
+    "skills/list": "SkillsListResponse",
+    "skills/config/write": "SkillsConfigWriteResponse",
+    "skills/extraRoots/set": "SkillsExtraRootsSetResponse",
+    "plugin/list": "PluginListResponse",
+    "plugin/installed": "PluginInstalledResponse",
+    "plugin/read": "PluginReadResponse",
+    "plugin/install": "PluginInstallResponse",
+    "plugin/uninstall": "PluginUninstallResponse",
+    "plugin/skill/read": "PluginSkillReadResponse",
+    "marketplace/add": "MarketplaceAddResponse",
+    "marketplace/remove": "MarketplaceRemoveResponse",
+    "marketplace/upgrade": "MarketplaceUpgradeResponse",
 }
 _SERVER_RESPONSE_TYPES = {
     "item/commandExecution/requestApproval": "CommandExecutionRequestApprovalResponse",
@@ -139,7 +157,9 @@ def extract_protocol_contract(
     root = Path(schema_root)
     try:
         if not root.is_absolute() or not root.is_dir() or root.is_symlink():
-            raise ProtocolContractError("schema root must be an absolute real directory")
+            raise ProtocolContractError(
+                "schema root must be an absolute real directory"
+            )
     except OSError:
         raise ProtocolContractError("schema root is unavailable") from None
 
@@ -154,7 +174,9 @@ def extract_protocol_contract(
     stable_schema = _canonical_schema(
         _required_schema(schema_files, _SOURCE_STABLE_SCHEMA_FILE)
     )
-    v2_schema = _canonical_schema(_required_schema(schema_files, _SOURCE_V2_SCHEMA_FILE))
+    v2_schema = _canonical_schema(
+        _required_schema(schema_files, _SOURCE_V2_SCHEMA_FILE)
+    )
     _validate_runtime_schema_contract(stable_schema, v2_schema, method_sets)
     return AppServerProtocolContract(
         codex_version=version,
@@ -223,7 +245,9 @@ def load_bundled_protocol_contract() -> AppServerProtocolContract:
     try:
         content = resource.read_bytes()
     except (FileNotFoundError, OSError):
-        raise ProtocolContractError("bundled protocol contract is unavailable") from None
+        raise ProtocolContractError(
+            "bundled protocol contract is unavailable"
+        ) from None
     return parse_protocol_contract(content)
 
 
@@ -322,7 +346,9 @@ class AppServerProtocolValidator:
         try:
             validator.validate(value)
         except (ValidationError, SchemaError):
-            raise ProtocolContractError("protocol payload does not match the lock") from None
+            raise ProtocolContractError(
+                "protocol payload does not match the lock"
+            ) from None
 
     @classmethod
     def _validate_method_message(
@@ -368,7 +394,9 @@ def _inspect_schema_bundle(root: Path) -> tuple[dict[str, bytes], str]:
         try:
             metadata = entry.lstat()
         except OSError:
-            raise ProtocolContractError("schema bundle entry cannot be inspected") from None
+            raise ProtocolContractError(
+                "schema bundle entry cannot be inspected"
+            ) from None
         if stat.S_ISDIR(metadata.st_mode) and not entry.is_symlink():
             continue
         if (
@@ -382,7 +410,9 @@ def _inspect_schema_bundle(root: Path) -> tuple[dict[str, bytes], str]:
         try:
             metadata = path.lstat()
         except OSError:
-            raise ProtocolContractError("schema bundle entry cannot be inspected") from None
+            raise ProtocolContractError(
+                "schema bundle entry cannot be inspected"
+            ) from None
         if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
             raise ProtocolContractError("schema bundle contains a non-regular entry")
         if metadata.st_size <= 0 or metadata.st_size > _MAX_SCHEMA_FILE_BYTES:
@@ -558,7 +588,9 @@ def _method_validator_map(
         try:
             enum = entry["properties"]["method"]["enum"]
         except (KeyError, TypeError):
-            raise ProtocolContractError("runtime method schema entry is invalid") from None
+            raise ProtocolContractError(
+                "runtime method schema entry is invalid"
+            ) from None
         if not isinstance(enum, list) or len(enum) != 1 or not isinstance(enum[0], str):
             raise ProtocolContractError("runtime method schema enum is invalid")
         method = enum[0]
@@ -598,14 +630,20 @@ def _extract_methods(content: bytes) -> frozenset[str]:
         methods.append(_validate_method(enum[0]))
     result = frozenset(methods)
     if not result or len(result) != len(methods):
-        raise ProtocolContractError("method schema contains missing or duplicate methods")
+        raise ProtocolContractError(
+            "method schema contains missing or duplicate methods"
+        )
     if len(result) > _MAX_METHODS_PER_DIRECTION:
         raise ProtocolContractError("method schema exceeds its limit")
     return result
 
 
 def _parse_method_list(value: object) -> frozenset[str]:
-    if not isinstance(value, list) or not value or len(value) > _MAX_METHODS_PER_DIRECTION:
+    if (
+        not isinstance(value, list)
+        or not value
+        or len(value) > _MAX_METHODS_PER_DIRECTION
+    ):
         raise ProtocolContractError("protocol method list is invalid")
     methods = [_validate_method(method) for method in value]
     if methods != sorted(methods) or len(set(methods)) != len(methods):

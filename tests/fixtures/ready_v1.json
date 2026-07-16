@@ -12,6 +12,6 @@
   "codex": {"version": "0.144.1"},
   "image": {"revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "release_lock_digest": null},
   "architecture": "amd64",
-  "capabilities": ["api_v1", "legacy_v0"],
+  "capabilities": ["api_v1", "legacy_v0", "automations_v1", "mcp_admin_v1", "skills_v1", "plugins_v1", "agents_v1"],
   "readiness": {"state": "ready", "reasons": []}
 }

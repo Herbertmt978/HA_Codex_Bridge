@@ -28,7 +28,9 @@ class ScriptedPeer:
         self.sidecars = self.codex_home / ".fake-app-server"
         self.sidecars.mkdir(parents=True, exist_ok=True)
         self.generation = self._claim_generation()
-        self.scenario = self._read_json(self.sidecars / f"scenario-{self.generation}.json")
+        self.scenario = self._read_json(
+            self.sidecars / f"scenario-{self.generation}.json"
+        )
         self.control_path = self.sidecars / f"control-{self.generation}.json"
         self.transcript_path = self.sidecars / f"transcript-{self.generation}.jsonl"
         self.process_path = self.sidecars / f"process-{self.generation}.json"
@@ -59,7 +61,9 @@ class ScriptedPeer:
         return value
 
     def _record(self, direction: str, message: object) -> None:
-        entry = json.dumps({"direction": direction, "message": message}, separators=(",", ":"))
+        entry = json.dumps(
+            {"direction": direction, "message": message}, separators=(",", ":")
+        )
         with self._transcript_lock:
             with self.transcript_path.open("a", encoding="utf-8") as transcript:
                 transcript.write(f"{entry}\n")
@@ -100,7 +104,9 @@ class ScriptedPeer:
                 stderr=subprocess.DEVNULL,
             )
             assert self._child.stdout is not None
-            process["childPid"] = int(self._child.stdout.readline().decode("ascii").strip())
+            process["childPid"] = int(
+                self._child.stdout.readline().decode("ascii").strip()
+            )
         self.process_path.write_text(json.dumps(process), encoding="utf-8")
 
     def _install_signals(self) -> None:
@@ -134,7 +140,9 @@ class ScriptedPeer:
                 sys.stderr.write(f"{line}\n")
         sys.stderr.flush()
 
-    def _delayed_response(self, request: dict[str, Any], action: dict[str, Any]) -> None:
+    def _delayed_response(
+        self, request: dict[str, Any], action: dict[str, Any]
+    ) -> None:
         time.sleep(float(action.get("delay_seconds", 0.1)))
         self._send_result(request, action)
 
@@ -171,11 +179,17 @@ class ScriptedPeer:
                 self._send_result(first, action)
                 pending.clear()
         elif mode == "delay":
-            Thread(target=self._delayed_response, args=(request, action), daemon=True).start()
+            Thread(
+                target=self._delayed_response, args=(request, action), daemon=True
+            ).start()
         elif mode == "hold":
-            Thread(target=self._held_response, args=(request, action), daemon=True).start()
+            Thread(
+                target=self._held_response, args=(request, action), daemon=True
+            ).start()
         elif mode == "error":
-            self._send({"id": request["id"], "error": action.get("error", {"code": -32000})})
+            self._send(
+                {"id": request["id"], "error": action.get("error", {"code": -32000})}
+            )
         elif mode == "malformed":
             self._send_raw(str(action.get("payload", "{malformed-json")))
         elif mode == "oversize":
@@ -246,7 +260,10 @@ class ScriptedPeer:
 
 
 def main() -> int:
-    if sys.argv[1:] != ["app-server", "--stdio"]:
+    if sys.argv[1:] not in (
+        ["app-server", "--stdio"],
+        ["-c", "mcp_servers={}", "app-server", "--stdio"],
+    ):
         raise SystemExit(f"unexpected argv: {sys.argv[1:]!r}")
     return ScriptedPeer().run()
 

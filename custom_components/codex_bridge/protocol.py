@@ -48,7 +48,17 @@ _READINESS_REASONS = frozenset(
         "sandbox_unavailable",
     }
 )
-_KNOWN_CAPABILITIES = frozenset({"api_v1", "legacy_v0"})
+_KNOWN_CAPABILITIES = frozenset(
+    {
+        "api_v1",
+        "legacy_v0",
+        "automations_v1",
+        "mcp_admin_v1",
+        "skills_v1",
+        "plugins_v1",
+        "agents_v1",
+    }
+)
 _KNOWN_PROBLEM_CODES = frozenset(
     {
         "api_incompatible",
@@ -60,8 +70,18 @@ _KNOWN_PROBLEM_CODES = frozenset(
         "authentication_failed",
         "authentication_required",
         "authorization_failed",
+        "agents_unavailable",
+        "automation_conflict",
+        "automation_error",
+        "automation_invalid",
+        "automation_not_found",
+        "automation_revision_conflict",
         "bad_request",
         "bridge_problem",
+        "capabilities_conflict",
+        "capabilities_error",
+        "capabilities_invalid",
+        "capabilities_unavailable",
         "conflict",
         "durable_operation_too_large",
         "event_cursor_expired",
@@ -78,6 +98,13 @@ _KNOWN_PROBLEM_CODES = frozenset(
         "not_found",
         "invalid_event_filter",
         "invalid_relative_path",
+        "mcp_config_conflict",
+        "mcp_disabled",
+        "mcp_elicitation_unavailable",
+        "mcp_request_invalid",
+        "mcp_runtime_invalid",
+        "mcp_server_not_found",
+        "mcp_unavailable",
         "payload_too_large",
         "path_escape",
         "quota_exceeded",

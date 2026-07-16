@@ -49,6 +49,7 @@ class _SharedClient:
         self.effort = "ultra"
         self.limit_used_percent = 10.0
         self.turn_in_progress = False
+        self.fail_mcp_cleanup = False
         self._thread_number = 0
         self._turn_number = 0
         self.notification_handlers: dict[str, Any] = {}
@@ -75,7 +76,7 @@ class _SharedClient:
         self.calls.append(method)
         self.requests.append((method, deepcopy(params)))
         if method == "config/read":
-            if self.fail_catalogue:
+            if self.fail_catalogue and params != {"includeLayers": True}:
                 raise RuntimeError(
                     "Bearer private-secret C:\\Users\\owner\\.codex\\auth.json"
                 )
@@ -83,8 +84,37 @@ class _SharedClient:
                 "config": {
                     "model": self.model,
                     "model_reasoning_effort": self.effort,
-                }
+                    # The disabled process override masks stale user MCP here.
+                    "mcp_servers": {},
+                    "features": {"plugins": True},
+                },
+                "layers": [
+                    {
+                        "name": {
+                            "type": "user",
+                            "file": "/data/codex-home/config.toml",
+                        },
+                        "version": "user-v1",
+                        "config": {
+                            "mcp_servers": {
+                                "stale": {"url": "https://stale-mcp.example/stream"}
+                            },
+                            "features": {"plugins": True},
+                        },
+                    }
+                ],
+                "origins": {},
             }
+        if method == "config/batchWrite":
+            if self.fail_mcp_cleanup:
+                raise RuntimeError("Bearer private-secret cleanup failure")
+            return {
+                "status": "ok",
+                "version": "user-v2",
+                "filePath": "/data/codex-home/config.toml",
+            }
+        if method == "config/mcpServer/reload":
+            return {}
         if method == "model/list":
             if params and params.get("cursor") == "next":
                 return {
@@ -173,9 +203,7 @@ class _SharedClient:
                 "turn": {
                     "id": f"codex-turn-{self._turn_number}",
                     "items": [],
-                    "status": (
-                        "inProgress" if self.turn_in_progress else "completed"
-                    ),
+                    "status": ("inProgress" if self.turn_in_progress else "completed"),
                 }
             }
         if method == "turn/interrupt":
@@ -317,6 +345,7 @@ def test_main_ha_composition_defers_catalogue_and_turns_to_shared_runtime(
     assert captured["limits_probe"] is None
     assert captured["account_probe"] is None
     assert captured["runner_factory"] is None
+    assert captured["enable_mcp"] is False
     assert captured["model_discovery_timeout_seconds"] == 10.0
     assert captured["model_cache_ttl_seconds"] == 600.0
 
@@ -372,8 +401,11 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
     assert thread_request["config"] == {"default_permissions": "ha_bridge"}
     assert "sandboxPolicy" not in turn_request
     _wait_until(
-        lambda: not any(
-            thread.name.startswith("CodexRuntime-") for thread in threading.enumerate()
+        lambda: (
+            not any(
+                thread.name.startswith("CodexRuntime-")
+                for thread in threading.enumerate()
+            )
         )
     )
 
@@ -745,8 +777,10 @@ def test_generation_change_interrupts_active_and_queued_shared_turns(
         ).json()
         client.generation = 2
         _wait_until(
-            lambda: app.state.storage.load_thread(first.thread_id).status == "error"
-            and app.state.storage.load_thread(second.thread_id).status == "error"
+            lambda: (
+                app.state.storage.load_thread(first.thread_id).status == "error"
+                and app.state.storage.load_thread(second.thread_id).status == "error"
+            )
         )
         assert active["run_id"] != queued["run_id"]
         assert app.state.runner.runtime_snapshot().active_turns == 0
@@ -816,3 +850,80 @@ def test_lifecycle_normal_shutdown_closes_resources_in_reverse_order(
         "auth.close",
         "client.close",
     ]
+
+
+def test_disabled_mcp_cleans_only_native_mcp_root_before_runtime_start(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    client = _LifecycleClient(events)
+    auth = _Auth(events=events)
+    runner = _Runner(events)
+    app = create_app(
+        root_path=tmp_path / "data",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=_workspace(tmp_path),
+        app_server_factory=lambda: client,
+        auth_coordinator_factory=lambda _client: auth,
+        runner_factory=lambda _storage: runner,
+        sandbox_ready=True,
+    )
+
+    with TestClient(app):
+        assert "mcp_admin_v1" not in app.state.feature_capabilities
+
+    assert client.requests[:3] == [
+        ("config/read", {"includeLayers": True}),
+        (
+            "config/batchWrite",
+            {
+                "edits": [
+                    {
+                        "keyPath": "mcp_servers",
+                        "mergeStrategy": "replace",
+                        "value": None,
+                    }
+                ],
+                "expectedVersion": "user-v1",
+                "reloadUserConfig": True,
+            },
+        ),
+        ("config/mcpServer/reload", None),
+    ]
+    assert events[:3] == ["client.start", "auth.start", "runner.start"]
+
+
+def test_disabled_mcp_cleanup_failure_keeps_runtime_non_ready(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    client = _LifecycleClient(events)
+    client.fail_mcp_cleanup = True
+    auth = _Auth(events=events)
+    runner = _Runner(events)
+    app = create_app(
+        root_path=tmp_path / "data",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=_workspace(tmp_path),
+        app_server_factory=lambda: client,
+        auth_coordinator_factory=lambda _client: auth,
+        runner_factory=lambda _storage: runner,
+        sandbox_ready=True,
+    )
+
+    with TestClient(app) as http:
+        response = http.get(
+            "/ready",
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["readiness"] == {
+        "state": "fatal",
+        "reasons": ["runtime_unavailable"],
+    }
+    assert app.state.runtime_startup_failed is True
+    assert "auth.start" not in events
+    assert "runner.start" not in events

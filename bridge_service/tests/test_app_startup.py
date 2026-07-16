@@ -160,6 +160,16 @@ def test_bridge_listens_on_the_app_network_while_readiness_stays_local() -> None
     assert "127.0.0.1:8766" in discovery
 
 
+def test_bridge_reads_boolean_mcp_option_and_passes_only_the_validated_value() -> None:
+    bridge_run = ROOTFS / "etc" / "s6-overlay" / "s6-rc.d" / "codex-bridge" / "run"
+    bridge = bridge_run.read_text(encoding="utf-8")
+
+    assert "bashio::config 'enable_mcp'" in bridge
+    assert re.search(r"CODEX_BRIDGE_ENABLE_MCP=\"?\$\{?enable_mcp\}?\"?", bridge)
+    assert re.search(r"case\s+\"?\$\{?enable_mcp\}?\"?\s+in", bridge)
+    assert "true|false" in bridge
+
+
 @pytest.mark.parametrize("service", ["codex-bridge-init"])
 def test_s6_oneshots_use_single_command_launchers(service: str) -> None:
     script = _oneshot_script(service)
@@ -403,8 +413,12 @@ def test_discovery_uses_a_fresh_marker_while_retaining_supervisor_identity(
         lambda _path, value: persisted.append(value),
     )
 
-    module.publish_discovery(host="172.30.32.5", supervisor_token="supervisor.test.token")
-    module.publish_discovery(host="172.30.32.5", supervisor_token="supervisor.test.token")
+    module.publish_discovery(
+        host="172.30.32.5", supervisor_token="supervisor.test.token"
+    )
+    module.publish_discovery(
+        host="172.30.32.5", supervisor_token="supervisor.test.token"
+    )
 
     assert publications == [
         "1234567890abcdef1234567890abcdef",
@@ -450,7 +464,13 @@ def test_discovery_logs_safe_failure_categories_without_credentials() -> None:
     script = _discovery_script().read_text(encoding="utf-8")
     publisher = (LIBEXEC / "publish_discovery.py").read_text(encoding="utf-8")
 
-    for category in ("configuration", "credential", "Supervisor", "transport", "storage"):
+    for category in (
+        "configuration",
+        "credential",
+        "Supervisor",
+        "transport",
+        "storage",
+    ):
         assert category in script
     assert "publication_id" in publisher
     assert "uuid4" in publisher

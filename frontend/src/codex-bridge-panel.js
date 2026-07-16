@@ -1,5 +1,7 @@
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
+import { INFO_TABS } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
+import { getRunActivityViewModel } from "./run-activity.js";
 import { createPreviewElement, previewDescriptor, sanitizeFilename } from "./safe-dom.js";
 import { uploadResumableFile } from "./uploads.js";
 import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
@@ -7,8 +9,9 @@ import { getApprovalViewModel, renderApproval } from "./views/approval.js";
 import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js";
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
+import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.6.6";
+const PANEL_VERSION = "0.7.0";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -26,7 +29,6 @@ const AUTH_ACTION_IDS = new Set([
 ]);
 const AUTH_POLL_INTERVAL_MS = 2000;
 const CREATED_THREAD_REFRESH_GRACE_MS = 5000;
-
 const MODE_OPTIONS = [
   {
     value: "observe",
@@ -303,6 +305,185 @@ template.innerHTML = `
 
     .hidden {
       display: none !important;
+    }
+
+    .confirmation-layer[hidden],
+    .information-layer[hidden] {
+      display: none !important;
+      pointer-events: none;
+    }
+
+    .tooltip-layer {
+      position: fixed;
+      z-index: 30;
+      max-width: min(280px, calc(100vw - 16px));
+      padding: 6px 8px;
+      border: 1px solid color-mix(in srgb, var(--text-color) 22%, var(--border-color) 78%);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--text-color) 94%, #000 6%);
+      color: var(--surface-bg);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
+      font-size: 12px;
+      line-height: 1.35;
+      pointer-events: none;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    .confirmation-layer,
+    .information-layer {
+      position: fixed;
+      z-index: 40;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .information-layer {
+      z-index: 39;
+    }
+
+    .confirmation-dialog {
+      width: min(100%, 430px);
+      display: grid;
+      gap: 12px;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--surface-bg);
+      box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
+    }
+
+    .confirmation-dialog h2,
+    .confirmation-dialog p {
+      margin: 0;
+    }
+
+    .confirmation-dialog h2 {
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .confirmation-dialog p {
+      color: var(--muted-color);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .confirmation-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .confirmation-delete {
+      border-color: var(--danger-color);
+      background: #111827;
+      color: #ffffff;
+    }
+
+    .confirmation-delete:hover {
+      border-color: var(--danger-color);
+      background: #000000;
+    }
+
+    .information-dialog {
+      width: min(100%, 680px);
+      max-height: min(82vh, 760px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--surface-bg);
+      box-shadow: 0 24px 72px rgba(15, 23, 42, 0.3);
+      overflow: hidden;
+    }
+
+    .information-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .information-head h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .information-content {
+      display: grid;
+      align-content: start;
+      gap: 18px;
+      min-height: 0;
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .information-summary {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .information-list,
+    .shortcut-list,
+    .flow-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .information-list li,
+    .shortcut-row,
+    .flow-list li {
+      display: grid;
+      gap: 5px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+      background: var(--surface-muted);
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .shortcut-row {
+      grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+      align-items: center;
+    }
+
+    .shortcut-row kbd {
+      width: fit-content;
+      padding: 4px 7px;
+      border: 1px solid var(--border-color);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      font: inherit;
+      font-weight: 650;
+    }
+
+    .information-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .information-primary {
+      background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
+      color: white;
+      border-color: transparent;
     }
 
     .section-scroll,
@@ -1787,6 +1968,9 @@ template.innerHTML = `
     .rail-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      position: relative;
     }
 
     .rail-brand {
@@ -1795,6 +1979,52 @@ template.innerHTML = `
       align-items: center;
       gap: 10px;
       min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .app-menu {
+      position: absolute;
+      z-index: 16;
+      top: calc(100% - 5px);
+      right: 10px;
+      width: min(230px, calc(100vw - 24px));
+      display: grid;
+      gap: 2px;
+      padding: 5px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+      background: var(--surface-bg);
+      box-shadow: 0 16px 42px color-mix(in srgb, var(--text-color) 18%, transparent);
+    }
+
+    .app-menu[hidden] {
+      display: none;
+    }
+
+    .app-menu-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 36px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-color);
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .app-menu-item:hover,
+    .app-menu-item:focus-visible {
+      border: 0;
+      background: var(--surface-muted);
+    }
+
+    .menu-shortcut {
+      color: var(--muted-color);
+      font-size: 10px;
     }
 
     .rail-brand-icon {
@@ -1881,6 +2111,187 @@ template.innerHTML = `
       padding: 8px 10px 10px;
       border-bottom: 1px solid var(--border-color);
     }
+
+    .desktop-destinations {
+      display: grid;
+      gap: 2px;
+      padding: 10px 8px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-destination {
+      min-height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .desktop-destination:hover,
+    .desktop-destination:focus-visible,
+    .desktop-destination[aria-current="page"] {
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .desktop-destination[aria-current="page"] {
+      font-weight: 650;
+    }
+
+    .desktop-feature-surface {
+      display: none;
+      min-height: 0;
+      overflow: auto;
+      padding: clamp(24px, 4vw, 56px);
+      background: var(--canvas-bg);
+    }
+
+    .desktop-feature-surface.visible {
+      display: block;
+      flex: 1 1 auto;
+    }
+
+    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 268px) minmax(0, 1fr); }
+    .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
+    .shell.desktop-route .side-pane { display: none !important; }
+
+    .desktop-feature-header {
+      max-width: 900px;
+      margin: 0 auto 28px;
+    }
+
+    .desktop-feature-title {
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .desktop-feature-summary,
+    .desktop-note {
+      margin: 8px 0 0;
+      max-width: 620px;
+      color: var(--muted-color);
+      line-height: 1.55;
+    }
+
+    .desktop-feature-content {
+      display: grid;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .desktop-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-section-label {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .desktop-toolbar > button,
+    .settings-panel > button {
+      min-height: 34px;
+      padding: 0 12px;
+      border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
+      background: var(--accent-surface);
+      color: var(--text-color);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .desktop-form-intro {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .desktop-table caption {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .desktop-table td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); font-weight: 600; }
+    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 78%, var(--text-color) 22%); font-weight: 600; }
+    .desktop-table td.is-negative { color: var(--danger-color); font-weight: 600; }
+    .desktop-table-actions { min-width: 180px; }
+    .desktop-action-note { color: var(--muted-color); font-size: 11px; }
+    .settings-panel { display: grid; gap: 14px; }
+
+    .desktop-subheading {
+      margin: 18px 0 -6px;
+      font-size: 14px;
+    }
+
+    .desktop-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .desktop-table th,
+    .desktop-table td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .desktop-table th {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .desktop-table td button {
+      margin: 2px 6px 2px 0;
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+    }
+
+    .desktop-form {
+      display: grid;
+      gap: 12px;
+      max-width: 680px;
+      padding: 16px 0;
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-field { display: grid; gap: 5px; }
+    .desktop-field-label { color: var(--muted-color); font-size: 12px; }
+    .desktop-field input,
+    .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
+    .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .desktop-empty,
+    .desktop-error,
+    .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
+    .desktop-error { color: var(--danger-color); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
+    .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
     .rail-actions .tool-button {
       min-height: 36px;
@@ -2096,7 +2507,7 @@ template.innerHTML = `
 
     .chat-select {
       display: grid;
-      grid-template-columns: 8px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 12px;
       gap: 8px;
       min-height: 36px;
       padding: 0 7px;
@@ -2110,11 +2521,23 @@ template.innerHTML = `
     }
 
     .status-pill {
-      width: 7px;
-      height: 7px;
-      min-width: 7px;
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
       border: 0;
       box-shadow: none;
+      justify-self: end;
+    }
+
+    .status-pill.running {
+      width: 12px;
+      height: 12px;
+      min-width: 12px;
+      border: 2px solid color-mix(in srgb, var(--accent-color) 28%, var(--border-color) 72%);
+      border-top-color: var(--accent-color);
+      background: transparent;
+      box-shadow: none;
+      animation: codex-spin 820ms linear infinite;
     }
 
     .thread-actions-toggle {
@@ -2237,7 +2660,8 @@ template.innerHTML = `
 
     .main-top,
     .interaction-region,
-    .message-list {
+    .message-list,
+    .run-activity-region {
       width: min(calc(100% - 32px), 900px);
       margin-inline: auto;
     }
@@ -2342,6 +2766,197 @@ template.innerHTML = `
     .message-list {
       padding: 20px 0 8px;
       gap: 18px;
+    }
+
+    .run-activity-region {
+      position: relative;
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      margin: 0 auto;
+      padding: 2px 0 8px 34px;
+    }
+
+    .run-activity-region:empty,
+    .run-activity-region[hidden] {
+      display: none;
+    }
+
+    .run-activity-copy {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .run-activity-copy > span:last-child {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .activity-spinner,
+    .step-spinner {
+      display: inline-block;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--accent-color) 25%, var(--border-color) 75%);
+      border-top-color: var(--accent-color);
+      animation: codex-spin 820ms linear infinite;
+    }
+
+    .activity-spinner {
+      width: 15px;
+      height: 15px;
+    }
+
+    .step-spinner {
+      width: 13px;
+      height: 13px;
+      border-width: 2px;
+    }
+
+    .activity-spinner.complete,
+    .step-spinner.complete {
+      border-color: var(--brand-emerald);
+      animation: none;
+    }
+
+    .activity-spinner.failed,
+    .step-spinner.failed {
+      border-color: var(--danger-color);
+      animation: none;
+    }
+
+    @keyframes codex-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .run-step-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .run-step-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      max-width: min(100%, 520px);
+      padding: 6px 11px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: var(--surface-bg);
+      color: var(--muted-color);
+      box-shadow: var(--shadow-soft);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .run-step-chip:hover,
+    .run-step-chip:focus-visible,
+    .run-step-wrap.open .run-step-chip {
+      border-color: color-mix(in srgb, var(--accent-color) 34%, var(--border-color) 66%);
+      color: var(--text-color);
+      background: var(--surface-muted);
+    }
+
+    .run-step-label,
+    .run-step-files {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .run-step-separator {
+      color: color-mix(in srgb, var(--muted-color) 55%, transparent);
+    }
+
+    .run-step-additions {
+      color: color-mix(in srgb, var(--brand-emerald) 82%, var(--text-color) 18%);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .run-step-deletions {
+      color: color-mix(in srgb, var(--danger-color) 84%, var(--text-color) 16%);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .run-step-tooltip {
+      position: absolute;
+      z-index: 12;
+      right: 0;
+      bottom: calc(100% + 9px);
+      width: min(360px, calc(100vw - 32px));
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 11px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      box-shadow: 0 16px 40px color-mix(in srgb, var(--text-color) 18%, transparent);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(5px);
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    }
+
+    .run-step-wrap:hover .run-step-tooltip,
+    .run-step-wrap:focus-within .run-step-tooltip,
+    .run-step-wrap.open .run-step-tooltip {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .run-step-tooltip-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .run-step-history {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .run-step-history li {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .run-step-history-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 5px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
+    }
+
+    .message.streaming .bubble {
+      opacity: 0.9;
+    }
+
+    .message.streaming .row-meta::after {
+      content: " · responding";
+      color: var(--muted-color);
+      font-weight: 400;
     }
 
     .message {
@@ -2708,6 +3323,60 @@ template.innerHTML = `
       box-shadow: none;
     }
 
+    .side-tab-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 3px;
+      padding: 0 10px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .side-tab {
+      min-width: 0;
+      min-height: 32px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .side-tab:hover,
+    .side-tab:focus-visible {
+      border: 0;
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .side-tab[aria-selected="true"] {
+      background: var(--surface-bg);
+      color: var(--text-color);
+      box-shadow: inset 0 0 0 1px var(--border-color);
+    }
+
+    [data-side-tab-panel][hidden] {
+      display: none;
+    }
+
+    .usage-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .usage-limit-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .usage-note {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
     .mobile-header-actions,
     .mobile-drawer-scrim {
       display: none;
@@ -2731,6 +3400,29 @@ template.innerHTML = `
     }
 
     @media (max-width: 880px) {
+      .shell.desktop-route { display: block; overflow: hidden; }
+      .shell.desktop-route .main-pane { min-height: 100dvh; height: 100dvh; }
+      .shell.desktop-route .main-pane { display: flex; }
+      .shell.desktop-route .main-pane > .main-header { display: grid !important; order: 0; }
+      .shell.desktop-route .main-pane > .desktop-feature-surface { order: 1; min-height: 0; }
+      .desktop-feature-surface { padding: 24px 16px 40px; }
+      .desktop-feature-header { margin-bottom: 22px; }
+      .desktop-feature-title { font-size: 27px; }
+      .desktop-table thead { display: none; }
+      .desktop-table,
+      .desktop-table tbody,
+      .desktop-table tr,
+      .desktop-table td { display: block; width: 100%; }
+      .desktop-table tr { padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+      .desktop-table td { display: grid; grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); gap: 12px; padding: 5px 0; border: 0; }
+      .desktop-table td::before { content: attr(data-label); color: var(--muted-color); font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; }
+      .desktop-table-actions { display: flex !important; flex-wrap: wrap; gap: 6px; padding-top: 9px !important; }
+      .desktop-table-actions::before { display: none; }
+      .desktop-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .desktop-toolbar > button { width: 100%; }
+      .settings-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+      .settings-tab { flex: 0 0 auto; }
+
       .shell {
         display: block;
         height: 100dvh;
@@ -2836,6 +3528,7 @@ template.innerHTML = `
       .main-top,
       .interaction-region,
       .message-list,
+      .run-activity-region,
       .composer-shell {
         width: calc(100% - 24px);
       }
@@ -2969,6 +3662,23 @@ template.innerHTML = `
         overflow: visible;
       }
 
+      .run-activity-region {
+        width: calc(100% - 24px);
+        align-items: flex-start;
+        flex-direction: column;
+        padding-left: 0;
+      }
+
+      .run-step-wrap,
+      .run-step-chip {
+        max-width: 100%;
+      }
+
+      .run-step-tooltip {
+        right: auto;
+        left: 0;
+      }
+
       .interaction-card {
         scroll-margin-block: 52px 160px;
       }
@@ -3010,6 +3720,13 @@ template.innerHTML = `
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
       }
+
+      .status-pill.running,
+      .activity-spinner,
+      .step-spinner {
+        animation: none !important;
+        border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color) 36%);
+      }
     }
   </style>
   <div class="shell">
@@ -3030,6 +3747,7 @@ template.innerHTML = `
           <input id="search-input" type="search" placeholder="Search" aria-label="Search chats and projects" autocomplete="off" />
         </label>
       </div>
+      <nav class="desktop-destinations" aria-label="Application destinations" id="desktop-destinations"></nav>
       <div class="forms-stack">
         <section class="panel-form" id="project-form-panel"></section>
         <section class="panel-form" id="thread-form-panel"></section>
@@ -3045,6 +3763,7 @@ template.innerHTML = `
     </aside>
 
     <main class="pane main-pane">
+      <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite"></section>
       <div class="main-header">
         <div class="title-block">
           <span class="eyeline" id="thread-project-label">Ready</span>
@@ -3074,6 +3793,7 @@ template.innerHTML = `
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       </div>
       <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
       <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       <div class="composer-shell">
         <div class="attachment-toolbar">
@@ -3100,43 +3820,65 @@ template.innerHTML = `
 
     <button class="mobile-drawer-scrim" type="button" data-action="close-mobile-drawer" id="mobile-drawer-scrim" aria-label="Close panel drawer" hidden></button>
 
-    <aside class="pane side-pane" id="context-drawer">
+    <aside class="pane side-pane" id="context-drawer" aria-label="Codex information">
       <div class="side-header">
         <div class="title-block">
           <span class="eyeline">Context</span>
-          <span class="title">Progress and artifacts</span>
+          <span class="title" id="side-panel-title">Activity</span>
         </div>
       </div>
+      <div class="side-tab-list" role="tablist" aria-label="Codex information">
+        <button class="side-tab" type="button" role="tab" id="side-tab-activity" data-action="select-side-tab" data-side-tab="activity" aria-controls="side-panel-activity" aria-selected="true">Activity</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-files" data-action="select-side-tab" data-side-tab="files" aria-controls="side-panel-files" aria-selected="false">Files</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-usage" data-action="select-side-tab" data-side-tab="usage" aria-controls="side-panel-usage" aria-selected="false">Usage</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-system" data-action="select-side-tab" data-side-tab="system" aria-controls="side-panel-system" aria-selected="false">System</button>
+      </div>
       <div class="side-scroll">
-        <section class="side-section">
+        <section class="side-section" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
           <span class="section-label">ChatGPT account</span>
           <div id="auth-panel"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="activity">
           <span class="section-label">Progress</span>
           <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
           <div class="section-head-row">
             <span class="section-label">Artifacts</span>
             <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
           </div>
           <div class="artifact-list" id="artifact-list"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="files" hidden>
           <span class="section-label">Preview</span>
           <div class="artifact-preview" id="artifact-preview"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
+          <span class="section-label">Codex usage</span>
+          <div class="usage-panel" id="usage-panel"></div>
+        </section>
+        <section class="side-section" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
           <span class="section-label">Details</span>
           <div class="context-list" id="context-list"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="system" hidden>
           <span class="section-label">Versions</span>
           <div class="diagnostics-list" id="diagnostics-list"></div>
         </section>
       </div>
     </aside>
+  </div>
+  <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="confirmation-layer" hidden>
+    <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
+      <span class="eyeline">Confirm deletion</span>
+      <h2 id="confirmation-title">Delete item?</h2>
+      <p id="confirmation-description">This deletes records only. Workspace files remain in place.</p>
+      <div class="confirmation-actions">
+        <button class="text-button" type="button" data-action="cancel-delete" id="cancel-delete-button">Cancel</button>
+        <button class="confirmation-delete" type="button" data-action="confirm-delete" id="confirm-delete-button">Delete</button>
+      </div>
+    </section>
   </div>
 `;
 
@@ -3282,6 +4024,13 @@ class CodexBridgePanel extends HTMLElement {
     this._mobileDrawerMedia = null;
     this._mobileDrawerMediaListener = null;
     this._mobileDrawerMediaListening = false;
+    this._sideTab = "activity";
+    this._pendingDeletion = null;
+    this._deletionReturnFocus = null;
+    this._tooltipTarget = null;
+    this._runActivityDetailsOpen = false;
+    this._activeDestination = "chats";
+    this._desktopFeatures = Object.fromEntries(DESTINATIONS.filter(({ id }) => id !== "chats").map(({ id }) => [id, createDesktopFeatureState()]));
   }
 
   connectedCallback() {
@@ -3308,6 +4057,7 @@ class CodexBridgePanel extends HTMLElement {
     this._clearInteractionExpiryTimer();
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
+    this._hideTooltip();
     this._revokePreviewUrl();
     this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = false;
@@ -3387,6 +4137,9 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
+    for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
+      this._setTooltipTarget(control, control.getAttribute("aria-label") || control.getAttribute("title") || "");
+    }
 
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
@@ -3395,6 +4148,8 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.addEventListener("keydown", (event) => this._handleKeyDown(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
+    this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
+    this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
 
     this._mobileDrawerMedia = typeof window.matchMedia === "function"
       ? window.matchMedia("(max-width: 880px)")
@@ -3525,6 +4280,10 @@ class CodexBridgePanel extends HTMLElement {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
     if (!actionTarget) {
+      if (this._runActivityDetailsOpen && !eventTarget?.closest(".run-step-wrap")) {
+        this._runActivityDetailsOpen = false;
+        this._renderRunActivity();
+      }
       if (this._hasOpenRailMenu()) {
         this._closeRailMenus();
       }
@@ -3539,11 +4298,20 @@ class CodexBridgePanel extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "select-desktop-destination":
+        this._selectDesktopDestination(actionTarget.dataset.destination || "chats");
+        break;
       case "toggle-mobile-nav":
         this._toggleMobileDrawer("navigation", actionTarget);
         break;
       case "toggle-mobile-context":
         this._toggleMobileDrawer("context", actionTarget);
+        break;
+      case "select-side-tab":
+        this._sideTab = ["activity", "files", "usage", "system"].includes(actionTarget.dataset.sideTab)
+          ? actionTarget.dataset.sideTab
+          : "activity";
+        this._renderSideTabs();
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -3618,7 +4386,7 @@ class CodexBridgePanel extends HTMLElement {
         this._restoreProject(actionTarget.dataset.projectId || "");
         break;
       case "delete-project":
-        this._deleteProject(actionTarget.dataset.projectId || "");
+        this._deleteProject(actionTarget.dataset.projectId || "", actionTarget);
         break;
       case "new-chat":
         this._openThreadFormForProject(actionTarget.dataset.projectId || null);
@@ -3634,7 +4402,17 @@ class CodexBridgePanel extends HTMLElement {
         this._restoreThread(actionTarget.dataset.threadId || "");
         break;
       case "delete-thread":
-        this._deleteThread(actionTarget.dataset.threadId || "");
+        this._deleteThread(actionTarget.dataset.threadId || "", actionTarget);
+        break;
+      case "cancel-delete":
+        this._closeDeletionConfirmation();
+        break;
+      case "confirm-delete":
+        this._confirmDeletion();
+        break;
+      case "toggle-run-activity-details":
+        this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
+        this._renderRunActivity();
         break;
       case "send-prompt":
         this._sendPrompt();
@@ -3776,6 +4554,14 @@ class CodexBridgePanel extends HTMLElement {
       this._threadForm.mode = target.value;
       return;
     }
+    if (target.dataset.desktopField === "agents_scope") {
+      const state = this._desktopFeatures.settings;
+      const hasActiveProject = Boolean(this._activeProject()?.project_id);
+      state.agentsScope = target.value === "project" && hasActiveProject ? "project" : "global";
+      state.data.agents = state.data.agentsScopes?.[state.agentsScope] || {};
+      this._renderDesktopSurface();
+      return;
+    }
     if (target.id === "thread-model-select") {
       const modelOverride = target.value || null;
       const project = this._activeProject();
@@ -3835,6 +4621,94 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+      const shortcut = event.key.toLowerCase();
+      if (shortcut === "n") {
+        event.preventDefault();
+        if (this._activeDestination !== "chats") this._selectDesktopDestination("chats");
+        this._openThreadFormForProject(null);
+        return;
+      }
+      if (shortcut === "g") {
+        event.preventDefault();
+        queueMicrotask(() => this.shadowRoot.getElementById("search-input")?.focus());
+        return;
+      }
+      if (event.key === ",") {
+        event.preventDefault();
+        this._selectDesktopDestination("settings");
+        return;
+      }
+    }
+    if (
+      event.key === "Enter"
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && target.tagName !== "TEXTAREA"
+      && !target.closest("button")
+    ) {
+      const form = target.closest("[data-desktop-form]");
+      const submit = form?.querySelector('[data-desktop-action^="submit-"]');
+      if (submit) {
+        event.preventDefault();
+        this._handleDesktopAction(submit.dataset.desktopAction, submit.dataset, target);
+        return;
+      }
+    }
+    if (target.matches('[role="tab"][data-settings-tab]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      const tabs = [...this.shadowRoot.querySelectorAll('[role="tab"][data-settings-tab]')];
+      const currentIndex = tabs.indexOf(target);
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const next = tabs[nextIndex];
+      if (next) {
+        event.preventDefault();
+        const tabId = next.dataset.settingsTab;
+        void this._handleDesktopAction("select-settings-tab", next.dataset, next).then(() => {
+          this.shadowRoot.querySelector(`[data-settings-tab="${tabId}"]`)?.focus();
+        });
+      }
+      return;
+    }
+    if (target.matches('[role="tab"][data-side-tab]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      const tabs = [...this.shadowRoot.querySelectorAll('[role="tab"][data-side-tab]')];
+      const currentIndex = tabs.indexOf(target);
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const next = tabs[nextIndex];
+      if (next) {
+        event.preventDefault();
+        this._sideTab = next.dataset.sideTab;
+        this._renderSideTabs();
+        next.focus();
+      }
+      return;
+    }
+    if (this._pendingDeletion) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this._closeDeletionConfirmation();
+        return;
+      }
+      if (event.key === "Tab") {
+        this._trapDeletionFocus(event);
+        return;
+      }
+    }
+    if (event.key === "Escape" && this._runActivityDetailsOpen) {
+      event.preventDefault();
+      this._runActivityDetailsOpen = false;
+      this._renderRunActivity();
+      this.shadowRoot.getElementById("run-step-chip")?.focus();
+      return;
+    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -3888,6 +4762,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _handleFocusIn(event) {
     const target = event.target;
+    this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
     if (!this._isRefreshLockTarget(target)) {
       return;
@@ -3911,6 +4786,10 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _handleFocusOut(event) {
+    const nextTarget = event.relatedTarget;
+    if (!(nextTarget instanceof Node) || !this._tooltipTarget?.contains(nextTarget)) {
+      this._hideTooltip();
+    }
     if (!this._isRefreshLockTarget(event.target)) {
       return;
     }
@@ -3924,6 +4803,235 @@ class CodexBridgePanel extends HTMLElement {
         this._render(true);
       }
     }, 0);
+  }
+
+  _renderDesktopNavigation() {
+    const nav = this.shadowRoot.getElementById("desktop-destinations");
+    if (!nav) return;
+    nav.replaceChildren();
+    for (const destination of DESTINATIONS) {
+      const control = document.createElement("button");
+      control.type = "button";
+      control.className = "desktop-destination";
+      control.dataset.action = "select-desktop-destination";
+      control.dataset.destination = destination.id;
+      control.textContent = destination.label;
+      control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
+      nav.append(control);
+    }
+  }
+
+  _selectDesktopDestination(destination) {
+    const allowed = DESTINATIONS.some((item) => item.id === destination);
+    this._activeDestination = allowed ? destination : "chats";
+    this._closeMobileDrawer({ restoreFocus: false });
+    if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
+    this._render();
+  }
+
+  async _loadDesktopDestination(destination, { force = false } = {}) {
+    const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
+    if ((state.loading && !force) || (!force && state.loaded)) return;
+    state.loading = true; state.error = ""; this._renderDesktopSurface();
+    try {
+      if (destination === "scheduled") {
+        state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
+          ...item,
+          title: item.name || "Untitled automation",
+          schedule: item.next_run_at || "Not scheduled",
+          status: item.last_status || (item.enabled === false ? "paused" : "idle"),
+        }));
+      } else if (destination === "skills") {
+        state.data.skills = normalizeSkillsResponse(await this._callWS("list_skills", this._desktopWorkspace()));
+      } else if (destination === "plugins") {
+        const workspace = this._desktopWorkspace();
+        const [plugins, marketplaces] = await Promise.all([this._callWS("list_plugins", workspace), this._callWS("list_marketplaces", workspace)]);
+        state.data.plugins = normalizePluginsResponse(plugins); state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
+      } else if (destination === "settings") {
+        const projectId = this._activeProject()?.project_id;
+        const globalAgentsCall = this._callWS("get_agents");
+        const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
+        const [servers, globalAgents, projectAgents] = await Promise.all([this._callWS("list_mcp"), globalAgentsCall, projectAgentsCall]);
+        state.data.mcp_servers = normalizeDesktopList(servers); state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
+      }
+      state.loaded = true;
+    } catch (error) {
+      state.error = normalizeDesktopError(error);
+    } finally {
+      state.loading = false; this._renderDesktopSurface();
+    }
+  }
+
+  _desktopFormValues(target) {
+    const form = target?.closest("form");
+    if (!form) return {};
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+  }
+
+  _desktopWorkspace() {
+    const project = this._activeProject();
+    if (project?.root_path) return { workspace_path: project.root_path };
+    if (this._activeThread?.workspace_path) return { workspace_path: this._activeThread.workspace_path };
+    return { workspace_path: "." };
+  }
+
+  _desktopProjectSelector() {
+    const project = this._activeProject();
+    if (project?.project_id) return { project_id: project.project_id };
+    return this._desktopWorkspace();
+  }
+
+  _externalHttpsUrl(url) {
+    try {
+      const parsed = new URL(String(url));
+      return parsed.protocol === "https:" ? parsed.href : "";
+    } catch {
+      return "";
+    }
+  }
+
+  async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    const destination = this._activeDestination;
+    const state = this._desktopFeatures[destination];
+    if (!state) return;
+    if (["save-agents", "delete-agents"].includes(action)) {
+      const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
+      const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
+      const projectId = dataset.projectId || this._activeProject()?.project_id;
+      if (scope === "project" && !projectId) {
+        state.error = "Select a workspace project before changing project instructions.";
+        state.notice = "";
+        state.confirmAction = null;
+        this._renderDesktopSurface();
+        return;
+      }
+      if (!["global", "project"].includes(scope)) {
+        state.error = "Choose an instruction scope before saving changes.";
+        state.notice = "";
+        state.confirmAction = null;
+        this._renderDesktopSurface();
+        return;
+      }
+      dataset = { ...dataset, agentsScope: scope };
+      if (scope === "project") dataset.projectId = projectId;
+    }
+    const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
+    if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
+    if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
+    if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
+    if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
+    if (action === "open-schedule-form") state.form = "schedule";
+    else if (action === "open-skill-form") state.form = "skill";
+    else if (action === "open-marketplace-form") state.form = "marketplace";
+    else if (action === "open-mcp-form") state.form = "mcp";
+    else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
+    else if (action === "close-form") state.form = null;
+    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state);
+    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state);
+    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state);
+    else if (action === "submit-marketplace") {
+      const values = this._desktopFormValues(target);
+      const source = String(values.source || "");
+      if (!source.startsWith("https://")) { state.error = "Marketplace source must use HTTPS."; }
+      else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state);
+    }
+    else if (action === "submit-mcp") {
+      const payload = this._desktopFormValues(target);
+      for (const key of ["oauth_client_id", "oauth_resource"]) {
+        if (!String(payload[key] || "").trim()) delete payload[key];
+      }
+      await this._desktopMutation("add_mcp", payload, state);
+    }
+    else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
+    else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "update-automation") {
+      try {
+        state.loading = true; this._renderDesktopSurface();
+        state.editingAutomation = await this._callWS("get_automation", { automation_id: dataset.id });
+        state.form = "schedule-edit";
+      } catch (error) { state.error = normalizeDesktopError(error); }
+      finally { state.loading = false; }
+    }
+    else if (action === "list-automation-runs") {
+      try { state.data.runs = normalizeDesktopList(await this._callWS("list_automation_runs", { automation_id: dataset.id })); state.notice = `${state.data.runs.length} run${state.data.runs.length === 1 ? "" : "s"} loaded.`; } catch (error) { state.error = normalizeDesktopError(error); }
+    }
+    else if (action === "delete-automation") await this._desktopMutation("delete_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "toggle-skill") await this._desktopMutation("set_skill", { ...this._desktopWorkspace(), name: dataset.id, enabled: dataset.enabled !== "false" }, state);
+    else if (action === "delete-skill") await this._desktopMutation("delete_skill", { ...this._desktopProjectSelector(), name: dataset.id }, state);
+    else if (action === "install-plugin") await this._desktopMutation("install_plugin", { plugin_name: dataset.name || dataset.id, marketplace_name: dataset.marketplace }, state);
+    else if (action === "uninstall-plugin") await this._desktopMutation("uninstall_plugin", { plugin_id: dataset.id }, state);
+    else if (action === "remove-marketplace") await this._desktopMutation("remove_marketplace", { marketplace_name: dataset.id }, state);
+    else if (action === "upgrade-marketplace") await this._desktopMutation("upgrade_marketplace", { marketplace_name: dataset.id }, state);
+    else if (action === "remove-mcp") await this._desktopMutation("remove_mcp", { name: dataset.id }, state);
+    else if (action === "login-mcp") {
+      let popup = null;
+      try {
+        popup = window.open("about:blank", "_blank");
+        if (!popup) throw new Error("Allow pop-ups to continue OAuth sign-in.");
+        popup.opener = null;
+        const result = await this._callWS("login_mcp", { name: dataset.id });
+        const authorizationUrl = this._externalHttpsUrl(result?.authorization_url);
+        if (!authorizationUrl) throw new Error("OAuth sign-in requires a valid HTTPS authorization URL.");
+        popup.location.replace(authorizationUrl);
+        state.notice = "OAuth sign-in started.";
+        state.error = "";
+      } catch (error) {
+        try { popup?.close(); } catch { /* the popup may already be unavailable */ }
+        state.error = normalizeDesktopError(error);
+      }
+    } else if (action === "save-agents") {
+      const payload = { content: this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.value || "" };
+      if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
+      await this._desktopMutation("update_agents", payload, state);
+    }
+    else if (action === "delete-agents") {
+      const payload = {};
+      if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
+      await this._desktopMutation("delete_agents", payload, state);
+    }
+    this._renderDesktopSurface();
+  }
+
+  async _desktopMutation(action, payload, state) {
+    state.loading = true; state.error = ""; this._renderDesktopSurface();
+    try {
+      await this._callWS(action, payload);
+      state.notice = "Saved.";
+      state.form = null;
+      state.editingAutomation = null;
+      state.loaded = false;
+      await this._loadDesktopDestination(this._activeDestination, { force: true });
+    }
+    catch (error) { state.error = normalizeDesktopError(error); }
+    finally { state.loading = false; }
+  }
+
+  _renderDesktopSurface() {
+    const container = this.shadowRoot.getElementById("desktop-feature-surface");
+    const shell = this.shadowRoot.querySelector(".shell");
+    const route = this._activeDestination !== "chats";
+    shell?.classList.toggle("desktop-route", route);
+    container?.classList.toggle("visible", route);
+    if (route) renderDesktopFeatureSurface(container, { destination: this._activeDestination, state: this._desktopFeatures[this._activeDestination], timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(this._activeProject()?.project_id), onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+  }
+
+  _handleTooltipPointerOver(event) {
+    const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
+    const related = event.relatedTarget;
+    if (!target || (related instanceof Node && target.contains(related))) {
+      return;
+    }
+    this._showTooltipForTarget(target);
+  }
+
+  _handleTooltipPointerOut(event) {
+    const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
+    const related = event.relatedTarget;
+    if (!target || (related instanceof Node && target.contains(related))) {
+      return;
+    }
+    this._hideTooltip();
   }
 
   _render(force = false) {
@@ -3948,12 +5056,7 @@ class CodexBridgePanel extends HTMLElement {
       activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent =
       this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
-    this.shadowRoot.getElementById("thread-status-text").textContent =
-      activeThread ? `Status: ${activeThread.status}` : "";
-    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
-      "hidden",
-      !activeThread || activeThread.status !== "running"
-    );
+    this._renderThreadRunState(activeThread);
     this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
       ? this._uploadProgressText()
       : activeThread
@@ -3962,6 +5065,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderComposerState(activeThread);
 
     this._renderErrorSurface();
+    this._renderDeletionConfirmation();
 
     this._renderRuntimeSurface();
     this._renderOnboardingSurface();
@@ -3980,12 +5084,17 @@ class CodexBridgePanel extends HTMLElement {
     this._renderToolbar();
     this._renderAttachmentChips();
     this._renderMessages();
+    this._renderRunActivity();
     this._renderInteractions();
     this._renderProgress();
     this._renderArtifacts();
     this._renderArtifactPreview();
+    this._renderUsagePanel();
     this._renderContext();
     this._renderDiagnostics();
+    this._renderSideTabs();
+    this._renderDesktopNavigation();
+    this._renderDesktopSurface();
   }
 
   _renderErrorSurface() {
@@ -4020,12 +5129,138 @@ class CodexBridgePanel extends HTMLElement {
     errorStrip.append(copy, actions);
   }
 
+  _renderDeletionConfirmation() {
+    const layer = this.shadowRoot.getElementById("confirmation-layer");
+    const shell = this.shadowRoot.querySelector(".shell");
+    const pending = this._pendingDeletion;
+    if (!pending) {
+      layer.hidden = true;
+      if (shell) {
+        shell.inert = false;
+        shell.removeAttribute("aria-hidden");
+      }
+      return;
+    }
+
+    const isProject = pending.kind === "project";
+    this.shadowRoot.getElementById("confirmation-title").textContent = isProject
+      ? "Delete project?"
+      : "Delete chat?";
+    this.shadowRoot.getElementById("confirmation-description").textContent = isProject
+      ? "This deletes the project and its chat records. Workspace files remain in place."
+      : "This deletes this chat record. Project workspace files remain in place.";
+    this.shadowRoot.getElementById("confirm-delete-button").textContent = isProject
+      ? "Delete project"
+      : "Delete chat";
+    layer.hidden = false;
+    if (shell) {
+      shell.inert = true;
+      shell.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  _openDeletionConfirmation(kind, targetId, trigger = null) {
+    if (!targetId || !["project", "thread"].includes(kind) || this._pendingDeletion) {
+      return;
+    }
+    this._pendingDeletion = { kind, targetId };
+    this._deletionReturnFocus = trigger instanceof HTMLElement ? trigger : this.shadowRoot.activeElement;
+    this._hideTooltip();
+    this._renderDeletionConfirmation();
+    queueMicrotask(() => this.shadowRoot.getElementById("cancel-delete-button")?.focus());
+  }
+
+  _closeDeletionConfirmation({ restoreFocus = true } = {}) {
+    if (!this._pendingDeletion) {
+      return;
+    }
+    const returnFocus = this._deletionReturnFocus;
+    this._pendingDeletion = null;
+    this._deletionReturnFocus = null;
+    this._renderDeletionConfirmation();
+    if (restoreFocus) {
+      queueMicrotask(() => returnFocus?.focus());
+    }
+  }
+
+  async _confirmDeletion() {
+    const pending = this._pendingDeletion;
+    if (!pending) {
+      return;
+    }
+    this._closeDeletionConfirmation();
+    if (pending.kind === "project") {
+      return this._deleteProject(pending.targetId, null, true);
+    }
+    return this._deleteThread(pending.targetId, null, true);
+  }
+
+  _trapDeletionFocus(event) {
+    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+    if (!dialog) {
+      return;
+    }
+    const controls = [...dialog.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)")];
+    if (!controls.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = controls[0];
+    const last = controls.at(-1);
+    const active = this.shadowRoot.activeElement;
+    if (event.shiftKey && (active === first || active === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  _runActivityForThread(thread = this._activeThread) {
+    if (!thread) {
+      return getRunActivityViewModel({}, []);
+    }
+    const events = thread.thread_id === this._selectedThreadId ? this._events : [];
+    return getRunActivityViewModel(thread, events);
+  }
+
+  _threadStatusLabel(thread, activity = this._runActivityForThread(thread)) {
+    if (!thread) {
+      return "";
+    }
+    if (activity.state === "queued") {
+      return "Queued";
+    }
+    if (activity.busy) {
+      return "Working";
+    }
+    if (activity.state === "failed" || thread.status === "error") {
+      return "Needs attention";
+    }
+    if (["cancelled", "interrupted"].includes(activity.state)) {
+      return "Stopped";
+    }
+    return "";
+  }
+
+  _renderThreadRunState(activeThread = this._activeThread) {
+    const activity = this._runActivityForThread(activeThread);
+    this.shadowRoot.getElementById("thread-status-text").textContent =
+      this._threadStatusLabel(activeThread, activity);
+    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
+      "hidden",
+      !activeThread || !activity.busy
+    );
+  }
+
   _renderComposerState(activeThread) {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
     const composerStatus = this.shadowRoot.getElementById("composer-status");
     const composerShell = this.shadowRoot.querySelector(".composer-shell");
-    const isRunning = activeThread?.status === "running";
+    const isRunning = this._runActivityForThread(activeThread).busy;
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const retryable = mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
@@ -5112,9 +6347,11 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _threadRow(thread, { archived = false } = {}) {
-    const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
+    const activity = this._runActivityForThread(thread);
+    const statusClass = activity.busy ? "running" : activity.state === "failed" || thread.status === "error" ? "error" : "idle";
     const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
+    const statusLabel = this._threadStatusLabel(thread, activity) || "Ready";
     const selected = thread.thread_id === this._selectedThreadId;
     const expanded = Boolean(this._expandedThreadActions[thread.thread_id]);
     const row = document.createElement("div");
@@ -5122,7 +6359,7 @@ class CodexBridgePanel extends HTMLElement {
     const select = this._actionButton(
       `chat-select${selected ? " active" : ""}`,
       "select-thread",
-      `Select chat ${thread.title || "Untitled chat"}, ${meta}, status ${thread.status || "unknown"}`
+      `Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
     select.title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
@@ -5132,7 +6369,7 @@ class CodexBridgePanel extends HTMLElement {
     const status = document.createElement("span");
     status.className = `status-pill ${statusClass}`;
     status.setAttribute("aria-hidden", "true");
-    select.append(status, this._textElement("span", "thread-name", thread.title || "Untitled chat"));
+    select.append(this._textElement("span", "thread-name", thread.title || "Untitled chat"), status);
     const rowActions = document.createElement("div");
     rowActions.className = "row-actions";
     const menuId = `thread-secondary-actions-${thread.thread_id}`;
@@ -5454,8 +6691,117 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
+  _renderRunActivity() {
+    const region = this.shadowRoot.getElementById("run-activity");
+    if (!region) return;
+
+    region.replaceChildren();
+    const activity = this._runActivityForThread();
+    const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
+    const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
+    const hasStepDetails = Boolean(activity.step || history.length || files.changed);
+    const showActivityCopy = Boolean(
+      activity.action
+      && (activity.terminal || activity.busy)
+    );
+    if (!this._activeThread || (!showActivityCopy && !hasStepDetails && !activity.busy)) {
+      this._runActivityDetailsOpen = false;
+      region.hidden = true;
+      region.setAttribute("aria-busy", "false");
+      return;
+    }
+
+    region.hidden = false;
+    region.setAttribute("aria-busy", String(activity.busy));
+    if (showActivityCopy) {
+      const copy = document.createElement("div");
+      copy.className = "run-activity-copy";
+      const indicator = document.createElement("span");
+      const indicatorState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
+      indicator.className = `activity-spinner${indicatorState ? ` ${indicatorState}` : ""}`;
+      indicator.setAttribute("aria-hidden", "true");
+      copy.append(indicator, this._textElement("span", "", activity.action));
+      region.append(copy);
+    }
+
+    if (hasStepDetails || activity.busy) {
+      const wrap = document.createElement("div");
+      wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
+      const tooltipId = "run-step-tooltip";
+      const chip = this._actionButton(
+        "run-step-chip",
+        "toggle-run-activity-details",
+        this._runStepAccessibleLabel(activity)
+      );
+      chip.id = "run-step-chip";
+      chip.setAttribute("aria-expanded", String(this._runActivityDetailsOpen));
+      chip.setAttribute("aria-haspopup", "true");
+      chip.setAttribute("aria-controls", tooltipId);
+      chip.setAttribute("aria-describedby", tooltipId);
+
+      const stepIndicator = document.createElement("span");
+      const stepState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
+      stepIndicator.className = `step-spinner${stepState ? ` ${stepState}` : ""}`;
+      stepIndicator.setAttribute("aria-hidden", "true");
+      chip.append(stepIndicator);
+
+      const stepText = activity.step
+        ? `Step ${activity.step.index} / ${activity.step.total}`
+        : activity.busy ? "Working" : activity.state === "failed" ? "Run failed" : "Run complete";
+      chip.append(this._textElement("span", "run-step-label", stepText));
+      if (files.changed) {
+        chip.append(
+          this._textElement("span", "run-step-separator", "·"),
+          this._textElement("span", "run-step-files", `${files.changed} file${files.changed === 1 ? "" : "s"} changed`)
+        );
+      }
+      if (files.additions) chip.append(this._textElement("span", "run-step-additions", `+${files.additions}`));
+      if (files.deletions) chip.append(this._textElement("span", "run-step-deletions", `-${files.deletions}`));
+
+      const tooltip = document.createElement("div");
+      tooltip.id = tooltipId;
+      tooltip.className = "run-step-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      tooltip.append(this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity"));
+      const list = document.createElement("ol");
+      list.className = "run-step-history";
+      const visibleHistory = history.length
+        ? history
+        : [{ label: activity.action || "Waiting for activity details", kind: "activity" }];
+      for (const entry of visibleHistory) {
+        const item = document.createElement("li");
+        const dot = this._textElement("span", "run-step-history-dot", "");
+        dot.setAttribute("aria-hidden", "true");
+        item.append(dot, this._textElement("span", "", entry.label));
+        list.append(item);
+      }
+      tooltip.append(list);
+      wrap.append(chip, tooltip);
+      region.append(wrap);
+    } else {
+      this._runActivityDetailsOpen = false;
+    }
+  }
+
+  _runStepAccessibleLabel(activity) {
+    const parts = [];
+    if (activity.step) {
+      parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
+    } else {
+      parts.push(activity.action || "Run activity");
+    }
+    const files = activity.files || {};
+    if (files.changed) parts.push(`${files.changed} files changed`);
+    if (files.additions) parts.push(`${files.additions} additions`);
+    if (files.deletions) parts.push(`${files.deletions} deletions`);
+    parts.push(this._runActivityDetailsOpen ? "Hide activity details" : "Show activity details");
+    return parts.join(". ");
+  }
+
   _renderMessages() {
     const messageList = this.shadowRoot.getElementById("message-list");
+    const activity = this._runActivityForThread();
+    messageList.setAttribute("aria-busy", String(Boolean(this._selectedThreadId && activity.busy)));
     if (!this._selectedThreadId) {
       this._renderedThreadId = null;
       this._renderedSequence = 0;
@@ -5480,6 +6826,7 @@ class CodexBridgePanel extends HTMLElement {
 
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
+      this._syncStreamingMessage(messageList, activity);
       return;
     }
 
@@ -5497,9 +6844,52 @@ class CodexBridgePanel extends HTMLElement {
       this._renderedSequence = event.sequence;
     }
 
+    this._syncStreamingMessage(messageList, activity);
+
     if (shouldStick) {
       this._scrollMessagesToBottom();
     }
+  }
+
+  _syncStreamingMessage(messageList, activity) {
+    const existing = messageList.querySelector('[data-streaming-message="true"]');
+    const text = this._streamingAssistantText(activity);
+    if (activity.assistantState !== "streaming" || !text) {
+      existing?.remove();
+      return;
+    }
+    messageList.querySelector(".empty-state")?.remove();
+    const article = this._renderMessage("assistant", text, "streaming", false, "Assistant");
+    article.classList.add("streaming");
+    article.dataset.streamingMessage = "true";
+    article.setAttribute("aria-label", "Assistant response in progress");
+    if (existing) {
+      existing.replaceWith(article);
+    } else {
+      messageList.append(article);
+    }
+  }
+
+  _streamingAssistantText(activity) {
+    if (activity.assistantState !== "streaming") return "";
+    let text = "";
+    for (const event of this._events) {
+      const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+      const eventRunId = typeof payload.run_id === "string" ? payload.run_id : "";
+      if (activity.runId && eventRunId && eventRunId !== activity.runId) continue;
+      if (event.event_type === "message.completed") {
+        text = "";
+        continue;
+      }
+      if (event.event_type !== "message.delta") continue;
+      const chunk = typeof payload.text === "string"
+        ? payload.text
+        : typeof payload.delta === "string" ? payload.delta : "";
+      if (!chunk) continue;
+      text = chunk.startsWith(text) && chunk.length > text.length ? chunk : `${text}${chunk}`;
+      if (text.length > 200000) text = text.slice(-200000);
+    }
+    return text;
   }
 
   _scrollMessagesToBottom() {
@@ -5524,11 +6914,11 @@ class CodexBridgePanel extends HTMLElement {
     if (event.event_type === "message.completed") {
       return this._renderMessage("assistant", payload.text, event.sequence, true);
     }
-    if (event.event_type === "run.started") {
-      return this._textElement("div", "event-row", "Run started");
+    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+      return null;
     }
-    if (event.event_type === "run.completed") {
-      return this._textElement("div", "event-row", "Run completed");
+    if (event.event_type === "run.started" || event.event_type === "run.completed") {
+      return null;
     }
     if (event.event_type === "run.queued") {
       return this._textElement("div", "event-row", "Steer queued");
@@ -5843,6 +7233,45 @@ class CodexBridgePanel extends HTMLElement {
       this._textElement("div", "empty-note", preview.notice || preview.contentType || "Binary file")
     );
     container.append(binary);
+  }
+
+  _renderUsagePanel() {
+    const container = this.shadowRoot.getElementById("usage-panel");
+    if (!container) return;
+    const limits = this._status?.limits;
+    const grid = document.createElement("div");
+    grid.className = "usage-limit-grid";
+    const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary ? "Off" : "Unavailable";
+    grid.append(
+      this._compactLimitCard("5 hours", limits?.primary, shortWindowEmptyLabel),
+      this._compactLimitCard("Weekly", limits?.secondary)
+    );
+    const summary = this._textElement("p", "usage-note", this._limitsFootnote(limits));
+    const account = this._status?.account;
+    const details = document.createElement("div");
+    details.className = "context-list";
+    this._renderKeyValueRows(details, [
+      ["Plan", normalizePlanType(limits?.plan_type || account?.plan_type)],
+      ["5-hour window", limits?.available && !limits?.primary && limits?.secondary ? "Off" : limits?.primary ? "Enabled" : "Unavailable"],
+      ["Weekly window", limits?.secondary ? this._formatPercent(limits.secondary.remaining_percent) : "Unavailable"],
+      ["Snapshot", limits?.updated_at ? this._timeAgo(limits.updated_at) : "Unavailable"],
+    ], "context-row");
+    container.replaceChildren(grid, summary, details);
+  }
+
+  _renderSideTabs() {
+    const allowed = INFO_TABS.map((tab) => tab.id);
+    if (!allowed.includes(this._sideTab)) this._sideTab = "activity";
+    for (const tab of this.shadowRoot.querySelectorAll('[role="tab"][data-side-tab]')) {
+      const selected = tab.dataset.sideTab === this._sideTab;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const panel of this.shadowRoot.querySelectorAll("[data-side-tab-panel]")) {
+      panel.hidden = panel.dataset.sideTabPanel !== this._sideTab;
+    }
+    const title = this.shadowRoot.getElementById("side-panel-title");
+    if (title) title.textContent = this._sideTab[0].toUpperCase() + this._sideTab.slice(1);
   }
 
   _renderContext() {
@@ -6253,6 +7682,7 @@ class CodexBridgePanel extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       this._stopPolling();
+      this._runActivityDetailsOpen = false;
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
       this._threadRefreshGraceUntil = 0;
@@ -6996,8 +8426,12 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  async _deleteProject(projectId) {
-    if (!projectId || !window.confirm("Delete this project and its chat records? Workspace files will be left in place.")) {
+  async _deleteProject(projectId, trigger = null, confirmed = false) {
+    if (!projectId) {
+      return;
+    }
+    if (!confirmed) {
+      this._openDeletionConfirmation("project", projectId, trigger);
       return;
     }
     try {
@@ -7037,8 +8471,12 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  async _deleteThread(threadId) {
-    if (!threadId || !window.confirm("Delete this chat? Project files will be left in place.")) {
+  async _deleteThread(threadId, trigger = null, confirmed = false) {
+    if (!threadId) {
+      return;
+    }
+    if (!confirmed) {
+      this._openDeletionConfirmation("thread", threadId, trigger);
       return;
     }
     try {
@@ -7800,6 +9238,15 @@ class CodexBridgePanel extends HTMLElement {
       this._settlePromptMutation(acceptedEvent.payload.client_request_id);
     }
     this._renderMessages();
+    this._renderRunActivity();
+    this._renderThreadRunState();
+    this._renderComposerState(this._activeThread);
+    if (["run.started", "run.completed", "run.failed", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
+      this._renderDirectSection();
+      this._renderProjectList();
+      this._renderArchivedSection();
+      this._renderProgress();
+    }
     if (
       [
         "run.started",
@@ -8385,8 +9832,76 @@ class CodexBridgePanel extends HTMLElement {
     if (accessibleLabel) {
       button.title = accessibleLabel;
       button.setAttribute("aria-label", accessibleLabel);
+      this._setTooltipTarget(button, accessibleLabel);
     }
     return button;
+  }
+
+  _setTooltipTarget(target, label) {
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const text = Array.from(String(label ?? ""), (character) => {
+      const code = character.codePointAt(0);
+      return code <= 31 || code === 127 ? " " : character;
+    }).join("").replace(/\s+/gu, " ").trim().slice(0, 120);
+    if (!text) {
+      return;
+    }
+    target.dataset.tooltip = text;
+    if (!target.getAttribute("title")) {
+      target.title = text;
+    }
+  }
+
+  _showTooltipForTarget(target) {
+    const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
+    if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
+      return;
+    }
+    const text = trigger.dataset.tooltip;
+    const layer = this.shadowRoot.getElementById("tooltip-layer");
+    if (!text || !layer) {
+      return;
+    }
+    this._hideTooltip();
+    this._tooltipTarget = trigger;
+    layer.textContent = text;
+    layer.hidden = false;
+    const descriptions = (trigger.getAttribute("aria-describedby") || "").split(/\s+/u).filter(Boolean);
+    if (!descriptions.includes(layer.id)) {
+      trigger.setAttribute("aria-describedby", [...descriptions, layer.id].join(" "));
+    }
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const left = Math.max(8, Math.min(viewportWidth - 8, rect.left + (rect.width / 2)));
+    const below = rect.top < 56;
+    layer.style.left = `${left}px`;
+    layer.style.top = `${below ? rect.bottom + 8 : rect.top - 8}px`;
+    layer.style.transform = below ? "translateX(-50%)" : "translate(-50%, -100%)";
+  }
+
+  _hideTooltip() {
+    const layer = this.shadowRoot?.getElementById("tooltip-layer");
+    if (this._tooltipTarget && layer) {
+      const descriptions = (this._tooltipTarget.getAttribute("aria-describedby") || "")
+        .split(/\s+/u)
+        .filter((value) => value && value !== layer.id);
+      if (descriptions.length) {
+        this._tooltipTarget.setAttribute("aria-describedby", descriptions.join(" "));
+      } else {
+        this._tooltipTarget.removeAttribute("aria-describedby");
+      }
+    }
+    this._tooltipTarget = null;
+    if (layer) {
+      layer.hidden = true;
+      layer.textContent = "";
+      layer.style.removeProperty("left");
+      layer.style.removeProperty("top");
+      layer.style.removeProperty("transform");
+    }
   }
 
   _input(className, id, placeholder, value, accessibleLabel = placeholder) {

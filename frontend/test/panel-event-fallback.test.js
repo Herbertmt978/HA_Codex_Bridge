@@ -1036,9 +1036,9 @@ describe("polling event fallback", () => {
       await panel._restoreThread("thread-beta");
     }],
     ["delete", async (panel) => {
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       panel._callWS = vi.fn().mockResolvedValue({});
       await panel._deleteThread("thread-alpha");
+      await panel._confirmDeletion();
     }],
   ])("restarts polling after a %s replacement selects another chat", async (_action, run) => {
     const panel = document.createElement("codex-bridge-panel");

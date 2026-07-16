@@ -16,6 +16,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiEndpointError,
     BridgeApiGoneError,
     BridgeApiIncompatibleError,
+    BridgeApiMcpDisabledError,
     BridgeApiPayloadTooLargeError,
     BridgeApiProblemError,
     BridgeApiRangeNotSatisfiableError,
@@ -90,6 +91,115 @@ async def test_start_auth_login_defaults_to_non_destructive_mode(
         await client.async_start_auth_login()
 
     assert bodies == [{"force_logout": False}]
+
+
+async def test_feature_client_route_fails_before_request_when_not_advertised(
+    bridge_server_factory,
+) -> None:
+    observed_paths: list[str] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed_paths.append(request.path)
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_list_automations()
+
+    assert observed_paths == ["/ready"]
+
+
+async def test_missing_mcp_capability_reports_the_app_option_instead_of_an_update(
+    bridge_server_factory,
+) -> None:
+    observed_paths: list[str] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "legacy_v0"]
+
+    async def handler(request: web.Request) -> web.Response:
+        observed_paths.append(request.path)
+        return web.json_response(ready)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiMcpDisabledError) as error:
+            await client.async_list_mcp()
+
+    assert error.value.code == "mcp_disabled"
+    assert observed_paths == ["/ready"]
+
+
+async def test_automation_and_mcp_client_routes_preserve_boundaries(
+    bridge_server_factory,
+) -> None:
+    observed: list[tuple[str, str, object]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        body = (
+            await request.json()
+            if request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and request.content_length
+            else None
+        )
+        observed.append((request.method, request.path, body))
+        if request.path == "/automations/aut_1/runs":
+            return web.json_response(
+                {"automation_run_id": "autrun_1", "status": "queued"}, status=202
+            )
+        if request.path == "/automations/aut_1":
+            return web.json_response({"automation_id": "aut_1", "revision": 1})
+        if request.path == "/mcp/servers/mcp_1/oauth/login":
+            return web.json_response(
+                {"authorization_url": "https://auth.example.invalid/one-time"}
+            )
+        if request.path == "/capabilities/skills":
+            return web.json_response({"name": "review"}, status=201)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_claim_automation_run(
+            "aut_1",
+            due_at="2026-07-15T10:00:00Z",
+            idempotency_key="automation:aut_1:1:2026-07-15T10:00:00Z",
+            expected_revision=1,
+        )
+        login = await client.async_login_mcp("mcp_1")
+        skill = await client.async_create_skill(
+            {
+                "workspace_path": "C:/work",
+                "name": "review",
+                "description": "Review changes",
+                "instructions": "Be precise.",
+            }
+        )
+        await client.async_get_agents()
+        automation = await client.async_get_automation("aut_1")
+
+    assert observed[1] == (
+        "POST",
+        "/automations/aut_1/runs",
+        {
+            "source": "scheduled",
+            "due_at": "2026-07-15T10:00:00Z",
+            "idempotency_key": "automation:aut_1:1:2026-07-15T10:00:00Z",
+            "expected_revision": 1,
+        },
+    )
+    assert login == {"authorization_url": "https://auth.example.invalid/one-time"}
+    assert skill == {"name": "review"}
+    assert automation == {"automation_id": "aut_1", "revision": 1}
+    assert observed[-2] == ("GET", "/agents/global", None)
+    assert observed[-1] == ("GET", "/automations/aut_1", None)
 
 
 async def test_explicit_legacy_client_uses_v0_header_after_legacy_readiness(

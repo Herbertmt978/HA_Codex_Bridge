@@ -41,12 +41,12 @@ function removeControlChars(value) {
   }).join("");
 }
 function sanitizeId(value, fallback = "") {
-  const text = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
-  return text.slice(0, 200) || fallback;
+  const text2 = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
+  return text2.slice(0, 200) || fallback;
 }
 function sanitizeFilename(value, fallback = "download") {
-  const text = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
-  return (text || fallback).slice(0, 255);
+  const text2 = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
+  return (text2 || fallback).slice(0, 255);
 }
 function sanitizeBlobUrl(value, { origin } = {}) {
   if (typeof value !== "string" || !value.startsWith("blob:")) return null;
@@ -226,6 +226,404 @@ function acceptEvents(state, values) {
   return { state: next, accepted, controls };
 }
 
+// frontend/src/info-center.js
+var MAX_SAFE_BYTES = 1024 ** 5;
+var PLAN_NAMES = Object.freeze({
+  free: "Free",
+  go: "Go",
+  plus: "Plus",
+  pro: "Pro",
+  prolite: "Pro",
+  team: "Team",
+  self_serve_business_usage_based: "Business",
+  business: "Business",
+  enterprise_cbp_usage_based: "Enterprise",
+  enterprise: "Enterprise",
+  edu: "Education"
+});
+var RUN_STATES = Object.freeze({
+  starting: "Starting",
+  queued: "Queued",
+  running: "Working",
+  in_progress: "Working",
+  cancelling: "Stopping",
+  completed: "Completed",
+  failed: "Needs attention",
+  error: "Needs attention",
+  cancelled: "Stopped",
+  interrupted: "Interrupted",
+  idle: "Ready"
+});
+var MODE_NAMES = Object.freeze({
+  observe: "Observe",
+  edit: "Edit",
+  "full-auto": "Full auto"
+});
+var PROJECT_KINDS = Object.freeze({
+  direct: "Direct chat",
+  project: "Project workspace",
+  imported: "Imported workspace"
+});
+var INFO_TABS = Object.freeze([
+  Object.freeze({ id: "activity", label: "Activity" }),
+  Object.freeze({ id: "files", label: "Files" }),
+  Object.freeze({ id: "usage", label: "Usage" }),
+  Object.freeze({ id: "system", label: "System" })
+]);
+var KEYBOARD_SHORTCUTS = Object.freeze([
+  Object.freeze({ keys: "Enter", description: "Send a message from the composer." }),
+  Object.freeze({ keys: "Shift + Enter", description: "Add a new line in the composer." }),
+  Object.freeze({ keys: "Escape", description: "Close an open menu, drawer, or confirmation." }),
+  Object.freeze({ keys: "Tab", description: "Move through controls in their visible order." })
+]);
+var ABOUT_SCREENS = Object.freeze([
+  Object.freeze({
+    id: "how-it-works",
+    title: "How it works",
+    summary: "Home Assistant is the browser-facing control plane; Codex runs through the private Bridge."
+  }),
+  Object.freeze({
+    id: "privacy-security",
+    title: "Privacy and security",
+    summary: "Use a small granted workspace, review approvals, and keep the App and Bridge private to Home Assistant."
+  }),
+  Object.freeze({
+    id: "keyboard-shortcuts",
+    title: "Keyboard shortcuts",
+    summary: "Keyboard controls follow the current panel state and preserve visible focus.",
+    rows: KEYBOARD_SHORTCUTS
+  }),
+  Object.freeze({
+    id: "about-version",
+    title: "About and versions",
+    summary: "Version labels describe the installed panel and private runtime components without exposing connection details."
+  })
+]);
+
+// frontend/src/run-activity.js
+var MAX_ACTION_TEXT = 240;
+var MAX_HISTORY_ITEMS = 8;
+var MAX_EVENTS = 2e3;
+var MAX_PLAN_STEPS = 128;
+var MAX_PATCH_CHANGES = 2048;
+var BUSY_STATUSES = /* @__PURE__ */ new Set(["starting", "running", "cancelling", "in_progress", "inprogress"]);
+var TERMINAL_STATES = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "interrupted"]);
+var ITEM_LABELS = Object.freeze({
+  agentMessage: "Preparing a response",
+  commandExecution: "Running a command",
+  contextCompaction: "Compacting context",
+  collabAgentToolCall: "Delegating to an agent",
+  dynamicToolCall: "Calling a tool",
+  fileChange: "Applying file changes",
+  imageGeneration: "Generating an image",
+  imageView: "Viewing an image",
+  mcpToolCall: "Calling an MCP tool",
+  plan: "Planning the work",
+  reasoning: "Thinking through the request",
+  sleep: "Waiting",
+  subAgentActivity: "Working with a sub-agent",
+  webSearch: "Searching the web"
+});
+var COMMAND_ACTION_LABELS = Object.freeze({
+  read: "Reading files",
+  listFiles: "Listing files",
+  search: "Searching files"
+});
+var WEB_ACTION_LABELS = Object.freeze({
+  search: "Searching the web",
+  openPage: "Opening a web page",
+  findInPage: "Finding text in a page",
+  other: "Using web search"
+});
+var FILE_CHANGE_LABELS = Object.freeze({
+  add: "Adding files",
+  update: "Updating files",
+  delete: "Deleting files"
+});
+function isRecord2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function safeText(value, maximum = MAX_ACTION_TEXT) {
+  if (typeof value !== "string" || maximum < 1) {
+    return "";
+  }
+  const withoutControls = [...value].map((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint >= 32 && codePoint !== 127 ? character : " ";
+  }).join("");
+  const normalized = withoutControls.replace(/\s+/gu, " ").trim();
+  return normalized.length > maximum ? `${normalized.slice(0, maximum - 1)}…` : normalized;
+}
+function safeChunk(value, maximum = 320) {
+  if (typeof value !== "string" || maximum < 1) return "";
+  const normalized = [...value].map((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint >= 32 && codePoint !== 127 ? character : " ";
+  }).join("");
+  return normalized.length > maximum ? normalized.slice(0, maximum) : normalized;
+}
+function eventPayload(event) {
+  return isRecord2(event?.payload) ? event.payload : {};
+}
+function normalizeEvents2(events) {
+  if (!Array.isArray(events)) {
+    return [];
+  }
+  return events.filter((event) => isRecord2(event) && Number.isSafeInteger(event.sequence) && event.sequence > 0 && typeof event.event_type === "string" && event.event_type.length <= 120 && isRecord2(event.payload)).sort((left, right) => left.sequence - right.sequence).slice(-MAX_EVENTS);
+}
+function eventRunId(event) {
+  const runId = eventPayload(event).run_id;
+  return typeof runId === "string" && /^[A-Za-z0-9_.:-]{1,256}$/u.test(runId) ? runId : "";
+}
+function latestEventRunId(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const runId = eventRunId(events[index]);
+    if (runId) return runId;
+  }
+  return "";
+}
+function eventBelongsToRun(event, runId) {
+  return !runId || !eventRunId(event) || eventRunId(event) === runId;
+}
+function currentPlan(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "plan.updated" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const plan = eventPayload(event).plan;
+    if (!Array.isArray(plan)) {
+      continue;
+    }
+    const steps = plan.slice(0, MAX_PLAN_STEPS).map((item) => {
+      if (!isRecord2(item)) {
+        return null;
+      }
+      const label = safeText(item.step);
+      const status = item.status === "inProgress" || item.status === "in_progress" ? "inProgress" : item.status === "completed" ? "completed" : item.status === "pending" ? "pending" : "";
+      return label && status ? { label, status } : null;
+    }).filter(Boolean);
+    const activeIndex = steps.findIndex((step) => step.status === "inProgress");
+    const pendingIndex = steps.findIndex((step) => step.status === "pending");
+    const completedCount = steps.filter((step) => step.status === "completed").length;
+    const displayIndex = activeIndex >= 0 ? activeIndex : pendingIndex >= 0 ? pendingIndex : steps.length ? Math.min(completedCount, steps.length - 1) : null;
+    return {
+      steps,
+      activeIndex: displayIndex,
+      completedCount,
+      sourceSequence: event.sequence
+    };
+  }
+  return { steps: [], activeIndex: null, sourceSequence: 0 };
+}
+function joinActivityLabels(labels, fallback) {
+  const unique = [...new Set(labels)].filter(Boolean);
+  if (!unique.length) return fallback;
+  if (unique.length === 1) return unique[0];
+  if (unique.length === 2) return `${unique[0]} and ${unique[1].toLowerCase()}`;
+  return `${unique[0]}, ${unique[1].toLowerCase()}, and more`;
+}
+function itemLabel(payload = {}) {
+  const itemType = payload.item_type;
+  if (itemType === "commandExecution" && Array.isArray(payload.action_types)) {
+    return joinActivityLabels(
+      payload.action_types.slice(0, 3).filter((type) => Object.hasOwn(COMMAND_ACTION_LABELS, type)).map((type) => COMMAND_ACTION_LABELS[type]),
+      ITEM_LABELS[itemType]
+    );
+  }
+  if (itemType === "webSearch" && Object.hasOwn(WEB_ACTION_LABELS, payload.action_type)) {
+    return WEB_ACTION_LABELS[payload.action_type];
+  }
+  if (itemType === "fileChange" && Array.isArray(payload.change_kinds)) {
+    return joinActivityLabels(
+      payload.change_kinds.slice(0, 3).filter((kind) => Object.hasOwn(FILE_CHANGE_LABELS, kind)).map((kind) => FILE_CHANGE_LABELS[kind]),
+      ITEM_LABELS[itemType]
+    );
+  }
+  return typeof itemType === "string" && Object.hasOwn(ITEM_LABELS, itemType) ? ITEM_LABELS[itemType] : "Working on the request";
+}
+function latestItemStart(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "item.started" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const payload = eventPayload(event);
+    const type = payload.item_type;
+    if (typeof type === "string" && Object.hasOwn(ITEM_LABELS, type)) {
+      return { event, label: itemLabel(payload), itemType: type };
+    }
+  }
+  return null;
+}
+function diffLineCounts(diff) {
+  if (typeof diff !== "string") return { additions: 0, deletions: 0 };
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diff.slice(0, 262144).split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) additions += 1;
+    if (line.startsWith("-")) deletions += 1;
+  }
+  return { additions, deletions };
+}
+function patchCounts(events, runId) {
+  const files = /* @__PURE__ */ new Map();
+  let seen = 0;
+  for (const event of events) {
+    if (event.event_type !== "patch.updated" || !eventBelongsToRun(event, runId)) {
+      continue;
+    }
+    const changes = eventPayload(event).changes;
+    if (!Array.isArray(changes)) {
+      continue;
+    }
+    for (const change of changes) {
+      if (seen >= MAX_PATCH_CHANGES || !isRecord2(change)) {
+        break;
+      }
+      seen += 1;
+      const path = safeText(change.path, 512);
+      if (!path) {
+        continue;
+      }
+      const kind = isRecord2(change.kind) ? change.kind.type : change.kind;
+      files.set(path, {
+        kind: kind === "add" || kind === "delete" || kind === "update" ? kind : "update",
+        ...diffLineCounts(change.diff)
+      });
+    }
+  }
+  let additions = 0;
+  let deletions = 0;
+  for (const file of files.values()) {
+    additions += file.additions;
+    deletions += file.deletions;
+  }
+  return { changed: files.size, additions, deletions };
+}
+function runEventState(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (!eventBelongsToRun(event, runId)) continue;
+    if (event.event_type === "run.completed") return "completed";
+    if (event.event_type === "run.failed") return "failed";
+    if (event.event_type === "run.cancelled") return "cancelled";
+    if (event.event_type === "run.interrupted") return "interrupted";
+    if (event.event_type === "run.started" || event.event_type === "run.dequeued") return "running";
+    if (event.event_type === "run.queued") return "queued";
+  }
+  return "";
+}
+function assistantState(events, runId) {
+  let latest = null;
+  for (const event of events) {
+    if ((event.event_type === "message.delta" || event.event_type === "message.completed") && eventBelongsToRun(event, runId)) {
+      latest = event;
+    }
+  }
+  return latest?.event_type === "message.delta" ? "streaming" : latest?.event_type === "message.completed" ? "complete" : "idle";
+}
+function reasoningSummary(events, runId) {
+  let latest = null;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type === "reasoning.summary_delta" && eventBelongsToRun(event, runId)) {
+      latest = event;
+      break;
+    }
+  }
+  if (!latest) return "";
+  const latestPayload = eventPayload(latest);
+  const itemId = latestPayload.item_id;
+  const summaryIndex = latestPayload.summary_index;
+  let joined = "";
+  for (const event of events) {
+    if (event.event_type !== "reasoning.summary_delta" || !eventBelongsToRun(event, runId)) continue;
+    const payload = eventPayload(event);
+    if (payload.item_id !== itemId || payload.summary_index !== summaryIndex) continue;
+    const chunk = safeChunk(payload.delta || payload.text, 320);
+    if (chunk) joined += chunk;
+    if (joined.length >= 2e3) break;
+  }
+  return safeText(joined, 2e3);
+}
+function addHistory(history, seen, label, kind) {
+  const text2 = safeText(label);
+  if (!text2 || seen.has(`${kind}:${text2}`)) return;
+  seen.add(`${kind}:${text2}`);
+  history.push({ label: text2, kind });
+  if (history.length > MAX_HISTORY_ITEMS) history.shift();
+}
+function getRunActivityViewModel(thread = {}, events = []) {
+  const normalizedEvents = normalizeEvents2(events);
+  const threadStatus = safeText(thread?.status, 40).toLowerCase();
+  const activeRunId = typeof thread?.active_run_id === "string" && /^[A-Za-z0-9_.:-]{1,256}$/u.test(thread.active_run_id) ? thread.active_run_id : "";
+  const runId = activeRunId || latestEventRunId(normalizedEvents);
+  const eventState = runEventState(normalizedEvents, runId);
+  let state = "idle";
+  if (threadStatus === "queued") state = "queued";
+  else if (threadStatus === "error") state = "failed";
+  else if (TERMINAL_STATES.has(eventState) && (activeRunId || threadStatus === "idle" || !threadStatus)) state = eventState;
+  else if (activeRunId || BUSY_STATUSES.has(threadStatus)) state = "running";
+  else if (eventState === "queued") state = "queued";
+  else if (eventState === "running") state = "running";
+  const plan = currentPlan(normalizedEvents, runId);
+  const activeStep = plan.activeIndex === null ? null : {
+    index: plan.activeIndex + 1,
+    total: plan.steps.length,
+    label: plan.steps[plan.activeIndex].label,
+    status: plan.steps[plan.activeIndex].status,
+    completedCount: plan.completedCount
+  };
+  const reasoningText = reasoningSummary(normalizedEvents, runId);
+  const startedItem = latestItemStart(normalizedEvents, runId);
+  const files = patchCounts(normalizedEvents, runId);
+  const history = [];
+  const seenHistory = /* @__PURE__ */ new Set();
+  for (const event of normalizedEvents) {
+    if (!eventBelongsToRun(event, runId)) continue;
+    const payload = eventPayload(event);
+    if (event.event_type === "plan.updated" && Array.isArray(payload.plan)) {
+      for (const item of payload.plan.slice(0, MAX_PLAN_STEPS)) {
+        if (isRecord2(item) && (item.status === "completed" || item.status === "inProgress" || item.status === "in_progress")) {
+          addHistory(history, seenHistory, item.step, "plan");
+        }
+      }
+    } else if (event.event_type === "reasoning.summary_delta") {
+    } else if (event.event_type === "item.started" && Object.hasOwn(ITEM_LABELS, payload.item_type)) {
+      addHistory(history, seenHistory, itemLabel(payload), "item");
+    } else if (event.event_type === "patch.updated") {
+      addHistory(history, seenHistory, "Updating files", "patch");
+    }
+  }
+  addHistory(history, seenHistory, reasoningText, "reasoning");
+  const terminal = TERMINAL_STATES.has(state);
+  const assistant = assistantState(normalizedEvents, runId);
+  const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
+  let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
+  if (!action && state === "queued") action = "Waiting in queue";
+  if (!action && state === "running") action = assistant === "streaming" ? "Generating a response" : "Working on the request";
+  if (!action && state === "completed") action = "Run completed";
+  if (!action && state === "failed") action = "Run failed";
+  if (!action && state === "cancelled") action = "Run cancelled";
+  if (!action && state === "interrupted") action = "Run interrupted";
+  return {
+    state,
+    status: state,
+    busy: state === "queued" || state === "running",
+    terminal,
+    runId,
+    action: safeText(action),
+    currentActivity: safeText(action),
+    step: activeStep,
+    actionHistory: history,
+    files,
+    assistant,
+    assistantState: assistant
+  };
+}
+
 // frontend/src/uploads.js
 var UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 var SHA256_WORDS = new Uint32Array([
@@ -319,8 +717,8 @@ var IncrementalSha256 = class {
     this._length = 0;
     this._workspace = new Uint32Array(64);
   }
-  update(input) {
-    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  update(input2) {
+    const bytes = input2 instanceof Uint8Array ? input2 : new Uint8Array(input2);
     this._length += bytes.byteLength;
     let position = 0;
     if (this._tail.length) {
@@ -713,7 +1111,7 @@ function containsControl(value) {
 }
 
 // frontend/src/views/auth.js
-var PLAN_NAMES = /* @__PURE__ */ new Map([
+var PLAN_NAMES2 = /* @__PURE__ */ new Map([
   ["free", "Free"],
   ["go", "Go"],
   ["plus", "Plus"],
@@ -726,11 +1124,11 @@ var PLAN_NAMES = /* @__PURE__ */ new Map([
   ["enterprise", "Enterprise"],
   ["edu", "Education"]
 ]);
-var TERMINAL_STATES = /* @__PURE__ */ new Set(["ok", "signed_out", "cancelled", "login_failed", "expired"]);
+var TERMINAL_STATES2 = /* @__PURE__ */ new Set(["ok", "signed_out", "cancelled", "login_failed", "expired"]);
 var ACTIVE_STATES = /* @__PURE__ */ new Set(["login_starting", "login_running"]);
 var BUSY_STATES = /* @__PURE__ */ new Set(["login_canceling", "login_completing", "logout_running"]);
 function normalizePlanType(value) {
-  return typeof value === "string" ? PLAN_NAMES.get(value.trim().toLowerCase()) || "Unknown" : "Unknown";
+  return typeof value === "string" ? PLAN_NAMES2.get(value.trim().toLowerCase()) || "Unknown" : "Unknown";
 }
 function getAuthViewModel(auth = {}) {
   const state = typeof auth.state === "string" ? auth.state : "unknown";
@@ -779,7 +1177,7 @@ function getAuthViewModel(auth = {}) {
     signedIn,
     busy,
     plan: normalizePlanType(auth.account?.plan_type ?? auth.plan_type),
-    code: TERMINAL_STATES.has(state) ? null : code,
+    code: TERMINAL_STATES2.has(state) ? null : code,
     canCopyCode: Boolean(code),
     canOpen: loginActive,
     message,
@@ -819,12 +1217,12 @@ function renderAuth(container, model) {
   const actions = document.createElement("div");
   actions.className = "auth-actions";
   for (const action of model.actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.action = action.id;
-    button.className = action.primary ? "primary" : "";
-    button.textContent = action.label;
-    actions.append(button);
+    const button2 = document.createElement("button");
+    button2.type = "button";
+    button2.dataset.action = action.id;
+    button2.className = action.primary ? "primary" : "";
+    button2.textContent = action.label;
+    actions.append(button2);
   }
   card.append(actions);
   container.append(card);
@@ -933,14 +1331,14 @@ function renderApproval(container, model) {
   const actions = document.createElement("div");
   actions.className = "decision-actions";
   for (const action of model.actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.action = `${action.id}-interaction`;
-    button.dataset.decision = action.id;
-    button.textContent = action.label;
-    button.disabled = action.disabled;
-    button.setAttribute("aria-disabled", String(action.disabled));
-    actions.append(button);
+    const button2 = document.createElement("button");
+    button2.type = "button";
+    button2.dataset.action = `${action.id}-interaction`;
+    button2.dataset.decision = action.id;
+    button2.textContent = action.label;
+    button2.disabled = action.disabled;
+    button2.setAttribute("aria-disabled", String(action.disabled));
+    actions.append(button2);
   }
   card.append(actions);
   container.append(card);
@@ -1207,8 +1605,397 @@ function collectUserInputAnswers(container, model) {
   return answers;
 }
 
+// frontend/src/desktop-features.js
+var DESTINATIONS = Object.freeze([
+  { id: "chats", label: "Chats", icon: "chat" },
+  { id: "scheduled", label: "Scheduled", icon: "calendar" },
+  { id: "skills", label: "Skills", icon: "spark" },
+  { id: "plugins", label: "Plugins", icon: "puzzle" },
+  { id: "settings", label: "Settings", icon: "settings" }
+]);
+var asRecord = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function normalizeDesktopList(value) {
+  if (Array.isArray(value)) return value.filter((item) => item && typeof item === "object");
+  const record = asRecord(value);
+  for (const key of ["items", "data", "results", "automations", "skills", "plugins", "marketplaces", "servers", "runs"]) {
+    if (Array.isArray(record[key])) return record[key].filter((item) => item && typeof item === "object");
+  }
+  return [];
+}
+function normalizeSkillsResponse(value) {
+  const record = asRecord(value);
+  const entries = Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
+  return entries.flatMap((entry) => Array.isArray(entry?.skills) ? entry.skills.map((skill) => ({ ...skill, scope: skill.scope || entry.cwd })) : []).filter((skill) => skill && typeof skill === "object");
+}
+function normalizePluginsResponse(value) {
+  const record = asRecord(value);
+  const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
+  return marketplaces.flatMap((marketplace) => (Array.isArray(marketplace?.plugins) ? marketplace.plugins : []).map((plugin) => ({ ...plugin, marketplace_name: plugin.marketplace_name || marketplace.name }))).filter((plugin) => plugin && typeof plugin === "object");
+}
+function normalizeMarketplacesResponse(value) {
+  const record = asRecord(value);
+  const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
+  return marketplaces.filter((marketplace) => marketplace && typeof marketplace === "object").map((marketplace) => ({ name: marketplace.name, plugins: Array.isArray(marketplace.plugins) ? marketplace.plugins : [] }));
+}
+function buildAutomationPayload(values = {}) {
+  const target = values.thread_id ? { kind: "continue_thread", thread_id: values.thread_id } : { kind: "standalone", project_id: values.project_id };
+  const kind = values.schedule_type || "once";
+  const schedule = kind === "interval" ? { kind, seconds: Number(values.interval_seconds), anchor_at: values.anchor_at || values.run_at } : kind === "RRULE" || kind === "rrule" ? { kind: "rrule", rule: values.rrule, start_at: values.start_at || values.run_at, timezone: values.timezone } : { kind: "once", at: values.run_at };
+  return { name: values.name || values.title || "Untitled automation", prompt: values.prompt || "", target, schedule, mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || values.reasoning || null };
+}
+function buildAutomationUpdatePayload(values = {}) {
+  return { expected_revision: Number(values.revision), ...buildAutomationPayload(values) };
+}
+function normalizeDesktopError(error) {
+  const record = asRecord(error);
+  const candidate = record.body?.message || record.message || record.error || record.detail || error;
+  const withoutControlCharacters = Array.from(String(candidate || ""), (character) => {
+    const code = character.codePointAt(0);
+    return code <= 8 || code === 11 || code === 12 || code >= 14 && code <= 31 || code === 127 ? " " : character;
+  }).join("");
+  const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
+  return (safe || "Unable to load this surface.").slice(0, 500);
+}
+function createDesktopFeatureState() {
+  return {
+    loading: false,
+    error: "",
+    data: {},
+    form: null,
+    notice: ""
+  };
+}
+var text = (documentRef, tag, value, className = "") => {
+  const node = documentRef.createElement(tag);
+  if (className) node.className = className;
+  node.textContent = value == null ? "" : String(value);
+  return node;
+};
+var button = (documentRef, label, action, extra = {}) => {
+  const node = documentRef.createElement("button");
+  node.type = "button";
+  node.textContent = label;
+  node.dataset.desktopAction = action;
+  for (const [key, value] of Object.entries(extra)) node.dataset[key] = String(value);
+  return node;
+};
+var input = (documentRef, label, name, value = "", type = "text") => {
+  const wrap = documentRef.createElement("label");
+  wrap.className = "desktop-field";
+  wrap.append(text(documentRef, "span", label, "desktop-field-label"));
+  const control = documentRef.createElement(type === "textarea" ? "textarea" : "input");
+  control.name = name;
+  control.value = value == null ? "" : String(value);
+  control.dataset.desktopField = name;
+  if (type !== "textarea") control.type = type;
+  if (type === "textarea") control.rows = 4;
+  wrap.append(control);
+  return wrap;
+};
+var selectField = (documentRef, label, name, options, value = "") => {
+  const wrap = documentRef.createElement("label");
+  wrap.className = "desktop-field";
+  wrap.append(text(documentRef, "span", label, "desktop-field-label"));
+  const control = documentRef.createElement("select");
+  control.name = name;
+  control.dataset.desktopField = name;
+  for (const option of options) {
+    const node = documentRef.createElement("option");
+    node.value = option.value;
+    node.textContent = option.label;
+    node.selected = option.value === value;
+    node.disabled = Boolean(option.disabled);
+    control.append(node);
+  }
+  wrap.append(control);
+  return wrap;
+};
+function displayValue(value, key = "") {
+  if (value === null || value === void 0 || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Enabled" : "Disabled";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
+  if (typeof value === "object") {
+    if (key === "schedule") {
+      const kind = value.kind === "rrule" ? "RRULE" : value.kind || "once";
+      const when = value.at || value.start_at || value.anchor_at;
+      if (kind === "interval" && value.seconds) return `Every ${value.seconds}s${when ? ` · from ${when}` : ""}`;
+      if (kind === "RRULE" && value.rule) return value.rule;
+      return when ? `${kind} · ${when}` : kind;
+    }
+    if (Array.isArray(value)) return value.map((item) => displayValue(item)).join(", ");
+    return value.name || value.label || value.status || "—";
+  }
+  return String(value);
+}
+function statusClass(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (["ready", "enabled", "connected", "completed", "success", "idle"].includes(normalized)) return "is-positive";
+  if (["failed", "error", "unsupported", "disabled"].includes(normalized)) return "is-negative";
+  if (["starting", "running", "paused", "oauth_required", "pending"].includes(normalized)) return "is-attention";
+  return "";
+}
+function renderEmpty(documentRef, message) {
+  const empty = text(documentRef, "p", message, "desktop-empty");
+  empty.setAttribute("role", "status");
+  return empty;
+}
+function renderTable(documentRef, rows, columns, actions = null) {
+  if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
+  const table = documentRef.createElement("table");
+  table.className = "desktop-table";
+  table.append(text(documentRef, "caption", `${columns.map(([, label]) => label).join(", ")} list`, "sr-only"));
+  const head = documentRef.createElement("thead");
+  const headRow = documentRef.createElement("tr");
+  for (const [, label] of columns) headRow.append(text(documentRef, "th", label));
+  if (actions) headRow.append(text(documentRef, "th", "Actions"));
+  head.append(headRow);
+  table.append(head);
+  const body = documentRef.createElement("tbody");
+  for (const row of rows) {
+    const tr = documentRef.createElement("tr");
+    for (const [key, label] of columns) {
+      const td = text(documentRef, "td", displayValue(row[key], key));
+      td.dataset.label = label;
+      const tone = statusClass(row[key]);
+      if (tone) td.classList.add(tone);
+      tr.append(td);
+    }
+    if (actions) {
+      const td = documentRef.createElement("td");
+      td.dataset.label = "Actions";
+      td.className = "desktop-table-actions";
+      actions(row, td);
+      tr.append(td);
+    }
+    body.append(tr);
+  }
+  table.append(body);
+  return table;
+}
+function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
+  const section = documentRef.createElement("div");
+  section.className = "desktop-feature-content";
+  const toolbar = documentRef.createElement("div");
+  toolbar.className = "desktop-toolbar";
+  toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
+  section.append(toolbar);
+  if (state.form === "schedule" || state.form === "schedule-edit") {
+    const editing = state.editingAutomation || {};
+    const schedule = editing.schedule || {};
+    const form = documentRef.createElement("form");
+    form.className = "desktop-form";
+    form.dataset.desktopForm = "schedule";
+    form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
+    form.append(input(documentRef, "Title", "title", editing.name || ""));
+    form.append(input(documentRef, "Project ID", "project_id", editing.target?.project_id || ""));
+    form.append(input(documentRef, "Thread ID", "thread_id", editing.target?.thread_id || ""));
+    form.append(input(documentRef, "Prompt", "prompt", editing.prompt || "", "textarea"));
+    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], schedule.kind === "rrule" ? "rrule" : schedule.kind || "once"));
+    form.append(input(documentRef, "Run at (ISO)", "run_at", schedule.at || schedule.start_at || ""));
+    form.append(input(documentRef, "Interval seconds", "interval_seconds", schedule.seconds || ""));
+    form.append(input(documentRef, "RRULE", "rrule", schedule.rule || ""));
+    form.append(input(documentRef, "Home Assistant timezone", "timezone", schedule.timezone || defaultTimezone));
+    form.append(input(documentRef, "Model", "model", editing.model || ""));
+    form.append(input(documentRef, "Reasoning", "thinking", editing.thinking || ""));
+    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], editing.mode || "observe"));
+    form.append(input(documentRef, "Revision", "revision", editing.revision || ""));
+    const actions = documentRef.createElement("div");
+    actions.className = "desktop-form-actions";
+    actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
+    form.append(actions);
+    section.append(form);
+  }
+  const rows = normalizeDesktopList(state.data.automations || state.data);
+  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+    const id = row.id || row.automation_id || "";
+    const common = { id, revision: row.revision || "0" };
+    td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
+  }));
+  const runs = normalizeDesktopList(state.data.runs);
+  if (runs.length) {
+    section.append(text(documentRef, "h3", "Run history", "desktop-subheading"));
+    section.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
+  }
+  return section;
+}
+function renderSkills(documentRef, state) {
+  const section = documentRef.createElement("div");
+  section.className = "desktop-feature-content";
+  const toolbar = documentRef.createElement("div");
+  toolbar.className = "desktop-toolbar";
+  toolbar.append(text(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button(documentRef, "Create skill", "open-skill-form"));
+  section.append(toolbar);
+  if (state.form === "skill") {
+    const form = documentRef.createElement("form");
+    form.className = "desktop-form";
+    form.dataset.desktopForm = "skill";
+    form.append(input(documentRef, "Name", "name"), input(documentRef, "Description", "description", "", "textarea"), input(documentRef, "Instructions", "instructions", "", "textarea"));
+    const actions = documentRef.createElement("div");
+    actions.className = "desktop-form-actions";
+    actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form"));
+    form.append(actions);
+    section.append(form);
+  }
+  const rows = normalizeDesktopList(state.data.skills || state.data);
+  section.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+    const id = row.id || row.skill_id || row.name || "";
+    td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+    td.append(button(documentRef, "Delete", "delete-skill", { id }));
+  }));
+  return section;
+}
+function renderPlugins(documentRef, state) {
+  const section = documentRef.createElement("div");
+  section.className = "desktop-feature-content";
+  const toolbar = documentRef.createElement("div");
+  toolbar.className = "desktop-toolbar";
+  toolbar.append(text(documentRef, "div", "Plugins", "desktop-section-label"));
+  section.append(toolbar);
+  const rows = normalizeDesktopList(state.data.plugins || state.data);
+  section.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
+    const id = row.id || row.plugin_id || row.name || "";
+    td.append(button(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
+  }));
+  const market = normalizeDesktopList(state.data.marketplaces);
+  const marketHeading = text(documentRef, "h3", "Trusted marketplaces", "desktop-subheading");
+  section.append(marketHeading);
+  const marketActions = documentRef.createElement("div");
+  marketActions.className = "desktop-form-actions";
+  marketActions.append(button(documentRef, "Add marketplace", "open-marketplace-form"));
+  section.append(marketActions);
+  if (state.form === "marketplace") {
+    const form = documentRef.createElement("form");
+    form.className = "desktop-form";
+    form.dataset.desktopForm = "marketplace";
+    form.append(input(documentRef, "HTTPS source URL", "source", "", "url"), input(documentRef, "Ref (optional)", "ref_name"), input(documentRef, "Sparse paths (comma separated)", "sparse_paths"));
+    const actions = documentRef.createElement("div");
+    actions.className = "desktop-form-actions";
+    actions.append(button(documentRef, "Add marketplace", "submit-marketplace"), button(documentRef, "Cancel", "close-form"));
+    form.append(actions);
+    section.append(form);
+  }
+  const marketRows = market.map((row) => ({ ...row, plugin_count: Array.isArray(row.plugins) ? row.plugins.length : 0 }));
+  section.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
+  return section;
+}
+function renderSettings(documentRef, state, hasActiveProject = false) {
+  const section = documentRef.createElement("div");
+  section.className = "desktop-feature-content settings-content";
+  const tabs = documentRef.createElement("nav");
+  tabs.className = "settings-tabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Settings sections");
+  const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tab = state.settingsTab || "general";
+  for (const [id, label] of tabItems) {
+    const control = button(documentRef, label, "select-settings-tab", { tab: id });
+    control.className = "settings-tab";
+    control.id = `settings-tab-${id}`;
+    control.dataset.settingsTab = id;
+    control.setAttribute("role", "tab");
+    control.setAttribute("aria-controls", "settings-panel");
+    control.setAttribute("aria-selected", String(tab === id));
+    control.tabIndex = tab === id ? 0 : -1;
+    tabs.append(control);
+  }
+  section.append(tabs);
+  const panel = documentRef.createElement("section");
+  panel.id = "settings-panel";
+  panel.className = "settings-panel";
+  panel.setAttribute("role", "tabpanel");
+  panel.setAttribute("aria-labelledby", `settings-tab-${tab}`);
+  section.append(panel);
+  const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
+  if (tab === "mcp") {
+    panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
+    if (state.form === "mcp") {
+      const form = documentRef.createElement("form");
+      form.className = "desktop-form";
+      form.dataset.desktopForm = "mcp";
+      form.append(input(documentRef, "Name", "name"), input(documentRef, "HTTPS URL", "url", "", "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id"), input(documentRef, "OAuth resource", "oauth_resource"));
+      const actions = documentRef.createElement("div");
+      actions.className = "desktop-form-actions";
+      actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form"));
+      form.append(actions);
+      panel.append(form);
+    }
+    panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+      const id = row.name || "";
+      const oauth = row.auth === "oauth_required" || row.auth === "oauth";
+      td.append(button(documentRef, "Remove", "remove-mcp", { id }));
+      if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id }));
+      else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note"));
+    }));
+  }
+  if (tab === "instructions") {
+    panel.append(text(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
+    const selectedScope = hasActiveProject && state.agentsScope !== "global" ? "project" : "global";
+    const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope);
+    panel.append(scope);
+    const records = asRecord(state.data.agentsScopes);
+    const agents = asRecord(records[selectedScope] || state.data.agents);
+    panel.append(input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", agents.content || "", "textarea"));
+    const actions = documentRef.createElement("div");
+    actions.className = "desktop-form-actions";
+    actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents"));
+    panel.append(actions);
+  }
+  if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
+  if (tab === "general") panel.append(text(documentRef, "h3", "General", "desktop-subheading"), text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"));
+  return section;
+}
+function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false } = {}) {
+  if (!container) return;
+  const documentRef = container.ownerDocument || globalThis.document;
+  container.replaceChildren();
+  container.onclick = (event) => {
+    const target = event.target.closest?.("[data-desktop-action]");
+    if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
+  };
+  container.onsubmit = (event) => {
+    event.preventDefault();
+    const form = event.target?.closest?.("[data-desktop-form]");
+    const submit = form?.querySelector('[data-desktop-action^="submit-"]');
+    if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
+  };
+  const heading = documentRef.createElement("div");
+  heading.className = "desktop-feature-header";
+  const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
+  heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
+  heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
+  container.append(heading);
+  if (state.loading) {
+    container.setAttribute("aria-busy", "true");
+    container.append(renderEmpty(documentRef, "Loading…"));
+    return;
+  }
+  container.setAttribute("aria-busy", "false");
+  if (state.error) {
+    const error = text(documentRef, "p", state.error, "desktop-error");
+    error.setAttribute("role", "alert");
+    container.append(error);
+    container.append(button(documentRef, "Retry", "retry-desktop"));
+    return;
+  }
+  if (state.notice) {
+    const notice = text(documentRef, "p", state.notice, "desktop-notice");
+    notice.setAttribute("role", "status");
+    container.append(notice);
+  }
+  if (state.confirmAction) {
+    const confirm = documentRef.createElement("div");
+    confirm.className = "desktop-notice";
+    confirm.setAttribute("role", "alert");
+    confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm"));
+    container.append(confirm);
+  }
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject);
+  container.append(content);
+}
+
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.6.6";
+var PANEL_VERSION = "0.7.0";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -1493,6 +2280,185 @@ template.innerHTML = `
 
     .hidden {
       display: none !important;
+    }
+
+    .confirmation-layer[hidden],
+    .information-layer[hidden] {
+      display: none !important;
+      pointer-events: none;
+    }
+
+    .tooltip-layer {
+      position: fixed;
+      z-index: 30;
+      max-width: min(280px, calc(100vw - 16px));
+      padding: 6px 8px;
+      border: 1px solid color-mix(in srgb, var(--text-color) 22%, var(--border-color) 78%);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--text-color) 94%, #000 6%);
+      color: var(--surface-bg);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
+      font-size: 12px;
+      line-height: 1.35;
+      pointer-events: none;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    .confirmation-layer,
+    .information-layer {
+      position: fixed;
+      z-index: 40;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .information-layer {
+      z-index: 39;
+    }
+
+    .confirmation-dialog {
+      width: min(100%, 430px);
+      display: grid;
+      gap: 12px;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--surface-bg);
+      box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
+    }
+
+    .confirmation-dialog h2,
+    .confirmation-dialog p {
+      margin: 0;
+    }
+
+    .confirmation-dialog h2 {
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .confirmation-dialog p {
+      color: var(--muted-color);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .confirmation-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .confirmation-delete {
+      border-color: var(--danger-color);
+      background: #111827;
+      color: #ffffff;
+    }
+
+    .confirmation-delete:hover {
+      border-color: var(--danger-color);
+      background: #000000;
+    }
+
+    .information-dialog {
+      width: min(100%, 680px);
+      max-height: min(82vh, 760px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--surface-bg);
+      box-shadow: 0 24px 72px rgba(15, 23, 42, 0.3);
+      overflow: hidden;
+    }
+
+    .information-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .information-head h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .information-content {
+      display: grid;
+      align-content: start;
+      gap: 18px;
+      min-height: 0;
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .information-summary {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .information-list,
+    .shortcut-list,
+    .flow-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .information-list li,
+    .shortcut-row,
+    .flow-list li {
+      display: grid;
+      gap: 5px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+      background: var(--surface-muted);
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .shortcut-row {
+      grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+      align-items: center;
+    }
+
+    .shortcut-row kbd {
+      width: fit-content;
+      padding: 4px 7px;
+      border: 1px solid var(--border-color);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      font: inherit;
+      font-weight: 650;
+    }
+
+    .information-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .information-primary {
+      background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
+      color: white;
+      border-color: transparent;
     }
 
     .section-scroll,
@@ -2977,6 +3943,9 @@ template.innerHTML = `
     .rail-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      position: relative;
     }
 
     .rail-brand {
@@ -2985,6 +3954,52 @@ template.innerHTML = `
       align-items: center;
       gap: 10px;
       min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .app-menu {
+      position: absolute;
+      z-index: 16;
+      top: calc(100% - 5px);
+      right: 10px;
+      width: min(230px, calc(100vw - 24px));
+      display: grid;
+      gap: 2px;
+      padding: 5px;
+      border: 1px solid var(--border-color);
+      border-radius: 9px;
+      background: var(--surface-bg);
+      box-shadow: 0 16px 42px color-mix(in srgb, var(--text-color) 18%, transparent);
+    }
+
+    .app-menu[hidden] {
+      display: none;
+    }
+
+    .app-menu-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 36px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-color);
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .app-menu-item:hover,
+    .app-menu-item:focus-visible {
+      border: 0;
+      background: var(--surface-muted);
+    }
+
+    .menu-shortcut {
+      color: var(--muted-color);
+      font-size: 10px;
     }
 
     .rail-brand-icon {
@@ -3071,6 +4086,187 @@ template.innerHTML = `
       padding: 8px 10px 10px;
       border-bottom: 1px solid var(--border-color);
     }
+
+    .desktop-destinations {
+      display: grid;
+      gap: 2px;
+      padding: 10px 8px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-destination {
+      min-height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .desktop-destination:hover,
+    .desktop-destination:focus-visible,
+    .desktop-destination[aria-current="page"] {
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .desktop-destination[aria-current="page"] {
+      font-weight: 650;
+    }
+
+    .desktop-feature-surface {
+      display: none;
+      min-height: 0;
+      overflow: auto;
+      padding: clamp(24px, 4vw, 56px);
+      background: var(--canvas-bg);
+    }
+
+    .desktop-feature-surface.visible {
+      display: block;
+      flex: 1 1 auto;
+    }
+
+    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 268px) minmax(0, 1fr); }
+    .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
+    .shell.desktop-route .side-pane { display: none !important; }
+
+    .desktop-feature-header {
+      max-width: 900px;
+      margin: 0 auto 28px;
+    }
+
+    .desktop-feature-title {
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .desktop-feature-summary,
+    .desktop-note {
+      margin: 8px 0 0;
+      max-width: 620px;
+      color: var(--muted-color);
+      line-height: 1.55;
+    }
+
+    .desktop-feature-content {
+      display: grid;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .desktop-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-section-label {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .desktop-toolbar > button,
+    .settings-panel > button {
+      min-height: 34px;
+      padding: 0 12px;
+      border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
+      background: var(--accent-surface);
+      color: var(--text-color);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .desktop-form-intro {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .desktop-table caption {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .desktop-table td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); font-weight: 600; }
+    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 78%, var(--text-color) 22%); font-weight: 600; }
+    .desktop-table td.is-negative { color: var(--danger-color); font-weight: 600; }
+    .desktop-table-actions { min-width: 180px; }
+    .desktop-action-note { color: var(--muted-color); font-size: 11px; }
+    .settings-panel { display: grid; gap: 14px; }
+
+    .desktop-subheading {
+      margin: 18px 0 -6px;
+      font-size: 14px;
+    }
+
+    .desktop-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .desktop-table th,
+    .desktop-table td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .desktop-table th {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .desktop-table td button {
+      margin: 2px 6px 2px 0;
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+    }
+
+    .desktop-form {
+      display: grid;
+      gap: 12px;
+      max-width: 680px;
+      padding: 16px 0;
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .desktop-field { display: grid; gap: 5px; }
+    .desktop-field-label { color: var(--muted-color); font-size: 12px; }
+    .desktop-field input,
+    .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
+    .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .desktop-empty,
+    .desktop-error,
+    .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
+    .desktop-error { color: var(--danger-color); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
+    .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
     .rail-actions .tool-button {
       min-height: 36px;
@@ -3286,7 +4482,7 @@ template.innerHTML = `
 
     .chat-select {
       display: grid;
-      grid-template-columns: 8px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 12px;
       gap: 8px;
       min-height: 36px;
       padding: 0 7px;
@@ -3300,11 +4496,23 @@ template.innerHTML = `
     }
 
     .status-pill {
-      width: 7px;
-      height: 7px;
-      min-width: 7px;
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
       border: 0;
       box-shadow: none;
+      justify-self: end;
+    }
+
+    .status-pill.running {
+      width: 12px;
+      height: 12px;
+      min-width: 12px;
+      border: 2px solid color-mix(in srgb, var(--accent-color) 28%, var(--border-color) 72%);
+      border-top-color: var(--accent-color);
+      background: transparent;
+      box-shadow: none;
+      animation: codex-spin 820ms linear infinite;
     }
 
     .thread-actions-toggle {
@@ -3427,7 +4635,8 @@ template.innerHTML = `
 
     .main-top,
     .interaction-region,
-    .message-list {
+    .message-list,
+    .run-activity-region {
       width: min(calc(100% - 32px), 900px);
       margin-inline: auto;
     }
@@ -3532,6 +4741,197 @@ template.innerHTML = `
     .message-list {
       padding: 20px 0 8px;
       gap: 18px;
+    }
+
+    .run-activity-region {
+      position: relative;
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      margin: 0 auto;
+      padding: 2px 0 8px 34px;
+    }
+
+    .run-activity-region:empty,
+    .run-activity-region[hidden] {
+      display: none;
+    }
+
+    .run-activity-copy {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      color: var(--muted-color);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .run-activity-copy > span:last-child {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .activity-spinner,
+    .step-spinner {
+      display: inline-block;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--accent-color) 25%, var(--border-color) 75%);
+      border-top-color: var(--accent-color);
+      animation: codex-spin 820ms linear infinite;
+    }
+
+    .activity-spinner {
+      width: 15px;
+      height: 15px;
+    }
+
+    .step-spinner {
+      width: 13px;
+      height: 13px;
+      border-width: 2px;
+    }
+
+    .activity-spinner.complete,
+    .step-spinner.complete {
+      border-color: var(--brand-emerald);
+      animation: none;
+    }
+
+    .activity-spinner.failed,
+    .step-spinner.failed {
+      border-color: var(--danger-color);
+      animation: none;
+    }
+
+    @keyframes codex-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .run-step-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .run-step-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      max-width: min(100%, 520px);
+      padding: 6px 11px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: var(--surface-bg);
+      color: var(--muted-color);
+      box-shadow: var(--shadow-soft);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .run-step-chip:hover,
+    .run-step-chip:focus-visible,
+    .run-step-wrap.open .run-step-chip {
+      border-color: color-mix(in srgb, var(--accent-color) 34%, var(--border-color) 66%);
+      color: var(--text-color);
+      background: var(--surface-muted);
+    }
+
+    .run-step-label,
+    .run-step-files {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .run-step-separator {
+      color: color-mix(in srgb, var(--muted-color) 55%, transparent);
+    }
+
+    .run-step-additions {
+      color: color-mix(in srgb, var(--brand-emerald) 82%, var(--text-color) 18%);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .run-step-deletions {
+      color: color-mix(in srgb, var(--danger-color) 84%, var(--text-color) 16%);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .run-step-tooltip {
+      position: absolute;
+      z-index: 12;
+      right: 0;
+      bottom: calc(100% + 9px);
+      width: min(360px, calc(100vw - 32px));
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 11px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      box-shadow: 0 16px 40px color-mix(in srgb, var(--text-color) 18%, transparent);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(5px);
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    }
+
+    .run-step-wrap:hover .run-step-tooltip,
+    .run-step-wrap:focus-within .run-step-tooltip,
+    .run-step-wrap.open .run-step-tooltip {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .run-step-tooltip-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .run-step-history {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .run-step-history li {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .run-step-history-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 5px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
+    }
+
+    .message.streaming .bubble {
+      opacity: 0.9;
+    }
+
+    .message.streaming .row-meta::after {
+      content: " · responding";
+      color: var(--muted-color);
+      font-weight: 400;
     }
 
     .message {
@@ -3898,6 +5298,60 @@ template.innerHTML = `
       box-shadow: none;
     }
 
+    .side-tab-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 3px;
+      padding: 0 10px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .side-tab {
+      min-width: 0;
+      min-height: 32px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .side-tab:hover,
+    .side-tab:focus-visible {
+      border: 0;
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .side-tab[aria-selected="true"] {
+      background: var(--surface-bg);
+      color: var(--text-color);
+      box-shadow: inset 0 0 0 1px var(--border-color);
+    }
+
+    [data-side-tab-panel][hidden] {
+      display: none;
+    }
+
+    .usage-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .usage-limit-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .usage-note {
+      margin: 0;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
     .mobile-header-actions,
     .mobile-drawer-scrim {
       display: none;
@@ -3921,6 +5375,29 @@ template.innerHTML = `
     }
 
     @media (max-width: 880px) {
+      .shell.desktop-route { display: block; overflow: hidden; }
+      .shell.desktop-route .main-pane { min-height: 100dvh; height: 100dvh; }
+      .shell.desktop-route .main-pane { display: flex; }
+      .shell.desktop-route .main-pane > .main-header { display: grid !important; order: 0; }
+      .shell.desktop-route .main-pane > .desktop-feature-surface { order: 1; min-height: 0; }
+      .desktop-feature-surface { padding: 24px 16px 40px; }
+      .desktop-feature-header { margin-bottom: 22px; }
+      .desktop-feature-title { font-size: 27px; }
+      .desktop-table thead { display: none; }
+      .desktop-table,
+      .desktop-table tbody,
+      .desktop-table tr,
+      .desktop-table td { display: block; width: 100%; }
+      .desktop-table tr { padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+      .desktop-table td { display: grid; grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); gap: 12px; padding: 5px 0; border: 0; }
+      .desktop-table td::before { content: attr(data-label); color: var(--muted-color); font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; }
+      .desktop-table-actions { display: flex !important; flex-wrap: wrap; gap: 6px; padding-top: 9px !important; }
+      .desktop-table-actions::before { display: none; }
+      .desktop-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .desktop-toolbar > button { width: 100%; }
+      .settings-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+      .settings-tab { flex: 0 0 auto; }
+
       .shell {
         display: block;
         height: 100dvh;
@@ -4026,6 +5503,7 @@ template.innerHTML = `
       .main-top,
       .interaction-region,
       .message-list,
+      .run-activity-region,
       .composer-shell {
         width: calc(100% - 24px);
       }
@@ -4159,6 +5637,23 @@ template.innerHTML = `
         overflow: visible;
       }
 
+      .run-activity-region {
+        width: calc(100% - 24px);
+        align-items: flex-start;
+        flex-direction: column;
+        padding-left: 0;
+      }
+
+      .run-step-wrap,
+      .run-step-chip {
+        max-width: 100%;
+      }
+
+      .run-step-tooltip {
+        right: auto;
+        left: 0;
+      }
+
       .interaction-card {
         scroll-margin-block: 52px 160px;
       }
@@ -4200,6 +5695,13 @@ template.innerHTML = `
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
       }
+
+      .status-pill.running,
+      .activity-spinner,
+      .step-spinner {
+        animation: none !important;
+        border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color) 36%);
+      }
     }
   </style>
   <div class="shell">
@@ -4220,6 +5722,7 @@ template.innerHTML = `
           <input id="search-input" type="search" placeholder="Search" aria-label="Search chats and projects" autocomplete="off" />
         </label>
       </div>
+      <nav class="desktop-destinations" aria-label="Application destinations" id="desktop-destinations"></nav>
       <div class="forms-stack">
         <section class="panel-form" id="project-form-panel"></section>
         <section class="panel-form" id="thread-form-panel"></section>
@@ -4235,6 +5738,7 @@ template.innerHTML = `
     </aside>
 
     <main class="pane main-pane">
+      <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite"></section>
       <div class="main-header">
         <div class="title-block">
           <span class="eyeline" id="thread-project-label">Ready</span>
@@ -4264,6 +5768,7 @@ template.innerHTML = `
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       </div>
       <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
       <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       <div class="composer-shell">
         <div class="attachment-toolbar">
@@ -4290,43 +5795,65 @@ template.innerHTML = `
 
     <button class="mobile-drawer-scrim" type="button" data-action="close-mobile-drawer" id="mobile-drawer-scrim" aria-label="Close panel drawer" hidden></button>
 
-    <aside class="pane side-pane" id="context-drawer">
+    <aside class="pane side-pane" id="context-drawer" aria-label="Codex information">
       <div class="side-header">
         <div class="title-block">
           <span class="eyeline">Context</span>
-          <span class="title">Progress and artifacts</span>
+          <span class="title" id="side-panel-title">Activity</span>
         </div>
       </div>
+      <div class="side-tab-list" role="tablist" aria-label="Codex information">
+        <button class="side-tab" type="button" role="tab" id="side-tab-activity" data-action="select-side-tab" data-side-tab="activity" aria-controls="side-panel-activity" aria-selected="true">Activity</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-files" data-action="select-side-tab" data-side-tab="files" aria-controls="side-panel-files" aria-selected="false">Files</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-usage" data-action="select-side-tab" data-side-tab="usage" aria-controls="side-panel-usage" aria-selected="false">Usage</button>
+        <button class="side-tab" type="button" role="tab" id="side-tab-system" data-action="select-side-tab" data-side-tab="system" aria-controls="side-panel-system" aria-selected="false">System</button>
+      </div>
       <div class="side-scroll">
-        <section class="side-section">
+        <section class="side-section" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
           <span class="section-label">ChatGPT account</span>
           <div id="auth-panel"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="activity">
           <span class="section-label">Progress</span>
           <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
           <div class="section-head-row">
             <span class="section-label">Artifacts</span>
             <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
           </div>
           <div class="artifact-list" id="artifact-list"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="files" hidden>
           <span class="section-label">Preview</span>
           <div class="artifact-preview" id="artifact-preview"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
+          <span class="section-label">Codex usage</span>
+          <div class="usage-panel" id="usage-panel"></div>
+        </section>
+        <section class="side-section" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
           <span class="section-label">Details</span>
           <div class="context-list" id="context-list"></div>
         </section>
-        <section class="side-section">
+        <section class="side-section" data-side-tab-panel="system" hidden>
           <span class="section-label">Versions</span>
           <div class="diagnostics-list" id="diagnostics-list"></div>
         </section>
       </div>
     </aside>
+  </div>
+  <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="confirmation-layer" hidden>
+    <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
+      <span class="eyeline">Confirm deletion</span>
+      <h2 id="confirmation-title">Delete item?</h2>
+      <p id="confirmation-description">This deletes records only. Workspace files remain in place.</p>
+      <div class="confirmation-actions">
+        <button class="text-button" type="button" data-action="cancel-delete" id="cancel-delete-button">Cancel</button>
+        <button class="confirmation-delete" type="button" data-action="confirm-delete" id="confirm-delete-button">Delete</button>
+      </div>
+    </section>
   </div>
 `;
 var iconSvg = (path) => `
@@ -4469,6 +5996,13 @@ var CodexBridgePanel = class extends HTMLElement {
     this._mobileDrawerMedia = null;
     this._mobileDrawerMediaListener = null;
     this._mobileDrawerMediaListening = false;
+    this._sideTab = "activity";
+    this._pendingDeletion = null;
+    this._deletionReturnFocus = null;
+    this._tooltipTarget = null;
+    this._runActivityDetailsOpen = false;
+    this._activeDestination = "chats";
+    this._desktopFeatures = Object.fromEntries(DESTINATIONS.filter(({ id }) => id !== "chats").map(({ id }) => [id, createDesktopFeatureState()]));
   }
   connectedCallback() {
     this._installStaticUi();
@@ -4493,6 +6027,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._clearInteractionExpiryTimer();
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
+    this._hideTooltip();
     this._revokePreviewUrl();
     this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = false;
@@ -4558,6 +6093,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
+    for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
+      this._setTooltipTarget(control, control.getAttribute("aria-label") || control.getAttribute("title") || "");
+    }
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
@@ -4565,6 +6103,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.addEventListener("keydown", (event) => this._handleKeyDown(event));
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
+    this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
+    this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
     this._mobileDrawerMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px)") : {
       matches: false,
       addEventListener() {
@@ -4686,6 +6226,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
     if (!actionTarget) {
+      if (this._runActivityDetailsOpen && !eventTarget?.closest(".run-step-wrap")) {
+        this._runActivityDetailsOpen = false;
+        this._renderRunActivity();
+      }
       if (this._hasOpenRailMenu()) {
         this._closeRailMenus();
       }
@@ -4696,11 +6240,18 @@ var CodexBridgePanel = class extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "select-desktop-destination":
+        this._selectDesktopDestination(actionTarget.dataset.destination || "chats");
+        break;
       case "toggle-mobile-nav":
         this._toggleMobileDrawer("navigation", actionTarget);
         break;
       case "toggle-mobile-context":
         this._toggleMobileDrawer("context", actionTarget);
+        break;
+      case "select-side-tab":
+        this._sideTab = ["activity", "files", "usage", "system"].includes(actionTarget.dataset.sideTab) ? actionTarget.dataset.sideTab : "activity";
+        this._renderSideTabs();
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -4775,7 +6326,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._restoreProject(actionTarget.dataset.projectId || "");
         break;
       case "delete-project":
-        this._deleteProject(actionTarget.dataset.projectId || "");
+        this._deleteProject(actionTarget.dataset.projectId || "", actionTarget);
         break;
       case "new-chat":
         this._openThreadFormForProject(actionTarget.dataset.projectId || null);
@@ -4791,7 +6342,17 @@ var CodexBridgePanel = class extends HTMLElement {
         this._restoreThread(actionTarget.dataset.threadId || "");
         break;
       case "delete-thread":
-        this._deleteThread(actionTarget.dataset.threadId || "");
+        this._deleteThread(actionTarget.dataset.threadId || "", actionTarget);
+        break;
+      case "cancel-delete":
+        this._closeDeletionConfirmation();
+        break;
+      case "confirm-delete":
+        this._confirmDeletion();
+        break;
+      case "toggle-run-activity-details":
+        this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
+        this._renderRunActivity();
         break;
       case "send-prompt":
         this._sendPrompt();
@@ -4929,6 +6490,14 @@ var CodexBridgePanel = class extends HTMLElement {
       this._threadForm.mode = target.value;
       return;
     }
+    if (target.dataset.desktopField === "agents_scope") {
+      const state = this._desktopFeatures.settings;
+      const hasActiveProject = Boolean(this._activeProject()?.project_id);
+      state.agentsScope = target.value === "project" && hasActiveProject ? "project" : "global";
+      state.data.agents = state.data.agentsScopes?.[state.agentsScope] || {};
+      this._renderDesktopSurface();
+      return;
+    }
     if (target.id === "thread-model-select") {
       const modelOverride = target.value || null;
       const project = this._activeProject();
@@ -4978,6 +6547,79 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+      const shortcut = event.key.toLowerCase();
+      if (shortcut === "n") {
+        event.preventDefault();
+        if (this._activeDestination !== "chats") this._selectDesktopDestination("chats");
+        this._openThreadFormForProject(null);
+        return;
+      }
+      if (shortcut === "g") {
+        event.preventDefault();
+        queueMicrotask(() => this.shadowRoot.getElementById("search-input")?.focus());
+        return;
+      }
+      if (event.key === ",") {
+        event.preventDefault();
+        this._selectDesktopDestination("settings");
+        return;
+      }
+    }
+    if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "TEXTAREA" && !target.closest("button")) {
+      const form = target.closest("[data-desktop-form]");
+      const submit = form?.querySelector('[data-desktop-action^="submit-"]');
+      if (submit) {
+        event.preventDefault();
+        this._handleDesktopAction(submit.dataset.desktopAction, submit.dataset, target);
+        return;
+      }
+    }
+    if (target.matches('[role="tab"][data-settings-tab]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      const tabs = [...this.shadowRoot.querySelectorAll('[role="tab"][data-settings-tab]')];
+      const currentIndex = tabs.indexOf(target);
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const next = tabs[nextIndex];
+      if (next) {
+        event.preventDefault();
+        const tabId = next.dataset.settingsTab;
+        void this._handleDesktopAction("select-settings-tab", next.dataset, next).then(() => {
+          this.shadowRoot.querySelector(`[data-settings-tab="${tabId}"]`)?.focus();
+        });
+      }
+      return;
+    }
+    if (target.matches('[role="tab"][data-side-tab]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      const tabs = [...this.shadowRoot.querySelectorAll('[role="tab"][data-side-tab]')];
+      const currentIndex = tabs.indexOf(target);
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const next = tabs[nextIndex];
+      if (next) {
+        event.preventDefault();
+        this._sideTab = next.dataset.sideTab;
+        this._renderSideTabs();
+        next.focus();
+      }
+      return;
+    }
+    if (this._pendingDeletion) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this._closeDeletionConfirmation();
+        return;
+      }
+      if (event.key === "Tab") {
+        this._trapDeletionFocus(event);
+        return;
+      }
+    }
+    if (event.key === "Escape" && this._runActivityDetailsOpen) {
+      event.preventDefault();
+      this._runActivityDetailsOpen = false;
+      this._renderRunActivity();
+      this.shadowRoot.getElementById("run-step-chip")?.focus();
+      return;
+    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -5022,6 +6664,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _handleFocusIn(event) {
     const target = event.target;
+    this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
     if (!this._isRefreshLockTarget(target)) {
       return;
@@ -5043,6 +6686,10 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _handleFocusOut(event) {
+    const nextTarget = event.relatedTarget;
+    if (!(nextTarget instanceof Node) || !this._tooltipTarget?.contains(nextTarget)) {
+      this._hideTooltip();
+    }
     if (!this._isRefreshLockTarget(event.target)) {
       return;
     }
@@ -5056,6 +6703,253 @@ var CodexBridgePanel = class extends HTMLElement {
         this._render(true);
       }
     }, 0);
+  }
+  _renderDesktopNavigation() {
+    const nav = this.shadowRoot.getElementById("desktop-destinations");
+    if (!nav) return;
+    nav.replaceChildren();
+    for (const destination of DESTINATIONS) {
+      const control = document.createElement("button");
+      control.type = "button";
+      control.className = "desktop-destination";
+      control.dataset.action = "select-desktop-destination";
+      control.dataset.destination = destination.id;
+      control.textContent = destination.label;
+      control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
+      nav.append(control);
+    }
+  }
+  _selectDesktopDestination(destination) {
+    const allowed = DESTINATIONS.some((item) => item.id === destination);
+    this._activeDestination = allowed ? destination : "chats";
+    this._closeMobileDrawer({ restoreFocus: false });
+    if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
+    this._render();
+  }
+  async _loadDesktopDestination(destination, { force = false } = {}) {
+    const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
+    if (state.loading && !force || !force && state.loaded) return;
+    state.loading = true;
+    state.error = "";
+    this._renderDesktopSurface();
+    try {
+      if (destination === "scheduled") {
+        state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
+          ...item,
+          title: item.name || "Untitled automation",
+          schedule: item.next_run_at || "Not scheduled",
+          status: item.last_status || (item.enabled === false ? "paused" : "idle")
+        }));
+      } else if (destination === "skills") {
+        state.data.skills = normalizeSkillsResponse(await this._callWS("list_skills", this._desktopWorkspace()));
+      } else if (destination === "plugins") {
+        const workspace = this._desktopWorkspace();
+        const [plugins, marketplaces] = await Promise.all([this._callWS("list_plugins", workspace), this._callWS("list_marketplaces", workspace)]);
+        state.data.plugins = normalizePluginsResponse(plugins);
+        state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
+      } else if (destination === "settings") {
+        const projectId = this._activeProject()?.project_id;
+        const globalAgentsCall = this._callWS("get_agents");
+        const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
+        const [servers, globalAgents, projectAgents] = await Promise.all([this._callWS("list_mcp"), globalAgentsCall, projectAgentsCall]);
+        state.data.mcp_servers = normalizeDesktopList(servers);
+        state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} };
+        state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
+      }
+      state.loaded = true;
+    } catch (error) {
+      state.error = normalizeDesktopError(error);
+    } finally {
+      state.loading = false;
+      this._renderDesktopSurface();
+    }
+  }
+  _desktopFormValues(target) {
+    const form = target?.closest("form");
+    if (!form) return {};
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+  }
+  _desktopWorkspace() {
+    const project = this._activeProject();
+    if (project?.root_path) return { workspace_path: project.root_path };
+    if (this._activeThread?.workspace_path) return { workspace_path: this._activeThread.workspace_path };
+    return { workspace_path: "." };
+  }
+  _desktopProjectSelector() {
+    const project = this._activeProject();
+    if (project?.project_id) return { project_id: project.project_id };
+    return this._desktopWorkspace();
+  }
+  _externalHttpsUrl(url) {
+    try {
+      const parsed = new URL(String(url));
+      return parsed.protocol === "https:" ? parsed.href : "";
+    } catch {
+      return "";
+    }
+  }
+  async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    const destination = this._activeDestination;
+    const state = this._desktopFeatures[destination];
+    if (!state) return;
+    if (["save-agents", "delete-agents"].includes(action)) {
+      const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
+      const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
+      const projectId = dataset.projectId || this._activeProject()?.project_id;
+      if (scope === "project" && !projectId) {
+        state.error = "Select a workspace project before changing project instructions.";
+        state.notice = "";
+        state.confirmAction = null;
+        this._renderDesktopSurface();
+        return;
+      }
+      if (!["global", "project"].includes(scope)) {
+        state.error = "Choose an instruction scope before saving changes.";
+        state.notice = "";
+        state.confirmAction = null;
+        this._renderDesktopSurface();
+        return;
+      }
+      dataset = { ...dataset, agentsScope: scope };
+      if (scope === "project") dataset.projectId = projectId;
+    }
+    const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
+    if (action === "confirm-desktop") {
+      const pending = state.confirmAction;
+      state.confirmAction = null;
+      if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true });
+    }
+    if (action === "cancel-desktop-confirm") {
+      state.confirmAction = null;
+      this._renderDesktopSurface();
+      return;
+    }
+    if (destructive.has(action) && !confirmed) {
+      state.confirmAction = { action, dataset: { ...dataset } };
+      this._renderDesktopSurface();
+      return;
+    }
+    if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
+    if (action === "open-schedule-form") state.form = "schedule";
+    else if (action === "open-skill-form") state.form = "skill";
+    else if (action === "open-marketplace-form") state.form = "marketplace";
+    else if (action === "open-mcp-form") state.form = "mcp";
+    else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
+    else if (action === "close-form") state.form = null;
+    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state);
+    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state);
+    else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state);
+    else if (action === "submit-marketplace") {
+      const values = this._desktopFormValues(target);
+      const source = String(values.source || "");
+      if (!source.startsWith("https://")) {
+        state.error = "Marketplace source must use HTTPS.";
+      } else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state);
+    } else if (action === "submit-mcp") {
+      const payload = this._desktopFormValues(target);
+      for (const key of ["oauth_client_id", "oauth_resource"]) {
+        if (!String(payload[key] || "").trim()) delete payload[key];
+      }
+      await this._desktopMutation("add_mcp", payload, state);
+    } else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
+    else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "update-automation") {
+      try {
+        state.loading = true;
+        this._renderDesktopSurface();
+        state.editingAutomation = await this._callWS("get_automation", { automation_id: dataset.id });
+        state.form = "schedule-edit";
+      } catch (error) {
+        state.error = normalizeDesktopError(error);
+      } finally {
+        state.loading = false;
+      }
+    } else if (action === "list-automation-runs") {
+      try {
+        state.data.runs = normalizeDesktopList(await this._callWS("list_automation_runs", { automation_id: dataset.id }));
+        state.notice = `${state.data.runs.length} run${state.data.runs.length === 1 ? "" : "s"} loaded.`;
+      } catch (error) {
+        state.error = normalizeDesktopError(error);
+      }
+    } else if (action === "delete-automation") await this._desktopMutation("delete_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
+    else if (action === "toggle-skill") await this._desktopMutation("set_skill", { ...this._desktopWorkspace(), name: dataset.id, enabled: dataset.enabled !== "false" }, state);
+    else if (action === "delete-skill") await this._desktopMutation("delete_skill", { ...this._desktopProjectSelector(), name: dataset.id }, state);
+    else if (action === "install-plugin") await this._desktopMutation("install_plugin", { plugin_name: dataset.name || dataset.id, marketplace_name: dataset.marketplace }, state);
+    else if (action === "uninstall-plugin") await this._desktopMutation("uninstall_plugin", { plugin_id: dataset.id }, state);
+    else if (action === "remove-marketplace") await this._desktopMutation("remove_marketplace", { marketplace_name: dataset.id }, state);
+    else if (action === "upgrade-marketplace") await this._desktopMutation("upgrade_marketplace", { marketplace_name: dataset.id }, state);
+    else if (action === "remove-mcp") await this._desktopMutation("remove_mcp", { name: dataset.id }, state);
+    else if (action === "login-mcp") {
+      let popup = null;
+      try {
+        popup = window.open("about:blank", "_blank");
+        if (!popup) throw new Error("Allow pop-ups to continue OAuth sign-in.");
+        popup.opener = null;
+        const result = await this._callWS("login_mcp", { name: dataset.id });
+        const authorizationUrl = this._externalHttpsUrl(result?.authorization_url);
+        if (!authorizationUrl) throw new Error("OAuth sign-in requires a valid HTTPS authorization URL.");
+        popup.location.replace(authorizationUrl);
+        state.notice = "OAuth sign-in started.";
+        state.error = "";
+      } catch (error) {
+        try {
+          popup?.close();
+        } catch {
+        }
+        state.error = normalizeDesktopError(error);
+      }
+    } else if (action === "save-agents") {
+      const payload = { content: this.shadowRoot.querySelector('[data-desktop-field="agents_content"]')?.value || "" };
+      if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
+      await this._desktopMutation("update_agents", payload, state);
+    } else if (action === "delete-agents") {
+      const payload = {};
+      if (dataset.agentsScope === "project") payload.project_id = dataset.projectId;
+      await this._desktopMutation("delete_agents", payload, state);
+    }
+    this._renderDesktopSurface();
+  }
+  async _desktopMutation(action, payload, state) {
+    state.loading = true;
+    state.error = "";
+    this._renderDesktopSurface();
+    try {
+      await this._callWS(action, payload);
+      state.notice = "Saved.";
+      state.form = null;
+      state.editingAutomation = null;
+      state.loaded = false;
+      await this._loadDesktopDestination(this._activeDestination, { force: true });
+    } catch (error) {
+      state.error = normalizeDesktopError(error);
+    } finally {
+      state.loading = false;
+    }
+  }
+  _renderDesktopSurface() {
+    const container = this.shadowRoot.getElementById("desktop-feature-surface");
+    const shell = this.shadowRoot.querySelector(".shell");
+    const route = this._activeDestination !== "chats";
+    shell?.classList.toggle("desktop-route", route);
+    container?.classList.toggle("visible", route);
+    if (route) renderDesktopFeatureSurface(container, { destination: this._activeDestination, state: this._desktopFeatures[this._activeDestination], timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(this._activeProject()?.project_id), onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+  }
+  _handleTooltipPointerOver(event) {
+    const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
+    const related = event.relatedTarget;
+    if (!target || related instanceof Node && target.contains(related)) {
+      return;
+    }
+    this._showTooltipForTarget(target);
+  }
+  _handleTooltipPointerOut(event) {
+    const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
+    const related = event.relatedTarget;
+    if (!target || related instanceof Node && target.contains(related)) {
+      return;
+    }
+    this._hideTooltip();
   }
   _render(force = false) {
     if (!force && this._suspendUiRefresh) {
@@ -5075,14 +6969,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
     this.shadowRoot.getElementById("thread-title-label").textContent = activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent = this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
-    this.shadowRoot.getElementById("thread-status-text").textContent = activeThread ? `Status: ${activeThread.status}` : "";
-    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
-      "hidden",
-      !activeThread || activeThread.status !== "running"
-    );
+    this._renderThreadRunState(activeThread);
     this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads ? this._uploadProgressText() : activeThread ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - add files or paste a screenshot` : "No chat selected";
     this._renderComposerState(activeThread);
     this._renderErrorSurface();
+    this._renderDeletionConfirmation();
     this._renderRuntimeSurface();
     this._renderOnboardingSurface();
     this._renderAuthSurface();
@@ -5100,12 +6991,17 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderToolbar();
     this._renderAttachmentChips();
     this._renderMessages();
+    this._renderRunActivity();
     this._renderInteractions();
     this._renderProgress();
     this._renderArtifacts();
     this._renderArtifactPreview();
+    this._renderUsagePanel();
     this._renderContext();
     this._renderDiagnostics();
+    this._renderSideTabs();
+    this._renderDesktopNavigation();
+    this._renderDesktopSurface();
   }
   _renderErrorSurface() {
     const errorStrip = this.shadowRoot.getElementById("error-strip");
@@ -5136,12 +7032,122 @@ var CodexBridgePanel = class extends HTMLElement {
     actions.append(dismiss);
     errorStrip.append(copy, actions);
   }
+  _renderDeletionConfirmation() {
+    const layer = this.shadowRoot.getElementById("confirmation-layer");
+    const shell = this.shadowRoot.querySelector(".shell");
+    const pending = this._pendingDeletion;
+    if (!pending) {
+      layer.hidden = true;
+      if (shell) {
+        shell.inert = false;
+        shell.removeAttribute("aria-hidden");
+      }
+      return;
+    }
+    const isProject = pending.kind === "project";
+    this.shadowRoot.getElementById("confirmation-title").textContent = isProject ? "Delete project?" : "Delete chat?";
+    this.shadowRoot.getElementById("confirmation-description").textContent = isProject ? "This deletes the project and its chat records. Workspace files remain in place." : "This deletes this chat record. Project workspace files remain in place.";
+    this.shadowRoot.getElementById("confirm-delete-button").textContent = isProject ? "Delete project" : "Delete chat";
+    layer.hidden = false;
+    if (shell) {
+      shell.inert = true;
+      shell.setAttribute("aria-hidden", "true");
+    }
+  }
+  _openDeletionConfirmation(kind, targetId, trigger = null) {
+    if (!targetId || !["project", "thread"].includes(kind) || this._pendingDeletion) {
+      return;
+    }
+    this._pendingDeletion = { kind, targetId };
+    this._deletionReturnFocus = trigger instanceof HTMLElement ? trigger : this.shadowRoot.activeElement;
+    this._hideTooltip();
+    this._renderDeletionConfirmation();
+    queueMicrotask(() => this.shadowRoot.getElementById("cancel-delete-button")?.focus());
+  }
+  _closeDeletionConfirmation({ restoreFocus = true } = {}) {
+    if (!this._pendingDeletion) {
+      return;
+    }
+    const returnFocus = this._deletionReturnFocus;
+    this._pendingDeletion = null;
+    this._deletionReturnFocus = null;
+    this._renderDeletionConfirmation();
+    if (restoreFocus) {
+      queueMicrotask(() => returnFocus?.focus());
+    }
+  }
+  async _confirmDeletion() {
+    const pending = this._pendingDeletion;
+    if (!pending) {
+      return;
+    }
+    this._closeDeletionConfirmation();
+    if (pending.kind === "project") {
+      return this._deleteProject(pending.targetId, null, true);
+    }
+    return this._deleteThread(pending.targetId, null, true);
+  }
+  _trapDeletionFocus(event) {
+    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+    if (!dialog) {
+      return;
+    }
+    const controls = [...dialog.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)")];
+    if (!controls.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = controls[0];
+    const last = controls.at(-1);
+    const active = this.shadowRoot.activeElement;
+    if (event.shiftKey && (active === first || active === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+  _runActivityForThread(thread = this._activeThread) {
+    if (!thread) {
+      return getRunActivityViewModel({}, []);
+    }
+    const events = thread.thread_id === this._selectedThreadId ? this._events : [];
+    return getRunActivityViewModel(thread, events);
+  }
+  _threadStatusLabel(thread, activity = this._runActivityForThread(thread)) {
+    if (!thread) {
+      return "";
+    }
+    if (activity.state === "queued") {
+      return "Queued";
+    }
+    if (activity.busy) {
+      return "Working";
+    }
+    if (activity.state === "failed" || thread.status === "error") {
+      return "Needs attention";
+    }
+    if (["cancelled", "interrupted"].includes(activity.state)) {
+      return "Stopped";
+    }
+    return "";
+  }
+  _renderThreadRunState(activeThread = this._activeThread) {
+    const activity = this._runActivityForThread(activeThread);
+    this.shadowRoot.getElementById("thread-status-text").textContent = this._threadStatusLabel(activeThread, activity);
+    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
+      "hidden",
+      !activeThread || !activity.busy
+    );
+  }
   _renderComposerState(activeThread) {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
     const composerStatus = this.shadowRoot.getElementById("composer-status");
     const composerShell = this.shadowRoot.querySelector(".composer-shell");
-    const isRunning = activeThread?.status === "running";
+    const isRunning = this._runActivityForThread(activeThread).busy;
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const retryable = mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
@@ -5224,12 +7230,12 @@ var CodexBridgePanel = class extends HTMLElement {
         const model = getApprovalViewModel(interaction, { pending });
         renderApproval(wrapper, model);
         if (mutation?.state === "retryable") {
-          for (const button of wrapper.querySelectorAll("[data-decision]")) {
-            const isOriginalDecision = button.dataset.decision === mutation.decision;
-            button.disabled = !isOriginalDecision;
-            button.setAttribute("aria-disabled", String(!isOriginalDecision));
+          for (const button2 of wrapper.querySelectorAll("[data-decision]")) {
+            const isOriginalDecision = button2.dataset.decision === mutation.decision;
+            button2.disabled = !isOriginalDecision;
+            button2.setAttribute("aria-disabled", String(!isOriginalDecision));
             if (isOriginalDecision) {
-              button.textContent = `Retry ${button.textContent.toLowerCase()}`;
+              button2.textContent = `Retry ${button2.textContent.toLowerCase()}`;
             }
           }
         }
@@ -5630,8 +7636,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     renderAuth(container, this._authViewModel());
     if (this._authActionPending) {
-      for (const button of container.querySelectorAll("button[data-action]")) {
-        button.disabled = true;
+      for (const button2 of container.querySelectorAll("button[data-action]")) {
+        button2.disabled = true;
       }
     }
   }
@@ -5693,9 +7699,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const browseActions = document.createElement("div");
       browseActions.className = "browser-actions";
       for (const [action, label] of [["browse-current", "Browse"], ["browse-up", "Up"], ["browse-roots", "Workspace root"]]) {
-        const button = this._actionButton("text-button", action);
-        button.textContent = label;
-        browseActions.append(button);
+        const button2 = this._actionButton("text-button", action);
+        button2.textContent = label;
+        browseActions.append(button2);
       }
       const browseList = document.createElement("div");
       browseList.className = "browse-list";
@@ -5995,10 +8001,10 @@ var CodexBridgePanel = class extends HTMLElement {
       secondary.setAttribute("aria-label", `Actions for ${project.name || "project"}`);
       secondary.hidden = !expanded;
       for (const [action, label, icon] of secondaryActions) {
-        const button = this._actionButton("rail-menu-item", action, label);
-        button.dataset.projectId = String(project.project_id || "");
-        this._setTrustedButtonContent(button, icon, label);
-        secondary.append(button);
+        const button2 = this._actionButton("rail-menu-item", action, label);
+        button2.dataset.projectId = String(project.project_id || "");
+        this._setTrustedButtonContent(button2, icon, label);
+        secondary.append(button2);
       }
       projectHead.append(secondary);
     }
@@ -6090,9 +8096,11 @@ var CodexBridgePanel = class extends HTMLElement {
     empty.textContent = hasMatch ? "" : `No chats or projects match “${query}”.`;
   }
   _threadRow(thread, { archived = false } = {}) {
-    const statusClass = thread.status === "running" ? "running" : thread.status === "error" ? "error" : "idle";
+    const activity = this._runActivityForThread(thread);
+    const statusClass2 = activity.busy ? "running" : activity.state === "failed" || thread.status === "error" ? "error" : "idle";
     const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
+    const statusLabel = this._threadStatusLabel(thread, activity) || "Ready";
     const selected = thread.thread_id === this._selectedThreadId;
     const expanded = Boolean(this._expandedThreadActions[thread.thread_id]);
     const row = document.createElement("div");
@@ -6100,7 +8108,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const select = this._actionButton(
       `chat-select${selected ? " active" : ""}`,
       "select-thread",
-      `Select chat ${thread.title || "Untitled chat"}, ${meta}, status ${thread.status || "unknown"}`
+      `Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
     select.title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
@@ -6108,9 +8116,9 @@ var CodexBridgePanel = class extends HTMLElement {
       select.setAttribute("aria-current", "page");
     }
     const status = document.createElement("span");
-    status.className = `status-pill ${statusClass}`;
+    status.className = `status-pill ${statusClass2}`;
     status.setAttribute("aria-hidden", "true");
-    select.append(status, this._textElement("span", "thread-name", thread.title || "Untitled chat"));
+    select.append(this._textElement("span", "thread-name", thread.title || "Untitled chat"), status);
     const rowActions = document.createElement("div");
     rowActions.className = "row-actions";
     const menuId = `thread-secondary-actions-${thread.thread_id}`;
@@ -6273,12 +8281,12 @@ var CodexBridgePanel = class extends HTMLElement {
       const actionContainer = document.createElement("div");
       actionContainer.className = "banner-actions";
       for (const action of actions) {
-        const button = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
-        button.textContent = action.label;
+        const button2 = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
+        button2.textContent = action.label;
         if (this._authActionPending && AUTH_ACTION_IDS.has(action.action)) {
-          button.disabled = true;
+          button2.disabled = true;
         }
-        actionContainer.append(button);
+        actionContainer.append(button2);
       }
       content.append(actionContainer);
     }
@@ -6403,8 +8411,104 @@ var CodexBridgePanel = class extends HTMLElement {
       );
     }
   }
+  _renderRunActivity() {
+    const region = this.shadowRoot.getElementById("run-activity");
+    if (!region) return;
+    region.replaceChildren();
+    const activity = this._runActivityForThread();
+    const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
+    const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
+    const hasStepDetails = Boolean(activity.step || history.length || files.changed);
+    const showActivityCopy = Boolean(
+      activity.action && (activity.terminal || activity.busy)
+    );
+    if (!this._activeThread || !showActivityCopy && !hasStepDetails && !activity.busy) {
+      this._runActivityDetailsOpen = false;
+      region.hidden = true;
+      region.setAttribute("aria-busy", "false");
+      return;
+    }
+    region.hidden = false;
+    region.setAttribute("aria-busy", String(activity.busy));
+    if (showActivityCopy) {
+      const copy = document.createElement("div");
+      copy.className = "run-activity-copy";
+      const indicator = document.createElement("span");
+      const indicatorState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
+      indicator.className = `activity-spinner${indicatorState ? ` ${indicatorState}` : ""}`;
+      indicator.setAttribute("aria-hidden", "true");
+      copy.append(indicator, this._textElement("span", "", activity.action));
+      region.append(copy);
+    }
+    if (hasStepDetails || activity.busy) {
+      const wrap = document.createElement("div");
+      wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
+      const tooltipId = "run-step-tooltip";
+      const chip = this._actionButton(
+        "run-step-chip",
+        "toggle-run-activity-details",
+        this._runStepAccessibleLabel(activity)
+      );
+      chip.id = "run-step-chip";
+      chip.setAttribute("aria-expanded", String(this._runActivityDetailsOpen));
+      chip.setAttribute("aria-haspopup", "true");
+      chip.setAttribute("aria-controls", tooltipId);
+      chip.setAttribute("aria-describedby", tooltipId);
+      const stepIndicator = document.createElement("span");
+      const stepState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
+      stepIndicator.className = `step-spinner${stepState ? ` ${stepState}` : ""}`;
+      stepIndicator.setAttribute("aria-hidden", "true");
+      chip.append(stepIndicator);
+      const stepText = activity.step ? `Step ${activity.step.index} / ${activity.step.total}` : activity.busy ? "Working" : activity.state === "failed" ? "Run failed" : "Run complete";
+      chip.append(this._textElement("span", "run-step-label", stepText));
+      if (files.changed) {
+        chip.append(
+          this._textElement("span", "run-step-separator", "·"),
+          this._textElement("span", "run-step-files", `${files.changed} file${files.changed === 1 ? "" : "s"} changed`)
+        );
+      }
+      if (files.additions) chip.append(this._textElement("span", "run-step-additions", `+${files.additions}`));
+      if (files.deletions) chip.append(this._textElement("span", "run-step-deletions", `-${files.deletions}`));
+      const tooltip = document.createElement("div");
+      tooltip.id = tooltipId;
+      tooltip.className = "run-step-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      tooltip.append(this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity"));
+      const list = document.createElement("ol");
+      list.className = "run-step-history";
+      const visibleHistory = history.length ? history : [{ label: activity.action || "Waiting for activity details", kind: "activity" }];
+      for (const entry of visibleHistory) {
+        const item = document.createElement("li");
+        const dot = this._textElement("span", "run-step-history-dot", "");
+        dot.setAttribute("aria-hidden", "true");
+        item.append(dot, this._textElement("span", "", entry.label));
+        list.append(item);
+      }
+      tooltip.append(list);
+      wrap.append(chip, tooltip);
+      region.append(wrap);
+    } else {
+      this._runActivityDetailsOpen = false;
+    }
+  }
+  _runStepAccessibleLabel(activity) {
+    const parts = [];
+    if (activity.step) {
+      parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
+    } else {
+      parts.push(activity.action || "Run activity");
+    }
+    const files = activity.files || {};
+    if (files.changed) parts.push(`${files.changed} files changed`);
+    if (files.additions) parts.push(`${files.additions} additions`);
+    if (files.deletions) parts.push(`${files.deletions} deletions`);
+    parts.push(this._runActivityDetailsOpen ? "Hide activity details" : "Show activity details");
+    return parts.join(". ");
+  }
   _renderMessages() {
     const messageList = this.shadowRoot.getElementById("message-list");
+    const activity = this._runActivityForThread();
+    messageList.setAttribute("aria-busy", String(Boolean(this._selectedThreadId && activity.busy)));
     if (!this._selectedThreadId) {
       this._renderedThreadId = null;
       this._renderedSequence = 0;
@@ -6422,6 +8526,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const eventsToRender = this._renderedSequence === 0 ? this._events : this._events.filter((item) => item.sequence > this._renderedSequence);
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
+      this._syncStreamingMessage(messageList, activity);
       return;
     }
     if (eventsToRender.length && messageList.querySelector(".empty-state")) {
@@ -6436,9 +8541,47 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.append(node);
       this._renderedSequence = event.sequence;
     }
+    this._syncStreamingMessage(messageList, activity);
     if (shouldStick) {
       this._scrollMessagesToBottom();
     }
+  }
+  _syncStreamingMessage(messageList, activity) {
+    const existing = messageList.querySelector('[data-streaming-message="true"]');
+    const text2 = this._streamingAssistantText(activity);
+    if (activity.assistantState !== "streaming" || !text2) {
+      existing?.remove();
+      return;
+    }
+    messageList.querySelector(".empty-state")?.remove();
+    const article = this._renderMessage("assistant", text2, "streaming", false, "Assistant");
+    article.classList.add("streaming");
+    article.dataset.streamingMessage = "true";
+    article.setAttribute("aria-label", "Assistant response in progress");
+    if (existing) {
+      existing.replaceWith(article);
+    } else {
+      messageList.append(article);
+    }
+  }
+  _streamingAssistantText(activity) {
+    if (activity.assistantState !== "streaming") return "";
+    let text2 = "";
+    for (const event of this._events) {
+      const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+      const eventRunId2 = typeof payload.run_id === "string" ? payload.run_id : "";
+      if (activity.runId && eventRunId2 && eventRunId2 !== activity.runId) continue;
+      if (event.event_type === "message.completed") {
+        text2 = "";
+        continue;
+      }
+      if (event.event_type !== "message.delta") continue;
+      const chunk = typeof payload.text === "string" ? payload.text : typeof payload.delta === "string" ? payload.delta : "";
+      if (!chunk) continue;
+      text2 = chunk.startsWith(text2) && chunk.length > text2.length ? chunk : `${text2}${chunk}`;
+      if (text2.length > 2e5) text2 = text2.slice(-2e5);
+    }
+    return text2;
   }
   _scrollMessagesToBottom() {
     const messageList = this.shadowRoot.getElementById("message-list");
@@ -6461,11 +8604,11 @@ var CodexBridgePanel = class extends HTMLElement {
     if (event.event_type === "message.completed") {
       return this._renderMessage("assistant", payload.text, event.sequence, true);
     }
-    if (event.event_type === "run.started") {
-      return this._textElement("div", "event-row", "Run started");
+    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+      return null;
     }
-    if (event.event_type === "run.completed") {
-      return this._textElement("div", "event-row", "Run completed");
+    if (event.event_type === "run.started" || event.event_type === "run.completed") {
+      return null;
     }
     if (event.event_type === "run.queued") {
       return this._textElement("div", "event-row", "Steer queued");
@@ -6503,7 +8646,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return null;
   }
-  _renderMessage(role, text, key, canCopy, label = "") {
+  _renderMessage(role, text2, key, canCopy, label = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
@@ -6525,18 +8668,18 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       bubble.append(head);
     }
-    this._renderMessageBody(bubble, String(text ?? ""));
+    this._renderMessageBody(bubble, String(text2 ?? ""));
     article.append(bubble);
     return article;
   }
-  _renderMessageBody(container, text) {
+  _renderMessageBody(container, text2) {
     const fencePattern = /```([^\n`]*)\n([\s\S]*?)```/g;
     let lastIndex = 0;
     let renderedPart = false;
     let match;
-    while ((match = fencePattern.exec(text)) !== null) {
+    while ((match = fencePattern.exec(text2)) !== null) {
       if (match.index > lastIndex) {
-        container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex, match.index)));
+        container.append(this._textElement("pre", "bubble-text", text2.slice(lastIndex, match.index)));
       }
       const language = (match[1] || "code").trim() || "code";
       const codeBlock = document.createElement("div");
@@ -6553,8 +8696,8 @@ var CodexBridgePanel = class extends HTMLElement {
       renderedPart = true;
       lastIndex = fencePattern.lastIndex;
     }
-    if (lastIndex < text.length || !renderedPart) {
-      container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex)));
+    if (lastIndex < text2.length || !renderedPart) {
+      container.append(this._textElement("pre", "bubble-text", text2.slice(lastIndex)));
     }
   }
   _renderProgress() {
@@ -6761,6 +8904,43 @@ var CodexBridgePanel = class extends HTMLElement {
       this._textElement("div", "empty-note", preview.notice || preview.contentType || "Binary file")
     );
     container.append(binary);
+  }
+  _renderUsagePanel() {
+    const container = this.shadowRoot.getElementById("usage-panel");
+    if (!container) return;
+    const limits = this._status?.limits;
+    const grid = document.createElement("div");
+    grid.className = "usage-limit-grid";
+    const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary ? "Off" : "Unavailable";
+    grid.append(
+      this._compactLimitCard("5 hours", limits?.primary, shortWindowEmptyLabel),
+      this._compactLimitCard("Weekly", limits?.secondary)
+    );
+    const summary = this._textElement("p", "usage-note", this._limitsFootnote(limits));
+    const account = this._status?.account;
+    const details = document.createElement("div");
+    details.className = "context-list";
+    this._renderKeyValueRows(details, [
+      ["Plan", normalizePlanType(limits?.plan_type || account?.plan_type)],
+      ["5-hour window", limits?.available && !limits?.primary && limits?.secondary ? "Off" : limits?.primary ? "Enabled" : "Unavailable"],
+      ["Weekly window", limits?.secondary ? this._formatPercent(limits.secondary.remaining_percent) : "Unavailable"],
+      ["Snapshot", limits?.updated_at ? this._timeAgo(limits.updated_at) : "Unavailable"]
+    ], "context-row");
+    container.replaceChildren(grid, summary, details);
+  }
+  _renderSideTabs() {
+    const allowed = INFO_TABS.map((tab) => tab.id);
+    if (!allowed.includes(this._sideTab)) this._sideTab = "activity";
+    for (const tab of this.shadowRoot.querySelectorAll('[role="tab"][data-side-tab]')) {
+      const selected = tab.dataset.sideTab === this._sideTab;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const panel of this.shadowRoot.querySelectorAll("[data-side-tab-panel]")) {
+      panel.hidden = panel.dataset.sideTabPanel !== this._sideTab;
+    }
+    const title = this.shadowRoot.getElementById("side-panel-title");
+    if (title) title.textContent = this._sideTab[0].toUpperCase() + this._sideTab.slice(1);
   }
   _renderContext() {
     const container = this.shadowRoot.getElementById("context-list");
@@ -7126,6 +9306,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       this._stopPolling();
+      this._runActivityDetailsOpen = false;
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
       this._threadRefreshGraceUntil = 0;
@@ -7783,8 +9964,12 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
-  async _deleteProject(projectId) {
-    if (!projectId || !window.confirm("Delete this project and its chat records? Workspace files will be left in place.")) {
+  async _deleteProject(projectId, trigger = null, confirmed = false) {
+    if (!projectId) {
+      return;
+    }
+    if (!confirmed) {
+      this._openDeletionConfirmation("project", projectId, trigger);
       return;
     }
     try {
@@ -7822,8 +10007,12 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
-  async _deleteThread(threadId) {
-    if (!threadId || !window.confirm("Delete this chat? Project files will be left in place.")) {
+  async _deleteThread(threadId, trigger = null, confirmed = false) {
+    if (!threadId) {
+      return;
+    }
+    if (!confirmed) {
+      this._openDeletionConfirmation("thread", threadId, trigger);
       return;
     }
     try {
@@ -7974,37 +10163,37 @@ var CodexBridgePanel = class extends HTMLElement {
   async _copyMessage(sequence) {
     const numericSequence = Number(sequence);
     const event = this._events.find((item) => item.sequence === numericSequence);
-    const text = event?.payload?.text || "";
-    if (!text) {
+    const text2 = event?.payload?.text || "";
+    if (!text2) {
       return;
     }
     try {
-      await this._writeClipboardText(text);
+      await this._writeClipboardText(text2);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
   }
-  async _copyCodeBlock(button) {
-    const block = button.closest(".code-block");
-    const text = block?.querySelector(".code-text")?.textContent || "";
-    if (!text) {
+  async _copyCodeBlock(button2) {
+    const block = button2.closest(".code-block");
+    const text2 = block?.querySelector(".code-text")?.textContent || "";
+    if (!text2) {
       return;
     }
     try {
-      await this._writeClipboardText(text);
+      await this._writeClipboardText(text2);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
   }
-  async _writeClipboardText(text) {
+  async _writeClipboardText(text2) {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text2);
       return;
     }
     const helper = document.createElement("textarea");
-    helper.value = text;
+    helper.value = text2;
     document.body.appendChild(helper);
     helper.select();
     document.execCommand("copy");
@@ -8496,6 +10685,15 @@ var CodexBridgePanel = class extends HTMLElement {
       this._settlePromptMutation(acceptedEvent.payload.client_request_id);
     }
     this._renderMessages();
+    this._renderRunActivity();
+    this._renderThreadRunState();
+    this._renderComposerState(this._activeThread);
+    if (["run.started", "run.completed", "run.failed", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
+      this._renderDirectSection();
+      this._renderProjectList();
+      this._renderArchivedSection();
+      this._renderProgress();
+    }
     if ([
       "run.started",
       "run.completed",
@@ -8969,25 +11167,87 @@ var CodexBridgePanel = class extends HTMLElement {
     return element;
   }
   _actionButton(className, action, accessibleLabel) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = className;
-    button.dataset.action = action;
+    const button2 = document.createElement("button");
+    button2.type = "button";
+    button2.className = className;
+    button2.dataset.action = action;
     if (accessibleLabel) {
-      button.title = accessibleLabel;
-      button.setAttribute("aria-label", accessibleLabel);
+      button2.title = accessibleLabel;
+      button2.setAttribute("aria-label", accessibleLabel);
+      this._setTooltipTarget(button2, accessibleLabel);
     }
-    return button;
+    return button2;
+  }
+  _setTooltipTarget(target, label) {
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const text2 = Array.from(String(label ?? ""), (character) => {
+      const code = character.codePointAt(0);
+      return code <= 31 || code === 127 ? " " : character;
+    }).join("").replace(/\s+/gu, " ").trim().slice(0, 120);
+    if (!text2) {
+      return;
+    }
+    target.dataset.tooltip = text2;
+    if (!target.getAttribute("title")) {
+      target.title = text2;
+    }
+  }
+  _showTooltipForTarget(target) {
+    const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
+    if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
+      return;
+    }
+    const text2 = trigger.dataset.tooltip;
+    const layer = this.shadowRoot.getElementById("tooltip-layer");
+    if (!text2 || !layer) {
+      return;
+    }
+    this._hideTooltip();
+    this._tooltipTarget = trigger;
+    layer.textContent = text2;
+    layer.hidden = false;
+    const descriptions = (trigger.getAttribute("aria-describedby") || "").split(/\s+/u).filter(Boolean);
+    if (!descriptions.includes(layer.id)) {
+      trigger.setAttribute("aria-describedby", [...descriptions, layer.id].join(" "));
+    }
+    const rect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const left = Math.max(8, Math.min(viewportWidth - 8, rect.left + rect.width / 2));
+    const below = rect.top < 56;
+    layer.style.left = `${left}px`;
+    layer.style.top = `${below ? rect.bottom + 8 : rect.top - 8}px`;
+    layer.style.transform = below ? "translateX(-50%)" : "translate(-50%, -100%)";
+  }
+  _hideTooltip() {
+    const layer = this.shadowRoot?.getElementById("tooltip-layer");
+    if (this._tooltipTarget && layer) {
+      const descriptions = (this._tooltipTarget.getAttribute("aria-describedby") || "").split(/\s+/u).filter((value) => value && value !== layer.id);
+      if (descriptions.length) {
+        this._tooltipTarget.setAttribute("aria-describedby", descriptions.join(" "));
+      } else {
+        this._tooltipTarget.removeAttribute("aria-describedby");
+      }
+    }
+    this._tooltipTarget = null;
+    if (layer) {
+      layer.hidden = true;
+      layer.textContent = "";
+      layer.style.removeProperty("left");
+      layer.style.removeProperty("top");
+      layer.style.removeProperty("transform");
+    }
   }
   _input(className, id, placeholder, value, accessibleLabel = placeholder) {
-    const input = document.createElement("input");
-    input.className = className;
-    input.id = id;
-    input.type = "text";
-    input.placeholder = placeholder;
-    input.value = String(value ?? "");
-    input.setAttribute("aria-label", accessibleLabel);
-    return input;
+    const input2 = document.createElement("input");
+    input2.className = className;
+    input2.id = id;
+    input2.type = "text";
+    input2.placeholder = placeholder;
+    input2.value = String(value ?? "");
+    input2.setAttribute("aria-label", accessibleLabel);
+    return input2;
   }
   _select(className, id, accessibleLabel) {
     const select = document.createElement("select");
@@ -8998,11 +11258,11 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return select;
   }
-  _setTrustedButtonContent(button, iconMarkup, label = "") {
-    button.replaceChildren();
-    this._appendTrustedIcon(button, iconMarkup);
+  _setTrustedButtonContent(button2, iconMarkup, label = "") {
+    button2.replaceChildren();
+    this._appendTrustedIcon(button2, iconMarkup);
     if (label) {
-      button.append(this._textElement("span", "", label));
+      button2.append(this._textElement("span", "", label));
     }
   }
   _sectionTitleLine(chevron, iconMarkup, label) {

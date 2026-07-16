@@ -6,15 +6,16 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Release being shipped: App `0.6.6` (`amd64` only, experimental)
-- Integration: `0.6.6`
-- External Bridge: `0.5.5`
+- Release being shipped: App `0.7.0` (`amd64` only, experimental)
+- Integration: `0.7.0`
+- External Bridge: `0.6.0`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Publication, signing, and target-Home-Assistant acceptance for `0.6.6` remain
-pending. The signed, live-accepted `0.6.5` matrix remains historical evidence;
-do not reuse its image digest or acceptance claims for this release. On target
+Publication, signing, and target-Home-Assistant acceptance for `0.7.0` remain
+pending. App/Integration `0.6.6` is the signed published baseline, while the
+live-accepted `0.6.5` matrix remains historical evidence; do not reuse either
+image digest or acceptance claim for this release. On target
 HAOS, pinned Codex `0.144.4`'s official `--no-proc`
 fallback works: denial of a fresh `/proc` mount leaves user, PID, and network
 namespaces, the read-only filesystem, AppArmor, and seccomp enforced; `/proc` is
@@ -28,11 +29,11 @@ validates canonical contained supplemental roots and hardens
 `lsm_get_self_attr` record parsing. The historical `0.6.5` image passed target-HAOS
 startup, the production sandbox self-test and attestation, an authenticated API
 v1 readiness request, Supervisor discovery, Integration pairing, and panel
-loading. Its live-acceptance evidence does not accept `0.6.6`. External
+loading. Its live-acceptance evidence does not accept `0.7.0`. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
 unattended App update, and previous-image rollback remain unproven.
 
-The `0.6.6` release advertises the Supervisor-assigned private App IP and includes a
+The `0.7.0` release advertises the Supervisor-assigned private App IP and includes a
 fresh non-secret publication marker on each start, so Home Assistant can
 recover discovery without changing the stable Supervisor identity. It retains
 bounded device-authorization recovery, immediate model-entitlement refresh,
@@ -74,6 +75,37 @@ approved ChatGPT device-auth page in a browser. **Cancel** stops an unfinished
 sign-in; **Sign out** removes the established session. Once signed in, normal
 panel use stays on Home Assistant, but re-authentication again needs access to
 the approved ChatGPT page. This flow does not use an OpenAI API key.
+
+## Automations, instructions, and extensions
+
+The administrator panel can manage durable automations, workspace skills,
+global/project `AGENTS.md`, plugins, marketplaces, and MCP servers. The App
+does not run a hidden wall-clock worker: Home Assistant schedules the next UTC
+occurrence and the Bridge accepts an idempotent claim. One-time, interval, and
+RFC 5545 recurrence schedules are supported; overlap, capacity, pause, and
+misfire outcomes are recorded as skipped runs.
+
+Skills are created below the selected workspace's `.agents/skills/` directory.
+Global instructions live in the private Codex home; project instructions live
+at the workspace root. Instruction writes are atomic and retain bounded private
+snapshots. Plugin and marketplace operations use Codex's runtime configuration
+and never accept arbitrary JSON or paths outside the workspace.
+
+MCP is disabled by default. Enable **Enable MCP** in the App configuration,
+save, and restart the App before adding servers. When it is off, Codex starts
+with MCP suppressed and the Bridge removes the saved native MCP server table
+without rewriting plugins, skills, marketplaces, or instructions. A cleanup
+failure keeps readiness unavailable.
+
+MCP configuration is outbound only. The server URL must use a trusted HTTPS
+hostname (not a literal IP, localhost, internal hostname, or known non-public
+DNS answer). DNS checks are best effort, are not a connection-time IP allowlist,
+and cannot guarantee that an answer will not change after validation. This
+surface does not configure bearer tokens. OAuth login is an explicit
+administrator action; its authorization URL is returned once and is not
+retained by the Bridge. MCP elicitation requests are declined until a consent
+UX is reviewed. None of these settings publishes the App or Bridge to a
+browser.
 
 ## Updates and recovery
 

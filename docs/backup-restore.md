@@ -7,6 +7,12 @@ ChatGPT device-login state in its App-private data volume. Backups can contain
 source code, workspace secrets, and login-related private state; treat them as
 sensitive material.
 
+The backup also needs to preserve Bridge metadata such as `automations.json`,
+thread/project history, uploaded artifacts, configured MCP metadata, plugin and
+marketplace configuration, and private `AGENTS.md` rollback snapshots. These
+records are useful recovery state, but they are not portable credentials: do
+not copy ChatGPT session files or OAuth authorization URLs into a new host.
+
 ## Current recovery plan
 
 Prepare a cold Home Assistant backup and, where one is already operated, retain
@@ -27,6 +33,11 @@ App tag and its restore procedure are published and tested.
 
 Make a cold backup before an App change, a workspace-layout change, or a host
 migration.
+
+Before a restore, pause or disable automations and note their revisions. After
+readiness and sign-in are verified, inspect the scheduler snapshot and run
+history before resuming them; an idempotency key prevents a claimed occurrence
+from being submitted twice, but it does not make an unreviewed workspace safe.
 
 ## Restore safely
 

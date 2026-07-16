@@ -3,7 +3,7 @@
 ## Status before you start
 
 This guide covers the release being shipped: experimental, `amd64`-only App
-`0.6.6`, Integration `0.6.6`, Bridge `0.5.5`, and Codex `0.144.4`.
+`0.7.0`, Integration `0.7.0`, Bridge `0.6.0`, and Codex `0.144.4`.
 Publication, signing, and target-Home-Assistant acceptance remain pending. The
 signed, live-accepted `0.6.5` matrix is historical evidence only. On target
 HAOS, Codex `0.144.4`'s official
@@ -14,15 +14,15 @@ contract mismatch: it required `writableRoots` exactly `[workspace]`, while the
 real `ha_bridge` `workspaceWrite` response includes bounded supplemental roots
 (`.agents`, `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace.
 The proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr`
-calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.6.6`
+calls, without requesting `SYS_ADMIN` or weakening isolation; App `0.7.0`
 retains canonical contained supplemental-root validation and hardened
 `lsm_get_self_attr` record parsing. The historical `0.6.5` image passed
 target-HAOS startup, its production sandbox self-test and attestation, an
 authenticated API v1 readiness request, Supervisor discovery, Integration
-pairing, and panel loading. App `0.6.6` uses private-IP Supervisor discovery and
+pairing, and panel loading. App `0.7.0` uses private-IP Supervisor discovery and
 retains bounded recovery after device approval, immediate entitlement-aware
 model discovery, duration-aware usage windows, and resilient new-chat
-hydration. The `0.6.6` panel has a clean left navigation tree, title-first chat
+hydration. The `0.7.0` panel has a clean left navigation tree, title-first chat
 rows, one action menu, correct archive collapse/search and search icon, 44px
 mobile targets, transcript-adjacent decisions, and collapsed mobile
 limits/model controls. Its catalogue
@@ -74,7 +74,7 @@ model and should not be used when checking or editing this repository.
 
 Open **Settings -> Apps -> App store**, select the three-dot menu, then
 **Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait
-until the store offers App `0.6.6`, then install and start **Codex Bridge**. Do
+until the store offers App `0.7.0`, then install and start **Codex Bridge**. Do
 not install App `0.6.1`; it fails closed during target-HAOS
 readiness. The App has no ingress route, direct port, or browser-visible Bridge
 URL; Supervisor discovery supplies the private connection using the App's
@@ -98,6 +98,25 @@ Integration does not save an unverified endpoint.
    separate sessions. **Cancel** stops only an active sign-in; **Sign out**
    removes an established session.
 5. Create a Project and grant a small workspace below `/config/workspaces`.
+
+## Configure capabilities
+
+After the first reversible chat, the panel's administrator-only navigation can
+manage scheduled automations (one-time, interval, or RFC 5545 recurrence),
+workspace skills under `.agents/skills/`, global or project-root `AGENTS.md`,
+Codex plugins and marketplaces, and outbound MCP servers. Home Assistant owns
+the automation clock while the Bridge records idempotent claims and skipped
+overlap/capacity/misfire outcomes. MCP is disabled by default. If you need it,
+open **Settings -> Apps -> Codex Bridge -> Configuration**, enable **Enable
+MCP**, save, and restart the App. MCP URLs must use trusted HTTPS hostnames;
+literal IPs, localhost/internal hosts, and known non-public DNS answers are
+rejected. DNS checks are best effort and are not a connection-time IP
+allowlist. OAuth is an explicit one-shot flow, and bearer-token configuration
+and MCP elicitation are unavailable.
+
+These controls do not add a browser-facing App/Bridge endpoint. Review prompts,
+instruction files, marketplace/plugin content, and every automation target
+before enabling unattended work.
 
 After connection, normal panel use can remain on Home Assistant. Initial
 sign-in and re-authentication require browser access to the approved ChatGPT

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock, Thread, current_thread
 from time import monotonic
@@ -245,6 +246,11 @@ _MAX_REQUEST_OUTCOMES = 50_000
 _MAX_TERMINAL_RUNS = 1024
 _MAX_TERMINAL_INTERACTIONS = 2048
 _MAX_PRE_RESPONSE_CALLBACKS = 16
+_SAFE_ITEM_STATUSES = frozenset({"inProgress", "completed", "failed", "declined"})
+_SAFE_COMMAND_ACTION_TYPES = frozenset({"read", "listFiles", "search", "unknown"})
+_SAFE_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "openPage", "findInPage", "other"})
+_SAFE_CHANGE_KINDS = frozenset({"add", "delete", "update"})
+_MAX_ITEM_ACTIVITY_DURATION_MS = 86_400_000
 _NOTIFICATIONS = (
     "turn/started",
     "item/agentMessage/delta",
@@ -287,6 +293,7 @@ class RuntimeBroker:
         turn_timeout_seconds: float | None = None,
         cancel_grace_seconds: float | None = None,
         interaction_timeout_seconds: float | None = None,
+        run_terminal_listener: Callable[[str, str, str, bool], None] | None = None,
     ) -> None:
         self.storage = storage
         self.app_server = app_server
@@ -322,6 +329,7 @@ class RuntimeBroker:
             if interaction_timeout_seconds is None
             else _positive_timeout(interaction_timeout_seconds)
         )
+        self._run_terminal_listener = run_terminal_listener
         self._store = RuntimeStateStore(
             storage.root,
             durable_outbox=storage.durable_outbox,
@@ -397,7 +405,10 @@ class RuntimeBroker:
         prompt: str,
         *,
         client_request_id: str | None = None,
+        unattended: bool = False,
     ) -> RunRecord:
+        if type(unattended) is not bool:
+            raise ValueError("unattended must be a boolean")
         request_id = client_request_id or f"req_{uuid4().hex}"
         prompt = _prompt(prompt)
         request_id = _identifier(request_id, limit=256, label="client request id")
@@ -421,6 +432,7 @@ class RuntimeBroker:
                 if (
                     existing_outcome.thread_id != thread_id
                     or existing_outcome.fingerprint != _fingerprint(prompt)
+                    or existing_outcome.unattended != unattended
                 ):
                     raise RuntimeRequestConflictError()
                 if existing_outcome.status == "uncertain":
@@ -447,12 +459,15 @@ class RuntimeBroker:
 
             active = self._active_run_for_thread_locked(thread_id)
             if active is not None:
+                if unattended or active.unattended:
+                    raise RuntimePromptPendingError()
                 if not active.codex_thread_id or not active.codex_turn_id:
                     raise RuntimePromptPendingError()
                 self._state.request_idempotency[request_id] = RuntimeRequestOutcome(
                     run_id=active.run_id,
                     thread_id=thread_id,
                     kind="steer",
+                    unattended=False,
                     fingerprint=_fingerprint(prompt),
                     status="uncertain",
                     run_status=active.status,
@@ -475,6 +490,7 @@ class RuntimeBroker:
                     run_id=f"run_{uuid4().hex[:16]}",
                     client_request_id=request_id,
                     thread_id=thread_id,
+                    unattended=unattended,
                     prompt=prompt,
                     prompt_fingerprint=_fingerprint(prompt),
                     mode=thread.mode,
@@ -504,6 +520,7 @@ class RuntimeBroker:
                     run_id=run.run_id,
                     thread_id=thread_id,
                     kind="prompt",
+                    unattended=unattended,
                     fingerprint=run.prompt_fingerprint,
                     status="accepted",
                     run_status=run.status,
@@ -1635,6 +1652,8 @@ class RuntimeBroker:
                 return _automatic_denial(request.method, params)
             if run.status != "running":
                 return _automatic_denial(request.method, params)
+            if run.unattended:
+                return _automatic_denial(request.method, params)
             workspace = self.storage.resolve_workspace_path(run.workspace_path)
             if request.method == "item/permissions/requestApproval":
                 return {"permissions": {}, "scope": "turn"}
@@ -1702,7 +1721,9 @@ class RuntimeBroker:
                         scope="thread",
                         thread_id=run.thread_id,
                         event_type="interaction.created",
-                        payload=_public_interaction(interaction).model_dump(mode="json"),
+                        payload=_public_interaction(interaction).model_dump(
+                            mode="json"
+                        ),
                     ),
                 )
             )
@@ -1749,9 +1770,7 @@ class RuntimeBroker:
                                     if interaction.status == "outcome_unknown"
                                     else "interaction.expired"
                                 ),
-                                payload={
-                                    "interaction_id": interaction.interaction_id
-                                },
+                                payload={"interaction_id": interaction.interaction_id},
                             ),
                         )
                     )
@@ -1961,10 +1980,14 @@ class RuntimeBroker:
             projection = self._thread_projection_record_locked(run)
             projection_payloads = (
                 (
-                    f"threads/{projection.thread_id}.json",
-                    projection.model_dump(mode="json"),
-                ),
-            ) if projection is not None else ()
+                    (
+                        f"threads/{projection.thread_id}.json",
+                        projection.model_dump(mode="json"),
+                    ),
+                )
+                if projection is not None
+                else ()
+            )
             try:
                 # Runtime ownership, the terminal UI projection, and the
                 # public event recover as one operation after a crash.
@@ -1995,6 +2018,20 @@ class RuntimeBroker:
             if run.generation is not None:
                 self.app_server.abort_generation(run.generation)
             raise RuntimeUnavailableError() from persistence_error
+
+        if self._run_terminal_listener is not None:
+            try:
+                self._run_terminal_listener(
+                    run.run_id,
+                    status,
+                    run.client_request_id,
+                    run.unattended,
+                )
+            except Exception:
+                # Automation bookkeeping must never compromise the canonical
+                # runtime terminal transition or expose its private failure.
+                pass
+
     def _thread_projection_record_locked(
         self,
         run: RuntimeRunState,
@@ -2059,7 +2096,8 @@ class RuntimeBroker:
                 del run.emitted_signatures[: len(run.emitted_signatures) - 2048]
         try:
             self._persist_locked(
-                events=(*preceding_events,
+                events=(
+                    *preceding_events,
                     EventDraft(
                         scope="thread",
                         thread_id=run.thread_id,
@@ -2180,6 +2218,7 @@ class RuntimeBroker:
             "item_id": item_id,
             "item_type": item_type,
         }
+        payload.update(_safe_item_activity_metadata(item))
         if item_type == "agentMessage":
             text = bounded_raw_text(
                 item.get("text"), self.limits.max_event_payload_bytes // 2
@@ -3064,6 +3103,69 @@ def _event_payload_bytes(payload: dict[str, object]) -> int:
             separators=(",", ":"),
         ).encode("utf-8")
     )
+
+
+def _safe_item_activity_metadata(item: dict[str, Any]) -> dict[str, object]:
+    """Project item lifecycle metadata without forwarding provider content.
+
+    Thread items carry commands, paths, URLs, arguments, and output alongside
+    their type.  The UI only needs bounded enum metadata to label activity, so
+    deliberately omit all provider-supplied text and locators here.
+    """
+
+    metadata: dict[str, object] = {}
+    status = item.get("status")
+    if isinstance(status, str) and status in _SAFE_ITEM_STATUSES:
+        metadata["status"] = status
+
+    duration = item.get("durationMs")
+    if type(duration) is int and 0 <= duration <= _MAX_ITEM_ACTIVITY_DURATION_MS:
+        metadata["duration_ms"] = duration
+
+    item_type = item.get("type")
+    if item_type == "commandExecution":
+        actions = item.get("commandActions")
+        if isinstance(actions, list):
+            action_types: list[str] = []
+            for action in actions[:16]:
+                if not isinstance(action, dict):
+                    continue
+                action_type = action.get("type")
+                if (
+                    isinstance(action_type, str)
+                    and action_type in _SAFE_COMMAND_ACTION_TYPES
+                    and action_type not in action_types
+                ):
+                    action_types.append(action_type)
+            if action_types:
+                metadata["action_types"] = action_types
+    elif item_type == "webSearch":
+        action = item.get("action")
+        if isinstance(action, dict):
+            action_type = action.get("type")
+            if (
+                isinstance(action_type, str)
+                and action_type in _SAFE_WEB_SEARCH_ACTION_TYPES
+            ):
+                metadata["action_type"] = action_type
+    elif item_type == "fileChange":
+        changes = item.get("changes")
+        if isinstance(changes, list):
+            change_kinds: list[str] = []
+            for change in changes[:256]:
+                if not isinstance(change, dict):
+                    continue
+                kind = change.get("kind")
+                change_type = kind.get("type") if isinstance(kind, dict) else None
+                if (
+                    isinstance(change_type, str)
+                    and change_type in _SAFE_CHANGE_KINDS
+                    and change_type not in change_kinds
+                ):
+                    change_kinds.append(change_type)
+            if change_kinds:
+                metadata["change_kinds"] = change_kinds
+    return metadata
 
 
 def _identifier(value: object, *, limit: int, label: str) -> str:

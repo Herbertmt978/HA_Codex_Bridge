@@ -22,15 +22,20 @@ to the App or Bridge.
 | **Workspace** | A deliberately granted project folder; in App mode, it is beneath `/config/workspaces`. | Home Assistant configuration or a generic broad share. |
 | **Project** | A user-visible group of Codex chats with one workspace and defaults. | A workspace or repository. |
 | **External Bridge** | An optional, separately operated private Bridge compatibility path. | A required Windows VM or browser endpoint. |
+| **Automation** | A durable prompt definition whose due time is scheduled by Home Assistant and claimed idempotently by the Bridge. | A free-running background worker or unrestricted cron job. |
+| **Skill** | A workspace-scoped Codex instruction under `.agents/skills/`. | A global executable or a path outside the workspace. |
+| **MCP server** | An explicitly enabled outbound streamable-HTTP server configured with a trusted HTTPS hostname and optional OAuth metadata. | A public listener for the App, Bridge, or Home Assistant. |
+| **Global/project AGENTS.md** | Global Codex instructions or an `AGENTS.md` at the selected project workspace root. | A way to grant Codex additional filesystem access. |
 
 ## Current compatibility statement
 
-- Current release being shipped: Integration `0.6.6`, App `0.6.6`
-  (experimental and `amd64` only), optional external Bridge `0.5.5`, and bundled
+- Current release being shipped: Integration `0.7.0`, App `0.7.0`
+  (experimental and `amd64` only), optional external Bridge `0.6.0`, and bundled
   Codex `0.144.4`. Publication, signing, and target-Home-Assistant acceptance
-  remain pending; no App image digest is recorded for `0.6.6` yet.
-- The prior `0.6.5` matrix is signed and live-accepted within the historical
-  boundaries recorded in `90-evidence.md`; do not apply that evidence to `0.6.6`.
+  remain pending; no App image digest is recorded for `0.7.0` yet.
+- App/Integration `0.6.6` is the signed published baseline. The prior `0.6.5`
+  matrix is live-accepted within the historical boundaries recorded in
+  `90-evidence.md`; do not apply either claim to `0.7.0`.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The
@@ -39,7 +44,7 @@ to the App or Bridge.
 - Device-login recovery uses bounded authoritative account checks; account
   entitlement changes invalidate the signed-out model catalogue before project
   defaults are reconciled. Model and reasoning choices stay runtime-discovered.
-  If live app-server discovery fails, the `0.6.6` release uses the installed
+  If live app-server discovery fails, the `0.7.0` release uses the installed
   Codex bundled catalogue dynamically, retries stale data after 15 seconds,
   prefers a verified last-known-good record, and uses a static fallback only as
   the final recovery layer. GPT-5.6 and per-model Max/Ultra options appear only
@@ -49,7 +54,7 @@ to the App or Bridge.
 - A typed, temporary artifact-scan reservation preserves the previous artifact
   snapshot and does not turn a healthy chat or completed response into a false
   connection failure, even where the selected chat is idle.
-- The `0.6.6` release keeps the chat surface at a bounded reading width with a
+- The `0.7.0` release keeps the chat surface at a bounded reading width with a
   clean Codex-style left navigation tree, title-first chat rows, one action
   menu, correct archive collapse/search and search icon, 44px mobile targets,
   transcript-adjacent decisions, and collapsed mobile settings/limits. It
@@ -70,9 +75,17 @@ to the App or Bridge.
 - The live App `0.6.5` passed target-HAOS startup, production sandbox
   self-test/attestation, authenticated API v1 readiness, Supervisor discovery,
   Integration pairing, ChatGPT Pro sign-in, runtime chat, and explicit App
-  restart recovery. This historical result does not accept `0.6.6`; external
+  restart recovery. This historical result does not accept `0.7.0`; external
   blocked-network/Nabu Casa/Cloudflare routing, cold restore, the first future
   unattended App update, and previous-image rollback remain unproven.
+- The App includes administrator-only capability surfaces for durable
+  automations, workspace skills, global/project `AGENTS.md`, plugins and
+  marketplaces, and outbound MCP configuration. Automations are persisted in
+  the Bridge while Home Assistant owns wall-clock scheduling. MCP is disabled
+  by default and requires an explicit App option plus restart. When enabled it
+  accepts only trusted HTTPS hostnames, rejects known non-public DNS answers,
+  does not expose bearer-token configuration, and offers an explicit one-shot
+  OAuth login response; MCP elicitation is declined by design.
 
 ## Product language
 
@@ -88,3 +101,11 @@ to the App or Bridge.
   last-known-good catalogue must not silently change a chat to another model.
 - App images are immutable. Never imply that the current Supervisor App can
   roll back to an arbitrary earlier image.
+- Do not describe an automation as guaranteed execution: capacity, overlap,
+  pause, and misfire policies can produce a recorded skipped run. Keep the
+  public contract that Home Assistant schedules and the Bridge claims.
+- Keep MCP documentation explicit that configured endpoints are outbound,
+  disabled by default, and limited to trusted HTTPS servers; never suggest
+  exposing the App or Bridge as an MCP endpoint. Make the best-effort DNS
+  limitation explicit. Never document bearer tokens, private URLs, or
+  persisted OAuth authorization URLs.

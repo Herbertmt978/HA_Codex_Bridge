@@ -45,5 +45,8 @@ def readiness_check(
             contract_version=build_info.sandbox_contract_version,
             attested=request.app.state.sandbox_ready is True,
         ),
+        capabilities=tuple(
+            getattr(request.app.state, "feature_capabilities", ("api_v1", "legacy_v0"))
+        ),
         readiness=readiness,
     )

@@ -219,6 +219,7 @@ class CodexAppServerClient:
         restart_stable_seconds: float = 60.0,
         shutdown_grace_seconds: float = 5.0,
         stderr_diagnostic_sink: Callable[[str], None] | None = None,
+        enable_mcp: bool = False,
         protocol_contract: AppServerProtocolContract
         | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
@@ -260,6 +261,9 @@ class CodexAppServerClient:
             "shutdown grace",
         )
         self._stderr_diagnostic_sink = stderr_diagnostic_sink
+        if type(enable_mcp) is not bool:
+            raise ValueError("MCP enabled state must be a boolean")
+        self.enable_mcp = enable_mcp
         self.protocol_contract = protocol_contract
         self._protocol_validator = (
             None
@@ -705,7 +709,12 @@ class CodexAppServerClient:
             self._closing.wait(delay)
 
     def _spawn_generation(self) -> tuple[int, subprocess.Popen[bytes]]:
-        command = [*codex_command_prefix(self.codex_command), "app-server", "--stdio"]
+        command = [*codex_command_prefix(self.codex_command)]
+        if not self.enable_mcp:
+            # This command-line layer is applied before Codex reads user MCP
+            # configuration, so stale servers cannot activate during cleanup.
+            command.extend(("-c", "mcp_servers={}"))
+        command.extend(("app-server", "--stdio"))
         kwargs: dict[str, Any] = {
             "stdin": subprocess.PIPE,
             "stdout": subprocess.PIPE,

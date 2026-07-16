@@ -53,6 +53,7 @@ class RuntimeGateSnapshot:
     active_turns: int
     queued_prompts: int
     auth_mutation_active: bool
+    config_mutation_active: bool
     closed: bool
 
 
@@ -61,7 +62,7 @@ class RuntimeLease:
         self,
         gate: RuntimeGate,
         *,
-        kind: Literal["prompt", "auth"],
+        kind: Literal["prompt", "auth", "config"],
         state: LeaseState,
         owner_key: str | None = None,
     ) -> None:
@@ -121,6 +122,7 @@ class RuntimeGate:
         self._prompt_leases: dict[str, RuntimeLease] = {}
         self._queue: deque[RuntimeLease] = deque()
         self._auth_lease: RuntimeLease | None = None
+        self._config_lease: RuntimeLease | None = None
         self._closed = False
 
     def reserve_prompt(self, *, client_request_id: str) -> RuntimeLease:
@@ -128,7 +130,7 @@ class RuntimeGate:
         with self._condition:
             if self._closed:
                 raise RuntimeGateClosedError()
-            if self._auth_lease is not None:
+            if self._auth_lease is not None or self._config_lease is not None:
                 raise RuntimeMutationConflictError()
             existing = self._prompt_leases.get(owner_key)
             if existing is not None:
@@ -155,10 +157,32 @@ class RuntimeGate:
         with self._condition:
             if self._closed:
                 raise RuntimeGateClosedError()
-            if self._auth_lease is not None or self._active_prompts > 0 or self._queue:
+            if (
+                self._auth_lease is not None
+                or self._config_lease is not None
+                or self._active_prompts > 0
+                or self._queue
+            ):
                 raise RuntimeMutationConflictError()
             lease = RuntimeLease(self, kind="auth", state="active")
             self._auth_lease = lease
+            return lease
+
+    def acquire_config_mutation(self) -> RuntimeLease:
+        """Exclusively mutate Codex configuration while no turn can observe it."""
+
+        with self._condition:
+            if self._closed:
+                raise RuntimeGateClosedError()
+            if (
+                self._config_lease is not None
+                or self._auth_lease is not None
+                or self._active_prompts > 0
+                or self._queue
+            ):
+                raise RuntimeMutationConflictError()
+            lease = RuntimeLease(self, kind="config", state="active")
+            self._config_lease = lease
             return lease
 
     def snapshot(self) -> RuntimeGateSnapshot:
@@ -167,6 +191,7 @@ class RuntimeGate:
                 active_turns=self._active_prompts,
                 queued_prompts=len(self._queue),
                 auth_mutation_active=self._auth_lease is not None,
+                config_mutation_active=self._config_lease is not None,
                 closed=self._closed,
             )
 
@@ -200,6 +225,9 @@ class RuntimeGate:
         if lease._kind == "auth":
             if self._auth_lease is lease:
                 self._auth_lease = None
+        elif lease._kind == "config":
+            if self._config_lease is lease:
+                self._config_lease = None
         else:
             if lease._owner_key is not None:
                 self._prompt_leases.pop(lease._owner_key, None)
@@ -214,7 +242,11 @@ class RuntimeGate:
         self._condition.notify_all()
 
     def _promote_locked(self) -> None:
-        if self._closed or self._auth_lease is not None:
+        if (
+            self._closed
+            or self._auth_lease is not None
+            or self._config_lease is not None
+        ):
             return
         while self._queue and self._active_prompts < self.limits.max_active_turns:
             lease = self._queue.popleft()

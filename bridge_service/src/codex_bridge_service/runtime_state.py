@@ -76,6 +76,7 @@ class RuntimeRunState(BaseModel):
     run_id: str = Field(min_length=1, max_length=128)
     client_request_id: str = Field(min_length=1, max_length=256)
     thread_id: str = Field(min_length=1, max_length=128)
+    unattended: bool = False
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
     mode: RunMode
@@ -133,6 +134,7 @@ class RuntimeRequestOutcome(BaseModel):
     run_id: str = Field(min_length=1, max_length=128)
     thread_id: str = Field(min_length=1, max_length=128)
     kind: Literal["prompt", "steer"]
+    unattended: bool = False
     fingerprint: str = Field(min_length=64, max_length=64)
     status: Literal["accepted", "uncertain"] = "accepted"
     run_status: RunStatus
@@ -277,9 +279,7 @@ class RuntimeStateStore:
             return ()
         if self._durable_outbox is None:
             self.save(validated)
-            raise RuntimeStateError(
-                "Durable runtime events require an event outbox."
-            )
+            raise RuntimeStateError("Durable runtime events require an event outbox.")
         if validated.revision < 1:
             raise RuntimeStateError(
                 "The private Codex runtime state revision is invalid."

@@ -62,6 +62,18 @@ class LifecycleAppServer:
     def close(self) -> None:
         self.events.append("app_server.close")
 
+    def request(
+        self,
+        method: str,
+        params: object = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, object]:
+        del timeout_seconds
+        assert method == "config/read"
+        assert params == {"includeLayers": True}
+        return {"config": {}, "layers": [], "origins": {}}
+
 
 class StructuredAuthCoordinator:
     def __init__(self, events: list[str] | None = None) -> None:

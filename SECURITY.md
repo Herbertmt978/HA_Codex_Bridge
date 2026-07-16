@@ -30,10 +30,52 @@ configuration, host filesystems, or broad shares. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
 
-The release being shipped (Integration `0.6.6`, App `0.6.6`, Bridge `0.5.5`,
+## Capabilities and unattended operation
+
+Automations are administrator-created records. Home Assistant owns the clock;
+the Bridge stores the prompt and target, enforces revision and idempotency
+checks, limits run history, and records skipped overlap/capacity/misfire cases.
+Treat a scheduled task as a request to claim work, not as an unconditional
+promise that a Codex turn will run. Stop or pause automations before changing a
+workspace or restoring a backup.
+
+Skills and plugins are constrained to the selected workspace and the Codex
+runtime's reported configuration. `AGENTS.md` writes are limited to the global
+Codex home or the selected project root and keep private rollback snapshots.
+Review instructions and third-party plugin/marketplace content as untrusted
+input before enabling them.
+
+MCP is disabled by default and requires the administrator to enable **Enable
+MCP** in the App configuration and restart it. When disabled, the App starts
+Codex with an empty MCP override and removes the saved native MCP server table;
+cleanup failure keeps readiness unavailable. This does not alter skills,
+plugins, marketplaces, or instructions.
+
+When enabled, MCP configuration is deliberately narrow: only outbound
+streamable-HTTP servers using HTTPS hostnames are accepted. Literal IPs and
+local/internal names are rejected, and available DNS answers are checked for
+non-public addresses before a server is saved. DNS checks are best effort, do
+not create a connection-time IP allowlist, and cannot prevent a trusted name's
+ownership or answers changing later. An administrator must still trust every
+configured provider.
+Bearer-token configuration is not supported by this surface. OAuth login is
+explicit and returns a one-shot authorization URL
+with `no-store` handling; do not log, cache, or paste it. MCP elicitation is
+declined until a separately reviewed consent flow exists. These controls do
+not make the App or Bridge public and do not replace Home Assistant's own
+remote-access boundary.
+
+Unattended updates and recovery remain fail-closed. A missing or invalid App
+sandbox attestation reports `sandbox_unavailable`; do not broaden mounts or
+permissions to make a task continue. Keep a cold backup before App changes,
+and do not claim arbitrary Supervisor image rollback until a prior immutable
+tag and restore procedure have been tested.
+
+The release being shipped (Integration `0.7.0`, App `0.7.0`, Bridge `0.6.0`,
 Codex `0.144.4`) is experimental and `amd64` only; it is pending publication,
-signing, and target-Home-Assistant acceptance. The signed, live-accepted
-`0.6.5` matrix remains historical evidence and does not accept `0.6.6`.
+signing, and target-Home-Assistant acceptance. App/Integration `0.6.6` is the
+signed published baseline; the live-accepted `0.6.5` matrix remains historical
+evidence and neither accepts `0.7.0`.
 Arbitrary prior-image selection is not a validated Supervisor rollback
 mechanism. Until an update and restore canary is complete, recover with a cold
 backup or an existing private external Bridge.

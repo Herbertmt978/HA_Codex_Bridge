@@ -89,13 +89,12 @@ class Settings(BaseSettings):
     codex_home: str | None = None
     bypass_sandbox: bool = False
     ignore_user_config: bool = False
+    enable_mcp: bool = False
     run_idle_timeout_seconds: float | None = 1800.0
     model_discovery_timeout_seconds: float = Field(
         default=10.0, gt=0, allow_inf_nan=False
     )
-    model_cache_ttl_seconds: float = Field(
-        default=600.0, ge=0, allow_inf_nan=False
-    )
+    model_cache_ttl_seconds: float = Field(default=600.0, ge=0, allow_inf_nan=False)
     max_active_turns: int = Field(default=1, gt=0)
     max_queued_prompts: int = Field(default=8, ge=0)
     run_total_timeout_seconds: float = Field(default=4 * 60 * 60, gt=0)

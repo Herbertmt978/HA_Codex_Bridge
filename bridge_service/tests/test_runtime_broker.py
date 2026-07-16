@@ -386,6 +386,7 @@ def _broker(
     turn_timeout_seconds: float = 5.0,
     cancel_grace_seconds: float = 0.05,
     interaction_timeout_seconds: float = 5.0,
+    run_terminal_listener: Callable[[str, str, str, bool], None] | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
         storage=storage,
@@ -396,6 +397,7 @@ def _broker(
         turn_timeout_seconds=turn_timeout_seconds,
         cancel_grace_seconds=cancel_grace_seconds,
         interaction_timeout_seconds=interaction_timeout_seconds,
+        run_terminal_listener=run_terminal_listener,
     )
     broker.start()
     return broker
@@ -503,6 +505,213 @@ def test_start_registers_nonblocking_protocol_handlers(tmp_path: Path) -> None:
             "turn/completed",
             "turn/started",
         }.issubset(client.notification_handlers)
+    finally:
+        broker.close()
+
+
+def test_terminal_listener_receives_run_request_identity_and_unattended_flag(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    terminals: list[tuple[str, str, str, bool]] = []
+    broker = _broker(
+        storage,
+        client,
+        run_terminal_listener=lambda run_id, status, request_id, unattended: (
+            terminals.append((run_id, status, request_id, unattended))
+        ),
+    )
+    try:
+        submitted = broker.submit_prompt(
+            thread.thread_id,
+            "Run unattended",
+            client_request_id="automation:autrun_fast123",
+            unattended=True,
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(
+            client,
+            remote_thread_id=remote_thread_id,
+            turn_id=turn_id,
+        )
+        _wait_until(lambda: bool(terminals))
+
+        assert submitted.run_id == run_id
+        assert terminals == [
+            (
+                run_id,
+                "completed",
+                "automation:autrun_fast123",
+                True,
+            )
+        ]
+    finally:
+        broker.close()
+
+
+def test_item_activity_metadata_is_enum_only_and_redacts_provider_content(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Project activity",
+            client_request_id="item-activity-metadata",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        client.emit_notification(
+            "item/started",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "startedAtMs": 1_783_936_800_000,
+                "item": {
+                    "id": "command-item",
+                    "type": "commandExecution",
+                    "status": "inProgress",
+                    "durationMs": 123,
+                    "command": "cat /private/reusable-secret",
+                    "cwd": "/private/workspace",
+                    "commandActions": [
+                        {
+                            "type": "read",
+                            "name": "reusable-secret",
+                            "path": "/private/reusable-secret",
+                            "command": "cat /private/reusable-secret",
+                        },
+                        {
+                            "type": "read",
+                            "name": "reusable-secret",
+                            "path": "/private/reusable-secret",
+                            "command": "cat /private/reusable-secret",
+                        },
+                        {
+                            "type": "listFiles",
+                            "command": "find /private/workspace -type f",
+                        },
+                    ],
+                },
+            },
+        )
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_123,
+                "item": {
+                    "id": "command-item",
+                    "type": "commandExecution",
+                    "status": "completed",
+                    "durationMs": 123,
+                    "command": "cat /private/reusable-secret",
+                    "cwd": "/private/workspace",
+                    "commandActions": [
+                        {
+                            "type": "search",
+                            "command": "rg token /private/workspace",
+                            "query": "token",
+                        }
+                    ],
+                },
+            },
+        )
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_456,
+                "item": {
+                    "id": "web-item",
+                    "type": "webSearch",
+                    "query": "private reusable-secret",
+                    "action": {
+                        "type": "openPage",
+                        "url": "https://private.example/reusable-secret",
+                    },
+                },
+            },
+        )
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_789,
+                "item": {
+                    "id": "file-item",
+                    "type": "fileChange",
+                    "status": "completed",
+                    "changes": [
+                        {
+                            "path": "/private/workspace/secrets.txt",
+                            "diff": "- reusable-secret",
+                            "kind": {"type": "update", "move_path": "/private/new"},
+                        },
+                        {
+                            "path": "/private/workspace/new.txt",
+                            "diff": "secret",
+                            "kind": {"type": "add"},
+                        },
+                    ],
+                },
+            },
+        )
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+
+        events = storage.list_thread_events(thread.thread_id)
+        command_started = next(
+            event
+            for event in events
+            if event.event_type == "item.started"
+            and event.payload.get("item_id") == "command-item"
+        )
+        assert command_started.payload == {
+            "run_id": _run_id,
+            "item_id": "command-item",
+            "item_type": "commandExecution",
+            "status": "inProgress",
+            "duration_ms": 123,
+            "action_types": ["read", "listFiles"],
+        }
+        command_completed = next(
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "command-item"
+        )
+        assert command_completed.payload["action_types"] == ["search"]
+        web_completed = next(
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "web-item"
+        )
+        assert web_completed.payload["action_type"] == "openPage"
+        file_completed = next(
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "file-item"
+        )
+        assert file_completed.payload["change_kinds"] == ["update", "add"]
+        serialized = json.dumps([event.payload for event in events])
+        for secret in (
+            "reusable-secret",
+            "/private/workspace",
+            "private.example",
+            "cat /private",
+        ):
+            assert secret not in serialized
     finally:
         broker.close()
 
@@ -1393,8 +1602,10 @@ def test_total_run_deadline_includes_queue_wait_and_active_time(
             turn_id=turn_id,
         )
         _wait_until(
-            lambda: len(_requests(client, "turn/start")) == 2
-            or storage.load_thread(second_thread.thread_id).status == "error",
+            lambda: (
+                len(_requests(client, "turn/start")) == 2
+                or storage.load_thread(second_thread.thread_id).status == "error"
+            ),
             timeout=3.0,
             message="queued run neither started nor exhausted its total budget",
         )
@@ -3221,6 +3432,87 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
         broker.close()
 
 
+@pytest.mark.parametrize(
+    ("method", "params", "expected"),
+    [
+        (
+            "item/commandExecution/requestApproval",
+            {
+                "command": "python -m pytest -q",
+                "commandActions": [],
+                "cwd": "__WORKSPACE__",
+                "itemId": "scheduled-command",
+                "startedAtMs": 1_783_936_800_000,
+            },
+            {"decision": "decline"},
+        ),
+        (
+            "item/fileChange/requestApproval",
+            {
+                "itemId": "scheduled-file",
+                "reason": "Update the workspace",
+                "startedAtMs": 1_783_936_800_000,
+            },
+            {"decision": "decline"},
+        ),
+        (
+            "item/tool/requestUserInput",
+            {
+                "itemId": "scheduled-question",
+                "questions": [
+                    {
+                        "id": "scope",
+                        "header": "Scope",
+                        "question": "Which scope should be used?",
+                        "options": [],
+                        "isOther": True,
+                        "isSecret": False,
+                    }
+                ],
+            },
+            {"answers": {"scope": {"answers": []}}},
+        ),
+    ],
+)
+def test_unattended_runs_fail_closed_without_pending_interactions(
+    tmp_path: Path,
+    method: str,
+    params: dict[str, Any],
+    expected: dict[str, Any],
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Run without an administrator present",
+            client_request_id=f"unattended-{method}",
+            unattended=True,
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        payload = deepcopy(params)
+        payload["threadId"] = remote_thread_id
+        payload["turnId"] = turn_id
+        if payload.get("cwd") == "__WORKSPACE__":
+            payload["cwd"] = str(storage.resolve_workspace_path(thread.workspace_path))
+
+        result = client.emit_request(method, payload)
+
+        assert result == expected
+        assert broker.pending_interactions(thread.thread_id) == ()
+        assert all(
+            event.event_type != "interaction.created"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
 def test_expired_interaction_aborts_generation_and_releases_runtime(
     tmp_path: Path,
 ) -> None:
@@ -3859,8 +4151,7 @@ def test_large_valid_patch_is_split_into_bounded_durable_events(
             range(len(patch_events))
         )
         assert all(
-            event.payload["chunk_count"] == len(patch_events)
-            for event in patch_events
+            event.payload["chunk_count"] == len(patch_events) for event in patch_events
         )
         assert sum(len(event.payload["changes"]) for event in patch_events) == 17
         assert all(

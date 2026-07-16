@@ -11,6 +11,7 @@ from .runner import BridgeRunner
 from .sandbox_attestation import sandbox_attestation_ready
 from .settings import Settings
 
+
 def build_app() -> FastAPI:
     settings = Settings()
     build_info = BuildInfo.from_environment()
@@ -29,14 +30,10 @@ def build_app() -> FastAPI:
             else None
         ),
         limits_probe=(
-            CodexLimitsProbe(codex_home)
-            if external_legacy and codex_home
-            else None
+            CodexLimitsProbe(codex_home) if external_legacy and codex_home else None
         ),
         account_probe=(
-            CodexAccountProbe(codex_home)
-            if external_legacy and codex_home
-            else None
+            CodexAccountProbe(codex_home) if external_legacy and codex_home else None
         ),
         model_catalog_probe=(
             CodexModelCatalogProbe(
@@ -53,6 +50,7 @@ def build_app() -> FastAPI:
         run_idle_timeout_seconds=settings.run_idle_timeout_seconds,
         model_discovery_timeout_seconds=settings.model_discovery_timeout_seconds,
         model_cache_ttl_seconds=settings.model_cache_ttl_seconds,
+        enable_mcp=settings.enable_mcp,
         runner_factory=(
             (
                 lambda storage: BridgeRunner(

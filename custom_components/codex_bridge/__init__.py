@@ -1,3 +1,5 @@
+from inspect import iscoroutinefunction
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -27,6 +29,7 @@ from .const import (
     EVENT_CURSOR_STORAGE_VERSION,
 )
 from .event_broker import EventBroker
+from .automation_scheduler import AutomationScheduler
 from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
@@ -69,7 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         allow_legacy_v0=connection_type == CONNECTION_TYPE_EXTERNAL_LEGACY,
     )
     try:
-        await client.async_ready()
+        ready = await client.async_ready()
         if connection_type == CONNECTION_TYPE_SUPERVISOR:
             client.require_api_v1()
         else:
@@ -90,6 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connection_type=connection_type,
         discovery_uuid=entry.data.get(CONF_DISCOVERY_UUID),
         api_version=client.negotiated_api_version or 0,
+        capabilities=tuple(getattr(ready, "capabilities", ())),
     )
     if runtime.api_version == 1:
         runtime.event_broker = EventBroker(
@@ -103,6 +107,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass, target, name
             ),
         )
+        if (
+            connection_type != CONNECTION_TYPE_EXTERNAL_LEGACY
+            and runtime.supports_capability("automations_v1")
+            and iscoroutinefunction(
+                getattr(client, "async_scheduler_automations", None)
+            )
+        ):
+            runtime.automation_scheduler = AutomationScheduler(
+                hass, client, connection_type
+            )
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
         if not domain_data[DATA_VIEWS_REGISTERED]:
@@ -118,6 +132,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             domain_data[DATA_PANEL_REGISTERED] = True
         if runtime.event_broker is not None:
             await runtime.event_broker.async_start()
+        if runtime.automation_scheduler is not None:
+            await runtime.automation_scheduler.async_start()
     except BaseException:
         domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
         await runtime.async_close()

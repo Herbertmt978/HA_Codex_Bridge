@@ -175,7 +175,12 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
             "title": "HA Codex Bridge",
             "version": "0.6.0",
         }
-        assert fake_server.process()["argv"] == ["app-server", "--stdio"]
+        assert fake_server.process()["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
         environment_keys = fake_server.process()["environmentKeys"]
         assert "CODEX_HOME" in environment_keys
         assert "HOME" in environment_keys
@@ -196,6 +201,39 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         ),
         message="app-server did not receive a graceful stdin EOF",
     )
+
+
+def test_disabled_mcp_adds_a_generation_scoped_empty_config_override(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    client = _client(module, fake_server, enable_mcp=False)
+
+    try:
+        client.start()
+        assert fake_server.process()["argv"] == [
+            "-c",
+            "mcp_servers={}",
+            "app-server",
+            "--stdio",
+        ]
+    finally:
+        client.close()
+
+
+def test_explicitly_enabled_mcp_does_not_add_the_empty_config_override(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    client = _client(module, fake_server, enable_mcp=True)
+
+    try:
+        client.start()
+        assert fake_server.process()["argv"] == ["app-server", "--stdio"]
+    finally:
+        client.close()
 
 
 def test_application_requests_remain_closed_until_initialized_is_written(
@@ -317,9 +355,7 @@ def test_notification_handler_failure_restarts_generation_for_reconciliation(
     client.start()
     try:
         _wait_until(lambda: client.ready and client.generation == 2)
-        assert client.request("ping", {"generation": 2}) == {
-            "echo": {"generation": 2}
-        }
+        assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
     finally:
         client.close()
 

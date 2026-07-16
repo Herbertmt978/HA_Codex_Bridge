@@ -95,6 +95,25 @@ def test_readiness_defaults_are_safe_and_keep_existing_status_field(tmp_path) ->
     }
 
 
+def test_readiness_exposes_only_the_configured_optional_capabilities(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    app.state.feature_capabilities = (
+        "api_v1",
+        "legacy_v0",
+        "automations_v1",
+        "agents_v1",
+    )
+
+    payload = TestClient(app).get("/ready", headers=AUTHORIZATION).json()
+
+    assert payload["capabilities"] == [
+        "api_v1",
+        "legacy_v0",
+        "automations_v1",
+        "agents_v1",
+    ]
+
+
 def test_create_app_reads_only_validated_environment_metadata_once(
     tmp_path,
     monkeypatch,
@@ -102,7 +121,9 @@ def test_create_app_reads_only_validated_environment_metadata_once(
     monkeypatch.setenv("CODEX_BRIDGE_APP_VERSION", "0.6.2")
     monkeypatch.setenv("CODEX_BRIDGE_VERSION", "invalid bridge; supervisor-secret")
     monkeypatch.setenv("CODEX_BRIDGE_CODEX_VERSION", "0.144.1")
-    monkeypatch.setenv("CODEX_BRIDGE_IMAGE_REVISION", "invalid revision; supervisor-secret")
+    monkeypatch.setenv(
+        "CODEX_BRIDGE_IMAGE_REVISION", "invalid revision; supervisor-secret"
+    )
     monkeypatch.setenv("CODEX_BRIDGE_ARCH", "amd64; supervisor-secret")
     monkeypatch.setenv("CODEX_BRIDGE_RELEASE_LOCK_DIGEST", "invalid; supervisor-secret")
     monkeypatch.setenv("SUPERVISOR_TOKEN", "supervisor-secret")
