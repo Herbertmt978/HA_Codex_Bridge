@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 0.7.4
+
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.6.2` without changing its Integration API compatibility.
+
 ## 0.7.3
 
 - Adds provider-gated native live web search for Supervisor prompts and

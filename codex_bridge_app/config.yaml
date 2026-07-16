@@ -1,5 +1,5 @@
 name: Codex Bridge
-version: "0.7.3"
+version: "0.7.4"
 slug: codex_bridge
 description: Run the Codex Bridge service privately inside Home Assistant.
 url: https://github.com/Herbertmt978/HA_Codex_Bridge
