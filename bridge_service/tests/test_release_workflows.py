@@ -160,10 +160,18 @@ def test_codex_updater_is_scheduled_manual_paused_and_narrowly_scoped() -> None:
 
 def test_codex_updater_opens_pr_without_main_push_or_auto_merge() -> None:
     document, source = _workflow("codex-update")
-    assert any(
-        action.startswith("peter-evans/create-pull-request@")
-        for action in _walk_uses(document)
-    ), "the updater must submit a reviewable pull request"
+    pull_request_steps = [
+        step
+        for job in document.get("jobs", {}).values()
+        if isinstance(job, dict)
+        for step in job.get("steps", [])
+        if isinstance(step, dict)
+        and str(step.get("uses", "")).startswith("peter-evans/create-pull-request@")
+    ]
+    assert pull_request_steps, "the updater must submit a reviewable pull request"
+    assert pull_request_steps[0].get("with", {}).get("base") == "main", (
+        "the updater must explicitly set the PR base because checkout uses an exact SHA"
+    )
     normalized = source.lower()
     assert not re.search(r"git\s+push[^\n]*\bmain\b", normalized)
     assert "gh pr merge" not in normalized
