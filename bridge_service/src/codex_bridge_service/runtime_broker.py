@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock, Thread, current_thread
 from time import monotonic
@@ -24,6 +25,7 @@ from .event_store import (
     StoredEventRecord,
 )
 from .models import (
+    ArtifactRecord,
     InteractionResultRecord,
     PendingInteractionRecord,
     ProjectKind,
@@ -31,7 +33,7 @@ from .models import (
     RunRecord,
     ThreadRecord,
 )
-from .resource_limits import ResourceLimits
+from .resource_limits import ResourceLimitError, ResourceLimits
 from .runtime_gate import (
     RuntimeGate,
     RuntimeGateSnapshot,
@@ -241,12 +243,15 @@ class _RuntimeTotalDeadlineExceeded(RuntimeError):
 
 
 _TERMINAL_RUN_STATES = {"completed", "cancelled", "failed", "interrupted"}
+_MANAGED_WEB_SEARCH_DEFAULT = "cached"
 _PENDING_INTERACTION_STATES = {"pending", "responding"}
 _MAX_REQUEST_OUTCOMES = 50_000
 _MAX_TERMINAL_RUNS = 1024
 _MAX_TERMINAL_INTERACTIONS = 2048
 _MAX_PRE_RESPONSE_CALLBACKS = 16
-_SAFE_ITEM_STATUSES = frozenset({"inProgress", "completed", "failed", "declined"})
+_SAFE_ITEM_STATUSES = frozenset(
+    {"inProgress", "completed", "succeeded", "failed", "declined"}
+)
 _SAFE_COMMAND_ACTION_TYPES = frozenset({"read", "listFiles", "search", "unknown"})
 _SAFE_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "openPage", "findInPage", "other"})
 _SAFE_CHANGE_KINDS = frozenset({"add", "delete", "update"})
@@ -275,6 +280,20 @@ _REQUESTS = (
     "execCommandApproval",
     "applyPatchApproval",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _GeneratedImagePublication:
+    run_id: str
+    thread_id: str
+    generation: int
+    codex_thread_id: str
+    turn_id: str
+    item_id: str
+    status: str | None
+    result: object
+    mime_type: str | None
+    payload: dict[str, object]
 
 
 class RuntimeBroker:
@@ -352,6 +371,7 @@ class RuntimeBroker:
         self._pre_response_request_owners: dict[tuple[int, str | int], str] = {}
         self._callback_replays_in_progress: set[str] = set()
         self._inflight_publications: dict[str, int] = {}
+        self._inflight_image_items: set[tuple[str, str]] = set()
         self._workers: set[Thread] = set()
         self._activity: dict[str, float] = {}
         self._started = False
@@ -406,9 +426,14 @@ class RuntimeBroker:
         *,
         client_request_id: str | None = None,
         unattended: bool = False,
+        web_search: Literal["live", "disabled"] | None = None,
     ) -> RunRecord:
         if type(unattended) is not bool:
             raise ValueError("unattended must be a boolean")
+        if web_search is not None and (
+            type(web_search) is not str or web_search not in {"live", "disabled"}
+        ):
+            raise ValueError("web_search must be live or disabled")
         request_id = client_request_id or f"req_{uuid4().hex}"
         prompt = _prompt(prompt)
         request_id = _identifier(request_id, limit=256, label="client request id")
@@ -433,6 +458,7 @@ class RuntimeBroker:
                     existing_outcome.thread_id != thread_id
                     or existing_outcome.fingerprint != _fingerprint(prompt)
                     or existing_outcome.unattended != unattended
+                    or existing_outcome.web_search != web_search
                 ):
                     raise RuntimeRequestConflictError()
                 if existing_outcome.status == "uncertain":
@@ -468,6 +494,7 @@ class RuntimeBroker:
                     thread_id=thread_id,
                     kind="steer",
                     unattended=False,
+                    web_search=web_search,
                     fingerprint=_fingerprint(prompt),
                     status="uncertain",
                     run_status=active.status,
@@ -491,6 +518,7 @@ class RuntimeBroker:
                     client_request_id=request_id,
                     thread_id=thread_id,
                     unattended=unattended,
+                    web_search=web_search,
                     prompt=prompt,
                     prompt_fingerprint=_fingerprint(prompt),
                     mode=thread.mode,
@@ -521,6 +549,7 @@ class RuntimeBroker:
                     thread_id=thread_id,
                     kind="prompt",
                     unattended=unattended,
+                    web_search=web_search,
                     fingerprint=run.prompt_fingerprint,
                     status="accepted",
                     run_status=run.status,
@@ -1053,12 +1082,19 @@ class RuntimeBroker:
                 raise RuntimeAttachmentsUnavailableError()
             inputs = self._turn_input(run)
 
+        thread_config: dict[str, object] = {
+            "default_permissions": policy.permission_profile,
+            # Codex keeps thread configuration when resuming. Always send the
+            # managed default so a prior live/disabled override cannot leak
+            # into a request whose web_search is None.
+            "web_search": run.web_search or _MANAGED_WEB_SEARCH_DEFAULT,
+        }
         thread_params: dict[str, object] = {
             "cwd": str(workspace),
             "model": run.model,
             "approvalPolicy": policy.approval_policy,
             "approvalsReviewer": "user",
-            "config": {"default_permissions": policy.permission_profile},
+            "config": thread_config,
         }
         if run.codex_thread_id:
             thread_params["threadId"] = run.codex_thread_id
@@ -1304,6 +1340,7 @@ class RuntimeBroker:
         turn = params.get("turn")
         if isinstance(turn, dict):
             turn_id = turn.get("id")
+        image_publication: _GeneratedImagePublication | None = None
         with self._lock:
             run = self._correlated_run_locked(
                 notification.generation,
@@ -1321,7 +1358,27 @@ class RuntimeBroker:
             if not replaying and run.run_id in self._callback_replays_in_progress:
                 self._buffer_pre_response_callback_locked(run, notification)
                 return
-            self._handle_correlated_notification_locked(run, notification, turn_id)
+            if notification.method == "item/completed":
+                image_publication = self._begin_generated_image_publication_locked(
+                    run,
+                    params,
+                    generation=notification.generation,
+                    turn_id=turn_id,
+                )
+                item = params.get("item")
+                if isinstance(item, dict) and item.get("type") == "imageGeneration":
+                    if image_publication is None:
+                        return
+                else:
+                    self._handle_correlated_notification_locked(
+                        run, notification, turn_id
+                    )
+                    return
+            else:
+                self._handle_correlated_notification_locked(run, notification, turn_id)
+                return
+        assert image_publication is not None
+        self._publish_generated_image_completion(image_publication)
 
     def _handle_correlated_notification_locked(
         self,
@@ -1352,6 +1409,137 @@ class RuntimeBroker:
             self._handle_turn_completed_locked(run, turn)
             return
         self._emit_runtime_notification_locked(run, notification.method, params)
+
+    def _begin_generated_image_publication_locked(
+        self,
+        run: RuntimeRunState,
+        params: dict[str, Any],
+        *,
+        generation: int,
+        turn_id: str,
+    ) -> _GeneratedImagePublication | None:
+        item = params.get("item")
+        if not isinstance(item, dict) or item.get("type") != "imageGeneration":
+            return None
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id or len(item_id) > 256:
+            return None
+        key = (run.run_id, item_id)
+        if item_id in run.completed_item_ids or key in self._inflight_image_items:
+            return None
+        if not isinstance(run.codex_thread_id, str):
+            return None
+        run.last_activity_at = _now()
+        self._activity[run.run_id] = monotonic()
+        payload: dict[str, object] = {
+            "run_id": run.run_id,
+            "item_id": item_id,
+            "item_type": "imageGeneration",
+        }
+        payload.update(_safe_item_activity_metadata(item))
+        self._inflight_image_items.add(key)
+        self._begin_publication_locked(run.thread_id)
+        status = item.get("status")
+        if not isinstance(status, str) or len(status) > 32:
+            status = None
+        mime_type = item.get("mimeType", item.get("mime_type"))
+        if not isinstance(mime_type, str) or len(mime_type) > 64:
+            mime_type = None
+        return _GeneratedImagePublication(
+            run_id=run.run_id,
+            thread_id=run.thread_id,
+            generation=generation,
+            codex_thread_id=run.codex_thread_id,
+            turn_id=turn_id,
+            item_id=item_id,
+            status=status,
+            result=item.get("result"),
+            mime_type=mime_type,
+            payload=payload,
+        )
+
+    def _publish_generated_image_completion(
+        self,
+        publication: _GeneratedImagePublication,
+    ) -> None:
+        artifact: ArtifactRecord | None = None
+        rejected = publication.status not in {"completed", "succeeded"}
+        failure: BaseException | None = None
+        if not rejected:
+            try:
+                artifact = self.storage.save_generated_image(
+                    thread_id=publication.thread_id,
+                    item_id=publication.item_id,
+                    result=publication.result,
+                    mime_type=publication.mime_type,
+                )
+            except (
+                WorkspaceBoundaryError,
+                OSError,
+                ValueError,
+                ResourceLimitError,
+                RuntimeError,
+            ):
+                rejected = True
+            except BaseException as exc:
+                failure = exc
+
+        with self._lock:
+            try:
+                if failure is None:
+                    self._finish_generated_image_publication_locked(
+                        publication,
+                        artifact=artifact,
+                        rejected=rejected,
+                    )
+            finally:
+                self._inflight_image_items.discard(
+                    (publication.run_id, publication.item_id)
+                )
+                self._finish_publication_locked(publication.thread_id)
+        if failure is not None:
+            raise failure
+
+    def _finish_generated_image_publication_locked(
+        self,
+        publication: _GeneratedImagePublication,
+        *,
+        artifact: ArtifactRecord | None,
+        rejected: bool,
+    ) -> None:
+        if self._closed or self._fatal_error:
+            return
+        run = self._state.runs.get(publication.run_id)
+        if (
+            run is None
+            or run.thread_id != publication.thread_id
+            or run.generation != publication.generation
+            or run.codex_thread_id != publication.codex_thread_id
+            or run.codex_turn_id != publication.turn_id
+            or publication.item_id in run.completed_item_ids
+        ):
+            return
+        payload = dict(publication.payload)
+        if rejected or artifact is None:
+            payload["status"] = "failed"
+            payload["error"] = "image_result_rejected"
+        else:
+            payload.update(
+                {
+                    "artifact_id": artifact.artifact_id,
+                    "mime_type": artifact.mime_type,
+                    "size_bytes": artifact.size_bytes,
+                }
+            )
+        if len(run.completed_item_ids) >= 4096:
+            del run.completed_item_ids[0]
+        run.completed_item_ids.append(publication.item_id)
+        self._emit_once_locked(
+            run,
+            "item.completed",
+            payload,
+            source=payload,
+        )
 
     def _buffer_pre_response_notification_locked(
         self,
@@ -2241,7 +2429,7 @@ class RuntimeBroker:
             run,
             event_type,
             payload,
-            source=params,
+            source=payload,
         )
 
     def _emit_interaction_resolved_locked(

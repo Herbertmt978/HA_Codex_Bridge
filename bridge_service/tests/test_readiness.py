@@ -1,8 +1,10 @@
 from fastapi.testclient import TestClient
+from types import SimpleNamespace
 
 from codex_bridge_service import __version__
 from codex_bridge_service.app import create_app
 from codex_bridge_service.build_info import BuildInfo
+from codex_bridge_service.models import RuntimeProfile
 
 
 AUTHORIZATION = {
@@ -112,6 +114,63 @@ def test_readiness_exposes_only_the_configured_optional_capabilities(tmp_path) -
         "automations_v1",
         "agents_v1",
     ]
+
+
+def test_readiness_advertises_only_verified_provider_features(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    app.state.storage.runtime_profile = RuntimeProfile.HOME_ASSISTANT
+
+    for provider, expected in (
+        (
+            {
+                "image_generation": True,
+                "web_search": True,
+                "namespace_tools": True,
+            },
+            {"web_search_v1", "image_generation_v1"},
+        ),
+        (
+            {
+                "image_generation": True,
+                "web_search": False,
+                "namespace_tools": False,
+            },
+            set(),
+        ),
+        (
+            {
+                "image_generation": None,
+                "web_search": None,
+                "namespace_tools": None,
+            },
+            set(),
+        ),
+    ):
+        app.state.capabilities_manager = SimpleNamespace(
+            provider_capabilities=lambda provider=provider: provider
+        )
+        capabilities = set(
+            TestClient(app).get("/ready", headers=AUTHORIZATION).json()["capabilities"]
+        )
+        assert capabilities & {"web_search_v1", "image_generation_v1"} == expected
+
+
+def test_readiness_does_not_advertise_provider_features_to_external_bridge(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    app.state.capabilities_manager = SimpleNamespace(
+        provider_capabilities=lambda: {
+            "image_generation": True,
+            "web_search": True,
+            "namespace_tools": True,
+        }
+    )
+
+    capabilities = TestClient(app).get("/ready", headers=AUTHORIZATION).json()[
+        "capabilities"
+    ]
+
+    assert "web_search_v1" not in capabilities
+    assert "image_generation_v1" not in capabilities
 
 
 def test_create_app_reads_only_validated_environment_metadata_once(

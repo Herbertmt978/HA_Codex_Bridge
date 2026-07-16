@@ -124,10 +124,14 @@ async def _async_handle(
     *,
     safe_error_messages: dict[str, str] | None = None,
     after_success=None,
+    runtime_handler=None,
 ) -> None:
     try:
         runtime = async_get_runtime(hass)
-        result = await handler(runtime.client)
+        if runtime_handler is not None:
+            result = await runtime_handler(runtime)
+        else:
+            result = await handler(runtime.client)
     except BridgeApiAuthError:
         connection.send_error(msg["id"], "invalid_auth", "Bridge authentication failed")
     except BridgeApiConnectionError:
@@ -162,16 +166,16 @@ async def ws_get_config(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    async def _handler(client) -> dict[str, Any]:
-        runtime = async_get_runtime(hass)
+    async def _handler(runtime) -> dict[str, Any]:
         return {
             "panel_title": runtime.title,
             "connection_type": runtime.connection_type,
             "api_version": runtime.api_version,
             "capabilities": list(runtime.capabilities),
+            "web_search_mode": runtime.web_search_mode,
         }
 
-    await _async_handle(hass, connection, msg, _handler)
+    await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_status"})
@@ -181,7 +185,14 @@ async def ws_get_status(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    await _async_handle(hass, connection, msg, lambda client: client.async_get_status())
+    async def _handler(runtime) -> dict[str, Any]:
+        status = await runtime.client.async_get_status()
+        await runtime.async_refresh_capabilities(
+            force=runtime.capability_refresh_is_urgent(status)
+        )
+        return status
+
+    await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_event_status"})
@@ -625,6 +636,12 @@ async def ws_send_prompt(
             msg["thread_id"],
             msg["prompt"],
             client_request_id=msg.get("client_request_id"),
+        ),
+        runtime_handler=lambda runtime: runtime.client.async_send_prompt(
+            msg["thread_id"],
+            msg["prompt"],
+            client_request_id=msg.get("client_request_id"),
+            **runtime.web_search_payload(),
         ),
     )
 
@@ -1298,6 +1315,9 @@ async def ws_run_automation(hass, connection, msg) -> None:
         msg,
         lambda client: client.async_run_automation(msg["automation_id"]),
         after_success=_automation_refresh,
+        runtime_handler=lambda runtime: runtime.client.async_run_automation(
+            msg["automation_id"], **runtime.web_search_payload()
+        ),
     )
 
 

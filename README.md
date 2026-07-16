@@ -46,8 +46,8 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-The published/live-accepted release (historical for the current candidate) is
-experimental, `amd64`-only App `0.7.1`,
+The latest target-Home-Assistant-accepted release (historical for the current
+candidate) is experimental, `amd64`-only App `0.7.1`,
 Integration `0.7.1`, optional external Bridge `0.6.0`, and bundled Codex
 `0.144.4`. The distributed immutable App image has generic digest
 `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
@@ -69,14 +69,27 @@ and this manual update kept the prior-version backup. External blocked-network/
 Nabu Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback
 remain unproven.
 
+App/Integration `0.7.2` with Bridge `0.6.1` was subsequently published and
+signed, but was not accepted on the target Home Assistant before this candidate
+superseded it. Its generic image digest is
+`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
+with amd64 child digest
+`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
+main CI `29491849347` and App publication `29491849502` succeeded
+([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2)).
+
 The `0.7.1` publication and target-HA acceptance above are historical for this
-candidate. App/Integration `0.7.2` with Bridge `0.6.1` is a candidate pending
-plugin live acceptance, with bundled Codex `0.144.4`. In a signed-in Codex
-run, its native plugin catalogue was approximately `4,041,499` bytes, contained
-`1,916` plugins, and completed cold in `35.887s`. The candidate bounds the
-app-server message at `8MiB` and cold request at `60s`, gives the Integration's
-plugin request a `75s` deadline and `8MiB` response cap, projects at most `4,096`
-plugins, and loads plugins and marketplaces with one frontend request.
+candidate. App/Integration `0.7.3` with Bridge `0.6.2` is a candidate pending
+real Home Assistant acceptance, with bundled Codex `0.144.4`. It enables
+provider-gated native live web search by default for Supervisor-connected
+prompts and automations, including automatic capability recovery after a
+delayed ChatGPT sign-in; shell-command networking remains disabled. Signed-in
+ChatGPT-account image generation is available only when Codex advertises both
+`imageGeneration` and `namespaceTools`; it uses no API key and keeps bounded
+PNG, JPEG, or WebP results as private artifacts. The compact panel remains the
+primary UI. The candidate also retains the bounded plugin catalogue fixes and
+the updater's pinned `jsonschema` dependency installation fix; neither is
+live-acceptance evidence.
 
 App `0.7.0` uses private-IP Supervisor discovery. It retains bounded recovery
 for delayed ChatGPT device sign-in, expires the signed-out catalogue when
@@ -162,6 +175,14 @@ the selected App workspace:
   clock; the Bridge persists definitions, uses revision checks and idempotent
   claims, records overlap/capacity/misfire skips, and keeps run history bounded.
   Pause an automation before deleting it.
+- **Native web search and images:** on a Supervisor connection, native web
+  search is selected by default and activates only after the App advertises
+  it, including after a delayed sign-in. It applies to prompts and manual
+  automation runs and can be disabled in Integration options. This does not
+  enable shell-command networking. Image generation
+  needs a signed-in ChatGPT account plus both runtime `imageGeneration` and
+  `namespaceTools` capabilities. It does not use an OpenAI API key; generated
+  PNG, JPEG, and WebP artifacts remain private and size-bounded.
 - **Skills:** list, enable/disable, create, and delete workspace skills under
   the selected workspace's `.agents/skills/` tree. Paths outside that workspace
   are rejected.
@@ -174,8 +195,8 @@ the selected App workspace:
   addresses, credentials, and arbitrary config payloads are rejected. In the
   historical `0.7.1` live-acceptance run, the list call returned
   `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or
-  marketplace list/mutation acceptance was claimed. The `0.7.2` candidate's
-  signed-in catalogue measurement is evidence for the candidate only.
+  marketplace list/mutation acceptance was claimed. The `0.7.3` candidate is
+  pending real Home Assistant acceptance.
 - **MCP servers:** MCP is disabled by default. To use it, explicitly enable
   **Enable MCP** in the Codex Bridge App configuration, save, and restart the
   App. Configure outbound streamable-HTTP servers only with an HTTPS hostname.

@@ -20,11 +20,15 @@ from custom_components.codex_bridge.const import (
     CONF_BRIDGE_URL,
     CONF_CONNECTION_TYPE,
     CONF_DISCOVERY_UUID,
+    CONF_WEB_SEARCH_MODE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
 )
-from custom_components.codex_bridge.config_flow import CodexBridgeConfigFlow
+from custom_components.codex_bridge.config_flow import (
+    CodexBridgeConfigFlow,
+    CodexBridgeOptionsFlow,
+)
 
 
 TOKEN = "a" * 48
@@ -87,6 +91,61 @@ async def test_hassio_discovery_uses_wrapper_identity_and_creates_safe_entry(has
     }
     assert client.async_ready.await_count == 2
     assert client.async_ready.await_args.kwargs["discovery"].uuid == UUID
+
+
+async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_off(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+        options={},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+
+    form = await flow.async_step_init()
+    assert form["type"] is FlowResultType.FORM
+    assert form["data_schema"]({}) == {CONF_WEB_SEARCH_MODE: "live"}
+    result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_WEB_SEARCH_MODE: "disabled"}
+
+
+async def test_supervisor_options_remain_available_before_login_capability_recovery(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+
+    result = await flow.async_step_init()
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["data_schema"]({}) == {CONF_WEB_SEARCH_MODE: "live"}
+
+
+async def test_external_legacy_entry_has_no_native_web_search_options(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="External Codex Bridge",
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_EXTERNAL_LEGACY},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+
+    result = await flow.async_step_init()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "supervisor_only"
 
 
 @pytest.mark.parametrize(

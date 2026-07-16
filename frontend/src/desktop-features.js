@@ -8,6 +8,40 @@ const DESTINATIONS = Object.freeze([
 
 const asRecord = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
 
+/**
+ * Turn the intentionally small native-provider status contract into stable UI
+ * copy. Unknown is distinct from unavailable: older Apps may not advertise
+ * this capability yet, and should not be presented as a failed account.
+ */
+export function getNativeToolsViewModel(status = {}, config = {}) {
+  const statusRecord = asRecord(status);
+  const providerCapabilities = asRecord(statusRecord.provider_capabilities);
+  const auth = asRecord(statusRecord.auth);
+  const explicitlySignedOut = Object.keys(auth).length > 0
+    && (auth.auth_required === true || (typeof auth.state === "string" && auth.state !== "ok"));
+  const imageGeneration = providerCapabilities.image_generation === true
+    && providerCapabilities.namespace_tools === true
+    && !explicitlySignedOut
+    ? { label: "Available", state: "available" }
+    : providerCapabilities.image_generation === false
+      || providerCapabilities.namespace_tools === false
+      || explicitlySignedOut
+      ? { label: "Unavailable", state: "unavailable" }
+      : { label: "Checking", state: "checking" };
+  const webSearchMode = asRecord(config).web_search_mode;
+  let webSearch = { label: "Checking", state: "checking" };
+  if (webSearchMode === "disabled") {
+    webSearch = { label: "Off", state: "unavailable" };
+  } else if (webSearchMode === "live") {
+    webSearch = providerCapabilities.web_search === true && !explicitlySignedOut
+      ? { label: "Live", state: "available" }
+      : providerCapabilities.web_search === false || explicitlySignedOut
+        ? { label: "Unavailable", state: "unavailable" }
+        : webSearch;
+  }
+  return { imageGeneration, webSearch };
+}
+
 /** Convert the bridge's list responses (array, {items}, or {data}) to a safe array. */
 export function normalizeDesktopList(value) {
   if (Array.isArray(value)) return value.filter((item) => item && typeof item === "object");
@@ -294,7 +328,7 @@ function renderPlugins(documentRef, state) {
   return section;
 }
 
-function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
   const section = documentRef.createElement("div"); section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav"); tabs.className = "settings-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Settings sections");
   const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
@@ -324,11 +358,30 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
   if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
-  if (tab === "general") panel.append(text(documentRef, "h3", "General", "desktop-subheading"), text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"));
+  if (tab === "general") {
+    const nativeTools = getNativeToolsViewModel(status, config);
+    const rows = documentRef.createElement("dl");
+    rows.className = "native-tools-list";
+    const addRow = (label, value, stateName) => {
+      const row = documentRef.createElement("div");
+      row.className = "native-tool-row";
+      row.append(text(documentRef, "dt", label), text(documentRef, "dd", value, `native-tool-state ${stateName}`));
+      rows.append(row);
+    };
+    addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
+    addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
+    panel.append(
+      text(documentRef, "h3", "General", "desktop-subheading"),
+      text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
+      text(documentRef, "h3", "Native tools", "desktop-subheading"),
+      rows,
+      text(documentRef, "p", "Image generation uses the signed-in ChatGPT account. Ask naturally, or type $imagegen in a chat.", "desktop-note")
+    );
+  }
   return section;
 }
 
-export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null } = {}) {
+export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.replaceChildren();
@@ -352,7 +405,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config);
   container.append(content);
 }
 

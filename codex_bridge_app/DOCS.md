@@ -94,8 +94,8 @@ The administrator-only panel exposes these App-backed surfaces:
   file path or JSON-RPC payload is passed through this API. The published/live-
   accepted `0.7.1` run returned `capabilities_unavailable` (HTTP 503); no
   `0.7.1` plugin or marketplace list/mutation acceptance was claimed. The
-  `0.7.2` candidate's signed-in catalogue measurement is described below and
-  remains candidate evidence until live publication.
+  `0.7.3` candidate is pending real Home Assistant acceptance; it is not live
+  publication evidence.
 - MCP is disabled by default. To opt in, set **Enable MCP** in the App
   configuration, save, and restart. Disabled startup suppresses MCP before
   Codex reads saved configuration and removes the native MCP server table;
@@ -129,6 +129,24 @@ plan change expires the signed-out catalogue immediately, so newly entitled
 models and reasoning levels are fetched on the next status request rather than
 waiting for the normal cache lifetime.
 
+## Provider-gated native tools
+
+For a Supervisor-connected Integration, native web search defaults to `live`
+for prompts and manual automation runs only when the App's installed Codex
+runtime advertises web-search support. The preference survives a signed-out
+startup and activates automatically when device login completes. The
+Integration can disable it, and an
+external legacy Bridge does not inherit the default. This is provider-side web
+search, not shell networking: model-controlled shell networking remains
+disabled by the tool sandbox.
+
+Image generation requires a signed-in ChatGPT account and both provider
+capabilities named `imageGeneration` and `namespaceTools`. It never requires or
+uses an OpenAI API key. The Bridge validates and stores only bounded PNG, JPEG,
+and WebP output as private artifacts, then makes them available through Home
+Assistant's authenticated path. Capability absence or a failed probe leaves
+these tools unavailable.
+
 ## Updates and recovery
 
 On each App start, the ready Bridge publishes its Supervisor-assigned private
@@ -146,17 +164,23 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Candidate App/Integration `0.7.2` with Bridge `0.6.1` is pending plugin live
-acceptance and retains bundled Codex `0.144.4`. In a signed-in Codex run, its
-native plugin catalogue measured approximately `4,041,499` bytes, contained
-`1,916` plugins, and completed cold in `35.887s`. The candidate fixes bound the
-app-server message to `8MiB` and cold request to `60s`, give the HA Integration
-plugin request a `75s` deadline and `8MiB` response cap, project at most `4,096`
-plugins, and load plugins and marketplaces with one frontend request. This is
-candidate evidence only; the published/live-accepted `0.7.1` release remains
-the historical live baseline.
+Candidate App/Integration `0.7.3` with Bridge `0.6.2` is pending real Home
+Assistant acceptance and retains bundled Codex `0.144.4`. It adds provider-
+gated Live web search by default for Supervisor prompts and automations,
+provider-gated signed-in image generation with private bounded PNG/JPEG/WebP
+artifacts, and compact panel controls; shell networking remains disabled and
+no OpenAI API key is used. It also includes the updater's pinned `jsonschema`
+dependency-installation fix. These are candidate facts only; the
+target-HA-accepted `0.7.1` release remains the historical live baseline.
 
-The published/live-accepted release is Integration `0.7.1`, App `0.7.1`, Bridge
+The latest published signed release is Integration/App `0.7.2`, Bridge `0.6.1`,
+and Codex `0.144.4`. It was not target-HA accepted before the `0.7.3` candidate
+superseded it. Its generic image digest is
+`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
+with amd64 child
+`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
+main CI `29491849347` and App publication `29491849502` succeeded. The latest
+target-HA-accepted release is Integration `0.7.1`, App `0.7.1`, Bridge
 `0.6.0`, and Codex `0.144.4` (experimental, `amd64` only). The generic image
 digest is `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
 with amd64 child `sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.

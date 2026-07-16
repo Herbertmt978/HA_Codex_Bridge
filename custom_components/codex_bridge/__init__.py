@@ -27,13 +27,14 @@ from .const import (
     DATA_WS_REGISTERED,
     DOMAIN,
     EVENT_CURSOR_STORAGE_VERSION,
+    CONF_WEB_SEARCH_MODE,
 )
 from .event_broker import EventBroker
 from .automation_scheduler import AutomationScheduler
 from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
-from .runtime import CodexBridgeRuntime
+from .runtime import CodexBridgeRuntime, normalize_web_search_mode
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = []
@@ -94,6 +95,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         discovery_uuid=entry.data.get(CONF_DISCOVERY_UUID),
         api_version=client.negotiated_api_version or 0,
         capabilities=tuple(getattr(ready, "capabilities", ())),
+        web_search_mode=normalize_web_search_mode(
+            entry.options.get(CONF_WEB_SEARCH_MODE),
+            connection_type=connection_type,
+            capabilities=tuple(getattr(ready, "capabilities", ())),
+        ),
     )
     if runtime.api_version == 1:
         runtime.event_broker = EventBroker(
@@ -115,7 +121,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         ):
             runtime.automation_scheduler = AutomationScheduler(
-                hass, client, connection_type
+                hass,
+                client,
+                connection_type,
+                web_search_mode=(
+                    runtime.web_search_mode
+                    if runtime.supports_capability("web_search_v1")
+                    else None
+                ),
             )
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:

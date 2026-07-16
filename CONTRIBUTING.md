@@ -26,13 +26,14 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current candidate is Integration `0.7.2`, App `0.7.2`, Bridge `0.6.1`, and
-Codex `0.144.4` (experimental, `amd64` only), pending plugin live acceptance.
-The signed-in candidate catalogue measured approximately `4,041,499` bytes,
-contained `1,916` plugins, and completed cold in `35.887s`. Its fixes bound the
-app-server message to `8MiB` and cold request to `60s`, give the HA Integration
-plugin request a `75s` deadline and `8MiB` response cap, project at most `4,096`
-plugins, and use one frontend request for plugins and marketplaces. The
+The current candidate is Integration `0.7.3`, App `0.7.3`, Bridge `0.6.2`, and
+Codex `0.144.4` (experimental, `amd64` only), pending real Home Assistant
+acceptance. Provider-gated native web search defaults to Live for Supervisor
+prompts and automations; model-controlled shell networking remains disabled.
+Signed-in image generation requires both `imageGeneration` and `namespaceTools`,
+uses no API key, and keeps bounded PNG/JPEG/WebP artifacts private. The compact
+panel and updater `jsonschema` dependency-installation fix are candidate
+changes. The
 published/live-accepted `0.7.1` release remains historical, with its live list
 returning `capabilities_unavailable` (HTTP 503) and no plugin or marketplace
 list/mutation acceptance. The published/signed `0.7.0` baseline has
@@ -46,8 +47,8 @@ is bounded: versions, ChatGPT Pro retention, dynamic GPT-5.6, five-hour `Off`,
 chat/history, management-form retention, skill mutations, App auto-update, and
 MCP form cancellation were observed. Its live plugin/marketplace list returned
 `capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.2` catalogue measurements and
-fixes above remain candidate evidence pending live acceptance. External blocked-
+list/mutation acceptance was claimed. The `0.7.3` changes above remain candidate
+evidence pending live acceptance. External blocked-
 network routing, cold restore, and previous-image rollback remain unproven. A
 source checkout, local image, or unit test is not release evidence.
 

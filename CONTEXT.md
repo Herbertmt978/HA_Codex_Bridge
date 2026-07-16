@@ -29,7 +29,15 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Current published/live-accepted release: Integration `0.7.1`, App `0.7.1`
+- Latest published signed release: Integration `0.7.2`, App `0.7.2`, bundled
+  Bridge `0.6.1`, and Codex `0.144.4`. It was not target-HA accepted before the
+  `0.7.3` candidate superseded it. Its generic image digest is
+  `sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
+  with amd64 child digest
+  `sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
+  main CI `29491849347` and App publication `29491849502` succeeded
+  ([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2)).
+- Latest target-HA-accepted release: Integration `0.7.1`, App `0.7.1`
   (experimental and `amd64` only), optional external Bridge `0.6.0`, and bundled
   Codex `0.144.4`. The generic App image digest is
   `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
@@ -101,23 +109,16 @@ to the App or Bridge.
   auto-update remains proven, and this manual update kept the prior-version
   backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
   and arbitrary previous-image rollback remain unproven.
-- Candidate `0.7.2` updates the App and Integration with Bridge `0.6.1` while
+- Candidate `0.7.3` updates the App and Integration with Bridge `0.6.2` while
   retaining bundled Codex `0.144.4`; it is not published or live-accepted yet.
-  Against a signed-in Codex account, the candidate's native plugin catalogue
-  measured approximately `4,041,499` bytes, contained `1,916` plugins, and
-  completed cold in `35.887s`. The candidate bounds the app-server message at
-  `8MiB` with a `60s` cold request, gives the HA Integration plugin request a
-  `75s` deadline and `8MiB` response cap, projects at most `4,096` plugins, and
-  fetches plugins and marketplaces with one frontend request. The historical
-  `0.7.1` live list returned `capabilities_unavailable` (HTTP 503); that
-  observation is retained for history, while `0.7.2` catalogue verification is
-  candidate evidence only.
-- Native Codex `webSearch` items are accepted, safely projected, and labelled in
-  the activity timeline, but the HA App does not yet negotiate the runtime's
-  web-search capability or explicitly select `web_search = "live"`. The managed
-  configuration therefore relies on Codex's cached default. Model-controlled
-  shell networking remains intentionally disabled and is a separate boundary;
-  live-current web search has not yet been accepted on target HA.
+  On a Supervisor connection, native web search defaults to `live` for prompts
+  and automation runs only after the provider capability is advertised; shell
+  networking remains disabled. Signed-in ChatGPT-account image generation is
+  enabled only when both `imageGeneration` and `namespaceTools` are advertised,
+  uses no API key, and stores bounded PNG/JPEG/WebP results as private
+  artifacts. The compact panel and updater `jsonschema` dependency-installation
+  fix are candidate changes only. No target-HA acceptance, image digest, or run
+  identifier is claimed for `0.7.3`.
 - The App includes administrator-only capability surfaces for durable
   automations, workspace skills, global/project `AGENTS.md`, plugins and
   marketplaces, and outbound MCP configuration. Automations are persisted in

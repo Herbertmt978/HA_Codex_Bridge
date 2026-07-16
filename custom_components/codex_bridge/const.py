@@ -34,9 +34,14 @@ CONF_BRIDGE_URL = "bridge_url"
 CONF_BRIDGE_TOKEN = "bridge_token"
 CONF_CONNECTION_TYPE = "connection_type"
 CONF_DISCOVERY_UUID = "discovery_uuid"
+CONF_WEB_SEARCH_MODE = "web_search_mode"
 
 CONNECTION_TYPE_SUPERVISOR = "supervisor"
 CONNECTION_TYPE_EXTERNAL_LEGACY = "external_legacy"
+
+WEB_SEARCH_CAPABILITY = "web_search_v1"
+WEB_SEARCH_MODE_DISABLED = "disabled"
+WEB_SEARCH_MODE_LIVE = "live"
 
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8766"
 
@@ -44,7 +49,7 @@ PANEL_COMPONENT_NAME = "codex-bridge-panel"
 PANEL_URL_PATH = "codex-bridge"
 PANEL_ICON = "mdi:robot-outline"
 STATIC_URL_BASE = "/codex_bridge_static"
-PANEL_ASSET_VERSION = "0.7.2"
+PANEL_ASSET_VERSION = "0.7.3"
 PANEL_MODULE_URL = f"{STATIC_URL_BASE}/codex-bridge-panel.js?v={PANEL_ASSET_VERSION}"
 
 DATA_ENTRIES = "entries"

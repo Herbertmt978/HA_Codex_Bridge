@@ -8,6 +8,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from ..auth import require_bridge_token
+from ..feature_capabilities import supports_web_search
 from ..automations import (
     AutomationConflictError,
     AutomationError,
@@ -49,6 +50,7 @@ class ClaimRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, max_length=256)
     expected_revision: int | None = None
     capacity_available: bool = True
+    web_search: Literal["live", "disabled"] | None = None
 
 
 def create_router() -> APIRouter:
@@ -156,6 +158,8 @@ def create_router() -> APIRouter:
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         _authorize(request, authorization)
+        if payload.web_search is not None and not supports_web_search(request.app.state):
+            raise _web_search_unavailable()
         store = _store(request)
         capacity_available = payload.capacity_available and _runtime_capacity_available(
             request
@@ -176,12 +180,15 @@ def create_router() -> APIRouter:
                     if payload.expected_revision is not None
                     else -1,
                     capacity_available=capacity_available,
+                    web_search=payload.web_search,
                 )
             )
         else:
             claim = _invoke(
                 lambda: store.run_now(
-                    automation_id, capacity_available=capacity_available
+                    automation_id,
+                    capacity_available=capacity_available,
+                    web_search=payload.web_search,
                 )
             )
         dispatcher = getattr(request.app.state, "automation_dispatch", None)
@@ -281,4 +288,11 @@ def _invalid() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail={"code": "automation_invalid", "retryable": False},
+    )
+
+
+def _web_search_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"code": "capabilities_unavailable", "retryable": False},
     )

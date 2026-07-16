@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Header, Request
 
 from ..auth import require_bridge_token
+from ..feature_capabilities import provider_capabilities
 from ..models import (
     BridgeDiagnosticsRecord,
     BridgeStatusRecord,
     CodexAccountRecord,
     CodexAuthStatusRecord,
+    ProviderCapabilitiesRecord,
     SUPPORTED_THINKING_LEVELS,
 )
 
@@ -53,6 +55,9 @@ def get_status(
         ),
         auth=auth,
         diagnostics=diagnostics,
+        provider_capabilities=ProviderCapabilitiesRecord(
+            **provider_capabilities(request.app.state)
+        ),
     )
 
 

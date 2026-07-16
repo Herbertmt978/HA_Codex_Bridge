@@ -94,6 +94,64 @@ async def test_start_auth_login_defaults_to_non_destructive_mode(
     assert bodies == [{"force_logout": False}]
 
 
+async def test_web_search_field_is_sent_only_to_an_advertising_app(
+    bridge_server_factory,
+) -> None:
+    bodies: list[dict[str, object]] = []
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"].append("web_search_v1")
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(ready)
+        bodies.append(await request.json())
+        return web.json_response({"status": "queued"}, status=202)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_send_prompt("thr_1", "Current weather", web_search="live")
+        await client.async_run_automation("aut_1", web_search="disabled")
+        await client.async_claim_automation_run(
+            "aut_1",
+            due_at="2026-07-15T10:00:00Z",
+            idempotency_key="automation:aut_1:1:2026-07-15T10:00:00Z",
+            expected_revision=1,
+            web_search="live",
+        )
+
+    assert bodies == [
+        {"prompt": "Current weather", "web_search": "live"},
+        {"source": "manual", "web_search": "disabled"},
+        {
+            "source": "scheduled",
+            "due_at": "2026-07-15T10:00:00Z",
+            "idempotency_key": "automation:aut_1:1:2026-07-15T10:00:00Z",
+            "expected_revision": 1,
+            "web_search": "live",
+        },
+    ]
+
+
+async def test_web_search_field_is_omitted_for_an_older_app(bridge_server_factory) -> None:
+    bodies: list[dict[str, object]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        bodies.append(await request.json())
+        return web.json_response({"status": "queued"}, status=202)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_send_prompt("thr_1", "Current weather", web_search="live")
+
+    assert bodies == [{"prompt": "Current weather"}]
+
+
 async def test_feature_client_route_fails_before_request_when_not_advertised(
     bridge_server_factory,
 ) -> None:
@@ -963,6 +1021,38 @@ async def test_failed_readiness_clears_a_previous_negotiated_version(
             await client.async_ready()
 
         assert client.negotiated_api_version is None
+
+
+async def test_failed_readiness_refresh_preserves_a_working_negotiation(
+    bridge_server_factory,
+) -> None:
+    call_count = 0
+
+    async def handler(_: web.Request) -> web.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return web.json_response(_fixture("ready_v1.json"))
+        if call_count == 2:
+            refreshed = _fixture("ready_v1.json")
+            refreshed["capabilities"].append("web_search_v1")
+            return web.json_response(refreshed)
+        return web.json_response({"ready": True, "api": {"current": 99}})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+
+        await client.async_ready()
+        await client.async_refresh_ready()
+        assert client.negotiated_api_version == 1
+        assert "web_search_v1" in client.capabilities
+
+        with pytest.raises(BridgeApiIncompatibleError):
+            await client.async_refresh_ready()
+
+        assert client.negotiated_api_version == 1
+        assert "web_search_v1" in client.capabilities
 
 
 def test_legacy_buffered_download_repr_never_contains_payload_or_content_type() -> None:

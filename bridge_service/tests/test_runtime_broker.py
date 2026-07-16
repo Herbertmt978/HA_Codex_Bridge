@@ -27,7 +27,7 @@ from codex_bridge_service.codex_app_server_contract import (
     load_bundled_protocol_contract,
 )
 from codex_bridge_service.event_store import EventStoreAdmissionError
-from codex_bridge_service.models import RunMode
+from codex_bridge_service.models import ArtifactRecord, ArtifactSource, RunMode
 from codex_bridge_service.resource_limits import ResourceLimits
 from codex_bridge_service.runtime_broker import (
     RuntimeBroker,
@@ -716,6 +716,165 @@ def test_item_activity_metadata_is_enum_only_and_redacts_provider_content(
         broker.close()
 
 
+def test_image_completion_never_hashes_or_persists_raw_provider_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    signature_sources: list[object] = []
+    saved_results: list[object] = []
+    original_emit_once = broker._emit_once_locked
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Generate a safe image",
+            client_request_id="image-provider-redaction",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        artifact = ArtifactRecord(
+            artifact_id="art_img_safe",
+            filename="codex-image-safe.png",
+            mime_type="image/png",
+            source=ArtifactSource.GENERATED_IMAGE,
+            stored_path=f"{thread.thread_id}/generated/codex-image-safe.png",
+            relative_path="codex-image-safe.png",
+            size_bytes=12,
+        )
+
+        def save_generated_image(**kwargs: object) -> ArtifactRecord:
+            saved_results.append(kwargs["result"])
+            return artifact
+
+        def capture_emit_once(
+            run: object,
+            event_type: str,
+            payload: dict[str, object],
+            **kwargs: object,
+        ) -> None:
+            if event_type == "item.completed":
+                signature_sources.append(deepcopy(kwargs.get("source")))
+            original_emit_once(run, event_type, payload, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(storage, "save_generated_image", save_generated_image)
+        monkeypatch.setattr(broker, "_emit_once_locked", capture_emit_once)
+        raw_result = "raw-base64-result-private-secret"
+        params = {
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "completedAtMs": 1_783_936_800_000,
+            "item": {
+                "id": "image-item-redacted",
+                "type": "imageGeneration",
+                "status": "completed",
+                "result": raw_result,
+                "revisedPrompt": "revised-provider-private-secret",
+                "savedPath": "/private/provider-image-secret.png",
+            },
+        }
+        client.emit_notification("item/completed", params)
+        client.emit_notification("item/completed", params)
+
+        assert saved_results == [raw_result]
+        assert signature_sources == [
+            {
+                "run_id": run_id,
+                "item_id": "image-item-redacted",
+                "item_type": "imageGeneration",
+                "status": "completed",
+                "artifact_id": artifact.artifact_id,
+                "mime_type": "image/png",
+                "size_bytes": 12,
+            }
+        ]
+        serialized_events = json.dumps(
+            [event.payload for event in storage.list_thread_events(thread.thread_id)]
+        )
+        serialized_sources = json.dumps(signature_sources)
+        for private_value in (
+            raw_result,
+            "revised-provider-private-secret",
+            "/private/provider-image-secret.png",
+        ):
+            assert private_value not in serialized_events
+            assert private_value not in serialized_sources
+    finally:
+        broker.close()
+
+
+def test_slow_image_save_does_not_hold_broker_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    entered = Event()
+    release = Event()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Generate without blocking runtime state",
+            client_request_id="image-nonblocking-save",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        artifact = ArtifactRecord(
+            artifact_id="art_img_blocked",
+            filename="codex-image-blocked.png",
+            mime_type="image/png",
+            source=ArtifactSource.GENERATED_IMAGE,
+            stored_path=f"{thread.thread_id}/generated/codex-image-blocked.png",
+            relative_path="codex-image-blocked.png",
+            size_bytes=12,
+        )
+
+        def blocked_save(**_kwargs: object) -> ArtifactRecord:
+            entered.set()
+            assert release.wait(2)
+            return artifact
+
+        monkeypatch.setattr(storage, "save_generated_image", blocked_save)
+        params = {
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "completedAtMs": 1_783_936_800_000,
+            "item": {
+                "id": "image-item-blocked",
+                "type": "imageGeneration",
+                "status": "completed",
+                "result": "raw-image-result",
+                "revisedPrompt": None,
+                "savedPath": None,
+            },
+        }
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(client.emit_notification, "item/completed", params)
+            assert entered.wait(1)
+            started_at = time.monotonic()
+            assert broker.pending_interactions(thread.thread_id) == ()
+            broker.runtime_snapshot()
+            assert time.monotonic() - started_at < 0.25
+            assert not future.done()
+            release.set()
+            future.result(timeout=1)
+
+        completed = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "image-item-blocked"
+        ]
+        assert len(completed) == 1
+        assert completed[0].payload["artifact_id"] == artifact.artifact_id
+    finally:
+        release.set()
+        broker.close()
+
+
 @pytest.mark.parametrize(
     "gate_limits",
     [
@@ -803,7 +962,10 @@ def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandb
                 "model": "gpt-5.6-codex",
                 "approvalPolicy": approval_policy,
                 "approvalsReviewer": "user",
-                "config": {"default_permissions": permission_profile},
+                "config": {
+                    "default_permissions": permission_profile,
+                    "web_search": "cached",
+                },
                 "ephemeral": False,
             }
         ]
@@ -821,6 +983,30 @@ def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandb
                 "approvalsReviewer": "user",
             }
         ]
+    finally:
+        broker.close()
+
+
+def test_web_search_override_is_scoped_to_thread_start_config(tmp_path: Path) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id,
+            "Search current information",
+            client_request_id="web-search-live",
+            web_search="live",
+        )
+        _wait_until(lambda: len(_requests(client, "thread/start")) == 1)
+        start = _requests(client, "thread/start")[0]
+        assert start["config"] == {
+            "default_permissions": "ha_bridge",
+            "web_search": "live",
+        }
+        saved = broker._state.runs[run.run_id]
+        assert saved.web_search == "live"
+        assert "networkAccess" not in start["config"]
     finally:
         broker.close()
 
@@ -1323,8 +1509,10 @@ def test_projection_denies_punctuation_wrapped_absolute_paths(
     )
 
 
+@pytest.mark.parametrize("first_web_search", ["live", "disabled"])
 def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
     tmp_path: Path,
+    first_web_search: str,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
     client = ValidatorBackedAppServer()
@@ -1335,6 +1523,7 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
             thread.thread_id,
             "First",
             client_request_id="client-first",
+            web_search=first_web_search,
         )
         _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
         _run_id, remote_thread_id, first_turn_id = _active_ids(
@@ -1361,7 +1550,10 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
                 "model": "gpt-5.6-codex",
                 "approvalPolicy": "on-request",
                 "approvalsReviewer": "user",
-                "config": {"default_permissions": "ha_bridge"},
+                "config": {
+                    "default_permissions": "ha_bridge",
+                    "web_search": "cached",
+                },
             }
         ]
         assert _requests(client, "turn/start")[-1] == {

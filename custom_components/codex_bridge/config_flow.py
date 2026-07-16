@@ -1,6 +1,7 @@
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -23,6 +24,9 @@ from .const import (
     DISCOVERY_SERVICE,
     DISCOVERY_SOURCE,
     DOMAIN,
+    CONF_WEB_SEARCH_MODE,
+    WEB_SEARCH_MODE_DISABLED,
+    WEB_SEARCH_MODE_LIVE,
 )
 from .protocol import (
     ApiIncompatibleError as ProtocolApiIncompatibleError,
@@ -72,6 +76,15 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     _hassio_title = "Codex Bridge"
     _hassio_replaced_entry: config_entries.ConfigEntry | None = None
     _hassio_error: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        _config_entry: config_entries.ConfigEntry,
+    ) -> "CodexBridgeOptionsFlow":
+        """Expose App-only settings through Home Assistant's standard UI."""
+
+        return CodexBridgeOptionsFlow()
 
     async def _async_hassio_ready_error(self, discovery: DiscoveryRecord) -> str | None:
         """Return a stable error code after authenticated v1 readiness validation."""
@@ -268,3 +281,47 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 reason="reconfigure_successful",
             )
         return self.async_create_entry(title=self._hassio_title, data=data)
+
+
+class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
+    """Manage integration-owned settings for the Supervisor App connection."""
+
+    async def async_step_init(self, user_input=None):
+        """Offer the strict native web-search preference to Supervisor entries."""
+
+        if (
+            self.config_entry.data.get(CONF_CONNECTION_TYPE)
+            != CONNECTION_TYPE_SUPERVISOR
+        ):
+            return self.async_abort(reason="supervisor_only")
+
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_WEB_SEARCH_MODE: user_input[CONF_WEB_SEARCH_MODE],
+                },
+            )
+
+        default = self.config_entry.options.get(
+            CONF_WEB_SEARCH_MODE,
+            WEB_SEARCH_MODE_LIVE,
+        )
+        if default not in {WEB_SEARCH_MODE_LIVE, WEB_SEARCH_MODE_DISABLED}:
+            default = WEB_SEARCH_MODE_LIVE
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_WEB_SEARCH_MODE,
+                        default=default,
+                    ): vol.In(
+                        {
+                            WEB_SEARCH_MODE_LIVE: "Live",
+                            WEB_SEARCH_MODE_DISABLED: "Off",
+                        }
+                    )
+                }
+            ),
+        )

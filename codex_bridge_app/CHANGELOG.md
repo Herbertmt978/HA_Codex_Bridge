@@ -2,6 +2,23 @@
 
 All notable App changes are recorded here.
 
+## 0.7.3
+
+- Adds provider-gated native live web search for Supervisor prompts and
+  automations. The Integration preference defaults to Live, activates only
+  after the App advertises the capability, and re-negotiates automatically
+  after ChatGPT sign-in; model-controlled shell networking remains disabled.
+- Adds signed-in ChatGPT-account image generation only when Codex advertises
+  both `imageGeneration` and `namespaceTools`. Generated image results are
+  persisted as private, bounded PNG, JPEG, or WebP artifacts; no OpenAI API key
+  is used.
+- Keeps the compact panel controls and fixes the updater's pinned `jsonschema`
+  dependency installation for contract generation.
+- Bundles the Sigstore-verified Codex runtime `0.144.4`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.6.2` and paired Integration `0.7.3` without changing API
+  v1 compatibility.
+
 ## 0.7.2
 
 - Fixes the signed-in Codex plugin catalogue failing with HTTP 503. The Bridge

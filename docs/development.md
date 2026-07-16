@@ -53,9 +53,15 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current candidate is Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, and
-Codex `0.144.4`; it carries the management-form rerender fix for target-HA
-retest. The published/signed `0.7.0` baseline has generic image digest
+The current candidate is Integration/App `0.7.3`, Bridge `0.6.2`, and Codex
+`0.144.4`; it is pending real Home Assistant acceptance. Provider-gated native
+web search defaults to Live only for Supervisor prompts and automations,
+provider capabilities are re-negotiated after authentication, and
+model-controlled shell networking remains disabled. Signed-in image generation
+requires `imageGeneration` plus `namespaceTools`, uses no API key, and stores
+only private bounded PNG/JPEG/WebP artifacts. Preserve the compact panel and
+the updater's pinned `jsonschema` dependency-installation fix. The
+published/signed `0.7.0` baseline has generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child
 `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
@@ -79,6 +85,12 @@ Because Codex owns the eventual connection and DNS may change after validation,
 document the administrator trust requirement. Document any target-system gap
 rather than implying that local tests prove unattended recovery or proxy
 behavior.
+
+For provider tools, tests and documentation must preserve the gate: advertise
+web search only after a successful provider-capability probe, and advertise
+image generation only when both `imageGeneration` and `namespaceTools` are
+true. Never turn provider-side web search into a shell-network exemption, an
+API-key flow, or a public artifact URL.
 
 ## Supervisor discovery contract
 

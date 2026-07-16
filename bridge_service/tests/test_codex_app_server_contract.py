@@ -126,6 +126,28 @@ def test_bundled_contract_contains_required_stable_bridge_methods() -> None:
     contract.require("serverNotifications", "account/updated")
 
 
+def test_bundled_contract_validates_model_provider_capability_response() -> None:
+    validator = AppServerProtocolValidator(load_bundled_protocol_contract())
+
+    validator.validate_client_response(
+        "modelProvider/capabilities/read",
+        result={
+            "imageGeneration": True,
+            "namespaceTools": False,
+            "webSearch": True,
+        },
+    )
+    with pytest.raises(ProtocolContractError):
+        validator.validate_client_response(
+            "modelProvider/capabilities/read",
+            result={
+                "imageGeneration": 1,
+                "namespaceTools": False,
+                "webSearch": True,
+            },
+        )
+
+
 def test_generator_check_detects_schema_drift(tmp_path: Path) -> None:
     root = _schema_bundle(tmp_path)
     output = tmp_path / "contract.json"

@@ -438,10 +438,16 @@ Main CI rerun `29483810669` and App publication `29483810926` succeeded
 | Plugins/marketplaces (historical 0.7.1 observation) | Live list returned `capabilities_unavailable` (HTTP 503). No `0.7.1` plugin or marketplace list/mutation acceptance was claimed. |
 | Update/recovery | First unattended App auto-update remains proven. This manual update retained the prior-version backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback remain unproven. |
 
-## 0.7.2 candidate plugin catalogue evidence
+## 0.7.2 published plugin catalogue evidence
 
-App/Integration `0.7.2` with Bridge `0.6.1` is a candidate pending plugin live
-acceptance; published/live-accepted `0.7.1` remains the historical release.
+App/Integration `0.7.2` with Bridge `0.6.1` was published and signed, but was
+not target-HA accepted before `0.7.3` superseded it; target-HA-accepted `0.7.1`
+remains the historical live baseline. The `0.7.2` generic image digest is
+`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`
+with amd64 child
+`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
+main CI `29491849347` and App publication `29491849502` succeeded
+([release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2)).
 Bundled Codex remains `0.144.4`. In a signed-in Codex run, the native plugin
 catalogue measured approximately `4,041,499` bytes, contained `1,916` plugins,
 and completed cold in `35.887s`.
@@ -463,7 +469,23 @@ retention, dynamic catalogue, duration-aware limits, chat/history, management
 form retention, skill mutations, scheduled Observe run, App auto-update, and
 MCP form cancellation are evidenced above. The `0.7.1` plugin/marketplace HTTP
 503 remains historical evidence; the `0.7.2` catalogue measurements and fixes
-are candidate evidence pending live acceptance. External blocked-network/Nabu
+are published evidence without target-HA acceptance. External blocked-network/Nabu
 Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback
 remain unproven; the optional external Bridge remains a compatibility/recovery
 path until then.
+
+## 0.7.3 candidate: provider-gated web search and images
+
+App/Integration `0.7.3` with Bridge `0.6.2` and bundled Codex `0.144.4` is a
+candidate only, pending real Home Assistant acceptance. On the Supervisor path,
+native web search defaults to Live for prompts and automation runs only after a
+successful provider-capability advertisement. Model-controlled shell networking
+remains disabled. Signed-in ChatGPT-account image generation requires both
+`imageGeneration` and `namespaceTools`, uses no OpenAI API key, and retains only
+private, bounded PNG/JPEG/WebP artifacts. The compact UI and updater
+`jsonschema` dependency-installation fix are also candidate changes.
+
+No target-HA acceptance, image digest, CI/publication run ID, or live feature
+result is recorded for `0.7.3`. The earlier published-but-not-target-accepted
+`0.7.2` catalogue section and the target-HA-accepted `0.7.1` evidence above
+remain unchanged historical records.

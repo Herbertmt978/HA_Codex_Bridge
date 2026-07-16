@@ -28,6 +28,7 @@ from custom_components.codex_bridge.const import (
     DATA_WS_REGISTERED,
     DOMAIN,
 )
+from custom_components.codex_bridge.runtime import normalize_web_search_mode
 
 
 TOKEN = "a" * 48
@@ -123,6 +124,53 @@ async def test_external_entry_requires_the_explicit_legacy_capability(hass):
     assert runtime.connection_type == CONNECTION_TYPE_EXTERNAL_LEGACY
     assert runtime.discovery_uuid is None
     assert runtime.api_version == 0
+
+
+async def test_supervisor_runtime_defaults_live_web_search_when_advertised(hass):
+    entry = _entry(hass)
+    client = Mock()
+    client.async_ready = AsyncMock(
+        return_value=Mock(capabilities=("api_v1", "web_search_v1"))
+    )
+    client.async_close = AsyncMock()
+    client.require_api_v1 = Mock()
+    client.negotiated_api_version = 1
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+    ):
+        assert await async_setup_entry(hass, entry)
+        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        assert runtime.web_search_mode == "live"
+        assert runtime.web_search_payload() == {"web_search": "live"}
+        assert await async_unload_entry(hass, entry)
+
+
+@pytest.mark.parametrize(
+    ("value", "connection_type", "capabilities", "expected"),
+    [
+        (None, CONNECTION_TYPE_SUPERVISOR, ("web_search_v1",), "live"),
+        ("disabled", CONNECTION_TYPE_SUPERVISOR, ("web_search_v1",), "disabled"),
+        ("browser", CONNECTION_TYPE_SUPERVISOR, ("web_search_v1",), "disabled"),
+        (None, CONNECTION_TYPE_SUPERVISOR, (), "live"),
+        ("disabled", CONNECTION_TYPE_SUPERVISOR, (), "disabled"),
+        (None, CONNECTION_TYPE_EXTERNAL_LEGACY, ("web_search_v1",), "disabled"),
+    ],
+)
+def test_web_search_mode_is_normalized_to_supported_supervisor_values(
+    value, connection_type, capabilities, expected
+):
+    assert (
+        normalize_web_search_mode(
+            value,
+            connection_type=connection_type,
+            capabilities=capabilities,
+        )
+        == expected
+    )
 
 
 async def test_setup_refuses_a_second_active_connection(hass):

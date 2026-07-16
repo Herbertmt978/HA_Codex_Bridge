@@ -6,20 +6,30 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published/live-accepted App: `0.7.1` (`amd64` only, experimental)
-- Published/live-accepted Integration: `0.7.1`
+- Published App: `0.7.2` (`amd64` only, experimental)
+- Published Integration: `0.7.2`
+- Latest target-HA-accepted App/Integration: `0.7.1`
 - External Bridge: `0.6.0`
 - Bundled Codex: `0.144.4`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.7.2` with Bridge `0.6.1` is pending plugin live
-acceptance; the published/live-accepted `0.7.1` release remains the historical
-live baseline. In a signed-in Codex `0.144.4` run, the candidate native plugin
-catalogue measured approximately `4,041,499` bytes, contained `1,916` plugins,
-and completed cold in `35.887s`. The candidate bounds the app-server message at
-`8MiB` and cold request at `60s`, gives the Integration plugin request a `75s`
-deadline and `8MiB` response cap, projects at most `4,096` plugins, and loads
-plugins and marketplaces with one frontend request.
+Candidate App/Integration `0.7.3` with Bridge `0.6.2` is pending real Home
+Assistant acceptance; target-HA-accepted `0.7.1` remains the historical live
+baseline. Published `0.7.2` was not target-HA accepted before this candidate
+superseded it. The candidate defaults provider-gated native web
+search to Live for Supervisor prompts and automations while shell-command
+networking remains disabled. Signed-in ChatGPT-account image generation needs
+both Codex `imageGeneration` and `namespaceTools` capabilities, uses no OpenAI
+API key, and keeps bounded PNG, JPEG, and WebP artifacts private. Its compact
+panel and the updater `jsonschema` dependency-installation fix are candidate
+changes, not acceptance evidence.
+
+The published `0.7.2` image has generic digest
+`sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`
+and amd64 child digest
+`sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`.
+Main CI `29491849347` and App publication `29491849502` succeeded; see the
+[`0.7.2` release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2).
 
 The published `0.7.1` image has generic digest
 `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
@@ -112,8 +122,18 @@ Global instructions live in the private Codex home; project instructions live
 at the workspace root. Instruction writes are atomic and retain bounded private
 snapshots. Plugin and marketplace operations use Codex's runtime configuration
 and never accept arbitrary JSON or paths outside the workspace. The historical
-`0.7.1` live list returned `capabilities_unavailable` (HTTP 503); the `0.7.2`
-candidate catalogue measurement above is not live-acceptance evidence.
+`0.7.1` live list returned `capabilities_unavailable` (HTTP 503). Release
+`0.7.2` was published without target acceptance, and `0.7.3` functionality is
+not live-acceptance evidence.
+
+For a Supervisor connection whose App advertises native web search, the
+Integration defaults prompts and manual automation runs to **Live**; an
+administrator can disable it in Integration options. A device login completed
+after Integration setup re-negotiates the capability automatically; it does
+not require an Integration reload. This does not relax the
+model-controlled shell network boundary. Image generation remains provider-
+gated as described above and never exposes generated artifacts outside the
+private App/Bridge and Home Assistant path.
 
 MCP is disabled by default. Enable **Enable MCP** in the App configuration,
 save, and restart the App before adding servers. When it is off, Codex starts

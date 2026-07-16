@@ -47,6 +47,7 @@ _RETIRED_ID_LIMIT = 2048
 _STDERR_READ_BYTES = 16 * 1024
 _DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
 _DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
+_MODEL_PROVIDER_CAPABILITIES_TIMEOUT_SECONDS = 5.0
 _DEFAULT_PROTOCOL_CONTRACT = load_bundled_protocol_contract()
 _DEFAULT_PROTOCOL_VALIDATOR = AppServerProtocolValidator(_DEFAULT_PROTOCOL_CONTRACT)
 
@@ -114,6 +115,16 @@ class AppServerResponseError:
         if isinstance(self.code, bool) or not isinstance(self.code, int):
             raise ValueError("response error code must be an integer")
         _validate_safe_response_message(self.message)
+
+
+@dataclass(frozen=True, slots=True)
+class ModelProviderCapabilities:
+    """Validated provider capability flags for one app-server generation."""
+
+    generation: int
+    image_generation: bool
+    web_search: bool
+    namespace_tools: bool
 
 
 @dataclass(slots=True)
@@ -209,7 +220,7 @@ class CodexAppServerClient:
         codex_home: Path | str | None = None,
         client_name: str = "ha_codex_bridge",
         client_title: str = "Home Assistant Codex Bridge",
-        client_version: str = "0.6.1",
+        client_version: str = "0.6.2",
         initialize_timeout_seconds: float = 10.0,
         request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
         max_message_bytes: int = _DEFAULT_MAX_MESSAGE_BYTES,
@@ -393,6 +404,45 @@ class CodexAppServerClient:
                 else _positive_number(timeout_seconds, "request timeout")
             ),
             require_ready=True,
+        )
+
+    def read_model_provider_capabilities(self) -> ModelProviderCapabilities:
+        """Read bounded, generation-correlated native provider capabilities."""
+
+        method = "modelProvider/capabilities/read"
+        self._require_contract_method("clientRequests", method)
+        with self._state_lock:
+            if not self._ready.is_set() or self._process is None:
+                raise AppServerUnavailableError()
+            generation = self._generation
+        result = self._request_for_generation(
+            generation,
+            method,
+            {},
+            timeout_seconds=min(
+                self.request_timeout_seconds,
+                _MODEL_PROVIDER_CAPABILITIES_TIMEOUT_SECONDS,
+            ),
+            require_ready=True,
+        )
+        if not isinstance(result, dict):
+            raise AppServerProtocolError()
+        values = (
+            result.get("imageGeneration"),
+            result.get("webSearch"),
+            result.get("namespaceTools"),
+        )
+        if any(type(value) is not bool for value in values):
+            raise AppServerProtocolError()
+        image_generation, web_search, namespace_tools = values
+        assert isinstance(image_generation, bool)
+        assert isinstance(web_search, bool)
+        assert isinstance(namespace_tools, bool)
+        return ModelProviderCapabilities(
+            generation=generation,
+            image_generation=image_generation,
+            web_search=web_search,
+            namespace_tools=namespace_tools,
         )
 
     def register_notification_handler(

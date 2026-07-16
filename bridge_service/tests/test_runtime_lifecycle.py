@@ -410,7 +410,14 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
         params for method, params in client.requests if method == "turn/start"
     )
     assert "sandbox" not in thread_request
-    assert thread_request["config"] == {"default_permissions": "ha_bridge"}
+    # The broker explicitly resets the managed web-search setting on every
+    # thread start.  This prevents a prior live/disabled override from
+    # persisting in Codex's sticky thread configuration when the next turn
+    # does not specify an override.
+    assert thread_request["config"] == {
+        "default_permissions": "ha_bridge",
+        "web_search": "cached",
+    }
     assert "sandboxPolicy" not in turn_request
     _wait_until(
         lambda: (

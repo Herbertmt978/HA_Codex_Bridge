@@ -89,7 +89,7 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "codex_home": fake_server.codex_home,
         "client_name": "ha_codex_bridge",
         "client_title": "HA Codex Bridge",
-        "client_version": "0.6.1",
+        "client_version": "0.6.2",
         "initialize_timeout_seconds": 10.0,
         "request_timeout_seconds": 2.0,
         "max_message_bytes": 16 * 1024,
@@ -179,7 +179,7 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert messages[0]["params"]["clientInfo"] == {
             "name": "ha_codex_bridge",
             "title": "HA Codex Bridge",
-            "version": "0.6.1",
+            "version": "0.6.2",
         }
         assert fake_server.process()["argv"] == [
             "-c",
@@ -793,6 +793,66 @@ def test_missing_and_failed_server_request_handlers_return_safe_errors(
         serialized = json.dumps([missing, failed])
         assert "reusable-secret" not in serialized
         assert "person@example.com" not in serialized
+    finally:
+        client.close()
+
+
+def test_model_provider_capability_probe_is_typed_and_uses_empty_params(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        responses={
+            "modelProvider/capabilities/read": {
+                "result": {
+                    "imageGeneration": True,
+                    "namespaceTools": False,
+                    "webSearch": True,
+                }
+            }
+        }
+    )
+    client = _client(module, fake_server)
+    client.start()
+
+    try:
+        capabilities = client.read_model_provider_capabilities()
+
+        assert capabilities.generation == 1
+        assert capabilities.image_generation is True
+        assert capabilities.namespace_tools is False
+        assert capabilities.web_search is True
+        request = _wait_for_client_message(
+            fake_server,
+            lambda message: message.get("method")
+            == "modelProvider/capabilities/read",
+        )
+        assert request["params"] == {}
+    finally:
+        client.close()
+
+
+def test_model_provider_capability_probe_rejects_non_boolean_flags(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure(
+        responses={
+            "modelProvider/capabilities/read": {
+                "result": {
+                    "imageGeneration": 1,
+                    "namespaceTools": False,
+                    "webSearch": True,
+                }
+            }
+        }
+    )
+    client = _client(module, fake_server)
+    client.start()
+
+    try:
+        with pytest.raises(module.AppServerProtocolError):
+            client.read_model_provider_capabilities()
     finally:
         client.close()
 

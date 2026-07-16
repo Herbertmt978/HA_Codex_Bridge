@@ -380,6 +380,27 @@ def test_unlink_regular_file_is_descriptor_rooted_and_type_checked(tmp_path) -> 
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
+def test_missing_ok_cleanup_allows_an_absent_parent_but_remains_fail_closed(
+    tmp_path,
+) -> None:
+    root = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    boundary = WorkspaceBoundary(root)
+
+    boundary.unlink_regular_file("missing/file.txt", missing_ok=True)
+    boundary.remove_empty_directory("missing/child", missing_ok=True)
+    with pytest.raises(WorkspaceNotFoundError):
+        boundary.unlink_regular_file("missing/file.txt")
+    _symlink_or_skip(outside, root / "linked", directory=True)
+    with pytest.raises(WorkspaceEscapeError):
+        boundary.unlink_regular_file("linked/file.txt", missing_ok=True)
+    with pytest.raises(WorkspaceEscapeError):
+        boundary.remove_empty_directory("linked/child", missing_ok=True)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor semantics are unavailable")
 def test_file_identity_rejects_replacement_and_protects_cleanup(tmp_path) -> None:
     root = tmp_path / "workspace"
     root.mkdir()

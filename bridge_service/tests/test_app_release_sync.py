@@ -80,16 +80,16 @@ def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) ->
         root / "codex_bridge_app/rootfs/etc/s6-overlay/s6-rc.d/codex-bridge/run"
     ).read_text(encoding="utf-8")
     changelog = (root / "codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
-    assert 'version: "0.7.3"' in config
-    assert 'io.hass.version="0.7.3"' in dockerfile
-    assert 'CODEX_BRIDGE_APP_VERSION="0.7.3"' in dockerfile
-    assert "CODEX_BRIDGE_APP_VERSION=0.7.3" in run
-    assert changelog.index("## 0.7.3") < changelog.index("## 0.7.2")
+    assert 'version: "0.7.4"' in config
+    assert 'io.hass.version="0.7.4"' in dockerfile
+    assert 'CODEX_BRIDGE_APP_VERSION="0.7.4"' in dockerfile
+    assert "CODEX_BRIDGE_APP_VERSION=0.7.4" in run
+    assert changelog.index("## 0.7.4") < changelog.index("## 0.7.3")
     assert "`0.144.4`" in changelog
     assert "- Bundles the Sigstore-verified Codex runtime" in changelog
     assert "Updates the Sigstore-verified bundled Codex runtime" not in changelog
-    assert 'CODEX_BRIDGE_VERSION="0.6.1"' in dockerfile
-    assert "CODEX_BRIDGE_VERSION=0.6.1" in run
+    assert 'CODEX_BRIDGE_VERSION="0.6.2"' in dockerfile
+    assert "CODEX_BRIDGE_VERSION=0.6.2" in run
     assert (ROOT / "package.json").read_bytes() == untouched["package.json"]
     assert (
         ROOT / "bridge_service/src/codex_bridge_service/build_info.py"
@@ -102,7 +102,7 @@ def test_check_fails_on_projection_drift_without_writing(tmp_path: Path) -> None
     original = path.read_bytes()
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            'io.hass.version="0.7.2"', 'io.hass.version="0.7.9"'
+            'io.hass.version="0.7.3"', 'io.hass.version="0.7.9"'
         ),
         encoding="utf-8",
     )
@@ -118,7 +118,7 @@ def test_check_fails_when_bundled_bridge_version_drifts(tmp_path: Path) -> None:
     project = root / "bridge_service" / "pyproject.toml"
     project.write_text(
         project.read_text(encoding="utf-8").replace(
-            'version = "0.6.1"', 'version = "0.6.2"'
+            'version = "0.6.2"', 'version = "0.6.3"'
         ),
         encoding="utf-8",
     )
@@ -142,7 +142,7 @@ def test_malformed_or_ambiguous_sources_are_rejected(tmp_path: Path) -> None:
     config = root / "codex_bridge_app/config.yaml"
     config.write_text(
         config.read_text(encoding="utf-8").replace(
-            'version: "0.7.2"', 'version: "0.7.2-rc.1"'
+            'version: "0.7.3"', 'version: "0.7.3-rc.1"'
         ),
         encoding="utf-8",
     )

@@ -56,6 +56,7 @@ class RuntimeProfile(StrEnum):
 class ArtifactSource(StrEnum):
     WORKSPACE = "workspace"
     WORKSPACE_ARCHIVE = "workspace_archive"
+    GENERATED_IMAGE = "generated_image"
 
 
 class EventScope(StrEnum):
@@ -438,6 +439,8 @@ class BridgeReadinessRecord(BaseModel):
             "skills_v1",
             "plugins_v1",
             "agents_v1",
+            "web_search_v1",
+            "image_generation_v1",
         ],
         ...,
     ] = (
@@ -472,6 +475,16 @@ class BridgeDiagnosticsRecord(BaseModel):
     tools: list[DiagnosticToolRecord] = Field(default_factory=list)
 
 
+class ProviderCapabilitiesRecord(BaseModel):
+    """Bounded provider capability state safe to expose to the Integration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    image_generation: bool | None = None
+    web_search: bool | None = None
+    namespace_tools: bool | None = None
+
+
 class BridgeStatusRecord(BaseModel):
     models: list[str] = Field(default_factory=lambda: list(SUPPORTED_MODELS))
     thinking_levels: list[str] = Field(
@@ -485,6 +498,9 @@ class BridgeStatusRecord(BaseModel):
     auth: CodexAuthStatusRecord = Field(default_factory=CodexAuthStatusRecord)
     diagnostics: BridgeDiagnosticsRecord = Field(
         default_factory=BridgeDiagnosticsRecord
+    )
+    provider_capabilities: ProviderCapabilitiesRecord = Field(
+        default_factory=lambda: ProviderCapabilitiesRecord()
     )
 
 

@@ -2,9 +2,15 @@
 
 ## Status before you start
 
-This guide covers the current candidate: experimental, `amd64`-only App
-`0.7.1`, Integration `0.7.1`, Bridge `0.6.0`, and Codex `0.144.4`; it carries
-the management-form rerender fix and remains under target-HA retest. The
+This guide covers the current candidate: experimental, `amd64`-only App and
+Integration `0.7.3`, Bridge `0.6.2`, and Codex `0.144.4`. It is pending real
+Home Assistant acceptance and is not a published release. Provider-gated native
+web search defaults to Live for Supervisor prompts and automations and
+re-negotiates automatically after ChatGPT sign-in; shell-command networking
+remains disabled. Signed-in image generation requires
+both `imageGeneration` and `namespaceTools`, uses no API key, and retains only
+private bounded PNG/JPEG/WebP artifacts. The compact panel and updater
+`jsonschema` dependency-installation fix are candidate changes. The
 published/signed `0.7.0` baseline has generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child
@@ -87,8 +93,8 @@ model and should not be used when checking or editing this repository.
 
 Open **Settings -> Apps -> App store**, select the three-dot menu, then
 **Repositories**. Add <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait
-until the store offers App `0.7.0`, then install and start **Codex Bridge**. Do
-not install App `0.6.1`; it fails closed during target-HAOS
+until the store offers a published App release, then install and start **Codex
+Bridge**. Do not install App `0.6.1`; it fails closed during target-HAOS
 readiness. The App has no ingress route, direct port, or browser-visible Bridge
 URL; Supervisor discovery supplies the private connection using the App's
 assigned HA-network IP. The App publishes a bounded, non-secret marker on

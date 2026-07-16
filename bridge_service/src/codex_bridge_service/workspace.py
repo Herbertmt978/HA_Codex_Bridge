@@ -382,7 +382,12 @@ class WorkspaceBoundary:
         self._require_secure_operations()
         normalized = self.normalize(relative)
         parts = tuple(normalized.split("/"))
-        parent_fd = self._open_parent_fd(parts[:-1])
+        try:
+            parent_fd = self._open_parent_fd(parts[:-1])
+        except WorkspaceNotFoundError:
+            if missing_ok:
+                return
+            raise
         try:
             try:
                 entry_stat = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
@@ -927,7 +932,12 @@ class WorkspaceBoundary:
         self._require_secure_operations()
         normalized = self.normalize(relative)
         parts = tuple(normalized.split("/"))
-        parent_fd = self._open_parent_fd(parts[:-1])
+        try:
+            parent_fd = self._open_parent_fd(parts[:-1])
+        except WorkspaceNotFoundError:
+            if missing_ok:
+                return
+            raise
         file_fd: int | None = None
         try:
             try:

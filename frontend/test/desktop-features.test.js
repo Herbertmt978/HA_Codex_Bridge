@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "../src/codex-bridge-panel.js";
-import { buildAutomationPayload, buildAutomationUpdatePayload, normalizeDesktopError, normalizeDesktopList, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "../src/desktop-features.js";
+import { buildAutomationPayload, buildAutomationUpdatePayload, getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "../src/desktop-features.js";
 
 describe("desktop feature surfaces", () => {
   beforeEach(() => document.body.replaceChildren());
@@ -58,6 +58,46 @@ describe("desktop feature surfaces", () => {
     expect(host.textContent).toContain("<img src=x onerror=alert(1)>");
   });
 
+  it("distinguishes available, unavailable, and still-checking native image capability states", () => {
+    expect(getNativeToolsViewModel({ provider_capabilities: { image_generation: true, namespace_tools: true, web_search: true } }, { web_search_mode: "live" })).toMatchObject({
+      imageGeneration: { label: "Available", state: "available" },
+      webSearch: { label: "Live", state: "available" },
+    });
+    expect(getNativeToolsViewModel({ provider_capabilities: { image_generation: false, namespace_tools: false, web_search: false } }, { web_search_mode: "disabled" })).toMatchObject({
+      imageGeneration: { label: "Unavailable", state: "unavailable" },
+      webSearch: { label: "Off", state: "unavailable" },
+    });
+    expect(getNativeToolsViewModel({ provider_capabilities: { image_generation: null, namespace_tools: null, web_search: null } }, {})).toMatchObject({
+      imageGeneration: { label: "Checking", state: "checking" },
+      webSearch: { label: "Checking", state: "checking" },
+    });
+    expect(getNativeToolsViewModel({ provider_capabilities: { image_generation: true, namespace_tools: false, web_search: false } }, { web_search_mode: "live" })).toMatchObject({
+      imageGeneration: { label: "Unavailable", state: "unavailable" },
+      webSearch: { label: "Unavailable", state: "unavailable" },
+    });
+    expect(getNativeToolsViewModel({ auth: { state: "authentication_required", auth_required: true }, provider_capabilities: { image_generation: true, namespace_tools: true, web_search: true } }, { web_search_mode: "live" })).toMatchObject({
+      imageGeneration: { label: "Unavailable", state: "unavailable" },
+      webSearch: { label: "Unavailable", state: "unavailable" },
+    });
+  });
+
+  it("renders the general native-tools status with ChatGPT account guidance only", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, {
+      destination: "settings",
+      state: { settingsTab: "general", data: {} },
+      status: { provider_capabilities: { image_generation: true, namespace_tools: true, web_search: true } },
+      config: { web_search_mode: "live" },
+    });
+    expect(host.textContent).toContain("Web search");
+    expect(host.textContent).toContain("Live");
+    expect(host.textContent).toContain("Image generation");
+    expect(host.textContent).toContain("Available");
+    expect(host.textContent).toContain("signed-in ChatGPT account");
+    expect(host.textContent).toContain("$imagegen");
+    expect(host.textContent).not.toMatch(/API key|token/i);
+  });
+
   it("uses backend capability fields in plugin, marketplace, and MCP rows", () => {
     const host = document.createElement("div");
     renderDesktopFeatureSurface(host, { destination: "plugins", state: { data: { plugins: [{ name: "P", enabled: true }], marketplaces: [{ name: "M", plugins: [{ name: "P" }] }] } } });
@@ -99,6 +139,46 @@ describe("desktop feature surfaces", () => {
     expect(panel._desktopFeatures.settings.error).toBe("");
     expect(panel.shadowRoot.querySelector("[data-settings-tab=general]")).toBeTruthy();
     expect(panel.shadowRoot.textContent).toContain("General");
+  });
+
+  it("keeps composer model, thinking, and limits in a compact accessible strip that collapses on mobile", () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._activeThread = {
+      thread_id: "thread-compact",
+      project_id: null,
+      attachments: [],
+      effective_model: "gpt-5.5",
+      effective_thinking_level: "medium",
+    };
+    panel._status = {
+      models: ["gpt-5.5"],
+      thinking_levels: ["low", "medium"],
+      limits: {
+        available: true,
+        plan_type: "pro",
+        primary: { remaining_percent: 60, resets_at: "2026-07-16T16:00:00Z" },
+        secondary: { remaining_percent: 82, resets_at: "2026-07-23T16:00:00Z" },
+      },
+    };
+    panel._render(true);
+
+    const toolbar = panel.shadowRoot.getElementById("compact-toolbar");
+    const diagnostics = panel.shadowRoot.getElementById("composer-diagnostics");
+    expect(toolbar.querySelectorAll(".toolbar-card")).toHaveLength(2);
+    expect(toolbar.querySelectorAll(".mini-limit")).toHaveLength(2);
+    expect(toolbar.querySelector('[aria-label="Chat model override"]')).toBeTruthy();
+    expect(toolbar.querySelector('[aria-label="Chat thinking level override"]')).toBeTruthy();
+    expect(toolbar.textContent).toContain("Effective gpt-5.5");
+    expect(toolbar.textContent).toContain("Effective medium");
+    expect(toolbar.querySelector(".mini-limit").getAttribute("tabindex")).toBe("0");
+    expect(diagnostics.querySelector("summary").textContent).toContain("Chat settings and limits");
+
+    const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
+    expect(stylesheet).toMatch(/min-height: 64px;/);
+    expect(stylesheet).toMatch(/height: 32px;/);
+    expect(stylesheet).toMatch(/\.toolbar-card\.controls \{\s*grid-template-columns: 1fr;/);
+    expect(stylesheet).toMatch(/\.composer-diagnostics > summary \{\s*display: flex;/);
   });
 
   it("opens an isolated OAuth popup synchronously and navigates it only after HTTPS validation", async () => {

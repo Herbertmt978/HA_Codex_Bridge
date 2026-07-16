@@ -65,6 +65,15 @@ def test_parses_a_typed_immutable_v1_ready_record() -> None:
         ready.bridge_version = "changed"  # type: ignore[misc]
 
 
+def test_retains_verified_provider_feature_capabilities() -> None:
+    payload = _fixture("ready_v1.json")
+    payload["capabilities"].extend(["web_search_v1", "image_generation_v1"])
+
+    ready = ReadyRecord.from_payload(payload)
+
+    assert ready.capabilities[-2:] == ("web_search_v1", "image_generation_v1")
+
+
 def test_parses_legacy_v0_ready_only_with_explicit_compatibility() -> None:
     ready = ReadyRecord.from_payload(
         _fixture("ready_legacy_v0.json"), allow_legacy_v0=True
