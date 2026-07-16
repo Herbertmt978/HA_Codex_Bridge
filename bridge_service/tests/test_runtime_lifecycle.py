@@ -50,6 +50,11 @@ class _SharedClient:
         self.limit_used_percent = 10.0
         self.turn_in_progress = False
         self.fail_mcp_cleanup = False
+        self.mcp_masked = True
+        self.mcp_activation_calls = 0
+        self.user_mcp_servers: dict[str, object] = {
+            "stale": {"url": "https://stale-mcp.example/stream"}
+        }
         self._thread_number = 0
         self._turn_number = 0
         self.notification_handlers: dict[str, Any] = {}
@@ -84,8 +89,9 @@ class _SharedClient:
                 "config": {
                     "model": self.model,
                     "model_reasoning_effort": self.effort,
-                    # The disabled process override masks stale user MCP here.
-                    "mcp_servers": {},
+                    "mcp_servers": (
+                        {} if self.mcp_masked else deepcopy(self.user_mcp_servers)
+                    ),
                     "features": {"plugins": True},
                 },
                 "layers": [
@@ -96,9 +102,7 @@ class _SharedClient:
                         },
                         "version": "user-v1",
                         "config": {
-                            "mcp_servers": {
-                                "stale": {"url": "https://stale-mcp.example/stream"}
-                            },
+                            "mcp_servers": deepcopy(self.user_mcp_servers),
                             "features": {"plugins": True},
                         },
                     }
@@ -108,6 +112,10 @@ class _SharedClient:
         if method == "config/batchWrite":
             if self.fail_mcp_cleanup:
                 raise RuntimeError("Bearer private-secret cleanup failure")
+            edits = params["edits"]
+            if edits[0]["keyPath"] == "mcp_servers":
+                value = edits[0]["value"]
+                self.user_mcp_servers = {} if value is None else deepcopy(value)
             return {
                 "status": "ok",
                 "version": "user-v2",
@@ -209,6 +217,10 @@ class _SharedClient:
         if method == "turn/interrupt":
             return {}
         raise AssertionError(f"unexpected shared-client request: {method}")
+
+    def activate_validated_mcp_config(self) -> None:
+        self.mcp_activation_calls += 1
+        self.mcp_masked = False
 
 
 class _Auth:
@@ -894,6 +906,62 @@ def test_disabled_mcp_cleans_only_native_mcp_root_before_runtime_start(
     assert events[:3] == ["client.start", "auth.start", "runner.start"]
 
 
+def test_enabled_mcp_sanitizes_before_activating_runtime_generation(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    client = _LifecycleClient(events)
+    client.user_mcp_servers = {
+        "safe": {"url": "https://mcp.vendor.example/stream"},
+        "stdio": {"command": "sh", "args": ["-c", "id"]},
+        "bearer": {
+            "url": "https://mcp.bearer.example/stream",
+            "bearer_token_env_var": "TOKEN",
+        },
+        "private": {"url": "https://localhost/mcp"},
+    }
+    auth = _Auth(events=events)
+    runner = _Runner(events)
+    app = create_app(
+        root_path=tmp_path / "data",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=_workspace(tmp_path),
+        app_server_factory=lambda: client,
+        auth_coordinator_factory=lambda _client: auth,
+        runner_factory=lambda _storage: runner,
+        sandbox_ready=True,
+        enable_mcp=True,
+    )
+
+    with TestClient(app):
+        assert client.mcp_activation_calls == 1
+        assert client.mcp_masked is False
+
+    assert client.requests[:3] == [
+        ("config/read", {"includeLayers": True}),
+        (
+            "config/batchWrite",
+            {
+                "edits": [
+                    {
+                        "keyPath": "mcp_servers",
+                        "mergeStrategy": "replace",
+                        "value": {"safe": {"url": "https://mcp.vendor.example/stream"}},
+                    }
+                ],
+                "expectedVersion": "user-v1",
+                "reloadUserConfig": True,
+            },
+        ),
+        ("config/mcpServer/reload", None),
+    ]
+    assert client.user_mcp_servers == {
+        "safe": {"url": "https://mcp.vendor.example/stream"}
+    }
+    assert events[:3] == ["client.start", "auth.start", "runner.start"]
+
+
 def test_disabled_mcp_cleanup_failure_keeps_runtime_non_ready(
     tmp_path: Path,
 ) -> None:
@@ -925,5 +993,42 @@ def test_disabled_mcp_cleanup_failure_keeps_runtime_non_ready(
         "reasons": ["runtime_unavailable"],
     }
     assert app.state.runtime_startup_failed is True
+    assert "auth.start" not in events
+    assert "runner.start" not in events
+
+
+def test_enabled_mcp_sanitize_write_failure_stays_masked_and_stops_runtime(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    client = _LifecycleClient(events)
+    client.fail_mcp_cleanup = True
+    auth = _Auth(events=events)
+    runner = _Runner(events)
+    app = create_app(
+        root_path=tmp_path / "data",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=_workspace(tmp_path),
+        app_server_factory=lambda: client,
+        auth_coordinator_factory=lambda _client: auth,
+        runner_factory=lambda _storage: runner,
+        sandbox_ready=True,
+        enable_mcp=True,
+    )
+
+    with TestClient(app) as http:
+        response = http.get(
+            "/ready",
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["readiness"] == {
+        "state": "fatal",
+        "reasons": ["runtime_unavailable"],
+    }
+    assert client.mcp_masked is True
+    assert client.mcp_activation_calls == 0
     assert "auth.start" not in events
     assert "runner.start" not in events

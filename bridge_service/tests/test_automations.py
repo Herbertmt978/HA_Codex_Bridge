@@ -5,6 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from codex_bridge_service.app import create_app
 from codex_bridge_service.automations import (
     AutomationConflictError,
     AutomationNotFoundError,
@@ -12,6 +13,7 @@ from codex_bridge_service.automations import (
     AutomationValidationError,
     ScheduleValidationError,
 )
+from codex_bridge_service.models import RuntimeProfile
 from codex_bridge_service.routes.automations import create_router
 
 
@@ -751,3 +753,103 @@ def test_router_derives_capacity_from_the_runtime_gate(tmp_path):
     assert response.status_code == 202
     assert response.json()["status"] == "skipped_capacity"
     assert response.json()["dispatchable"] is False
+
+
+class _AutomationLifecycle:
+    def start(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class _AutomationRunner:
+    def __init__(self) -> None:
+        self.submissions: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def submit_prompt(self, *args: object, **kwargs: object) -> SimpleNamespace:
+        self.submissions.append((args, kwargs))
+        return SimpleNamespace(run_id="run_automation")
+
+
+def _dispatch_test_app(tmp_path, *, target_kind: str):
+    state_root = tmp_path / "state"
+    workspace_root = tmp_path / "workspaces"
+    state_root.mkdir()
+    workspace_root.mkdir()
+    runner = _AutomationRunner()
+    app = create_app(
+        root_path=state_root,
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        app_server_factory=_AutomationLifecycle,
+        runner_factory=lambda _storage: runner,
+    )
+    target_record = SimpleNamespace(archived_at=None)
+    if target_kind == "standalone":
+        app.state.storage.load_project = lambda _project_id: target_record
+        app.state.storage.create_thread = lambda **_kwargs: pytest.fail(
+            "archived project must not create a thread"
+        )
+        target = {"kind": "standalone", "project_id": "prj_dispatch"}
+    else:
+        app.state.storage.load_thread = lambda _thread_id: target_record
+        app.state.storage.update_thread = lambda *_args, **_kwargs: pytest.fail(
+            "archived thread must not be updated"
+        )
+        target = {"kind": "continue_thread", "thread_id": "thr_dispatch"}
+    return app, runner, target_record, target
+
+
+@pytest.mark.parametrize("target_kind", ["standalone", "continue_thread"])
+def test_dispatch_revalidates_archived_targets_without_starting_codex(
+    tmp_path, target_kind
+):
+    app, runner, target_record, target = _dispatch_test_app(
+        tmp_path, target_kind=target_kind
+    )
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+    target_record.archived_at = "2026-07-15T09:01:00Z"
+    client = TestClient(app)
+
+    response = client.post(
+        f"/automations/{automation['automation_id']}/runs",
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+        json={"source": "manual"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "blocked"
+    assert response.json()["dispatchable"] is False
+    assert response.json()["error"] == "automation dispatcher rejected the claim"
+    assert runner.submissions == []
+
+
+def test_dispatch_revalidates_deleted_target_without_starting_codex(tmp_path):
+    app, runner, target_record, target = _dispatch_test_app(
+        tmp_path, target_kind="standalone"
+    )
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+
+    def missing_project(_project_id):
+        raise FileNotFoundError("project was deleted")
+
+    app.state.storage.load_project = missing_project
+    client = TestClient(app)
+    response = client.post(
+        f"/automations/{automation['automation_id']}/runs",
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+        json={"source": "manual"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "blocked"
+    assert response.json()["dispatchable"] is False
+    assert runner.submissions == []

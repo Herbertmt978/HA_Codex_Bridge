@@ -11,6 +11,8 @@ from threading import Lock, RLock
 from typing import BinaryIO, Callable, Literal
 from uuid import uuid4
 import zipfile
+from contextlib import contextmanager, nullcontext
+from collections.abc import Iterator, Mapping
 
 from .codex_auth import AUTH_EXPIRED_MESSAGE
 from .event_store import BridgeEventStore, DurableOutbox, EventDraft, OutboxWrite
@@ -184,12 +186,28 @@ class UploadValidationError(ValueError):
 class _UploadChunkWriter:
     """One descriptor-rooted chunk write; owns the upload lock until finished."""
 
-    def __init__(self, storage: "BridgeStorage", payload: dict[str, object], index: int, digest: str, expected: int, reservation: QuotaReservation) -> None:
-        self.storage, self.payload, self.index, self.digest, self.expected = storage, payload, index, digest, expected
+    def __init__(
+        self,
+        storage: "BridgeStorage",
+        payload: dict[str, object],
+        index: int,
+        digest: str,
+        expected: int,
+        reservation: QuotaReservation,
+    ) -> None:
+        self.storage, self.payload, self.index, self.digest, self.expected = (
+            storage,
+            payload,
+            index,
+            digest,
+            expected,
+        )
         self.reservation = reservation
         self.boundary = storage._home_assistant_uploads_boundary()
         self.part = f"{storage._upload_payload_dir(str(payload['upload_id']))}/{index}.{uuid4().hex}.part"
-        self.chunk = f"{storage._upload_payload_dir(str(payload['upload_id']))}/{index}.chunk"
+        self.chunk = (
+            f"{storage._upload_payload_dir(str(payload['upload_id']))}/{index}.chunk"
+        )
         self.output = self.boundary.create_file_exclusive(self.part)
         self.identity = self.boundary.identify_open_file(self.output)
         storage._active_upload_parts.add(self.part)
@@ -199,7 +217,11 @@ class _UploadChunkWriter:
         self.closed = False
 
     def write(self, block: bytes) -> None:
-        if self.closed or not isinstance(block, bytes) or self.counter + len(block) > self.expected:
+        if (
+            self.closed
+            or not isinstance(block, bytes)
+            or self.counter + len(block) > self.expected
+        ):
             raise UploadValidationError("content_length")
         self.reservation.consume(len(block))
         _write_all(self.output, block)
@@ -214,18 +236,25 @@ class _UploadChunkWriter:
             self.output.close()
             if self.counter != self.expected or self.hasher.hexdigest() != self.digest:
                 raise UploadValidationError("chunk_sha256")
-            current = self.storage._read_upload_session_locked(str(self.payload["upload_id"]))
+            current = self.storage._read_upload_session_locked(
+                str(self.payload["upload_id"])
+            )
             if current["status"] != "active":
                 raise UploadConflictError("upload is not active")
             received = current["received"]
             assert isinstance(received, dict)
-            if str(self.index) in received or {int(value) for value in received} != set(range(self.index)):
+            if str(self.index) in received or {int(value) for value in received} != set(
+                range(self.index)
+            ):
                 raise UploadConflictError("chunk order")
             self.boundary.replace_regular_file(
                 self.part, self.chunk, expected_identity=self.identity
             )
             self.chunk_published = True
-            received[str(self.index)] = {"sha256": self.digest, "size_bytes": self.counter}
+            received[str(self.index)] = {
+                "sha256": self.digest,
+                "size_bytes": self.counter,
+            }
             self.storage._write_upload_session_locked(current)
             self.reservation.commit(persisted_bytes=self.counter)
             return self.storage._upload_view(current)
@@ -357,6 +386,12 @@ class BridgeStorage:
         self._event_next_sequences: dict[str, int] = {}
         self._project_mutation_lock = RLock()
         self._thread_mutation_lock = RLock()
+        # Automation dispatch reserves its target across thread preparation and
+        # runtime submission. Archive/delete take this lock first and reject a
+        # reserved target instead of interleaving with an accepted prompt.
+        self._automation_target_lock = RLock()
+        self._automation_project_reservations: dict[str, int] = {}
+        self._automation_thread_reservations: dict[str, int] = {}
         # A single process lock deliberately precedes the thread lock in every
         # upload transition and deletion, avoiding complete/cancel/delete ABBA.
         self._upload_mutation_lock = RLock()
@@ -1485,14 +1520,16 @@ class BridgeStorage:
         )
 
     def archive_project(self, project_id: str) -> ProjectRecord:
-        with self._project_mutation_lock:
-            record = self.load_project(project_id)
-            if record.kind is not ProjectKind.PROJECT:
-                raise ProjectMutationError("only normal projects can be archived")
-            record.archived_at = self._now()
-            record.updated_at = record.archived_at
-            self.save_project(record)
-            return record
+        with self._automation_target_lock:
+            self._assert_automation_project_unreserved(project_id)
+            with self._project_mutation_lock:
+                record = self.load_project(project_id)
+                if record.kind is not ProjectKind.PROJECT:
+                    raise ProjectMutationError("only normal projects can be archived")
+                record.archived_at = self._now()
+                record.updated_at = record.archived_at
+                self.save_project(record)
+                return record
 
     def restore_project(self, project_id: str) -> ProjectRecord:
         with self._project_mutation_lock:
@@ -1505,8 +1542,10 @@ class BridgeStorage:
             return record
 
     def delete_project(self, project_id: str) -> None:
-        with self._project_mutation_lock:
-            self._delete_project_locked(project_id)
+        with self._automation_target_lock:
+            self._assert_automation_project_unreserved(project_id)
+            with self._project_mutation_lock:
+                self._delete_project_locked(project_id)
 
     def _delete_project_locked(self, project_id: str) -> None:
         record = self.load_project(project_id)
@@ -1738,19 +1777,165 @@ class BridgeStorage:
                 thread_id=record.thread_id,
                 event_type="thread.created",
                 payload={
-                "title": record.title,
-                "project_id": project.project_id,
-                "project_name": project.name,
-                "workspace_id": record.workspace_id,
-                "workspace_path": record.workspace_path,
-                "mode": record.mode.value,
-                "model_override": record.model_override,
-                "thinking_override": record.thinking_override,
-                "created_at": record.created_at,
+                    "title": record.title,
+                    "project_id": project.project_id,
+                    "project_name": project.name,
+                    "workspace_id": record.workspace_id,
+                    "workspace_path": record.workspace_path,
+                    "mode": record.mode.value,
+                    "model_override": record.model_override,
+                    "thinking_override": record.thinking_override,
+                    "created_at": record.created_at,
                 },
             ),
         )
         return self._resolve_thread(record)
+
+    @contextmanager
+    def prepare_automation_target(
+        self,
+        target: Mapping[str, str],
+        *,
+        title: str,
+        mode: RunMode,
+        model_override: str | None = None,
+        thinking_override: str | None = None,
+    ) -> Iterator[ThreadViewRecord]:
+        """Prepare and reserve an automation target through prompt submission.
+
+        The reservation is deliberately separate from the storage mutation
+        locks. Runtime submission re-enters storage synchronously, while
+        archive/delete reject a reserved project or thread instead of racing
+        between target validation, thread preparation, and prompt admission.
+        """
+        kind = target.get("kind")
+        project_id = target.get("project_id")
+        thread_id = target.get("thread_id")
+        if kind not in {"standalone", "continue_thread"}:
+            raise ProjectMutationError("automation target is invalid")
+
+        with self._automation_target_lock:
+            with self._project_mutation_lock:
+                with (
+                    self._thread_mutation_lock
+                    if kind == "continue_thread"
+                    else nullcontext()
+                ):
+                    if kind == "standalone":
+                        if not project_id:
+                            raise ProjectMutationError("automation target is invalid")
+                        project = self.load_project(project_id)
+                        if project.archived_at is not None:
+                            raise ProjectMutationError("automation project is archived")
+                        self._reserve_automation_target_locked(project_id, None)
+                        try:
+                            thread = self._create_thread_locked(
+                                title=title,
+                                mode=mode,
+                                project_id=project_id,
+                                model_override=model_override,
+                                thinking_override=thinking_override,
+                            )
+                        except BaseException:
+                            self._release_automation_target_locked(project_id, None)
+                            raise
+                    else:
+                        if not thread_id:
+                            raise ProjectMutationError("automation target is invalid")
+                        record = self.load_thread(thread_id)
+                        project = self.load_project(record.project_id or "")
+                        if (
+                            project.archived_at is not None
+                            or record.archived_at is not None
+                        ):
+                            raise ProjectMutationError("automation target is archived")
+                        if (
+                            record.active_run_id is not None
+                            or record.pending_prompts
+                            or record.status in {"queued", "running"}
+                        ):
+                            raise ProjectMutationError("automation thread is busy")
+                        if self._automation_thread_reservations.get(thread_id, 0):
+                            raise ProjectMutationError(
+                                "automation thread is reserved for an automation run"
+                            )
+                        self._reserve_automation_target_locked(
+                            project.project_id, thread_id
+                        )
+                        try:
+                            thread = self._update_thread_record_locked(
+                                record,
+                                mode=mode,
+                                model_override=model_override,
+                                thinking_override=thinking_override,
+                            )
+                        except BaseException:
+                            self._release_automation_target_locked(
+                                project.project_id, thread_id
+                            )
+                            raise
+        try:
+            yield thread
+        finally:
+            with self._automation_target_lock:
+                self._release_automation_target_locked(
+                    thread.project_id,
+                    None if kind == "standalone" else thread.thread_id,
+                )
+
+    def _reserve_automation_target_locked(
+        self, project_id: str, thread_id: str | None
+    ) -> None:
+        self._automation_project_reservations[project_id] = (
+            self._automation_project_reservations.get(project_id, 0) + 1
+        )
+        if thread_id is not None:
+            self._automation_thread_reservations[thread_id] = (
+                self._automation_thread_reservations.get(thread_id, 0) + 1
+            )
+
+    def _release_automation_target_locked(
+        self, project_id: str, thread_id: str | None
+    ) -> None:
+        project_count = self._automation_project_reservations.get(project_id, 0)
+        if project_count <= 1:
+            self._automation_project_reservations.pop(project_id, None)
+        else:
+            self._automation_project_reservations[project_id] = project_count - 1
+        if thread_id is not None:
+            thread_count = self._automation_thread_reservations.get(thread_id, 0)
+            if thread_count <= 1:
+                self._automation_thread_reservations.pop(thread_id, None)
+            else:
+                self._automation_thread_reservations[thread_id] = thread_count - 1
+
+    def _assert_automation_project_unreserved(self, project_id: str) -> None:
+        if self._automation_project_reservations.get(project_id, 0):
+            raise ProjectMutationError("project is reserved for an automation run")
+
+    def _assert_automation_thread_unreserved(self, record: ThreadRecord) -> None:
+        if self._automation_thread_reservations.get(
+            record.thread_id, 0
+        ) or self._automation_project_reservations.get(record.project_id or "", 0):
+            raise ProjectMutationError("thread is reserved for an automation run")
+
+    @contextmanager
+    def admit_thread_deletion(self, thread_id: str) -> Iterator[ThreadRecord]:
+        """Admit broker-owned deletion before it takes the runtime lock."""
+        with self._automation_target_lock:
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                self._assert_automation_thread_unreserved(record)
+            yield record
+
+    @contextmanager
+    def admit_project_deletion(self, project_id: str) -> Iterator[ProjectRecord]:
+        """Admit broker-owned cascade deletion before it takes the runtime lock."""
+        with self._automation_target_lock:
+            with self._project_mutation_lock:
+                record = self.load_project(project_id)
+                self._assert_automation_project_unreserved(project_id)
+            yield record
 
     def update_thread(
         self,
@@ -1761,54 +1946,75 @@ class BridgeStorage:
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
     ) -> ThreadViewRecord:
-        with self._project_mutation_lock:
-            with self._thread_mutation_lock:
-                record = self.load_thread(thread_id)
-                if title is not None:
-                    if not title.strip():
-                        raise ValueError("title must not be blank")
-                    record.title = title.strip()
-                if mode is not None:
-                    record.mode = mode
-                if model_override is not _UNSET:
-                    record.model_override = (
-                        normalize_model(model_override) if model_override else None
+        with self._automation_target_lock:
+            with self._project_mutation_lock:
+                with self._thread_mutation_lock:
+                    record = self.load_thread(thread_id)
+                    self._assert_automation_thread_unreserved(record)
+                    return self._update_thread_record_locked(
+                        record,
+                        title=title,
+                        mode=mode,
+                        model_override=model_override,
+                        thinking_override=thinking_override,
                     )
-                if thinking_override is not _UNSET:
-                    record.thinking_override = thinking_override
-                self._touch_thread(record)
-                self._save_thread_with_events(
-                    record,
-                    EventDraft(
-                        scope="thread",
-                        thread_id=record.thread_id,
-                        event_type="thread.updated",
-                        payload={
-                        "title": record.title,
-                        "mode": record.mode.value,
-                        "model_override": record.model_override,
-                        "thinking_override": record.thinking_override,
-                        },
-                    ),
-                )
-                return self._resolve_thread(record)
+
+    def _update_thread_record_locked(
+        self,
+        record: ThreadRecord,
+        *,
+        title: str | None = None,
+        mode: RunMode | None = None,
+        model_override: str | None | object = _UNSET,
+        thinking_override: str | None | object = _UNSET,
+    ) -> ThreadViewRecord:
+        if title is not None:
+            if not title.strip():
+                raise ValueError("title must not be blank")
+            record.title = title.strip()
+        if mode is not None:
+            record.mode = mode
+        if model_override is not _UNSET:
+            record.model_override = (
+                normalize_model(model_override) if model_override else None
+            )
+        if thinking_override is not _UNSET:
+            record.thinking_override = thinking_override
+        self._touch_thread(record)
+        self._save_thread_with_events(
+            record,
+            EventDraft(
+                scope="thread",
+                thread_id=record.thread_id,
+                event_type="thread.updated",
+                payload={
+                    "title": record.title,
+                    "mode": record.mode.value,
+                    "model_override": record.model_override,
+                    "thinking_override": record.thinking_override,
+                },
+            ),
+        )
+        return self._resolve_thread(record)
 
     def archive_thread(self, thread_id: str) -> ThreadViewRecord:
-        with self._project_mutation_lock:
-            with self._thread_mutation_lock:
-                record = self.load_thread(thread_id)
-                record.archived_at = self._now()
-                self._touch_thread(record)
-                self._save_thread_with_events(
-                    record,
-                    EventDraft(
-                        scope="thread",
-                        thread_id=thread_id,
-                        event_type="thread.archived",
-                        payload={"archived_at": record.archived_at},
-                    ),
-                )
-                return self._resolve_thread(record)
+        with self._automation_target_lock:
+            with self._project_mutation_lock:
+                with self._thread_mutation_lock:
+                    record = self.load_thread(thread_id)
+                    self._assert_automation_thread_unreserved(record)
+                    record.archived_at = self._now()
+                    self._touch_thread(record)
+                    self._save_thread_with_events(
+                        record,
+                        EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="thread.archived",
+                            payload={"archived_at": record.archived_at},
+                        ),
+                    )
+                    return self._resolve_thread(record)
 
     def restore_thread(self, thread_id: str) -> ThreadViewRecord:
         with self._project_mutation_lock:
@@ -1829,43 +2035,55 @@ class BridgeStorage:
 
     def delete_thread(self, thread_id: str) -> None:
         # Keep the same upload -> thread ordering used by completion/cancel.
-        with self._upload_mutation_lock:
-            if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
-                boundary = self._home_assistant_uploads_boundary()
-                manifest_paths = boundary.walk_regular_files(".sessions")
-            else:
-                manifest_paths = ()
-            for manifest_path in manifest_paths:
-                if not manifest_path.endswith(".json"):
-                    continue
-                try:
-                    with boundary.open_regular_file(manifest_path) as stream:
-                        payload = json.loads(stream.read().decode("utf-8"))
-                except (WorkspaceBoundaryError, OSError, ValueError):
-                    continue
-                if isinstance(payload, dict) and payload.get("thread_id") == thread_id:
-                    upload_id = payload.get("upload_id")
-                    if isinstance(upload_id, str) and re.fullmatch(r"upl_[0-9a-f]{32}", upload_id):
-                        received = payload.get("received", {})
-                        if isinstance(received, dict):
-                            if payload.get("status") == "publishing":
-                                try:
-                                    self._rollback_published_upload_locked(payload)
-                                except (UploadConflictError, WorkspaceBoundaryError):
-                                    # Thread deletion will fail closed when a
-                                    # hostile replacement prevents precise
-                                    # cleanup; never unlink by pathname alone.
-                                    raise
-                            self._clear_upload_payload_locked(upload_id, received)
-                            boundary.remove_empty_directory(
-                                self._upload_payload_dir(upload_id), missing_ok=True
-                            )
-                    boundary.unlink_regular_file(manifest_path, missing_ok=True)
-            self._delete_thread_locked(thread_id)
+        with self._automation_target_lock:
+            with self._thread_mutation_lock:
+                self._assert_automation_thread_unreserved(self.load_thread(thread_id))
+            with self._upload_mutation_lock:
+                if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+                    boundary = self._home_assistant_uploads_boundary()
+                    manifest_paths = boundary.walk_regular_files(".sessions")
+                else:
+                    manifest_paths = ()
+                for manifest_path in manifest_paths:
+                    if not manifest_path.endswith(".json"):
+                        continue
+                    try:
+                        with boundary.open_regular_file(manifest_path) as stream:
+                            payload = json.loads(stream.read().decode("utf-8"))
+                    except (WorkspaceBoundaryError, OSError, ValueError):
+                        continue
+                    if (
+                        isinstance(payload, dict)
+                        and payload.get("thread_id") == thread_id
+                    ):
+                        upload_id = payload.get("upload_id")
+                        if isinstance(upload_id, str) and re.fullmatch(
+                            r"upl_[0-9a-f]{32}", upload_id
+                        ):
+                            received = payload.get("received", {})
+                            if isinstance(received, dict):
+                                if payload.get("status") == "publishing":
+                                    try:
+                                        self._rollback_published_upload_locked(payload)
+                                    except (
+                                        UploadConflictError,
+                                        WorkspaceBoundaryError,
+                                    ):
+                                        # Thread deletion will fail closed when a
+                                        # hostile replacement prevents precise
+                                        # cleanup; never unlink by pathname alone.
+                                        raise
+                                self._clear_upload_payload_locked(upload_id, received)
+                                boundary.remove_empty_directory(
+                                    self._upload_payload_dir(upload_id), missing_ok=True
+                                )
+                        boundary.unlink_regular_file(manifest_path, missing_ok=True)
+                self._delete_thread_locked(thread_id)
 
     def _delete_thread_locked(self, thread_id: str) -> None:
         with self._thread_mutation_lock:
             record = self.load_thread(thread_id)
+            self._assert_automation_thread_unreserved(record)
             # Remove replayable prompts/deltas before deleting metadata. If a
             # later filesystem cleanup fails, privacy fails closed and a retry
             # can finish the remaining idempotent deletion work.
@@ -1916,7 +2134,9 @@ class BridgeStorage:
                 pending.append(child)
         for locator in files:
             boundary.unlink_regular_file(locator, missing_ok=True)
-        for directory in sorted(directories, key=lambda item: item.count("/"), reverse=True):
+        for directory in sorted(
+            directories, key=lambda item: item.count("/"), reverse=True
+        ):
             boundary.remove_empty_directory(directory, missing_ok=True)
 
     def save_thread(self, record: ThreadRecord) -> None:
@@ -2289,7 +2509,9 @@ class BridgeStorage:
             raise UploadNotFoundError(upload_id)
         if not _UPLOAD_SESSION_FIELDS.issubset(payload):
             raise UploadNotFoundError(upload_id)
-        if payload["upload_id"] != upload_id or not isinstance(payload["thread_id"], str):
+        if payload["upload_id"] != upload_id or not isinstance(
+            payload["thread_id"], str
+        ):
             raise UploadNotFoundError(upload_id)
         if type(payload["size_bytes"]) is not int or payload["size_bytes"] <= 0:
             raise UploadNotFoundError(upload_id)
@@ -2326,19 +2548,31 @@ class BridgeStorage:
         if PurePosixPath(relative).name != filename:
             raise UploadNotFoundError(upload_id)
         mime_type = payload.get("mime_type")
-        if not isinstance(mime_type, str) or not mime_type or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES or any(ord(char) < 32 for char in mime_type):
+        if (
+            not isinstance(mime_type, str)
+            or not mime_type
+            or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES
+            or any(ord(char) < 32 for char in mime_type)
+        ):
             raise UploadNotFoundError(upload_id)
         total = int(payload["size_bytes"])
         chunks = (total + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE
         received_indices: list[int] = []
         for raw_index, metadata in payload["received"].items():
-            if not isinstance(raw_index, str) or not raw_index.isdecimal() or str(int(raw_index)) != raw_index:
+            if (
+                not isinstance(raw_index, str)
+                or not raw_index.isdecimal()
+                or str(int(raw_index)) != raw_index
+            ):
                 raise UploadNotFoundError(upload_id)
             index = int(raw_index)
             if index >= chunks or not isinstance(metadata, dict):
                 raise UploadNotFoundError(upload_id)
             expected = min(_UPLOAD_CHUNK_SIZE, total - index * _UPLOAD_CHUNK_SIZE)
-            if type(metadata.get("size_bytes")) is not int or metadata.get("size_bytes") != expected:
+            if (
+                type(metadata.get("size_bytes")) is not int
+                or metadata.get("size_bytes") != expected
+            ):
                 raise UploadNotFoundError(upload_id)
             try:
                 self._validate_upload_sha256(metadata.get("sha256"))
@@ -2402,15 +2636,18 @@ class BridgeStorage:
             while block := stream.read(1024 * 1024):
                 digest.update(block)
                 size_bytes += len(block)
-        if size_bytes != attachment.size_bytes or digest.hexdigest() != attachment.sha256:
+        if (
+            size_bytes != attachment.size_bytes
+            or digest.hexdigest() != attachment.sha256
+        ):
             raise WorkspaceEscapeError()
         boundary.validate_regular_file_identity(attachment.stored_path, identity)
         return identity
 
     def _write_upload_session_locked(self, payload: dict[str, object]) -> None:
-        encoded = json.dumps(
-            payload, separators=(",", ":"), sort_keys=True
-        ).encode("utf-8")
+        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+            "utf-8"
+        )
         if len(encoded) > _UPLOAD_MANIFEST_MAX_BYTES:
             raise UploadValidationError("manifest")
         # The replacement briefly creates a second private manifest.  Check
@@ -2436,7 +2673,11 @@ class BridgeStorage:
         expected = self._upload_attachment_from_payload(payload)
         record = self.load_thread(str(payload["thread_id"]))
         existing = next(
-            (item for item in record.attachments if item.attachment_id == expected.attachment_id),
+            (
+                item
+                for item in record.attachments
+                if item.attachment_id == expected.attachment_id
+            ),
             None,
         )
         if existing is None:
@@ -2455,7 +2696,9 @@ class BridgeStorage:
         self._clear_upload_payload_locked(str(payload["upload_id"]), received)
         return existing
 
-    def _clear_upload_payload_locked(self, upload_id: str, received: dict[str, object]) -> None:
+    def _clear_upload_payload_locked(
+        self, upload_id: str, received: dict[str, object]
+    ) -> None:
         boundary = self._home_assistant_uploads_boundary()
         try:
             files = boundary.walk_regular_files(
@@ -2471,7 +2714,8 @@ class BridgeStorage:
         boundary = self._home_assistant_uploads_boundary()
         terminal: list[tuple[str, dict[str, object]]] = []
         manifests = [
-            locator for locator in boundary.walk_regular_files(".sessions")
+            locator
+            for locator in boundary.walk_regular_files(".sessions")
             if locator.endswith(".json")
         ]
         for locator in manifests:
@@ -2495,7 +2739,10 @@ class BridgeStorage:
                 for orphan in boundary.walk_regular_files(
                     self._upload_payload_dir(upload_id), reject_unsafe=True
                 ):
-                    if orphan not in allowed and orphan not in self._active_upload_parts:
+                    if (
+                        orphan not in allowed
+                        and orphan not in self._active_upload_parts
+                    ):
                         boundary.unlink_regular_file(orphan, missing_ok=True)
             except WorkspaceNotFoundError:
                 pass
@@ -2504,7 +2751,9 @@ class BridgeStorage:
                 payload["received"] = {}
                 self._write_upload_session_locked(payload)
         reaped_manifest_paths: set[str] = set()
-        for upload_id, payload in sorted(terminal)[: max(0, len(terminal) - _UPLOAD_TERMINAL_SESSION_LIMIT)]:
+        for upload_id, payload in sorted(terminal)[
+            : max(0, len(terminal) - _UPLOAD_TERMINAL_SESSION_LIMIT)
+        ]:
             received = payload["received"]
             assert isinstance(received, dict)
             self._clear_upload_payload_locked(upload_id, received)
@@ -2589,7 +2838,9 @@ class BridgeStorage:
             safe_filename = normalize_portable_relative_path(filename)
             if "/" in safe_filename or safe_filename != filename:
                 raise WorkspaceInputError()
-            safe_relative = normalize_portable_relative_path(relative_path or safe_filename)
+            safe_relative = normalize_portable_relative_path(
+                relative_path or safe_filename
+            )
             if PurePosixPath(safe_relative).name != safe_filename:
                 raise WorkspaceInputError()
         except WorkspaceInputError:
@@ -2600,7 +2851,12 @@ class BridgeStorage:
             or len(PurePosixPath(safe_relative).parts) > _UPLOAD_MAX_RELATIVE_PATH_DEPTH
         ):
             raise UploadValidationError("filename")
-        if not isinstance(mime_type, str) or not mime_type or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES or any(ord(char) < 32 for char in mime_type):
+        if (
+            not isinstance(mime_type, str)
+            or not mime_type
+            or len(mime_type.encode("utf-8")) > _UPLOAD_MAX_MIME_TYPE_BYTES
+            or any(ord(char) < 32 for char in mime_type)
+        ):
             raise UploadValidationError("mime_type")
         if type(size_bytes) is not int or size_bytes <= 0:
             raise UploadValidationError("size_bytes")
@@ -2647,7 +2903,9 @@ class BridgeStorage:
                 raise
             return self._upload_view(payload)
 
-    def get_upload_session(self, *, thread_id: str, upload_id: str) -> dict[str, object]:
+    def get_upload_session(
+        self, *, thread_id: str, upload_id: str
+    ) -> dict[str, object]:
         with self._upload_mutation_lock:
             self.load_thread(thread_id)
             payload = self._read_upload_session_locked(upload_id)
@@ -2676,7 +2934,12 @@ class BridgeStorage:
                 raise UploadConflictError("upload is not active")
             total = int(payload["size_bytes"])
             chunks = (total + _UPLOAD_CHUNK_SIZE - 1) // _UPLOAD_CHUNK_SIZE
-            if type(index) is not int or index < 0 or index >= chunks or offset != index * _UPLOAD_CHUNK_SIZE:
+            if (
+                type(index) is not int
+                or index < 0
+                or index >= chunks
+                or offset != index * _UPLOAD_CHUNK_SIZE
+            ):
                 raise UploadConflictError("chunk offset")
             expected = min(_UPLOAD_CHUNK_SIZE, total - offset)
             if content_length != expected:
@@ -2702,10 +2965,14 @@ class BridgeStorage:
             if {int(value) for value in received} != set(range(index)):
                 raise UploadConflictError("chunk order")
             reservation = self._disk_quota().reserve(
-                "private", amount_bytes=expected, item_limit_bytes=self._resource_limits().max_upload_file_bytes
+                "private",
+                amount_bytes=expected,
+                item_limit_bytes=self._resource_limits().max_upload_file_bytes,
             )
             try:
-                writer = _UploadChunkWriter(self, payload, index, digest, expected, reservation)
+                writer = _UploadChunkWriter(
+                    self, payload, index, digest, expected, reservation
+                )
             except BaseException:
                 reservation.release()
                 raise
@@ -2713,7 +2980,9 @@ class BridgeStorage:
         finally:
             self._upload_mutation_lock.release()
 
-    def complete_upload_session(self, *, thread_id: str, upload_id: str) -> AttachmentRecord:
+    def complete_upload_session(
+        self, *, thread_id: str, upload_id: str
+    ) -> AttachmentRecord:
         with self._upload_mutation_lock:
             payload = self._read_upload_session_locked(upload_id)
             if payload["thread_id"] != thread_id:
@@ -2817,7 +3086,9 @@ class BridgeStorage:
         # A final assembly is kept below the session root until it is
         # checksum-verified and atomically published.  A hard process death
         # is therefore recoverable by the session's cancel/retry/delete path.
-        target_part = f"{self._upload_payload_dir(str(payload['upload_id']))}/assembly.part"
+        target_part = (
+            f"{self._upload_payload_dir(str(payload['upload_id']))}/assembly.part"
+        )
         boundary.unlink_regular_file(target_part, missing_ok=True)
         reservation = self._disk_quota().reserve(
             "private",
@@ -2848,9 +3119,7 @@ class BridgeStorage:
                                 data_digest.update(block)
                                 written += len(block)
                                 chunk_written += len(block)
-                        boundary.validate_regular_file_identity(
-                            chunk, source_identity
-                        )
+                        boundary.validate_regular_file_identity(chunk, source_identity)
                     except WorkspaceBoundaryError as exc:
                         raise UploadConflictError("stored chunk") from exc
                     metadata = received[str(index)]
@@ -2913,7 +3182,9 @@ class BridgeStorage:
                 reservation.release()
             raise
 
-    def cancel_upload_session(self, *, thread_id: str, upload_id: str) -> dict[str, object]:
+    def cancel_upload_session(
+        self, *, thread_id: str, upload_id: str
+    ) -> dict[str, object]:
         with self._upload_mutation_lock:
             self.load_thread(thread_id)
             payload = self._read_upload_session_locked(upload_id)

@@ -61,7 +61,7 @@ from .runtime_gate import (
     RuntimeQueueFullError,
 )
 from .routes.agents import WorkspaceAgentsManager
-from .storage import BridgeStorage
+from .storage import BridgeStorage, ProjectMutationError
 
 
 class _AppServerLifecycle(Protocol):
@@ -206,14 +206,19 @@ def create_app(
                 _app.state.runtime_startup_failed = True
                 yield
                 return
-            if resolved_mcp_manager is not None and not resolved_mcp_manager.enabled:
+            if resolved_mcp_manager is not None:
                 try:
-                    await asyncio.to_thread(resolved_mcp_manager.disable_all_servers)
+                    await asyncio.to_thread(
+                        resolved_mcp_manager.sanitize_startup_servers
+                    )
+                    if resolved_mcp_manager.enabled:
+                        await asyncio.to_thread(
+                            resolved_mcp_manager.activate_validated_mcp_config
+                        )
                 except McpManagerError:
-                    # The generation-scoped CLI override blocks stale MCP in
-                    # this process. Keep readiness fatal until the durable
-                    # root-key cleanup succeeds so a later restart cannot
-                    # silently retain those endpoints.
+                    # The generation-scoped CLI override remains in place
+                    # until the manager has durably sanitized native MCP
+                    # configuration and activated a clean generation.
                     _app.state.runtime_startup_failed = True
                     yield
                     return
@@ -621,35 +626,29 @@ def create_app(
         automation_run_id = str(claim.get("automation_run_id", ""))
         definition = resolved_automations.get(automation_id)
         target = definition["target"]
+        # Targets are validated when an automation is created or updated, but
+        # the referenced project/thread can be archived or deleted while a
+        # claim is waiting for dispatch.  Revalidate immediately before any
+        # storage mutation or runtime submission so stale definitions fail
+        # closed without creating a thread, updating one, or starting Codex.
+        validate_automation_target(target)
         mode = RunMode(definition["mode"])
-        if target["kind"] == "standalone":
-            thread = storage.create_thread(
+        try:
+            with storage.prepare_automation_target(
+                target,
                 title=definition["name"],
                 mode=mode,
-                project_id=target["project_id"],
                 model_override=definition.get("model"),
                 thinking_override=definition.get("thinking"),
-            )
-        else:
-            existing_thread = storage.load_thread(target["thread_id"])
-            if (
-                existing_thread.active_run_id is not None
-                or existing_thread.pending_prompts
-                or existing_thread.status in {"queued", "running"}
-            ):
-                raise AutomationValidationError("automation thread is busy")
-            thread = storage.update_thread(
-                target["thread_id"],
-                mode=mode,
-                model_override=definition.get("model"),
-                thinking_override=definition.get("thinking"),
-            )
-        run = resolved_runner.submit_prompt(
-            thread.thread_id,
-            definition["prompt"],
-            client_request_id=f"automation:{automation_run_id}",
-            unattended=True,
-        )
+            ) as thread:
+                run = resolved_runner.submit_prompt(
+                    thread.thread_id,
+                    definition["prompt"],
+                    client_request_id=f"automation:{automation_run_id}",
+                    unattended=True,
+                )
+        except (ProjectMutationError, FileNotFoundError) as error:
+            raise AutomationValidationError(str(error)) from None
         resolved_automations.mark_running(
             automation_run_id,
             bridge_run_id=run.run_id,

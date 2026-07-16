@@ -187,6 +187,7 @@ class McpManager:
         self._startup: dict[str, tuple[str, str | None]] = {}
         self._oauth_completion: dict[str, bool] = {}
         self._elicitation_handler_registered = False
+        self._startup_config_sanitized = False
         self._register_callbacks()
 
     @property
@@ -347,6 +348,56 @@ class McpManager:
                 self._reload()
                 self._startup.clear()
                 self._oauth_completion.clear()
+
+    def sanitize_startup_servers(self) -> None:
+        """Prepare the persisted MCP root before an enabled generation can use it.
+
+        The app server always starts with a session override that masks native
+        MCP configuration.  When MCP is enabled, replace the user-layer root
+        with exactly the entries that pass this manager's public HTTPS/OAuth
+        validation, then reload it.  Nothing can unmask that generation until
+        both operations succeed.
+        """
+
+        if not self._enabled:
+            self.disable_all_servers()
+            return
+        with self._mutation_lease():
+            with self._lock:
+                self._startup_config_sanitized = False
+                result = self._request("config/read", {"includeLayers": True})
+                definitions, version = _validated_user_definitions(
+                    result,
+                    resolver=self._resolver,
+                )
+                self._write_config_value(
+                    key_path="mcp_servers",
+                    value={
+                        definition.name: definition.config_value()
+                        for definition in definitions.values()
+                    },
+                    version=version,
+                )
+                self._reload()
+                self._startup_config_sanitized = True
+
+    def activate_validated_mcp_config(self) -> None:
+        """Drop the bootstrap mask only after successful startup sanitation."""
+
+        self._require_enabled()
+        with self._lock:
+            if not self._startup_config_sanitized:
+                raise McpUnavailableError()
+            activate = getattr(self._app_server, "activate_validated_mcp_config", None)
+            if not callable(activate):
+                raise McpUnavailableError()
+        # A clean generation can emit MCP startup callbacks before this
+        # synchronous handoff returns.  Those callbacks update manager state,
+        # so never retain the manager lock across the client restart.
+        try:
+            activate()
+        except Exception:
+            raise McpUnavailableError() from None
 
     def _require_enabled(self) -> None:
         if not self._enabled:
@@ -557,7 +608,12 @@ class _LeaseContext:
         self._lease.release()
 
 
-def _definition_from_config(name: object, value: object) -> McpServerDefinition:
+def _definition_from_config(
+    name: object,
+    value: object,
+    *,
+    resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
+) -> McpServerDefinition:
     normalized_name = _validate_name(name)
     if not isinstance(value, Mapping) or set(value) - {
         "url",
@@ -567,7 +623,7 @@ def _definition_from_config(name: object, value: object) -> McpServerDefinition:
         raise McpValidationError()
     return McpServerDefinition(
         name=normalized_name,
-        url=_validate_https_url(value.get("url")),
+        url=_validate_https_url(value.get("url"), resolver=resolver),
         oauth_client_id=_validate_public_field(value.get("oauth_client_id")),
         oauth_resource=_validate_public_field(value.get("oauth_resource")),
     )
@@ -731,6 +787,83 @@ def _optional_user_config_version(layers: object) -> str | None:
         assert isinstance(version, str)
         return version
     return None
+
+
+def _validated_user_definitions(
+    result: object,
+    *,
+    resolver: Callable[[str], tuple[str, ...]],
+) -> tuple[dict[str, McpServerDefinition], str]:
+    """Return only safe servers from the raw user layer behind a session mask."""
+
+    if not isinstance(result, Mapping):
+        raise McpProtocolError()
+    effective_config = result.get("config")
+    if not isinstance(effective_config, Mapping) or not _mcp_root_is_empty(
+        effective_config.get("mcp_servers")
+    ):
+        # The only reason it is safe to inspect persisted layers is that the
+        # bootstrap process has already masked their effective MCP root.
+        raise McpProtocolError()
+    layers = result.get("layers")
+    if not isinstance(layers, list) or len(layers) > 32:
+        raise McpProtocolError()
+    user_config: Mapping[str, object] | None = None
+    user_version: str | None = None
+    for layer in layers:
+        if not isinstance(layer, Mapping):
+            raise McpProtocolError()
+        source = layer.get("name")
+        config = layer.get("config")
+        if not isinstance(source, Mapping) or not isinstance(config, Mapping):
+            raise McpProtocolError()
+        source_type = source.get("type")
+        if source_type != "user":
+            if not _mcp_root_is_empty(config.get("mcp_servers")):
+                # The session mask blocks these layers in the bootstrap process,
+                # but a system or project entry could reappear after activation.
+                # The Bridge cannot safely rewrite another layer's authority.
+                raise McpProtocolError()
+            continue
+        version = layer.get("version")
+        if not _safe_version(version) or not isinstance(config, Mapping):
+            raise McpProtocolError()
+        profile = source.get("profile")
+        if profile is not None:
+            if not isinstance(profile, str) or not _mcp_root_is_empty(
+                config.get("mcp_servers")
+            ):
+                # The user profile is a separate persisted layer.  It is not
+                # the root that config/batchWrite updates, so it must not
+                # contribute MCP after the bootstrap mask is removed.
+                raise McpProtocolError()
+            continue
+        if user_config is None:
+            assert isinstance(version, str)
+            user_config = config
+            user_version = version
+        elif not _mcp_root_is_empty(config.get("mcp_servers")):
+            raise McpProtocolError()
+    if user_config is None or user_version is None:
+        raise McpProtocolError()
+    raw_servers = user_config.get("mcp_servers", {})
+    definitions: dict[str, McpServerDefinition] = {}
+    if isinstance(raw_servers, Mapping) and len(raw_servers) <= _MAX_SERVERS:
+        for name, value in raw_servers.items():
+            try:
+                definition = _definition_from_config(
+                    name,
+                    value,
+                    resolver=resolver,
+                )
+            except McpValidationError:
+                continue
+            definitions[definition.name] = definition
+    return definitions, user_version
+
+
+def _mcp_root_is_empty(value: object) -> bool:
+    return value is None or (isinstance(value, Mapping) and not value)
 
 
 def _safe_version(value: object) -> bool:

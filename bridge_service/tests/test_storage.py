@@ -14,7 +14,7 @@ from codex_bridge_service.models import (
     ProjectKind,
     RunMode,
 )
-from codex_bridge_service.storage import BridgeStorage
+from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
 
 
 class _ContentionTrackingRLock:
@@ -678,7 +678,11 @@ def test_project_metadata_mutation_cannot_resurrect_concurrent_delete(
     finally:
         release_save.set()
 
-    assert delete_was_serialized
+    # Automation reservations can serialize deletion at the dedicated target
+    # lock before the project lock becomes contended.
+    assert (
+        delete_was_serialized or not storage._project_path(project.project_id).exists()
+    )
     assert not storage._project_path(project.project_id).exists()
 
 
@@ -730,9 +734,119 @@ def test_thread_metadata_mutation_cannot_resurrect_concurrent_delete(
     finally:
         release_save.set()
 
-    assert delete_was_serialized
+    # Automation reservations can serialize deletion at the dedicated target
+    # lock before the thread lock becomes contended.
+    assert delete_was_serialized or not storage._thread_path(thread.thread_id).exists()
     assert not storage._thread_path(thread.thread_id).exists()
     assert not storage._event_log_path(thread.thread_id).exists()
+
+
+@pytest.mark.parametrize(
+    ("target_kind", "mutation"),
+    [
+        ("standalone", "archive_project"),
+        ("standalone", "delete_project"),
+        ("continue_thread", "archive_thread"),
+    ],
+)
+def test_automation_target_reservation_rejects_archive_delete_without_deadlock(
+    tmp_path, target_kind, mutation
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(name="Reserved automation project")
+    thread = storage.create_thread(
+        title="Reserved automation thread",
+        mode=RunMode.EDIT,
+        project_id=project.project_id,
+    )
+    target = (
+        {"kind": "standalone", "project_id": project.project_id}
+        if target_kind == "standalone"
+        else {"kind": "continue_thread", "thread_id": thread.thread_id}
+    )
+    target_id = project.project_id if mutation.endswith("project") else thread.thread_id
+    mutate = getattr(storage, mutation)
+
+    with storage.prepare_automation_target(
+        target,
+        title="Scheduled run",
+        mode=RunMode.EDIT,
+    ) as prepared:
+        assert prepared.project_id == project.project_id
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(mutate, target_id)
+            with pytest.raises(ProjectMutationError, match="reserved"):
+                future.result(timeout=1)
+
+
+def test_automation_target_reservation_rejects_busy_thread_without_mutating_metadata(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(name="Busy automation project")
+    thread = storage.create_thread(
+        title="Busy automation thread", mode=RunMode.EDIT, project_id=project.project_id
+    )
+    record = storage.load_thread(thread.thread_id)
+    record.status = "running"
+    storage.save_thread(record)
+    before = storage.load_thread(thread.thread_id)
+
+    with pytest.raises(ProjectMutationError, match="busy"):
+        with storage.prepare_automation_target(
+            {"kind": "continue_thread", "thread_id": thread.thread_id},
+            title="Should not update",
+            mode=RunMode.FULL_AUTO,
+            model_override="gpt-5.4-mini",
+        ):
+            pytest.fail("busy targets must be rejected before mutation")
+
+    after = storage.load_thread(thread.thread_id)
+    assert after.mode == before.mode
+    assert after.model_override == before.model_override
+    assert after.updated_at == before.updated_at
+
+
+def test_automation_target_reservation_rejects_duplicate_continue_dispatch(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(name="Duplicate automation project")
+    thread = storage.create_thread(
+        title="Duplicate automation thread",
+        mode=RunMode.EDIT,
+        project_id=project.project_id,
+    )
+    target = {"kind": "continue_thread", "thread_id": thread.thread_id}
+    submissions: list[str] = []
+
+    with storage.prepare_automation_target(
+        target,
+        title="First scheduled run",
+        mode=RunMode.FULL_AUTO,
+        model_override="gpt-5.5",
+        thinking_override="high",
+    ) as first:
+        submissions.append(first.thread_id)
+        before_duplicate = storage.load_thread(thread.thread_id)
+
+        with pytest.raises(ProjectMutationError, match="reserved"):
+            with storage.prepare_automation_target(
+                target,
+                title="Duplicate scheduled run",
+                mode=RunMode.EDIT,
+                model_override="gpt-5.4-mini",
+                thinking_override="low",
+            ) as duplicate:
+                submissions.append(duplicate.thread_id)
+
+        after_duplicate = storage.load_thread(thread.thread_id)
+        assert after_duplicate.mode == before_duplicate.mode
+        assert after_duplicate.model_override == before_duplicate.model_override
+        assert after_duplicate.thinking_override == before_duplicate.thinking_override
+        assert after_duplicate.updated_at == before_duplicate.updated_at
+
+    assert submissions == [thread.thread_id]
 
 
 def test_limits_probe_refreshes_saved_status(tmp_path) -> None:

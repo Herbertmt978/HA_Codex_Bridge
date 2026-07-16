@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
+from threading import Event, Thread
 from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from codex_bridge_service.mcp_manager import (
     McpConflictError,
     McpManager,
     McpProtocolError,
+    McpUnavailableError,
     McpValidationError,
 )
 from codex_bridge_service.routes.mcp import router
@@ -104,6 +106,111 @@ class LayeredConfigAppServer(AppServerDouble):
         if method == "mcpServerStatus/list":
             return {"data": []}
         raise AssertionError(f"unexpected request: {method}")
+
+
+class StartupSanitizingAppServer(AppServerDouble):
+    """Native config fixture that models the masked bootstrap generation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.override_mcp = True
+        self.version = "user-v1"
+        self.user_config: dict[str, object] = {
+            "mcp_servers": {
+                "safe": {
+                    "url": "https://mcp.vendor.example/stream",
+                    "oauth_client_id": "public-client",
+                    "oauth_resource": "https://api.vendor.example",
+                },
+                "stdio": {"command": "sh", "args": ["-c", "id"]},
+                "bearer": {
+                    "url": "https://mcp.bearer.example/stream",
+                    "bearer_token_env_var": "TOKEN",
+                },
+                "private": {"url": "https://localhost/mcp"},
+            },
+            "features": {"plugins": True},
+        }
+        self.non_user_mcp_servers: object | None = None
+        self.profile_mcp_servers: object | None = None
+        self.activation_calls = 0
+
+    def request(self, method: str, params: object = None, **_kwargs: object) -> object:
+        self.calls.append(Call(method, deepcopy(params)))
+        if method == "config/read":
+            effective = deepcopy(self.user_config)
+            if self.override_mcp:
+                effective["mcp_servers"] = {}
+            layers: list[dict[str, object]] = [
+                {
+                    "name": {
+                        "type": "user",
+                        "file": "/data/codex-home/config.toml",
+                    },
+                    "version": self.version,
+                    "config": deepcopy(self.user_config),
+                }
+            ]
+            if self.non_user_mcp_servers is not None:
+                layers.insert(
+                    0,
+                    {
+                        "name": {"type": "system", "file": "/etc/codex.toml"},
+                        "version": "system-v1",
+                        "config": {"mcp_servers": deepcopy(self.non_user_mcp_servers)},
+                    },
+                )
+            if self.profile_mcp_servers is not None:
+                layers.append(
+                    {
+                        "name": {
+                            "type": "user",
+                            "file": "/data/codex-home/config.toml",
+                            "profile": "restricted",
+                        },
+                        "version": "profile-v1",
+                        "config": {"mcp_servers": deepcopy(self.profile_mcp_servers)},
+                    }
+                )
+            return {
+                "config": effective,
+                "layers": layers,
+                "origins": {},
+            }
+        if method == "config/batchWrite":
+            assert params == {
+                "edits": [
+                    {
+                        "keyPath": "mcp_servers",
+                        "mergeStrategy": "replace",
+                        "value": {
+                            "safe": {
+                                "url": "https://mcp.vendor.example/stream",
+                                "oauth_client_id": "public-client",
+                                "oauth_resource": "https://api.vendor.example",
+                            }
+                        },
+                    }
+                ],
+                "expectedVersion": "user-v1",
+                "reloadUserConfig": True,
+            }
+            self.user_config["mcp_servers"] = deepcopy(params["edits"][0]["value"])
+            self.version = "user-v2"
+            return {
+                "status": "ok",
+                "version": self.version,
+                "filePath": "/data/codex-home/config.toml",
+            }
+        if method == "config/mcpServer/reload":
+            return {}
+        if method == "mcpServerStatus/list":
+            return {"data": []}
+        raise AssertionError(f"unexpected request: {method}")
+
+    def activate_validated_mcp_config(self) -> None:
+        self.activation_calls += 1
+        self.override_mcp = False
 
 
 class Lease:
@@ -548,6 +655,148 @@ def test_masked_user_mcp_is_deleted_and_cannot_resurrect_when_later_enabled() ->
     client.override_mcp = False
     enabled = McpManager(client, gate, enabled=True)
     assert enabled.list_servers() == []
+
+
+def test_enabled_startup_replaces_unsafe_user_mcp_before_activation() -> None:
+    client = StartupSanitizingAppServer()
+    manager = McpManager(client, GateDouble(), enabled=True)
+
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    manager.sanitize_startup_servers()
+
+    assert client.override_mcp is True
+    assert client.user_config == {
+        "mcp_servers": {
+            "safe": {
+                "url": "https://mcp.vendor.example/stream",
+                "oauth_client_id": "public-client",
+                "oauth_resource": "https://api.vendor.example",
+            }
+        },
+        "features": {"plugins": True},
+    }
+    assert [call.method for call in client.calls] == [
+        "config/read",
+        "config/batchWrite",
+        "config/mcpServer/reload",
+    ]
+
+    manager.activate_validated_mcp_config()
+
+    assert client.activation_calls == 1
+    assert manager.list_servers() == [
+        {
+            "name": "safe",
+            "transport": "streamable_http",
+            "endpoint": "https://mcp.vendor.example/stream",
+            "auth": "unknown",
+            "startup": "unknown",
+            "tool_count": 0,
+            "resource_count": 0,
+        }
+    ]
+
+
+def test_enabled_activation_releases_manager_lock_before_restarting_client() -> None:
+    client = StartupSanitizingAppServer()
+    manager = McpManager(client, GateDouble(), enabled=True)
+    manager.sanitize_startup_servers()
+    probe_finished = Event()
+    probe_acquired: list[bool] = []
+
+    def activation() -> None:
+        def probe() -> None:
+            acquired = manager._lock.acquire(blocking=False)
+            probe_acquired.append(acquired)
+            if acquired:
+                manager._lock.release()
+            probe_finished.set()
+
+        thread = Thread(target=probe)
+        thread.start()
+        thread.join(timeout=1)
+        if not probe_finished.is_set() or probe_acquired != [True]:
+            raise RuntimeError("manager lock held across activation")
+
+    client.activate_validated_mcp_config = activation
+
+    manager.activate_validated_mcp_config()
+
+    assert probe_acquired == [True]
+
+
+def test_enabled_startup_refuses_non_user_mcp_configuration() -> None:
+    client = StartupSanitizingAppServer()
+    client.non_user_mcp_servers = {"stdio": {"command": "sh", "args": ["-c", "id"]}}
+    manager = McpManager(client, GateDouble(), enabled=True)
+
+    with pytest.raises(McpProtocolError):
+        manager.sanitize_startup_servers()
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    assert client.override_mcp is True
+    assert client.activation_calls == 0
+    assert [call.method for call in client.calls] == ["config/read"]
+
+
+def test_enabled_startup_without_a_user_layer_remains_masked() -> None:
+    manager, client, _gate = _manager(
+        {"config": {"mcp_servers": {}}, "layers": [], "origins": {}}
+    )
+
+    with pytest.raises(McpProtocolError):
+        manager.sanitize_startup_servers()
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    assert client.calls == [Call("config/read", {"includeLayers": True})]
+
+
+def test_enabled_startup_requires_the_effective_mcp_root_to_be_masked() -> None:
+    client = StartupSanitizingAppServer()
+    client.override_mcp = False
+    manager = McpManager(client, GateDouble(), enabled=True)
+
+    with pytest.raises(McpProtocolError):
+        manager.sanitize_startup_servers()
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    assert client.activation_calls == 0
+    assert [call.method for call in client.calls] == ["config/read"]
+
+
+def test_enabled_startup_rejects_malformed_config_layers() -> None:
+    manager, client, _gate = _manager(
+        {"config": {"mcp_servers": {}}, "layers": [None], "origins": {}}
+    )
+
+    with pytest.raises(McpProtocolError):
+        manager.sanitize_startup_servers()
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    assert client.calls == [Call("config/read", {"includeLayers": True})]
+
+
+def test_enabled_startup_refuses_profile_mcp_configuration() -> None:
+    client = StartupSanitizingAppServer()
+    client.profile_mcp_servers = {
+        "profile": {"url": "https://mcp.profile.example/stream"}
+    }
+    manager = McpManager(client, GateDouble(), enabled=True)
+
+    with pytest.raises(McpProtocolError):
+        manager.sanitize_startup_servers()
+    with pytest.raises(McpUnavailableError):
+        manager.activate_validated_mcp_config()
+
+    assert client.override_mcp is True
+    assert client.activation_calls == 0
+    assert [call.method for call in client.calls] == ["config/read"]
 
 
 def test_mcp_endpoint_and_oauth_url_reject_private_dns_answers() -> None:

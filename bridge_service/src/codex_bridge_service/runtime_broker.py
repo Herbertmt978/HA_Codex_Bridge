@@ -376,28 +376,28 @@ class RuntimeBroker:
 
     def delete_thread(self, thread_id: str) -> None:
         """Delete an idle chat and its retained private runtime history."""
-        with self._lock:
-            self._require_started_locked()
-            self.storage.load_thread(thread_id)
-            self._assert_threads_deletable_locked({thread_id})
-            self._purge_threads_locked({thread_id})
-            self.storage.delete_thread(thread_id)
+        with self.storage.admit_thread_deletion(thread_id):
+            with self._lock:
+                self._require_started_locked()
+                self._assert_threads_deletable_locked({thread_id})
+                self._purge_threads_locked({thread_id})
+                self.storage.delete_thread(thread_id)
 
     def delete_project(self, project_id: str) -> None:
         """Delete a project only when none of its chats has runtime ownership."""
-        with self._lock:
-            self._require_started_locked()
-            project = self.storage.load_project(project_id)
-            if project.kind is not ProjectKind.PROJECT:
-                raise ProjectMutationError("only normal projects can be deleted")
-            thread_ids = {
-                thread.thread_id
-                for thread in self.storage.list_threads(include_archived=True)
-                if thread.project_id == project_id
-            }
-            self._assert_threads_deletable_locked(thread_ids)
-            self._purge_threads_locked(thread_ids)
-            self.storage.delete_project(project_id)
+        with self.storage.admit_project_deletion(project_id) as project:
+            with self._lock:
+                self._require_started_locked()
+                if project.kind is not ProjectKind.PROJECT:
+                    raise ProjectMutationError("only normal projects can be deleted")
+                thread_ids = {
+                    thread.thread_id
+                    for thread in self.storage.list_threads(include_archived=True)
+                    if thread.project_id == project_id
+                }
+                self._assert_threads_deletable_locked(thread_ids)
+                self._purge_threads_locked(thread_ids)
+                self.storage.delete_project(project_id)
 
     def submit_prompt(
         self,

@@ -1801,6 +1801,87 @@ def test_active_thread_cannot_be_deleted_while_broker_owns_its_turn(
         broker.close()
 
 
+def test_broker_thread_delete_rejects_held_automation_preparation_without_purge(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id,
+            "Seed retained runtime history",
+            client_request_id="automation-delete-thread-seed",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+        state_path = storage.root / "runtime-state.json"
+        before_state = state_path.read_bytes()
+        before_runtime = json.loads(before_state)
+        assert run.run_id in before_runtime["runs"]
+        assert "automation-delete-thread-seed" in before_runtime["request_idempotency"]
+
+        with storage.prepare_automation_target(
+            {"kind": "continue_thread", "thread_id": thread.thread_id},
+            title="Automation continuation",
+            mode=RunMode.FULL_AUTO,
+        ):
+            before_thread = storage.load_thread(thread.thread_id).model_dump()
+            with pytest.raises(ProjectMutationError, match="reserved"):
+                broker.delete_thread(thread.thread_id)
+
+            assert state_path.read_bytes() == before_state
+            assert storage.load_thread(thread.thread_id).model_dump() == before_thread
+            assert storage.load_thread(thread.thread_id).thread_id == thread.thread_id
+            assert broker.runtime_snapshot().active_turns == 0
+    finally:
+        broker.close()
+
+
+def test_broker_project_delete_rejects_held_automation_preparation_without_purge(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    project_id = thread.project_id
+    assert project_id is not None
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id,
+            "Seed retained project runtime history",
+            client_request_id="automation-delete-project-seed",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+        state_path = storage.root / "runtime-state.json"
+        before_state = state_path.read_bytes()
+        before_runtime = json.loads(before_state)
+        assert run.run_id in before_runtime["runs"]
+        assert "automation-delete-project-seed" in before_runtime["request_idempotency"]
+        project_path = storage._project_path(project_id)
+        thread_path = storage._thread_path(thread.thread_id)
+
+        with storage.prepare_automation_target(
+            {"kind": "standalone", "project_id": project_id},
+            title="Automation standalone",
+            mode=RunMode.FULL_AUTO,
+        ) as prepared:
+            prepared_path = storage._thread_path(prepared.thread_id)
+            with pytest.raises(ProjectMutationError, match="reserved"):
+                broker.delete_project(project_id)
+
+            assert state_path.read_bytes() == before_state
+            assert project_path.exists()
+            assert thread_path.exists()
+            assert prepared_path.exists()
+            assert storage.load_project(project_id).project_id == project_id
+    finally:
+        broker.close()
+
+
 def test_thread_delete_waits_for_inflight_steer_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2099,7 +2180,12 @@ def test_thread_create_is_serialized_before_broker_project_delete(
             created = create_future.result(timeout=2)
             delete_future.result(timeout=2)
 
-        assert delete_was_serialized
+        # The dedicated automation admission lock may serialize deletion
+        # before the thread lock becomes contended.
+        assert (
+            delete_was_serialized
+            or not storage._project_path(project.project_id).exists()
+        )
         assert not storage._project_path(project.project_id).exists()
         assert not storage._thread_path(created.thread_id).exists()
         assert not storage._event_log_path(created.thread_id).exists()
