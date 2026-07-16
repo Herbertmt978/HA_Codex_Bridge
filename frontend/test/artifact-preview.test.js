@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/codex-bridge-panel.js";
 
 const PREVIEW_MAX_BYTES = 512 * 1024;
+const PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const originalCreateObjectUrl = URL.createObjectURL;
 const originalRevokeObjectUrl = URL.revokeObjectURL;
@@ -58,6 +59,24 @@ describe("artifact previews", () => {
     expect(panel._artifactPreview).toMatchObject({ kind: "text", text: "preview text" });
   });
 
+  it("settles a failed preview locally and offers a working retry", async () => {
+    const panel = createPanel(createArtifact());
+    const fetchSpy = vi.spyOn(window, "fetch")
+      .mockRejectedValueOnce(new Error("temporary HA preview failure"))
+      .mockResolvedValueOnce(
+        new Response("preview recovered", { status: 200, headers: { "Content-Type": "text/plain" } })
+      );
+
+    await panel._loadArtifactPreview(panel._selectedArtifactId);
+
+    expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
+    const retry = panel.shadowRoot.querySelector('[data-action="retry-artifact-preview"]');
+    expect(retry).not.toBeNull();
+    retry.click();
+    await vi.waitFor(() => expect(panel._artifactPreview).toMatchObject({ kind: "text", text: "preview recovered" }));
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("fetches a capped image artifact and creates a local preview URL", async () => {
     const urls = previewUrlStubs();
     const panel = createPanel(createArtifact({ filename: "chart.png", mime_type: "image/png" }));
@@ -70,6 +89,204 @@ describe("artifact previews", () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(urls.createObjectUrl).toHaveBeenCalledOnce();
     expect(panel._artifactPreview).toMatchObject({ kind: "image", url: `blob:${window.location.origin}/artifact-preview` });
+  });
+
+  it("validates a PDF and renders the safe canvas preview shell", async () => {
+    const urls = previewUrlStubs();
+    const artifact = createArtifact({ filename: "design.pdf", mime_type: "application/pdf", size_bytes: 32 });
+    const panel = createPanel(artifact);
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("%PDF-1.7\n1 0 obj\n", { status: 200, headers: { "Content-Type": "application/octet-stream" } })
+    );
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(urls.createObjectUrl).toHaveBeenCalledOnce();
+    expect(panel._artifactPreview).toMatchObject({
+      kind: "pdf",
+      contentType: "application/pdf",
+      url: `blob:${window.location.origin}/artifact-preview`,
+    });
+    const preview = panel.shadowRoot.getElementById("artifact-preview");
+    const shell = preview.querySelector(".pdf-preview-shell");
+    expect(shell).not.toBeNull();
+    expect(shell.querySelector("canvas.pdf-preview-canvas")).toBeInstanceOf(HTMLCanvasElement);
+    expect(shell.querySelector('[data-action="pdf-previous"]')).not.toBeNull();
+    expect(shell.querySelector('[data-action="pdf-next"]')).not.toBeNull();
+    expect(shell.querySelector('[data-action="pdf-zoom-out"]')).not.toBeNull();
+    expect(shell.querySelector('[data-action="pdf-zoom-in"]')).not.toBeNull();
+    expect(shell.querySelector('[data-action="open-pdf-preview"]')).not.toBeNull();
+    expect(shell.querySelector('[data-action="download-artifact"]')).not.toBeNull();
+    expect(preview.querySelector("iframe, object, embed")).toBeNull();
+  });
+
+  it("latches malformed PDF failures until the user explicitly retries", async () => {
+    const artifact = createArtifact({ filename: "malformed.pdf", mime_type: "application/pdf", size_bytes: 32 });
+    const panel = createPanel(artifact);
+    const preview = {
+      artifactId: artifact.artifact_id,
+      blob: new Blob(["%PDF-1.7\nmalformed"], { type: "application/pdf" }),
+      filename: artifact.filename,
+      kind: "pdf",
+    };
+    panel._artifactPreview = preview;
+    panel._pdfPreviewArtifactId = artifact.artifact_id;
+    panel._pdfPreviewError = "PDF preview unavailable.";
+
+    await panel._ensurePdfPreview(preview);
+    expect(panel._pdfPreviewLoadPromise).toBeNull();
+    panel._renderArtifactPreview();
+    const retry = panel.shadowRoot.querySelector('[data-action="retry-pdf-preview"]');
+    expect(retry).not.toBeNull();
+    expect(retry.hidden).toBe(false);
+
+    const ensureSpy = vi.spyOn(panel, "_ensurePdfPreview").mockResolvedValue(undefined);
+    retry.click();
+    expect(panel._pdfPreviewError).toBe("");
+    expect(ensureSpy).toHaveBeenCalledWith(preview);
+  });
+
+  it("keeps a spoofed PDF inert when its signature is invalid", async () => {
+    previewUrlStubs();
+    const artifact = createArtifact({ filename: "spoofed.pdf", mime_type: "application/pdf", size_bytes: 64 });
+    const panel = createPanel(artifact);
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("<script>window.top.location='https://evil.example'</script>", {
+        status: 200,
+        headers: { "Content-Type": "application/pdf" },
+      })
+    );
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(panel._artifactPreview.kind).toBe("binary");
+    expect(panel._artifactPreview.notice).toMatch(/valid PDF header/i);
+    expect(panel.shadowRoot.getElementById("artifact-preview").querySelector("iframe, object, embed")).toBeNull();
+  });
+
+  it("enforces the PDF preview cap against the fetched bytes as well as metadata", async () => {
+    previewUrlStubs();
+    const artifact = createArtifact({ filename: "oversized.pdf", mime_type: "application/pdf", size_bytes: 32 });
+    const panel = createPanel(artifact);
+    vi.spyOn(window, "fetch").mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob([new Uint8Array(PDF_PREVIEW_MAX_BYTES + 1)], { type: "application/pdf" }),
+    });
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(panel._artifactPreview.kind).toBe("binary");
+    expect(panel._artifactPreview.notice).toContain("8 MB");
+    expect(panel.shadowRoot.getElementById("artifact-preview").querySelector("iframe")).toBeNull();
+  });
+
+  it("rejects and cancels a streamed preview response that exceeds the PDF cap", async () => {
+    const artifact = createArtifact({ filename: "streamed-large.pdf", mime_type: "application/pdf", size_bytes: 32 });
+    const panel = createPanel(artifact);
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const releaseLock = vi.fn();
+    const read = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array(PDF_PREVIEW_MAX_BYTES) })
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array([0]) });
+    vi.spyOn(window, "fetch").mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "Content-Type": "application/pdf" }),
+      body: { getReader: () => ({ read, cancel, releaseLock }) },
+    });
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(releaseLock).toHaveBeenCalledOnce();
+    expect(panel._artifactPreview.kind).toBe("binary");
+    expect(panel._artifactPreview.notice).toContain("8 MB");
+    expect(panel.shadowRoot.getElementById("artifact-preview").querySelector("iframe, object, embed")).toBeNull();
+  });
+
+  it("does not send a Range header for a zero-byte artifact", async () => {
+    const artifact = createArtifact({ artifact_id: "empty", filename: "empty.txt", size_bytes: 0 });
+    const panel = createPanel(artifact);
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("", { status: 200, headers: { "Content-Type": "text/plain" } })
+    );
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/codex_bridge/threads/thread_safe/artifacts/empty",
+      { headers: {} }
+    );
+  });
+
+  it("invalidates a stale preview when switching artifacts and revokes the active blob on disconnect", async () => {
+    const urls = previewUrlStubs();
+    const first = createArtifact({ artifact_id: "first", filename: "first.png", mime_type: "image/png" });
+    const second = createArtifact({ artifact_id: "second", filename: "second.png", mime_type: "image/png" });
+    const panel = createPanel(first);
+    panel._artifacts = [first, second];
+    let resolveFirst;
+    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
+    const fetchSpy = vi.spyOn(window, "fetch").mockImplementation((url) => (
+      String(url).endsWith("/first")
+        ? firstResponse
+        : Promise.resolve(new Response("second", { status: 200, headers: { "Content-Type": "image/png" } }))
+    ));
+
+    const staleLoad = panel._loadArtifactPreview(first.artifact_id);
+    await Promise.resolve();
+    panel._selectedArtifactId = second.artifact_id;
+    panel._clearArtifactPreview();
+    const activeLoad = panel._loadArtifactPreview(second.artifact_id);
+    resolveFirst(new Response("first", { status: 200, headers: { "Content-Type": "image/png" } }));
+    await staleLoad;
+    await activeLoad;
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(panel._artifactPreview.artifactId).toBe(second.artifact_id);
+    expect(urls.createObjectUrl).toHaveBeenCalledOnce();
+    panel.remove();
+    expect(urls.createObjectUrl).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(`blob:${window.location.origin}/artifact-preview`);
+  });
+
+  it("revokes the previous blob URL when switching from one preview to another", async () => {
+    const urls = previewUrlStubs();
+    const first = createArtifact({ artifact_id: "switch-first", filename: "first.png", mime_type: "image/png" });
+    const second = createArtifact({ artifact_id: "switch-second", filename: "second.png", mime_type: "image/png" });
+    const panel = createPanel(first);
+    panel._artifacts = [first, second];
+    vi.spyOn(window, "fetch")
+      .mockResolvedValueOnce(new Response("first", { status: 200, headers: { "Content-Type": "image/png" } }))
+      .mockResolvedValueOnce(new Response("second", { status: 200, headers: { "Content-Type": "image/png" } }));
+
+    await panel._loadArtifactPreview(first.artifact_id);
+    expect(urls.createObjectUrl).toHaveBeenCalledOnce();
+
+    await panel._selectArtifact(second.artifact_id);
+
+    expect(urls.createObjectUrl).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(`blob:${window.location.origin}/artifact-preview`);
+    panel.remove();
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates a pending preview load when disconnected", async () => {
+    const urls = previewUrlStubs();
+    const artifact = createArtifact({ filename: "pending.png", mime_type: "image/png" });
+    const panel = createPanel(artifact);
+    let resolveResponse;
+    const pending = new Promise((resolve) => { resolveResponse = resolve; });
+    vi.spyOn(window, "fetch").mockReturnValue(pending);
+    const load = panel._loadArtifactPreview(artifact.artifact_id);
+    await Promise.resolve();
+    panel.remove();
+    resolveResponse(new Response("pending", { status: 200, headers: { "Content-Type": "image/png" } }));
+    await load;
+
+    expect(urls.createObjectUrl).not.toHaveBeenCalled();
+    expect(panel._artifactPreview).toBeNull();
   });
 
   it("does not preview an oversized artifact but still downloads it in full on request", async () => {
@@ -139,7 +356,7 @@ describe("artifact previews", () => {
     expect(panel._selectedArtifactId).toBe(previewable.artifact_id);
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/codex_bridge/threads/thread_safe/artifacts/art_previewable",
-      { headers: {} }
+      { headers: { Range: "bytes=0-11" } }
     );
 
     panel._selectedArtifactId = unknown.artifact_id;

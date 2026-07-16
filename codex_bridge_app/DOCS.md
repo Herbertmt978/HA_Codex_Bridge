@@ -147,6 +147,24 @@ and WebP output as private artifacts, then makes them available through Home
 Assistant's authenticated path. Capability absence or a failed probe leaves
 these tools unavailable.
 
+## Run stages and private previews
+
+The panel presents plan stages, allowlisted tool activity, file/line totals,
+and aggregate subagent status. It never receives agent IDs, prompts, private
+paths, raw commands, model names, messages, or arbitrary provider status text
+for this view.
+
+Selected text, raster-image, and PDF artifacts are fetched through Home
+Assistant's administrator-authenticated artifact route. PDF preview requires a
+known and observed size of no more than 8 MB plus a valid leading PDF signature;
+the panel then renders the bytes on canvas with the bundled local PDF.js
+renderer. PDF.js scripting, eval, and XFA support are disabled. No iframe or
+native browser PDF embed is used. HTML, SVG, XML, invalid PDFs, unknown-size
+files, and oversized files keep the safe open/download fallback. This does not
+expose a browser, CDP, App, or Bridge endpoint. Browser automation needs the
+separate isolation recorded in
+[ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
+
 ## Updates and recovery
 
 On each App start, the ready Bridge publishes its Supervisor-assigned private

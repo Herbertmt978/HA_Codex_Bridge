@@ -2,6 +2,25 @@
 
 All notable App changes are recorded here.
 
+## 0.8.0
+
+- Adds Codex-style live run stages, current-action copy, file/line counters, and
+  bounded subagent status to the transcript, with a responsive activity
+  popover and truthful completed/failed states.
+- Adds an authenticated, bounded PDF artifact viewer rendered locally with the
+  bundled PDF.js canvas runtime. PDF scripting, XFA, eval, native embeds, and
+  remote document frames stay disabled; open and download remain explicit
+  fallbacks.
+- Hardens artifact previews with declared-size and streamed-byte limits,
+  zero-byte range handling, stale-request invalidation, and blob URL cleanup.
+- Documents the separate fail-closed architecture required before interactive
+  Chromium automation can be enabled inside the Home Assistant App.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that
+  runtime.
+- Bundles Bridge `0.7.0` and paired Integration `0.8.0` without changing API
+  v1 compatibility.
+
 ## 0.7.5
 
 - Makes Live mode reliably select Codex's native web-search tool for weather,

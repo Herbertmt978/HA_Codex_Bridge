@@ -36,6 +36,11 @@ describe("run activity view model", () => {
       step: { index: 2, total: 3, label: "Implement the focused change" },
       files: { changed: 3, additions: 3, deletions: 2 },
     });
+    expect(model.stages).toEqual([
+      { index: 1, label: "Inspect the repository", status: "completed" },
+      { index: 2, label: "Implement the focused change", status: "inProgress" },
+      { index: 3, label: "Run tests", status: "pending" },
+    ]);
     expect(model.actionHistory.map((item) => item.label)).toContain("Inspect the repository");
     expect(JSON.stringify(model)).not.toContain("private diff");
   });
@@ -65,6 +70,59 @@ describe("run activity view model", () => {
     expect(model.action).toBe("Reading files and listing files");
     expect(JSON.stringify(model)).not.toContain("secret");
     expect(JSON.stringify(model)).not.toContain("private");
+  });
+
+  it("clears the current activity when that same item completes", () => {
+    const model = getRunActivityViewModel(
+      { status: "running", active_run_id: "run-1" },
+      [
+        event(1, "item.started", { item_id: "command-1", item_type: "commandExecution", action_types: ["read"] }),
+        event(2, "item.completed", { item_id: "command-1", item_type: "commandExecution" }),
+      ],
+    );
+
+    expect(model.action).toBe("Working on the request");
+  });
+
+  it("shows allowlisted subagent operations and aggregate states without topology or content", () => {
+    const model = getRunActivityViewModel(
+      { status: "running", active_run_id: "run-1" },
+      [event(1, "item.started", {
+        item_type: "collabAgentToolCall",
+        operation: "wait",
+        agent_state_counts: { running: 2, completed: 1, "secret-agent": 99 },
+        prompt: "private prompt",
+        agentPath: "/private/workspace",
+        agentThreadId: "private-thread",
+      })],
+    );
+
+    expect(model.action).toBe("Waiting for sub-agents");
+    expect(model.subagents).toMatchObject({ total: 3, active: 2, completed: 1, attention: 0, label: "2 active · 1 complete" });
+    expect(JSON.stringify(model)).not.toMatch(/secret|private|workspace|thread/i);
+  });
+
+  it("only accepts subagent snapshots with the active run ID", () => {
+    const model = getRunActivityViewModel(
+      { status: "running", active_run_id: "run-1" },
+      [
+        event(1, "item.started", { item_type: "collabAgentToolCall", agent_state_counts: { running: 1 } }),
+        event(2, "item.started", { item_type: "collabAgentToolCall", agent_state_counts: { completed: 9 } }, null),
+        event(3, "item.started", { item_type: "collabAgentToolCall", agent_state_counts: { completed: 8 } }, "run-2"),
+      ],
+    );
+
+    expect(model.subagents).toMatchObject({ total: 1, active: 1, completed: 0, sourceSequence: 1 });
+
+    const onlyOtherRuns = getRunActivityViewModel(
+      { status: "running", active_run_id: "run-1" },
+      [
+        event(1, "item.started", { item_type: "collabAgentToolCall", agent_state_counts: { completed: 9 } }, null),
+        event(2, "item.started", { item_type: "collabAgentToolCall", agent_state_counts: { completed: 8 } }, "run-2"),
+      ],
+    );
+
+    expect(onlyOtherRuns.subagents).toBeNull();
   });
 
   it.each([

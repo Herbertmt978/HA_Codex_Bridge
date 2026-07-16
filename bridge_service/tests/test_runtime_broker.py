@@ -716,6 +716,156 @@ def test_item_activity_metadata_is_enum_only_and_redacts_provider_content(
         broker.close()
 
 
+def test_subagent_activity_metadata_projects_only_enums_and_aggregate_counts(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Project subagent activity",
+            client_request_id="subagent-activity-metadata",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_000,
+                "item": {
+                    "id": "collab-item",
+                    "type": "collabAgentToolCall",
+                    "tool": "spawnAgent",
+                    "status": "completed",
+                    "senderThreadId": "sender-thread-private-1",
+                    "receiverThreadIds": [
+                        "receiver-thread-private-1",
+                        "receiver-thread-private-2",
+                    ],
+                    "model": "private-model-name",
+                    "prompt": "reusable-secret private@example.test",
+                    "agentsStates": {
+                        "agent-private-1": {
+                            "status": "running",
+                            "message": "Working in /private/workspace",
+                        },
+                        "agent-private-2": {
+                            "status": "running",
+                            "message": "Read https://private.example/secret",
+                        },
+                        "agent-private-3": {
+                            "status": "completed",
+                            "message": "Ran python -m pytest",
+                        },
+                        "agent-private-4": {
+                            "status": "errored",
+                            "message": "private failure text",
+                        },
+                    },
+                },
+            },
+        )
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_001,
+                "item": {
+                    "id": "subagent-item",
+                    "type": "subAgentActivity",
+                    "kind": "interacted",
+                    "agentPath": "/private/workspace/agent-secret",
+                    "agentThreadId": "agent-thread-private-1",
+                },
+            },
+        )
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+
+        events = storage.list_thread_events(thread.thread_id)
+        collab = next(
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "collab-item"
+        )
+        assert collab.payload == {
+            "run_id": run_id,
+            "item_id": "collab-item",
+            "item_type": "collabAgentToolCall",
+            "status": "completed",
+            "operation": "spawnAgent",
+            "agent_state_counts": {
+                "running": 2,
+                "completed": 1,
+                "errored": 1,
+            },
+        }
+        subagent = next(
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "subagent-item"
+        )
+        assert subagent.payload == {
+            "run_id": run_id,
+            "item_id": "subagent-item",
+            "item_type": "subAgentActivity",
+            "kind": "interacted",
+        }
+        serialized = json.dumps([event.payload for event in events])
+        for private_value in (
+            "agent-private",
+            "sender-thread-private",
+            "receiver-thread-private",
+            "agent-thread-private",
+            "private-model-name",
+            "reusable-secret",
+            "private@example.test",
+            "/private/workspace",
+            "python -m pytest",
+            "private.example",
+        ):
+            assert private_value not in serialized
+    finally:
+        broker.close()
+
+
+def test_subagent_activity_metadata_rejects_hostile_unallowlisted_values() -> None:
+    assert runtime_broker_module._safe_item_activity_metadata(
+        {
+            "type": "collabAgentToolCall",
+            "tool": "agent-private-operation",
+            "prompt": "reusable-secret",
+            "model": "private-model-name",
+            "agentsStates": {
+                "agent-private-1": {
+                    "status": "running",
+                    "message": "private provider message",
+                },
+                "agent-private-2": {
+                    "status": "exfiltrate /private/workspace",
+                    "message": "another secret",
+                },
+            },
+        }
+    ) == {"agent_state_counts": {"running": 1}}
+    assert runtime_broker_module._safe_item_activity_metadata(
+        {
+            "type": "subAgentActivity",
+            "kind": "agent-private-kind",
+            "agentPath": "/private/workspace/agent-secret",
+            "agentThreadId": "agent-thread-private-1",
+        }
+    ) == {}
+
+
 def test_image_completion_never_hashes_or_persists_raw_provider_fields(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

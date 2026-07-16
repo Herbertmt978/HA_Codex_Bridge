@@ -93,6 +93,19 @@ previous-image rollback remain unproven. Arbitrary prior-image selection is not
 a validated Supervisor rollback mechanism; recover with a cold backup or an
 existing private external Bridge.
 
+Artifact previews remain on the Home Assistant origin. PDFs are fetched only
+through the administrator-authenticated artifact route, checked against an 8 MB
+declared and observed size limit, and validated for a leading `%PDF-` signature.
+Validated bytes are rendered on a canvas by the bundled local PDF.js renderer;
+PDF.js scripting, eval, and XFA support are disabled. The panel does not use an
+iframe or native browser PDF embed, and does not embed remote URLs, HTML, SVG,
+XML, or an unvalidated PDF. Unsupported content keeps the safe open/download
+fallback. This preview is not a Chrome/CDP endpoint and does not grant
+model-controlled networking.
+See [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md) for the
+separate isolation requirements that must be met before App-owned browser
+automation can be enabled.
+
 ## Scope notes
 
 The project can investigate vulnerabilities in the Integration, Bridge, App

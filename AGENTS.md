@@ -34,9 +34,9 @@ changing product language or architecture.
 - Reuse the panel's design tokens and accessible interaction patterns. Preserve
   loading, empty, error, retry, keyboard, narrow-screen, and reduced-motion
   states.
-- Edit `frontend/src/`, then regenerate
-  `custom_components/codex_bridge/frontend/codex-bridge-panel.js` with
-  `npm run build`; do not hand-edit the generated bundle.
+- Edit `frontend/src/`, then regenerate the panel and bundled PDF worker below
+  `custom_components/codex_bridge/frontend/` with `npm run build`; do not
+  hand-edit generated frontend assets.
 - Keep App, Integration, panel, Bridge, Codex lock, changelog, and documentation
   versions synchronized through the owning scripts and tests.
 

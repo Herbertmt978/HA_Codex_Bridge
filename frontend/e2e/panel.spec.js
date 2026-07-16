@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
@@ -10,16 +10,42 @@ const repositoryRoot = resolve(process.cwd());
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
 };
 
 let origin;
 let server;
 
+function createMinimalPdfFixture() {
+  const objects = [
+    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+    "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+    "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    "5 0 obj\n<< /Length 48 >>\nstream\nBT /F1 18 Tf 24 100 Td (Local PDF preview) Tj ET\nendstream\nendobj\n",
+  ];
+  let document = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const object of objects) {
+    offsets.push(Buffer.byteLength(document));
+    document += object;
+  }
+  const startXref = Buffer.byteLength(document);
+  document += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  document += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  document += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+  return Buffer.from(document, "ascii");
+}
+
 test.beforeAll(async () => {
   server = createServer(async (request, response) => {
     const pathname = new URL(request.url || "/", "http://ha.invalid").pathname;
-    const relativePath = pathname === "/" ? "frontend/e2e/panel-harness.html" : pathname.slice(1);
+    const relativePath = pathname === "/"
+      ? "frontend/e2e/panel-harness.html"
+      : pathname === "/frontend/src/codex-bridge-pdf-worker.js"
+        ? "custom_components/codex_bridge/frontend/codex-bridge-pdf-worker.js"
+        : pathname.slice(1);
     const filePath = resolve(repositoryRoot, relativePath);
     if (!filePath.startsWith(`${resolve(repositoryRoot)}${sep}`)) {
       response.writeHead(403).end();
@@ -32,6 +58,13 @@ test.beforeAll(async () => {
         "Cache-Control": "no-store",
         "Content-Type": contentTypes[extname(filePath)] || "application/octet-stream",
       });
+      if (pathname === "/frontend/src/pdf-preview.js") {
+        response.end((await readFile(filePath, "utf8")).replace(
+          'from "pdfjs-dist/legacy/build/pdf.min.mjs"',
+          'from "/node_modules/pdfjs-dist/legacy/build/pdf.min.mjs"',
+        ));
+        return;
+      }
       createReadStream(filePath).pipe(response);
     } catch {
       response.writeHead(404).end();
@@ -58,6 +91,33 @@ async function selectHarnessThread(page, threadId = "thr_vba_1") {
 
 async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
+}
+
+async function seedRunStageActivity(page) {
+  await page.evaluate(() => {
+    const harness = window.__codexHarness;
+    const threadId = "thr_vba_1";
+    const runId = "run_stage_tooltip";
+    harness.emitThreadEvent(threadId, "run.started", { run_id: runId });
+    harness.emitThreadEvent(threadId, "plan.updated", {
+      run_id: runId,
+      plan: [
+        { step: "Search the web", status: "completed" },
+        { step: "Inspect returned pages", status: "inProgress" },
+        { step: "Summarize sources", status: "pending" },
+      ],
+    });
+    harness.emitThreadEvent(threadId, "item.started", {
+      run_id: runId,
+      item_type: "webSearch",
+      action_type: "search",
+    });
+    harness.emitThreadEvent(threadId, "patch.updated", {
+      run_id: runId,
+      changes: [{ path: "frontend/e2e/panel.spec.js", kind: "update", diff: "+stage tooltip regression\n-old assertion" }],
+    });
+  });
+  await expect(page.locator("codex-bridge-panel").locator("#run-step-chip")).toBeVisible();
 }
 
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
@@ -116,6 +176,90 @@ test("keeps hostile Codex content inert and on the Home Assistant origin", async
   });
   await expect(panel.locator("#attachment-chip-list")).toContainText("safe-upload.txt");
   expect(pageErrors).toEqual([]);
+});
+
+test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
+  const requests = [];
+  const workerResponses = [];
+  const pageErrors = [];
+  page.on("request", (request) => requests.push(request.url()));
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname === "/frontend/src/codex-bridge-pdf-worker.js") {
+      workerResponses.push(response.status());
+    }
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await expect(page.locator("codex-bridge-panel").locator("#message-list")).toBeVisible();
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const fixture = createMinimalPdfFixture().toString("base64");
+  await page.evaluate(async (encodedFixture) => {
+    const bytes = Uint8Array.from(atob(encodedFixture), (character) => character.charCodeAt(0));
+    const artifact = {
+      artifact_id: "art_local_pdf",
+      filename: "local-preview.pdf",
+      mime_type: "application/pdf",
+      relative_path: "local-preview.pdf",
+      size_bytes: bytes.byteLength,
+    };
+    const harnessFetch = window.fetch;
+    window.fetch = async (url, init) => {
+      const pathname = new URL(String(url), window.location.origin).pathname;
+      if (pathname.endsWith("/artifacts/art_local_pdf")) {
+        return new Response(bytes, {
+          status: 200,
+          headers: {
+            "Content-Length": String(bytes.byteLength),
+            "Content-Type": "application/pdf",
+          },
+        });
+      }
+      return harnessFetch(url, init);
+    };
+    const panel = document.querySelector("codex-bridge-panel");
+    window.__codexHarness.addArtifact(panel._selectedThreadId, artifact);
+    panel._artifacts = [...panel._artifacts, artifact];
+    await panel._selectArtifact(artifact.artifact_id);
+  }, fixture);
+
+  await panel.locator('[data-action="select-side-tab"][data-side-tab="files"]').click();
+  const preview = panel.locator(".pdf-preview-shell");
+  const canvas = preview.locator("canvas.pdf-preview-canvas");
+  await expect(canvas).toBeVisible();
+  expect(await canvas.evaluate((element) => element.width > 0 && element.height > 0)).toBe(true);
+  await expect(preview.getByRole("toolbar", { name: "PDF preview controls" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Previous page" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Next page" })).toBeVisible();
+  await expect(preview.locator(".pdf-preview-page-status").first()).toHaveText("1 / 1");
+  await expect(preview.locator(".pdf-preview-zoom-status")).toHaveText("100%");
+  await expect(preview.getByRole("button", { name: "Zoom out" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Zoom in" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Open PDF in a new tab" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Download local-preview.pdf" })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await panel.locator("#mobile-context-toggle").click();
+  await expect(panel.locator("#context-drawer")).toHaveAttribute("aria-hidden", "false");
+  const mobileToolbar = await preview.getByRole("toolbar", { name: "PDF preview controls" }).evaluate((toolbar) => ({
+    fits: toolbar.scrollWidth <= toolbar.clientWidth + 1,
+    minimumTarget: Math.min(
+      ...Array.from(toolbar.querySelectorAll("button"))
+        .filter((button) => !button.hidden && button.getClientRects().length)
+        .map((button) => button.getBoundingClientRect().height)
+    ),
+  }));
+  expect(mobileToolbar.fits).toBe(true);
+  expect(mobileToolbar.minimumTarget).toBeGreaterThanOrEqual(44);
+
+  expect(workerResponses).toContain(200);
+  expect(pageErrors).toEqual([]);
+  const networkRequests = requests.filter((url) => /^https?:/u.test(url));
+  expect(networkRequests).not.toHaveLength(0);
+  expect(networkRequests.every((url) => new URL(url).origin === origin)).toBe(true);
+  expect(await page.locator("iframe, object, embed").count()).toBe(0);
+  expect(await panel.locator("iframe, object, embed").count()).toBe(0);
 });
 
 test("runs the Home Assistant first-run and ChatGPT device sign-in flow without exposing runtime secrets", async ({ page, context }) => {
@@ -202,6 +346,118 @@ test("creates a workspace project and first chat at compact widths in both colou
 
   await page.emulateMedia({ colorScheme: "light" });
   await expect(panel.locator("#runtime-strip")).toBeVisible();
+});
+
+test("exposes run stages through one accessible tooltip in both colour schemes", async ({ page }) => {
+  const palettes = [];
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "no-preference" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await seedRunStageActivity(page);
+
+    const panel = page.locator("codex-bridge-panel");
+    const chip = panel.locator("#run-step-chip");
+    const tooltip = panel.locator("#run-step-tooltip");
+    const genericTooltip = panel.locator("#tooltip-layer");
+    await expect(chip).toHaveText(/Step 2 \/ 3/);
+    await expect(chip).toHaveAttribute("aria-haspopup", "true");
+    await expect(chip).toHaveAttribute("aria-expanded", "false");
+    await expect(chip).toHaveAttribute("aria-controls", "run-step-tooltip");
+    await expect(chip).not.toHaveAttribute("aria-describedby", /(?:^|\s)run-step-tooltip(?:\s|$)/);
+
+    await chip.hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("Inspect returned pages");
+    await expect(tooltip).toContainText("Searching the web");
+    await expect(genericTooltip).toBeHidden();
+
+    await page.mouse.move(1, 1);
+    await chip.focus();
+    await expect(chip).toBeFocused();
+    await expect(tooltip).toBeVisible();
+    await expect(genericTooltip).toBeHidden();
+    await expect(chip).not.toHaveAttribute("aria-describedby", /(?:^|\s)tooltip-layer(?:\s|$)/);
+
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-expanded", "true");
+    await expect(chip).toHaveAttribute("aria-describedby", /(?:^|\s)run-step-tooltip(?:\s|$)/);
+    await expect(chip.locator(".." )).toHaveClass(/open/);
+    await expect(tooltip).toBeVisible();
+    await expect(genericTooltip).toBeHidden();
+
+    const palette = await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      const root = panel?.shadowRoot;
+      const chip = root?.querySelector("#run-step-chip");
+      const tooltip = root?.querySelector("#run-step-tooltip");
+      const chipStyle = chip ? getComputedStyle(chip) : null;
+      const tooltipStyle = tooltip ? getComputedStyle(tooltip) : null;
+      const hostStyle = panel ? getComputedStyle(panel) : null;
+      return {
+        chipColor: chipStyle?.color || "",
+        chipBackground: chipStyle?.backgroundColor || "",
+        tooltipColor: tooltipStyle?.color || "",
+        tooltipBackground: tooltipStyle?.backgroundColor || "",
+        tooltipBorder: tooltipStyle?.borderTopColor || "",
+        textToken: hostStyle?.getPropertyValue("--text-color").trim() || "",
+        surfaceToken: hostStyle?.getPropertyValue("--surface-bg").trim() || "",
+      };
+    });
+    for (const value of Object.values(palette)) {
+      expect(value).not.toBe("");
+      expect(value).not.toBe("rgba(0, 0, 0, 0)");
+    }
+    expect(palette.tooltipColor).not.toBe(palette.tooltipBackground);
+    expect(palette.chipColor).not.toBe(palette.chipBackground);
+    palettes.push(palette);
+  }
+
+  expect(palettes[0].textToken).not.toBe(palettes[1].textToken);
+  expect(palettes[0].surfaceToken).not.toBe(palettes[1].surfaceToken);
+});
+
+test("keeps run-stage details within the mobile viewport and disables motion when requested", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+
+  const panel = page.locator("codex-bridge-panel");
+  const chip = panel.locator("#run-step-chip");
+  const tooltip = panel.locator("#run-step-tooltip");
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-expanded", "true");
+  await expect(tooltip).toBeVisible();
+
+  const mobileLayout = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const tooltip = root?.querySelector("#run-step-tooltip");
+    const shell = root?.querySelector(".shell");
+    const spinner = root?.querySelector(".step-spinner");
+    const tooltipStyle = tooltip ? getComputedStyle(tooltip) : null;
+    const chipStyle = root?.querySelector("#run-step-chip") ? getComputedStyle(root.querySelector("#run-step-chip")) : null;
+    const tooltipBox = tooltip?.getBoundingClientRect();
+    return {
+      tooltipRight: tooltipBox?.right || 0,
+      tooltipWidth: tooltipBox?.width || 0,
+      viewportWidth: window.innerWidth,
+      shellFits: Boolean(shell && shell.scrollWidth <= shell.clientWidth + 1),
+      tooltipTransition: tooltipStyle?.transitionDuration || "",
+      tooltipAnimation: tooltipStyle?.animationName || "",
+      spinnerAnimation: spinner ? getComputedStyle(spinner).animationName : "",
+      chipTransition: chipStyle?.transitionDuration || "",
+      chipHeight: root?.querySelector("#run-step-chip")?.getBoundingClientRect().height || 0,
+    };
+  });
+  expect(mobileLayout.tooltipRight).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1);
+  expect(mobileLayout.tooltipWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth - 24);
+  expect(mobileLayout.shellFits).toBe(true);
+  expect(mobileLayout.tooltipTransition).toMatch(/0\.01ms|1e-05s|0s/);
+  expect(mobileLayout.chipTransition).toMatch(/0\.01ms|1e-05s|0s/);
+  expect(mobileLayout.spinnerAnimation).toBe("none");
+  expect(mobileLayout.chipHeight).toBeGreaterThanOrEqual(44);
 });
 
 test("shows inline command approvals and user questions through the HA websocket boundary", async ({ page }) => {

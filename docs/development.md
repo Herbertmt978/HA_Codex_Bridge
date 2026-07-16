@@ -123,6 +123,17 @@ unverified URL or token.
 - Keep the compact Codex-style sidebar within Home Assistant's theme and
   accessibility conventions; do not turn a typed transient artifact reservation
   into a connection error.
+- Keep run-stage and subagent telemetry enum/aggregate-only. Never project
+  prompts, IDs, paths, commands, raw messages, URLs, or provider-controlled
+  labels into the panel.
+- PDF preview must stay on the authenticated HA artifact route, enforce both
+  metadata and fetched-byte limits, verify the file signature, and render only
+  through the bundled local PDF.js canvas renderer with scripting, eval, and XFA
+  disabled. Do not add an iframe or native browser PDF embed. Invalid,
+  HTML/SVG/XML, unknown-size, and oversized content must keep the safe
+  open/download fallback. Do not add a panel-visible browser, CDP port,
+  arbitrary URL proxy, or local MCP endpoint; follow ADR 0006 for future
+  App-owned browser automation.
 - Do not document a Supervisor prior-image selection as rollback until an
   immutable prior tag and restore procedure are published and tested.
 

@@ -132,6 +132,16 @@ the selected App workspace:
   needs a signed-in ChatGPT account plus both runtime `imageGeneration` and
   `namespaceTools` capabilities. It does not use an OpenAI API key; generated
   PNG, JPEG, and WebP artifacts remain private and size-bounded.
+- **Codex-style run detail and previews:** live stages, allowlisted tool
+  actions, file/line totals, and aggregate subagent state appear in the run
+  chip without exposing prompts, agent IDs, commands, URLs, or workspace paths.
+  Text, raster images, and signature-validated PDFs can be viewed inside the
+  panel through Home Assistant's administrator-authenticated artifact path.
+  PDFs are capped at 8 MB for both declared and fetched size, then rendered by
+  the bundled local PDF.js canvas renderer (with scripting, eval, and XFA
+  disabled). No iframe or native browser PDF embed is used. HTML, SVG, invalid
+  PDFs, unknown-size files, and oversized files keep the safe open/download
+  fallback.
 - **Skills:** list, enable/disable, create, and delete workspace skills under
   the selected workspace's `.agents/skills/` tree. Paths outside that workspace
   are rejected.

@@ -264,7 +264,23 @@ _SAFE_ITEM_STATUSES = frozenset(
 _SAFE_COMMAND_ACTION_TYPES = frozenset({"read", "listFiles", "search", "unknown"})
 _SAFE_WEB_SEARCH_ACTION_TYPES = frozenset({"search", "openPage", "findInPage", "other"})
 _SAFE_CHANGE_KINDS = frozenset({"add", "delete", "update"})
+_SAFE_COLLAB_AGENT_OPERATIONS = frozenset(
+    {"spawnAgent", "sendInput", "resumeAgent", "wait", "closeAgent"}
+)
+_SAFE_COLLAB_AGENT_STATES = frozenset(
+    {
+        "pendingInit",
+        "running",
+        "interrupted",
+        "completed",
+        "errored",
+        "shutdown",
+        "notFound",
+    }
+)
+_SAFE_SUB_AGENT_ACTIVITY_KINDS = frozenset({"started", "interacted", "interrupted"})
 _MAX_ITEM_ACTIVITY_DURATION_MS = 86_400_000
+_MAX_SAFE_AGENT_STATE_COUNT = 9_007_199_254_740_991
 _NOTIFICATIONS = (
     "turn/started",
     "item/agentMessage/delta",
@@ -3374,6 +3390,43 @@ def _safe_item_activity_metadata(item: dict[str, Any]) -> dict[str, object]:
                     change_kinds.append(change_type)
             if change_kinds:
                 metadata["change_kinds"] = change_kinds
+    elif item_type == "collabAgentToolCall":
+        # A collab item carries agent IDs, thread IDs, prompt, model, and per-agent
+        # messages. Project only its fixed operation enum and aggregate state totals.
+        operation = item.get("tool")
+        if (
+            isinstance(operation, str)
+            and operation in _SAFE_COLLAB_AGENT_OPERATIONS
+        ):
+            metadata["operation"] = operation
+        agent_states = item.get("agentsStates")
+        if isinstance(agent_states, dict):
+            counts: dict[str, int] = {}
+            for state in agent_states.values():
+                if not isinstance(state, dict):
+                    continue
+                status = state.get("status")
+                if (
+                    isinstance(status, str)
+                    and status in _SAFE_COLLAB_AGENT_STATES
+                ):
+                    # Keep the durable JSON payload within JavaScript's exact
+                    # integer range even if an untrusted provider map is extreme.
+                    counts[status] = min(
+                        counts.get(status, 0) + 1,
+                        _MAX_SAFE_AGENT_STATE_COUNT,
+                    )
+            if counts:
+                metadata["agent_state_counts"] = counts
+    elif item_type == "subAgentActivity":
+        # agentPath and agentThreadId can identify local workspace layout or
+        # internal agent topology, so retain only the protocol-defined kind.
+        kind = item.get("kind")
+        if (
+            isinstance(kind, str)
+            and kind in _SAFE_SUB_AGENT_ACTIVITY_KINDS
+        ):
+            metadata["kind"] = kind
     return metadata
 
 

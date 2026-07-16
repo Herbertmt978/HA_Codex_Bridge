@@ -39,6 +39,8 @@ const TEXT_EXTENSIONS = new Set([
   "yml",
 ]);
 
+const PDF_MIME_TYPE = "application/pdf";
+
 function removeControlChars(value) {
   return [...value].filter((character) => {
     const codePoint = character.codePointAt(0);
@@ -145,16 +147,42 @@ function extensionOf(filename) {
   return dot >= 0 ? name.slice(dot + 1) : "";
 }
 
-export function previewDescriptor(artifact = {}, blob = {}) {
-  const mime = String(blob?.type || artifact?.mime_type || "").toLowerCase().split(";", 1)[0].trim();
+function effectivePreviewMime(artifact = {}, blob = {}) {
+  const blobMime = String(blob?.type || "").toLowerCase().split(";", 1)[0].trim();
+  const artifactMime = String(artifact?.mime_type || "").toLowerCase().split(";", 1)[0].trim();
+  return blobMime && blobMime !== "application/octet-stream" ? blobMime : artifactMime || blobMime;
+}
+
+export function isPdfArtifactCandidate(artifact = {}, blob = {}) {
+  const mime = effectivePreviewMime(artifact, blob);
+  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
+  return mime === PDF_MIME_TYPE || extensionOf(filename) === "pdf";
+}
+
+export async function hasValidPdfHeader(blob) {
+  if (!(blob instanceof Blob) || blob.size < 5) return false;
+  const bytes = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  return bytes[0] === 0x25
+    && bytes[1] === 0x50
+    && bytes[2] === 0x44
+    && bytes[3] === 0x46
+    && bytes[4] === 0x2d;
+}
+
+export function previewDescriptor(artifact = {}, blob = {}, { validatedPdf = false } = {}) {
+  const mime = effectivePreviewMime(artifact, blob);
   const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
   const base = { artifactId: sanitizeId(artifact?.artifact_id), filename, contentType: mime || "application/octet-stream" };
+  if (validatedPdf && isPdfArtifactCandidate(artifact, blob)) {
+    return { ...base, kind: "pdf", contentType: PDF_MIME_TYPE, url: null };
+  }
   if (RASTER_MIME_TYPES.has(mime)) return { ...base, kind: "image", url: null };
   if (mime.startsWith("text/") && mime !== "text/html" && mime !== "text/xml") return { ...base, kind: "text", text: "" };
   if (TEXT_EXTENSIONS.has(extensionOf(filename)) && !mime.includes("html") && !mime.includes("svg") && !mime.includes("xml")) {
     return { ...base, kind: "text", text: "" };
   }
-  // PDFs, HTML, SVG, and all other binary formats must not be embedded.
+  // PDFs remain binary until their file signature has been validated. HTML,
+  // SVG, XML, and all other binary formats are never embedded.
   return { ...base, kind: "binary" };
 }
 
@@ -177,9 +205,13 @@ export function createPreviewElement(document, descriptor, { blobUrl } = {}) {
     image.alt = descriptor.filename || "artifact preview";
     return image;
   }
+  // Validated PDFs are rendered by the panel's bundled PDF.js canvas viewer.
+  // Keeping PDF handling out of this generic helper prevents callers from
+  // accidentally reintroducing a browser/plugin embed for untrusted files.
+  if (descriptor.kind === "pdf") return null;
   const empty = document.createElement("div");
   empty.textContent = `${descriptor.filename || "Artifact"} preview unavailable`;
   return empty;
 }
 
-export { RASTER_MIME_TYPES, TEXT_EXTENSIONS };
+export { PDF_MIME_TYPE, RASTER_MIME_TYPES, TEXT_EXTENSIONS };

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createPreviewElement,
   createSafeLink,
+  hasValidPdfHeader,
   previewDescriptor,
   sanitizeBlobUrl,
   sanitizeFilename,
@@ -54,12 +55,17 @@ describe("safe DOM and hostile content", () => {
     expect(text.textContent).toContain("<script>");
   });
 
-  it("only previews raster blobs and allowlisted text; PDF/SVG/HTML are binary", () => {
+  it("only previews raster blobs and allowlisted text until a PDF signature is validated", async () => {
     expect(previewDescriptor(makeArtifact({ filename: "x.png" }), new Blob([], { type: "image/png" })).kind).toBe("image");
     expect(previewDescriptor(makeArtifact({ filename: "x.svg" }), new Blob([], { type: "image/svg+xml" })).kind).toBe("binary");
     expect(previewDescriptor(makeArtifact({ filename: "x.pdf" }), new Blob([], { type: "application/pdf" })).kind).toBe("binary");
     expect(previewDescriptor(makeArtifact({ filename: "x.txt" }), new Blob([], { type: "text/plain" })).kind).toBe("text");
-    expect(createPreviewElement(document, { kind: "binary", filename: "x.pdf" })).not.toBeInstanceOf(HTMLIFrameElement);
+    const unvalidatedPdf = createPreviewElement(document, { kind: "binary", filename: "x.pdf" });
+    expect(unvalidatedPdf).not.toBeInstanceOf(HTMLIFrameElement);
+    expect(unvalidatedPdf?.querySelector("iframe, object, embed")).toBeNull();
+    expect(createPreviewElement(document, { kind: "pdf", filename: "x.pdf" })).toBeNull();
+    expect(await hasValidPdfHeader(new Blob(["<html>not a pdf</html>"], { type: "application/pdf" }))).toBe(false);
+    expect(await hasValidPdfHeader(new Blob(["%PDF-1.7\n"], { type: "application/octet-stream" }))).toBe(true);
   });
 
   it("accepts only local blob URLs for raster previews", () => {
@@ -148,7 +154,7 @@ describe("safe DOM and hostile content", () => {
     fetchSpy.mockRestore();
   });
 
-  it("never embeds hostile SVG, HTML, or PDF artifacts", () => {
+  it("never embeds hostile SVG, HTML, or unvalidated PDF artifacts", () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
     for (const [filename, mime] of [

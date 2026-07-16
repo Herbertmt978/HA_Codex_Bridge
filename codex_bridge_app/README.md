@@ -6,19 +6,20 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.7.4` (`amd64` only, experimental)
-- Published Integration: `0.7.3`
-- Latest target-HA-accepted App/Integration: `0.7.3`
-- Candidate Bridge: `0.6.3`
+- Published App: `0.7.5` (`amd64` only, experimental)
+- Published Integration: `0.7.5`
+- Latest target-HA-accepted App/Integration: `0.7.5`
+- Candidate App/Integration: `0.8.0`
+- Candidate Bridge: `0.7.0`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.7.5` with Bridge `0.6.3` is pending real Home
-Assistant acceptance; coordinated `0.7.3` remains the live baseline. Signed
-App `0.7.4` carries the verified Codex `0.144.5` runtime. The candidate defaults
-provider-gated native search to Live and guides time-sensitive prompts toward
-that tool while shell-command networking remains disabled. Signed-in
-ChatGPT-account image generation needs
+Candidate App/Integration `0.8.0` with Bridge `0.7.0` is pending real Home
+Assistant acceptance; coordinated `0.7.5` remains the live baseline. Signed
+App `0.7.5` carries the verified Codex `0.144.5` runtime. The candidate adds
+Codex-style stages, bounded subagent activity, and a local PDF.js canvas viewer
+while preserving the existing Live native-search behavior and blocked
+shell-command networking. Signed-in ChatGPT-account image generation needs
 both Codex `imageGeneration` and `namespaceTools` capabilities, uses no OpenAI
 API key, and keeps bounded PNG, JPEG, and WebP artifacts private. Its compact
 composer is a presentation change, not an authority change.
