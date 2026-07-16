@@ -25,6 +25,11 @@ All notable App changes are recorded here.
 - Aligns the header, transcript, live activity, interactions, and composer to
   the same content measure and compensates the Activity card's visual gutter so
   desktop rails remain pixel-aligned.
+- Preserves that 840-pixel reading measure at 1280- and 1440-pixel widths by
+  moving Activity into an accessible right drawer before the three-column shell
+  can compress the conversation; exact responsive boundaries are browser-tested.
+- Hides empty Background, Browser, and Sources blocks until a run has real
+  activity, while keeping Outputs and bounded Subagent status immediately visible.
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
 - Bundles Bridge `0.7.2` without changing its Integration API compatibility.

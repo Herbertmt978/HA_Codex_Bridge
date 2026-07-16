@@ -23024,7 +23024,7 @@ template.innerHTML = `
       --accent-color: var(--primary-color, #28a0f0);
       --rail-bg: color-mix(in srgb, var(--surface-bg) 90%, #dff4c1 10%);
       --canvas-bg: color-mix(in srgb, var(--surface-bg) 99%, var(--text-color) 1%);
-      --context-bg: color-mix(in srgb, var(--surface-bg) 98%, var(--text-color) 2%);
+      --context-bg: color-mix(in srgb, var(--surface-bg) 95%, var(--text-color) 5%);
       --focus-ring-color: color-mix(in srgb, var(--accent-color) 74%, var(--surface-bg) 26%);
       --focus-ring-contrast: var(--surface-bg);
       --brand-cyan: #64748b;
@@ -25062,7 +25062,7 @@ template.innerHTML = `
       border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
       border-radius: 18px;
       background: var(--context-bg);
-      box-shadow: 0 12px 32px color-mix(in srgb, var(--text-color) 10%, transparent);
+      box-shadow: 0 18px 44px color-mix(in srgb, var(--text-color) 12%, transparent);
     }
 
     .rail-pane {
@@ -25178,6 +25178,12 @@ template.innerHTML = `
 
     .main-header {
       padding-inline: max(20px, calc((100% - var(--conversation-width)) / 2));
+      border-bottom: 0;
+    }
+
+    .main-header .eyeline,
+    .main-header .subline {
+      display: none;
     }
 
     .eyeline,
@@ -26298,10 +26304,10 @@ template.innerHTML = `
       gap: 4px 10px;
       margin: 8px auto 14px;
       padding: 10px 12px max(10px, env(safe-area-inset-bottom));
-      border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
-      border-radius: 18px;
+      border: 1px solid color-mix(in srgb, var(--border-color) 92%, var(--text-color) 8%);
+      border-radius: 20px;
       background: var(--surface-bg);
-      box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 11%, transparent);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--text-color) 8%, transparent);
       transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
     }
 
@@ -26369,8 +26375,7 @@ template.innerHTML = `
 
     .composer-shell:focus-within {
       border-color: color-mix(in srgb, var(--accent-color) 56%, var(--border-color) 44%);
-      box-shadow: 0 12px 30px color-mix(in srgb, var(--text-color) 13%, transparent), 0 0 0 2px color-mix(in srgb, var(--accent-color) 10%, transparent);
-      transform: translateY(-1px);
+      box-shadow: 0 10px 26px color-mix(in srgb, var(--text-color) 10%, transparent), 0 0 0 2px color-mix(in srgb, var(--accent-color) 9%, transparent);
     }
 
     .composer-shell.retry-ready {
@@ -26668,10 +26673,14 @@ template.innerHTML = `
 
     .activity-center-section {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       min-width: 0;
-      padding: 16px;
+      padding: 18px 16px;
       border-bottom: 1px solid var(--border-color);
+    }
+
+    .activity-center-section:last-child {
+      border-bottom: 0;
     }
 
     .activity-center-heading {
@@ -26695,7 +26704,7 @@ template.innerHTML = `
     .activity-center-summary {
       color: var(--muted-color);
       font-size: 12px;
-      line-height: 1.45;
+      line-height: 1.55;
     }
 
     .activity-center-rows {
@@ -26791,6 +26800,12 @@ template.innerHTML = `
     .side-pane .side-header .title {
       font-size: 16px;
       letter-spacing: -0.01em;
+    }
+
+    .side-pane .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
     }
 
     .side-section {
@@ -26902,6 +26917,72 @@ template.innerHTML = `
     .mobile-header-actions,
     .mobile-drawer-scrim {
       display: none;
+    }
+
+    @media (min-width: 1121px) and (max-width: 1480px) {
+      .shell {
+        grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr);
+      }
+
+      .side-pane {
+        position: fixed;
+        z-index: 4;
+        top: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: min(92vw, 360px);
+        height: auto;
+        margin: 0;
+        border-radius: 18px;
+        transform: translateX(calc(100% + 28px));
+        transition: transform 180ms ease, box-shadow 180ms ease;
+        will-change: transform;
+      }
+
+      .side-pane.drawer-open {
+        transform: translateX(0);
+      }
+
+      .mobile-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      #mobile-nav-toggle {
+        display: none;
+      }
+
+      #mobile-context-toggle {
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: var(--surface-muted);
+      }
+
+      .mobile-drawer-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: 0;
+        background: color-mix(in srgb, var(--text-color) 24%, transparent);
+        cursor: default;
+        opacity: 0;
+        transition: opacity 180ms ease;
+      }
+
+      .mobile-drawer-scrim[hidden] {
+        display: none;
+      }
+
+      .mobile-drawer-scrim.open {
+        opacity: 1;
+      }
     }
 
     @media (max-width: 1120px) {
@@ -27670,6 +27751,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._mobileDrawerMedia = null;
     this._mobileDrawerMediaListener = null;
     this._mobileDrawerMediaListening = false;
+    this._contextDrawerMedia = null;
+    this._contextDrawerMediaListener = null;
+    this._contextDrawerMediaListening = false;
     this._sideTab = "activity";
     this._pendingDeletion = null;
     this._deletionReturnFocus = null;
@@ -27689,6 +27773,10 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
       this._mobileDrawerMediaListening = true;
+    }
+    if (this._contextDrawerMedia && this._contextDrawerMediaListener && !this._contextDrawerMediaListening) {
+      this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
+      this._contextDrawerMediaListening = true;
     }
     if (this._config && this._hass) {
       this._startSystemEventSubscription();
@@ -27713,6 +27801,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._clearArtifactPreview();
     this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = false;
+    this._contextDrawerMedia?.removeEventListener("change", this._contextDrawerMediaListener);
+    this._contextDrawerMediaListening = false;
   }
   set hass(value) {
     this._hass = value;
@@ -27802,6 +27892,16 @@ var CodexBridgePanel = class extends HTMLElement {
     };
     this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = true;
+    this._contextDrawerMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px), (min-width: 1121px) and (max-width: 1480px)") : {
+      matches: false,
+      addEventListener() {
+      },
+      removeEventListener() {
+      }
+    };
+    this._contextDrawerMediaListener = () => this._syncMobileDrawer();
+    this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
+    this._contextDrawerMediaListening = true;
     this._syncMobileDrawer();
     this._syncComposerDiagnostics();
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
@@ -27820,7 +27920,8 @@ var CodexBridgePanel = class extends HTMLElement {
     });
   }
   _toggleMobileDrawer(drawer, trigger) {
-    if (!this._mobileDrawerMedia?.matches) {
+    const enabled = drawer === "navigation" ? this._mobileDrawerMedia?.matches : this._contextDrawerMedia?.matches;
+    if (!enabled) {
       return;
     }
     if (this._mobileDrawer === drawer) {
@@ -27858,8 +27959,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const scrim = this.shadowRoot.getElementById("mobile-drawer-scrim");
     const navigationToggle = this.shadowRoot.getElementById("mobile-nav-toggle");
     const contextToggle = this.shadowRoot.getElementById("mobile-context-toggle");
-    const mobile = Boolean(this._mobileDrawerMedia?.matches);
-    if (!mobile) {
+    const mobileNavigation = Boolean(this._mobileDrawerMedia?.matches);
+    const contextDrawer = Boolean(this._contextDrawerMedia?.matches);
+    if (!mobileNavigation && !contextDrawer) {
       this._mobileDrawer = null;
       this._mobileDrawerReturnFocus = null;
       for (const drawer of [navigation, context]) {
@@ -27874,17 +27976,24 @@ var CodexBridgePanel = class extends HTMLElement {
       contextToggle?.setAttribute("aria-expanded", "false");
       return;
     }
-    const navigationOpen = this._mobileDrawer === "navigation";
-    const contextOpen = this._mobileDrawer === "context";
+    if (this._mobileDrawer === "navigation" && !mobileNavigation || this._mobileDrawer === "context" && !contextDrawer) {
+      this._mobileDrawer = null;
+      this._mobileDrawerReturnFocus = null;
+    }
+    const navigationOpen = mobileNavigation && this._mobileDrawer === "navigation";
+    const contextOpen = contextDrawer && this._mobileDrawer === "context";
     navigation?.classList.toggle("drawer-open", navigationOpen);
     context?.classList.toggle("drawer-open", contextOpen);
     if (navigation) {
-      navigation.inert = !navigationOpen;
-      navigation.setAttribute("aria-hidden", String(!navigationOpen));
+      const navigationBlocked = mobileNavigation && !navigationOpen || contextOpen;
+      navigation.inert = navigationBlocked;
+      if (mobileNavigation || contextOpen) navigation.setAttribute("aria-hidden", String(navigationBlocked));
+      else navigation.removeAttribute("aria-hidden");
     }
     if (context) {
-      context.inert = !contextOpen;
-      context.setAttribute("aria-hidden", String(!contextOpen));
+      context.inert = contextDrawer && !contextOpen;
+      if (contextDrawer) context.setAttribute("aria-hidden", String(!contextOpen));
+      else context.removeAttribute("aria-hidden");
     }
     if (main) main.inert = Boolean(this._mobileDrawer);
     if (scrim) {
@@ -27953,7 +28062,7 @@ var CodexBridgePanel = class extends HTMLElement {
       case "open-usage":
         this._sideTab = "usage";
         this._renderSideTabs();
-        if (this._mobileDrawerMedia?.matches) {
+        if (this._contextDrawerMedia?.matches) {
           this._toggleMobileDrawer("context", actionTarget);
         }
         break;
@@ -31418,6 +31527,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const rowValues = Object.fromEntries(section2.rows.map((row) => [row.label, row.value]));
       const numericRow = (label) => Number.parseInt(rowValues[label] || "0", 10) || 0;
       const hasDetails = section2.id === "outputs" ? numericRow("Available files") > 0 : section2.id === "subagents" ? numericRow("Total") > 0 : section2.id === "background" ? !["Ready", "No active run"].includes(rowValues.Run) || rowValues["Current step"] !== "Unavailable" : section2.id === "browser" ? rowValues["Current use"] === "Active" : section2.id === "sources" ? numericRow("Sources") > 0 : false;
+      if (["background", "browser", "sources"].includes(section2.id) && !hasDetails) {
+        continue;
+      }
       const heading = document.createElement("div");
       heading.className = "activity-center-heading";
       heading.append(this._textElement("h3", "", section2.title));

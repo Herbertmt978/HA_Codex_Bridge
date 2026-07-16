@@ -179,6 +179,7 @@ test("keeps hostile Codex content inert and on the Home Assistant origin", async
 });
 
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
   const requests = [];
   const workerResponses = [];
   const pageErrors = [];
@@ -263,6 +264,7 @@ test("renders a local PDF on canvas without embeds or off-origin requests", asyn
 });
 
 test("runs the Home Assistant first-run and ChatGPT device sign-in flow without exposing runtime secrets", async ({ page, context }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
@@ -524,48 +526,92 @@ test("keeps the active approval actions visible at the 1280px desktop layout", a
   }).toBe(true);
 });
 
-test("uses a Codex-like reading workspace with an adjacent context rail and mobile chat-first order", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
-  await selectHarnessThread(page);
-  const panel = page.locator("codex-bridge-panel");
-  await expect(panel.locator("#archived-chat-list")).toBeHidden();
-  await expect(panel.locator("#onboarding-shell")).toBeHidden();
+test("keeps the conversation rail stable and opens Activity as a compact-width drawer", async ({ page }) => {
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator("#archived-chat-list")).toBeHidden();
+    await expect(panel.locator("#onboarding-shell")).toBeHidden();
 
-  const desktop = await page.evaluate(() => {
-    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
-    const rect = (selector) => root?.querySelector(selector)?.getBoundingClientRect();
-    const main = rect(".main-pane");
-    const side = rect(".side-pane");
-    const messages = rect("#message-list");
-    const composerElement = root?.querySelector(".composer-shell");
-    const composer = composerElement?.getBoundingClientRect();
-    const toolbar = root?.querySelector("#compact-toolbar");
-    const bubble = root?.querySelector(".bubble-text");
-    const railElement = root?.querySelector(".rail-pane");
-    const mainElement = root?.querySelector(".main-pane");
-    const sideElement = root?.querySelector(".side-pane");
-    return {
-      contextIsFloatingCard: Boolean(
-          main && side && side.left >= main.right - 1
-          && side.top >= main.top + 60 && side.top <= main.top + 68,
-      ),
-      readingMeasure: messages?.width || 0,
-      composerMeasure: composer?.width || 0,
-      toolbarInComposer: Boolean(toolbar && composerElement?.contains(toolbar)),
-      proseFont: bubble ? getComputedStyle(bubble).fontFamily : "",
-      railBackground: railElement ? getComputedStyle(railElement).backgroundColor : "",
-      mainBackground: mainElement ? getComputedStyle(mainElement).backgroundColor : "",
-      sideBackground: sideElement ? getComputedStyle(sideElement).backgroundColor : "",
-    };
-  });
-  expect(desktop.contextIsFloatingCard).toBe(true);
-  expect(desktop.readingMeasure).toBeLessThanOrEqual(900);
-  expect(desktop.composerMeasure).toBeLessThanOrEqual(900);
-  expect(desktop.toolbarInComposer).toBe(true);
-  expect(desktop.proseFont).not.toMatch(/monospace|consolas|courier/i);
-  expect(desktop.railBackground).not.toBe(desktop.mainBackground);
-  expect(desktop.sideBackground).not.toBe(desktop.mainBackground);
+    const navigationToggle = panel.locator("#mobile-nav-toggle");
+    const contextToggle = panel.locator("#mobile-context-toggle");
+    const context = panel.locator("#context-drawer");
+    const scrim = panel.locator("#mobile-drawer-scrim");
+    await expect(navigationToggle).toBeHidden();
+    await expect(contextToggle).toBeVisible();
+    await expect(contextToggle).toHaveAccessibleName("Context");
+    await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(context).toHaveAttribute("aria-hidden", "true");
+    await expect(panel.locator("#workspace-drawer")).not.toHaveAttribute("aria-hidden");
+    await expect(panel.locator("#workspace-drawer")).toHaveJSProperty("inert", false);
+    await expect(scrim).toBeHidden();
+
+    const compactLayout = await page.evaluate(() => {
+      const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+      const rect = (selector) => root?.querySelector(selector)?.getBoundingClientRect();
+      const rail = rect(".rail-pane");
+      const main = rect(".main-pane");
+      const side = rect(".side-pane");
+      const messages = rect("#message-list");
+      const composer = rect(".composer-shell");
+      const toolbar = root?.querySelector("#compact-toolbar");
+      const bubble = root?.querySelector(".bubble-text");
+      const railElement = root?.querySelector(".rail-pane");
+      const mainElement = root?.querySelector(".main-pane");
+      const sideElement = root?.querySelector(".side-pane");
+      return {
+        railWidth: rail?.width || 0,
+        mainWidth: main?.width || 0,
+        sideOffCanvas: Boolean(side && side.left >= window.innerWidth - 1),
+        readingMeasure: messages?.width || 0,
+        composerMeasure: composer?.width || 0,
+        toolbarInComposer: Boolean(toolbar && root?.querySelector(".composer-shell")?.contains(toolbar)),
+        proseFont: bubble ? getComputedStyle(bubble).fontFamily : "",
+        railBackground: railElement ? getComputedStyle(railElement).backgroundColor : "",
+        mainBackground: mainElement ? getComputedStyle(mainElement).backgroundColor : "",
+        sideBackground: sideElement ? getComputedStyle(sideElement).backgroundColor : "",
+      };
+    });
+    expect(compactLayout.railWidth).toBeGreaterThanOrEqual(300);
+    expect(compactLayout.railWidth).toBeLessThanOrEqual(330);
+    expect(compactLayout.mainWidth).toBeCloseTo(width - compactLayout.railWidth, 0);
+    expect(compactLayout.sideOffCanvas).toBe(true);
+    expect(compactLayout.readingMeasure).toBeCloseTo(840, 0);
+    expect(compactLayout.composerMeasure).toBeCloseTo(840, 0);
+    expect(compactLayout.toolbarInComposer).toBe(true);
+    expect(compactLayout.proseFont).not.toMatch(/monospace|consolas|courier/i);
+    expect(compactLayout.railBackground).not.toBe(compactLayout.mainBackground);
+    expect(compactLayout.sideBackground).not.toBe(compactLayout.mainBackground);
+
+    await contextToggle.click();
+    await expect(contextToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(context).toHaveAttribute("aria-hidden", "false");
+    await expect(panel.locator("#workspace-drawer")).toHaveAttribute("aria-hidden", "true");
+    await expect(panel.locator("#workspace-drawer")).toHaveJSProperty("inert", true);
+    await expect(scrim).toBeVisible();
+    await expect.poll(() => context.evaluate((drawer) => drawer.getBoundingClientRect().right))
+      .toBeLessThanOrEqual(width + 1);
+    const openDrawer = await context.evaluate((drawer) => {
+      const box = drawer.getBoundingClientRect();
+      return { left: box.left, right: box.right, width: box.width, viewport: window.innerWidth };
+    });
+    expect(openDrawer.width).toBeGreaterThan(0);
+    expect(openDrawer.right).toBeLessThanOrEqual(openDrawer.viewport + 1);
+    expect(openDrawer.left).toBeLessThan(openDrawer.viewport);
+
+    await scrim.click({ position: { x: 10, y: 420 } });
+    await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(context).toHaveAttribute("aria-hidden", "true");
+    await expect(panel.locator("#workspace-drawer")).not.toHaveAttribute("aria-hidden");
+    await expect(panel.locator("#workspace-drawer")).toHaveJSProperty("inert", false);
+    await expect(scrim).toBeHidden();
+    await expect(contextToggle).toBeFocused();
+  }
+
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const panel = page.locator("codex-bridge-panel");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(220);
@@ -628,6 +674,62 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
   await scrim.click({ position: { x: 10, y: 420 } });
   await expect(contextToggle).toHaveAttribute("aria-expanded", "false");
   await expect(contextToggle).toBeFocused();
+});
+
+test("keeps drawer state and accessibility exact at the responsive boundaries", async ({ page }) => {
+  const snapshot = async (width) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    return page.evaluate(() => {
+      const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+      const navigation = root?.querySelector("#workspace-drawer");
+      const context = root?.querySelector("#context-drawer");
+      const navToggle = root?.querySelector("#mobile-nav-toggle");
+      const contextToggle = root?.querySelector("#mobile-context-toggle");
+      const contextRect = context?.getBoundingClientRect();
+      return {
+        navigationToggleVisible: Boolean(navToggle?.getClientRects().length),
+        contextToggleVisible: Boolean(contextToggle?.getClientRects().length),
+        navigationHidden: navigation?.getAttribute("aria-hidden"),
+        contextHidden: context?.getAttribute("aria-hidden"),
+        navigationInert: Boolean(navigation?.inert),
+        contextInert: Boolean(context?.inert),
+        contextLeft: contextRect?.left || 0,
+        contextRight: contextRect?.right || 0,
+        viewport: window.innerWidth,
+      };
+    });
+  };
+
+  const mobile = await snapshot(880);
+  expect(mobile.navigationToggleVisible).toBe(true);
+  expect(mobile.contextToggleVisible).toBe(true);
+  expect(mobile.navigationHidden).toBe("true");
+  expect(mobile.contextHidden).toBe("true");
+  expect(mobile.navigationInert).toBe(true);
+  expect(mobile.contextInert).toBe(true);
+
+  for (const width of [881, 1120]) {
+    const staticContext = await snapshot(width);
+    expect(staticContext.navigationToggleVisible).toBe(false);
+    expect(staticContext.contextToggleVisible).toBe(false);
+    expect(staticContext.navigationHidden).toBeNull();
+    expect(staticContext.contextHidden).toBeNull();
+    expect(staticContext.navigationInert).toBe(false);
+    expect(staticContext.contextInert).toBe(false);
+    expect(staticContext.contextLeft).toBeGreaterThanOrEqual(0);
+    expect(staticContext.contextRight).toBeLessThanOrEqual(staticContext.viewport + 1);
+  }
+
+  const compactDesktop = await snapshot(1121);
+  expect(compactDesktop.navigationToggleVisible).toBe(false);
+  expect(compactDesktop.contextToggleVisible).toBe(true);
+  expect(compactDesktop.navigationHidden).toBeNull();
+  expect(compactDesktop.contextHidden).toBe("true");
+  expect(compactDesktop.navigationInert).toBe(false);
+  expect(compactDesktop.contextInert).toBe(true);
+  expect(compactDesktop.contextLeft).toBeGreaterThanOrEqual(compactDesktop.viewport - 1);
 });
 
 test("aligns the desktop workspace rails and reading edges at wide widths", async ({ page }) => {

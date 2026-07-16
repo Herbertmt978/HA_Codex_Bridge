@@ -553,10 +553,10 @@ is claimed before CI, release, and live validation complete.
 
 | Evidence or acceptance item | Status |
 | --- | --- |
-| Shared reading geometry | Header, transcript, safe live action, interactions, and compact composer use one 840-pixel content rail. The 330-360-pixel Activity card floats with the same desktop gutter and retains responsive drawers below the desktop breakpoint. |
+| Shared reading geometry | Header, transcript, safe live action, interactions, and compact composer use one 840-pixel content rail. The 330-360-pixel Activity card floats with the same desktop gutter at wide widths, then becomes an accessible right drawer at 1121-1480 pixels before it can compress the conversation. |
 | Continuous transcript | Messages, run activity, approvals, and questions share one scroll surface rather than competing nested regions. |
 | Activity information | Outputs, bounded Subagent totals, Background activity, Browser state, and Sources render as compact Codex-style sections. Terminal runs clear stale working counts while retaining completed and needs-attention totals. |
 | Failure containment | Artifact-index, archive, and preview errors remain local to **Files** after authoritative thread/status/events succeed. A healthy response and real connection state are preserved; bounded retry remains available. |
-| Responsive and accessible behavior | Mobile activity details expand inside the viewport; keyboard tabs, disclosures, touch targets, reduced motion, and one-to-one tab/panel semantics are retained. |
-| Local frontend verification | ESLint passed, 285/285 unit tests passed, the generated bundle rebuilt, and 16/16 Playwright flows passed including hostile-content containment, PDF preview, auth, approvals, retries, mobile bounds, and axe checks. |
+| Responsive and accessible behavior | Mobile activity details expand inside the viewport; compact-desktop Activity uses a focus-contained drawer; keyboard tabs, disclosures, touch targets, reduced motion, and one-to-one tab/panel semantics are retained. Exact 880/881/1120/1121 boundaries are covered. |
+| Local frontend verification | ESLint passed, 286/286 unit tests passed, the generated bundle rebuilt, and 17/17 Playwright flows passed including hostile-content containment, PDF preview, auth, approvals, retries, compact-width geometry, exact responsive boundaries, mobile bounds, and axe checks. |
 | Required target gate | Publish the immutable image, update both target components, then prove versions, retained account/history, normal prompt completion, no false connection banner after secondary file failure, Activity/card geometry, compact composer, mobile bounds, models/limits/search, and bounded PDF/archive behavior. |
