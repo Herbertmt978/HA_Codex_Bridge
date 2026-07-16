@@ -238,6 +238,23 @@ function safeAgentStateCounts(value) {
   };
 }
 
+function clearTerminalSubagentActivity(snapshot) {
+  if (!snapshot?.active) return snapshot;
+  const counts = { ...snapshot.counts };
+  delete counts.pendingInit;
+  delete counts.running;
+  const labels = [];
+  if (snapshot.completed) labels.push(`${snapshot.completed} complete`);
+  if (snapshot.attention) labels.push(`${snapshot.attention} need${snapshot.attention === 1 ? "s" : ""} attention`);
+  return {
+    ...snapshot,
+    counts,
+    total: snapshot.completed + snapshot.attention,
+    active: 0,
+    label: labels.join(" \u00b7 "),
+  };
+}
+
 function latestSubagentSnapshot(events, runId) {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
@@ -434,7 +451,9 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
   const assistant = assistantState(normalizedEvents, runId);
-  const subagents = latestSubagentSnapshot(normalizedEvents, runId);
+  const subagents = terminal
+    ? clearTerminalSubagentActivity(latestSubagentSnapshot(normalizedEvents, runId))
+    : latestSubagentSnapshot(normalizedEvents, runId);
   const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
   let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
   if (!action && state === "queued") action = "Waiting in queue";

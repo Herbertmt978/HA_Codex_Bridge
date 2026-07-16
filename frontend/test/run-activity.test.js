@@ -125,6 +125,45 @@ describe("run activity view model", () => {
     expect(onlyOtherRuns.subagents).toBeNull();
   });
 
+  it.each(["completed", "cancelled", "failed"])("clears stale active subagents when a run is %s", (terminalState) => {
+    const model = getRunActivityViewModel(
+      { status: "idle", active_run_id: null },
+      [
+        event(1, "item.started", {
+          item_type: "collabAgentToolCall",
+          agent_state_counts: { pendingInit: 1, running: 2, completed: 3, errored: 4 },
+        }),
+        event(2, `run.${terminalState}`),
+      ],
+    );
+
+    expect(model.subagents).toMatchObject({
+      total: 7,
+      active: 0,
+      completed: 3,
+      attention: 4,
+      label: "3 complete \u00b7 4 need attention",
+    });
+  });
+
+  it("retains active subagents while a run is in progress", () => {
+    const model = getRunActivityViewModel(
+      { status: "running", active_run_id: "run-1" },
+      [event(1, "item.started", {
+        item_type: "collabAgentToolCall",
+        agent_state_counts: { pendingInit: 1, running: 2, completed: 3, errored: 4 },
+      })],
+    );
+
+    expect(model.subagents).toMatchObject({
+      total: 10,
+      active: 3,
+      completed: 3,
+      attention: 4,
+      label: "3 active \u00b7 3 complete \u00b7 4 need attention",
+    });
+  });
+
   it.each([
     ["queued", "queued", false],
     ["completed", "completed", true],

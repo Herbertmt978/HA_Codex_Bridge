@@ -6,23 +6,30 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.8.1` (`amd64` only, experimental)
-- Published Integration: `0.8.1`
+- Published App: `0.8.2` (`amd64` only, experimental)
+- Published Integration: `0.8.2`
 - Latest target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.2`
+- Candidate App/Integration: `0.8.3`
 - Candidate Bridge: `0.7.2`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.8.2` with Bridge `0.7.2` is pending signed
+Candidate App/Integration `0.8.3` with Bridge `0.7.2` is pending signed
 publication and real Home Assistant validation; coordinated `0.7.5` remains
-the fully accepted baseline. Signed App `0.8.1` carries the verified Codex
-`0.144.5` runtime and the bounded live results below. The candidate restores
-aggregate scan failures to the typed, retryable local **Files** contract and
-keeps secondary artifact failures out of global connection state. It also
-calibrates the wide panel to the Codex desktop rail, conversation, composer,
-and full-height context geometry, with an explicit standards-based Focus mode
-for a clean three-pane canvas inside Home Assistant.
+the fully accepted baseline. Signed and target-smoked App `0.8.2` carries the
+verified Codex `0.144.5` runtime, restores aggregate scan failures to the typed,
+retryable local **Files** contract, and keeps secondary artifact failures out
+of global connection state. The candidate moves the panel materially closer to
+Codex desktop with one aligned reading rail, a continuous transcript, compact
+composer, floating Activity card, bounded subagent status, and viewport-safe
+mobile run details.
+
+The `0.8.2` publication, signature, SBOM, and provenance workflow passed in
+[run 29536061100](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29536061100).
+The App and Integration were installed on the target HA, retained ChatGPT Pro
+and history, reported the coordinated versions, and loaded without the prior
+false global connection banner. That was a bounded smoke check rather than a
+completed PDF/archive/restore acceptance matrix.
 
 The 0.8.1 live exercise proved installation/pairing, ChatGPT Pro/history,
 version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native

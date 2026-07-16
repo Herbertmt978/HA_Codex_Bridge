@@ -424,7 +424,7 @@ describe("polling event fallback", () => {
     vi.useRealTimers();
   });
 
-  it("surfaces a primary websocket artifact failure during the initial refresh", async () => {
+  it("keeps a websocket artifact failure local to Files after the initial snapshot succeeds", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
     panel._selectedThreadId = "thread-alpha";
@@ -442,11 +442,17 @@ describe("polling event fallback", () => {
 
     await panel._refreshActiveThread();
 
-    expect(panel._error).toBe("Bridge unavailable");
-    expect(panel._artifactRefreshState.status).toBe("idle");
+    expect(panel._error).toBe("");
+    expect(panel._activeThread?.title).toBe("Initial");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
   });
 
-  it("surfaces a primary websocket artifact failure during polling", async () => {
+  it("keeps a websocket artifact failure local to Files during polling", async () => {
     const event = controlEvent("message.created", { text: "Refresh" });
     const panel = pollingPanel(event);
     panel._activeThread = threadRecord("thr_safe", "Before poll");
@@ -464,8 +470,13 @@ describe("polling event fallback", () => {
 
     await panel._runPollTick(1);
 
-    expect(panel._error).toBe("Bridge unavailable");
-    expect(panel._errorSource).toBe("poll");
+    expect(panel._error).toBe("");
+    expect(panel._activeThread?.title).toBe("After poll");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
   });
 
   it("keeps an idle chat healthy when another run reserves its artifact workspace", async () => {
@@ -567,7 +578,7 @@ describe("polling event fallback", () => {
     vi.useRealTimers();
   });
 
-  it("surfaces a primary websocket failure during a manual artifact retry", async () => {
+  it("keeps a websocket failure local during a manual artifact retry", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
     panel._selectedThreadId = "thread-alpha";
@@ -577,8 +588,12 @@ describe("polling event fallback", () => {
 
     await panel._retryArtifactRefresh({ manual: true });
 
-    expect(panel._error).toBe("Bridge unavailable");
-    expect(panel._artifactRefreshState.status).toBe("idle");
+    expect(panel._error).toBe("");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
   });
 
   it("cancels a pending artifact retry when the selected chat changes or disconnects", async () => {
@@ -691,7 +706,7 @@ describe("polling event fallback", () => {
     expect(panel._error).toBe("");
   });
 
-  it("surfaces a primary websocket failure while listing an archived workspace", async () => {
+  it("keeps a websocket failure local while listing an archived workspace", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
     panel._selectedThreadId = "thread-alpha";
@@ -712,8 +727,12 @@ describe("polling event fallback", () => {
 
     await panel._createWorkspaceArchive();
 
-    expect(panel._error).toBe("Bridge unavailable");
-    expect(panel._errorSource).toBe("");
+    expect(panel._error).toBe("");
+    expect(panel._artifactRefreshState).toMatchObject({
+      status: "retryable",
+      action: "retry-artifacts",
+      message: "Files could not be refreshed.",
+    });
   });
 
   it("keeps a non-reservation artifact failure local to Files during a live refresh", async () => {

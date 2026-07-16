@@ -56,26 +56,24 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed App:** `0.8.1`, bundling Bridge `0.7.1` and Codex `0.144.5`.
-  App publication [run 29527193037](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29527193037)
-  produced immutable digest
-  `sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`;
-  signature, SBOM, and provenance verification passed for the signed
-  [0.8.1 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.1).
-  It installed successfully on the target HA, retained ChatGPT/history, and
-  reported the expected runtime models and limits, but bounded PDF acceptance
-  failed: stale sandbox-test debris in the aggregate workspace root produced
-  an operational scan failure that `0.8.1` misreported as HTTP 400 unsafe
-  selected-workspace content.
-- **Candidate, not yet accepted:** App, Integration, and panel `0.8.2`, Bridge
-  `0.7.2`, and Codex `0.144.5` restore that aggregate failure to the typed,
-  retryable local **Files** contract. Artifact-index and preview failures stay
-  in **Files** and cannot replace a successful reply with a false connection
-  outage. The same release adds measured desktop geometry, a theme-derived
-  navigation plane, and a user-invoked **Focus mode** that presents the full
-  Codex-style three-pane canvas without Home Assistant's surrounding chrome.
-  Signed publication and target-HA validation are still required; PDF indexing,
-  archive, preview, and Focus mode remain pending until that pass.
+- **Latest signed and installed App:** `0.8.2`, bundling Bridge `0.7.2` and
+  Codex `0.144.5`. App publication
+  [run 29536061100](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29536061100)
+  completed its immutable-image, signature, SBOM, and provenance workflow. The
+  App and Integration were then installed on the target HA, retained ChatGPT
+  Pro and history, reported the coordinated versions, and loaded without a
+  false global connection banner. This was a bounded live smoke check rather
+  than a completed PDF/archive/restore acceptance matrix, so `0.7.5` remains
+  the latest fully target-accepted release.
+- **Candidate, not yet accepted:** App, Integration, and panel `0.8.3`, Bridge
+  `0.7.2`, and Codex `0.144.5` continue that recovery contract and move the
+  panel materially closer to Codex desktop. Header, transcript, safe live
+  actions, interactions, and composer share one 840-pixel reading rail; the
+  compact Activity card exposes Outputs, bounded Subagent counts, Background
+  activity, Browser state, and Sources; mobile run details stay inside the
+  viewport. Successful replies can no longer be replaced by a secondary
+  artifact-index, archive, or preview error. Signed publication and the full
+  target-HA matrix are still required.
 - **Browser automation:** secure App-owned browser-worker follow-up is tracked
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).
@@ -108,7 +106,7 @@ environment-specific acceptance. Historical details remain in the
    Assistant so its Supervisor discovery handler is active.
 2. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
-   offers App `0.7.1` or newer, then install and start **Codex Bridge**. Do not
+   offers App `0.8.2` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
 3. In **Settings -> Devices & services**, confirm the discovered **Codex
    Bridge** Integration. Supervisor advertises the App's private HA-network IP

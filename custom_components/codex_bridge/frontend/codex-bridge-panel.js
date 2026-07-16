@@ -247,7 +247,12 @@ function acceptEvents(state, values) {
 }
 
 // frontend/src/info-center.js
+var MAX_ROWS = 8;
+var MAX_ARTIFACTS = 1e3;
+var MAX_COUNT = 1e6;
+var MAX_HISTORY_ITEMS = 32;
 var MAX_SAFE_BYTES = 1024 ** 5;
+var SAFE_VERSION = /^[0-9][0-9A-Za-z.+-]{0,31}$/u;
 var PLAN_NAMES = Object.freeze({
   free: "Free",
   go: "Go",
@@ -284,6 +289,70 @@ var PROJECT_KINDS = Object.freeze({
   project: "Project workspace",
   imported: "Imported workspace"
 });
+var RUN_ACTIVITY_STATES = Object.freeze({
+  idle: "Ready",
+  queued: "Queued",
+  running: "Working",
+  completed: "Completed",
+  failed: "Needs attention",
+  cancelled: "Stopped",
+  interrupted: "Interrupted"
+});
+var SAFE_ACTIVITY_LABELS = /* @__PURE__ */ new Set([
+  "Preparing a response",
+  "Running a command",
+  "Compacting context",
+  "Delegating to an agent",
+  "Calling a tool",
+  "Applying file changes",
+  "Generating an image",
+  "Viewing an image",
+  "Calling an MCP tool",
+  "Planning the work",
+  "Thinking through the request",
+  "Waiting",
+  "Working with a sub-agent",
+  "Searching the web",
+  "Reading files",
+  "Listing files",
+  "Searching files",
+  "Opening a web page",
+  "Finding text in a page",
+  "Using web search",
+  "Adding files",
+  "Updating files",
+  "Deleting files",
+  "Starting a sub-agent",
+  "Steering a sub-agent",
+  "Resuming a sub-agent",
+  "Waiting for sub-agents",
+  "Closing a sub-agent",
+  "Sub-agent started",
+  "Sub-agent active",
+  "Sub-agent interrupted",
+  "Working on the request",
+  "Waiting in queue",
+  "Generating a response",
+  "Run completed",
+  "Run failed",
+  "Run cancelled",
+  "Run interrupted"
+]);
+var WEB_ACTIVITY_LABELS = /* @__PURE__ */ new Set([
+  "Searching the web",
+  "Opening a web page",
+  "Finding text in a page",
+  "Using web search"
+]);
+var INFO_SECTION_IDS = Object.freeze([
+  "outputs",
+  "subagents",
+  "background",
+  "browser",
+  "sources",
+  "usage",
+  "system"
+]);
 var INFO_TABS = Object.freeze([
   Object.freeze({ id: "activity", label: "Activity" }),
   Object.freeze({ id: "files", label: "Files" }),
@@ -319,6 +388,243 @@ var ABOUT_SCREENS = Object.freeze([
     summary: "Version labels describe the installed panel and private runtime components without exposing connection details."
   })
 ]);
+function isRecord2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function safeVersion(value) {
+  return typeof value === "string" && SAFE_VERSION.test(value) ? value : "Unavailable";
+}
+function safeBooleanLabel(value, positive, negative = "Unavailable") {
+  return value === true ? positive : value === false ? negative : "Unavailable";
+}
+function safeEnum(value, values, fallback = "Unavailable") {
+  return typeof value === "string" && Object.hasOwn(values, value) ? values[value] : fallback;
+}
+function safePlan(value) {
+  if (typeof value !== "string") return "Unknown";
+  return PLAN_NAMES[value.trim().toLowerCase()] || "Unknown";
+}
+function safePercent(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+    return "Unavailable";
+  }
+  return `${Math.round(value)}% remaining`;
+}
+function safeCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? Math.min(MAX_COUNT, value) : 0;
+}
+function safeActivityLabel(value) {
+  return typeof value === "string" && SAFE_ACTIVITY_LABELS.has(value) ? value : "";
+}
+function safeRunActivity(value) {
+  if (!isRecord2(value)) {
+    return {
+      state: "No active run",
+      action: "",
+      actionHistoryCount: 0,
+      files: { changed: 0, additions: 0, deletions: 0 },
+      subagents: null,
+      webSearchActive: false
+    };
+  }
+  const stateValue = value.state || value.status;
+  const state = typeof stateValue === "string" && stateValue ? safeEnum(stateValue, RUN_ACTIVITY_STATES, "Unavailable") : "No active run";
+  const action = safeActivityLabel(value.currentActivity || value.action);
+  const history = Array.isArray(value.actionHistory) ? value.actionHistory.slice(0, MAX_HISTORY_ITEMS).filter((item) => isRecord2(item) ? safeActivityLabel(item.label) : safeActivityLabel(item)).length : 0;
+  const files = isRecord2(value.files) ? value.files : {};
+  const subagentInput = isRecord2(value.subagents) ? value.subagents : null;
+  const subagents = subagentInput ? {
+    total: safeCount(subagentInput.total),
+    active: safeCount(subagentInput.active),
+    completed: safeCount(subagentInput.completed),
+    attention: safeCount(subagentInput.attention)
+  } : null;
+  return {
+    state,
+    action,
+    actionHistoryCount: history,
+    files: {
+      changed: safeCount(files.changed),
+      additions: safeCount(files.additions),
+      deletions: safeCount(files.deletions)
+    },
+    subagents,
+    webSearchActive: value.webSearchActive === true || value.web_search_active === true || WEB_ACTIVITY_LABELS.has(action)
+  };
+}
+function safeSourceCount(value) {
+  if (Array.isArray(value)) return Math.min(MAX_ARTIFACTS, value.length);
+  return safeCount(value);
+}
+function safeArtifactSummary(artifacts) {
+  if (!Array.isArray(artifacts)) {
+    return { count: 0, bytes: 0 };
+  }
+  let bytes = 0;
+  for (const artifact of artifacts.slice(0, MAX_ARTIFACTS)) {
+    const size = isRecord2(artifact) ? artifact.size_bytes : null;
+    if (Number.isSafeInteger(size) && size >= 0) {
+      bytes = Math.min(MAX_SAFE_BYTES, bytes + size);
+    }
+  }
+  return { count: Math.min(MAX_ARTIFACTS, artifacts.length), bytes };
+}
+function formatBytes(bytes) {
+  if (!Number.isSafeInteger(bytes) || bytes < 0) return "Unavailable";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB", "PB"];
+  let value = bytes;
+  let unit = "B";
+  for (const candidate of units) {
+    value /= 1024;
+    unit = candidate;
+    if (value < 1024 || candidate === "PB") break;
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+}
+function section(id, title, summary, rows) {
+  return {
+    id,
+    title,
+    summary,
+    rows: rows.slice(0, MAX_ROWS).map(([label, value]) => ({ label, value }))
+  };
+}
+function getInfoCenterViewModel({
+  status = {},
+  thread = {},
+  project = {},
+  artifacts = [],
+  panelVersion = "",
+  runActivity = null,
+  browser = {},
+  sources = []
+} = {}) {
+  const safeStatus = isRecord2(status) ? status : {};
+  const auth = isRecord2(safeStatus.auth) ? safeStatus.auth : {};
+  const account = isRecord2(safeStatus.account) ? safeStatus.account : {};
+  const limits = isRecord2(safeStatus.limits) ? safeStatus.limits : {};
+  const primary = isRecord2(limits.primary) ? limits.primary : {};
+  const secondary = isRecord2(limits.secondary) ? limits.secondary : {};
+  const diagnostics = isRecord2(safeStatus.diagnostics) ? safeStatus.diagnostics : {};
+  const app = isRecord2(safeStatus.app) ? safeStatus.app : {};
+  const integration = isRecord2(safeStatus.integration) ? safeStatus.integration : {};
+  const safeThread = isRecord2(thread) ? thread : {};
+  const safeProject = isRecord2(project) ? project : {};
+  const fileSummary = safeArtifactSummary(artifacts);
+  const attachmentCount = Array.isArray(safeThread.attachments) ? Math.min(MAX_ARTIFACTS, safeThread.attachments.length) : 0;
+  const activitySnapshot = safeRunActivity(runActivity);
+  const providerCapabilities = isRecord2(safeStatus.provider_capabilities) ? safeStatus.provider_capabilities : {};
+  const safeBrowser = isRecord2(browser) ? browser : {};
+  const webSearchAvailable = providerCapabilities.web_search === true || safeBrowser.web_search === true;
+  const webSearchUnavailable = providerCapabilities.web_search === false || safeBrowser.web_search === false;
+  const sourceCount = Math.max(
+    safeSourceCount(sources),
+    safeSourceCount(safeBrowser.source_count),
+    safeSourceCount(safeBrowser.sources)
+  );
+  const runState = safeEnum(safeThread.status, RUN_STATES, "No active run");
+  const connected = auth.state === "ok" && auth.auth_required === false && account.auth_mode === "chatgpt";
+  const appReady = app.connected === true;
+  const integrationReady = integration.ready === true;
+  const bridgeReady = Number(safeStatus.api_version) === 1 && safeStatus.bridge_ready !== false;
+  const codexReady = safeStatus.codex_ready === true || typeof diagnostics.app_server_version === "string" && bridgeReady;
+  const activity = section(
+    "activity",
+    "Current activity",
+    runState === "No active run" ? "Choose a chat to see its current run state." : `This chat is ${runState.toLowerCase()}.`,
+    [
+      ["Chat", safeThread.thread_id ? "Selected" : "Not selected"],
+      ["Run", runState],
+      ["Permission", safeEnum(safeThread.mode, MODE_NAMES, "Unavailable")],
+      ["Workspace type", safeEnum(safeProject.kind, PROJECT_KINDS, "Unavailable")]
+    ]
+  );
+  const outputs = section(
+    "outputs",
+    "Outputs",
+    fileSummary.count ? "Files created or attached in this chat are ready to review." : "No files are available for this chat yet.",
+    [
+      ["Available files", String(fileSummary.count)],
+      ["Known size", formatBytes(fileSummary.bytes)],
+      ["Attachments", String(attachmentCount)],
+      ["Workspace archive", safeThread.thread_id ? "Available from the Files section" : "Select a chat first"]
+    ]
+  );
+  const subagents = section(
+    "subagents",
+    "Subagents",
+    activitySnapshot.subagents?.total ? "Aggregate sub-agent activity is shown without names or prompts." : "No sub-agent activity has been reported for this run.",
+    [
+      ["Total", String(activitySnapshot.subagents?.total || 0)],
+      ["Active", String(activitySnapshot.subagents?.active || 0)],
+      ["Completed", String(activitySnapshot.subagents?.completed || 0)],
+      ["Needs attention", String(activitySnapshot.subagents?.attention || 0)]
+    ]
+  );
+  const background = section(
+    "background",
+    "Background activity",
+    activitySnapshot.action || activitySnapshot.state === "Working" ? `This chat is ${activitySnapshot.state.toLowerCase()}.` : "No background activity is currently reported.",
+    [
+      ["Run", activitySnapshot.state],
+      ["Current step", activitySnapshot.action || "Unavailable"],
+      ["Recent stages", String(activitySnapshot.actionHistoryCount)],
+      ["Files changed", String(activitySnapshot.files.changed)]
+    ]
+  );
+  const browserSection = section(
+    "browser",
+    "Browser",
+    activitySnapshot.webSearchActive ? "Web search is active for this run." : webSearchAvailable ? "Web search is available when the run requests it." : "No browser activity is currently reported.",
+    [
+      ["Web search", webSearchAvailable ? "Available" : webSearchUnavailable ? "Unavailable" : "Unknown"],
+      ["Current use", activitySnapshot.webSearchActive ? "Active" : "Not active"]
+    ]
+  );
+  const sourcesSection = section(
+    "sources",
+    "Sources",
+    sourceCount ? `${sourceCount} source${sourceCount === 1 ? "" : "s"} reported for this run.` : "No source context is available for this run.",
+    [
+      ["Sources", String(sourceCount)],
+      ["Details", sourceCount ? "Available in the transcript" : "Unavailable"]
+    ]
+  );
+  const usage = section(
+    "usage",
+    "Usage and account",
+    limits.blocked === true ? "Usage is temporarily unavailable for this account." : connected ? "Usage is shown from the latest safe account snapshot." : "Connect a ChatGPT account to view usage.",
+    [
+      ["ChatGPT", connected ? "Connected" : "Not connected"],
+      ["Plan", safePlan(account.plan_type)],
+      ["5-hour limit", limits.available === true ? safePercent(primary.remaining_percent) : "Unavailable"],
+      ["Weekly limit", limits.available === true ? safePercent(secondary.remaining_percent) : "Unavailable"]
+    ]
+  );
+  const system = section(
+    "system",
+    "System status",
+    appReady && integrationReady && bridgeReady && codexReady ? "The private runtime is ready." : "One or more private runtime components need attention.",
+    [
+      ["Panel", safeVersion(panelVersion)],
+      ["App", `${safeBooleanLabel(app.connected, "Connected", "Not connected")} · ${safeVersion(app.version || diagnostics.app_version)}`],
+      ["Integration", `${safeBooleanLabel(integration.ready, "Ready", "Needs attention")} · ${safeVersion(integration.version)}`],
+      ["Bridge", `${bridgeReady ? "Ready" : "Needs attention"} · ${safeVersion(diagnostics.bridge_version)}`],
+      ["Codex", `${codexReady ? "Ready" : "Needs attention"} · ${safeVersion(diagnostics.app_server_version || diagnostics.active_codex_version)}`]
+    ]
+  );
+  const sections = [outputs, subagents, background, browserSection, sourcesSection, usage, system];
+  return {
+    tabs: INFO_TABS,
+    sections,
+    // Legacy aliases remain stable for callers that render the existing tabs.
+    activity,
+    files: outputs,
+    usage,
+    system
+  };
+}
 
 // node_modules/pdfjs-dist/legacy/build/pdf.min.mjs
 var t = { 9306(t2, e2, i2) {
@@ -20711,7 +21017,7 @@ async function renderPdfPage({
 
 // frontend/src/run-activity.js
 var MAX_ACTION_TEXT = 240;
-var MAX_HISTORY_ITEMS = 8;
+var MAX_HISTORY_ITEMS2 = 8;
 var MAX_EVENTS = 2e3;
 var MAX_PLAN_STEPS = 128;
 var MAX_PATCH_CHANGES = 2048;
@@ -20770,7 +21076,7 @@ var AGENT_STATE_KEYS = Object.freeze([
   "shutdown",
   "notFound"
 ]);
-function isRecord2(value) {
+function isRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function safeText(value, maximum = MAX_ACTION_TEXT) {
@@ -20793,13 +21099,13 @@ function safeChunk(value, maximum = 320) {
   return normalized.length > maximum ? normalized.slice(0, maximum) : normalized;
 }
 function eventPayload(event) {
-  return isRecord2(event?.payload) ? event.payload : {};
+  return isRecord3(event?.payload) ? event.payload : {};
 }
 function normalizeEvents2(events) {
   if (!Array.isArray(events)) {
     return [];
   }
-  return events.filter((event) => isRecord2(event) && Number.isSafeInteger(event.sequence) && event.sequence > 0 && typeof event.event_type === "string" && event.event_type.length <= 120 && isRecord2(event.payload)).sort((left, right) => left.sequence - right.sequence).slice(-MAX_EVENTS);
+  return events.filter((event) => isRecord3(event) && Number.isSafeInteger(event.sequence) && event.sequence > 0 && typeof event.event_type === "string" && event.event_type.length <= 120 && isRecord3(event.payload)).sort((left, right) => left.sequence - right.sequence).slice(-MAX_EVENTS);
 }
 function eventRunId(event) {
   const runId = eventPayload(event).run_id;
@@ -20826,7 +21132,7 @@ function currentPlan(events, runId) {
       continue;
     }
     const steps = plan.slice(0, MAX_PLAN_STEPS).map((item) => {
-      if (!isRecord2(item)) {
+      if (!isRecord3(item)) {
         return null;
       }
       const label = safeText(item.step);
@@ -20879,7 +21185,7 @@ function itemLabel(payload = {}) {
   return typeof itemType === "string" && Object.hasOwn(ITEM_LABELS, itemType) ? ITEM_LABELS[itemType] : "Working on the request";
 }
 function safeAgentStateCounts(value) {
-  if (!isRecord2(value)) return null;
+  if (!isRecord3(value)) return null;
   const counts = {};
   let total = 0;
   for (const state of AGENT_STATE_KEYS) {
@@ -20902,6 +21208,22 @@ function safeAgentStateCounts(value) {
     active,
     completed,
     attention,
+    label: labels.join(" · ")
+  };
+}
+function clearTerminalSubagentActivity(snapshot) {
+  if (!snapshot?.active) return snapshot;
+  const counts = { ...snapshot.counts };
+  delete counts.pendingInit;
+  delete counts.running;
+  const labels = [];
+  if (snapshot.completed) labels.push(`${snapshot.completed} complete`);
+  if (snapshot.attention) labels.push(`${snapshot.attention} need${snapshot.attention === 1 ? "s" : ""} attention`);
+  return {
+    ...snapshot,
+    counts,
+    total: snapshot.completed + snapshot.attention,
+    active: 0,
     label: labels.join(" · ")
   };
 }
@@ -20957,7 +21279,7 @@ function patchCounts(events, runId) {
       continue;
     }
     for (const change of changes) {
-      if (seen >= MAX_PATCH_CHANGES || !isRecord2(change)) {
+      if (seen >= MAX_PATCH_CHANGES || !isRecord3(change)) {
         break;
       }
       seen += 1;
@@ -20965,7 +21287,7 @@ function patchCounts(events, runId) {
       if (!path) {
         continue;
       }
-      const kind = isRecord2(change.kind) ? change.kind.type : change.kind;
+      const kind = isRecord3(change.kind) ? change.kind.type : change.kind;
       files.set(path, {
         kind: kind === "add" || kind === "delete" || kind === "update" ? kind : "update",
         ...diffLineCounts(change.diff)
@@ -21031,7 +21353,7 @@ function addHistory(history, seen, label, kind) {
   if (!text2 || seen.has(`${kind}:${text2}`)) return;
   seen.add(`${kind}:${text2}`);
   history.push({ label: text2, kind });
-  if (history.length > MAX_HISTORY_ITEMS) history.shift();
+  if (history.length > MAX_HISTORY_ITEMS2) history.shift();
 }
 function getRunActivityViewModel(thread = {}, events = []) {
   const normalizedEvents = normalizeEvents2(events);
@@ -21064,7 +21386,7 @@ function getRunActivityViewModel(thread = {}, events = []) {
     const payload = eventPayload(event);
     if (event.event_type === "plan.updated" && Array.isArray(payload.plan)) {
       for (const item of payload.plan.slice(0, MAX_PLAN_STEPS)) {
-        if (isRecord2(item) && (item.status === "completed" || item.status === "inProgress" || item.status === "in_progress")) {
+        if (isRecord3(item) && (item.status === "completed" || item.status === "inProgress" || item.status === "in_progress")) {
           addHistory(history, seenHistory, item.step, "plan");
         }
       }
@@ -21079,7 +21401,7 @@ function getRunActivityViewModel(thread = {}, events = []) {
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
   const assistant = assistantState(normalizedEvents, runId);
-  const subagents = latestSubagentSnapshot(normalizedEvents, runId);
+  const subagents = terminal ? clearTerminalSubagentActivity(latestSubagentSnapshot(normalizedEvents, runId)) : latestSubagentSnapshot(normalizedEvents, runId);
   const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
   let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
   if (!action && state === "queued") action = "Waiting in queue";
@@ -21878,11 +22200,11 @@ function renderOnboarding(container, model) {
 }
 
 // frontend/src/views/runtime-strip.js
-function safeVersion(value) {
+function safeVersion2(value) {
   return typeof value === "string" && /^[0-9][0-9A-Za-z.+-]{0,31}$/u.test(value) ? value : null;
 }
 function runtimeItem(label, ready, version) {
-  return { label, state: ready ? "ready" : "attention", version: safeVersion(version) };
+  return { label, state: ready ? "ready" : "attention", version: safeVersion2(version) };
 }
 function getRuntimeStripViewModel(status = {}) {
   const apiVersion = Number(status.api_version);
@@ -22282,12 +22604,12 @@ function renderTable(documentRef, rows, columns, actions = null) {
   return table;
 }
 function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
-  const section = documentRef.createElement("div");
-  section.className = "desktop-feature-content";
+  const section2 = documentRef.createElement("div");
+  section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
-  section.append(toolbar);
+  section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
     const editing = state.editingAutomation || {};
     const schedule = editing.schedule || {};
@@ -22312,28 +22634,28 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
     form.append(actions);
-    section.append(form);
+    section2.append(form);
   }
   const rows = normalizeDesktopList(state.data.automations || state.data);
-  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+  section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
-    section.append(text(documentRef, "h3", "Run history", "desktop-subheading"));
-    section.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
+    section2.append(text(documentRef, "h3", "Run history", "desktop-subheading"));
+    section2.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
   }
-  return section;
+  return section2;
 }
 function renderSkills(documentRef, state) {
-  const section = documentRef.createElement("div");
-  section.className = "desktop-feature-content";
+  const section2 = documentRef.createElement("div");
+  section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button(documentRef, "Create skill", "open-skill-form"));
-  section.append(toolbar);
+  section2.append(toolbar);
   if (state.form === "skill") {
     const form = documentRef.createElement("form");
     form.className = "desktop-form";
@@ -22343,35 +22665,35 @@ function renderSkills(documentRef, state) {
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form"));
     form.append(actions);
-    section.append(form);
+    section2.append(form);
   }
   const rows = normalizeDesktopList(state.data.skills || state.data);
-  section.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+  section2.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
     const id = row.id || row.skill_id || row.name || "";
     td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
     td.append(button(documentRef, "Delete", "delete-skill", { id }));
   }));
-  return section;
+  return section2;
 }
 function renderPlugins(documentRef, state) {
-  const section = documentRef.createElement("div");
-  section.className = "desktop-feature-content";
+  const section2 = documentRef.createElement("div");
+  section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Plugins", "desktop-section-label"));
-  section.append(toolbar);
+  section2.append(toolbar);
   const rows = normalizeDesktopList(state.data.plugins || state.data);
-  section.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
+  section2.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
     td.append(button(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
   const market = normalizeDesktopList(state.data.marketplaces);
   const marketHeading = text(documentRef, "h3", "Trusted marketplaces", "desktop-subheading");
-  section.append(marketHeading);
+  section2.append(marketHeading);
   const marketActions = documentRef.createElement("div");
   marketActions.className = "desktop-form-actions";
   marketActions.append(button(documentRef, "Add marketplace", "open-marketplace-form"));
-  section.append(marketActions);
+  section2.append(marketActions);
   if (state.form === "marketplace") {
     const form = documentRef.createElement("form");
     form.className = "desktop-form";
@@ -22381,15 +22703,15 @@ function renderPlugins(documentRef, state) {
     actions.className = "desktop-form-actions";
     actions.append(button(documentRef, "Add marketplace", "submit-marketplace"), button(documentRef, "Cancel", "close-form"));
     form.append(actions);
-    section.append(form);
+    section2.append(form);
   }
   const marketRows = market.map((row) => ({ ...row, plugin_count: Array.isArray(row.plugins) ? row.plugins.length : 0 }));
-  section.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
-  return section;
+  section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
+  return section2;
 }
 function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
-  const section = documentRef.createElement("div");
-  section.className = "desktop-feature-content settings-content";
+  const section2 = documentRef.createElement("div");
+  section2.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav");
   tabs.className = "settings-tabs";
   tabs.setAttribute("role", "tablist");
@@ -22407,13 +22729,13 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     control.tabIndex = tab === id ? 0 : -1;
     tabs.append(control);
   }
-  section.append(tabs);
+  section2.append(tabs);
   const panel = documentRef.createElement("section");
   panel.id = "settings-panel";
   panel.className = "settings-panel";
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-labelledby", `settings-tab-${tab}`);
-  section.append(panel);
+  section2.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
   if (tab === "mcp") {
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
@@ -22479,7 +22801,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account. Ask naturally, or type $imagegen in a chat.", "desktop-note")
     );
   }
-  return section;
+  return section2;
 }
 function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
   if (!container) return;
@@ -22531,7 +22853,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.8.2";
+var PANEL_VERSION = "0.8.3";
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 var AUTH_VERIFICATION_HOSTS = /* @__PURE__ */ new Set([
   "auth.openai.com",
@@ -22589,8 +22911,6 @@ var PDF_PREVIEW_MAX_LABEL = "8 MB";
 var GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
-var ARTIFACT_PRIMARY_ERROR_CODES = /* @__PURE__ */ new Set(["invalid_auth", "cannot_connect", "not_configured"]);
-var ARTIFACT_PRIMARY_HTTP_STATUSES = /* @__PURE__ */ new Set([401, 403, 502, 503, 504]);
 var ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 var ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1e3, 2e3]);
 function isGeneratedImageArtifact(artifact) {
@@ -22623,23 +22943,6 @@ function artifactErrorCode(error) {
     }
   }
   return "";
-}
-function artifactErrorStatus(error) {
-  for (const candidate of artifactErrorCandidates(error)) {
-    if (candidate && typeof candidate === "object") {
-      const value = candidate.status ?? candidate.statusCode;
-      if (Number.isInteger(value)) return value;
-    }
-  }
-  return null;
-}
-function isArtifactDomainFailure(error) {
-  const code = artifactErrorCode(error);
-  const status = artifactErrorStatus(error);
-  return !ARTIFACT_PRIMARY_ERROR_CODES.has(code) && !ARTIFACT_PRIMARY_HTTP_STATUSES.has(status);
-}
-function hasStructuredArtifactError(error) {
-  return Boolean(artifactErrorCode(error)) || artifactErrorStatus(error) !== null;
 }
 function artifactPreviewLimit(artifact) {
   if (isPdfArtifactCandidate(artifact)) {
@@ -22719,9 +23022,9 @@ template.innerHTML = `
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
-      --rail-bg: color-mix(in srgb, var(--surface-bg) 95%, var(--accent-color) 5%);
+      --rail-bg: color-mix(in srgb, var(--surface-bg) 90%, #dff4c1 10%);
       --canvas-bg: color-mix(in srgb, var(--surface-bg) 99%, var(--text-color) 1%);
-      --context-bg: color-mix(in srgb, var(--surface-bg) 96%, var(--text-color) 4%);
+      --context-bg: color-mix(in srgb, var(--surface-bg) 98%, var(--text-color) 2%);
       --focus-ring-color: color-mix(in srgb, var(--accent-color) 74%, var(--surface-bg) 26%);
       --focus-ring-contrast: var(--surface-bg);
       --brand-cyan: #64748b;
@@ -22735,11 +23038,13 @@ template.innerHTML = `
       --danger-surface: color-mix(in srgb, var(--danger-color) 11%, var(--surface-bg) 89%);
       --warning-surface: color-mix(in srgb, var(--brand-amber) 10%, var(--surface-bg) 90%);
       --success-surface: color-mix(in srgb, var(--brand-emerald) 10%, var(--surface-bg) 90%);
+      --conversation-width: 840px;
       --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06);
       --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
       height: 100%;
       color: var(--text-color);
+      font-family: var(--paper-font-body1_-_font-family, var(--primary-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif));
     }
 
     :host(:fullscreen) {
@@ -24727,7 +25032,7 @@ template.innerHTML = `
      * These rules sit near the responsive rules so stateful controls above retain their
      * existing selectors and behaviour while sharing one visual language. */
     .shell {
-      grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr) clamp(260px, 18vw, 350px);
+      grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr) clamp(342px, calc(22vw + 12px), 372px);
       gap: 0;
       padding: 0;
       background: var(--canvas-bg);
@@ -24744,13 +25049,20 @@ template.innerHTML = `
       display: none;
     }
 
-    .rail-pane,
-    .side-pane {
-      background: var(--rail-bg);
+    .rail-pane {
+      background:
+        linear-gradient(180deg,
+          color-mix(in srgb, var(--surface-bg) 88%, #dff4c1 12%) 0%,
+          color-mix(in srgb, var(--surface-bg) 92%, #dff4c1 8%) 68%,
+          color-mix(in srgb, var(--surface-bg) 88%, #fff0a8 12%) 100%);
     }
 
     .side-pane {
+      margin: 64px 12px 12px 0;
+      border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+      border-radius: 18px;
       background: var(--context-bg);
+      box-shadow: 0 12px 32px color-mix(in srgb, var(--text-color) 10%, transparent);
     }
 
     .rail-pane {
@@ -24758,7 +25070,7 @@ template.innerHTML = `
     }
 
     .side-pane {
-      border-left: 1px solid var(--border-color);
+      border-left: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
     }
 
     .rail-header,
@@ -24865,7 +25177,7 @@ template.innerHTML = `
     }
 
     .main-header {
-      padding-inline: max(20px, calc((100% - 900px) / 2));
+      padding-inline: max(20px, calc((100% - var(--conversation-width)) / 2));
     }
 
     .eyeline,
@@ -24974,7 +25286,7 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
-    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr); }
+    .shell.desktop-route { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
     .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
     .shell.desktop-route .side-pane { display: none !important; }
 
@@ -25491,6 +25803,16 @@ template.innerHTML = `
       background: var(--canvas-bg);
     }
 
+    .conversation-scroll {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scroll-padding-block: 24px;
+    }
+
     #thread-status-text:not(:empty) {
       padding: 4px 7px;
       border: 1px solid var(--border-color);
@@ -25505,7 +25827,7 @@ template.innerHTML = `
     .interaction-region,
     .message-list,
     .run-activity-region {
-      width: min(calc(100% - 32px), 900px);
+      width: min(calc(100% - 32px), var(--conversation-width));
       margin-inline: auto;
     }
 
@@ -25582,15 +25904,27 @@ template.innerHTML = `
     .message-list {
       padding: 20px 0 8px;
       gap: 18px;
+      flex: 0 0 auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .interaction-region {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      padding: 8px 0 18px;
+      overflow: visible;
     }
 
     .run-activity-region {
       position: relative;
-      display: flex;
+      display: grid;
       flex: 0 0 auto;
+      grid-template-columns: minmax(0, 1fr);
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      justify-items: start;
+      gap: 8px;
       min-height: 42px;
       margin: 0 auto;
       padding: 2px 0 8px 34px;
@@ -25658,13 +25992,16 @@ template.innerHTML = `
     .run-step-wrap {
       position: relative;
       flex: 0 0 auto;
+      justify-self: center;
+      max-width: calc(100% - 34px);
+      transform: translateX(-17px);
     }
 
     .run-step-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      min-height: 34px;
+      min-height: 32px;
       max-width: min(100%, 520px);
       padding: 6px 11px;
       border: 1px solid var(--border-color);
@@ -25672,7 +26009,7 @@ template.innerHTML = `
       background: var(--surface-bg);
       color: var(--muted-color);
       box-shadow: var(--shadow-soft);
-      font-size: 12px;
+      font-size: 12.5px;
       white-space: nowrap;
     }
 
@@ -25952,18 +26289,82 @@ template.innerHTML = `
     }
 
     .composer-shell {
-      position: sticky;
+      position: relative;
       z-index: 2;
-      bottom: 12px;
-      width: min(calc(100% - 32px), 900px);
-      gap: 8px;
-      margin: 10px auto 14px;
-      padding: 8px 9px max(8px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      width: min(calc(100% - 32px), var(--conversation-width));
+      gap: 4px 10px;
+      margin: 8px auto 14px;
+      padding: 10px 12px max(10px, env(safe-area-inset-bottom));
       border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
-      border-radius: 20px;
+      border-radius: 18px;
       background: var(--surface-bg);
       box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 11%, transparent);
       transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+
+    .composer-shell .attachment-toolbar {
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .composer-shell .attachment-actions {
+      gap: 4px;
+    }
+
+    .composer-shell .attachment-toolbar .icon-button {
+      width: 32px;
+      height: 32px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .composer-shell .attachment-toolbar .icon-button:hover,
+    .composer-shell .attachment-toolbar .icon-button:focus-visible {
+      background: var(--surface-muted);
+    }
+
+    .composer-shell .attachment-chips {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(100% + 8px);
+    }
+
+    .composer-shell .composer {
+      display: contents;
+    }
+
+    .composer-shell .composer textarea {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+
+    .composer-shell .composer .send-button {
+      grid-column: 3;
+      grid-row: 2;
+    }
+
+    .composer-shell .composer-diagnostics {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+    }
+
+    .composer-shell .compact-toolbar {
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .composer-shell .composer-status {
+      grid-column: 1 / -1;
+      grid-row: 3;
     }
 
     .composer-shell:focus-within {
@@ -25984,7 +26385,8 @@ template.innerHTML = `
 
     .composer textarea {
       min-height: 64px;
-      padding: 10px 11px;
+      max-height: 220px;
+      padding: 8px 4px;
       border: 0;
       border-radius: 10px;
       outline: 0;
@@ -26257,6 +26659,140 @@ template.innerHTML = `
       padding: 0;
     }
 
+    .side-panel,
+    .activity-center {
+      display: grid;
+      min-width: 0;
+      align-content: start;
+    }
+
+    .activity-center-section {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .activity-center-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .activity-center-heading h3,
+    .activity-center-summary {
+      margin: 0;
+    }
+
+    .activity-center-heading h3 {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .activity-center-summary {
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .activity-center-rows {
+      display: grid;
+      gap: 5px;
+    }
+
+    .activity-center-section[data-section="subagents"] .activity-center-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .activity-agent-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      color: var(--text-color);
+      font-size: 12px;
+    }
+
+    .activity-agent-markers {
+      display: inline-flex;
+      align-items: center;
+      padding-right: 2px;
+    }
+
+    .activity-agent-marker {
+      width: 15px;
+      height: 15px;
+      margin-left: -3px;
+      border: 2px solid var(--context-bg);
+      border-radius: 999px;
+      background: var(--agent-marker, var(--accent-color));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--agent-marker, var(--accent-color)) 28%, transparent);
+    }
+
+    .activity-agent-marker:first-child {
+      margin-left: 0;
+    }
+
+    .activity-agent-marker:nth-child(1) { --agent-marker: #f472b6; }
+    .activity-agent-marker:nth-child(2) { --agent-marker: #2dd4bf; }
+    .activity-agent-marker:nth-child(3) { --agent-marker: #facc15; }
+    .activity-agent-marker:nth-child(4) { --agent-marker: #60a5fa; }
+
+    .activity-agent-done {
+      margin-left: auto;
+      color: var(--muted-color);
+    }
+
+    .activity-agent-attention {
+      color: var(--danger-color);
+      font-weight: 650;
+    }
+
+    .activity-center-section[data-section="subagents"] .context-row {
+      display: grid;
+      gap: 2px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .activity-center-section[data-section="background"] .context-row,
+    .activity-center-section[data-section="browser"] .context-row,
+    .activity-center-section[data-section="sources"] .context-row {
+      min-height: 26px;
+    }
+
+    .activity-center-section .section-action {
+      width: 28px;
+      height: 28px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .activity-center-section .section-action:hover,
+    .activity-center-section .section-action:focus-visible {
+      background: var(--surface-muted);
+    }
+
+    .side-pane .side-header {
+      min-height: 52px;
+      padding: 14px 16px 8px;
+      border-bottom: 0;
+    }
+
+    .side-pane .side-header .eyeline {
+      display: none;
+    }
+
+    .side-pane .side-header .title {
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
     .side-section {
       gap: 8px;
       padding: 12px 14px;
@@ -26271,19 +26807,19 @@ template.innerHTML = `
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0;
-      padding: 0 10px;
+      padding: 0 12px;
       border-bottom: 1px solid var(--border-color);
     }
 
     .side-tab {
       min-width: 0;
-      min-height: 32px;
+      min-height: 36px;
       padding: 0 6px;
       border: 0;
       border-radius: 0;
       background: transparent;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
     }
 
@@ -26382,6 +26918,9 @@ template.innerHTML = `
         grid-column: 1 / -1;
         grid-row: 2;
         min-height: 0;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
       }
     }
 
@@ -26517,6 +27056,15 @@ template.innerHTML = `
       .run-activity-region,
       .composer-shell {
         width: calc(100% - 24px);
+      }
+
+      .composer-shell .composer-diagnostics {
+        grid-column: 1 / -1;
+        grid-row: 3;
+      }
+
+      .composer-shell .composer-status {
+        grid-row: 4;
       }
 
       .compact-toolbar {
@@ -26676,7 +27224,12 @@ template.innerHTML = `
         padding-left: 0;
       }
 
-      .run-step-wrap,
+      .run-step-wrap {
+        width: 100%;
+        max-width: 100%;
+        transform: none;
+      }
+
       .run-step-chip {
         max-width: 100%;
       }
@@ -26716,8 +27269,23 @@ template.innerHTML = `
       }
 
       .run-step-tooltip {
-        right: auto;
+        right: 0;
         left: 0;
+        width: min(360px, calc(100vw - 24px));
+      }
+
+      .run-step-wrap.open {
+        display: grid;
+        gap: 8px;
+      }
+
+      .run-step-wrap.open .run-step-tooltip {
+        position: relative;
+        inset: auto;
+        width: 100%;
+        max-height: min(50dvh, 360px);
+        margin-top: 0;
+        transform: none;
       }
 
       .interaction-card {
@@ -26841,9 +27409,11 @@ template.innerHTML = `
         </section>
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       </div>
-      <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
-      <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
-      <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+      <div class="conversation-scroll" id="conversation-scroll">
+        <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
+        <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+      </div>
       <div class="composer-shell">
         <div class="attachment-toolbar">
           <div class="attachment-actions">
@@ -26884,36 +27454,45 @@ template.innerHTML = `
         <button class="side-tab" type="button" role="tab" id="side-tab-system" data-action="select-side-tab" data-side-tab="system" aria-controls="side-panel-system" aria-selected="false">System</button>
       </div>
       <div class="side-scroll">
-        <section class="side-section" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
-          <span class="section-label">ChatGPT account</span>
-          <div id="auth-panel"></div>
+        <section class="side-panel" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
+          <div class="activity-center" id="activity-center"></div>
         </section>
-        <section class="side-section" data-side-tab-panel="activity">
-          <span class="section-label">Progress</span>
-          <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
-        </section>
-        <section class="side-section" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
-          <div class="section-head-row">
-            <span class="section-label">Artifacts</span>
-            <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
+        <section class="side-panel" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
+          <div class="side-section">
+            <div class="section-head-row">
+              <span class="section-label">Artifacts</span>
+              <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
+            </div>
+            <div class="artifact-list" id="artifact-list"></div>
           </div>
-          <div class="artifact-list" id="artifact-list"></div>
+          <div class="side-section">
+            <span class="section-label">Preview</span>
+            <div class="artifact-preview" id="artifact-preview"></div>
+          </div>
         </section>
-        <section class="side-section" data-side-tab-panel="files" hidden>
-          <span class="section-label">Preview</span>
-          <div class="artifact-preview" id="artifact-preview"></div>
+        <section class="side-panel" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
+          <div class="side-section">
+            <span class="section-label">Codex usage</span>
+            <div class="usage-panel" id="usage-panel"></div>
+          </div>
         </section>
-        <section class="side-section" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
-          <span class="section-label">Codex usage</span>
-          <div class="usage-panel" id="usage-panel"></div>
-        </section>
-        <section class="side-section" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
-          <span class="section-label">Details</span>
-          <div class="context-list" id="context-list"></div>
-        </section>
-        <section class="side-section" data-side-tab-panel="system" hidden>
-          <span class="section-label">Versions</span>
-          <div class="diagnostics-list" id="diagnostics-list"></div>
+        <section class="side-panel" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
+          <div class="side-section">
+            <span class="section-label">ChatGPT account</span>
+            <div id="auth-panel"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Progress</span>
+            <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Details</span>
+            <div class="context-list" id="context-list"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Versions</span>
+            <div class="diagnostics-list" id="diagnostics-list"></div>
+          </div>
         </section>
       </div>
     </aside>
@@ -28305,7 +28884,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.getElementById("thread-title-label").textContent = activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent = this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
     this._renderThreadRunState(activeThread);
-    this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads ? this._uploadProgressText() : activeThread ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - add files or paste a screenshot` : "No chat selected";
+    const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
+    attachmentMeta.textContent = this._pendingUploads ? this._uploadProgressText() : activeThread?.attachments?.length ? `${activeThread.attachments.length} attached` : "";
+    attachmentMeta.hidden = !attachmentMeta.textContent;
     this._renderComposerState(activeThread);
     this._renderErrorSurface();
     this._renderDeletionConfirmation();
@@ -28331,6 +28912,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderProgress();
     this._renderArtifacts();
     this._renderArtifactPreview();
+    this._renderActivityCenter();
     this._renderUsagePanel();
     this._renderContext();
     this._renderDiagnostics();
@@ -28495,12 +29077,12 @@ var CodexBridgePanel = class extends HTMLElement {
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
     sendButton.disabled = !activeThread || locked && !retryable || !retryable && !promptInput.value.trim();
-    this._setTrustedButtonContent(
-      sendButton,
-      icons.send,
-      retryable ? "Retry" : isRunning ? "Steer" : "Send"
-    );
-    sendButton.title = isRunning ? "Queue steering for this running Codex turn" : "Send message to Codex";
+    const actionLabel = retryable ? "Retry" : isRunning ? "Steer" : "Send";
+    const actionTitle = retryable ? "Retry this message safely" : isRunning ? "Queue steering for this running Codex turn" : "Send message to Codex";
+    this._setTrustedButtonContent(sendButton, icons.send, actionLabel);
+    sendButton.setAttribute("aria-label", actionLabel);
+    sendButton.title = actionTitle;
+    sendButton.dataset.tooltip = actionTitle;
     if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
@@ -29202,15 +29784,15 @@ var CodexBridgePanel = class extends HTMLElement {
     return map[mimeType] || "bin";
   }
   _renderDirectSection() {
-    const section = this.shadowRoot.getElementById("direct-section");
+    const section2 = this.shadowRoot.getElementById("direct-section");
     const directThreads = this._directThreads(false);
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedSections.direct) && !searchActive;
     if (searchActive && !directThreads.length) {
-      section.replaceChildren();
+      section2.replaceChildren();
       return;
     }
-    section.replaceChildren();
+    section2.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
     const toggle = this._actionButton(
@@ -29229,7 +29811,7 @@ var CodexBridgePanel = class extends HTMLElement {
     titleLine.append(this._textElement("span", "section-count", ` ${directThreads.length} `));
     toggle.append(titleLine);
     sectionHead.append(toggle);
-    section.append(sectionHead);
+    section2.append(sectionHead);
     const chatList = document.createElement("div");
     chatList.id = "direct-chat-list";
     chatList.className = "chat-list direct-chat-list";
@@ -29241,13 +29823,13 @@ var CodexBridgePanel = class extends HTMLElement {
     } else {
       chatList.append(this._textElement("div", "empty-note", "No direct chats yet."));
     }
-    section.append(chatList);
+    section2.append(chatList);
   }
   _renderProjectList() {
-    const section = this.shadowRoot.getElementById("project-section");
+    const section2 = this.shadowRoot.getElementById("project-section");
     const projects = this._projects.filter((project) => project.kind !== "direct" && !project.archived_at);
     const visibleProjects = projects.filter((project) => this._projectIsVisible(project));
-    section.replaceChildren();
+    section2.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = "section-head compact";
     sectionHead.append(this._sectionTitleLine(null, icons.folder, "Projects"));
@@ -29259,10 +29841,10 @@ var CodexBridgePanel = class extends HTMLElement {
     newProject.id = "new-project-button";
     this._setTrustedButtonContent(newProject, icons.plus);
     sectionHead.append(newProject);
-    section.append(sectionHead);
+    section2.append(sectionHead);
     if (!projects.length) {
       if (!this._searchQuery.trim()) {
-        section.append(this._textElement("div", "empty-note section-empty", "No projects yet."));
+        section2.append(this._textElement("div", "empty-note section-empty", "No projects yet."));
       }
       return;
     }
@@ -29273,7 +29855,7 @@ var CodexBridgePanel = class extends HTMLElement {
         projectList.append(this._projectSection(project));
       }
     }
-    section.append(projectList);
+    section2.append(projectList);
   }
   _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
     const threads = this._projectThreads(project.project_id, includeArchivedThreads);
@@ -29361,7 +29943,7 @@ var CodexBridgePanel = class extends HTMLElement {
     return shell;
   }
   _renderArchivedSection() {
-    const section = this.shadowRoot.getElementById("archived-section");
+    const section2 = this.shadowRoot.getElementById("archived-section");
     const archivedProjects = this._projects.filter((project) => Boolean(project.archived_at) && this._projectMatchesQuery(project));
     const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
     const archivedThreads = this._threads.filter(
@@ -29370,10 +29952,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedSections.archived) && !searchActive;
     if (!archivedProjects.length && !archivedThreads.length) {
-      section.replaceChildren();
+      section2.replaceChildren();
       return;
     }
-    section.replaceChildren();
+    section2.replaceChildren();
     const sectionHead = document.createElement("div");
     sectionHead.className = `section-head${collapsed ? " compact" : ""}`;
     const toggle = this._actionButton(
@@ -29394,7 +29976,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     toggle.append(titleLine);
     sectionHead.append(toggle);
-    section.append(sectionHead);
+    section2.append(sectionHead);
     const chatList = document.createElement("div");
     chatList.id = "archived-chat-list";
     chatList.className = "archive-list";
@@ -29405,7 +29987,7 @@ var CodexBridgePanel = class extends HTMLElement {
     for (const thread of archivedThreads) {
       chatList.append(this._threadRow(thread, { archived: true }));
     }
-    section.append(chatList);
+    section2.append(chatList);
   }
   _renderNavigationEmptyState() {
     const empty = this.shadowRoot.getElementById("rail-search-empty");
@@ -29796,7 +30378,7 @@ var CodexBridgePanel = class extends HTMLElement {
       chip.removeAttribute("title");
       chip.id = "run-step-chip";
       chip.setAttribute("aria-expanded", String(this._runActivityDetailsOpen));
-      chip.setAttribute("aria-haspopup", "true");
+      chip.setAttribute("aria-haspopup", "dialog");
       chip.setAttribute("aria-controls", tooltipId);
       if (this._runActivityDetailsOpen) chip.setAttribute("aria-describedby", tooltipId);
       const stepIndicator = document.createElement("span");
@@ -29824,8 +30406,12 @@ var CodexBridgePanel = class extends HTMLElement {
       const tooltip = document.createElement("div");
       tooltip.id = tooltipId;
       tooltip.className = "run-step-tooltip";
-      tooltip.setAttribute("role", "tooltip");
-      tooltip.append(this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity"));
+      tooltip.setAttribute("role", "dialog");
+      tooltip.setAttribute("aria-modal", "false");
+      tooltip.setAttribute("aria-labelledby", `${tooltipId}-title`);
+      const tooltipTitle = this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity");
+      tooltipTitle.id = `${tooltipId}-title`;
+      tooltip.append(tooltipTitle);
       const stages = Array.isArray(activity.stages) ? activity.stages.slice(0, 12) : [];
       if (stages.length) {
         tooltip.append(this._textElement("span", "run-step-section-label", "Stages"));
@@ -29907,6 +30493,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderMessages() {
     const messageList = this.shadowRoot.getElementById("message-list");
+    const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
     const activity = this._runActivityForThread();
     messageList.setAttribute("aria-busy", String(Boolean(this._selectedThreadId && activity.busy)));
     if (!this._selectedThreadId) {
@@ -29922,7 +30509,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._forceMessageRebuild = false;
       messageList.replaceChildren();
     }
-    const shouldStick = shouldRebuild || messageList.scrollHeight - messageList.clientHeight - messageList.scrollTop < 80;
+    const shouldStick = shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
     const eventsToRender = this._renderedSequence === 0 ? this._events : this._events.filter((item) => item.sequence > this._renderedSequence);
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
@@ -29984,10 +30571,10 @@ var CodexBridgePanel = class extends HTMLElement {
     return text2;
   }
   _scrollMessagesToBottom() {
-    const messageList = this.shadowRoot.getElementById("message-list");
-    messageList.scrollTop = messageList.scrollHeight;
+    const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || this.shadowRoot.getElementById("message-list");
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
     window.requestAnimationFrame(() => {
-      messageList.scrollTop = messageList.scrollHeight;
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
     });
   }
   _renderEvent(event) {
@@ -30420,13 +31007,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._noteArtifactReservationConflict(threadId, { manual });
         return false;
       }
-      if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-        this._noteArtifactRefreshFailure(threadId);
-        this._render();
-      } else {
-        this._clearArtifactRefreshRetry();
-        this._setError(error);
-      }
+      this._noteArtifactRefreshFailure(threadId);
+      this._render();
       return false;
     }
   }
@@ -30805,6 +31387,89 @@ var CodexBridgePanel = class extends HTMLElement {
       });
     }
   }
+  _renderActivityCenter() {
+    const container = this.shadowRoot.getElementById("activity-center");
+    if (!container) return;
+    const activity = this._runActivityForThread();
+    const sourceCount = activity.runId ? this._events.slice(-2e3).reduce((total, event) => {
+      const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+      if (payload.run_id !== activity.runId) return total;
+      const count = Array.isArray(payload.sources) ? payload.sources.length : Array.isArray(payload.citations) ? payload.citations.length : 0;
+      return Math.min(1e3, total + count);
+    }, 0) : 0;
+    const model = getInfoCenterViewModel({
+      status: this._status,
+      thread: this._activeThread,
+      project: this._activeProject(),
+      artifacts: this._artifacts,
+      panelVersion: PANEL_VERSION,
+      runActivity: activity,
+      browser: {
+        web_search: this._config?.web_search_mode === "live",
+        source_count: sourceCount
+      }
+    });
+    container.replaceChildren();
+    const visibleSections = /* @__PURE__ */ new Set(["outputs", "subagents", "background", "browser", "sources"]);
+    for (const section2 of model.sections.filter((item) => visibleSections.has(item.id))) {
+      const card = document.createElement("section");
+      card.className = "activity-center-section";
+      card.dataset.section = section2.id;
+      const rowValues = Object.fromEntries(section2.rows.map((row) => [row.label, row.value]));
+      const numericRow = (label) => Number.parseInt(rowValues[label] || "0", 10) || 0;
+      const hasDetails = section2.id === "outputs" ? numericRow("Available files") > 0 : section2.id === "subagents" ? numericRow("Total") > 0 : section2.id === "background" ? !["Ready", "No active run"].includes(rowValues.Run) || rowValues["Current step"] !== "Unavailable" : section2.id === "browser" ? rowValues["Current use"] === "Active" : section2.id === "sources" ? numericRow("Sources") > 0 : false;
+      const heading = document.createElement("div");
+      heading.className = "activity-center-heading";
+      heading.append(this._textElement("h3", "", section2.title));
+      if (section2.id === "outputs") {
+        const openFiles = this._actionButton("section-action", "select-side-tab", "Open Files");
+        openFiles.dataset.sideTab = "files";
+        this._appendTrustedIcon(openFiles, icons.plus);
+        heading.append(openFiles);
+      }
+      const summaryText = section2.id === "outputs" && !hasDetails ? "Create a file or site" : section2.summary;
+      const summary = this._textElement("p", "activity-center-summary", summaryText);
+      const rows = document.createElement("div");
+      rows.className = "activity-center-rows";
+      this._renderKeyValueRows(
+        rows,
+        section2.rows.map((row) => [row.label, row.value]),
+        "context-row"
+      );
+      card.append(heading);
+      if (section2.id === "subagents" && hasDetails) {
+        const active = numericRow("Active");
+        const completed = numericRow("Completed");
+        const attention = numericRow("Needs attention");
+        const attentionLabel = attention ? `${attention} need${attention === 1 ? "s" : ""} attention` : "";
+        const strip = document.createElement("div");
+        strip.className = "activity-agent-strip";
+        strip.setAttribute(
+          "aria-label",
+          [`${active} subagents working`, `${completed} done`, attentionLabel].filter(Boolean).join(", ")
+        );
+        const markers = document.createElement("span");
+        markers.className = "activity-agent-markers";
+        markers.setAttribute("aria-hidden", "true");
+        for (let index = 0; index < Math.min(4, Math.max(1, numericRow("Total"))); index += 1) {
+          markers.append(this._textElement("span", "activity-agent-marker", ""));
+        }
+        strip.append(
+          markers,
+          this._textElement("span", "activity-agent-working", `${active} working`),
+          this._textElement("span", "activity-agent-done", `${completed} done`)
+        );
+        if (attentionLabel) {
+          strip.append(this._textElement("span", "activity-agent-attention", attentionLabel));
+        }
+        card.append(strip);
+      } else {
+        card.append(summary);
+        if (hasDetails) card.append(rows);
+      }
+      container.append(card);
+    }
+  }
   _renderUsagePanel() {
     const container = this.shadowRoot.getElementById("usage-panel");
     if (!container) return;
@@ -30952,10 +31617,8 @@ var CodexBridgePanel = class extends HTMLElement {
       } catch (error) {
         if (canDeferArtifactRefresh(error)) {
           this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
-        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-          this._noteArtifactRefreshFailure(threadId);
         } else {
-          throw error;
+          this._noteArtifactRefreshFailure(threadId);
         }
       }
       if (!isCurrent()) {
@@ -31095,11 +31758,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
     queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
   }
-  _toggleSection(section) {
-    if (!section) {
+  _toggleSection(section2) {
+    if (!section2) {
       return;
     }
-    this._collapsedSections[section] = !this._collapsedSections[section];
+    this._collapsedSections[section2] = !this._collapsedSections[section2];
     this._render();
   }
   _toggleProjectCollapse(projectId) {
@@ -31971,10 +32634,8 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         if (canDeferArtifactRefresh(error)) {
           this._noteArtifactReservationConflict(threadId);
-        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-          this._noteArtifactRefreshFailure(threadId);
         } else {
-          throw error;
+          this._noteArtifactRefreshFailure(threadId);
         }
       }
       if (!isCurrent()) {
@@ -31989,7 +32650,6 @@ var CodexBridgePanel = class extends HTMLElement {
       if (artifacts?.some((item) => item.artifact_id === artifact.artifact_id)) {
         await this._loadArtifactPreview(artifact.artifact_id);
       }
-      this._clearError();
       this._render();
     } catch (error) {
       if (!isCurrent()) {
@@ -31999,8 +32659,13 @@ var CodexBridgePanel = class extends HTMLElement {
         this._noteArtifactReservationConflict(threadId, { retryArchive: true });
         return;
       }
-      this._clearArtifactRefreshRetry();
-      this._setError(error);
+      this._clearArtifactRefreshRetry({ resetState: false });
+      this._artifactRefreshState = {
+        status: "retryable",
+        message: "Workspace archive could not be created.",
+        action: "retry-archive"
+      };
+      this._render();
     } finally {
       this._workspaceArchivePending = false;
       if (this.isConnected) {
@@ -32097,12 +32762,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._forceMessageRebuild = true;
       }
       this._render();
-    } catch (error) {
+    } catch {
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
-      if (!isArtifactDomainFailure(error) || !hasStructuredArtifactError(error) && this._isRetryableTransportError(error)) {
-        this._setError(error);
-        return;
-      }
       this._revokePreviewUrl();
       this._artifactPreview = {
         ...advertisedDescriptor,
@@ -32360,10 +33021,8 @@ var CodexBridgePanel = class extends HTMLElement {
           } catch (error) {
             if (canDeferArtifactRefresh(error)) {
               this._noteArtifactReservationConflict(polledThreadId);
-            } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-              this._noteArtifactRefreshFailure(polledThreadId);
             } else {
-              throw error;
+              this._noteArtifactRefreshFailure(polledThreadId);
             }
           }
           if (!isCurrent()) {
@@ -32696,6 +33355,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     this._renderMessages();
     this._renderRunActivity();
+    this._renderActivityCenter();
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
     if (["run.started", "run.completed", "run.failed", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
@@ -32751,10 +33411,8 @@ var CodexBridgePanel = class extends HTMLElement {
         } catch (error) {
           if (canDeferArtifactRefresh(error)) {
             this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
-          } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-            this._noteArtifactRefreshFailure(threadId);
           } else {
-            throw error;
+            this._noteArtifactRefreshFailure(threadId);
           }
         }
         if (!isCurrent()) {

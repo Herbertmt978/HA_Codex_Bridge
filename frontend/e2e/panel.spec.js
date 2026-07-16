@@ -224,7 +224,7 @@ test("renders a local PDF on canvas without embeds or off-origin requests", asyn
     await panel._selectArtifact(artifact.artifact_id);
   }, fixture);
 
-  await panel.locator('[data-action="select-side-tab"][data-side-tab="files"]').click();
+  await panel.locator("#side-tab-files").click();
   const preview = panel.locator(".pdf-preview-shell");
   const canvas = preview.locator("canvas.pdf-preview-canvas");
   await expect(canvas).toBeVisible();
@@ -266,6 +266,7 @@ test("runs the Home Assistant first-run and ChatGPT device sign-in flow without 
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
+  await panel.locator("#side-tab-system").click();
   const onboarding = panel.locator("#onboarding");
   const auth = panel.locator("#auth-panel");
 
@@ -360,7 +361,7 @@ test("exposes run stages through one accessible tooltip in both colour schemes",
     const tooltip = panel.locator("#run-step-tooltip");
     const genericTooltip = panel.locator("#tooltip-layer");
     await expect(chip).toHaveText(/Step 2 \/ 3/);
-    await expect(chip).toHaveAttribute("aria-haspopup", "true");
+    await expect(chip).toHaveAttribute("aria-haspopup", "dialog");
     await expect(chip).toHaveAttribute("aria-expanded", "false");
     await expect(chip).toHaveAttribute("aria-controls", "run-step-tooltip");
     await expect(chip).not.toHaveAttribute("aria-describedby", /(?:^|\s)run-step-tooltip(?:\s|$)/);
@@ -545,7 +546,10 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
     const mainElement = root?.querySelector(".main-pane");
     const sideElement = root?.querySelector(".side-pane");
     return {
-      contextIsAdjacent: Boolean(main && side && side.left >= main.right - 1 && Math.abs(side.top - main.top) < 2),
+      contextIsFloatingCard: Boolean(
+          main && side && side.left >= main.right - 1
+          && side.top >= main.top + 60 && side.top <= main.top + 68,
+      ),
       readingMeasure: messages?.width || 0,
       composerMeasure: composer?.width || 0,
       toolbarInComposer: Boolean(toolbar && composerElement?.contains(toolbar)),
@@ -555,7 +559,7 @@ test("uses a Codex-like reading workspace with an adjacent context rail and mobi
       sideBackground: sideElement ? getComputedStyle(sideElement).backgroundColor : "",
     };
   });
-  expect(desktop.contextIsAdjacent).toBe(true);
+  expect(desktop.contextIsFloatingCard).toBe(true);
   expect(desktop.readingMeasure).toBeLessThanOrEqual(900);
   expect(desktop.composerMeasure).toBeLessThanOrEqual(900);
   expect(desktop.toolbarInComposer).toBe(true);
@@ -659,13 +663,14 @@ test("aligns the desktop workspace rails and reading edges at wide widths", asyn
   expect(layout.railWidth).toBeGreaterThanOrEqual(300);
   expect(layout.railWidth).toBeLessThanOrEqual(330);
   expect(layout.sideWidth).toBeGreaterThanOrEqual(330);
-  expect(layout.sideWidth).toBeLessThanOrEqual(350);
+  expect(layout.sideWidth).toBeLessThanOrEqual(360);
   expect(layout.headerTitleAligned).toBe(true);
   expect(layout.headerActionsAligned).toBe(true);
   expect(layout.projectFontSize).toBe("14px");
   expect(layout.threadFontSize).toBe("14px");
   expect(layout.mainTitleFontSize).toBe("16px");
-  expect(layout.sideTop).toBe(layout.mainTop);
+  expect(layout.sideTop).toBeGreaterThanOrEqual(layout.mainTop + 60);
+  expect(layout.sideTop).toBeLessThanOrEqual(layout.mainTop + 68);
 
   const floating = await page.evaluate(() => {
     const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
@@ -677,7 +682,7 @@ test("aligns the desktop workspace rails and reading edges at wide widths", asyn
       scrolling: scroll ? getComputedStyle(scroll).overflowY : "",
     };
   });
-  expect(floating.radius).toBe("0px");
+  expect(floating.radius).toBe("18px");
   expect(floating.scrolling).toMatch(/auto|scroll/);
 });
 

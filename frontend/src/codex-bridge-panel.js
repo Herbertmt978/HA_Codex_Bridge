@@ -1,5 +1,5 @@
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
-import { INFO_TABS } from "./info-center.js";
+import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
 import {
   PDF_PREVIEW_MAX_SCALE,
@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.2";
+const PANEL_VERSION = "0.8.3";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -85,8 +85,6 @@ const PDF_PREVIEW_MAX_LABEL = "8 MB";
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
-const ARTIFACT_PRIMARY_ERROR_CODES = new Set(["invalid_auth", "cannot_connect", "not_configured"]);
-const ARTIFACT_PRIMARY_HTTP_STATUSES = new Set([401, 403, 502, 503, 504]);
 const ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 const ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
 
@@ -125,26 +123,6 @@ function artifactErrorCode(error) {
     }
   }
   return "";
-}
-
-function artifactErrorStatus(error) {
-  for (const candidate of artifactErrorCandidates(error)) {
-    if (candidate && typeof candidate === "object") {
-      const value = candidate.status ?? candidate.statusCode;
-      if (Number.isInteger(value)) return value;
-    }
-  }
-  return null;
-}
-
-function isArtifactDomainFailure(error) {
-  const code = artifactErrorCode(error);
-  const status = artifactErrorStatus(error);
-  return !ARTIFACT_PRIMARY_ERROR_CODES.has(code) && !ARTIFACT_PRIMARY_HTTP_STATUSES.has(status);
-}
-
-function hasStructuredArtifactError(error) {
-  return Boolean(artifactErrorCode(error)) || artifactErrorStatus(error) !== null;
 }
 
 function artifactPreviewLimit(artifact) {
@@ -244,9 +222,9 @@ template.innerHTML = `
       --text-color: var(--primary-text-color, #151b29);
       --muted-color: var(--secondary-text-color, #667085);
       --accent-color: var(--primary-color, #28a0f0);
-      --rail-bg: color-mix(in srgb, var(--surface-bg) 95%, var(--accent-color) 5%);
+      --rail-bg: color-mix(in srgb, var(--surface-bg) 90%, #dff4c1 10%);
       --canvas-bg: color-mix(in srgb, var(--surface-bg) 99%, var(--text-color) 1%);
-      --context-bg: color-mix(in srgb, var(--surface-bg) 96%, var(--text-color) 4%);
+      --context-bg: color-mix(in srgb, var(--surface-bg) 98%, var(--text-color) 2%);
       --focus-ring-color: color-mix(in srgb, var(--accent-color) 74%, var(--surface-bg) 26%);
       --focus-ring-contrast: var(--surface-bg);
       --brand-cyan: #64748b;
@@ -260,11 +238,13 @@ template.innerHTML = `
       --danger-surface: color-mix(in srgb, var(--danger-color) 11%, var(--surface-bg) 89%);
       --warning-surface: color-mix(in srgb, var(--brand-amber) 10%, var(--surface-bg) 90%);
       --success-surface: color-mix(in srgb, var(--brand-emerald) 10%, var(--surface-bg) 90%);
+      --conversation-width: 840px;
       --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06);
       --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
       height: 100%;
       color: var(--text-color);
+      font-family: var(--paper-font-body1_-_font-family, var(--primary-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif));
     }
 
     :host(:fullscreen) {
@@ -2252,7 +2232,7 @@ template.innerHTML = `
      * These rules sit near the responsive rules so stateful controls above retain their
      * existing selectors and behaviour while sharing one visual language. */
     .shell {
-      grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr) clamp(260px, 18vw, 350px);
+      grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr) clamp(342px, calc(22vw + 12px), 372px);
       gap: 0;
       padding: 0;
       background: var(--canvas-bg);
@@ -2269,13 +2249,20 @@ template.innerHTML = `
       display: none;
     }
 
-    .rail-pane,
-    .side-pane {
-      background: var(--rail-bg);
+    .rail-pane {
+      background:
+        linear-gradient(180deg,
+          color-mix(in srgb, var(--surface-bg) 88%, #dff4c1 12%) 0%,
+          color-mix(in srgb, var(--surface-bg) 92%, #dff4c1 8%) 68%,
+          color-mix(in srgb, var(--surface-bg) 88%, #fff0a8 12%) 100%);
     }
 
     .side-pane {
+      margin: 64px 12px 12px 0;
+      border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+      border-radius: 18px;
       background: var(--context-bg);
+      box-shadow: 0 12px 32px color-mix(in srgb, var(--text-color) 10%, transparent);
     }
 
     .rail-pane {
@@ -2283,7 +2270,7 @@ template.innerHTML = `
     }
 
     .side-pane {
-      border-left: 1px solid var(--border-color);
+      border-left: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
     }
 
     .rail-header,
@@ -2390,7 +2377,7 @@ template.innerHTML = `
     }
 
     .main-header {
-      padding-inline: max(20px, calc((100% - 900px) / 2));
+      padding-inline: max(20px, calc((100% - var(--conversation-width)) / 2));
     }
 
     .eyeline,
@@ -2499,7 +2486,7 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
-    .shell.desktop-route { grid-template-columns: clamp(248px, 16vw, 330px) minmax(0, 1fr); }
+    .shell.desktop-route { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
     .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
     .shell.desktop-route .side-pane { display: none !important; }
 
@@ -3016,6 +3003,16 @@ template.innerHTML = `
       background: var(--canvas-bg);
     }
 
+    .conversation-scroll {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scroll-padding-block: 24px;
+    }
+
     #thread-status-text:not(:empty) {
       padding: 4px 7px;
       border: 1px solid var(--border-color);
@@ -3030,7 +3027,7 @@ template.innerHTML = `
     .interaction-region,
     .message-list,
     .run-activity-region {
-      width: min(calc(100% - 32px), 900px);
+      width: min(calc(100% - 32px), var(--conversation-width));
       margin-inline: auto;
     }
 
@@ -3107,15 +3104,27 @@ template.innerHTML = `
     .message-list {
       padding: 20px 0 8px;
       gap: 18px;
+      flex: 0 0 auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .interaction-region {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      padding: 8px 0 18px;
+      overflow: visible;
     }
 
     .run-activity-region {
       position: relative;
-      display: flex;
+      display: grid;
       flex: 0 0 auto;
+      grid-template-columns: minmax(0, 1fr);
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      justify-items: start;
+      gap: 8px;
       min-height: 42px;
       margin: 0 auto;
       padding: 2px 0 8px 34px;
@@ -3183,13 +3192,16 @@ template.innerHTML = `
     .run-step-wrap {
       position: relative;
       flex: 0 0 auto;
+      justify-self: center;
+      max-width: calc(100% - 34px);
+      transform: translateX(-17px);
     }
 
     .run-step-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      min-height: 34px;
+      min-height: 32px;
       max-width: min(100%, 520px);
       padding: 6px 11px;
       border: 1px solid var(--border-color);
@@ -3197,7 +3209,7 @@ template.innerHTML = `
       background: var(--surface-bg);
       color: var(--muted-color);
       box-shadow: var(--shadow-soft);
-      font-size: 12px;
+      font-size: 12.5px;
       white-space: nowrap;
     }
 
@@ -3477,18 +3489,82 @@ template.innerHTML = `
     }
 
     .composer-shell {
-      position: sticky;
+      position: relative;
       z-index: 2;
-      bottom: 12px;
-      width: min(calc(100% - 32px), 900px);
-      gap: 8px;
-      margin: 10px auto 14px;
-      padding: 8px 9px max(8px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      width: min(calc(100% - 32px), var(--conversation-width));
+      gap: 4px 10px;
+      margin: 8px auto 14px;
+      padding: 10px 12px max(10px, env(safe-area-inset-bottom));
       border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-color) 12%);
-      border-radius: 20px;
+      border-radius: 18px;
       background: var(--surface-bg);
       box-shadow: 0 10px 28px color-mix(in srgb, var(--text-color) 11%, transparent);
       transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+
+    .composer-shell .attachment-toolbar {
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .composer-shell .attachment-actions {
+      gap: 4px;
+    }
+
+    .composer-shell .attachment-toolbar .icon-button {
+      width: 32px;
+      height: 32px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .composer-shell .attachment-toolbar .icon-button:hover,
+    .composer-shell .attachment-toolbar .icon-button:focus-visible {
+      background: var(--surface-muted);
+    }
+
+    .composer-shell .attachment-chips {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(100% + 8px);
+    }
+
+    .composer-shell .composer {
+      display: contents;
+    }
+
+    .composer-shell .composer textarea {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+
+    .composer-shell .composer .send-button {
+      grid-column: 3;
+      grid-row: 2;
+    }
+
+    .composer-shell .composer-diagnostics {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+    }
+
+    .composer-shell .compact-toolbar {
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .composer-shell .composer-status {
+      grid-column: 1 / -1;
+      grid-row: 3;
     }
 
     .composer-shell:focus-within {
@@ -3509,7 +3585,8 @@ template.innerHTML = `
 
     .composer textarea {
       min-height: 64px;
-      padding: 10px 11px;
+      max-height: 220px;
+      padding: 8px 4px;
       border: 0;
       border-radius: 10px;
       outline: 0;
@@ -3782,6 +3859,140 @@ template.innerHTML = `
       padding: 0;
     }
 
+    .side-panel,
+    .activity-center {
+      display: grid;
+      min-width: 0;
+      align-content: start;
+    }
+
+    .activity-center-section {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .activity-center-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .activity-center-heading h3,
+    .activity-center-summary {
+      margin: 0;
+    }
+
+    .activity-center-heading h3 {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .activity-center-summary {
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .activity-center-rows {
+      display: grid;
+      gap: 5px;
+    }
+
+    .activity-center-section[data-section="subagents"] .activity-center-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .activity-agent-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      color: var(--text-color);
+      font-size: 12px;
+    }
+
+    .activity-agent-markers {
+      display: inline-flex;
+      align-items: center;
+      padding-right: 2px;
+    }
+
+    .activity-agent-marker {
+      width: 15px;
+      height: 15px;
+      margin-left: -3px;
+      border: 2px solid var(--context-bg);
+      border-radius: 999px;
+      background: var(--agent-marker, var(--accent-color));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--agent-marker, var(--accent-color)) 28%, transparent);
+    }
+
+    .activity-agent-marker:first-child {
+      margin-left: 0;
+    }
+
+    .activity-agent-marker:nth-child(1) { --agent-marker: #f472b6; }
+    .activity-agent-marker:nth-child(2) { --agent-marker: #2dd4bf; }
+    .activity-agent-marker:nth-child(3) { --agent-marker: #facc15; }
+    .activity-agent-marker:nth-child(4) { --agent-marker: #60a5fa; }
+
+    .activity-agent-done {
+      margin-left: auto;
+      color: var(--muted-color);
+    }
+
+    .activity-agent-attention {
+      color: var(--danger-color);
+      font-weight: 650;
+    }
+
+    .activity-center-section[data-section="subagents"] .context-row {
+      display: grid;
+      gap: 2px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .activity-center-section[data-section="background"] .context-row,
+    .activity-center-section[data-section="browser"] .context-row,
+    .activity-center-section[data-section="sources"] .context-row {
+      min-height: 26px;
+    }
+
+    .activity-center-section .section-action {
+      width: 28px;
+      height: 28px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .activity-center-section .section-action:hover,
+    .activity-center-section .section-action:focus-visible {
+      background: var(--surface-muted);
+    }
+
+    .side-pane .side-header {
+      min-height: 52px;
+      padding: 14px 16px 8px;
+      border-bottom: 0;
+    }
+
+    .side-pane .side-header .eyeline {
+      display: none;
+    }
+
+    .side-pane .side-header .title {
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
     .side-section {
       gap: 8px;
       padding: 12px 14px;
@@ -3796,19 +4007,19 @@ template.innerHTML = `
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0;
-      padding: 0 10px;
+      padding: 0 12px;
       border-bottom: 1px solid var(--border-color);
     }
 
     .side-tab {
       min-width: 0;
-      min-height: 32px;
+      min-height: 36px;
       padding: 0 6px;
       border: 0;
       border-radius: 0;
       background: transparent;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
     }
 
@@ -3907,6 +4118,9 @@ template.innerHTML = `
         grid-column: 1 / -1;
         grid-row: 2;
         min-height: 0;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
       }
     }
 
@@ -4042,6 +4256,15 @@ template.innerHTML = `
       .run-activity-region,
       .composer-shell {
         width: calc(100% - 24px);
+      }
+
+      .composer-shell .composer-diagnostics {
+        grid-column: 1 / -1;
+        grid-row: 3;
+      }
+
+      .composer-shell .composer-status {
+        grid-row: 4;
       }
 
       .compact-toolbar {
@@ -4201,7 +4424,12 @@ template.innerHTML = `
         padding-left: 0;
       }
 
-      .run-step-wrap,
+      .run-step-wrap {
+        width: 100%;
+        max-width: 100%;
+        transform: none;
+      }
+
       .run-step-chip {
         max-width: 100%;
       }
@@ -4241,8 +4469,23 @@ template.innerHTML = `
       }
 
       .run-step-tooltip {
-        right: auto;
+        right: 0;
         left: 0;
+        width: min(360px, calc(100vw - 24px));
+      }
+
+      .run-step-wrap.open {
+        display: grid;
+        gap: 8px;
+      }
+
+      .run-step-wrap.open .run-step-tooltip {
+        position: relative;
+        inset: auto;
+        width: 100%;
+        max-height: min(50dvh, 360px);
+        margin-top: 0;
+        transform: none;
       }
 
       .interaction-card {
@@ -4366,9 +4609,11 @@ template.innerHTML = `
         </section>
         <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       </div>
-      <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
-      <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
-      <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+      <div class="conversation-scroll" id="conversation-scroll">
+        <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
+        <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+      </div>
       <div class="composer-shell">
         <div class="attachment-toolbar">
           <div class="attachment-actions">
@@ -4409,36 +4654,45 @@ template.innerHTML = `
         <button class="side-tab" type="button" role="tab" id="side-tab-system" data-action="select-side-tab" data-side-tab="system" aria-controls="side-panel-system" aria-selected="false">System</button>
       </div>
       <div class="side-scroll">
-        <section class="side-section" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
-          <span class="section-label">ChatGPT account</span>
-          <div id="auth-panel"></div>
+        <section class="side-panel" id="side-panel-activity" role="tabpanel" aria-labelledby="side-tab-activity" data-side-tab-panel="activity">
+          <div class="activity-center" id="activity-center"></div>
         </section>
-        <section class="side-section" data-side-tab-panel="activity">
-          <span class="section-label">Progress</span>
-          <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
-        </section>
-        <section class="side-section" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
-          <div class="section-head-row">
-            <span class="section-label">Artifacts</span>
-            <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
+        <section class="side-panel" id="side-panel-files" role="tabpanel" aria-labelledby="side-tab-files" data-side-tab-panel="files" hidden>
+          <div class="side-section">
+            <div class="section-head-row">
+              <span class="section-label">Artifacts</span>
+              <button class="icon-button small" type="button" data-action="create-workspace-archive" title="Zip this chat workspace" aria-label="Zip this chat workspace" id="workspace-archive-button"></button>
+            </div>
+            <div class="artifact-list" id="artifact-list"></div>
           </div>
-          <div class="artifact-list" id="artifact-list"></div>
+          <div class="side-section">
+            <span class="section-label">Preview</span>
+            <div class="artifact-preview" id="artifact-preview"></div>
+          </div>
         </section>
-        <section class="side-section" data-side-tab-panel="files" hidden>
-          <span class="section-label">Preview</span>
-          <div class="artifact-preview" id="artifact-preview"></div>
+        <section class="side-panel" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
+          <div class="side-section">
+            <span class="section-label">Codex usage</span>
+            <div class="usage-panel" id="usage-panel"></div>
+          </div>
         </section>
-        <section class="side-section" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
-          <span class="section-label">Codex usage</span>
-          <div class="usage-panel" id="usage-panel"></div>
-        </section>
-        <section class="side-section" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
-          <span class="section-label">Details</span>
-          <div class="context-list" id="context-list"></div>
-        </section>
-        <section class="side-section" data-side-tab-panel="system" hidden>
-          <span class="section-label">Versions</span>
-          <div class="diagnostics-list" id="diagnostics-list"></div>
+        <section class="side-panel" id="side-panel-system" role="tabpanel" aria-labelledby="side-tab-system" data-side-tab-panel="system" hidden>
+          <div class="side-section">
+            <span class="section-label">ChatGPT account</span>
+            <div id="auth-panel"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Progress</span>
+            <div class="progress-list" id="progress-list" role="list" aria-label="Chat progress" aria-live="polite"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Details</span>
+            <div class="context-list" id="context-list"></div>
+          </div>
+          <div class="side-section">
+            <span class="section-label">Versions</span>
+            <div class="diagnostics-list" id="diagnostics-list"></div>
+          </div>
         </section>
       </div>
     </aside>
@@ -5896,11 +6150,13 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.getElementById("thread-path-label").textContent =
       this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
     this._renderThreadRunState(activeThread);
-    this.shadowRoot.getElementById("attachment-meta").textContent = this._pendingUploads
+    const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
+    attachmentMeta.textContent = this._pendingUploads
       ? this._uploadProgressText()
-      : activeThread
-        ? `${activeThread.attachments.length} upload${activeThread.attachments.length === 1 ? "" : "s"} - add files or paste a screenshot`
-        : "No chat selected";
+      : activeThread?.attachments?.length
+        ? `${activeThread.attachments.length} attached`
+        : "";
+    attachmentMeta.hidden = !attachmentMeta.textContent;
     this._renderComposerState(activeThread);
 
     this._renderErrorSurface();
@@ -5928,6 +6184,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderProgress();
     this._renderArtifacts();
     this._renderArtifactPreview();
+    this._renderActivityCenter();
     this._renderUsagePanel();
     this._renderContext();
     this._renderDiagnostics();
@@ -6114,14 +6371,16 @@ class CodexBridgePanel extends HTMLElement {
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
     sendButton.disabled = !activeThread || (locked && !retryable) || (!retryable && !promptInput.value.trim());
-    this._setTrustedButtonContent(
-      sendButton,
-      icons.send,
-      retryable ? "Retry" : isRunning ? "Steer" : "Send"
-    );
-    sendButton.title = isRunning
-      ? "Queue steering for this running Codex turn"
-      : "Send message to Codex";
+    const actionLabel = retryable ? "Retry" : isRunning ? "Steer" : "Send";
+    const actionTitle = retryable
+      ? "Retry this message safely"
+      : isRunning
+        ? "Queue steering for this running Codex turn"
+        : "Send message to Codex";
+    this._setTrustedButtonContent(sendButton, icons.send, actionLabel);
+    sendButton.setAttribute("aria-label", actionLabel);
+    sendButton.title = actionTitle;
+    sendButton.dataset.tooltip = actionTitle;
     if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
@@ -7588,7 +7847,7 @@ class CodexBridgePanel extends HTMLElement {
       chip.removeAttribute("title");
       chip.id = "run-step-chip";
       chip.setAttribute("aria-expanded", String(this._runActivityDetailsOpen));
-      chip.setAttribute("aria-haspopup", "true");
+      chip.setAttribute("aria-haspopup", "dialog");
       chip.setAttribute("aria-controls", tooltipId);
       if (this._runActivityDetailsOpen) chip.setAttribute("aria-describedby", tooltipId);
 
@@ -7621,8 +7880,12 @@ class CodexBridgePanel extends HTMLElement {
       const tooltip = document.createElement("div");
       tooltip.id = tooltipId;
       tooltip.className = "run-step-tooltip";
-      tooltip.setAttribute("role", "tooltip");
-      tooltip.append(this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity"));
+      tooltip.setAttribute("role", "dialog");
+      tooltip.setAttribute("aria-modal", "false");
+      tooltip.setAttribute("aria-labelledby", `${tooltipId}-title`);
+      const tooltipTitle = this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity");
+      tooltipTitle.id = `${tooltipId}-title`;
+      tooltip.append(tooltipTitle);
       const stages = Array.isArray(activity.stages) ? activity.stages.slice(0, 12) : [];
       if (stages.length) {
         tooltip.append(this._textElement("span", "run-step-section-label", "Stages"));
@@ -7713,6 +7976,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderMessages() {
     const messageList = this.shadowRoot.getElementById("message-list");
+    const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
     const activity = this._runActivityForThread();
     messageList.setAttribute("aria-busy", String(Boolean(this._selectedThreadId && activity.busy)));
     if (!this._selectedThreadId) {
@@ -7731,7 +7995,7 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const shouldStick =
-      shouldRebuild || messageList.scrollHeight - messageList.clientHeight - messageList.scrollTop < 80;
+      shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
     const eventsToRender =
       this._renderedSequence === 0
         ? this._events
@@ -7806,10 +8070,11 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _scrollMessagesToBottom() {
-    const messageList = this.shadowRoot.getElementById("message-list");
-    messageList.scrollTop = messageList.scrollHeight;
+    const scrollContainer = this.shadowRoot.getElementById("conversation-scroll")
+      || this.shadowRoot.getElementById("message-list");
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
     window.requestAnimationFrame(() => {
-      messageList.scrollTop = messageList.scrollHeight;
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
     });
   }
 
@@ -8288,13 +8553,8 @@ class CodexBridgePanel extends HTMLElement {
         this._noteArtifactReservationConflict(threadId, { manual });
         return false;
       }
-      if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-        this._noteArtifactRefreshFailure(threadId);
-        this._render();
-      } else {
-        this._clearArtifactRefreshRetry();
-        this._setError(error);
-      }
+      this._noteArtifactRefreshFailure(threadId);
+      this._render();
       return false;
     }
   }
@@ -8713,6 +8973,108 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
+  _renderActivityCenter() {
+    const container = this.shadowRoot.getElementById("activity-center");
+    if (!container) return;
+    const activity = this._runActivityForThread();
+    const sourceCount = activity.runId ? this._events.slice(-2000).reduce((total, event) => {
+      const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+      if (payload.run_id !== activity.runId) return total;
+      const count = Array.isArray(payload.sources)
+        ? payload.sources.length
+        : Array.isArray(payload.citations)
+          ? payload.citations.length
+          : 0;
+      return Math.min(1000, total + count);
+    }, 0) : 0;
+    const model = getInfoCenterViewModel({
+      status: this._status,
+      thread: this._activeThread,
+      project: this._activeProject(),
+      artifacts: this._artifacts,
+      panelVersion: PANEL_VERSION,
+      runActivity: activity,
+      browser: {
+        web_search: this._config?.web_search_mode === "live",
+        source_count: sourceCount,
+      },
+    });
+    container.replaceChildren();
+    const visibleSections = new Set(["outputs", "subagents", "background", "browser", "sources"]);
+    for (const section of model.sections.filter((item) => visibleSections.has(item.id))) {
+      const card = document.createElement("section");
+      card.className = "activity-center-section";
+      card.dataset.section = section.id;
+      const rowValues = Object.fromEntries(section.rows.map((row) => [row.label, row.value]));
+      const numericRow = (label) => Number.parseInt(rowValues[label] || "0", 10) || 0;
+      const hasDetails = section.id === "outputs"
+        ? numericRow("Available files") > 0
+        : section.id === "subagents"
+          ? numericRow("Total") > 0
+          : section.id === "background"
+            ? !["Ready", "No active run"].includes(rowValues.Run) || rowValues["Current step"] !== "Unavailable"
+            : section.id === "browser"
+              ? rowValues["Current use"] === "Active"
+              : section.id === "sources"
+                ? numericRow("Sources") > 0
+                : false;
+      const heading = document.createElement("div");
+      heading.className = "activity-center-heading";
+      heading.append(this._textElement("h3", "", section.title));
+      if (section.id === "outputs") {
+        const openFiles = this._actionButton("section-action", "select-side-tab", "Open Files");
+        openFiles.dataset.sideTab = "files";
+        this._appendTrustedIcon(openFiles, icons.plus);
+        heading.append(openFiles);
+      }
+      const summaryText = section.id === "outputs" && !hasDetails
+        ? "Create a file or site"
+        : section.summary;
+      const summary = this._textElement("p", "activity-center-summary", summaryText);
+      const rows = document.createElement("div");
+      rows.className = "activity-center-rows";
+      this._renderKeyValueRows(
+        rows,
+        section.rows.map((row) => [row.label, row.value]),
+        "context-row"
+      );
+      card.append(heading);
+      if (section.id === "subagents" && hasDetails) {
+        const active = numericRow("Active");
+        const completed = numericRow("Completed");
+        const attention = numericRow("Needs attention");
+        const attentionLabel = attention
+          ? `${attention} need${attention === 1 ? "s" : ""} attention`
+          : "";
+        const strip = document.createElement("div");
+        strip.className = "activity-agent-strip";
+        strip.setAttribute(
+          "aria-label",
+          [`${active} subagents working`, `${completed} done`, attentionLabel].filter(Boolean).join(", "),
+        );
+        const markers = document.createElement("span");
+        markers.className = "activity-agent-markers";
+        markers.setAttribute("aria-hidden", "true");
+        for (let index = 0; index < Math.min(4, Math.max(1, numericRow("Total"))); index += 1) {
+          markers.append(this._textElement("span", "activity-agent-marker", ""));
+        }
+        strip.append(
+          markers,
+          this._textElement("span", "activity-agent-working", `${active} working`),
+          this._textElement("span", "activity-agent-done", `${completed} done`),
+        );
+        if (attentionLabel) {
+          strip.append(this._textElement("span", "activity-agent-attention", attentionLabel));
+        }
+        card.append(strip);
+      } else {
+        card.append(summary);
+        if (hasDetails) card.append(rows);
+      }
+      container.append(card);
+    }
+  }
+
   _renderUsagePanel() {
     const container = this.shadowRoot.getElementById("usage-panel");
     if (!container) return;
@@ -8874,10 +9236,8 @@ class CodexBridgePanel extends HTMLElement {
       } catch (error) {
         if (canDeferArtifactRefresh(error)) {
           this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
-        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-          this._noteArtifactRefreshFailure(threadId);
         } else {
-          throw error;
+          this._noteArtifactRefreshFailure(threadId);
         }
       }
       if (!isCurrent()) {
@@ -10018,10 +10378,8 @@ class CodexBridgePanel extends HTMLElement {
         }
         if (canDeferArtifactRefresh(error)) {
           this._noteArtifactReservationConflict(threadId);
-        } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-          this._noteArtifactRefreshFailure(threadId);
         } else {
-          throw error;
+          this._noteArtifactRefreshFailure(threadId);
         }
       }
       if (!isCurrent()) {
@@ -10036,7 +10394,6 @@ class CodexBridgePanel extends HTMLElement {
       if (artifacts?.some((item) => item.artifact_id === artifact.artifact_id)) {
         await this._loadArtifactPreview(artifact.artifact_id);
       }
-      this._clearError();
       this._render();
     } catch (error) {
       if (!isCurrent()) {
@@ -10046,8 +10403,13 @@ class CodexBridgePanel extends HTMLElement {
         this._noteArtifactReservationConflict(threadId, { retryArchive: true });
         return;
       }
-      this._clearArtifactRefreshRetry();
-      this._setError(error);
+      this._clearArtifactRefreshRetry({ resetState: false });
+      this._artifactRefreshState = {
+        status: "retryable",
+        message: "Workspace archive could not be created.",
+        action: "retry-archive",
+      };
+      this._render();
     } finally {
       this._workspaceArchivePending = false;
       if (this.isConnected) {
@@ -10147,12 +10509,8 @@ class CodexBridgePanel extends HTMLElement {
         this._forceMessageRebuild = true;
       }
       this._render();
-    } catch (error) {
+    } catch {
       if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
-      if (!isArtifactDomainFailure(error) || (!hasStructuredArtifactError(error) && this._isRetryableTransportError(error))) {
-        this._setError(error);
-        return;
-      }
       this._revokePreviewUrl();
       this._artifactPreview = {
         ...advertisedDescriptor,
@@ -10448,10 +10806,8 @@ class CodexBridgePanel extends HTMLElement {
           } catch (error) {
             if (canDeferArtifactRefresh(error)) {
               this._noteArtifactReservationConflict(polledThreadId);
-            } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-              this._noteArtifactRefreshFailure(polledThreadId);
             } else {
-              throw error;
+              this._noteArtifactRefreshFailure(polledThreadId);
             }
           }
           if (!isCurrent()) {
@@ -10833,6 +11189,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     this._renderMessages();
     this._renderRunActivity();
+    this._renderActivityCenter();
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
     if (["run.started", "run.completed", "run.failed", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
@@ -10896,10 +11253,8 @@ class CodexBridgePanel extends HTMLElement {
         } catch (error) {
           if (canDeferArtifactRefresh(error)) {
             this._noteArtifactReservationConflict(threadId, { runStatus: thread?.status });
-          } else if (isArtifactDomainFailure(error) && (hasStructuredArtifactError(error) || !this._isRetryableTransportError(error))) {
-            this._noteArtifactRefreshFailure(threadId);
           } else {
-            throw error;
+            this._noteArtifactRefreshFailure(threadId);
           }
         }
         if (!isCurrent()) {

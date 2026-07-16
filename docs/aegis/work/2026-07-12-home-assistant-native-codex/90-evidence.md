@@ -524,18 +524,39 @@ accepted release because the required PDF path failed.
 | Acceptance result | Failed/pending. PDF indexing, archive, and preview did not pass; no 0.8.1 target-acceptance claim is made. |
 | Browser automation | Issue #43 tracks the required secure App-owned browser worker. Per ADR 0006, interactive Chromium remains deferred pending separate sandbox and enforced-egress acceptance. |
 
-## 0.8.2 candidate: scan contract and desktop alignment
+## 0.8.2 signed publication and bounded target smoke
 
 App, Integration, and panel `0.8.2`, Bridge `0.7.2`, and Codex `0.144.5` are a
-candidate only. Signed publication and target-Home-Assistant validation have
-not occurred; no 0.8.2 image digest or acceptance result is claimed.
+signed release. Publication run `29536061100` completed successfully against
+exact main commit `ad65759032e859c309d06fee309a0e436f50dbe6`. The target Home
+Assistant then reported App, Integration, and panel `0.8.2`, Bridge `0.7.2`,
+and Codex `0.144.5`; ChatGPT/history remained present and the panel loaded
+without the prior false global connection banner. This was a bounded smoke
+check, not a completed PDF/archive/restore acceptance matrix, so `0.7.5`
+remains the latest fully accepted release.
 
 | Evidence or acceptance item | Status |
 | --- | --- |
-| Aggregate scan contract | Candidate restores non-capacity `WorkspaceBoundaryError` failures to typed, retryable `reservation_conflict` with resource `filesystem_scan`; capacity violations remain `quota_exceeded`. |
-| Ordinary workspace regression | Candidate regression covers `.agents/skills/.../SKILL.md` plus a regular PDF and proves a retry succeeds after one operational aggregate scan failure. |
-| Artifact error containment | Candidate keeps generic artifact-index and preview failures in the **Files** surface, preserving the authoritative transcript, chat state, and any real global connection/authentication error. |
-| Desktop alignment | Candidate widens the desktop navigation/context rails at large viewports, retains a shared bounded conversation/composer axis, uses theme-derived navigation tint and a full-height structural context plane, moves healthy telemetry to System, and preserves narrow drawers, keyboard/touch actions, and reduced motion. |
-| Focus mode | Candidate exposes standards fullscreen only from an explicit panel control, reflects fullscreen state, uses native Escape, and restores keyboard focus without changing the HA/Integration/App trust boundary. |
+| Aggregate scan contract | Release restores non-capacity `WorkspaceBoundaryError` failures to typed, retryable `reservation_conflict` with resource `filesystem_scan`; capacity violations remain `quota_exceeded`. |
+| Ordinary workspace regression | Release regression covers `.agents/skills/.../SKILL.md` plus a regular PDF and proves a retry succeeds after one operational aggregate scan failure. |
+| Artifact error containment | Release keeps generic artifact-index and preview failures in the **Files** surface, preserving the authoritative transcript, chat state, and any real global connection/authentication error. |
+| Desktop alignment | Release widens the desktop navigation/context rails at large viewports, retains a shared bounded conversation/composer axis, uses theme-derived navigation tint and a full-height structural context plane, moves healthy telemetry to System, and preserves narrow drawers, keyboard/touch actions, and reduced motion. |
+| Focus mode | Release exposes standards fullscreen only from an explicit panel control, reflects fullscreen state, uses native Escape, and restores keyboard focus without changing the HA/Integration/App trust boundary. |
 | Local verification | Clean Linux/Python 3.14 Bridge run: 1,450 passed and 13 skipped. Frontend: lint passed, 272 unit tests passed, generated bundle rebuilt, and 16/16 Playwright flows passed; release projections, Codex lock, Python compilation, Ruff, and diff checks passed. Independent re-review found no remaining release blocker in the requested scope. |
-| Required target gate | Install both components, observe typed local Files recovery while the preserved debris is present, remove only the known acceptance debris, then prove PDF indexing, archive, local PDF.js preview, retained models/limits/search/history, normal responsive layout, and Focus mode. |
+| Bounded target smoke | Coordinated versions, retained ChatGPT/history, and absence of the false global connection banner passed after the App restart. PDF indexing/archive/preview, cleanup of known acceptance debris, Focus mode, cold restore, and arbitrary previous-image recovery were not re-proved. |
+
+## 0.8.3 candidate: Codex desktop parity and local secondary failures
+
+App, Integration, and panel `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5` are a
+candidate only. No signed publication, image digest, or target-acceptance result
+is claimed before CI, release, and live validation complete.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| Shared reading geometry | Header, transcript, safe live action, interactions, and compact composer use one 840-pixel content rail. The 330-360-pixel Activity card floats with the same desktop gutter and retains responsive drawers below the desktop breakpoint. |
+| Continuous transcript | Messages, run activity, approvals, and questions share one scroll surface rather than competing nested regions. |
+| Activity information | Outputs, bounded Subagent totals, Background activity, Browser state, and Sources render as compact Codex-style sections. Terminal runs clear stale working counts while retaining completed and needs-attention totals. |
+| Failure containment | Artifact-index, archive, and preview errors remain local to **Files** after authoritative thread/status/events succeed. A healthy response and real connection state are preserved; bounded retry remains available. |
+| Responsive and accessible behavior | Mobile activity details expand inside the viewport; keyboard tabs, disclosures, touch targets, reduced motion, and one-to-one tab/panel semantics are retained. |
+| Local frontend verification | ESLint passed, 285/285 unit tests passed, the generated bundle rebuilt, and 16/16 Playwright flows passed including hostile-content containment, PDF preview, auth, approvals, retries, mobile bounds, and axe checks. |
+| Required target gate | Publish the immutable image, update both target components, then prove versions, retained account/history, normal prompt completion, no false connection banner after secondary file failure, Activity/card geometry, compact composer, mobile bounds, models/limits/search, and bounded PDF/archive behavior. |

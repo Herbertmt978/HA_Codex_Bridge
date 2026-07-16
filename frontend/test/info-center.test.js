@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ABOUT_SCREENS,
+  INFO_SECTION_IDS,
   INFO_TABS,
   KEYBOARD_SHORTCUTS,
   getInfoCenterViewModel,
@@ -32,7 +33,9 @@ describe("information center view model", () => {
     });
 
     expect(model.tabs).toBe(INFO_TABS);
-    expect(Object.keys(model)).toEqual(["tabs", "activity", "files", "usage", "system"]);
+    expect(Object.keys(model)).toEqual(["tabs", "sections", "activity", "files", "usage", "system"]);
+    expect(model.sections.map((item) => item.id)).toEqual(INFO_SECTION_IDS);
+    expect(new Set(model.sections.map((item) => item.id)).size).toBe(model.sections.length);
     expect(model.activity).toMatchObject({
       title: "Current activity",
       summary: "This chat is working.",
@@ -47,6 +50,40 @@ describe("information center view model", () => {
       { label: "5-hour limit", value: "72% remaining" },
     ]));
     expect(model.system.summary).toBe("The private runtime is ready.");
+  });
+
+  it("projects bounded run activity, capabilities, and source counts without raw content", () => {
+    const model = getInfoCenterViewModel({
+      status: { provider_capabilities: { web_search: true } },
+      thread: { attachments: [{ filename: "secret.txt" }] },
+      artifacts: [{ size_bytes: 10 }],
+      runActivity: {
+        state: "running",
+        action: "Searching the web",
+        actionHistory: [
+          { label: "Reading files", command: "ignored" },
+          { label: "https://private.example/secret" },
+        ],
+        subagents: { total: 3, active: 2, completed: 1, attention: 0, prompt: "ignored" },
+        files: { changed: 2, additions: 4, deletions: 1 },
+      },
+      sources: [{ url: "https://private.example/secret?token=hidden" }],
+    });
+
+    expect(model.sections.map((item) => item.id)).toEqual([
+      "outputs", "subagents", "background", "browser", "sources", "usage", "system",
+    ]);
+    expect(model.subagents).toBeUndefined();
+    expect(model.sections.find((item) => item.id === "subagents")?.rows).toEqual(expect.arrayContaining([
+      { label: "Total", value: "3" },
+      { label: "Active", value: "2" },
+    ]));
+    expect(model.sections.find((item) => item.id === "browser")?.summary).toMatch(/active/i);
+    expect(model.sections.find((item) => item.id === "sources")?.rows).toEqual(expect.arrayContaining([
+      { label: "Sources", value: "1" },
+    ]));
+    const output = JSON.stringify(model);
+    expect(output).not.toMatch(/private\.example|secret\.txt|token=hidden|ignored/);
   });
 
   it("never reflects secrets, paths, URLs, commands, diffs, or unknown nested status fields", () => {

@@ -141,11 +141,43 @@ describe("panel run activity integration", () => {
     expect(messageList?.textContent).not.toContain("Partial answer");
   });
 
+  it("refreshes the Activity card for every accepted streamed run event", () => {
+    const panel = createPanel({ events: [] });
+    panel._render(true);
+    const activitySpy = vi.spyOn(panel, "_renderActivityCenter");
+
+    panel._handleSubscribedEvent("thread-activity", event(1, "plan.updated", {
+      run_id: "run-activity",
+      plan: [{ step: "Inspect the workspace", status: "inProgress" }],
+    }));
+
+    expect(activitySpy).toHaveBeenCalledTimes(1);
+    expect(panel.shadowRoot.querySelector('[data-section="background"]')?.textContent).toContain("Working");
+  });
+
+  it("counts sources only for the run currently represented by Activity", () => {
+    const panel = createPanel({ events: [
+      event(1, "web_search.completed", {
+        run_id: "run-previous",
+        sources: [{ url: "https://old.example/1" }, { url: "https://old.example/2" }],
+      }),
+      event(2, "web_search.completed", {
+        run_id: "run-activity",
+        citations: [{ url: "https://current.example/1" }],
+      }),
+    ] });
+    panel._render(true);
+
+    const sources = panel.shadowRoot.querySelector('[data-section="sources"]');
+    expect(sources?.textContent).toContain("1 source reported for this run");
+    expect(sources?.textContent).not.toContain("3 sources");
+  });
+
   it("keeps reduced-motion and mobile layout fallbacks in the activity stylesheet", () => {
     const panel = createPanel();
     const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
     expect(stylesheet).toMatch(/prefers-reduced-motion\s*:\s*reduce/i);
-    expect(stylesheet).toMatch(/--rail-bg:\s*color-mix\(in srgb,\s*var\(--surface-bg\)\s+95%,\s*var\(--accent-color\)\s+5%\)/);
+    expect(stylesheet).toMatch(/--rail-bg:\s*color-mix\(in srgb,\s*var\(--surface-bg\)\s+90%,\s*#dff4c1\s+10%\)/i);
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)/i);
     expect(stylesheet).toMatch(/run-activity-region|run-step-chip/);
     expect(stylesheet).toMatch(/@media\s*\(max-width\s*:\s*\d+px\)[\s\S]*?\.run-activity-region/i);
