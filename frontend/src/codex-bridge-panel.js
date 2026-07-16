@@ -11,7 +11,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.7.1";
+const PANEL_VERSION = "0.7.2";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -4884,8 +4884,8 @@ class CodexBridgePanel extends HTMLElement {
         state.data.skills = normalizeSkillsResponse(await this._callWS("list_skills", this._desktopWorkspace()));
       } else if (destination === "plugins") {
         const workspace = this._desktopWorkspace();
-        const [plugins, marketplaces] = await Promise.all([this._callWS("list_plugins", workspace), this._callWS("list_marketplaces", workspace)]);
-        state.data.plugins = normalizePluginsResponse(plugins); state.data.marketplaces = normalizeMarketplacesResponse(marketplaces);
+        const catalogue = await this._callWS("list_plugins", workspace);
+        state.data.plugins = normalizePluginsResponse(catalogue); state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
         const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");

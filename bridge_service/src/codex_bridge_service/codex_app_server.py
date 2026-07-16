@@ -45,6 +45,8 @@ _MAX_REQUEST_ID_TEXT_BYTES = 256
 _MAX_METHOD_BYTES = 512
 _RETIRED_ID_LIMIT = 2048
 _STDERR_READ_BYTES = 16 * 1024
+_DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
+_DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 _DEFAULT_PROTOCOL_CONTRACT = load_bundled_protocol_contract()
 _DEFAULT_PROTOCOL_VALIDATOR = AppServerProtocolValidator(_DEFAULT_PROTOCOL_CONTRACT)
 
@@ -207,10 +209,10 @@ class CodexAppServerClient:
         codex_home: Path | str | None = None,
         client_name: str = "ha_codex_bridge",
         client_title: str = "Home Assistant Codex Bridge",
-        client_version: str = "0.6.0",
+        client_version: str = "0.6.1",
         initialize_timeout_seconds: float = 10.0,
-        request_timeout_seconds: float = 30.0,
-        max_message_bytes: int = 1024 * 1024,
+        request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        max_message_bytes: int = _DEFAULT_MAX_MESSAGE_BYTES,
         max_pending_requests: int = 64,
         callback_workers: int = 4,
         max_callback_queue: int = 64,

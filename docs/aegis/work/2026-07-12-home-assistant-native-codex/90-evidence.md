@@ -409,19 +409,61 @@ bounded live observations rather than blanket acceptance of every capability.
 | Local App image | Docker built the staged Home Assistant base image successfully. Inside that image `codex --version` reported `0.144.4`, and the locked app-server contract generator `--check` passed against that exact binary. |
 | Independent release review | Pre-release review found and closed the MCP capability-gate bypass, pre-service MCP activation, masked durable MCP cleanup, unlinked and terminal-before-link automation crash windows, retryable/post-mutation/post-claim scheduler gaps, root-workspace skill path, best-effort DNS screening gaps, mobile management-route trap, stale mutation refresh, desktop-error privacy leak, keyboard gaps, hidden-overlay hit testing, destructive-button contrast, and project-instruction scope/OAuth popup regressions. The final backend re-review was READY after 115 focused tests; the final frontend re-review was READY after 213 unit tests. |
 | Target Home Assistant | App and Integration `0.7.0` reported Bridge `0.6.0` and Codex `0.144.4`; ChatGPT Pro remained signed in, dynamic GPT-5.6 was visible, the five-hour window rendered `Off`, and chat/history were preserved. App auto-update and MCP opt-in persistence after restart were observed. |
-| Management mutation boundary | Forms lose unsaved values during a background rerender. The `0.7.1` candidate contains the fix; automation, skills, plugins/marketplaces, MCP-server, and global/project `AGENTS.md` mutation acceptance is superseded and must be retested. |
-| Recovery gates | The first unattended App update is proven. External blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image rollback remain unproven. |
+| Management mutation boundary (historical 0.7.0 observation) | Forms lost unsaved values during a background rerender. The `0.7.1` candidate contained the fix; the retest was open at the time of this `0.7.0` record. |
+| Recovery gates (historical 0.7.0 observation) | The first unattended App update was proven. External blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image rollback remained unproven. |
 
-The remaining acceptance work is the `0.7.1` management-mutation retest and the
-external blocked-network, cold-restore, and previous-image recovery gates.
+The remaining acceptance work recorded for this `0.7.0` section was the
+`0.7.1` management-mutation retest and the external blocked-network,
+cold-restore, and previous-image recovery gates. The retest is recorded below;
+the recovery gates remain open.
+
+## 0.7.1 published release and bounded target-HA evidence
+
+Integration/App `0.7.1` is published and live-accepted on the target Home
+Assistant within the boundaries below. The release uses generic image digest
+`sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
+and amd64 child digest
+`sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
+Main CI rerun `29483810669` and App publication `29483810926` succeeded
+([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1)).
+
+| Evidence | Result |
+| --- | --- |
+| Target runtime | App and Integration `0.7.1` installed/running; Bridge `0.6.0`; Codex `0.144.4`. |
+| Account and models | ChatGPT Pro remained signed in; GPT-5.6 was visible from runtime discovery; the five-hour window rendered `Off`; existing chats/history were preserved. |
+| Scheduled form | Draft values survived background rerenders. |
+| Skills form and mutations | Draft values survived rerenders; create/list/delete passed. |
+| MCP form | Draft values survived rerenders; cancellation passed. |
+| One-time Observe automation | Claimed exactly at `2026-07-16T09:09:30Z`; completed at `09:09:35Z`; then paused and deleted. |
+| Plugins/marketplaces (historical 0.7.1 observation) | Live list returned `capabilities_unavailable` (HTTP 503). No `0.7.1` plugin or marketplace list/mutation acceptance was claimed. |
+| Update/recovery | First unattended App auto-update remains proven. This manual update retained the prior-version backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback remain unproven. |
+
+## 0.7.2 candidate plugin catalogue evidence
+
+App/Integration `0.7.2` with Bridge `0.6.1` is a candidate pending plugin live
+acceptance; published/live-accepted `0.7.1` remains the historical release.
+Bundled Codex remains `0.144.4`. In a signed-in Codex run, the native plugin
+catalogue measured approximately `4,041,499` bytes, contained `1,916` plugins,
+and completed cold in `35.887s`.
+
+| Candidate fix or measurement | Result |
+| --- | --- |
+| App-server framing/request | Message bounded to `8MiB`; cold catalogue request bounded to `60s`. |
+| HA Integration plugin request | Plugin catalogue request gets a `75s` deadline and `8MiB` response cap. |
+| Bridge projection | Projects at most `4,096` plugins, covering the measured `1,916`-plugin catalogue. |
+| Frontend request shape | Plugins and marketplaces load through one frontend request. |
+| Acceptance boundary | These are candidate facts only. The historical `0.7.1` live list returned `capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace list/mutation acceptance was claimed. |
 
 ## Evidence status
 
 The historical `0.6.5` section remains bounded live-acceptance evidence for that
-matrix. The `0.7.0` publication, signed digests, target-HA runtime versions,
-ChatGPT Pro login retention, dynamic catalogue, duration-aware limits,
-chat/history, App auto-update, and MCP opt-in persistence are evidenced above.
-Management mutation acceptance is superseded pending `0.7.1` retest. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
-recovery remain unproven; the optional external Bridge remains a
-compatibility/recovery path until then.
+matrix, and the `0.7.0` section is retained as the prior published baseline.
+The `0.7.1` publication, digests, target-HA runtime versions, ChatGPT Pro login
+retention, dynamic catalogue, duration-aware limits, chat/history, management
+form retention, skill mutations, scheduled Observe run, App auto-update, and
+MCP form cancellation are evidenced above. The `0.7.1` plugin/marketplace HTTP
+503 remains historical evidence; the `0.7.2` catalogue measurements and fixes
+are candidate evidence pending live acceptance. External blocked-network/Nabu
+Casa/Cloudflare routing, cold restore, and arbitrary previous-image rollback
+remain unproven; the optional external Bridge remains a compatibility/recovery
+path until then.

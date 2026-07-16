@@ -25,6 +25,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiTimeoutError,
     BridgeDownload,
     BridgeStreamResponse,
+    PLUGIN_LIST_REQUEST_TIMEOUT,
     REQUEST_TIMEOUT,
 )
 from custom_components.codex_bridge.protocol import DiscoveryRecord, ReadyRecord
@@ -610,6 +611,76 @@ async def test_maps_request_timeouts_and_passes_the_bounded_timeout_policy(
     assert TOKEN not in repr(error.value)
     assert session.kwargs["timeout"] == REQUEST_TIMEOUT
     assert session.kwargs["allow_redirects"] is False
+
+
+async def test_plugin_catalogue_uses_the_bounded_cold_response_timeout() -> None:
+    class TimeoutSession:
+        kwargs: dict
+
+        async def request(self, *args, **kwargs):
+            self.kwargs = kwargs
+            raise asyncio.TimeoutError()
+
+    session = TimeoutSession()
+    client = BridgeApiClient(session, "http://127.0.0.1:8766", TOKEN)
+    client._api_version = 1
+    client._capabilities = frozenset({"plugins_v1"})
+
+    with pytest.raises(BridgeApiTimeoutError):
+        await client.async_list_plugins(".")
+
+    assert session.kwargs["timeout"] == PLUGIN_LIST_REQUEST_TIMEOUT
+    assert session.kwargs["timeout"].total == 75
+    assert session.kwargs["timeout"].sock_read == 70
+    assert session.kwargs["allow_redirects"] is False
+
+
+@pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
+async def test_plugin_catalogue_response_is_limited_to_eight_mebibytes(
+    bridge_server_factory, monkeypatch, method: str
+) -> None:
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        return web.Response(body=b"{" + (b"x" * 64))
+
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.bridge_api.BRIDGE_PLUGIN_LIST_MAX_BYTES", 64
+    )
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiPayloadTooLargeError):
+            await getattr(client, method)(".")
+
+
+@pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
+async def test_plugin_catalogue_chunked_response_is_limited_without_content_length(
+    bridge_server_factory, monkeypatch, method: str
+) -> None:
+    async def handler(request: web.Request) -> web.StreamResponse:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+
+        response = web.StreamResponse()
+        response.enable_chunked_encoding()
+        assert response.content_length is None
+        await response.prepare(request)
+        await response.write(b"{")
+        await response.write(b"x" * 64)
+        await response.write_eof()
+        return response
+
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.bridge_api.BRIDGE_PLUGIN_LIST_MAX_BYTES", 64
+    )
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiPayloadTooLargeError):
+            await getattr(client, method)(".")
 
 
 async def test_maps_error_body_read_timeout_and_releases_the_response() -> None:

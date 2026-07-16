@@ -475,7 +475,7 @@ def _worker(arguments: argparse.Namespace) -> int:
         codex_home=CODEX_HOME,
         client_name="ha_codex_bridge_sandbox_test",
         client_title="HA Codex Bridge sandbox test",
-        client_version="0.6.0",
+        client_version="0.6.1",
         initialize_timeout_seconds=30,
         request_timeout_seconds=30,
         max_message_bytes=128 * 1024,

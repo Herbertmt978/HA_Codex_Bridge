@@ -245,7 +245,7 @@ class ScriptedPeer:
                                 ),
                                 "userAgent": (
                                     "Codex Desktop/0.144.4 (test; x86_64) "
-                                    "fake (ha_codex_bridge; 0.6.0)"
+                                    "fake (ha_codex_bridge; 0.6.1)"
                                 ),
                             },
                         ),

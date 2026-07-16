@@ -89,7 +89,7 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "codex_home": fake_server.codex_home,
         "client_name": "ha_codex_bridge",
         "client_title": "HA Codex Bridge",
-        "client_version": "0.6.0",
+        "client_version": "0.6.1",
         "initialize_timeout_seconds": 10.0,
         "request_timeout_seconds": 2.0,
         "max_message_bytes": 16 * 1024,
@@ -102,7 +102,13 @@ def _client(module: ModuleType, fake_server: FakeAppServer, **overrides: Any) ->
         "shutdown_grace_seconds": 0.05,
         "protocol_contract": None,
     }
+    use_default_message_limit = overrides.pop("_use_default_message_limit", False)
+    use_default_request_timeout = overrides.pop("_use_default_request_timeout", False)
     options.update(overrides)
+    if use_default_message_limit:
+        options.pop("max_message_bytes")
+    if use_default_request_timeout:
+        options.pop("request_timeout_seconds")
     return module.CodexAppServerClient(**options)
 
 
@@ -173,7 +179,7 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         assert messages[0]["params"]["clientInfo"] == {
             "name": "ha_codex_bridge",
             "title": "HA Codex Bridge",
-            "version": "0.6.0",
+            "version": "0.6.1",
         }
         assert fake_server.process()["argv"] == [
             "-c",
@@ -930,6 +936,66 @@ def test_outbound_limit_preflight_rejects_before_json_serialization(
     exact_body = "x" * (client.max_message_bytes - len(b'{"payload":""}'))
     with pytest.raises(module.AppServerProtocolError):
         client._write_message(1, {"payload": exact_body})
+
+
+def test_default_plugin_catalog_bounds_accept_large_response(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    description = "x" * 4_000_000
+    fake_server.configure(
+        responses={
+            "plugin/list": {
+                "result": {
+                    "marketplaces": [
+                        {
+                            "name": "official",
+                            "plugins": [
+                                {
+                                    "id": "large-plugin",
+                                    "name": "Large Plugin",
+                                    "description": description,
+                                }
+                            ],
+                        }
+                    ],
+                    "marketplaceLoadErrors": [],
+                    "featuredPluginIds": ["large-plugin"],
+                }
+            }
+        }
+    )
+    client = _client(
+        module,
+        fake_server,
+        _use_default_message_limit=True,
+        _use_default_request_timeout=True,
+    )
+    assert client.max_message_bytes == module._DEFAULT_MAX_MESSAGE_BYTES
+    assert client.request_timeout_seconds == 30.0
+
+    client.start()
+    try:
+        result = client.request("plugin/list")
+        marketplace = result["marketplaces"][0]
+        plugin = marketplace["plugins"][0]
+        assert marketplace["name"] == "official"
+        assert plugin["id"] == "large-plugin"
+        assert plugin["name"] == "Large Plugin"
+        assert len(plugin["description"]) == len(description)
+        assert result["marketplaceLoadErrors"] == []
+        assert result["featuredPluginIds"] == ["large-plugin"]
+    finally:
+        client.close()
+
+
+def test_default_request_timeout_remains_bounded_for_ordinary_requests(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    client = _client(module, fake_server, _use_default_request_timeout=True)
+
+    assert client.request_timeout_seconds == 30.0
 
 
 @pytest.mark.parametrize(

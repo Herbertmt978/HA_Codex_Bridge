@@ -91,7 +91,11 @@ The administrator-only panel exposes these App-backed surfaces:
   atomic, bounded, and retain private rollback snapshots.
 - Plugins and marketplaces are projected from Codex's native configuration.
   Sources and names are validated, credentials are rejected, and no arbitrary
-  file path or JSON-RPC payload is passed through this API.
+  file path or JSON-RPC payload is passed through this API. The published/live-
+  accepted `0.7.1` run returned `capabilities_unavailable` (HTTP 503); no
+  `0.7.1` plugin or marketplace list/mutation acceptance was claimed. The
+  `0.7.2` candidate's signed-in catalogue measurement is described below and
+  remains candidate evidence until live publication.
 - MCP is disabled by default. To opt in, set **Enable MCP** in the App
   configuration, save, and restart. Disabled startup suppresses MCP before
   Codex reads saved configuration and removes the native MCP server table;
@@ -142,14 +146,22 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The current candidate is Integration `0.7.1`, App `0.7.1`, Bridge `0.6.0`, and
-Codex `0.144.4` (experimental, `amd64` only), carrying the management-form
-rerender fix for target-HA retest. The published/signed `0.7.0` baseline has
-generic image digest
-`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
-with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
-Main CI `29471288344` and publication `29471288457` succeeded; signature, SBOM,
-and provenance are attached to the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+Candidate App/Integration `0.7.2` with Bridge `0.6.1` is pending plugin live
+acceptance and retains bundled Codex `0.144.4`. In a signed-in Codex run, its
+native plugin catalogue measured approximately `4,041,499` bytes, contained
+`1,916` plugins, and completed cold in `35.887s`. The candidate fixes bound the
+app-server message to `8MiB` and cold request to `60s`, give the HA Integration
+plugin request a `75s` deadline and `8MiB` response cap, project at most `4,096`
+plugins, and load plugins and marketplaces with one frontend request. This is
+candidate evidence only; the published/live-accepted `0.7.1` release remains
+the historical live baseline.
+
+The published/live-accepted release is Integration `0.7.1`, App `0.7.1`, Bridge
+`0.6.0`, and Codex `0.144.4` (experimental, `amd64` only). The generic image
+digest is `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
+with amd64 child `sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
+Main CI rerun `29483810669` and App publication `29483810926` succeeded; see
+the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1).
 Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
 matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
@@ -159,14 +171,17 @@ canonical contained supplemental roots and hardens `lsm_get_self_attr` record
 parsing. The historical `0.6.5` image passed target-HAOS startup, its production sandbox
 self-test and attestation, an authenticated API v1 readiness request,
 Supervisor discovery, Integration pairing, and panel loading. A redacted
-ChatGPT device-login start/cancel cycle also passed. The target `0.7.0` run
+ChatGPT device-login start/cancel cycle also passed. The target `0.7.1` run
 retained ChatGPT Pro, showed dynamic GPT-5.6, rendered the five-hour window
-`Off`, preserved chat/history, and persisted App auto-update plus MCP opt-in
-across restart. Management forms lose unsaved values during a background
-rerender; the `0.7.1` candidate contains the fix. Do not claim automation,
-skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation acceptance
-until retested. The first unattended App update is proven. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
-rollback remain unproven.
+`Off`, and preserved existing chats/history. Scheduled and Skills form drafts
+survived rerenders; Skills create/list/delete passed; the MCP form draft
+survived and was cancelled. A one-time Observe automation was claimed exactly
+at `2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted.
+The historical `0.7.1` live Plugins/marketplaces list returned
+`capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace
+list/mutation acceptance was claimed. The first unattended App update is
+proven, and this manual update kept the prior-version backup. External
+blocked-network/Nabu Casa/Cloudflare routing, cold restore, and arbitrary
+previous-image rollback remain unproven.
 
 For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).
