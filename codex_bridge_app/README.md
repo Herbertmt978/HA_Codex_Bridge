@@ -6,23 +6,27 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.7.2` (`amd64` only, experimental)
-- Published Integration: `0.7.2`
-- Latest target-HA-accepted App/Integration: `0.7.1`
-- External Bridge: `0.6.0`
-- Bundled Codex: `0.144.4`
+- Published App: `0.7.4` (`amd64` only, experimental)
+- Published Integration: `0.7.3`
+- Latest target-HA-accepted App/Integration: `0.7.3`
+- Candidate Bridge: `0.6.3`
+- Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.7.3` with Bridge `0.6.2` is pending real Home
-Assistant acceptance; target-HA-accepted `0.7.1` remains the historical live
-baseline. Published `0.7.2` was not target-HA accepted before this candidate
-superseded it. The candidate defaults provider-gated native web
-search to Live for Supervisor prompts and automations while shell-command
-networking remains disabled. Signed-in ChatGPT-account image generation needs
+Candidate App/Integration `0.7.5` with Bridge `0.6.3` is pending real Home
+Assistant acceptance; coordinated `0.7.3` remains the live baseline. Signed
+App `0.7.4` carries the verified Codex `0.144.5` runtime. The candidate defaults
+provider-gated native search to Live and guides time-sensitive prompts toward
+that tool while shell-command networking remains disabled. Signed-in
+ChatGPT-account image generation needs
 both Codex `imageGeneration` and `namespaceTools` capabilities, uses no OpenAI
 API key, and keeps bounded PNG, JPEG, and WebP artifacts private. Its compact
-panel and the updater `jsonschema` dependency-installation fix are candidate
-changes, not acceptance evidence.
+composer is a presentation change, not an authority change.
+
+The published `0.7.4` image has immutable digest
+`sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
+Publication, signature, SBOM, and provenance verification passed in
+[run 29507100716](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29507100716).
 
 The published `0.7.2` image has generic digest
 `sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`

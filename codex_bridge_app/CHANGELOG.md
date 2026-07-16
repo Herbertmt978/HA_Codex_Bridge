@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 0.7.5
+
+- Makes Live mode reliably select Codex's native web-search tool for weather,
+  news, schedules, prices, rules, and other current information while keeping
+  model-controlled shell networking blocked.
+- Replaces the tall Limits/Model/Thinking dashboard beneath the prompt with a
+  compact Codex-style utility row. Full quota details remain available in the
+  Usage view, and keyboard guidance remains exposed to assistive technology.
+- Makes release-contract tests derive App, Bridge, and Codex versions from
+  their canonical authorities so future verified runtime updates do not fail
+  on stale literal version assertions.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.6.3` and paired Integration `0.7.5` without changing API
+  v1 compatibility.
+
 ## 0.7.4
 
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.

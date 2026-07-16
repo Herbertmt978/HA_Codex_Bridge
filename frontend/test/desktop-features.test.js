@@ -141,7 +141,7 @@ describe("desktop feature surfaces", () => {
     expect(panel.shadowRoot.textContent).toContain("General");
   });
 
-  it("keeps composer model, thinking, and limits in a compact accessible strip that collapses on mobile", () => {
+  it("renders a quiet, accessible composer utility row that opens usage and collapses on mobile", () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
     panel._activeThread = {
@@ -165,19 +165,22 @@ describe("desktop feature surfaces", () => {
 
     const toolbar = panel.shadowRoot.getElementById("compact-toolbar");
     const diagnostics = panel.shadowRoot.getElementById("composer-diagnostics");
-    expect(toolbar.querySelectorAll(".toolbar-card")).toHaveLength(2);
-    expect(toolbar.querySelectorAll(".mini-limit")).toHaveLength(2);
+    const usageButton = toolbar.querySelector('[data-action="open-usage"]');
+    expect(toolbar.querySelectorAll(".composer-utility")).toHaveLength(3);
+    expect(toolbar.querySelectorAll(".toolbar-card")).toHaveLength(0);
+    expect(toolbar.querySelectorAll(".mini-limit")).toHaveLength(0);
     expect(toolbar.querySelector('[aria-label="Chat model override"]')).toBeTruthy();
     expect(toolbar.querySelector('[aria-label="Chat thinking level override"]')).toBeTruthy();
-    expect(toolbar.textContent).toContain("Effective gpt-5.5");
-    expect(toolbar.textContent).toContain("Effective medium");
-    expect(toolbar.querySelector(".mini-limit").getAttribute("tabindex")).toBe("0");
+    expect(toolbar.textContent).toContain("5h 60% · Week 82%");
+    expect(usageButton.getAttribute("aria-label")).toMatch(/open usage details.*5h 60%.*week 82%/i);
+    expect(usageButton.getAttribute("title")).toContain("Pro usage snapshot");
     expect(diagnostics.querySelector("summary").textContent).toContain("Chat settings and limits");
+    usageButton.click();
+    expect(panel._sideTab).toBe("usage");
 
     const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
-    expect(stylesheet).toMatch(/min-height: 64px;/);
-    expect(stylesheet).toMatch(/height: 32px;/);
-    expect(stylesheet).toMatch(/\.toolbar-card\.controls \{\s*grid-template-columns: 1fr;/);
+    expect(stylesheet).toMatch(/\.compact-toolbar \{\s*display: flex;/);
+    expect(stylesheet).toMatch(/\.composer-utility \{\s*flex: 1 1 100%;\s*min-height: 44px;/);
     expect(stylesheet).toMatch(/\.composer-diagnostics > summary \{\s*display: flex;/);
   });
 

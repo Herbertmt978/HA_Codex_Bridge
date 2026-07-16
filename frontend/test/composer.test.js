@@ -49,6 +49,18 @@ describe("prompt composer mutation contract", () => {
     vi.restoreAllMocks();
   });
 
+  it("keeps keyboard guidance accessible without a persistent idle status row", () => {
+    const panel = createPanel();
+    panel._render(true);
+
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    const status = panel.shadowRoot.getElementById("composer-status");
+    const hint = panel.shadowRoot.getElementById("composer-shortcut-hint");
+    expect(prompt.getAttribute("aria-describedby")).toContain("composer-shortcut-hint");
+    expect(hint.textContent).toBe("Enter sends; Shift+Enter adds a new line.");
+    expect(status.textContent).toBe("");
+  });
+
   it("locks the composer before awaiting the Bridge and sends one stable request id", async () => {
     const panel = createPanel();
     const prompt = panel.shadowRoot.getElementById("prompt-input");

@@ -144,10 +144,11 @@ def test_check_fails_on_projection_drift_without_writing(tmp_path: Path) -> None
 def test_check_fails_when_bundled_bridge_version_drifts(tmp_path: Path) -> None:
     root = _fixture(tmp_path)
     _app_version, _codex_version, bridge_version = _canonical_versions()
+    next_bridge_version = _next_patch(bridge_version)
     project = root / "bridge_service" / "pyproject.toml"
     project.write_text(
         project.read_text(encoding="utf-8").replace(
-            f'version = "{bridge_version}"', 'version = "0.6.3"'
+            f'version = "{bridge_version}"', f'version = "{next_bridge_version}"'
         ),
         encoding="utf-8",
     )

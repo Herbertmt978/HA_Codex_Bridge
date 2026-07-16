@@ -244,6 +244,15 @@ class _RuntimeTotalDeadlineExceeded(RuntimeError):
 
 _TERMINAL_RUN_STATES = {"completed", "cancelled", "failed", "interrupted"}
 _MANAGED_WEB_SEARCH_DEFAULT = "cached"
+_LIVE_WEB_SEARCH_GUIDANCE = (
+    "Application web-search policy: Live web search is available. "
+    "When the request depends on current, recent, changing, scheduled, price, "
+    "weather, news, rules, or other time-sensitive information, use the native "
+    "web-search tool before answering unless the user explicitly asks you not to. "
+    "Use the native tool rather than shell commands for network access. "
+    "Do not include credentials, private workspace contents, or unrelated personal "
+    "data in search queries."
+)
 _PENDING_INTERACTION_STATES = {"pending", "responding"}
 _MAX_REQUEST_OUTCOMES = 50_000
 _MAX_TERMINAL_RUNS = 1024
@@ -601,7 +610,7 @@ class RuntimeBroker:
                     {
                         "threadId": codex_thread_id,
                         "expectedTurnId": turn_id,
-                        "input": [{"type": "text", "text": prompt}],
+                        "input": self._prompt_input(prompt, web_search),
                         "clientUserMessageId": request_id,
                     },
                     timeout_seconds=self.control_request_timeout_seconds,
@@ -2456,7 +2465,18 @@ class RuntimeBroker:
     ) -> list[dict[str, object]]:
         if run.prompt is None:
             raise RuntimeStateError("The queued Codex prompt is unavailable.")
-        return [{"type": "text", "text": run.prompt}]
+        return self._prompt_input(run.prompt, run.web_search)
+
+    @staticmethod
+    def _prompt_input(
+        prompt: str,
+        web_search: Literal["live", "disabled"] | None,
+    ) -> list[dict[str, object]]:
+        inputs: list[dict[str, object]] = []
+        if web_search == "live":
+            inputs.append({"type": "text", "text": _LIVE_WEB_SEARCH_GUIDANCE})
+        inputs.append({"type": "text", "text": prompt})
+        return inputs
 
     def _correlated_run_locked(
         self,

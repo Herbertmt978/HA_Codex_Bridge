@@ -53,14 +53,15 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current candidate is Integration/App `0.7.3`, Bridge `0.6.2`, and Codex
-`0.144.4`; it is pending real Home Assistant acceptance. Provider-gated native
+The current candidate is Integration/App `0.7.5`, Bridge `0.6.3`, and Codex
+`0.144.5`; it is pending real Home Assistant acceptance. Provider-gated native
 web search defaults to Live only for Supervisor prompts and automations,
-provider capabilities are re-negotiated after authentication, and
-model-controlled shell networking remains disabled. Signed-in image generation
+provider capabilities are re-negotiated after authentication, time-sensitive
+prompts receive bounded native-tool guidance, and model-controlled shell
+networking remains disabled. Signed-in image generation
 requires `imageGeneration` plus `namespaceTools`, uses no API key, and stores
-only private bounded PNG/JPEG/WebP artifacts. Preserve the compact panel and
-the updater's pinned `jsonschema` dependency-installation fix. The
+only private bounded PNG/JPEG/WebP artifacts. Preserve the compact composer and
+the canonical-version release tests. The
 published/signed `0.7.0` baseline has generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child
@@ -123,6 +124,30 @@ unverified URL or token.
   into a connection error.
 - Do not document a Supervisor prior-image selection as rollback until an
   immutable prior tag and restore procedure are published and tested.
+
+## Verified updater setup
+
+For unattended updates, the scheduled Codex updater uses a dedicated GitHub App
+installed only on this repository. Grant that App **Contents: read and write**
+and **Pull requests: read and write**; do not grant Actions, Packages,
+Administration, webhook, or branch-protection bypass permissions. Store its
+client ID as repository variable `CODEX_UPDATER_APP_CLIENT_ID` and its private
+key as Actions secret `CODEX_UPDATER_APP_PRIVATE_KEY`. Also set repository
+variable `CODEX_UPDATER_APP_ACTOR` to the installed App's login (for example,
+`codex-updater[bot]`). All three values are mandatory: if any is absent, the
+workflow logs an actionable notice and creates no pull request. It deliberately
+does not fall back to `GITHUB_TOKEN`, because that token cannot start the
+required pull-request CI. The required policy checks both the PR author and the
+event actor against `CODEX_UPDATER_APP_ACTOR`, so a collaborator cannot retain
+the bot-authored PR while pushing a later branch mutation.
+
+Repository auto-merge must remain paired with protected `main` and its required
+CI contexts. The updater signs its PR commit and arms squash auto-merge only
+when GitHub verifies that commit and its exact head SHA. The required
+workflow-policy job rejects any `automation/codex-*` PR that changes a path
+outside the updater allowlist. The updater token can neither publish packages
+nor bypass failed checks. Set repository variable `CODEX_UPDATE_PAUSED` to
+`true` to stop new updater runs.
 
 ## Contribution hygiene
 

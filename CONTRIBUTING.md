@@ -26,17 +26,16 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current candidate is Integration `0.7.3`, App `0.7.3`, Bridge `0.6.2`, and
-Codex `0.144.4` (experimental, `amd64` only), pending real Home Assistant
-acceptance. Provider-gated native web search defaults to Live for Supervisor
-prompts and automations; model-controlled shell networking remains disabled.
+The current candidate is Integration/App `0.7.5`, Bridge `0.6.3`, and Codex
+`0.144.5` (experimental, `amd64` only), pending real Home Assistant acceptance.
+Provider-gated native web search defaults to Live for Supervisor prompts and
+automations, with bounded time-sensitive guidance; model-controlled shell
+networking remains disabled.
 Signed-in image generation requires both `imageGeneration` and `namespaceTools`,
 uses no API key, and keeps bounded PNG/JPEG/WebP artifacts private. The compact
-panel and updater `jsonschema` dependency-installation fix are candidate
-changes. The
-published/live-accepted `0.7.1` release remains historical, with its live list
-returning `capabilities_unavailable` (HTTP 503) and no plugin or marketplace
-list/mutation acceptance. The published/signed `0.7.0` baseline has
+composer is a presentation change and does not expand authority. Coordinated
+`0.7.3` is the target-HA-accepted baseline; signed App `0.7.4` carries the
+verified Codex `0.144.5` runtime. The published/signed `0.7.0` baseline has
 generic image digest
 `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
 with amd64 child `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`;
@@ -47,7 +46,7 @@ is bounded: versions, ChatGPT Pro retention, dynamic GPT-5.6, five-hour `Off`,
 chat/history, management-form retention, skill mutations, App auto-update, and
 MCP form cancellation were observed. Its live plugin/marketplace list returned
 `capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.3` changes above remain candidate
+list/mutation acceptance was claimed. The `0.7.5` changes above remain candidate
 evidence pending live acceptance. External blocked-
 network routing, cold restore, and previous-image rollback remain unproven. A
 source checkout, local image, or unit test is not release evidence.

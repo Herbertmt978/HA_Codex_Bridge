@@ -181,7 +181,42 @@ jobs:
       - name: Check out source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Enforce automatic Codex updater pull-request policy
+        if: startsWith(github.head_ref, 'automation/codex-')
+        shell: bash
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_EVENT_ACTOR: ${{ github.actor }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          UPDATER_APP_ACTOR: ${{ vars.CODEX_UPDATER_APP_ACTOR }}
+        run: |
+          [[ "${PR_HEAD_REF}" =~ ^automation/codex-[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Unexpected automated updater branch: ${PR_HEAD_REF}" >&2
+            exit 1
+          }
+          if [[ "${PR_AUTHOR}" != "${UPDATER_APP_ACTOR}" || "${PR_EVENT_ACTOR}" != "${UPDATER_APP_ACTOR}" ]]; then
+            echo "Automated updater PR author or event actor does not match CODEX_UPDATER_APP_ACTOR." >&2
+            exit 1
+          fi
+          allowed='^(codex_bridge_app/(codex-release\.json|config\.yaml|Dockerfile|CHANGELOG\.md|rootfs/etc/s6-overlay/s6-rc\.d/codex-bridge/run)|bridge_service/src/codex_bridge_service/codex_app_server_(contract\.json|protocol\.schema\.json|protocol\.v2\.schema\.json))$'
+          changed="$(git diff --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}")"
+          test -n "${changed}"
+          deleted="$(git diff --diff-filter=D --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}")"
+          test -z "${deleted}" || {
+            echo "Automated updater PR must not delete files." >&2
+            exit 1
+          }
+          while IFS= read -r path; do
+            [[ "${path}" =~ ${allowed} ]] || {
+              echo "Automated updater PR changes a forbidden path: ${path}" >&2
+              exit 1
+            }
+          done <<< "${changed}"
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0

@@ -29,32 +29,20 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest published signed release: Integration `0.7.2`, App `0.7.2`, bundled
-  Bridge `0.6.1`, and Codex `0.144.4`. It was not target-HA accepted before the
-  `0.7.3` candidate superseded it. Its generic image digest is
-  `sha256:6d2622bfbf2f1ce50611a4b2b0f72b9f682d0ad6e6619ed84c06d3d74fd462bd`,
-  with amd64 child digest
-  `sha256:8e70abea7f98037c805d5163601a0d4a3045e3d54a83f27ee36af64072fe56f0`;
-  main CI `29491849347` and App publication `29491849502` succeeded
-  ([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.2)).
-- Latest target-HA-accepted release: Integration `0.7.1`, App `0.7.1`
-  (experimental and `amd64` only), optional external Bridge `0.6.0`, and bundled
-  Codex `0.144.4`. The generic App image digest is
-  `sha256:ec4e5f4ea48ba2333d5689879bc98a58912ae15ac9f90a133d30712452403184`
-  with amd64 child digest
-  `sha256:cacfb7b4a65a1b0290fe5c7da9dfa33c5ffde78f8ebaa3370fac9366c19681a6`.
-  Main CI rerun `29483810669` and App publication run `29483810926` succeeded
-  ([release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.1)).
-- Prior published/signed baseline: Integration `0.7.0`, App `0.7.0`. Its generic image
+- Latest signed App runtime update: App `0.7.4`, Bridge `0.6.2`, and
+  Sigstore-verified Codex `0.144.5`. Publication, SBOM, signature, and
+  provenance verification passed in run `29507100716`; the immutable image
   digest is
-  `sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
-  with amd64 child digest
-  `sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
-  Main CI run `29471288344` and publication run `29471288457` succeeded; the
-  release includes signature, SBOM, and provenance attestations ([release
-  page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0)).
-  Target-Home-Assistant acceptance is bounded below; it is not a blanket
-  acceptance of every capability mutation.
+  `sha256:de03e6e57cd6fcaa0dd2a479b743ede2c4d3773b228fc2af3b35b0eb86c1b152`.
+- Latest target-HA-accepted coordinated release: Integration/App `0.7.3`,
+  Bridge `0.6.2`, and Codex `0.144.4` (experimental and `amd64` only). The
+  signed App digest is
+  `sha256:8f15aa8b74222c6df72209b8ee2766a18996e8e34b04797e2561501cf4c056d5`.
+  Natural current-information prompts did not reliably select the available
+  provider search tool; explicit live-search requests did.
+- Earlier signed release evidence remains in `codex_bridge_app/CHANGELOG.md`
+  and the repository Releases page. Target-Home-Assistant acceptance is always
+  bounded to the recorded checks rather than every capability mutation.
 - App/Integration `0.6.6` is the prior signed publication. The `0.6.5` matrix
   remains live-accepted only within the historical boundaries recorded in
   `90-evidence.md`; neither historical claim supersedes the current bounded
@@ -109,16 +97,16 @@ to the App or Bridge.
   auto-update remains proven, and this manual update kept the prior-version
   backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
   and arbitrary previous-image rollback remain unproven.
-- Candidate `0.7.3` updates the App and Integration with Bridge `0.6.2` while
-  retaining bundled Codex `0.144.4`; it is not published or live-accepted yet.
-  On a Supervisor connection, native web search defaults to `live` for prompts
-  and automation runs only after the provider capability is advertised; shell
-  networking remains disabled. Signed-in ChatGPT-account image generation is
-  enabled only when both `imageGeneration` and `namespaceTools` are advertised,
-  uses no API key, and stores bounded PNG/JPEG/WebP results as private
-  artifacts. The compact panel and updater `jsonschema` dependency-installation
-  fix are candidate changes only. No target-HA acceptance, image digest, or run
-  identifier is claimed for `0.7.3`.
+- Candidate `0.7.5` coordinates App/Integration/panel `0.7.5`, Bridge `0.6.3`,
+  and Codex `0.144.5`; it is not published or live-accepted yet. On a
+  Supervisor connection, native search remains capability-gated and defaults
+  to `live`; time-sensitive prompts now receive bounded guidance to use the
+  native search tool rather than the intentionally blocked shell network.
+  Signed-in image generation remains gated by both `imageGeneration` and
+  `namespaceTools`, uses no API key, and stores bounded PNG/JPEG/WebP results as
+  private artifacts. The composer now uses a compact Codex-style
+  Limits/Model/Thinking row with full details in Usage. No target-HA acceptance,
+  image digest, or run identifier is claimed for `0.7.5`.
 - The App includes administrator-only capability surfaces for durable
   automations, workspace skills, global/project `AGENTS.md`, plugins and
   marketplaces, and outbound MCP configuration. Automations are persisted in

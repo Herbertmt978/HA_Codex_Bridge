@@ -159,13 +159,12 @@ jobs:
           retention-days: 1
 
   pull-request:
-    name: Open reviewed App update
+    name: Open verified App update
     needs: generate
     if: needs.generate.outputs.changed == 'true'
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # Commit allowlisted files to an automation branch.
-      pull-requests: write # Open or update the reviewable update PR.
+      contents: read # The dedicated GitHub App token owns the update mutation.
     steps:
       - name: Check out current main
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -199,7 +198,38 @@ jobs:
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
           python scripts/sync_app_release.py --check
 
+      - name: Check updater App credentials
+        id: updater-credentials
+        shell: bash
+        env:
+          UPDATER_APP_ACTOR: ${{ vars.CODEX_UPDATER_APP_ACTOR }}
+          UPDATER_APP_CLIENT_ID: ${{ vars.CODEX_UPDATER_APP_CLIENT_ID }}
+          UPDATER_APP_PRIVATE_KEY: ${{ secrets.CODEX_UPDATER_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${UPDATER_APP_CLIENT_ID}" || -z "${UPDATER_APP_PRIVATE_KEY}" || -z "${UPDATER_APP_ACTOR}" ]]; then
+            echo "::notice title=Codex updater skipped::Configure CODEX_UPDATER_APP_CLIENT_ID, CODEX_UPDATER_APP_PRIVATE_KEY, and CODEX_UPDATER_APP_ACTOR before this workflow can create an update pull request."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Mint repository-scoped updater token
+        id: updater-token
+        if: steps.updater-credentials.outputs.available == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        env:
+          UPDATER_APP_PRIVATE_KEY: ${{ secrets.CODEX_UPDATER_APP_PRIVATE_KEY }}
+        with:
+          client-id: ${{ vars.CODEX_UPDATER_APP_CLIENT_ID }}
+          private-key: ${{ env.UPDATER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create the reviewable Codex update pull request
+        id: create-update-pr
+        if: steps.updater-credentials.outputs.available == 'true'
         # v8.1.1 owns branch reuse, signed-off commits, and PR lifecycle.
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # zizmor: ignore[superfluous-actions]
         with:
@@ -217,12 +247,28 @@ jobs:
             to `${{ needs.generate.outputs.codex_version }}` and bumps the App to
             `${{ needs.generate.outputs.app_version }}`.
 
-            The running App never self-modifies. CI must pass, and the App update
-            remains reviewable before Home Assistant Supervisor can offer it.
+            The running App never self-modifies. Required CI must pass before
+            guarded squash auto-merge can make the signed App update available.
           branch: automation/codex-${{ needs.generate.outputs.codex_version }}
           base: main
           commit-message: Update verified Codex to ${{ needs.generate.outputs.codex_version }}
           delete-branch: true
           signoff: true
+          sign-commits: true
           title: Update verified Codex to ${{ needs.generate.outputs.codex_version }}
-          token: ${{ github.token }}
+          token: ${{ steps.updater-token.outputs.token }}
+
+      - name: Enable guarded squash auto-merge
+        if: >-
+          steps.updater-credentials.outputs.available == 'true' &&
+          steps.create-update-pr.outputs.pull-request-number != '' &&
+          steps.create-update-pr.outputs.pull-request-head-sha != '' &&
+          steps.create-update-pr.outputs.pull-request-commits-verified == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.updater-token.outputs.token }}
+          PR_NUMBER: ${{ steps.create-update-pr.outputs.pull-request-number }}
+          PR_HEAD_SHA: ${{ steps.create-update-pr.outputs.pull-request-head-sha }}
+        run: >-
+          gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}"
+          --auto --squash --match-head-commit "${PR_HEAD_SHA}"
