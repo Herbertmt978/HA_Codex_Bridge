@@ -13,6 +13,14 @@ from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
 
 
+def _registered_paths(app) -> set[str]:
+    return {
+        path
+        for route in app.routes
+        if isinstance(path := getattr(route, "path", None), str)
+    }
+
+
 def test_external_legacy_storage_keeps_existing_root_layout(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
 
@@ -198,7 +206,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         "plugins_v1",
         "agents_v1",
     )
-    paths = {route.path for route in app.routes}
+    paths = _registered_paths(app)
     assert {
         "/automations",
         "/capabilities/skills",
@@ -218,7 +226,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
     assert "mcp_admin_v1" in opted_in.state.feature_capabilities
 
     external = create_app(root_path=tmp_path / "external", auth_token="secret")
-    external_paths = {route.path for route in external.routes}
+    external_paths = _registered_paths(external)
     assert external.state.automations is None
     assert external.state.capabilities_manager is None
     assert external.state.agents_manager is None
