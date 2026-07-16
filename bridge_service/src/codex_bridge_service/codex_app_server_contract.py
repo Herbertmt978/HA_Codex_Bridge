@@ -42,6 +42,7 @@ _CLIENT_RESPONSE_TYPES = {
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
     "account/usage/read": "GetAccountTokenUsageResponse",
     "model/list": "ModelListResponse",
+    "modelProvider/capabilities/read": "ModelProviderCapabilitiesReadResponse",
     "thread/start": "ThreadStartResponse",
     "thread/resume": "ThreadResumeResponse",
     "thread/fork": "ThreadForkResponse",

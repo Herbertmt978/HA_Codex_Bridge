@@ -52,6 +52,40 @@ def test_store_persists_safe_definition_and_calculates_rrule_in_utc(tmp_path):
     assert restored.list()[0]["next_run_at"] == "2026-07-15T09:30:00Z"
 
 
+@pytest.mark.parametrize("value", ["cached", "LIVE", 1, [], {}])
+def test_claim_rejects_invalid_web_search_override(tmp_path, value):
+    store = AutomationStore(tmp_path)
+    automation = store.create(_payload(), now=NOW)
+    with pytest.raises(AutomationValidationError):
+        store.run_now(automation["automation_id"], web_search=value, now=NOW)
+
+
+def test_claim_web_search_override_survives_idempotent_retry_and_restart(tmp_path):
+    store = AutomationStore(tmp_path)
+    automation = store.create(_payload(), now=NOW)
+    claimed = store.claim(
+        automation["automation_id"],
+        due_at="2026-07-15T09:30:00Z",
+        idempotency_key="search-claim",
+        expected_revision=automation["revision"],
+        web_search="live",
+        now=NOW,
+    )
+    assert claimed["web_search"] == "live"
+    retry = store.claim(
+        automation["automation_id"],
+        due_at="2026-07-15T09:30:00Z",
+        idempotency_key="search-claim",
+        expected_revision=automation["revision"],
+        web_search="disabled",
+        now=NOW,
+    )
+    assert retry["automation_run_id"] == claimed["automation_run_id"]
+    assert retry["web_search"] == "live"
+    restored = AutomationStore(tmp_path)
+    assert restored.list_runs(automation["automation_id"])[0]["web_search"] == "live"
+
+
 @pytest.mark.parametrize(
     "schedule",
     [
@@ -753,6 +787,46 @@ def test_router_derives_capacity_from_the_runtime_gate(tmp_path):
     assert response.status_code == 202
     assert response.json()["status"] == "skipped_capacity"
     assert response.json()["dispatchable"] is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"source": "manual", "web_search": "live"},
+        {
+            "source": "scheduled",
+            "due_at": "2026-07-15T09:30:00Z",
+            "idempotency_key": "native-search",
+            "expected_revision": 1,
+            "web_search": "disabled",
+        },
+    ],
+)
+def test_router_rejects_unsupported_web_search_before_claim_persistence(
+    tmp_path, payload
+):
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.automations = AutomationStore(tmp_path)
+    app.include_router(create_router())
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    automation_id = client.post(
+        "/automations", headers=headers, json=_payload()
+    ).json()["automation_id"]
+
+    response = client.post(
+        f"/automations/{automation_id}/runs",
+        headers=headers,
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "capabilities_unavailable",
+        "retryable": False,
+    }
+    assert app.state.automations.list_runs(automation_id) == []
 
 
 class _AutomationLifecycle:

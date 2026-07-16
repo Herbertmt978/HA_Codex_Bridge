@@ -43,5 +43,20 @@
       "unknown": "The App could not be validated safely.",
       "reconfigure_successful": "The App connection was updated."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Native web search",
+        "description": "Choose whether Codex may use its native live web search for prompts and automations. Shell-command networking remains disabled.",
+        "data": {
+          "web_search_mode": "Web search"
+        }
+      }
+    },
+    "abort": {
+      "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",
+      "web_search_unavailable": "Native web search is unavailable in the connected App. Update or restart the App, then try again."
+    }
   }
 }

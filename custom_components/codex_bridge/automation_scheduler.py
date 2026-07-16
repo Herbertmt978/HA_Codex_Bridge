@@ -15,10 +15,18 @@ from .const import CONNECTION_TYPE_EXTERNAL_LEGACY
 class AutomationScheduler:
     """Re-arm HA point-in-time callbacks from the Bridge's durable snapshot."""
 
-    def __init__(self, hass: HomeAssistant, client, connection_type: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client,
+        connection_type: str,
+        *,
+        web_search_mode: str | None = None,
+    ) -> None:
         self.hass = hass
         self.client = client
         self.connection_type = connection_type
+        self.web_search_mode = web_search_mode
         self.timezone = ZoneInfo(hass.config.time_zone)
         self._callbacks: dict[str, CALLBACK_TYPE] = {}
         self._retry_callbacks: set[CALLBACK_TYPE] = set()
@@ -92,11 +100,16 @@ class AutomationScheduler:
             return
         key = f"automation:{automation_id}:{revision}:{_iso(due)}"
         try:
+            claim = {
+                "due_at": _iso(due),
+                "idempotency_key": key,
+                "expected_revision": revision,
+            }
+            if self.web_search_mode is not None:
+                claim["web_search"] = self.web_search_mode
             await self.client.async_claim_automation_run(
                 automation_id,
-                due_at=_iso(due),
-                idempotency_key=key,
-                expected_revision=revision,
+                **claim,
             )
         except BridgeApiConnectionError:
             self._schedule_retry(automation_id, revision, due)

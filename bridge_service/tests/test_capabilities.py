@@ -103,6 +103,14 @@ class FakeServer:
         self.calls: list[tuple[str, object]] = []
         self.request_timeouts: list[float | None] = []
         self.responses: dict[str, object] = {}
+        self.generation = 1
+        self.provider_capability_calls = 0
+        self.provider_capability_result: object = SimpleNamespace(
+            generation=1,
+            image_generation=True,
+            namespace_tools=False,
+            web_search=True,
+        )
 
     def request(
         self,
@@ -114,6 +122,12 @@ class FakeServer:
         self.calls.append((method, params))
         self.request_timeouts.append(timeout_seconds)
         return self.responses.get(method, {})
+
+    def read_model_provider_capabilities(self) -> object:
+        self.provider_capability_calls += 1
+        if isinstance(self.provider_capability_result, BaseException):
+            raise self.provider_capability_result
+        return self.provider_capability_result
 
 
 class Gate:
@@ -150,6 +164,140 @@ class Storage:
 
             raise ProjectNotFoundError()
         return self.project
+
+
+def test_provider_capabilities_are_generation_cached_and_fail_closed_to_unknown(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    manager = CapabilitiesManager(Storage(tmp_path), server)
+
+    assert manager.provider_capabilities() == {
+        "image_generation": True,
+        "web_search": True,
+        "namespace_tools": False,
+    }
+    assert manager.provider_capabilities() == {
+        "image_generation": True,
+        "web_search": True,
+        "namespace_tools": False,
+    }
+    assert server.provider_capability_calls == 1
+
+    server.generation = 2
+    server.provider_capability_result = SimpleNamespace(
+        generation=2,
+        image_generation=False,
+        namespace_tools=True,
+        web_search=False,
+    )
+    assert manager.provider_capabilities() == {
+        "image_generation": False,
+        "web_search": False,
+        "namespace_tools": True,
+    }
+    assert server.provider_capability_calls == 2
+
+    server.generation = 3
+    server.provider_capability_result = RuntimeError("provider capability probe failed")
+    assert manager.provider_capabilities() == {
+        "image_generation": None,
+        "web_search": None,
+        "namespace_tools": None,
+    }
+    server.provider_capability_result = SimpleNamespace(
+        generation=3,
+        image_generation=True,
+        namespace_tools=True,
+        web_search=True,
+    )
+    assert manager.provider_capabilities() == {
+        "image_generation": True,
+        "web_search": True,
+        "namespace_tools": True,
+    }
+    assert server.provider_capability_calls == 4
+
+    server.generation = 4
+    server.provider_capability_result = SimpleNamespace(
+        generation=4,
+        image_generation=1,
+        namespace_tools=False,
+        web_search=True,
+    )
+    assert manager.provider_capabilities() == {
+        "image_generation": None,
+        "web_search": None,
+        "namespace_tools": None,
+    }
+    assert server.provider_capability_calls == 5
+
+
+def test_provider_capabilities_refresh_after_bounded_ttl_same_generation(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    now = [100.0]
+    manager = CapabilitiesManager(Storage(tmp_path), server, clock=lambda: now[0])
+
+    assert manager.provider_capabilities()["image_generation"] is True
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=False,
+        namespace_tools=False,
+        web_search=False,
+    )
+    # A short-lived successful result is reused while fresh.
+    assert manager.provider_capabilities()["image_generation"] is True
+    assert server.provider_capability_calls == 1
+
+    now[0] += 5.0
+    assert manager.provider_capabilities()["image_generation"] is False
+    assert server.provider_capability_calls == 2
+
+
+def test_provider_capabilities_invalidate_immediately_after_auth_identity_change(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    manager = CapabilitiesManager(Storage(tmp_path), server)
+
+    assert manager.provider_capabilities()["web_search"] is True
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=False,
+        namespace_tools=False,
+        web_search=False,
+    )
+    assert manager.provider_capabilities()["web_search"] is True
+
+    manager.invalidate_provider_capabilities()
+
+    assert manager.provider_capabilities()["web_search"] is False
+    assert server.provider_capability_calls == 2
+
+
+def test_unknown_provider_capability_failures_are_immediately_retryable(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    now = [100.0]
+    manager = CapabilitiesManager(Storage(tmp_path), server, clock=lambda: now[0])
+    server.provider_capability_result = RuntimeError("temporarily unavailable")
+
+    assert manager.provider_capabilities() == {
+        "image_generation": None,
+        "web_search": None,
+        "namespace_tools": None,
+    }
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=True,
+        namespace_tools=False,
+        web_search=True,
+    )
+    assert manager.provider_capabilities()["image_generation"] is True
+    assert server.provider_capability_calls == 2
 
 
 def test_skills_are_workspace_scoped_and_private_paths_are_omitted(

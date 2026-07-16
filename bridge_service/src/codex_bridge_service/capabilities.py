@@ -12,9 +12,12 @@ from contextlib import contextmanager
 from ipaddress import ip_address
 import re
 import json
+from math import isfinite
 import os
 import socket
+import time
 from pathlib import Path
+from threading import RLock
 from typing import Any, Callable, Iterator
 from urllib.parse import urlsplit
 
@@ -36,6 +39,7 @@ _MAX_SKILLS = 512
 _MAX_PLUGINS = 4096
 _MAX_MARKETPLACES = 128
 _PLUGIN_CATALOGUE_TIMEOUT_SECONDS = 60.0
+_PROVIDER_CAPABILITIES_TTL_SECONDS = 5.0
 _MAX_SKILL_DESCRIPTION = 4096
 _MAX_SKILL_INSTRUCTIONS = 256 * 1024
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z", re.ASCII)
@@ -45,6 +49,11 @@ _CREDENTIAL = re.compile(
     r"[A-Za-z0-9._~+/=-]{8,}",
     re.IGNORECASE,
 )
+_UNKNOWN_PROVIDER_CAPABILITIES: dict[str, bool | None] = {
+    "image_generation": None,
+    "web_search": None,
+    "namespace_tools": None,
+}
 
 
 class CapabilitiesError(RuntimeError):
@@ -129,11 +138,108 @@ class CapabilitiesManager:
         runtime_gate: RuntimeGate | None = None,
         *,
         resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
+        clock: Callable[[], float] = time.monotonic,
+        provider_capabilities_ttl_seconds: float = _PROVIDER_CAPABILITIES_TTL_SECONDS,
     ) -> None:
         self.storage = storage
         self.app_server = app_server
         self.runtime_gate = runtime_gate
         self._resolver = resolver
+        if (
+            isinstance(provider_capabilities_ttl_seconds, bool)
+            or not isinstance(provider_capabilities_ttl_seconds, (int, float))
+            or not isfinite(provider_capabilities_ttl_seconds)
+            or provider_capabilities_ttl_seconds <= 0
+        ):
+            raise ValueError("provider capability TTL must be positive")
+        self._clock = clock
+        self._provider_capabilities_ttl_seconds = float(
+            provider_capabilities_ttl_seconds
+        )
+        self._provider_capabilities_lock = RLock()
+        self._provider_capabilities_generation: int | None = None
+        self._provider_capabilities_cached_at: float | None = None
+        self._provider_capabilities_cache = dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+
+    def provider_capabilities(self) -> dict[str, bool | None]:
+        """Return a short-lived provider-capability probe per generation.
+
+        This diagnostics-only read preserves uncertainty: unavailable, malformed,
+        and stale responses are all unknown rather than negative capabilities.
+        Only a verified response is cached.  A transient failure must be able to
+        recover without forcing an app-server restart merely to change generation.
+        """
+
+        with self._provider_capabilities_lock:
+            generation = self._app_server_generation()
+            if generation is None:
+                return dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+            if generation == self._provider_capabilities_generation:
+                # A verified negative result must not live forever: auth can
+                # become available without restarting the app-server. Unknown
+                # failures are deliberately never marked as cached, so every
+                # call remains immediately retryable.
+                try:
+                    cached_at = self._provider_capabilities_cached_at
+                    if (
+                        cached_at is not None
+                        and self._clock() - cached_at
+                        < self._provider_capabilities_ttl_seconds
+                    ):
+                        return dict(self._provider_capabilities_cache)
+                except (RuntimeError, OSError, ValueError, TypeError):
+                    pass
+            try:
+                result = self.app_server.read_model_provider_capabilities()
+                current_generation = self._app_server_generation()
+                if (
+                    current_generation is not None
+                    and getattr(result, "generation", None) == current_generation
+                ):
+                    projected = self._project_provider_capabilities(result)
+                    if all(type(value) is bool for value in projected.values()):
+                        self._provider_capabilities_generation = current_generation
+                        self._provider_capabilities_cache = projected
+                        self._provider_capabilities_cached_at = self._clock()
+                        return dict(projected)
+            except (
+                CodexAppServerError,
+                RuntimeError,
+                OSError,
+                ValueError,
+                AttributeError,
+                TypeError,
+            ):
+                pass
+            return dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+
+    def invalidate_provider_capabilities(self) -> None:
+        """Discard a verified projection after the ChatGPT identity changes."""
+
+        with self._provider_capabilities_lock:
+            self._provider_capabilities_generation = None
+            self._provider_capabilities_cached_at = None
+            self._provider_capabilities_cache = dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+
+    def _app_server_generation(self) -> int | None:
+        try:
+            generation = self.app_server.generation
+        except (RuntimeError, OSError, ValueError, AttributeError):
+            return None
+        if type(generation) is not int or generation < 0:
+            return None
+        return generation
+
+    @staticmethod
+    def _project_provider_capabilities(value: object) -> dict[str, bool | None]:
+        values = {
+            "image_generation": getattr(value, "image_generation", None),
+            "web_search": getattr(value, "web_search", None),
+            "namespace_tools": getattr(value, "namespace_tools", None),
+        }
+        if any(type(item) is not bool for item in values.values()):
+            return dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+        return values
 
     def workspace_cwd(self, workspace_path: str) -> tuple[str, str]:
         boundary = self.storage.workspace_boundary

@@ -23,6 +23,7 @@ from .event_store import (
     EventPayloadTooLargeError,
     EventStoreCapacityError,
 )
+from .feature_capabilities import supports_web_search
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
@@ -176,7 +177,7 @@ def create_app(
                 client_version=(
                     resolved_build_info.app_version
                     or resolved_build_info.bridge_version
-                    or "0.6.1"
+                    or "0.6.2"
                 ),
                 # RuntimeBroker state transitions are ordered protocol events.
                 # One bounded callback worker preserves app-server FIFO order.
@@ -462,6 +463,8 @@ def create_app(
                     )
                     if callable(invalidate_catalog):
                         invalidate_catalog()
+                    if resolved_capabilities_manager is not None:
+                        resolved_capabilities_manager.invalidate_provider_capabilities()
                     auth_catalog_identity = next_catalog_identity
                 storage.durable_outbox.commit_json(
                     operation_id=f"auth-status:{status.revision}",
@@ -543,7 +546,12 @@ def create_app(
     feature_capabilities = ["api_v1", "legacy_v0"]
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         feature_capabilities.extend(
-            ["automations_v1", "skills_v1", "plugins_v1", "agents_v1"]
+            [
+                "automations_v1",
+                "skills_v1",
+                "plugins_v1",
+                "agents_v1",
+            ]
         )
         # Elicitations must be rejected before we expose MCP administration.
         # Without the app-server callback, an OAuth-enabled MCP server could
@@ -634,6 +642,9 @@ def create_app(
         validate_automation_target(target)
         mode = RunMode(definition["mode"])
         try:
+            web_search = claim.get("web_search")
+            if web_search is not None and not supports_web_search(app.state):
+                raise AutomationValidationError("web search is unavailable")
             with storage.prepare_automation_target(
                 target,
                 title=definition["name"],
@@ -646,6 +657,7 @@ def create_app(
                     definition["prompt"],
                     client_request_id=f"automation:{automation_run_id}",
                     unattended=True,
+                    web_search=web_search,
                 )
         except (ProjectMutationError, FileNotFoundError) as error:
             raise AutomationValidationError(str(error)) from None

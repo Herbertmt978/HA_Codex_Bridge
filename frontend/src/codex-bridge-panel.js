@@ -11,7 +11,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.7.2";
+const PANEL_VERSION = "0.7.3";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -65,10 +65,32 @@ const INTERACTION_ERROR_CODES = new Set([
 ]);
 const ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 const ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
+const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
+const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
+
+function isGeneratedImageArtifact(artifact) {
+  return artifact?.source === "generated_image";
+}
+
+function displayArtifactFilename(value, fallback = "Generated image") {
+  const basename = String(value ?? "").replaceAll("\\", "/").split("/").pop();
+  return sanitizeFilename(basename, fallback);
+}
+
+function displayArtifactMime(value) {
+  const mime = String(value ?? "").split(";", 1)[0].trim();
+  return mime.slice(0, 120) || "image";
+}
 
 function canDeferArtifactRefresh(error) {
   return error?.code === ARTIFACT_RESERVATION_CONFLICT_CODE;
+}
+
+function artifactPreviewLimit(artifact) {
+  return isGeneratedImageArtifact(artifact)
+    ? { bytes: GENERATED_IMAGE_PREVIEW_MAX_BYTES, label: GENERATED_IMAGE_PREVIEW_MAX_LABEL }
+    : { bytes: ARTIFACT_PREVIEW_MAX_BYTES, label: ARTIFACT_PREVIEW_MAX_LABEL };
 }
 
 function artifactPreviewSizeState(artifact) {
@@ -76,7 +98,7 @@ function artifactPreviewSizeState(artifact) {
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
     return "unknown";
   }
-  return sizeBytes <= ARTIFACT_PREVIEW_MAX_BYTES ? "within-limit" : "oversized";
+  return sizeBytes <= artifactPreviewLimit(artifact).bytes ? "within-limit" : "oversized";
 }
 
 function isAutoPreviewCandidate(artifact) {
@@ -86,9 +108,9 @@ function isAutoPreviewCandidate(artifact) {
   );
 }
 
-function previewUnavailableMessage(sizeState) {
+function previewUnavailableMessage(artifact, sizeState) {
   if (sizeState === "oversized") {
-    return `Preview limited to files up to ${ARTIFACT_PREVIEW_MAX_LABEL}. Download it to view the full file.`;
+    return `Preview limited to files up to ${artifactPreviewLimit(artifact).label}. Download it to view the full file.`;
   }
   return "Preview unavailable because the file size is unknown. Download it to view the full file.";
 }
@@ -1617,6 +1639,70 @@ template.innerHTML = `
       -webkit-user-select: text;
     }
 
+    .generated-image-card {
+      display: grid;
+      gap: 7px;
+      max-width: min(460px, 100%);
+      border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
+      background: var(--surface-bg);
+    }
+
+    .generated-image-heading {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .generated-image-kicker {
+      color: var(--muted-color);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .generated-image-filename {
+      overflow: hidden;
+      color: var(--text-color);
+      font-size: 14px;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .generated-image-meta,
+    .generated-image-pending {
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .generated-image-open {
+      justify-self: start;
+      min-height: 32px;
+      padding: 0 10px;
+      border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color) 68%);
+      background: var(--surface-bg);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .generated-image-thumbnail {
+      width: 100%;
+      max-height: 260px;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .generated-image-thumbnail img {
+      display: block;
+      width: 100%;
+      max-height: 260px;
+      object-fit: contain;
+    }
+
     .composer-shell {
       display: grid;
       flex: 0 0 auto;
@@ -2235,6 +2321,29 @@ template.innerHTML = `
     .desktop-action-note { color: var(--muted-color); font-size: 11px; }
     .settings-panel { display: grid; gap: 14px; }
 
+    .native-tools-list {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .native-tool-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .native-tool-row + .native-tool-row { border-top: 1px solid var(--border-color); }
+    .native-tool-row dt, .native-tool-row dd { margin: 0; }
+    .native-tool-row dt { color: var(--text-color); font-size: 13px; font-weight: 600; }
+    .native-tool-state { font-size: 12px; font-weight: 650; }
+    .native-tool-state.available { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); }
+    .native-tool-state.unavailable { color: var(--danger-color); }
+    .native-tool-state.checking { color: var(--muted-color); }
+
     .desktop-subheading {
       margin: 18px 0 -6px;
       font-size: 14px;
@@ -2734,6 +2843,84 @@ template.innerHTML = `
       height: 28px;
       border-radius: 6px;
       background: var(--surface-bg);
+    }
+
+    /* A flat, three-region composer strip: full reset details live in the
+     * focusable tooltips and Usage panel rather than adding permanent height. */
+    .compact-toolbar {
+      grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+      gap: 0;
+      min-height: 64px;
+      padding-top: 6px;
+    }
+
+    .toolbar-card {
+      align-content: start;
+      gap: 4px;
+      min-height: 58px;
+    }
+
+    .toolbar-card.limits {
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 12px;
+      align-items: center;
+    }
+
+    .toolbar-card.limits > .setting-label {
+      align-self: start;
+      padding-top: 3px;
+    }
+
+    .toolbar-card.limits > .setting-foot,
+    .limit-subline {
+      display: none;
+    }
+
+    .limit-pair { gap: 12px; }
+    .mini-limit { gap: 2px; }
+    .mini-limit-name { font-size: 10px; letter-spacing: 0.07em; }
+    .limit-value { font-size: 13px; }
+    .mini-limit-bar { height: 3px; margin-top: 0; }
+
+    .toolbar-card.controls {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      min-height: 58px;
+      padding-left: 14px;
+    }
+
+    .mini-control {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto 32px;
+      gap: 2px 8px;
+      align-items: center;
+    }
+
+    .mini-control + .mini-control {
+      margin-left: 14px;
+      padding-left: 14px;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .mini-control .setting-label {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .compact-select {
+      height: 32px;
+      padding-inline: 9px;
+      font-size: 12px;
+    }
+
+    .mini-control .setting-foot {
+      overflow: hidden;
+      max-width: 94px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .mini-limit-fill,
@@ -3535,6 +3722,22 @@ template.innerHTML = `
 
       .compact-toolbar {
         grid-template-columns: 1fr;
+      }
+
+      .toolbar-card.controls {
+        grid-template-columns: 1fr;
+        padding-left: 0;
+        border-left: 0;
+        border-top: 1px solid var(--border-color);
+        padding-top: 9px;
+      }
+
+      .mini-control + .mini-control {
+        margin-left: 0;
+        padding-left: 0;
+        border-left: 0;
+        border-top: 1px solid var(--border-color);
+        padding-top: 8px;
       }
 
       .composer-diagnostics {
@@ -5124,7 +5327,7 @@ class CodexBridgePanel extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     }
   }
 
@@ -6549,6 +6752,11 @@ class CodexBridgePanel extends HTMLElement {
     container.replaceChildren();
     const limitsCard = document.createElement("div");
     limitsCard.className = "toolbar-card limits";
+    const limitsLabel = this._textElement("span", "setting-label", "Limits");
+    limitsLabel.tabIndex = 0;
+    limitsLabel.setAttribute("role", "note");
+    limitsLabel.setAttribute("aria-label", this._limitsFootnote(limits));
+    this._setTooltipTarget(limitsLabel, this._limitsFootnote(limits));
     const limitPair = document.createElement("div");
     limitPair.className = "limit-pair";
     const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary
@@ -6559,7 +6767,7 @@ class CodexBridgePanel extends HTMLElement {
       this._compactLimitCard("Week", limits?.secondary)
     );
     limitsCard.append(
-      this._textElement("span", "setting-label", "Limits"),
+      limitsLabel,
       limitPair,
       this._textElement("span", "setting-foot", this._limitsFootnote(limits))
     );
@@ -6596,6 +6804,8 @@ class CodexBridgePanel extends HTMLElement {
   _compactLimitCard(label, windowInfo, emptyLabel = "Unavailable") {
     const card = document.createElement("div");
     card.className = "mini-limit";
+    card.tabIndex = 0;
+    card.setAttribute("role", "note");
     const head = document.createElement("div");
     head.className = "mini-limit-head";
     const fill = document.createElement("span");
@@ -6607,7 +6817,11 @@ class CodexBridgePanel extends HTMLElement {
       fill.style.setProperty("--limit-width", "0%");
       fill.style.setProperty("--limit-color", "var(--muted-color)");
       head.append(this._textElement("span", "mini-limit-name", label), this._textElement("span", "limit-value", "--"));
-      card.append(head, bar, this._textElement("span", "limit-subline", emptyLabel));
+      const reset = this._textElement("span", "limit-subline", emptyLabel);
+      const tooltip = `${label}: ${emptyLabel}.`;
+      card.setAttribute("aria-label", tooltip);
+      this._setTooltipTarget(card, tooltip);
+      card.append(head, bar, reset);
       return card;
     }
     const remaining = typeof windowInfo.remaining_percent === "number" ? Math.max(0, Math.min(100, windowInfo.remaining_percent)) : 0;
@@ -6623,7 +6837,11 @@ class CodexBridgePanel extends HTMLElement {
       this._textElement("span", "mini-limit-name", label),
       this._textElement("span", "limit-value", this._formatPercent(windowInfo.remaining_percent))
     );
-    card.append(head, bar, this._textElement("span", "limit-subline", this._formatReset(windowInfo.resets_at)));
+    const reset = this._formatReset(windowInfo.resets_at);
+    const tooltip = `${label}: ${this._formatPercent(windowInfo.remaining_percent)} remaining. Resets ${reset}.`;
+    card.setAttribute("aria-label", tooltip);
+    this._setTooltipTarget(card, tooltip);
+    card.append(head, bar, this._textElement("span", "limit-subline", reset));
     return card;
   }
 
@@ -7026,6 +7244,13 @@ class CodexBridgePanel extends HTMLElement {
     if (event.event_type === "message.completed") {
       return this._renderMessage("assistant", payload.text, event.sequence, true);
     }
+    if (
+      event.event_type === "item.completed"
+      && payload.item_type === "imageGeneration"
+      && payload.status === "failed"
+    ) {
+      return this._renderGeneratedImageFailure(event);
+    }
     if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
       return null;
     }
@@ -7051,6 +7276,10 @@ class CodexBridgePanel extends HTMLElement {
       return this._textElement("div", "event-row", `Uploaded ${payload.relative_path || payload.filename || "file"}`);
     }
     if (event.event_type === "artifact.added") {
+      const generatedImage = this._generatedImageArtifactForEvent(event);
+      if (generatedImage || payload.source === "generated_image") {
+        return this._renderGeneratedImageCard(event, generatedImage);
+      }
       return this._textElement(
         "div",
         "event-row",
@@ -7067,6 +7296,86 @@ class CodexBridgePanel extends HTMLElement {
       return this._textElement("div", "event-row", "Chat restored");
     }
     return null;
+  }
+
+  _generatedImageArtifactForEvent(event) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const artifactId = typeof payload.artifact_id === "string" ? payload.artifact_id : "";
+    const artifact = artifactId
+      ? this._artifacts.find((item) => item?.artifact_id === artifactId)
+      : null;
+    return isGeneratedImageArtifact(artifact) ? artifact : null;
+  }
+
+  _renderGeneratedImageFailure(event) {
+    const article = document.createElement("article");
+    article.className = "message assistant generated-image-message";
+    article.dataset.sequence = String(event?.sequence ?? "generated-image-failed");
+    article.setAttribute("role", "status");
+    article.setAttribute("aria-label", "Image generation failed");
+    const avatar = this._textElement("span", "avatar", "");
+    this._appendTrustedIcon(avatar, icons.bot);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble generated-image-card";
+    bubble.append(
+      this._textElement("span", "generated-image-kicker", "Image generation failed"),
+      this._textElement(
+        "span",
+        "generated-image-pending",
+        "Codex could not publish the generated image safely. Retry the prompt."
+      )
+    );
+    article.append(avatar, bubble);
+    return article;
+  }
+
+  _renderGeneratedImageCard(event, artifact = null) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const filename = displayArtifactFilename(artifact?.filename || payload.filename);
+    const mime = displayArtifactMime(artifact?.mime_type || payload.mime_type);
+    const article = document.createElement("article");
+    article.className = "message assistant generated-image-message";
+    article.dataset.sequence = String(event?.sequence ?? "generated-image");
+    article.setAttribute("aria-label", `Generated image: ${filename}`);
+    const avatar = this._textElement("span", "avatar", "");
+    this._appendTrustedIcon(avatar, icons.bot);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble generated-image-card";
+    const heading = document.createElement("div");
+    heading.className = "generated-image-heading";
+    heading.append(
+      this._textElement("span", "generated-image-kicker", "Generated image"),
+      this._textElement("span", "generated-image-filename", filename)
+    );
+    const metadata = [mime];
+    if (Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0) {
+      metadata.push(this._formatBytes(artifact.size_bytes));
+    }
+    const action = artifact?.artifact_id
+      ? this._actionButton("generated-image-open", "select-artifact", `Open generated image ${filename}`)
+      : null;
+    if (action) {
+      action.dataset.artifactId = artifact.artifact_id;
+      action.textContent = "Open preview";
+    }
+    const cachedPreview = artifact?.artifact_id === this._artifactPreview?.artifactId
+      && this._artifactPreview?.kind === "image"
+      ? createPreviewElement(document, this._artifactPreview, { blobUrl: this._artifactPreview.url })
+      : null;
+    if (cachedPreview && artifact?.artifact_id) {
+      const thumbnail = this._actionButton("generated-image-thumbnail", "select-artifact", `Open generated image ${filename}`);
+      thumbnail.dataset.artifactId = artifact.artifact_id;
+      thumbnail.append(cachedPreview);
+      bubble.append(heading, thumbnail);
+    } else {
+      bubble.append(heading);
+    }
+    bubble.append(
+      this._textElement("span", "generated-image-meta", metadata.join(" · ")),
+      action || this._textElement("span", "generated-image-pending", "Available in Files")
+    );
+    article.append(avatar, bubble);
+    return article;
   }
 
   _renderMessage(role, text, key, canCopy, label = "") {
@@ -7283,19 +7592,20 @@ class CodexBridgePanel extends HTMLElement {
 
     for (const artifact of this._artifacts) {
       const active = artifact.artifact_id === this._selectedArtifactId;
+      const generatedImage = isGeneratedImageArtifact(artifact);
       const row = document.createElement("div");
-      row.className = `file-row${active ? " active" : ""}`;
+      row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
-        `Preview ${artifact.filename || "artifact"}`
+        `Preview ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
       );
       select.dataset.artifactId = String(artifact.artifact_id || "");
       const main = document.createElement("div");
       main.className = "file-main";
       const size = artifact.size_bytes ? ` / ${this._formatBytes(artifact.size_bytes)}` : "";
       main.append(
-        this._textElement("span", "file-name", artifact.relative_path || artifact.filename || "Artifact"),
+        this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
         this._textElement("span", "row-meta", `${artifact.mime_type || "application/octet-stream"}${size}`)
       );
       select.append(main);
@@ -8669,7 +8979,7 @@ class CodexBridgePanel extends HTMLElement {
       this._artifactPreview = {
         ...advertisedDescriptor,
         kind: "binary",
-        notice: previewUnavailableMessage(sizeState),
+        notice: previewUnavailableMessage(artifact, sizeState),
       };
       this._render();
       return;
@@ -8698,6 +9008,9 @@ class CodexBridgePanel extends HTMLElement {
         descriptor.url = URL.createObjectURL(blob);
       }
       this._artifactPreview = descriptor;
+      if (isGeneratedImageArtifact(artifact) && descriptor.kind === "image") {
+        this._forceMessageRebuild = true;
+      }
       this._clearError();
       this._render();
     } catch (error) {
@@ -8981,6 +9294,9 @@ class CodexBridgePanel extends HTMLElement {
           }
           if (artifacts) {
             this._artifacts = artifacts;
+            if (artifacts.some((artifact) => isGeneratedImageArtifact(artifact))) {
+              this._forceMessageRebuild = true;
+            }
             this._syncSelectedArtifact();
           }
         }
@@ -9422,6 +9738,9 @@ class CodexBridgePanel extends HTMLElement {
         this._activeThread = thread;
         if (artifacts) {
           this._artifacts = artifacts;
+          if (artifacts.some((artifact) => isGeneratedImageArtifact(artifact))) {
+            this._forceMessageRebuild = true;
+          }
         }
         this._replacePendingInteractions(interactions);
         this._mergeStatus(status);

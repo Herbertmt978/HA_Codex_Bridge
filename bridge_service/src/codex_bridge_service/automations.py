@@ -263,6 +263,7 @@ class AutomationStore:
         idempotency_key: str,
         expected_revision: int,
         capacity_available: bool = True,
+        web_search: Literal["live", "disabled"] | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         now = _now(now)
@@ -274,6 +275,7 @@ class AutomationStore:
             idempotency_key=idempotency_key,
             expected_revision=expected_revision,
             capacity_available=capacity_available,
+            web_search=web_search,
             now=now,
         )
 
@@ -282,6 +284,7 @@ class AutomationStore:
         automation_id: str,
         *,
         capacity_available: bool = True,
+        web_search: Literal["live", "disabled"] | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         now = _now(now)
@@ -294,6 +297,7 @@ class AutomationStore:
                 idempotency_key=f"manual:{automation_id}:{uuid4().hex}",
                 expected_revision=record["revision"],
                 capacity_available=capacity_available,
+                web_search=web_search,
                 now=now,
             )
 
@@ -507,9 +511,11 @@ class AutomationStore:
         idempotency_key: str,
         expected_revision: int,
         capacity_available: bool,
+        web_search: Literal["live", "disabled"] | None,
         now: datetime,
     ) -> dict[str, Any]:
         with self._lock:
+            web_search = _normalize_web_search(web_search)
             existing_id = self._state["idempotency"].get(
                 _identifier(idempotency_key, "idempotency key")
             )
@@ -545,6 +551,7 @@ class AutomationStore:
                 "completed_at": _iso(now) if status != "queued" else None,
                 "bridge_run_id": None,
                 "error": None,
+                "web_search": web_search,
             }
             self._state["runs"][run_id] = run
             self._state["idempotency"][idempotency_key] = run_id
@@ -699,6 +706,10 @@ class AutomationStore:
             )
         ):
             raise AutomationValidationError("automation state is invalid")
+        for run in payload["runs"].values():
+            if isinstance(run, dict):
+                # Older checkpoints predate per-claim search overrides.
+                run.setdefault("web_search", None)
         return payload
 
     def _save(self) -> None:
@@ -865,6 +876,7 @@ def _public_run(value: Mapping[str, Any]) -> dict[str, Any]:
             "completed_at",
             "bridge_run_id",
             "error",
+            "web_search",
         )
     }
 
@@ -902,6 +914,14 @@ def _text(value: object, field: str, limit: int) -> str:
     ):
         raise AutomationValidationError(f"{field} is invalid")
     return value
+
+
+def _normalize_web_search(value: object) -> Literal["live", "disabled"] | None:
+    if value is None:
+        return None
+    if type(value) is not str or value not in {"live", "disabled"}:
+        raise AutomationValidationError("web_search is invalid")
+    return value  # type: ignore[return-value]
 
 
 def _identifier(value: object, field: str) -> str:

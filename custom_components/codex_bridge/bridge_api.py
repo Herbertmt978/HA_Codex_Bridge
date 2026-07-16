@@ -178,6 +178,12 @@ def _client_request_id(value: object) -> str:
     return value
 
 
+def _web_search_mode(value: object) -> str:
+    if value not in {"live", "disabled"}:
+        raise BridgeApiEndpointError("web_search_invalid")
+    return value
+
+
 def _upload_sha256(value: object) -> str:
     if not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None:
         raise BridgeApiEndpointError("sha256_invalid")
@@ -484,8 +490,27 @@ class BridgeApiClient:
         discovery: DiscoveryRecord | None = None,
         discovery_api: ApiRange | None = None,
     ) -> ReadyRecord:
-        self._api_version = None
-        self._capabilities = frozenset()
+        return await self._async_ready(
+            discovery=discovery,
+            discovery_api=discovery_api,
+            reset_before_request=True,
+        )
+
+    async def async_refresh_ready(self) -> ReadyRecord:
+        """Refresh readiness without discarding a working negotiation on failure."""
+
+        return await self._async_ready(reset_before_request=False)
+
+    async def _async_ready(
+        self,
+        *,
+        discovery: DiscoveryRecord | None = None,
+        discovery_api: ApiRange | None = None,
+        reset_before_request: bool,
+    ) -> ReadyRecord:
+        if reset_before_request:
+            self._api_version = None
+            self._capabilities = frozenset()
         payload = await self._async_json("GET", "/ready")
         try:
             ready = ReadyRecord.from_payload(
@@ -668,10 +693,13 @@ class BridgeApiClient:
         prompt: str,
         *,
         client_request_id: str | None = None,
+        web_search: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"prompt": prompt}
         if client_request_id is not None:
             payload["client_request_id"] = _client_request_id(client_request_id)
+        if web_search is not None and "web_search_v1" in self._capabilities:
+            payload["web_search"] = _web_search_mode(web_search)
         return await self._async_json(
             "POST",
             f"/threads/{_path_segment(thread_id)}/prompts",
@@ -1129,12 +1157,17 @@ class BridgeApiClient:
             json_body={"expected_revision": _positive_int(expected_revision)},
         )
 
-    async def async_run_automation(self, automation_id: str) -> dict[str, Any]:
+    async def async_run_automation(
+        self, automation_id: str, *, web_search: str | None = None
+    ) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        payload: dict[str, Any] = {"source": "manual"}
+        if web_search is not None and "web_search_v1" in self._capabilities:
+            payload["web_search"] = _web_search_mode(web_search)
         return await self._async_json(
             "POST",
             f"/automations/{_path_segment(automation_id)}/runs",
-            json_body={"source": "manual"},
+            json_body=payload,
             expected_status={202},
         )
 
@@ -1145,17 +1178,21 @@ class BridgeApiClient:
         due_at: str,
         idempotency_key: str,
         expected_revision: int,
+        web_search: str | None = None,
     ) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        payload: dict[str, Any] = {
+            "source": "scheduled",
+            "due_at": _bounded_text(due_at, 64),
+            "idempotency_key": _bounded_text(idempotency_key, 256),
+            "expected_revision": _positive_int(expected_revision),
+        }
+        if web_search is not None and "web_search_v1" in self._capabilities:
+            payload["web_search"] = _web_search_mode(web_search)
         return await self._async_json(
             "POST",
             f"/automations/{_path_segment(automation_id)}/runs",
-            json_body={
-                "source": "scheduled",
-                "due_at": _bounded_text(due_at, 64),
-                "idempotency_key": _bounded_text(idempotency_key, 256),
-                "expected_revision": _positive_int(expected_revision),
-            },
+            json_body=payload,
             expected_status={202},
         )
 

@@ -1,7 +1,10 @@
+from typing import Literal
+
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
+from ..feature_capabilities import supports_web_search
 from ..models import RunRecord
 from ..runner import NoActiveRunError, ThreadBusyError
 from ..readiness import evaluate_readiness
@@ -13,6 +16,7 @@ router = APIRouter()
 class PromptRequest(BaseModel):
     prompt: str
     client_request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    web_search: Literal["live", "disabled"] | None = None
 
     @field_validator("prompt")
     @classmethod
@@ -60,12 +64,18 @@ def submit_prompt(
             status_code=409,
             detail={"code": "authentication_required"},
         )
+    if payload.web_search is not None and not supports_web_search(request.app.state):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": "capabilities_unavailable", "retryable": False},
+        )
     try:
         if request.app.state.storage.runtime_profile.value == "home_assistant":
             return request.app.state.runner.submit_prompt(
                 thread_id,
                 payload.prompt,
                 client_request_id=payload.client_request_id,
+                web_search=payload.web_search,
             )
         return request.app.state.runner.submit_prompt(thread_id, payload.prompt)
     except ThreadBusyError as exc:

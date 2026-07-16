@@ -1,5 +1,6 @@
 import json
 import io
+import base64
 import hashlib
 import mimetypes
 import os
@@ -85,6 +86,64 @@ _UPLOAD_SESSION_FIELDS = frozenset(
         "status",
     }
 )
+_GENERATED_IMAGE_MAX_BYTES = 25 * 1024 * 1024
+_GENERATED_IMAGE_MIME_TYPES = frozenset({"image/png", "image/jpeg", "image/webp"})
+_GENERATED_IMAGE_MAGIC = {
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/webp": b"RIFF",
+}
+
+
+def _decode_generated_image(
+    result: object,
+    declared_mime_type: object = None,
+) -> tuple[str, bytes]:
+    """Decode one bounded Codex image result and verify its container signature."""
+    if not isinstance(result, str) or not result:
+        raise WorkspaceInputError()
+    mime_type: str | None = None
+    encoded = result
+    if result.startswith("data:"):
+        header, separator, encoded = result.partition(",")
+        if separator != "," or not header.startswith("data:"):
+            raise WorkspaceInputError()
+        prefix = header[5:]
+        if not prefix.endswith(";base64"):
+            raise WorkspaceInputError()
+        mime_type = prefix[:-7]
+    if mime_type is None:
+        if isinstance(declared_mime_type, str):
+            mime_type = declared_mime_type.split(";", 1)[0].strip().lower()
+    else:
+        mime_type = mime_type.lower()
+        if isinstance(declared_mime_type, str):
+            declared = declared_mime_type.split(";", 1)[0].strip().lower()
+            if declared and declared != mime_type:
+                raise WorkspaceInputError()
+    if not isinstance(encoded, str) or not encoded or len(encoded) > (
+        (_GENERATED_IMAGE_MAX_BYTES + 2) * 4 // 3 + 8
+    ):
+        raise WorkspaceInputError()
+    try:
+        raw = base64.b64decode(encoded.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, ValueError, base64.binascii.Error):
+        raise WorkspaceInputError() from None
+    if not raw or len(raw) > _GENERATED_IMAGE_MAX_BYTES:
+        raise WorkspaceInputError()
+    detected_mime = None
+    if raw.startswith(_GENERATED_IMAGE_MAGIC["image/png"]):
+        detected_mime = "image/png"
+    elif raw.startswith(_GENERATED_IMAGE_MAGIC["image/jpeg"]):
+        detected_mime = "image/jpeg"
+    elif len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        detected_mime = "image/webp"
+    if detected_mime is None or (mime_type is not None and mime_type != detected_mime):
+        raise WorkspaceInputError()
+    mime_type = detected_mime
+    if mime_type not in _GENERATED_IMAGE_MIME_TYPES:
+        raise WorkspaceInputError()
+    return mime_type, raw
 
 
 def _write_all(output: BinaryIO, content: bytes | bytearray | memoryview) -> int:
@@ -139,6 +198,12 @@ class _ReleasingBinaryStream:
     @property
     def closed(self) -> bool:
         return self._stream.closed
+
+    def __enter__(self) -> "_ReleasingBinaryStream":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
 
     def read(self, size: int = -1) -> bytes:
         return self._stream.read(size)
@@ -882,6 +947,14 @@ class BridgeStorage:
                 relative = boundary.normalize(artifact.relative_path)
                 stored = boundary.normalize(artifact.stored_path)
                 expected_stored = f"{thread_locator}/{relative}"
+            elif artifact.source is ArtifactSource.GENERATED_IMAGE:
+                boundary = archive_boundary
+                thread_locator = boundary.normalize(record.thread_id)
+                if thread_locator != record.thread_id or "/" in thread_locator:
+                    raise WorkspaceInputError()
+                relative = boundary.normalize(artifact.relative_path)
+                stored = boundary.normalize(artifact.stored_path)
+                expected_stored = f"{thread_locator}/generated/{relative}"
             else:
                 raise WorkspaceInputError()
 
@@ -2091,11 +2164,43 @@ class BridgeStorage:
             if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                 artifacts_boundary = self._home_assistant_artifacts_boundary()
                 for artifact in record.artifacts:
-                    if artifact.source is ArtifactSource.WORKSPACE_ARCHIVE:
+                    if artifact.source in {
+                        ArtifactSource.WORKSPACE_ARCHIVE,
+                        ArtifactSource.GENERATED_IMAGE,
+                    }:
                         artifacts_boundary.unlink_regular_file(
                             artifact.stored_path,
                             missing_ok=True,
                         )
+                # A generated image is published before thread metadata.  If
+                # the process died in that crash window, the deterministic
+                # orphan is absent from ``record.artifacts``; reap only the
+                # generated-name regular files we own and leave unknown or
+                # hostile entries for a fail-closed retry.
+                generated_locator = f"{record.thread_id}/generated"
+                try:
+                    generated_orphans = artifacts_boundary.walk_regular_files(
+                        generated_locator,
+                        reject_unsafe=True,
+                    )
+                except WorkspaceNotFoundError:
+                    generated_orphans = ()
+                for orphan in generated_orphans:
+                    if re.fullmatch(
+                        r"codex-image-[0-9a-f]{24}\.(?:png|jpg|webp)",
+                        PurePosixPath(orphan).name,
+                    ):
+                        artifacts_boundary.unlink_regular_file(
+                            orphan,
+                            missing_ok=True,
+                        )
+                artifacts_boundary.remove_empty_directory(
+                    generated_locator,
+                    missing_ok=True,
+                )
+                artifacts_boundary.remove_empty_directory(
+                    record.thread_id, missing_ok=True
+                )
             thread_path = self._thread_path(thread_id)
             if thread_path.exists():
                 thread_path.unlink()
@@ -3449,6 +3554,192 @@ class BridgeStorage:
                 return artifact
         raise ThreadNotFoundError(artifact_id)
 
+    def save_generated_image(
+        self,
+        *,
+        thread_id: str,
+        item_id: str,
+        result: object,
+        mime_type: object = None,
+    ) -> ArtifactRecord:
+        """Persist one Codex imageGeneration result in the private artifact boundary.
+
+        The item id is part of the deterministic locator, making repeated
+        completion notifications idempotent without retaining provider output.
+        """
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("generated images require the home_assistant profile")
+        if not isinstance(item_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,256}", item_id):
+            raise WorkspaceInputError()
+        normalized_mime, content = _decode_generated_image(result, mime_type)
+        extension = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[normalized_mime]
+        digest = hashlib.sha256(item_id.encode("utf-8")).hexdigest()[:24]
+        artifact_id = f"art_img_{digest}"
+        filename = f"codex-image-{digest}{extension}"
+        boundary = self._home_assistant_artifacts_boundary()
+        thread_locator = boundary.normalize(thread_id)
+        if thread_locator != thread_id or "/" in thread_locator:
+            raise WorkspaceInputError()
+        relative_path = boundary.normalize(filename)
+        stored_locator = f"{thread_locator}/generated/{relative_path}"
+        artifact = ArtifactRecord(
+            artifact_id=artifact_id,
+            filename=filename,
+            mime_type=normalized_mime,
+            source=ArtifactSource.GENERATED_IMAGE,
+            stored_path=stored_locator,
+            relative_path=relative_path,
+            size_bytes=len(content),
+        )
+
+        def _matches_existing_file(identity: WorkspaceFileIdentity) -> bool:
+            """Only reconcile a crash orphan after proving its exact bytes.
+
+            The deterministic locator is private and is never exposed as an
+            artifact until metadata is committed.  A path left by an earlier
+            process is therefore safe to adopt only when it names the same
+            regular inode and contains exactly the provider bytes for this
+            item; arbitrary pre-existing data is discarded below.
+            """
+
+            try:
+                with boundary.open_regular_file(stored_locator) as stream:
+                    if boundary.identify_open_file(stream) != identity:
+                        return False
+                    stat_result = os.fstat(stream.fileno())
+                    if stat_result.st_size != len(content):
+                        return False
+                    if stream.read(len(content) + 1) != content:
+                        return False
+                boundary.validate_regular_file_identity(stored_locator, identity)
+                return True
+            except (WorkspaceBoundaryError, OSError, ValueError):
+                return False
+
+        def _append_metadata_locked(record: ThreadRecord) -> ArtifactRecord:
+            for existing in record.artifacts:
+                if (
+                    existing.source is ArtifactSource.GENERATED_IMAGE
+                    and existing.artifact_id == artifact_id
+                ):
+                    return existing
+            record.artifacts.append(artifact)
+            self._touch_thread(record)
+            self._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread",
+                    thread_id=thread_id,
+                    event_type="artifact.added",
+                    payload={
+                        "artifact_id": artifact.artifact_id,
+                        "filename": artifact.filename,
+                        "mime_type": artifact.mime_type,
+                        "source": artifact.source.value,
+                        "stored_path": artifact.stored_path,
+                        "relative_path": artifact.relative_path,
+                        "size_bytes": artifact.size_bytes,
+                    },
+                ),
+            )
+            return artifact
+
+        with self._thread_mutation_lock:
+            record = self.load_thread(thread_id)
+            for existing in record.artifacts:
+                if (
+                    existing.source is ArtifactSource.GENERATED_IMAGE
+                    and existing.artifact_id == artifact_id
+                ):
+                    return existing
+
+            # A process can die after fsyncing the deterministic image but
+            # before the thread metadata/outbox commit.  Reconcile an exact
+            # byte-for-byte orphan without charging quota a second time.
+            try:
+                existing_stat = boundary.regular_file_stat(stored_locator)
+            except WorkspaceNotFoundError:
+                existing_stat = None
+            if existing_stat is not None:
+                if _matches_existing_file(existing_stat.identity):
+                    return _append_metadata_locked(record)
+                # The path is regular but not ours (or was partially written).
+                # Delete only the inode we inspected; a concurrent replacement
+                # fails closed instead of unlinking arbitrary private data.
+                boundary.unlink_regular_file(
+                    stored_locator,
+                    expected_identity=existing_stat.identity,
+                )
+
+        boundary.create_directory(f"{thread_locator}/generated")
+        reservation = self._disk_quota().reserve(
+            "private",
+            amount_bytes=len(content),
+            item_limit_bytes=_GENERATED_IMAGE_MAX_BYTES,
+        )
+        output: BinaryIO | None = None
+        identity: WorkspaceFileIdentity | None = None
+        created_by_us = False
+        metadata_saved = False
+        try:
+            try:
+                output = boundary.create_file_exclusive(stored_locator)
+                created_by_us = True
+            except WorkspaceExistsError:
+                # A concurrent/replayed completion won the reservation race;
+                # return its durable record when available and clean ours.
+                with self._thread_mutation_lock:
+                    record = self.load_thread(thread_id)
+                    for existing in record.artifacts:
+                        if existing.source is ArtifactSource.GENERATED_IMAGE and existing.artifact_id == artifact_id:
+                            reservation.release()
+                            return existing
+                raise
+            identity = boundary.identify_open_file(output)
+            reservation.consume(len(content))
+            _write_all(output, content)
+            output.flush()
+            os.fsync(output.fileno())
+            boundary.validate_regular_file_identity(stored_locator, identity)
+            reservation.commit(persisted_bytes=len(content))
+            with self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                existing = next(
+                    (
+                        candidate
+                        for candidate in record.artifacts
+                        if candidate.source is ArtifactSource.GENERATED_IMAGE
+                        and candidate.artifact_id == artifact_id
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    metadata_saved = True
+                    return existing
+                _append_metadata_locked(record)
+                metadata_saved = True
+            return artifact
+        except BaseException:
+            if not metadata_saved:
+                if created_by_us:
+                    try:
+                        boundary.unlink_regular_file(
+                            stored_locator,
+                            missing_ok=True,
+                            expected_identity=identity,
+                        )
+                    except WorkspaceBoundaryError:
+                        pass
+                if reservation.active:
+                    reservation.release()
+                boundary.remove_empty_directory(
+                    f"{thread_locator}/generated", missing_ok=True
+                )
+            raise
+        finally:
+            if output is not None:
+                output.close()
+
     def sync_thread_artifacts(self, thread_id: str) -> list[ArtifactRecord]:
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             return self._sync_thread_artifacts_home_assistant(thread_id)
@@ -3607,7 +3898,10 @@ class BridgeStorage:
         artifact = self.get_artifact(thread_id, artifact_id)
         if artifact.source is ArtifactSource.WORKSPACE:
             boundary = self._home_assistant_boundary()
-        elif artifact.source is ArtifactSource.WORKSPACE_ARCHIVE:
+        elif artifact.source in {
+            ArtifactSource.WORKSPACE_ARCHIVE,
+            ArtifactSource.GENERATED_IMAGE,
+        }:
             boundary = self._home_assistant_artifacts_boundary()
         else:
             raise WorkspaceInputError()

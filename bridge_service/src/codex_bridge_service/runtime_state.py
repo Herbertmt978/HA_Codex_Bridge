@@ -77,6 +77,10 @@ class RuntimeRunState(BaseModel):
     client_request_id: str = Field(min_length=1, max_length=256)
     thread_id: str = Field(min_length=1, max_length=128)
     unattended: bool = False
+    # Explicit per-run native web-search override.  ``None`` is intentionally
+    # distinct from ``disabled`` so older checkpoints and callers that do not
+    # negotiate the capability retain Codex's managed default.
+    web_search: Literal["live", "disabled"] | None = None
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
     mode: RunMode
@@ -135,6 +139,7 @@ class RuntimeRequestOutcome(BaseModel):
     thread_id: str = Field(min_length=1, max_length=128)
     kind: Literal["prompt", "steer"]
     unattended: bool = False
+    web_search: Literal["live", "disabled"] | None = None
     fingerprint: str = Field(min_length=64, max_length=64)
     status: Literal["accepted", "uncertain"] = "accepted"
     run_status: RunStatus

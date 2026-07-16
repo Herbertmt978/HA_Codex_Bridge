@@ -29,6 +29,8 @@ from custom_components.codex_bridge.websocket_api import (
     ws_create_automation,
     ws_login_mcp,
     ws_list_artifacts,
+    ws_run_automation,
+    ws_send_prompt,
     ws_start_auth_login,
     ws_subscribe_events,
     ws_unsubscribe_events,
@@ -92,6 +94,8 @@ class _Hass:
 
 def _runtime(*, queue_size: int = 256) -> tuple[CodexBridgeRuntime, EventBroker]:
     client = AsyncMock()
+    client.async_refresh_ready.return_value = SimpleNamespace(capabilities=())
+    client.negotiated_api_version = 1
     broker = EventBroker(client, initial_cursor=0, queue_size=queue_size)
     return (
         CodexBridgeRuntime("entry", "Codex", client, "supervisor", "a" * 32, 1, broker),
@@ -157,6 +161,170 @@ async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:
 
     runtime.client.async_start_auth_login.assert_awaited_once_with(False)
     assert connection.results == [(4, {"state": "login_starting"})]
+
+
+async def test_web_search_mode_is_forwarded_server_side_for_prompts_and_manual_runs() -> None:
+    runtime, _broker = _runtime()
+    runtime.capabilities = ("web_search_v1",)
+    runtime.web_search_mode = "live"
+    runtime.client.async_send_prompt = AsyncMock(return_value={"run_id": "run_1"})
+    runtime.client.async_run_automation = AsyncMock(
+        return_value={"automation_run_id": "autrun_1"}
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_send_prompt(
+        hass,
+        connection,
+        {
+            "id": 41,
+            "type": f"{DOMAIN}/send_prompt",
+            "thread_id": "thr_1",
+            "prompt": "Find current information",
+        },
+    )
+    ws_run_automation(
+        hass,
+        connection,
+        {
+            "id": 42,
+            "type": f"{DOMAIN}/run_automation",
+            "automation_id": "aut_1",
+        },
+    )
+    await asyncio.sleep(0)
+
+    runtime.client.async_send_prompt.assert_awaited_once_with(
+        "thr_1",
+        "Find current information",
+        client_request_id=None,
+        web_search="live",
+    )
+    runtime.client.async_run_automation.assert_awaited_once_with(
+        "aut_1", web_search="live"
+    )
+    assert connection.results == [
+        (41, {"run_id": "run_1"}),
+        (42, {"automation_run_id": "autrun_1"}),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "mode", "expected_mode"),
+    [
+        (("web_search_v1",), "live", "live"),
+        ((), "live", "live"),
+        (("web_search_v1",), "disabled", "disabled"),
+    ],
+)
+async def test_get_config_returns_persisted_web_search_preference(
+    capabilities, mode, expected_mode
+) -> None:
+    runtime, _broker = _runtime()
+    runtime.capabilities = capabilities
+    runtime.web_search_mode = mode
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_get_config(
+        hass,
+        connection,
+        {"id": 55, "type": f"{DOMAIN}/get_config"},
+    )
+    await asyncio.sleep(0)
+
+    assert connection.results == [
+        (
+            55,
+            {
+                "panel_title": "Codex",
+                "connection_type": "supervisor",
+                "api_version": 1,
+                "capabilities": list(capabilities),
+                "web_search_mode": expected_mode,
+            },
+        )
+    ]
+
+
+async def test_status_poll_recovers_live_search_after_login_without_reload() -> None:
+    runtime, _broker = _runtime()
+    runtime.web_search_mode = "live"
+    runtime.client.async_get_status.return_value = {
+        "auth": {
+            "state": "logged_out",
+            "auth_mode": None,
+            "auth_required": True,
+        },
+        "provider_capabilities": {"web_search": False},
+    }
+    runtime.client.async_refresh_ready.return_value = SimpleNamespace(
+        capabilities=("api_v1", "automations_v1")
+    )
+    runtime.automation_scheduler = SimpleNamespace(web_search_mode=None)
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_get_status(hass, connection, {"id": 56, "type": f"{DOMAIN}/get_status"})
+    await hass.finish()
+
+    assert not runtime.supports_capability("web_search_v1")
+    assert runtime._capability_refreshed_at > 0
+
+    runtime.client.async_get_status.return_value = {
+        "auth": {
+            "state": "ok",
+            "auth_mode": "chatgpt",
+            "auth_required": False,
+        },
+        "provider_capabilities": {"web_search": True},
+    }
+    runtime.client.async_refresh_ready.return_value = SimpleNamespace(
+        capabilities=("api_v1", "automations_v1", "web_search_v1")
+    )
+    runtime.client.async_send_prompt.return_value = {"run_id": "run_1"}
+    runtime.client.async_run_automation.return_value = {
+        "automation_run_id": "autrun_1"
+    }
+    ws_get_status(hass, connection, {"id": 59, "type": f"{DOMAIN}/get_status"})
+    await hass.finish()
+
+    assert runtime.supports_capability("web_search_v1")
+    assert runtime.web_search_payload() == {"web_search": "live"}
+    assert runtime.automation_scheduler.web_search_mode == "live"
+    assert runtime.client.async_refresh_ready.await_count == 2
+
+    ws_send_prompt(
+        hass,
+        connection,
+        {
+            "id": 57,
+            "type": f"{DOMAIN}/send_prompt",
+            "thread_id": "thr_1",
+            "prompt": "Find today's weather",
+        },
+    )
+    ws_run_automation(
+        hass,
+        connection,
+        {
+            "id": 58,
+            "type": f"{DOMAIN}/run_automation",
+            "automation_id": "aut_1",
+        },
+    )
+    await hass.finish()
+
+    runtime.client.async_send_prompt.assert_awaited_once_with(
+        "thr_1",
+        "Find today's weather",
+        client_request_id=None,
+        web_search="live",
+    )
+    runtime.client.async_run_automation.assert_awaited_once_with(
+        "aut_1", web_search="live"
+    )
 
 
 async def test_create_automation_refreshes_the_local_scheduler() -> None:
@@ -596,6 +764,7 @@ async def test_event_status_and_config_never_expose_private_origin_or_errors() -
                 "connection_type": "supervisor",
                 "api_version": 1,
                 "capabilities": [],
+                "web_search_mode": "disabled",
             },
         ),
         (

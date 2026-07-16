@@ -77,6 +77,48 @@ async def test_scheduler_registers_a_coroutine_callback_ha_dispatches(
         await hass.async_stop(force=True)
 
 
+async def test_scheduler_forwards_native_web_search_only_when_configured(monkeypatch):
+    callbacks = []
+
+    def track(_hass, action, due):
+        callbacks.append((action, due))
+        return lambda: None
+
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.automation_scheduler.async_track_point_in_time",
+        track,
+    )
+    client = AsyncMock()
+    client.async_scheduler_automations.side_effect = [
+        {
+            "automations": [
+                {
+                    "automation_id": "aut_1",
+                    "revision": 4,
+                    "next_run_at": "2026-07-15T10:00:00Z",
+                }
+            ]
+        },
+        {"automations": []},
+    ]
+    scheduler = AutomationScheduler(
+        _Hass(), client, "supervisor", web_search_mode="disabled"
+    )
+
+    await scheduler.async_start()
+    action, due = callbacks[0]
+    await action(due)
+
+    client.async_claim_automation_run.assert_awaited_once_with(
+        "aut_1",
+        due_at="2026-07-15T10:00:00Z",
+        idempotency_key="automation:aut_1:4:2026-07-15T10:00:00Z",
+        expected_revision=4,
+        web_search="disabled",
+    )
+    await scheduler.async_close()
+
+
 async def test_scheduler_is_disabled_for_external_legacy_without_contacting_bridge():
     client = AsyncMock()
     scheduler = AutomationScheduler(_Hass(), client, CONNECTION_TYPE_EXTERNAL_LEGACY)

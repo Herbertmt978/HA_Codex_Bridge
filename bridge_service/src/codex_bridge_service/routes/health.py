@@ -2,6 +2,7 @@ from fastapi import APIRouter, Header, Request
 
 from .. import __version__
 from ..auth import require_bridge_token
+from ..feature_capabilities import readiness_capabilities
 from ..models import (
     BridgeReadinessRecord,
     ComponentVersionRecord,
@@ -45,8 +46,6 @@ def readiness_check(
             contract_version=build_info.sandbox_contract_version,
             attested=request.app.state.sandbox_ready is True,
         ),
-        capabilities=tuple(
-            getattr(request.app.state, "feature_capabilities", ("api_v1", "legacy_v0"))
-        ),
+        capabilities=readiness_capabilities(request.app.state),
         readiness=readiness,
     )
