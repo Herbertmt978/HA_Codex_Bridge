@@ -1,5 +1,6 @@
 import base64
 import json
+from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
 from threading import Lock
@@ -118,7 +119,9 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
         secondary=secondary,
         credits=_app_server_credits(snapshot.get("credits")),
         plan_type=normalize_chatgpt_plan_type(plan_type),
-        updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        updated_at=datetime.now(UTC)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z"),
     )
 
 

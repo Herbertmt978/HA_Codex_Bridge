@@ -196,6 +196,45 @@ describe("run activity view model", () => {
     expect(complete.state).toBe("completed");
   });
 
+  it.each(["failed", "cancelled", "interrupted"])(
+    "preserves streamed assistant text as partial when a run is %s without a completed message",
+    (terminalState) => {
+      const model = getRunActivityViewModel(
+        { status: terminalState === "failed" ? "error" : "idle", active_run_id: null },
+        [
+          event(1, "message.delta", { delta: "The response began before the provider stopped." }),
+          event(2, `run.${terminalState}`, {
+            error: terminalState === "failed" ? "Bearer secret /private/provider/path" : undefined,
+            failure_type: terminalState === "failed" ? "network.response_stream_disconnected" : undefined,
+          }),
+        ],
+      );
+
+      expect(model.assistantState).toBe("partial");
+      expect(model.failureMessage).toBe(
+        terminalState === "failed"
+          ? "The Codex response stream disconnected before completion."
+          : "",
+      );
+    },
+  );
+
+  it("does not expose an untrusted failed-run error string", () => {
+    const model = getRunActivityViewModel(
+      { status: "error", active_run_id: null, last_error: "Bearer secret /private/thread/path" },
+      [
+        event(1, "run.failed", {
+          error: "Bearer secret /private/event/path",
+          failure_type: "provider.future_failure",
+        }),
+      ],
+    );
+
+    expect(model.failureMessage).toBe("Codex could not complete the turn.");
+    expect(JSON.stringify(model)).not.toContain("Bearer secret");
+    expect(JSON.stringify(model)).not.toContain("/private/");
+  });
+
   it("does not resurrect orphaned activity from an idle thread snapshot", () => {
     const model = getRunActivityViewModel(
       { status: "idle", active_run_id: "run-old" },

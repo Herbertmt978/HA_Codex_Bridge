@@ -261,6 +261,10 @@ test("downloads a cached generated-image preview inside the user activation", as
       return originalAnchorClick.call(this);
     };
     const panel = document.querySelector("codex-bridge-panel");
+    // The synthetic artifact exists only in this browser fixture. Prevent the
+    // harness poller from replacing it with the server's ordinary artifact
+    // list while the intentionally delayed authenticated fetch is in flight.
+    panel._stopPolling();
     const artifact = {
       artifact_id: "art_generated_cached",
       filename: "generated-cached.png",
@@ -312,6 +316,9 @@ test("downloads a generated image through the authenticated browser artifact pat
       return originalAnchorClick.call(this);
     };
     const panel = document.querySelector("codex-bridge-panel");
+    // This delayed synthetic fetch must not race the harness's ordinary
+    // artifact refresh, which correctly knows nothing about this fixture row.
+    panel._stopPolling();
     const artifact = {
       artifact_id: "art_generated_download",
       filename: "generated-tree.png",
@@ -572,11 +579,41 @@ test("creates a workspace project and first chat at compact widths in both colou
   await expect(panel.locator("#project-section")).toContainText("Home lab notes");
 
   const createdProject = panel.locator(".project-shell").filter({ hasText: "Home lab notes" });
+  await page.setViewportSize({ width: 1120, height: 1000 });
   await createdProject.locator('button[data-action="toggle-project-actions"]').click();
   await createdProject.locator('button[data-action="new-chat"]').click();
   await panel.locator("#thread-title-input").fill("First Home Assistant chat");
+  const formLayout = await panel.locator("#thread-form-panel").evaluate((form) => {
+    const actions = form.querySelector(".form-actions");
+    const create = form.querySelector('[data-action="save-thread"]');
+    const close = form.querySelector('[data-action="cancel-thread-form"]');
+    const formRect = form.getBoundingClientRect();
+    const createRect = create?.getBoundingClientRect();
+    const closeRect = close?.getBoundingClientRect();
+    return {
+      actionsFit: Boolean(actions && actions.scrollWidth <= actions.clientWidth),
+      createFits: Boolean(createRect && createRect.right <= formRect.right),
+      closeFits: Boolean(closeRect && closeRect.right <= formRect.right),
+      createWhiteSpace: create ? getComputedStyle(create).whiteSpace : "",
+      createWidth: createRect?.width || 0,
+      createHeight: createRect?.height || 0,
+    };
+  });
+  expect(formLayout).toMatchObject({
+    actionsFit: true,
+    createFits: true,
+    closeFits: true,
+    createWhiteSpace: "nowrap",
+  });
+  expect(formLayout.createWidth).toBeGreaterThan(100);
+  expect(formLayout.createHeight).toBeLessThanOrEqual(44);
   await panel.locator('button[data-action="save-thread"]').click();
   await expect(panel.locator("#thread-title-label")).toContainText("First Home Assistant chat");
+  const refresh = panel.locator("#refresh-thread-button");
+  await expect(refresh).toHaveAttribute("aria-label", "Refresh");
+  await expect(refresh.locator("svg")).toBeVisible();
+  await expect(refresh).toHaveCSS("width", "32px");
+  await expect(refresh).toHaveCSS("height", "32px");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(panel.locator("#runtime-strip")).toBeHidden();
 
@@ -1032,6 +1069,7 @@ test("renders an intentional empty workspace with a working new-chat action", as
     bridgePanel._stopEventSubscription();
     bridgePanel._setSelectedThreadId(null);
     bridgePanel._activeThread = null;
+    bridgePanel._threads = [];
     bridgePanel._render(true);
   });
 
@@ -1040,11 +1078,23 @@ test("renders an intentional empty workspace with a working new-chat action", as
   await expect(emptyState.locator(".empty-state-mark svg")).toBeVisible();
   const newChat = emptyState.getByRole("button", { name: "Create a new direct chat" });
   await expect(newChat).toBeVisible();
+  await expect(panel.locator("#direct-section")).toContainText("No direct chats yet.");
+  await expect(panel.locator("#direct-section .section-count")).toHaveText(/0/);
   await page.screenshot({ path: testInfo.outputPath("empty-workspace.png"), fullPage: true });
 
   await newChat.click();
   await expect(panel.locator("#thread-form-panel")).toHaveClass(/visible/);
   await expect(panel.locator("#thread-title-input")).toBeFocused();
+  const railScroll = await panel.locator(".section-scroll").evaluate((scrollport) => ({
+    overflowX: getComputedStyle(scrollport).overflowX,
+    overflowY: getComputedStyle(scrollport).overflowY,
+    scrollbarButtonDisplay: getComputedStyle(scrollport, "::-webkit-scrollbar-button").display,
+  }));
+  expect(railScroll).toEqual({
+    overflowX: "hidden",
+    overflowY: "auto",
+    scrollbarButtonDisplay: "none",
+  });
 });
 
 test("retries a dropped prompt response with one stable client request id", async ({ page }) => {

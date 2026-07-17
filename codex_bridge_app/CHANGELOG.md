@@ -2,6 +2,24 @@
 
 All notable App changes are recorded here.
 
+## 0.8.9
+
+- Keeps a long streamed assistant response visible as **Partial response** when
+  the provider stream fails, and shows a safe, specific failure category rather
+  than collapsing the turn to three lines plus a generic **Run failed** state.
+- Classifies every failed-turn variant advertised by bundled Codex `0.144.5`
+  without persisting provider messages, paths, HTTP details, or credentials.
+- Removes a stale usage-limit lock after a newer healthy snapshot and serializes
+  competing limit refresh/failure writes so the account state cannot race.
+- Prevents the compact **Create chat** action from wrapping or clipping, quiets
+  the refresh control, and removes native scrollbar arrow buttons from the chat
+  rail.
+- Covers both completed and interrupted 5,000-word responses; the Bridge does
+  not impose a three-line or 5,000-word output ceiling.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.4` without changing its Integration API compatibility.
+
 ## 0.8.8
 
 - Shows the complete two-step download state on generic Files rows: authenticated

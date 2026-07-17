@@ -58,6 +58,23 @@ describe("Codex desktop parity layout", () => {
     expect(stylesheet).not.toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*\n\s+\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
   });
 
+  it("keeps create-chat actions intact and uses quiet native-feeling rail controls", () => {
+    const panel = createPanel();
+    panel._showThreadForm = true;
+    panel._threadForm = { title: "", mode: "full-auto", projectId: null };
+    panel._renderThreadForm();
+    const root = panel.shadowRoot;
+    const stylesheet = [...root.querySelectorAll("style")].map((style) => style.textContent).join("\n");
+
+    expect(root.querySelector('[data-action="save-thread"]')?.textContent).toContain("Create chat");
+    expect(stylesheet).toMatch(/\.panel-form\s+\.form-actions\s*>\s*button\s*\{[^}]*flex:\s*0\s+0\s+auto;[^}]*white-space:\s*nowrap;/s);
+    expect(stylesheet).toMatch(/\.panel-form\s+\.send-button\s*\{[^}]*width:\s*auto;/s);
+    expect(stylesheet).toMatch(/#refresh-thread-button\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*transparent;/s);
+    expect(stylesheet).toMatch(/\.section-scroll\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s);
+    expect(stylesheet).toMatch(/\.section-scroll::-webkit-scrollbar-button\s*\{[^}]*display:\s*none;/s);
+    expect(stylesheet).toMatch(/\.run-step-failure\s*\{[^}]*display:\s*block;[^}]*color:\s*var\(--error-color\);/s);
+  });
+
   it("renders a compact footer composer and Codex-style activity sections", () => {
     const panel = createPanel();
     const root = panel.shadowRoot;

@@ -453,6 +453,11 @@ class BridgeStorage:
         self._special_default_migration_pending = False
         self._special_migration_lock = Lock()
         self._event_lock = Lock()
+        # Limit snapshots are refreshed by status requests while terminal runs
+        # can mark an account blocked from the runtime thread. Keep each
+        # read/merge/write transition atomic so a stale refresh cannot undo a
+        # newer terminal outcome.
+        self._limits_status_lock = RLock()
         self._event_next_sequences: dict[str, int] = {}
         self._project_mutation_lock = RLock()
         self._thread_mutation_lock = RLock()
@@ -4518,76 +4523,126 @@ class BridgeStorage:
         return Path(*parts)
 
     def get_limits_status(self, *, refresh: bool = False) -> LimitsStatusRecord:
-        if not self.limits_status_path.exists():
-            status = LimitsStatusRecord()
-        else:
-            status = LimitsStatusRecord.model_validate_json(
-                self.limits_status_path.read_text(encoding="utf-8")
-            )
+        with self._limits_status_lock:
+            if not self.limits_status_path.exists():
+                status = LimitsStatusRecord()
+            else:
+                status = LimitsStatusRecord.model_validate_json(
+                    self.limits_status_path.read_text(encoding="utf-8")
+                )
 
-        if refresh and self.limits_probe is not None:
-            snapshot = self.limits_probe.probe()
-            if snapshot is not None:
-                merged = self._merge_limits_status(status, snapshot)
-                if merged.model_dump() != status.model_dump():
-                    self.save_limits_status(merged)
-                return merged
-        return status
+            if refresh and self.limits_probe is not None:
+                snapshot = self.limits_probe.probe()
+                if snapshot is not None:
+                    merged = self._merge_limits_status(status, snapshot)
+                    if merged.model_dump() != status.model_dump():
+                        self.save_limits_status(merged)
+                    return merged
+            return status
 
     def save_limits_status(self, status: LimitsStatusRecord) -> None:
-        self._atomic_write_json(self.limits_status_path, status.model_dump())
+        with self._limits_status_lock:
+            self._atomic_write_json(self.limits_status_path, status.model_dump())
 
     def update_limits_from_rate_data(
         self, rate_limits: dict[str, object]
     ) -> LimitsStatusRecord:
-        status = LimitsStatusRecord(
-            available=True,
-            blocked=False,
-            message=None,
-            primary=self._limits_window(rate_limits.get("primary")),
-            secondary=self._limits_window(rate_limits.get("secondary")),
-            credits=rate_limits.get("credits")
-            if isinstance(rate_limits.get("credits"), dict)
-            else None,
-            plan_type=str(rate_limits.get("plan_type"))
-            if rate_limits.get("plan_type") is not None
-            else None,
-            updated_at=self._now(),
-        )
-        self.save_limits_status(status)
-        return status
+        with self._limits_status_lock:
+            current = self.get_limits_status()
+            status = LimitsStatusRecord(
+                available=True,
+                blocked=False,
+                message=None,
+                primary=self._limits_window(rate_limits.get("primary")),
+                secondary=self._limits_window(rate_limits.get("secondary")),
+                credits=rate_limits.get("credits")
+                if isinstance(rate_limits.get("credits"), dict)
+                else None,
+                plan_type=str(rate_limits.get("plan_type"))
+                if rate_limits.get("plan_type") is not None
+                else None,
+                updated_at=self._now(),
+            )
+            if current.blocked:
+                # Token-count events can arrive after the terminal failure that
+                # established the block. They refresh window measurements but
+                # are not an authoritative recovery signal. A new submitted
+                # compatibility run explicitly clears the block first; the App
+                # path clears it only from a newer healthy limits probe.
+                status.blocked = True
+                status.message = current.message
+                status.updated_at = current.updated_at
+            self.save_limits_status(status)
+            return status
 
     def mark_limits_blocked(self, message: str) -> LimitsStatusRecord:
-        status = self.get_limits_status()
-        status.available = True
-        status.blocked = True
-        status.message = message
-        status.updated_at = self._now()
-        self.save_limits_status(status)
-        return status
-
-    def clear_limits_blocked(self) -> LimitsStatusRecord:
-        status = self.get_limits_status()
-        if status.blocked or status.message:
-            status.blocked = False
-            status.message = None
+        with self._limits_status_lock:
+            status = self.get_limits_status()
+            status.available = True
+            status.blocked = True
+            status.message = message
             status.updated_at = self._now()
             self.save_limits_status(status)
-        return status
+            return status
+
+    def clear_limits_blocked(self) -> LimitsStatusRecord:
+        with self._limits_status_lock:
+            status = self.get_limits_status()
+            if status.blocked or status.message:
+                status.blocked = False
+                status.message = None
+                status.updated_at = self._now()
+                self.save_limits_status(status)
+            return status
 
     def _merge_limits_status(
         self,
         current: LimitsStatusRecord,
         snapshot: LimitsStatusRecord,
     ) -> LimitsStatusRecord:
-        snapshot.blocked = snapshot.blocked or current.blocked
-        if current.blocked and current.message:
+        snapshot_is_strictly_newer = snapshot.updated_at is not None and (
+            current.updated_at is None
+            or self._limits_timestamp(snapshot.updated_at)
+            > self._limits_timestamp(current.updated_at)
+        )
+        if current.blocked and not snapshot.blocked:
+            if snapshot_is_strictly_newer:
+                # A fresh authoritative probe can prove that a prior terminal
+                # usage-limit block has recovered.  Do not retain its stale
+                # display message.
+                snapshot.message = None
+            else:
+                # An old/equal snapshot cannot clear a block raised by a newer
+                # terminal failure.  Preserve the known-safe local message.
+                snapshot.blocked = True
+                snapshot.message = current.message
+                snapshot.updated_at = current.updated_at
+        elif current.blocked and current.message and not snapshot.message:
             snapshot.message = current.message
-        if current.updated_at and (
-            snapshot.updated_at is None or current.updated_at > snapshot.updated_at
-        ):
-            snapshot.updated_at = current.updated_at
+            if current.updated_at and (
+                snapshot.updated_at is None
+                or self._limits_timestamp(current.updated_at)
+                > self._limits_timestamp(snapshot.updated_at)
+            ):
+                snapshot.updated_at = current.updated_at
         return snapshot
+
+    @staticmethod
+    def _limits_timestamp(value: str) -> datetime:
+        """Parse one normalized UTC limits timestamp for ordering.
+
+        Older persisted snapshots used whole seconds while current App Server
+        probes include microseconds. Comparing their ISO strings directly
+        reverses same-second ordering because ``.`` sorts before ``Z``.
+        """
+
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return datetime.min.replace(tzinfo=UTC)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     def _limits_window(self, payload: object) -> LimitsWindowRecord | None:
         if not isinstance(payload, dict):

@@ -195,19 +195,18 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Signed App/Integration/panel `0.8.7` with Bridge `0.7.3` and Codex `0.144.5`
+Signed App/Integration/panel `0.8.8` with Bridge `0.7.3` and Codex `0.144.5`
 is installed on the target Home Assistant. ChatGPT Pro, projects, and history
 were retained; generated-image preview and transcript-only scrolling passed.
-The browser persisted a complete 3,276,457-byte PNG with the expected signature
-and SHA-256
+During the preceding `0.8.7` acceptance, the browser persisted a complete
+3,276,457-byte PNG with the expected signature and SHA-256
 `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
 Chrome's automation event did not report the blob download, so the persisted
-file is the acceptance evidence. Candidate `0.8.8` makes the authenticated
-**Prepare download** -> **Preparing...** -> **Save file** handoff visible on
-generic Files rows as well as generated-image and PDF controls. Unsaved prepared
-bytes expire after 60 seconds and are cleared on panel disconnect or context
-change; no Home Assistant credential enters a URL. Candidate publication and
-live generic-artifact acceptance remain separate gates.
+file is the acceptance evidence. Candidate `0.8.9` preserves partial long
+responses after a provider stream failure, reports a safe failure category,
+recovers stale or racing usage-limit state, and fixes compact chat-creation,
+refresh, and rail controls. Candidate publication and target-HA acceptance
+remain separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,

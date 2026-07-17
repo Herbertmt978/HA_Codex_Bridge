@@ -141,6 +141,72 @@ describe("panel run activity integration", () => {
     expect(messageList?.textContent).not.toContain("Partial answer");
   });
 
+  it("keeps a partial response and the safe failure reason visible after a failed run", () => {
+    const failure = "The Codex response stream disconnected before completion.";
+    const panel = createPanel({
+      status: "error",
+      activeRunId: null,
+      events: [
+        event(1, "message.delta", {
+          run_id: "run-activity",
+          item_id: "assistant-1",
+          text: "The first three lines were generated before the stream stopped.",
+        }),
+        event(2, "run.failed", {
+          run_id: "run-activity",
+          error: "Bearer secret /private/provider/path",
+          failure_type: "network.response_stream_disconnected",
+          blocked: false,
+        }),
+      ],
+    });
+    panel._activeThread.last_error = failure;
+    panel._threads[0].last_error = failure;
+    panel._render(true);
+
+    const messageList = panel.shadowRoot.getElementById("message-list");
+    const partial = messageList?.querySelector("article.message.assistant.partial");
+    expect(messageList?.getAttribute("aria-busy")).toBe("false");
+    expect(partial?.textContent).toContain("The first three lines were generated");
+    expect(partial?.getAttribute("aria-label")).toBe("Assistant partial response");
+    expect(panel.shadowRoot.getElementById("status-banner")?.textContent).toContain(failure);
+
+    panel.shadowRoot.getElementById("run-step-chip")?.click();
+    expect(panel.shadowRoot.getElementById("run-step-tooltip")?.textContent).toContain(failure);
+  });
+
+  it("never renders secret-bearing legacy thread or limits errors", () => {
+    const panel = createPanel({
+      status: "error",
+      events: [
+        event(1, "run.failed", {
+          run_id: "run-activity",
+          error: "Bearer secret /private/event/path",
+          failure_type: "provider.future_failure",
+        }),
+      ],
+    });
+    panel._activeThread.last_error = "Bearer secret /private/thread/path";
+    panel._threads[0].last_error = panel._activeThread.last_error;
+    panel._status.limits = {
+      available: true,
+      blocked: true,
+      message: "Bearer secret /private/limits/path",
+    };
+    panel._render(true);
+
+    const banner = panel.shadowRoot.getElementById("status-banner");
+    expect(banner?.textContent).toContain("Codex usage limits have been reached.");
+    expect(panel.shadowRoot.textContent).not.toContain("Bearer secret");
+    expect(panel.shadowRoot.textContent).not.toContain("/private/");
+
+    panel._status.limits.blocked = false;
+    panel._render(true);
+    expect(banner?.textContent).toContain("Codex could not complete the turn.");
+    expect(panel.shadowRoot.textContent).not.toContain("Bearer secret");
+    expect(panel.shadowRoot.textContent).not.toContain("/private/");
+  });
+
   it("does not show a stale preparing state for an idle thread with orphaned events", () => {
     const panel = createPanel({
       status: "idle",

@@ -4574,6 +4574,281 @@ def test_remote_failure_has_no_cli_fallback_and_never_persists_raw_cause(
 
 
 @pytest.mark.parametrize(
+    ("classification", "failure_type", "message", "blocked", "auth_required"),
+    [
+        (
+            "usageLimitExceeded",
+            "limits.exhausted",
+            "Codex usage limits have been reached.",
+            True,
+            False,
+        ),
+        (
+            "unauthorized",
+            "auth.expired",
+            "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+            False,
+            True,
+        ),
+        (
+            "contextWindowExceeded",
+            "context.window_exceeded",
+            "The Codex conversation context is full.",
+            False,
+            False,
+        ),
+        (
+            "sessionBudgetExceeded",
+            "session.budget_exhausted",
+            "The Codex session budget has been reached.",
+            False,
+            False,
+        ),
+        (
+            "serverOverloaded",
+            "service.overloaded",
+            "The Codex service is temporarily overloaded.",
+            False,
+            False,
+        ),
+        (
+            "sandboxError",
+            "sandbox.error",
+            "The Codex sandbox could not complete the turn.",
+            False,
+            False,
+        ),
+        (
+            "cyberPolicy",
+            "policy.cyber",
+            "Codex could not complete this request because of its safety policy.",
+            False,
+            False,
+        ),
+        (
+            "internalServerError",
+            "service.internal_error",
+            "The Codex service encountered an internal error.",
+            False,
+            False,
+        ),
+        (
+            "badRequest",
+            "request.invalid",
+            "Codex could not process this request.",
+            False,
+            False,
+        ),
+        (
+            "threadRollbackFailed",
+            "thread.rollback_failed",
+            "Codex could not restore the conversation after the turn failed.",
+            False,
+            False,
+        ),
+        ("other", "run.failed", "Codex could not complete the turn.", False, False),
+        (
+            {"httpConnectionFailed": {"httpStatusCode": 503}},
+            "network.http_connection_failed",
+            "Codex could not connect to the service.",
+            False,
+            False,
+        ),
+        (
+            {"responseStreamConnectionFailed": {"httpStatusCode": 503}},
+            "network.response_stream_connection_failed",
+            "Codex could not connect to the response stream.",
+            False,
+            False,
+        ),
+        (
+            {"responseStreamDisconnected": {"httpStatusCode": 503}},
+            "network.response_stream_disconnected",
+            "The Codex response stream disconnected before completion.",
+            False,
+            False,
+        ),
+        (
+            {"responseTooManyFailedAttempts": {"httpStatusCode": 503}},
+            "network.response_stream_retry_exhausted",
+            "Codex could not recover the response stream after several attempts.",
+            False,
+            False,
+        ),
+        (
+            {"activeTurnNotSteerable": {"turnKind": "review"}},
+            "turn.not_steerable",
+            "The active Codex turn cannot accept this follow-up yet.",
+            False,
+            False,
+        ),
+    ],
+)
+def test_turn_completed_failures_are_classified_without_persisting_provider_details(
+    tmp_path: Path,
+    classification: object,
+    failure_type: str,
+    message: str,
+    blocked: bool,
+    auth_required: bool,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Classify a failed turn",
+            client_request_id="classify-turn-failure",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        client.emit_notification(
+            "turn/completed",
+            {
+                "threadId": remote_thread_id,
+                "turn": {
+                    **_turn(turn_id, status="failed"),
+                    "error": {
+                        "message": "Bearer provider-secret /private/provider-error",
+                        "additionalDetails": "provider-secret /private/provider-error",
+                        "codexErrorInfo": classification,
+                    },
+                },
+            },
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "error")
+
+        record = storage.load_thread(thread.thread_id)
+        events = storage.list_thread_events(thread.thread_id)
+        failure = next(event for event in events if event.event_type == "run.failed")
+        assert failure.payload == {
+            "run_id": failure.payload["run_id"],
+            "error": message,
+            "failure_type": failure_type,
+            **({"blocked": True} if blocked else {}),
+            **({"auth_required": True} if auth_required else {}),
+        }
+        assert record.last_error == message
+        serialized = json.dumps(
+            {
+                "record": record.model_dump(mode="json"),
+                "events": [event.model_dump(mode="json") for event in events],
+            }
+        )
+        assert "provider-secret" not in serialized
+        assert "/private/provider-error" not in serialized
+        if blocked:
+            limits = storage.get_limits_status()
+            assert limits.blocked is True
+            assert limits.message == message
+        else:
+            assert storage.get_limits_status().blocked is False
+    finally:
+        broker.close()
+
+
+def test_large_completed_agent_message_is_preserved_and_does_not_fail_the_turn(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    response = " ".join(["word"] * 5_000)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Write a long response",
+            client_request_id="long-agent-message",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_000,
+                "item": {
+                    "id": "long-agent-message",
+                    "type": "agentMessage",
+                    "text": response,
+                },
+            },
+        )
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+
+        events = storage.list_thread_events(thread.thread_id)
+        completed = [event for event in events if event.event_type == "message.completed"]
+        assert len(completed) == 1
+        assert completed[0].payload["text"] == response
+        assert len(response.split()) == 5_000
+        assert not any(event.event_type == "run.failed" for event in events)
+    finally:
+        broker.close()
+
+
+def test_large_streamed_message_survives_a_terminal_response_stream_failure(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    response = " ".join(["word"] * 5_000)
+    chunks = (response[:5_000], response[5_000:15_000], response[15_000:])
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Write a long response that may disconnect while streaming",
+            client_request_id="large-streamed-failure",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        for chunk in chunks:
+            client.emit_notification(
+                "item/agentMessage/delta",
+                {
+                    "threadId": remote_thread_id,
+                    "turnId": turn_id,
+                    "itemId": "large-streamed-message",
+                    "delta": chunk,
+                },
+            )
+        client.emit_notification(
+            "turn/completed",
+            {
+                "threadId": remote_thread_id,
+                "turn": {
+                    **_turn(turn_id, status="failed"),
+                    "error": {
+                        "message": "Bearer provider-secret /private/stream-error",
+                        "codexErrorInfo": {
+                            "responseStreamDisconnected": {"httpStatusCode": 503}
+                        },
+                    },
+                },
+            },
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "error")
+
+        events = storage.list_thread_events(thread.thread_id)
+        deltas = [event for event in events if event.event_type == "message.delta"]
+        failure = next(event for event in events if event.event_type == "run.failed")
+        assert "".join(event.payload["text"] for event in deltas) == response
+        assert len("".join(event.payload["text"] for event in deltas).split()) == 5_000
+        assert failure.payload["error"] == (
+            "The Codex response stream disconnected before completion."
+        )
+        assert failure.payload["failure_type"] == "network.response_stream_disconnected"
+        serialized = json.dumps([event.model_dump(mode="json") for event in events])
+        assert "provider-secret" not in serialized
+        assert "/private/stream-error" not in serialized
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize(
     ("method", "params", "expected_kind"),
     [
         (

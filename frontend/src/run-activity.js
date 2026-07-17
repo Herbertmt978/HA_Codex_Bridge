@@ -386,6 +386,42 @@ function assistantState(events, runId) {
     : latest?.event_type === "message.completed" ? "complete" : "idle";
 }
 
+const SAFE_FAILURE_MESSAGES = Object.freeze({
+  "auth.expired": "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+  "context.window_exceeded": "The Codex conversation context is full.",
+  "limits.exhausted": "Codex usage limits have been reached.",
+  "model.unsupported": "The selected Codex model is not supported.",
+  "network.http_connection_failed": "Codex could not connect to the service.",
+  "network.response_stream_connection_failed": "Codex could not connect to the response stream.",
+  "network.response_stream_disconnected": "The Codex response stream disconnected before completion.",
+  "network.response_stream_retry_exhausted": "Codex could not recover the response stream after several attempts.",
+  "policy.cyber": "Codex could not complete this request because of its safety policy.",
+  "request.invalid": "Codex could not process this request.",
+  "run.failed": "Codex could not complete the turn.",
+  "run.orphaned": "Bridge restarted while this run was active.",
+  "sandbox.error": "The Codex sandbox could not complete the turn.",
+  "service.internal_error": "The Codex service encountered an internal error.",
+  "service.overloaded": "The Codex service is temporarily overloaded.",
+  "session.budget_exhausted": "The Codex session budget has been reached.",
+  "thread.rollback_failed": "Codex could not restore the conversation after the turn failed.",
+  "turn.not_steerable": "The active Codex turn cannot accept this follow-up yet.",
+});
+
+export function getSafeRunFailureMessage(event) {
+  if (event?.event_type !== "run.failed") return "";
+  const failureType = safeText(eventPayload(event).failure_type, 96);
+  return SAFE_FAILURE_MESSAGES[failureType] || SAFE_FAILURE_MESSAGES["run.failed"];
+}
+
+function runFailureMessage(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "run.failed" || !eventBelongsToRun(event, runId)) continue;
+    return getSafeRunFailureMessage(event);
+  }
+  return "";
+}
+
 function reasoningSummary(events, runId) {
   let latest = null;
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -488,9 +524,14 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
   const projectedAssistant = assistantState(scopedEvents, runId);
-  const assistant = projectedAssistant === "streaming" && state !== "running"
-    ? "idle"
+  const assistant = projectedAssistant === "streaming"
+    ? ["failed", "cancelled", "interrupted"].includes(state)
+      ? "partial"
+      : state === "running" ? "streaming" : "idle"
     : projectedAssistant;
+  const failureMessage = state === "failed"
+    ? runFailureMessage(scopedEvents, runId)
+    : "";
   const subagents = terminal
     ? clearTerminalSubagentActivity(latestSubagentSnapshot(scopedEvents, runId))
     : latestSubagentSnapshot(scopedEvents, runId);
@@ -518,6 +559,7 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     subagents,
     assistant,
     assistantState: assistant,
+    failureMessage,
   };
 }
 

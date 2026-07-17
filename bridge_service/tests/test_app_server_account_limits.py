@@ -316,6 +316,8 @@ def test_limits_probe_normalizes_primary_and_secondary_windows() -> None:
     }
     assert status.plan_type == "pro"
     assert status.updated_at is not None
+    assert status.updated_at.endswith("Z")
+    assert "." in status.updated_at
 
 
 def test_limits_probe_classifies_a_weekly_only_primary_window_as_secondary() -> None:
