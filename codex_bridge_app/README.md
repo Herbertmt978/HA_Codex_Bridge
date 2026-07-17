@@ -6,33 +6,34 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App/Integration: `0.8.8` (`amd64` only, experimental)
-- Latest installed target exercise: `0.8.8`
+- Published App/Integration: `0.8.9` (`amd64` only, experimental)
+- Latest installed target exercise: `0.8.9`
 - Historical fully target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.9`
-- Candidate Bridge: `0.7.4`
+- Candidate App/Integration: `0.8.10`
+- Candidate Bridge: `0.7.5`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Signed App/Integration `0.8.8` with Bridge `0.7.3` is installed on the target
+Signed App/Integration `0.8.9` with Bridge `0.7.4` is installed on the target
 Home Assistant. It retained ChatGPT Pro, projects, and history; generated-image
-preview and transcript-only scrolling passed. During the preceding `0.8.7`
+preview and transcript-only scrolling remained available. During the preceding `0.8.7`
 acceptance, the browser persisted a complete 3,276,457-byte generated PNG with
 the expected signature and SHA-256
 `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
-Candidate `0.8.9` preserves partial long responses after provider stream
-failures, exposes only safe failure categories, recovers stale usage-limit
-state, and fixes compact chat-creation and rail controls. Coordinated `0.7.5`
-remains the historical fully accepted baseline.
+Two live 5,000-word prompts on `0.8.9` stopped after the same short prefix: the
+partial response was preserved, but the long-response gate failed. Candidate
+`0.8.10` losslessly coalesces rapid text deltas before durable publication and
+distinguishes a typed runtime interruption from a provider failure.
+Coordinated `0.7.5` remains the historical fully accepted baseline.
 
-The `0.8.8` publication, signature, SBOM, and provenance workflow passed in
-[run 29597045103](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29597045103).
+The `0.8.9` publication, signature, SBOM, and provenance workflow passed in
+[run 29604382155](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29604382155).
 Its paired
-[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.8)
-points to exact main commit `63878bfcf23ed302d7d86e48b7353b4fd9e52288`.
+[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.9)
+points to exact main commit `2538a6de2f44e25a3a74e331287ca45d72547249`.
 The immutable image digest is
-`sha256:df29572aa4eb95a2000b0970ee670dee6d2cc007d90b3cbcb0c8a19cc4fdfa4f`,
-with attestation `35867567`.
+`sha256:083eafe2a76be930843c436a4106f2e73e1337715b2e47f71e1af04862c1ef31`,
+with attestation `35885291`.
 The following earlier bounded target smoke remains evidence for `0.8.3`, not a
 claim that `0.8.8` completed the broader target matrix:
 The App and Integration were installed on the target HA, retained ChatGPT Pro

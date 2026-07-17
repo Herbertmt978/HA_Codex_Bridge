@@ -43,10 +43,11 @@ workspace paths, or workspace secrets.
 
 The target-HA-accepted coordinated baseline is App/Integration `0.7.5` with
 Bridge `0.6.3` and Codex `0.144.5`. The latest signed and installed release is
-App/Integration/panel `0.8.8` with Bridge `0.7.3` and Codex `0.144.5`.
-Candidate `0.8.9` with Bridge `0.7.4` preserves partial output when a long
-provider stream fails, reports only a safe failure category, repairs stale or
-racing usage-limit state, and fixes compact chat-creation controls. Its signed
+App/Integration/panel `0.8.9` with Bridge `0.7.4` and Codex `0.144.5`.
+Its partial-output recovery worked, but two live 5,000-word prompts exposed a
+callback-backpressure restart after the same short prefix. Candidate `0.8.10`
+with Bridge `0.7.5` coalesces rapid text deltas before durable publication and
+reports a typed runtime interruption if Codex genuinely restarts. Signed
 publication and bounded target-HA acceptance remain pending. The historical
 0.8.0 live exercise passed install/pairing, ChatGPT Pro/history, versions,
 GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage

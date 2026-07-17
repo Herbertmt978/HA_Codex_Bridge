@@ -481,9 +481,9 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   const eventState = runEventState(scopedEvents, runId);
   let state = "idle";
   if (threadStatus === "queued") state = "queued";
-  else if (threadStatus === "error") state = "failed";
   else if (threadIsBusy && !activeRunId) state = "running";
   else if (TERMINAL_STATES.has(eventState)) state = eventState;
+  else if (threadStatus === "error") state = "failed";
   else if (threadIsBusy) state = "running";
   else if (eventState === "queued") state = "queued";
   else if (!hasThreadStatus && (activeRunId || eventState === "running")) state = "running";
@@ -532,6 +532,10 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   const failureMessage = state === "failed"
     ? runFailureMessage(scopedEvents, runId)
     : "";
+  const interruptionMessage = state === "interrupted"
+    ? "The Codex runtime restarted before the turn completed. Your partial response was preserved."
+    : "";
+  const attentionMessage = failureMessage || interruptionMessage;
   const subagents = terminal
     ? clearTerminalSubagentActivity(latestSubagentSnapshot(scopedEvents, runId))
     : latestSubagentSnapshot(scopedEvents, runId);
@@ -560,6 +564,7 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     assistant,
     assistantState: assistant,
     failureMessage,
+    attentionMessage,
   };
 }
 

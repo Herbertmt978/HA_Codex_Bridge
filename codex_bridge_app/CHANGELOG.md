@@ -2,6 +2,24 @@
 
 All notable App changes are recorded here.
 
+## 0.8.10
+
+- Coalesces adjacent Codex text deltas into ordered, bounded batches before the
+  Bridge's durable callback work, so one high-rate long response no longer
+  consumes one callback slot per text fragment and restarts after a short prefix.
+- Exercises the real App-server client and Runtime Broker callback path against
+  a scripted peer with 5,000 distinct streamed words, exact completed-message
+  reconstruction, one successful terminal event, and no generation change.
+- Keeps terminal notifications behind every accepted text batch and retains
+  the existing fail-closed overload path for genuinely heterogeneous callback
+  backlogs.
+- Shows a typed runtime restart as **Run interrupted**, preserves the partial
+  response, and provides a safe explanation instead of mislabelling the event
+  as a generic **Run failed** state.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.5` without changing its Integration API compatibility.
+
 ## 0.8.9
 
 - Keeps a long streamed assistant response visible as **Partial response** when
@@ -14,8 +32,9 @@ All notable App changes are recorded here.
 - Prevents the compact **Create chat** action from wrapping or clipping, quiets
   the refresh control, and removes native scrollbar arrow buttons from the chat
   rail.
-- Covers both completed and interrupted 5,000-word responses; the Bridge does
-  not impose a three-line or 5,000-word output ceiling.
+- Preserves completed and interrupted long-response payloads once delivered to
+  the Runtime Broker. Rapid token-delta callback backpressure was not yet
+  covered in this release and is corrected in `0.8.10`.
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
 - Bundles Bridge `0.7.4` without changing its Integration API compatibility.

@@ -195,7 +195,7 @@ def create_app(
                 client_version=(
                     resolved_build_info.app_version
                     or resolved_build_info.bridge_version
-                    or "0.7.4"
+                    or "0.7.5"
                 ),
                 # RuntimeBroker state transitions are ordered protocol events.
                 # One bounded callback worker preserves app-server FIFO order.

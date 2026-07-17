@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.9";
+const PANEL_VERSION = "0.8.10";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -6550,11 +6550,11 @@ class CodexBridgePanel extends HTMLElement {
     if (activity.busy) {
       return "Working";
     }
-    if (activity.state === "failed" || thread.status === "error") {
-      return "Needs attention";
-    }
     if (["cancelled", "interrupted"].includes(activity.state)) {
       return "Stopped";
+    }
+    if (activity.state === "failed" || thread.status === "error") {
+      return "Needs attention";
     }
     return "";
   }
@@ -7921,7 +7921,8 @@ class CodexBridgePanel extends HTMLElement {
       if (this._isResolvedAuthError(this._activeThread.last_error)) {
         return null;
       }
-      const safeFailure = this._runActivityForThread().failureMessage;
+      const activity = this._runActivityForThread();
+      const safeFailure = activity.attentionMessage;
       return {
         key: `thread:${this._selectedThreadId}:${safeFailure || "run.failed"}`,
         tone: "error",
@@ -8049,7 +8050,7 @@ class CodexBridgePanel extends HTMLElement {
       region.append(copy);
     }
 
-    if (hasStepDetails || activity.busy || activity.failureMessage) {
+    if (hasStepDetails || activity.busy || activity.attentionMessage) {
       const wrap = document.createElement("div");
       wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
       wrap.dataset.state = activity.state;
@@ -8077,7 +8078,15 @@ class CodexBridgePanel extends HTMLElement {
 
       const stepText = activity.step
         ? `Step ${activity.step.index} / ${activity.step.total}`
-        : activity.busy ? "Working" : activity.state === "failed" ? "Run failed" : "Run complete";
+        : activity.busy
+          ? "Working"
+          : activity.state === "failed"
+            ? "Run failed"
+            : activity.state === "interrupted"
+              ? "Run interrupted"
+              : activity.state === "cancelled"
+                ? "Run cancelled"
+                : "Run complete";
       chip.append(this._textElement("span", "run-step-label", stepText));
       if (files.changed) {
         chip.append(
@@ -8104,8 +8113,8 @@ class CodexBridgePanel extends HTMLElement {
       const tooltipTitle = this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity");
       tooltipTitle.id = `${tooltipId}-title`;
       tooltip.append(tooltipTitle);
-      if (activity.failureMessage) {
-        tooltip.append(this._textElement("span", "run-step-failure", activity.failureMessage));
+      if (activity.attentionMessage) {
+        tooltip.append(this._textElement("span", "run-step-failure", activity.attentionMessage));
       }
       const stages = Array.isArray(activity.stages) ? activity.stages.slice(0, 12) : [];
       if (stages.length) {
@@ -8582,10 +8591,15 @@ class CodexBridgePanel extends HTMLElement {
       });
     }
     if (this._activeThread) {
+      const activity = this._runActivityForThread(this._activeThread);
       items.push({
-        title: this._activeThread.status === "running" ? "Run in progress" : "Chat selected",
+        title: activity.busy
+          ? "Run in progress"
+          : activity.state === "failed"
+            ? "Chat needs attention"
+            : "Chat selected",
         meta: this._activeThread.title,
-        state: this._activeThread.status === "running" ? "active" : this._activeThread.status === "error" ? "error" : "complete",
+        state: activity.busy ? "active" : activity.state === "failed" ? "error" : "complete",
       });
     }
     if (this._pendingUploads) {
@@ -8606,6 +8620,7 @@ class CodexBridgePanel extends HTMLElement {
       .filter((event) =>
         [
           "run.failed",
+          "run.interrupted",
           "run.completed",
           "run.queued",
           "run.dequeued",
@@ -8629,6 +8644,13 @@ class CodexBridgePanel extends HTMLElement {
       return {
         title: "Run failed",
         meta: "Open the chat and retry when ready.",
+        state: "error",
+      };
+    }
+    if (event.event_type === "run.interrupted") {
+      return {
+        title: "Run interrupted",
+        meta: "The Codex runtime restarted; the partial response was preserved.",
         state: "error",
       };
     }
@@ -11720,7 +11742,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderActivityCenter();
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
-    if (["run.started", "run.completed", "run.failed", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
+    if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
       this._renderDirectSection();
       this._renderProjectList();
       this._renderArchivedSection();
@@ -11731,6 +11753,7 @@ class CodexBridgePanel extends HTMLElement {
         "run.started",
         "run.completed",
         "run.failed",
+        "run.interrupted",
         "run.cancelled",
         "run.queued",
         "run.dequeued",
