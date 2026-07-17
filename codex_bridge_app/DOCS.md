@@ -188,7 +188,8 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-App, Integration, and panel `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`
+The historical fully target-HA-accepted matrix, App, Integration, and panel
+`0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
 were installed and running on target Home Assistant `192.168.50.20` on
 2026-07-16. ChatGPT Pro remained connected. A fresh direct chat defaulted to
 `gpt-5.6-sol` with `low` thinking; the runtime catalogue exposed Sol, Terra,
@@ -204,26 +205,37 @@ with attestation `35670902`. This acceptance does not establish image-
 generation, plugin/marketplace, MCP, external-routing, cold-restore, or
 arbitrary prior-image rollback acceptance.
 
-App/Integration/panel `0.8.2` with Bridge `0.7.2` and Codex `0.144.5` is a
-candidate only until signed publication and target-HA validation complete. It
-restores operational aggregate workspace-scan failures to the typed, retryable
-local **Files** contract and adds a measured Codex-style wide-screen alignment
-pass with a theme-derived navigation plane, full-height context surface, and
-user-invoked standards-based Focus mode. Artifact-index and preview failures
-remain local to **Files** and cannot overwrite a valid reply or healthy chat
-state. Healthy component versions live under **Context -> System** while only
-runtime attention remains in the conversation. It must not represent a shared filesystem scan conflict as unsafe content
-in the selected chat or as a general connection outage. The 0.8.1 live exercise
-passed installation/pairing, ChatGPT Pro/history, versions, GPT-5.6 models,
-Max/Ultra, five-hour `Off`, native web-search source/stage history, and subagent
-stage history. PDF creation succeeded, but stale sandbox-test debris in the
-aggregate workspace root caused an operational scan failure that `0.8.1`
-misreported as HTTP 400; PDF acceptance remains failed/pending. Issue #43
-tracks the required secure App-owned browser worker; interactive Chromium
-remains deferred under
-[ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
-Target-Home-Assistant acceptance is bounded. The signed, live-accepted `0.6.5`
-matrix remains historical evidence only. App `0.6.1` is known-bad
+App/Integration/panel `0.8.3` with Bridge `0.7.2` and Codex `0.144.5` is the
+latest signed release. It was published from exact main commit
+`913c08d3393574f799baf0b47e78d31422c12fe1`; main CI `29544350904` and the
+signed App publication `29544351022` passed. The immutable App digest is
+`sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`,
+with
+[provenance attestation 35745773](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35745773)
+and the
+[0.8.3 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.3).
+
+On target Home Assistant `192.168.50.20`, App and Integration `0.8.3` reported
+Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects, and chat history
+were retained. The old `0.8.0 PDF acceptance` thread recovered from the false
+**Working / Preparing a response / Stop / steer** state to a truthful ready/
+Run completed state. A fresh GPT-5.6-Sol prompt completed. Sol, Terra, and Luna
+and advertised Max/Ultra reasoning levels were visible; five-hour usage showed
+`Off`; and the Malta prompt exposed `Searching the web` and `Using web search`
+before returning live conditions. No false global **Connection issue** remained.
+
+The release restores operational aggregate workspace-scan failures to the
+typed, retryable local **Files** contract and adds the measured Codex-style
+wide-screen alignment pass. Artifact-index and preview failures remain local to
+**Files** and cannot overwrite a valid reply or healthy chat state. The current
+PDF artifact scan still returns the typed `409` local Files conflict, so
+PDF/archive/restore acceptance is not claimed. External Nabu Casa/Cloudflare
+routing, cold restore, arbitrary image rollback, and the secure App-owned
+browser worker remain unproven. A manual paired HACS release gap was found; the
+paired-release workflow is now policy-tested, while its first live automatic
+exercise remains the next App release.
+
+The signed, live-accepted `0.6.5` matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly
 `[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
 bounded supplemental roots beneath the workspace. App `0.6.2` validates

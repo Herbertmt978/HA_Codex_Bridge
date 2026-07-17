@@ -95,3 +95,57 @@ jobs:
       contents: read
       id-token: write # Let the reusable builder sign images and SBOMs.
       packages: write # Let the reusable builder publish GHCR objects.
+
+  release-integration:
+    name: Publish the paired Integration release
+    needs: [validate, publish]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Create only the verified, exact-main Integration tag/release.
+    steps:
+      - name: Check out the exact published main commit without credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.expected_sha }}
+
+      - name: Require the checkout to remain the published App source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.validate.outputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Read the canonical synchronized release version
+        id: version
+        shell: bash
+        run: |
+          version="$(python - <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path("codex_bridge_app/config.yaml").read_text(encoding="utf-8")
+          matches = re.findall(r'(?m)^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$', text)
+          if len(matches) != 1:
+              raise SystemExit("config.yaml must contain one stable App version")
+          print(matches[0])
+          PY
+          )"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or verify the exact paired Integration release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ needs.validate.outputs.expected_sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          python scripts/publish_integration_release.py

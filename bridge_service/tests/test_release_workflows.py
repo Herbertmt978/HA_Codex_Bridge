@@ -294,7 +294,7 @@ def test_workflow_policy_rejects_mutated_automation_update_pull_requests() -> No
         assert path_pattern in gate_script
 
 
-def test_release_validates_main_sha_and_version_without_hacs_release_tag() -> None:
+def test_release_publishes_an_idempotent_exact_main_integration_release() -> None:
     document, source = _workflow("release")
     push = document["on"]["push"]
     assert push["paths"] == ["codex_bridge_app/config.yaml"], (
@@ -308,8 +308,63 @@ def test_release_validates_main_sha_and_version_without_hacs_release_tag() -> No
         or "commits/main" in normalized
     ), "release must bind publication to the exact main commit SHA"
     assert "config.yaml" in normalized and "version" in normalized
-    assert not re.search(r"softprops/action-gh-release|gh\s+release\s+create", normalized)
-    assert not re.search(r"(?:^|\n)\s*git\s+tag\b", normalized)
+    paired_release = document["jobs"]["release-integration"]
+    assert paired_release["needs"] == ["validate", "publish"], (
+        "the Integration tag/release must wait for the signed manifest and its "
+        "provenance/SBOM verification"
+    )
+    assert paired_release["permissions"] == {"contents": "write"}
+    assert all(
+        job.get("permissions") != {"contents": "write"}
+        for name, job in document["jobs"].items()
+        if name != "release-integration"
+    ), "contents: write must be granted only after App publication succeeds"
+    paired_condition = str(paired_release["if"])
+    assert "refs/heads/main" in paired_condition
+
+    paired_steps = paired_release["steps"]
+    checkout = next(
+        step
+        for step in paired_steps
+        if isinstance(step, dict) and str(step.get("uses", "")).startswith("actions/checkout@")
+    )
+    assert checkout["with"] == {
+        "persist-credentials": False,
+        "ref": "${{ needs.validate.outputs.expected_sha }}",
+    }
+
+    current_main_source = str(
+        next(
+            step["run"]
+            for step in paired_steps
+            if isinstance(step, dict)
+            and step.get("name") == "Require the checkout to remain the published App source"
+        )
+    )
+    assert "git rev-parse HEAD" in current_main_source
+    assert "git ls-remote" not in current_main_source, (
+        "a later main advance must not strand an already-published immutable App"
+    )
+
+    paired_source = str(
+        next(
+            step["run"]
+            for step in paired_steps
+            if isinstance(step, dict)
+            and step.get("name") == "Create or verify the exact paired Integration release"
+        )
+    )
+    assert "scripts/publish_integration_release.py" in paired_source
+    assert "GITHUB_API_URL" in source
+    helper = ROOT / "scripts" / "publish_integration_release.py"
+    helper_source = helper.read_text(encoding="utf-8").lower()
+    assert "urllib.request" in helper_source
+    assert "refs/tags/" in helper_source
+    assert "target_commitish" in helper_source
+    assert "github_run_id" in helper_source
+    assert "draft" in helper_source and "prerelease" in helper_source
+    assert "max_tag_depth" in helper_source
+    assert "git ls-remote" not in paired_source
 
 
 def test_ci_uses_the_hash_verified_official_actionlint_binary() -> None:

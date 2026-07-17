@@ -545,11 +545,16 @@ remains the latest fully accepted release.
 | Local verification | Clean Linux/Python 3.14 Bridge run: 1,450 passed and 13 skipped. Frontend: lint passed, 272 unit tests passed, generated bundle rebuilt, and 16/16 Playwright flows passed; release projections, Codex lock, Python compilation, Ruff, and diff checks passed. Independent re-review found no remaining release blocker in the requested scope. |
 | Bounded target smoke | Coordinated versions, retained ChatGPT/history, and absence of the false global connection banner passed after the App restart. PDF indexing/archive/preview, cleanup of known acceptance debris, Focus mode, cold restore, and arbitrary previous-image recovery were not re-proved. |
 
-## 0.8.3 candidate: Codex desktop parity and local secondary failures
+## 0.8.3 signed publication and bounded target-HA acceptance
 
-App, Integration, and panel `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5` are a
-candidate only. No signed publication, image digest, or target-acceptance result
-is claimed before CI, release, and live validation complete.
+App, Integration, and panel `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5` were
+published from exact main commit `913c08d3393574f799baf0b47e78d31422c12fe1`.
+Main CI `29544350904` and the signed App publication `29544351022` passed. The
+immutable App digest is
+`sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`;
+[provenance attestation 35745773](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35745773)
+accompanies the
+[0.8.3 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.3).
 
 | Evidence or acceptance item | Status |
 | --- | --- |
@@ -561,4 +566,10 @@ is claimed before CI, release, and live validation complete.
 | Responsive and accessible behavior | Mobile activity details expand inside the viewport; compact-desktop Activity uses a focus-contained drawer; keyboard tabs, disclosures, touch targets, reduced motion, and one-to-one tab/panel semantics are retained. Exact 880/881/1120/1121 boundaries are covered. |
 | Local frontend verification | ESLint passed, 294/294 unit tests passed, the generated bundle rebuilt, and 17/17 Playwright flows passed including hostile-content containment, PDF preview, auth, approvals, retries, compact-width geometry, exact responsive boundaries, mobile bounds, and axe checks. |
 | Local Bridge verification | The complete Bridge matrix passed with 1267 tests and 200 platform-gated skips. Focused recovery coverage proves missing-checkpoint cleanup, exact re-projection of a genuinely owned nonterminal run, and startup isolation from an unrelated malformed thread record. Ruff and diff checks also passed. |
-| Required target gate | Publish the immutable image, update both target components, then prove versions, retained account/history, normal prompt completion, no false connection banner after secondary file failure, Activity/card geometry, compact composer, mobile bounds, models/limits/search, and bounded PDF/archive behavior. |
+| Target versions and retained state | On Home Assistant `192.168.50.20`, App and Integration `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects, and chat history remained present. |
+| Recovered stale run | The old `0.8.0 PDF acceptance` thread recovered from the false **Working / Preparing a response / Stop / steer** state to a truthful ready/Run completed state. |
+| Normal prompt and catalogue | A fresh GPT-5.6-Sol prompt completed. Sol, Terra, and Luna plus advertised Max/Ultra reasoning levels were visible. The compact composer rendered five-hour usage as `Off` and showed the weekly window. |
+| Native web search | The Malta weather prompt exposed `Searching the web` and `Using web search` before returning live conditions. Shell networking remained disabled. |
+| Connection-state truthfulness | No false global **Connection issue** remained after the successful run, including after the secondary Files failure path. |
+| Open acceptance boundaries | The current PDF artifact scan still returns the typed `409` local Files conflict, so PDF/archive/restore acceptance is not claimed. External Nabu Casa/Cloudflare routing, cold restore, arbitrary image rollback, and the secure App-owned browser worker remain unproven. |
+| Release workflow follow-up | A manual paired HACS release gap was discovered. The paired-release workflow now waits for signed App publication and is policy-tested; its first live automatic exercise remains the next App release and is not claimed as part of this acceptance. |
