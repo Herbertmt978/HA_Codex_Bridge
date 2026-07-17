@@ -222,8 +222,8 @@ with attestation `35670902`. This acceptance does not establish image-
 generation, plugin/marketplace, MCP, external-routing, cold-restore, or
 arbitrary prior-image rollback acceptance.
 
-App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex `0.144.5` is the
-latest signed release. It was published from exact main commit
+Historical App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
+`0.144.5` was the previous signed release. It was published from exact main commit
 `ccc698e96a2142d46ba96fb1419857461efe81ca`; signed App publication
 `29571157282` passed and the paired
 [0.8.4 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.4)
