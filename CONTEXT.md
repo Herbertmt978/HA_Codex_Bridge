@@ -29,22 +29,28 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.4`, Bridge
+- Latest signed coordinated release: App/Integration/panel `0.8.5`, Bridge
   `0.7.3`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29571157282` and the paired Integration release were produced
-  from exact main commit `ccc698e96a2142d46ba96fb1419857461efe81ca`.
+  publication `29584316727` and the paired Integration release were produced
+  from exact main commit `ccbfbfd67a9e12a8ac26710be5554014b2cc4ee9`.
   Latest bounded target smoke remains `0.8.3`; it retained ChatGPT Pro/history,
   recovered stale run state, completed a GPT-5.6-Sol prompt, and exposed native
   live-search activity without a false global connection error.
   The typed PDF Files `409` now has a locally covered repair, but real target
   list/archive/preview/download acceptance remains pending. External Nabu
-  Casa/Cloudflare routing, image generation, arbitrary previous-image rollback,
-  and the secure App-owned browser worker remain explicitly unaccepted.
-- Candidate App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex
-  `0.144.5` makes generated-image preview and authenticated browser download
-  explicit, constrains scrolling to the transcript, and removes unsupported
-  local `$imagegen` guidance. Frontend unit and browser gates pass locally. It
-  has no signed publication or target-HA acceptance yet.
+  Casa/Cloudflare routing, arbitrary previous-image rollback, and the secure
+  App-owned browser worker remain explicitly unaccepted.
+- The target HA now runs App/Integration/panel `0.8.5` with Bridge `0.7.3` and
+  Codex `0.144.5`. ChatGPT Pro, projects, and history survived both updates;
+  generated-image preview works and the HA document is fixed while only the
+  transcript scrolls. The live browser download probe received no native
+  download event, so `0.8.5` download acceptance failed.
+- Candidate App/Integration/panel `0.8.6` retains the authenticated Home
+  Assistant artifact fetch and hardens the final browser handoff by attaching
+  the hidden anchor during the click and deferring blob-URL revocation. Local
+  unit and Playwright coverage includes delayed multi-megabyte generated-image
+  bytes and filename integrity; signed publication and target download
+  acceptance remain pending.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF

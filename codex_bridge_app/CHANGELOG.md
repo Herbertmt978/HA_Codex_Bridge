@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 0.8.6
+
+- Makes artifact downloads browser-safe by handing the fetched blob to an
+  attached, hidden download anchor and revoking its object URL only after the
+  browser has accepted the click.
+- Covers delayed multi-megabyte generated-image downloads, filename and byte
+  integrity, failed-fetch behavior, anchor cleanup, and deferred URL cleanup.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.3` without changing its Integration API compatibility.
+
 ## 0.8.5
 
 - Makes generated-image **Open preview** reliably reveal the authenticated
