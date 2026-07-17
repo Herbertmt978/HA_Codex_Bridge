@@ -29,11 +29,13 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.5`, Bridge
+- Latest signed coordinated release: App/Integration/panel `0.8.6`, Bridge
   `0.7.3`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29584316727` and the paired Integration release were produced
-  from exact main commit `ccbfbfd67a9e12a8ac26710be5554014b2cc4ee9`.
-  Latest bounded target smoke remains `0.8.3`; it retained ChatGPT Pro/history,
+  publication `29587857673` and the paired Integration release were produced
+  from exact main commit `e94ca852bb4b38cfb262b71992fbf4e42aa0b0d1`.
+  Latest target exercise is `0.8.6`; it retained ChatGPT Pro/history, preview,
+  and transcript-only scrolling, while its live download probe failed. The
+  last bounded prompt-path smoke remains `0.8.3`; it retained ChatGPT Pro/history,
   recovered stale run state, completed a GPT-5.6-Sol prompt, and exposed native
   live-search activity without a false global connection error.
   The typed PDF Files `409` now has a locally covered repair, but real target
@@ -45,12 +47,15 @@ to the App or Bridge.
   generated-image preview works and the HA document is fixed while only the
   transcript scrolls. The live browser download probe received no native
   download event, so `0.8.5` download acceptance failed.
-- Candidate App/Integration/panel `0.8.6` retains the authenticated Home
-  Assistant artifact fetch and hardens the final browser handoff by attaching
-  the hidden anchor during the click and deferring blob-URL revocation. Local
-  unit and Playwright coverage includes delayed multi-megabyte generated-image
-  bytes and filename integrity; signed publication and target download
-  acceptance remain pending.
+- Signed App/Integration/panel `0.8.6` is now installed with Bridge `0.7.3` and
+  Codex `0.144.5`; ChatGPT Pro, history, preview, and transcript-only scrolling
+  remained healthy. Real Chrome still did not emit or persist the download.
+- Candidate `0.8.7` keeps complete authenticated preview bytes and performs the
+  common generated-image download handoff synchronously during the user's
+  click. Its temporary anchor and blob URL remain attached for a bounded
+  60-second grace period; unpreviewed outputs use an explicit authenticated
+  **Prepare download** then synchronous **Save file** flow, and credentials
+  never enter a URL.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF

@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 0.8.7
+
+- Reuses a complete, authenticated artifact preview for the browser download
+  handoff, keeping generated-image downloads inside the user's active click.
+- Retains each temporary download anchor and blob URL together for a bounded
+  60-second grace period before removing and revoking them.
+- Expires an unsaved prepared blob after 60 seconds and clears it immediately
+  when the panel disconnects or its chat/file context changes.
+- Gives artifacts that were not safely cached in full an explicit two-stage
+  **Prepare download** then **Save file** flow, so the final browser handoff is
+  also synchronous without putting Home Assistant credentials in a URL.
+- Covers cached user-activation downloads, authenticated delayed downloads,
+  filename and byte integrity, and bounded cleanup in unit and browser tests.
+- Bundles the Sigstore-verified Codex runtime `0.144.5` and Bridge `0.7.3`.
+
 ## 0.8.6
 
 - Makes artifact downloads browser-safe by handing the fetched blob to an

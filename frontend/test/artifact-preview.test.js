@@ -57,7 +57,11 @@ describe("artifact previews", () => {
     await panel._loadArtifactPreview(panel._selectedArtifactId);
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    expect(panel._artifactPreview).toMatchObject({ kind: "text", text: "preview text" });
+    expect(panel._artifactPreview).toMatchObject({
+      kind: "text",
+      text: "preview text",
+      blob: expect.any(Blob),
+    });
   });
 
   it("settles a failed preview locally and offers a working retry", async () => {
@@ -339,14 +343,19 @@ describe("artifact previews", () => {
       "/api/codex_bridge/threads/thread_safe/artifacts/art_safe",
       { headers: {} }
     );
+    expect(clickSpy).not.toHaveBeenCalled();
+
+    await panel._downloadArtifact(artifact.artifact_id);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
   });
 
-  it("hands downloads to a connected anchor before revoking the blob URL", async () => {
+  it("prepares an uncached download before handing it to a connected anchor", async () => {
     vi.useFakeTimers();
     const urls = previewUrlStubs();
     const panel = createPanel(createArtifact({ filename: "generated-tree.png" }));
-    vi.spyOn(window, "fetch").mockResolvedValue(
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
       new Response("download", {
         status: 200,
         headers: { "Content-Disposition": 'attachment; filename="generated-tree.png"' },
@@ -361,16 +370,246 @@ describe("artifact previews", () => {
 
     await panel._downloadArtifact(panel._selectedArtifactId);
 
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(panel._preparedArtifactDownload).toMatchObject({
+      artifactId: panel._selectedArtifactId,
+      filename: "generated-tree.png",
+    });
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
     expect(clickSpy).toHaveBeenCalledOnce();
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._preparedArtifactDownloadTimer).toBeNull();
     expect(connectedAtClick).toBe(true);
     expect(downloadAtClick).toBe("generated-tree.png");
-    expect(document.querySelector('a[download="generated-tree.png"]')).toBeNull();
+    expect(document.querySelector('a[download="generated-tree.png"]')).not.toBeNull();
     expect(urls.revokeObjectUrl).not.toHaveBeenCalled();
 
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(document.querySelector('a[download="generated-tree.png"]')).not.toBeNull();
+    expect(urls.revokeObjectUrl).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(document.querySelector('a[download="generated-tree.png"]')).toBeNull();
     expect(urls.revokeObjectUrl).toHaveBeenCalledWith(
       `blob:${window.location.origin}/artifact-preview`
     );
+  });
+
+  it("expires a prepared download that is not saved", async () => {
+    vi.useFakeTimers();
+    previewUrlStubs();
+    const panel = createPanel(createArtifact({ filename: "expiring.txt" }));
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("download", {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="expiring.txt"' },
+      })
+    );
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(panel._preparedArtifactDownload).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(panel._preparedArtifactDownload).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._preparedArtifactDownloadTimer).toBeNull();
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
+  it("discards a prepared download when the panel disconnects", async () => {
+    vi.useFakeTimers();
+    previewUrlStubs();
+    const panel = createPanel(createArtifact({ filename: "disconnect.txt" }));
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("download", {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="disconnect.txt"' },
+      })
+    );
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+    expect(panel._preparedArtifactDownload).not.toBeNull();
+
+    panel.remove();
+
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._preparedArtifactDownloadTimer).toBeNull();
+  });
+
+  it("does not retain an in-flight download after the panel disconnects", async () => {
+    const panel = createPanel(createArtifact({ filename: "in-flight.txt" }));
+    let resolveResponse;
+    vi.spyOn(window, "fetch").mockReturnValue(new Promise((resolve) => {
+      resolveResponse = resolve;
+    }));
+
+    const preparing = panel._downloadArtifact(panel._selectedArtifactId);
+    panel.remove();
+    resolveResponse(new Response("in-flight file", {
+      status: 200,
+      headers: { "Content-Disposition": 'attachment; filename="in-flight.txt"' },
+    }));
+    await preparing;
+
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._preparedArtifactDownloadTimer).toBeNull();
+    expect(panel._artifactDownloadPendingId).toBeNull();
+  });
+
+  it("downloads a complete cached preview synchronously without fetching it again", async () => {
+    vi.useFakeTimers();
+    const urls = previewUrlStubs();
+    const artifact = createArtifact({
+      filename: "generated-tree.png",
+      mime_type: "image/png",
+      size_bytes: 12,
+      source: "generated_image",
+    });
+    const panel = createPanel(artifact);
+    panel._artifactPreview = {
+      artifactId: artifact.artifact_id,
+      filename: artifact.filename,
+      kind: "image",
+      blob: new Blob([new Uint8Array(12)], { type: "image/png" }),
+    };
+    const fetchSpy = vi.spyOn(window, "fetch");
+    let connectedAtClick = null;
+    let activeAtClick = null;
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+      connectedAtClick = this.isConnected;
+      activeAtClick = navigator.userActivation?.isActive ?? null;
+    });
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(connectedAtClick).toBe(true);
+    expect(activeAtClick).not.toBe(false);
+    expect(document.querySelector('a[download="generated-tree.png"]')).not.toBeNull();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(document.querySelector('a[download="generated-tree.png"]')).toBeNull();
+    expect(urls.revokeObjectUrl).toHaveBeenCalledOnce();
+  });
+
+  it("fetches the full artifact instead of downloading an incomplete cached preview", async () => {
+    vi.useFakeTimers();
+    previewUrlStubs();
+    const artifact = createArtifact({ filename: "bounded.txt", size_bytes: 12 });
+    const panel = createPanel(artifact);
+    panel._artifactPreview = {
+      artifactId: artifact.artifact_id,
+      filename: artifact.filename,
+      kind: "text",
+      blob: new Blob(["short"], { type: "text/plain" }),
+    };
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("complete file", {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="bounded.txt"' },
+      })
+    );
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(document.querySelector('a[download="bounded.txt"]')).toBeNull();
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(document.querySelector('a[download="bounded.txt"]')).not.toBeNull();
+  });
+
+  it("discards a prepared download when the selected chat changes during fetch", async () => {
+    const panel = createPanel(createArtifact({ filename: "old-chat.txt" }));
+    let resolveResponse;
+    vi.spyOn(window, "fetch").mockReturnValue(new Promise((resolve) => {
+      resolveResponse = resolve;
+    }));
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    const preparing = panel._downloadArtifact(panel._selectedArtifactId);
+    panel._selectedThreadId = "thread_other";
+    resolveResponse(new Response("old chat file", {
+      status: 200,
+      headers: { "Content-Disposition": 'attachment; filename="old-chat.txt"' },
+    }));
+    await preparing;
+
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
+  it("cannot revive an in-flight download after switching away and back to a chat", async () => {
+    const panel = createPanel(createArtifact({ filename: "old-chat.txt" }));
+    let resolveResponse;
+    vi.spyOn(window, "fetch").mockReturnValue(new Promise((resolve) => {
+      resolveResponse = resolve;
+    }));
+
+    const preparing = panel._downloadArtifact(panel._selectedArtifactId);
+    panel._setSelectedThreadId("thread_other");
+    panel._setSelectedThreadId("thread_safe");
+    resolveResponse(new Response("old chat file", {
+      status: 200,
+      headers: { "Content-Disposition": 'attachment; filename="old-chat.txt"' },
+    }));
+    await preparing;
+
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._artifactDownloadPendingId).toBeNull();
+  });
+
+  it("does not surface a stale download error after switching chats", async () => {
+    const panel = createPanel(createArtifact({ filename: "old-chat.txt" }));
+    let rejectResponse;
+    vi.spyOn(window, "fetch").mockReturnValue(new Promise((_, reject) => {
+      rejectResponse = reject;
+    }));
+
+    const preparing = panel._downloadArtifact(panel._selectedArtifactId);
+    panel._setSelectedThreadId("thread_other");
+    rejectResponse(new Error("old chat download failed"));
+    await preparing;
+
+    expect(panel._error).toBe("");
+    expect(panel._artifactDownloadPendingId).toBeNull();
+  });
+
+  it("clears a prepared download when another artifact is selected", async () => {
+    vi.useFakeTimers();
+    previewUrlStubs();
+    const first = createArtifact({ filename: "first.txt" });
+    const second = createArtifact({
+      artifact_id: "art_second",
+      filename: "second.bin",
+      mime_type: "application/octet-stream",
+      size_bytes: 12,
+    });
+    const panel = createPanel(first);
+    panel._artifacts = [first, second];
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("first output", {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="first.txt"' },
+      })
+    );
+
+    await panel._downloadArtifact(first.artifact_id);
+    expect(panel._preparedArtifactDownload).not.toBeNull();
+
+    await panel._selectArtifact(second.artifact_id);
+
+    expect(panel._selectedArtifactId).toBe(second.artifact_id);
+    expect(panel._preparedArtifactDownload).toBeNull();
+    expect(panel._preparedArtifactDownloadTimer).toBeNull();
   });
 
   it("does not allocate a browser download when the authenticated fetch fails", async () => {
@@ -554,7 +793,7 @@ describe("artifact previews", () => {
 
     const download = card.querySelector('[data-action="download-artifact"]');
     expect(download).not.toBeNull();
-    expect(download.getAttribute("aria-label")).toContain("Download");
+    expect(download.getAttribute("aria-label")).toContain("Prepare download");
 
     download.click();
     expect(downloadArtifact).toHaveBeenCalledWith(artifact.artifact_id);

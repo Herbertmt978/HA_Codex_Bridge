@@ -56,15 +56,15 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed release:** App, Integration, and panel `0.8.5`, Bridge
+- **Latest signed release:** App, Integration, and panel `0.8.6`, Bridge
   `0.7.3`, and Codex `0.144.5` were published from exact main commit
-  `ccbfbfd67a9e12a8ac26710be5554014b2cc4ee9`. The signed App publication
-  [run 29584316727](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29584316727)
+  `e94ca852bb4b38cfb262b71992fbf4e42aa0b0d1`. The signed App publication
+  [run 29587857673](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29587857673)
   and paired
-  [0.8.5 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.5)
+  [0.8.6 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.6)
   passed. This is publication evidence, not a claim that the full target-HA
   acceptance matrix was completed.
-- **Latest bounded target-HA smoke:** On `192.168.50.20`, App and Integration
+- **Last prompt-path target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
   recovered from a false **Working / Preparing a response / Stop / steer**
@@ -79,12 +79,17 @@ App and Bridge remain private to Home Assistant.
   Files; the HA document stayed fixed while the transcript remained the only
   scrollport. The live browser download probe did not receive a native download
   event, so download acceptance remains failed for `0.8.5`.
-- **0.8.6 candidate:** keeps the authenticated artifact fetch and hardens only
-  the final browser handoff: the hidden download anchor is attached during the
-  click and its blob URL is revoked on the next task. Unit and Playwright
-  coverage includes delayed multi-megabyte generated-image bytes and filename
-  integrity; signed publication and target download acceptance remain separate
-  gates.
+- **0.8.6 target result:** the coordinated signed release installed cleanly and
+  retained ChatGPT Pro, history, generated-image preview, and transcript-only
+  scrolling. Its next-task blob cleanup still raced real Chrome: the browser
+  emitted no download and persisted no file.
+- **0.8.7 candidate:** the signed `0.8.6` release was installed successfully and
+  preview remained healthy, but real Chrome still neither emitted a download
+  nor wrote the generated image. This follow-up reuses a complete authenticated
+  preview synchronously inside the user's click and keeps the temporary anchor
+  and blob URL alive together for 60 seconds. Unpreviewed artifacts use an
+  explicit **Prepare download** then **Save file** flow, keeping their final
+  handoff synchronous too; no credential is placed in a URL.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,
