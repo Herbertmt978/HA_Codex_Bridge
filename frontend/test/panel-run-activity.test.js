@@ -175,6 +175,40 @@ describe("panel run activity integration", () => {
     expect(panel.shadowRoot.getElementById("run-step-tooltip")?.textContent).toContain(failure);
   });
 
+  it("shows a runtime interruption instead of mislabelling it as a failed response", () => {
+    const interruption = "The Codex runtime restarted before the turn completed. Your partial response was preserved.";
+    const panel = createPanel({
+      status: "error",
+      activeRunId: null,
+      events: [
+        event(1, "message.delta", {
+          run_id: "run-activity",
+          item_id: "assistant-1",
+          text: "The first paragraph was generated before the runtime restarted.",
+        }),
+        event(2, "run.interrupted", {
+          run_id: "run-activity",
+          message: "private restart detail",
+        }),
+      ],
+    });
+    panel._activeThread.last_error = "private runtime detail";
+    panel._threads[0].last_error = panel._activeThread.last_error;
+    panel._render(true);
+
+    expect(panel.shadowRoot.getElementById("thread-status-text")?.textContent).toBe("Stopped");
+    expect(panel.shadowRoot.querySelector("article.message.assistant.partial")?.textContent).toContain(
+      "The first paragraph was generated",
+    );
+    expect(panel.shadowRoot.getElementById("status-banner")?.textContent).toContain(interruption);
+    expect(panel.shadowRoot.getElementById("status-banner")?.textContent).not.toContain(
+      "The latest Codex run did not complete",
+    );
+    expect(panel.shadowRoot.getElementById("run-activity")?.textContent).toContain("Run interrupted");
+    expect(panel.shadowRoot.textContent).not.toContain("private restart detail");
+    expect(panel.shadowRoot.textContent).not.toContain("private runtime detail");
+  });
+
   it("never renders secret-bearing legacy thread or limits errors", () => {
     const panel = createPanel({
       status: "error",
@@ -238,6 +272,30 @@ describe("panel run activity integration", () => {
 
     expect(activitySpy).toHaveBeenCalledTimes(1);
     expect(panel.shadowRoot.querySelector('[data-section="background"]')?.textContent).toContain("Working");
+  });
+
+  it("settles every live surface when a running turn is interrupted", () => {
+    const panel = createPanel({
+      events: [event(1, "run.started", { run_id: "run-activity" })],
+    });
+    panel._render(true);
+    const railSpy = vi.spyOn(panel, "_renderDirectSection");
+    const progressSpy = vi.spyOn(panel, "_renderProgress");
+    const refreshSpy = vi.spyOn(panel, "_scheduleLiveRefresh");
+
+    panel._handleSubscribedEvent("thread-activity", event(2, "run.interrupted", {
+      run_id: "run-activity",
+      message: "private runtime detail",
+    }));
+
+    expect(railSpy).toHaveBeenCalledTimes(1);
+    expect(progressSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith("thread-activity");
+    expect(panel.shadowRoot.getElementById("run-activity")?.textContent).toContain("Run interrupted");
+    expect(panel.shadowRoot.getElementById("message-list")?.getAttribute("aria-busy")).toBe("false");
+    expect(panel.shadowRoot.getElementById("progress-list")?.textContent).toContain("Run interrupted");
+    expect(panel.shadowRoot.getElementById("progress-list")?.textContent).not.toContain("Run in progress");
+    expect(panel.shadowRoot.textContent).not.toContain("private runtime detail");
   });
 
   it("counts sources only for the run currently represented by Activity", () => {

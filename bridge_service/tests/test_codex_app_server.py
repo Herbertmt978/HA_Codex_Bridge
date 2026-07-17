@@ -20,8 +20,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
-from codex_bridge_service.models import RuntimeProfile
-
+from codex_bridge_service.models import RunMode, RuntimeProfile
+from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.runtime_broker import RuntimeBroker
+from codex_bridge_service.runtime_gate import RuntimeGate
+from codex_bridge_service.storage import BridgeStorage
 
 FAKE_APP_SERVER = Path(__file__).with_name("fakes") / "fake_app_server.py"
 ROOT = Path(__file__).resolve().parents[2]
@@ -253,7 +256,9 @@ def test_experimental_api_is_opt_in_for_a_proven_client_owned_tool(
         client.close()
 
 
-def test_experimental_api_flag_requires_an_exact_boolean(fake_server: FakeAppServer) -> None:
+def test_experimental_api_flag_requires_an_exact_boolean(
+    fake_server: FakeAppServer,
+) -> None:
     module = _load_module()
 
     with pytest.raises(ValueError, match="experimental API enabled state"):
@@ -316,11 +321,14 @@ def test_failed_mcp_activation_restores_the_empty_config_override(
         module,
         fake_server,
         enable_mcp=True,
-        initialize_timeout_seconds=0.2,
+        initialize_timeout_seconds=2.0,
     )
 
     try:
         client.start()
+        # Keep the deliberate activation stall short without making a cold
+        # Windows subprocess launch share the same brittle deadline.
+        client.initialize_timeout_seconds = 0.2
         with pytest.raises(module.AppServerUnavailableError):
             client.activate_validated_mcp_config()
 
@@ -505,6 +513,306 @@ def test_notification_handler_failure_restarts_generation_for_reconciliation(
         _wait_until(lambda: client.ready and client.generation == 2)
         assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
     finally:
+        client.close()
+
+
+def test_rapid_agent_message_deltas_do_not_overflow_the_callback_queue(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    initial = "0000 "
+    deltas = [f"{index:04d} " for index in range(1, 1_001)]
+    fake_server.configure(
+        on_initialized=[
+            {
+                "kind": "notification",
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "itemId": "message-1",
+                    "delta": initial,
+                },
+            }
+        ],
+        responses={
+            "emit/long-response": {
+                "mode": "notifications_then_echo",
+                "notifications": [
+                    {
+                        "method": "item/agentMessage/delta",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "itemId": "message-1",
+                            "delta": delta,
+                        },
+                    }
+                    for delta in deltas
+                ]
+                + [
+                    {
+                        "method": "item/completed",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "item": {
+                                "id": "message-1",
+                                "type": "agentMessage",
+                                "text": initial + "".join(deltas),
+                            },
+                        },
+                    },
+                    {
+                        "method": "turn/completed",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "turn": {
+                                "id": "turn-1",
+                                "status": "completed",
+                                "items": [],
+                            },
+                        },
+                    },
+                ],
+            }
+        },
+    )
+    client = _client(module, fake_server, callback_workers=1, max_callback_queue=1)
+    entered = Event()
+    release = Event()
+    received: list[tuple[str, str]] = []
+
+    def handle(notification: Any) -> None:
+        received.append(("delta", notification.params["delta"]))
+        if notification.params["delta"] == initial:
+            entered.set()
+            release.wait(2)
+
+    def handle_terminal(_notification: Any) -> None:
+        received.append(("terminal", ""))
+
+    client.register_notification_handler("item/agentMessage/delta", handle)
+    client.register_notification_handler("item/completed", handle_terminal)
+    client.register_notification_handler("turn/completed", handle_terminal)
+    client.start()
+    try:
+        assert entered.wait(1)
+        assert client.request("emit/long-response") == {"echo": None}
+        assert client.generation == 1
+        release.set()
+        _wait_until(
+            lambda: sum(kind == "terminal" for kind, _value in received) == 2,
+            message="completion notifications did not follow the assistant text",
+        )
+        assert "".join(value for kind, value in received if kind == "delta") == (
+            initial + "".join(deltas)
+        )
+        assert [kind for kind, _value in received][-2:] == ["terminal", "terminal"]
+        assert client.ready is True
+        assert client.generation == 1
+    finally:
+        release.set()
+        client.close()
+
+
+def test_real_runtime_broker_preserves_a_rapid_five_thousand_word_response(
+    fake_server: FakeAppServer,
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    workspace = (tmp_path / "workspace").resolve()
+    workspace.mkdir()
+    remote_thread_id = "codex-thread-long-response"
+    remote_turn_id = "codex-turn-long-response"
+    model = "gpt-5.6-codex"
+    words = [f"word-{index:04d}" for index in range(5_000)]
+    response = " ".join(words)
+    deltas = []
+    for offset in range(0, len(words), 13):
+        chunk = " ".join(words[offset : offset + 13])
+        deltas.append(chunk if offset == 0 else f" {chunk}")
+    thread = {
+        "id": remote_thread_id,
+        "preview": "",
+        "ephemeral": False,
+        "modelProvider": "openai",
+        "createdAt": 1_783_936_800,
+        "updatedAt": 1_783_936_800,
+        "status": {"type": "idle"},
+        "cwd": str(workspace),
+        "cliVersion": CODEX_VERSION,
+        "source": "appServer",
+        "turns": [],
+        "sessionId": "session-long-response",
+    }
+    fake_server.configure(
+        responses={
+            "thread/start": {
+                "result": {
+                    "thread": thread,
+                    "model": model,
+                    "modelProvider": "openai",
+                    "cwd": str(workspace),
+                    "approvalPolicy": "on-request",
+                    "approvalsReviewer": "user",
+                    "sandbox": {
+                        "type": "workspaceWrite",
+                        "networkAccess": False,
+                        "writableRoots": [
+                            str(workspace / name)
+                            for name in (
+                                ".agents",
+                                ".codex",
+                                ".cursor",
+                                ".git",
+                                ".vscode",
+                            )
+                        ],
+                        "excludeSlashTmp": True,
+                        "excludeTmpdirEnvVar": True,
+                    },
+                    "activePermissionProfile": {"id": "ha_bridge", "extends": None},
+                    "instructionSources": [],
+                }
+            },
+            "turn/start": {
+                "result": {
+                    "turn": {
+                        "id": remote_turn_id,
+                        "items": [],
+                        "status": "inProgress",
+                    }
+                }
+            },
+            "emit/long-response": {
+                "mode": "notifications_then_echo",
+                "notifications": [
+                    {
+                        "method": "item/agentMessage/delta",
+                        "params": {
+                            "threadId": remote_thread_id,
+                            "turnId": remote_turn_id,
+                            "itemId": "agent-message-long-response",
+                            "delta": delta,
+                        },
+                    }
+                    for delta in deltas
+                ]
+                + [
+                    {
+                        "method": "item/completed",
+                        "params": {
+                            "threadId": remote_thread_id,
+                            "turnId": remote_turn_id,
+                            "item": {
+                                "id": "agent-message-long-response",
+                                "type": "agentMessage",
+                                "text": response,
+                            },
+                        },
+                    },
+                    {
+                        "method": "turn/completed",
+                        "params": {
+                            "threadId": remote_thread_id,
+                            "turn": {
+                                "id": remote_turn_id,
+                                "items": [],
+                                "status": "completed",
+                            },
+                        },
+                    },
+                ],
+            },
+        }
+    )
+    storage = BridgeStorage(root_path=tmp_path / "state")
+    project = storage.create_project(
+        name="Long response",
+        root_path=str(workspace),
+        default_model=model,
+        default_thinking_level="high",
+    )
+    local_thread = storage.create_thread(
+        title="Long response",
+        project_id=project.project_id,
+        mode=RunMode.EDIT,
+    )
+    client = _client(
+        module,
+        fake_server,
+        callback_workers=1,
+        max_callback_queue=64,
+        _use_default_message_limit=True,
+        request_timeout_seconds=30.0,
+    )
+    client.start()
+    broker = RuntimeBroker(
+        storage=storage,
+        app_server=client,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+        queue_wait_timeout_seconds=5.0,
+        watchdog_interval_seconds=0.01,
+        turn_timeout_seconds=30.0,
+        cancel_grace_seconds=0.05,
+        interaction_timeout_seconds=5.0,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            local_thread.thread_id,
+            "Write a five thousand word response",
+            client_request_id="long-response-transport",
+        )
+
+        def run_started() -> bool:
+            record = storage.load_thread(local_thread.thread_id)
+            return record.active_run_id is not None and any(
+                event.event_type == "run.started"
+                and event.payload.get("run_id") == record.active_run_id
+                for event in storage.list_thread_events(local_thread.thread_id)
+            )
+
+        _wait_until(
+            run_started,
+            timeout=10.0,
+            message="long-response run did not start",
+        )
+        assert client.request("emit/long-response", timeout_seconds=30.0) == {
+            "echo": None
+        }
+        _wait_until(
+            lambda: storage.load_thread(local_thread.thread_id).status == "idle",
+            timeout=10.0,
+            message="long-response run did not complete",
+        )
+
+        events = storage.list_thread_events(local_thread.thread_id)
+        streamed = "".join(
+            event.payload["text"]
+            for event in events
+            if event.event_type == "message.delta"
+        )
+        completed = [
+            event for event in events if event.event_type == "message.completed"
+        ]
+        terminals = [
+            event.event_type
+            for event in events
+            if event.event_type
+            in {"run.completed", "run.failed", "run.interrupted", "run.cancelled"}
+        ]
+        assert streamed == response
+        assert len(streamed.split()) == 5_000
+        assert len(completed) == 1
+        assert completed[0].payload["text"] == response
+        assert terminals == ["run.completed"]
+        assert client.ready is True
+        assert client.generation == 1
+    finally:
+        broker.close()
         client.close()
 
 
@@ -875,8 +1183,7 @@ def test_model_provider_capability_probe_is_typed_and_uses_empty_params(
         assert capabilities.web_search is True
         request = _wait_for_client_message(
             fake_server,
-            lambda message: message.get("method")
-            == "modelProvider/capabilities/read",
+            lambda message: message.get("method") == "modelProvider/capabilities/read",
         )
         assert request["params"] == {}
     finally:

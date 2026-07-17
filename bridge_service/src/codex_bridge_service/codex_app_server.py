@@ -48,6 +48,15 @@ _STDERR_READ_BYTES = 16 * 1024
 _DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
 _DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 _MODEL_PROVIDER_CAPABILITIES_TIMEOUT_SECONDS = 5.0
+_CALLBACK_COMPLETION_RESERVE = 2
+_MAX_COALESCED_NOTIFICATION_BYTES = 64 * 1024
+_MAX_COALESCED_NOTIFICATION_FRAGMENTS = 256
+_COALESCIBLE_NOTIFICATION_FIELDS: Final = {
+    "item/agentMessage/delta": "delta",
+    "item/plan/delta": "delta",
+    "item/reasoning/summaryTextDelta": "delta",
+    "item/reasoning/textDelta": "delta",
+}
 _DEFAULT_PROTOCOL_CONTRACT = load_bundled_protocol_contract()
 _DEFAULT_PROTOCOL_VALIDATOR = AppServerProtocolValidator(_DEFAULT_PROTOCOL_CONTRACT)
 
@@ -137,17 +146,98 @@ class _DuplicateJsonKey(ValueError):
     pass
 
 
+class _CoalescedNotificationCallback:
+    """Join adjacent text deltas before their ordered durable callback runs."""
+
+    def __init__(
+        self,
+        notification: AppServerNotification,
+        handler: Callable[[AppServerNotification], None],
+        invoke: Callable[[AppServerNotification], None],
+    ) -> None:
+        field = _COALESCIBLE_NOTIFICATION_FIELDS[notification.method]
+        assert isinstance(notification.params, dict)
+        delta = notification.params[field]
+        assert isinstance(delta, str)
+        self._method = notification.method
+        self._generation = notification.generation
+        self._handler = handler
+        self._invoke = invoke
+        self._field = field
+        self._metadata = {
+            key: value for key, value in notification.params.items() if key != field
+        }
+        self._fragments = [delta]
+        self._size_bytes = len(delta.encode("utf-8"))
+        self._started = False
+        self._lock = threading.Lock()
+
+    @classmethod
+    def create(
+        cls,
+        notification: AppServerNotification,
+        handler: Callable[[AppServerNotification], None],
+        invoke: Callable[[AppServerNotification], None],
+    ) -> _CoalescedNotificationCallback | None:
+        field = _COALESCIBLE_NOTIFICATION_FIELDS.get(notification.method)
+        if field is None or not isinstance(notification.params, dict):
+            return None
+        if not isinstance(notification.params.get(field), str):
+            return None
+        return cls(notification, handler, invoke)
+
+    def try_coalesce(self, other: object) -> bool:
+        if not isinstance(other, _CoalescedNotificationCallback):
+            return False
+        if (
+            self._method != other._method
+            or self._generation != other._generation
+            or self._handler is not other._handler
+            or self._metadata != other._metadata
+        ):
+            return False
+        with self._lock:
+            combined_bytes = self._size_bytes + other._size_bytes
+            if self._started or combined_bytes > _MAX_COALESCED_NOTIFICATION_BYTES:
+                return False
+            if len(self._fragments) >= _MAX_COALESCED_NOTIFICATION_FRAGMENTS:
+                self._fragments = ["".join(self._fragments)]
+            self._fragments.extend(other._fragments)
+            self._size_bytes = combined_bytes
+            return True
+
+    def __call__(self) -> None:
+        with self._lock:
+            self._started = True
+            params = dict(self._metadata)
+            params[self._field] = "".join(self._fragments)
+        self._invoke(
+            AppServerNotification(
+                method=self._method,
+                params=params,
+                generation=self._generation,
+            )
+        )
+
+
 class _BoundedCallbackDispatcher:
     def __init__(self, *, workers: int, queued_callbacks: int) -> None:
         if type(workers) is not int or workers <= 0:
             raise ValueError("callback workers must be positive")
         if type(queued_callbacks) is not int or queued_callbacks <= 0:
             raise ValueError("callback queue size must be positive")
-        self._queue: queue.Queue[object] = queue.Queue(maxsize=queued_callbacks)
+        # Keep the normal item/completed + turn/completed suffix beyond the
+        # text-delta budget. Both ordered barriers must follow the final batch.
+        self._queue: queue.Queue[object] = queue.Queue(
+            maxsize=queued_callbacks + _CALLBACK_COMPLETION_RESERVE
+        )
+        self._queued_callbacks = queued_callbacks
         self._workers_count = workers
         self._threads: list[threading.Thread] = []
         self._started = False
         self._closed = threading.Event()
+        self._submit_lock = threading.Lock()
+        self._tail: _CoalescedNotificationCallback | None = None
 
     def start(self) -> None:
         if self._started:
@@ -163,18 +253,33 @@ class _BoundedCallbackDispatcher:
             worker.start()
 
     def submit(self, callback: Callable[[], None]) -> bool:
-        if self._closed.is_set():
-            return False
-        try:
-            self._queue.put_nowait(callback)
+        with self._submit_lock:
+            if self._closed.is_set():
+                return False
+            if self._tail is not None and self._tail.try_coalesce(callback):
+                return True
+            if (
+                isinstance(callback, _CoalescedNotificationCallback)
+                and self._queue.qsize() >= self._queued_callbacks
+            ):
+                return False
+            try:
+                self._queue.put_nowait(callback)
+            except queue.Full:
+                return False
+            self._tail = (
+                callback
+                if isinstance(callback, _CoalescedNotificationCallback)
+                else None
+            )
             return True
-        except queue.Full:
-            return False
 
     def close(self, *, join_timeout_seconds: float) -> None:
         if not self._started or self._closed.is_set():
             return
         self._closed.set()
+        with self._submit_lock:
+            self._tail = None
         while True:
             try:
                 self._queue.get_nowait()
@@ -220,7 +325,7 @@ class CodexAppServerClient:
         codex_home: Path | str | None = None,
         client_name: str = "ha_codex_bridge",
         client_title: str = "Home Assistant Codex Bridge",
-        client_version: str = "0.7.4",
+        client_version: str = "0.7.5",
         initialize_timeout_seconds: float = 10.0,
         request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
         max_message_bytes: int = _DEFAULT_MAX_MESSAGE_BYTES,
@@ -1137,27 +1242,40 @@ class CodexAppServerClient:
         if handler is None:
             return
 
-        def invoke() -> None:
+        def invoke(current: AppServerNotification) -> None:
             with self._state_lock:
                 if (
-                    notification.generation != self._generation
-                    or self._dispatch_generation != notification.generation
+                    current.generation != self._generation
+                    or self._dispatch_generation != current.generation
                 ):
                     return
             try:
-                handler(notification)
+                handler(current)
             except BaseException:
                 # A handler may own durable auth/runtime publication. Silently
                 # dropping its failure would leave the in-memory projection
                 # ahead of replayable state, so retire this generation and let
                 # the normal restart/reconciliation path restore consistency.
                 self._mark_generation_failed(
-                    notification.generation,
+                    current.generation,
                     AppServerProtocolError(),
                 )
                 return
 
-        if not self._dispatcher.submit(invoke):
+        coalesced = _CoalescedNotificationCallback.create(
+            notification,
+            handler,
+            invoke,
+        )
+        callback: Callable[[], None]
+        if coalesced is None:
+
+            def callback() -> None:
+                invoke(notification)
+
+        else:
+            callback = coalesced
+        if not self._dispatcher.submit(callback):
             self._mark_generation_failed(
                 notification.generation,
                 AppServerOverloadedError(),

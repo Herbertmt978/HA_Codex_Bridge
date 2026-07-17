@@ -235,6 +235,41 @@ describe("run activity view model", () => {
     expect(JSON.stringify(model)).not.toContain("/private/");
   });
 
+  it("keeps a durable interrupted event authoritative over a coarse error snapshot", () => {
+    const model = getRunActivityViewModel(
+      { status: "error", active_run_id: null, last_error: "private runtime detail" },
+      [
+        event(1, "message.delta", { text: "A partial answer" }),
+        event(2, "run.interrupted", { message: "private restart detail" }),
+      ],
+    );
+
+    expect(model).toMatchObject({
+      state: "interrupted",
+      action: "Run interrupted",
+      assistantState: "partial",
+      failureMessage: "",
+      attentionMessage: "The Codex runtime restarted before the turn completed. Your partial response was preserved.",
+    });
+    expect(JSON.stringify(model)).not.toContain("private runtime detail");
+    expect(JSON.stringify(model)).not.toContain("private restart detail");
+  });
+
+  it("keeps an error snapshot conservative when terminal history is unavailable", () => {
+    const model = getRunActivityViewModel(
+      { status: "error", active_run_id: null, last_error: "private runtime detail" },
+      [],
+    );
+
+    expect(model).toMatchObject({
+      state: "failed",
+      action: "Run failed",
+      failureMessage: "",
+      attentionMessage: "",
+    });
+    expect(JSON.stringify(model)).not.toContain("private runtime detail");
+  });
+
   it("does not resurrect orphaned activity from an idle thread snapshot", () => {
     const model = getRunActivityViewModel(
       { status: "idle", active_run_id: "run-old" },

@@ -29,13 +29,13 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.8`, Bridge
-  `0.7.3`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29597045103` and the paired Integration release were produced
-  from exact main commit `63878bfcf23ed302d7d86e48b7353b4fd9e52288`.
+- Latest signed coordinated release: App/Integration/panel `0.8.9`, Bridge
+  `0.7.4`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
+  publication `29604382155` and the paired Integration release were produced
+  from exact main commit `2538a6de2f44e25a3a74e331287ca45d72547249`.
   The immutable image digest is
-  `sha256:df29572aa4eb95a2000b0970ee670dee6d2cc007d90b3cbcb0c8a19cc4fdfa4f`
-  with attestation `35867567`. The latest target installation is `0.8.8`; it
+  `sha256:083eafe2a76be930843c436a4106f2e73e1337715b2e47f71e1af04862c1ef31`
+  with attestation `35885291`. The latest target installation is `0.8.9`; it
   retained ChatGPT Pro/history, preview, and transcript-only scrolling. The
   last complete generated-image browser-download acceptance is `0.8.7`. The
   last bounded prompt-path smoke remains `0.8.3`; it retained ChatGPT Pro/history,
@@ -45,7 +45,7 @@ to the App or Bridge.
   list/archive/preview/download acceptance remains pending. External Nabu
   Casa/Cloudflare routing, arbitrary previous-image rollback, and the secure
   App-owned browser worker remain explicitly unaccepted.
-- Signed App/Integration/panel `0.8.8` is installed with Bridge `0.7.3` and
+- Signed App/Integration/panel `0.8.9` is installed with Bridge `0.7.4` and
   Codex `0.144.5`; ChatGPT Pro, projects, history, generated-image preview, and
   transcript-only scrolling remained healthy. During the preceding `0.8.7`
   acceptance, the browser persisted a complete 3,276,457-byte PNG with the
@@ -53,10 +53,13 @@ to the App or Bridge.
   `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
   Chrome's automation event did not report the blob download, so the persisted
   file is the acceptance evidence.
-- Candidate `0.8.9` preserves partial long responses after provider stream
-  failures, safely classifies Codex failure categories, repairs stale/racing
-  usage-limit state, and fixes compact chat-creation and rail controls. Its
-  publication and target-HA acceptance remain separate gates.
+- Two live 5,000-word prompts on `0.8.9` stopped after the same short prefix.
+  Partial-output preservation passed, but long-response acceptance failed:
+  rapid token deltas could overflow the App-server callback queue and restart
+  Codex. Candidate `0.8.10` with Bridge `0.7.5` coalesces adjacent text deltas
+  into bounded ordered callbacks and reports a genuine restart as
+  **Run interrupted**. Publication and target-HA acceptance remain separate
+  gates.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF
