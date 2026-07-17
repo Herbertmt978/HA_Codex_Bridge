@@ -1,3 +1,4 @@
+import errno
 import os
 import stat
 import zipfile
@@ -18,7 +19,7 @@ from codex_bridge_service.resource_limits import (
     ResourceLimits,
 )
 from codex_bridge_service.storage import BridgeStorage
-from codex_bridge_service.workspace import WorkspaceEscapeError
+from codex_bridge_service.workspace import WorkspaceEscapeError, WorkspaceTypeError
 
 pytestmark = pytest.mark.skipif(
     os.name == "nt",
@@ -357,7 +358,7 @@ def test_workspace_quota_blocks_artifact_scan_without_publication(tmp_path) -> N
     assert storage.load_thread(thread.thread_id).artifacts == []
 
 
-def test_aggregate_workspace_quota_blocks_artifact_scan_without_publication(
+def test_aggregate_workspace_quota_does_not_block_artifact_scan(
     tmp_path,
 ) -> None:
     storage, _thread, _workspace = _home_assistant_thread(
@@ -369,54 +370,6 @@ def test_aggregate_workspace_quota_blocks_artifact_scan_without_publication(
         title="Peer quota",
         mode=RunMode.EDIT,
     )
-    workspace_root = storage.workspace_root
-    assert workspace_root is not None
-    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
-    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
-    (workspace / "report.pdf").write_bytes(b"123")
-    (peer_workspace / "peer.pdf").write_bytes(b"456")
-
-    with pytest.raises(QuotaExceededError) as error:
-        storage.sync_thread_artifacts(thread.thread_id)
-
-    assert error.value.resource == "workspace"
-    assert storage.load_thread(thread.thread_id).artifacts == []
-
-
-def test_aggregate_workspace_quota_blocks_archive_without_publication(tmp_path) -> None:
-    storage, _thread, _workspace = _home_assistant_thread(
-        tmp_path,
-        _limits(max_workspace_bytes=5),
-    )
-    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
-    peer = storage.create_thread(
-        title="Peer quota",
-        mode=RunMode.EDIT,
-    )
-    workspace_root = storage.workspace_root
-    assert workspace_root is not None
-    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
-    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
-    (workspace / "report.pdf").write_bytes(b"123")
-    (peer_workspace / "peer.pdf").write_bytes(b"456")
-
-    with pytest.raises(QuotaExceededError) as error:
-        storage.create_workspace_archive(thread.thread_id)
-
-    assert error.value.resource == "workspace"
-    assert storage.load_thread(thread.thread_id).artifacts == []
-    assert storage._home_assistant_artifacts_boundary().walk_regular_files(".") == ()
-
-
-def test_aggregate_workspace_measurement_does_not_use_archive_entry_limit(
-    tmp_path,
-) -> None:
-    storage, _thread, _workspace = _home_assistant_thread(
-        tmp_path,
-        _limits(max_workspace_bytes=10, max_archive_entries=1),
-    )
-    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
-    peer = storage.create_thread(title="Peer quota", mode=RunMode.EDIT)
     workspace_root = storage.workspace_root
     assert workspace_root is not None
     workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
@@ -428,8 +381,36 @@ def test_aggregate_workspace_measurement_does_not_use_archive_entry_limit(
 
     assert [artifact.filename for artifact in artifacts] == ["report.pdf"]
 
+    with pytest.raises(QuotaExceededError) as error:
+        storage.reserve_workspace_mutation()
 
-def test_aggregate_workspace_scan_boundary_error_is_retryable_while_agents_skills_and_pdf_succeed(
+    assert error.value.resource == "workspace"
+
+
+def test_aggregate_workspace_quota_does_not_block_archive(tmp_path) -> None:
+    storage, _thread, _workspace = _home_assistant_thread(
+        tmp_path,
+        _limits(max_workspace_bytes=5),
+    )
+    thread = storage.create_thread(title="Primary quota", mode=RunMode.EDIT)
+    peer = storage.create_thread(
+        title="Peer quota",
+        mode=RunMode.EDIT,
+    )
+    workspace_root = storage.workspace_root
+    assert workspace_root is not None
+    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
+    peer_workspace = workspace_root.joinpath(*peer.workspace_path.split("/"))
+    (workspace / "report.pdf").write_bytes(b"123")
+    (peer_workspace / "peer.pdf").write_bytes(b"456")
+
+    artifact = storage.create_workspace_archive(thread.thread_id)
+
+    assert artifact.filename.endswith(".zip")
+    assert artifact.size_bytes is not None and artifact.size_bytes > 0
+
+
+def test_read_paths_ignore_unmeasurable_aggregate_root_but_mutations_fail_closed(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -439,28 +420,123 @@ def test_aggregate_workspace_scan_boundary_error_is_retryable_while_agents_skill
     skill.write_text("# Example\n", encoding="utf-8")
     (workspace / "report.pdf").write_bytes(b"%PDF-1.7\n")
     boundary = storage._home_assistant_boundary()
-    measure_regular_files = boundary.measure_regular_files
-    attempts = 0
 
-    def boundary_error_once(*args, **kwargs):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise WorkspaceEscapeError()
-        return measure_regular_files(*args, **kwargs)
+    def aggregate_boundary_error(relative, *args, **kwargs):
+        assert relative == "."
+        raise WorkspaceEscapeError()
 
-    monkeypatch.setattr(boundary, "measure_regular_files", boundary_error_once)
+    monkeypatch.setattr(boundary, "measure_regular_files", aggregate_boundary_error)
 
-    with pytest.raises(ReservationConflictError) as error:
-        storage.sync_thread_artifacts(thread.thread_id)
-
-    assert error.value.resource == "filesystem_scan"
     artifacts = storage.sync_thread_artifacts(thread.thread_id)
 
     assert sorted(artifact.relative_path for artifact in artifacts) == [
         ".agents/skills/example/SKILL.md",
         "report.pdf",
     ]
+    archive = storage.create_workspace_archive(thread.thread_id)
+
+    assert archive.filename.endswith(".zip")
+
+    with pytest.raises(ReservationConflictError) as error:
+        storage.reserve_workspace_mutation()
+
+    assert error.value.resource == "filesystem_scan"
+
+
+def test_real_unopenable_stale_self_test_peer_does_not_block_pdf_read_paths(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    workspace_root = tmp_path / "config" / "workspaces"
+    app = create_app(
+        root_path=tmp_path / "data" / "bridge",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        resource_limits=_limits(),
+        runner_factory=lambda _storage: object(),
+    )
+    project = app.state.storage.create_project(
+        name="PDF boundary",
+        root_path="projects/pdf-boundary",
+    )
+    thread = app.state.storage.create_thread(
+        title="PDF boundary",
+        project_id=project.project_id,
+        mode=RunMode.EDIT,
+    )
+    workspace = workspace_root.joinpath(*thread.workspace_path.split("/"))
+    (workspace / "report.pdf").write_bytes(b"%PDF-1.7\n")
+    stale = workspace_root / (
+        ".sandbox-self-test-0123456789abcdef0123456789abcdef"
+    )
+    stale.mkdir(mode=0o700)
+    stale.chmod(0)
+    original_open = os.open
+    denied_attempts = 0
+
+    def deny_stale_descriptor(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal denied_attempts
+        if path == stale.name and dir_fd is not None:
+            denied_attempts += 1
+            raise PermissionError(errno.EACCES, "stale probe is unreadable", path)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", deny_stale_descriptor)
+    headers = {
+        "Authorization": "Bearer secret",
+        "X-Codex-Bridge-Api": "1",
+    }
+    try:
+        with pytest.raises(WorkspaceTypeError):
+            app.state.storage._home_assistant_boundary().measure_regular_files(".")
+
+        assert denied_attempts == 1
+
+        client = TestClient(app)
+        listed = client.get(
+            f"/threads/{thread.thread_id}/artifacts",
+            headers=headers,
+        )
+
+        assert listed.status_code == 200
+        assert [
+            (item["filename"], item["relative_path"])
+            for item in listed.json()
+        ] == [("report.pdf", "report.pdf")]
+
+        archived = client.post(
+            f"/threads/{thread.thread_id}/artifacts/workspace-archive",
+            headers=headers,
+        )
+
+        assert archived.status_code == 201
+        archive_payload = archived.json()
+        assert archive_payload["filename"].endswith(".zip")
+        with app.state.storage.artifacts_boundary.open_regular_file(
+            archive_payload["stored_path"]
+        ) as stream:
+            with zipfile.ZipFile(stream) as archive:
+                assert archive.namelist() == ["workspace/report.pdf"]
+                assert archive.read("workspace/report.pdf") == b"%PDF-1.7\n"
+        assert denied_attempts == 1
+    finally:
+        stale.chmod(0o700)
+
+
+def test_selected_workspace_unsafe_entry_still_blocks_read_paths(
+    tmp_path,
+) -> None:
+    storage, thread, workspace = _home_assistant_thread(tmp_path, _limits())
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"%PDF-1.7\n")
+    (workspace / "unsafe.pdf").symlink_to(outside)
+
+    with pytest.raises(WorkspaceEscapeError):
+        storage.sync_thread_artifacts(thread.thread_id)
+
+    with pytest.raises(WorkspaceEscapeError):
+        storage.create_workspace_archive(thread.thread_id)
 
 
 def test_artifact_sync_uses_bounded_manifest_when_workspace_ledger_check_conflicts(
@@ -714,7 +790,7 @@ def test_archive_output_quota_failure_removes_partial_file_and_reservation(tmp_p
     assert storage.quota_manager.active_reservations == 0
 
 
-def test_artifact_scan_boundary_conflict_has_retryable_http_response(
+def test_artifact_list_ignores_unmeasurable_aggregate_root(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -747,14 +823,8 @@ def test_artifact_scan_boundary_conflict_has_retryable_http_response(
         headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
     )
 
-    assert response.status_code == 409
-    assert response.json() == {
-        "detail": {
-            "code": "reservation_conflict",
-            "resource": "filesystem_scan",
-            "retryable": True,
-        }
-    }
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_resource_errors_have_typed_http_responses(tmp_path, monkeypatch) -> None:

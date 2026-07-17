@@ -220,7 +220,7 @@ class CodexAppServerClient:
         codex_home: Path | str | None = None,
         client_name: str = "ha_codex_bridge",
         client_title: str = "Home Assistant Codex Bridge",
-        client_version: str = "0.7.2",
+        client_version: str = "0.7.3",
         initialize_timeout_seconds: float = 10.0,
         request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
         max_message_bytes: int = _DEFAULT_MAX_MESSAGE_BYTES,
@@ -233,6 +233,7 @@ class CodexAppServerClient:
         shutdown_grace_seconds: float = 5.0,
         stderr_diagnostic_sink: Callable[[str], None] | None = None,
         enable_mcp: bool = False,
+        enable_experimental_api: bool = False,
         protocol_contract: AppServerProtocolContract
         | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
@@ -277,6 +278,9 @@ class CodexAppServerClient:
         if type(enable_mcp) is not bool:
             raise ValueError("MCP enabled state must be a boolean")
         self.enable_mcp = enable_mcp
+        if type(enable_experimental_api) is not bool:
+            raise ValueError("experimental API enabled state must be a boolean")
+        self.enable_experimental_api = enable_experimental_api
         self.protocol_contract = protocol_contract
         self._protocol_validator = (
             None
@@ -742,7 +746,7 @@ class CodexAppServerClient:
                             "version": self.client_version,
                         },
                         "capabilities": {
-                            "experimentalApi": False,
+                            "experimentalApi": self.enable_experimental_api,
                             "requestAttestation": False,
                         },
                     },

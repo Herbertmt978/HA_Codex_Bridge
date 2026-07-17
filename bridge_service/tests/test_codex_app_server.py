@@ -203,6 +203,10 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
             "title": "HA Codex Bridge",
             "version": BRIDGE_VERSION,
         }
+        assert messages[0]["params"]["capabilities"] == {
+            "experimentalApi": False,
+            "requestAttestation": False,
+        }
         assert fake_server.process()["argv"] == [
             "-c",
             "mcp_servers={}",
@@ -229,6 +233,31 @@ def test_start_performs_initialize_then_initialized_with_sanitized_environment(
         ),
         message="app-server did not receive a graceful stdin EOF",
     )
+
+
+def test_experimental_api_is_opt_in_for_a_proven_client_owned_tool(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    client = _client(module, fake_server, enable_experimental_api=True)
+
+    try:
+        client.start()
+        initialize = fake_server.client_messages()[0]
+        assert initialize["params"]["capabilities"] == {
+            "experimentalApi": True,
+            "requestAttestation": False,
+        }
+    finally:
+        client.close()
+
+
+def test_experimental_api_flag_requires_an_exact_boolean(fake_server: FakeAppServer) -> None:
+    module = _load_module()
+
+    with pytest.raises(ValueError, match="experimental API enabled state"):
+        _client(module, fake_server, enable_experimental_api=1)
 
 
 def test_disabled_mcp_adds_a_generation_scoped_empty_config_override(

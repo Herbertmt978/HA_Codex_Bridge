@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import runpy
+import stat
 import struct
 import sys
 import types
@@ -439,6 +440,258 @@ def test_sandbox_self_test_always_starts_codex_with_mcp_disabled() -> None:
     self_test = SANDBOX_SELF_TEST.read_text(encoding="utf-8")
 
     assert re.search(r"CodexAppServerClient\([\s\S]*enable_mcp\s*=\s*False", self_test)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or getattr(os, "geteuid", lambda: 1)() != 0,
+    reason="root ownership exclusion requires Linux root",
+)
+def test_sandbox_self_test_cleans_only_exact_stale_entries_idempotently(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    cleanup = namespace["_cleanup_stale_probe_entries"]
+    cleanup.__globals__["WORKSPACE_ROOT"] = tmp_path
+    nonce = "0123456789abcdef0123456789abcdef"
+    stale_workspace = tmp_path / f".sandbox-self-test-{nonce}"
+    stale_workspace.mkdir()
+    (stale_workspace / "partial.txt").write_text("partial", encoding="utf-8")
+    outside = tmp_path.parent / "outside-stale-cleanup.txt"
+    outside.write_text("outside", encoding="utf-8")
+    (stale_workspace / "outside-link").symlink_to(outside)
+    stale_sibling = tmp_path / f".sandbox-sibling-{nonce}"
+    stale_sibling.write_text("sandbox-self-test\n", encoding="utf-8")
+    foreign_entries = (
+        tmp_path / f".sandbox-self-test-{nonce}.renamed",
+        tmp_path / f".sandbox-self-test-{nonce.upper()}",
+        tmp_path / f".sandbox-sibling-{nonce}.backup",
+        tmp_path / f".sandbox-sibling-{nonce.upper()}",
+    )
+    foreign_entries[0].mkdir()
+    foreign_entries[1].mkdir()
+    foreign_entries[2].write_text("foreign", encoding="utf-8")
+    foreign_entries[3].write_text("foreign", encoding="utf-8")
+
+    cleanup(uid=65534, gid=65534)
+
+    assert not stale_workspace.exists()
+    assert not stale_sibling.exists()
+    assert outside.read_text(encoding="utf-8") == "outside"
+    assert all(path.exists() for path in foreign_entries)
+
+    cleanup(uid=65534, gid=65534)
+
+    assert all(path.exists() for path in foreign_entries)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or getattr(os, "geteuid", lambda: 1)() != 0,
+    reason="root ownership rollback requires Linux root",
+)
+@pytest.mark.parametrize("failure", ["fchmod", "claimed_fstat"])
+def test_sandbox_self_test_restores_workspace_after_partial_root_claim(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    cleanup = namespace["_cleanup_stale_probe_entries"]
+    self_test_error = namespace["SelfTestError"]
+    cleanup.__globals__["WORKSPACE_ROOT"] = tmp_path
+    uid = 65534
+    gid = 65534
+    os.chown(tmp_path, uid, gid)
+    tmp_path.chmod(0o700)
+
+    if failure == "fchmod":
+        original_fchmod = os.fchmod
+        failed = False
+
+        def fail_claim_fchmod(descriptor: int, mode: int) -> None:
+            nonlocal failed
+            if mode == 0o700 and not failed:
+                failed = True
+                raise OSError(errno.EIO, "injected claim failure")
+            original_fchmod(descriptor, mode)
+
+        monkeypatch.setattr(os, "fchmod", fail_claim_fchmod)
+    else:
+        original_fstat = os.fstat
+        calls = 0
+
+        def fail_claim_validation(descriptor: int) -> object:
+            nonlocal calls
+            calls += 1
+            metadata = original_fstat(descriptor)
+            if calls == 2:
+                return types.SimpleNamespace(
+                    st_mode=metadata.st_mode,
+                    st_uid=uid,
+                    st_gid=gid,
+                    st_dev=metadata.st_dev,
+                    st_ino=metadata.st_ino,
+                )
+            return metadata
+
+        monkeypatch.setattr(os, "fstat", fail_claim_validation)
+
+    with pytest.raises(self_test_error):
+        cleanup(uid=uid, gid=gid)
+
+    restored = tmp_path.stat()
+    assert restored.st_uid == uid
+    assert restored.st_gid == gid
+    assert stat.S_IMODE(restored.st_mode) == 0o700
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or getattr(os, "geteuid", lambda: 1)() != 0,
+    reason="root ownership exclusion requires Linux root",
+)
+@pytest.mark.parametrize("entry_kind", ["workspace", "sibling"])
+def test_sandbox_self_test_rejects_exact_stale_symlinks_without_following(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    entry_kind: str,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    cleanup = namespace["_cleanup_stale_probe_entries"]
+    self_test_error = namespace["SelfTestError"]
+    cleanup.__globals__["WORKSPACE_ROOT"] = tmp_path
+    nonce = "0123456789abcdef0123456789abcdef"
+    outside = tmp_path.parent / f"outside-{entry_kind}"
+    if entry_kind == "workspace":
+        outside.mkdir()
+        (outside / "sentinel.txt").write_text("outside", encoding="utf-8")
+        locator = tmp_path / f".sandbox-self-test-{nonce}"
+        locator.symlink_to(outside, target_is_directory=True)
+    else:
+        outside.write_text("outside", encoding="utf-8")
+        locator = tmp_path / f".sandbox-sibling-{nonce}"
+        locator.symlink_to(outside)
+
+    with pytest.raises(self_test_error):
+        cleanup(uid=65534, gid=65534)
+
+    assert locator.is_symlink()
+    if entry_kind == "workspace":
+        assert (outside / "sentinel.txt").read_text(encoding="utf-8") == "outside"
+    else:
+        assert outside.read_text(encoding="utf-8") == "outside"
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or getattr(os, "geteuid", lambda: 1)() != 0,
+    reason="root ownership exclusion requires Linux root",
+)
+def test_sandbox_self_test_rejects_stale_workspace_rename_race(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    cleanup = namespace["_cleanup_stale_probe_entries"]
+    self_test_error = namespace["SelfTestError"]
+    cleanup.__globals__["WORKSPACE_ROOT"] = tmp_path
+    nonce = "0123456789abcdef0123456789abcdef"
+    locator = tmp_path / f".sandbox-self-test-{nonce}"
+    locator.mkdir()
+    renamed = tmp_path / "foreign-renamed-workspace"
+    original_open = os.open
+    swapped = False
+
+    def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        if path == locator.name and dir_fd is not None and not swapped:
+            swapped = True
+            locator.rename(renamed)
+            locator.mkdir()
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    with pytest.raises(self_test_error):
+        cleanup(uid=65534, gid=65534)
+
+    assert swapped is True
+    assert locator.is_dir()
+    assert renamed.is_dir()
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or getattr(os, "geteuid", lambda: 1)() != 0,
+    reason="root ownership exclusion requires Linux root",
+)
+def test_sandbox_self_test_blocks_unprivileged_rename_at_final_unlink(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    namespace = _sandbox_self_test_namespace(monkeypatch)
+    cleanup = namespace["_cleanup_stale_probe_entries"]
+    cleanup.__globals__["WORKSPACE_ROOT"] = tmp_path
+    uid = 65534
+    gid = 65534
+    nonce = "0123456789abcdef0123456789abcdef"
+    locator = tmp_path / f".sandbox-sibling-{nonce}"
+    locator.write_text("sandbox-self-test\n", encoding="utf-8")
+    renamed = tmp_path / "foreign-renamed-sibling"
+    os.chown(tmp_path, uid, gid)
+    tmp_path.chmod(0o700)
+    original_unlink = os.unlink
+    attempts = 0
+
+    def racing_unlink(path, *, dir_fd=None):
+        nonlocal attempts
+        if path == locator.name and dir_fd is not None:
+            attempts += 1
+            parent = os.fstat(dir_fd)
+            assert parent.st_uid == 0
+            assert stat.S_IMODE(parent.st_mode) == 0o700
+            child = os.fork()
+            if child == 0:
+                try:
+                    os.setgroups([])
+                    os.setgid(gid)
+                    os.setuid(uid)
+                    os.rename(
+                        locator.name,
+                        renamed.name,
+                        src_dir_fd=dir_fd,
+                        dst_dir_fd=dir_fd,
+                    )
+                    os.open(
+                        locator.name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=dir_fd,
+                    )
+                except PermissionError:
+                    os._exit(0)
+                except BaseException:
+                    os._exit(2)
+                os._exit(1)
+            _, status = os.waitpid(child, 0)
+            assert os.waitstatus_to_exitcode(status) == 0
+        return original_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "unlink", racing_unlink)
+
+    cleanup(uid=uid, gid=gid)
+
+    assert attempts == 1
+    assert not locator.exists()
+    assert not renamed.exists()
+    assert tmp_path.stat().st_uid == uid
+    assert tmp_path.stat().st_gid == gid
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o700
+
+
+def test_sandbox_self_test_cleans_stale_entries_before_new_probe() -> None:
+    text = SANDBOX_SELF_TEST.read_text(encoding="utf-8")
+
+    assert text.index("_cleanup_stale_probe_entries(uid=uid, gid=gid)") < text.index(
+        "nonce = secrets.token_hex(16)"
+    )
 
 
 def test_app_bakes_managed_permission_profile_requirements() -> None:

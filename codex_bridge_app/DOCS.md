@@ -188,6 +188,15 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
+Candidate App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
+`0.144.5` passes the local PDF repair, revocation-safe private image artifact,
+LAN/Nabu-shaped/Cloudflare-shaped synthetic transport, offline recovery
+evidence, frontend, Linux, Docker, hassfest, and independent-review gates. It
+is not yet signed, installed, or target-HA accepted. Real target PDF and image
+flows, authorized external Nabu Casa/Cloudflare captures, destructive cold
+restore/retained-image rollback, and browser-worker isolation attestation
+remain separate gates.
+
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
 were installed and running on target Home Assistant `192.168.50.20` on

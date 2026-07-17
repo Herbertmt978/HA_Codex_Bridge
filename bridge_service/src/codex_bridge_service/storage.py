@@ -17,8 +17,10 @@ from collections.abc import Iterator, Mapping
 
 from pydantic import ValidationError
 
+from .browser_contract import BrowserContractError, validate_browser_pdf_bytes
 from .codex_auth import AUTH_EXPIRED_MESSAGE
 from .event_store import BridgeEventStore, DurableOutbox, EventDraft, OutboxWrite
+from .generated_images import validate_generated_image_result
 from .limits import CodexLimitsProbe
 from .models import (
     DEFAULT_MODEL,
@@ -75,9 +77,6 @@ _UPLOAD_MAX_RELATIVE_PATH_DEPTH = 16
 _UPLOAD_MAX_MIME_TYPE_BYTES = 255
 _UPLOAD_TERMINAL_SESSION_LIMIT = 128
 _UPLOAD_SESSION_LIMIT = 256
-# This is intentionally independent of the per-archive entry limit: an
-# aggregate workspace measurement spans many chats, but must still be bounded.
-_WORKSPACE_AGGREGATE_SCAN_MAX_ENTRIES = 100_000
 _UPLOAD_SESSION_FIELDS = frozenset(
     {
         "upload_id",
@@ -92,6 +91,7 @@ _UPLOAD_SESSION_FIELDS = frozenset(
     }
 )
 _GENERATED_IMAGE_MAX_BYTES = 25 * 1024 * 1024
+_BROWSER_ARTIFACT_MAX_BYTES = 8 * 1024 * 1024
 _GENERATED_IMAGE_MIME_TYPES = frozenset({"image/png", "image/jpeg", "image/webp"})
 _GENERATED_IMAGE_MAGIC = {
     "image/png": b"\x89PNG\r\n\x1a\n",
@@ -960,6 +960,14 @@ class BridgeStorage:
                 relative = boundary.normalize(artifact.relative_path)
                 stored = boundary.normalize(artifact.stored_path)
                 expected_stored = f"{thread_locator}/generated/{relative}"
+            elif artifact.source is ArtifactSource.BROWSER_CAPTURE:
+                boundary = archive_boundary
+                thread_locator = boundary.normalize(record.thread_id)
+                if thread_locator != record.thread_id or "/" in thread_locator:
+                    raise WorkspaceInputError()
+                relative = boundary.normalize(artifact.relative_path)
+                stored = boundary.normalize(artifact.stored_path)
+                expected_stored = f"{thread_locator}/browser/{relative}"
             else:
                 raise WorkspaceInputError()
 
@@ -2172,6 +2180,7 @@ class BridgeStorage:
                     if artifact.source in {
                         ArtifactSource.WORKSPACE_ARCHIVE,
                         ArtifactSource.GENERATED_IMAGE,
+                        ArtifactSource.BROWSER_CAPTURE,
                     }:
                         artifacts_boundary.unlink_regular_file(
                             artifact.stored_path,
@@ -2201,6 +2210,27 @@ class BridgeStorage:
                         )
                 artifacts_boundary.remove_empty_directory(
                     generated_locator,
+                    missing_ok=True,
+                )
+                browser_locator = f"{record.thread_id}/browser"
+                try:
+                    browser_orphans = artifacts_boundary.walk_regular_files(
+                        browser_locator,
+                        reject_unsafe=True,
+                    )
+                except WorkspaceNotFoundError:
+                    browser_orphans = ()
+                for orphan in browser_orphans:
+                    if re.fullmatch(
+                        r"browser-(?:screenshot|page)-[0-9a-f]{24}\.(?:png|jpg|pdf)",
+                        PurePosixPath(orphan).name,
+                    ):
+                        artifacts_boundary.unlink_regular_file(
+                            orphan,
+                            missing_ok=True,
+                        )
+                artifacts_boundary.remove_empty_directory(
+                    browser_locator,
                     missing_ok=True,
                 )
                 artifacts_boundary.remove_empty_directory(
@@ -3660,6 +3690,7 @@ class BridgeStorage:
         item_id: str,
         result: object,
         mime_type: object = None,
+        persistence_guard: Callable[[], None] | None = None,
     ) -> ArtifactRecord:
         """Persist one Codex imageGeneration result in the private artifact boundary.
 
@@ -3670,7 +3701,12 @@ class BridgeStorage:
             raise RuntimeError("generated images require the home_assistant profile")
         if not isinstance(item_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,256}", item_id):
             raise WorkspaceInputError()
-        normalized_mime, content = _decode_generated_image(result, mime_type)
+        # Runtime validation is not the storage trust boundary.  Direct callers
+        # must receive the same strict raster/container checks immediately
+        # before private persistence.
+        normalized_mime, content = validate_generated_image_result(result, mime_type)
+        if persistence_guard is not None:
+            persistence_guard()
         extension = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[normalized_mime]
         digest = hashlib.sha256(item_id.encode("utf-8")).hexdigest()[:24]
         artifact_id = f"art_img_{digest}"
@@ -3690,6 +3726,105 @@ class BridgeStorage:
             relative_path=relative_path,
             size_bytes=len(content),
         )
+
+        return self._save_private_artifact_blob(
+            thread_id=thread_id,
+            artifact=artifact,
+            content=content,
+            directory="generated",
+            source=ArtifactSource.GENERATED_IMAGE,
+            item_limit_bytes=_GENERATED_IMAGE_MAX_BYTES,
+            persistence_guard=persistence_guard,
+        )
+
+    def save_browser_artifact(
+        self,
+        *,
+        thread_id: str,
+        kind: object,
+        mime_type: object,
+        content: object,
+    ) -> ArtifactRecord:
+        """Persist one content-addressed browser screenshot or printed PDF.
+
+        The worker is untrusted even though it is App-owned, so the artifact
+        is independently validated again immediately before the descriptor-
+        relative write. Content addressing makes an app-server callback replay
+        idempotent without persisting any URL, selector, or page text.
+        """
+
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError("browser artifacts require the home_assistant profile")
+        if kind not in {"screenshot", "pdf"} or not isinstance(mime_type, str):
+            raise WorkspaceInputError()
+        if (
+            not isinstance(content, bytes)
+            or not content
+            or len(content) > _BROWSER_ARTIFACT_MAX_BYTES
+        ):
+            raise WorkspaceInputError()
+        if kind == "screenshot":
+            if mime_type not in {"image/png", "image/jpeg"}:
+                raise WorkspaceInputError()
+            normalized_mime, validated = validate_generated_image_result(
+                base64.b64encode(content).decode("ascii"),
+                mime_type,
+            )
+            if normalized_mime != mime_type or validated != content:
+                raise WorkspaceInputError()
+            extension = ".png" if mime_type == "image/png" else ".jpg"
+            stem = "screenshot"
+        else:
+            if mime_type != "application/pdf":
+                raise WorkspaceInputError()
+            try:
+                validate_browser_pdf_bytes(content)
+            except BrowserContractError:
+                raise WorkspaceInputError() from None
+            extension = ".pdf"
+            stem = "page"
+        digest = hashlib.sha256(
+            kind.encode("ascii") + b"\0" + mime_type.encode("ascii") + b"\0" + content
+        ).hexdigest()[:24]
+        artifact_id = f"art_browser_{digest}"
+        filename = f"browser-{stem}-{digest}{extension}"
+        boundary = self._home_assistant_artifacts_boundary()
+        thread_locator = boundary.normalize(thread_id)
+        if thread_locator != thread_id or "/" in thread_locator:
+            raise WorkspaceInputError()
+        relative_path = boundary.normalize(filename)
+        stored_locator = f"{thread_locator}/browser/{relative_path}"
+        artifact = ArtifactRecord(
+            artifact_id=artifact_id,
+            filename=filename,
+            mime_type=mime_type,
+            source=ArtifactSource.BROWSER_CAPTURE,
+            stored_path=stored_locator,
+            relative_path=relative_path,
+            size_bytes=len(content),
+        )
+        return self._save_private_artifact_blob(
+            thread_id=thread_id,
+            artifact=artifact,
+            content=content,
+            directory="browser",
+            source=ArtifactSource.BROWSER_CAPTURE,
+            item_limit_bytes=_BROWSER_ARTIFACT_MAX_BYTES,
+        )
+
+    def _save_private_artifact_blob(
+        self,
+        *,
+        thread_id: str,
+        artifact: ArtifactRecord,
+        content: bytes,
+        directory: Literal["generated", "browser"],
+        source: ArtifactSource,
+        item_limit_bytes: int,
+        persistence_guard: Callable[[], None] | None = None,
+    ) -> ArtifactRecord:
+        boundary = self._home_assistant_artifacts_boundary()
+        stored_locator = artifact.stored_path
 
         def _matches_existing_file(identity: WorkspaceFileIdentity) -> bool:
             """Only reconcile a crash orphan after proving its exact bytes.
@@ -3716,10 +3851,12 @@ class BridgeStorage:
                 return False
 
         def _append_metadata_locked(record: ThreadRecord) -> ArtifactRecord:
+            if persistence_guard is not None:
+                persistence_guard()
             for existing in record.artifacts:
                 if (
-                    existing.source is ArtifactSource.GENERATED_IMAGE
-                    and existing.artifact_id == artifact_id
+                    existing.source is source
+                    and existing.artifact_id == artifact.artifact_id
                 ):
                     return existing
             record.artifacts.append(artifact)
@@ -3744,11 +3881,13 @@ class BridgeStorage:
             return artifact
 
         with self._thread_mutation_lock:
+            if persistence_guard is not None:
+                persistence_guard()
             record = self.load_thread(thread_id)
             for existing in record.artifacts:
                 if (
-                    existing.source is ArtifactSource.GENERATED_IMAGE
-                    and existing.artifact_id == artifact_id
+                    existing.source is source
+                    and existing.artifact_id == artifact.artifact_id
                 ):
                     return existing
 
@@ -3770,11 +3909,14 @@ class BridgeStorage:
                     expected_identity=existing_stat.identity,
                 )
 
-        boundary.create_directory(f"{thread_locator}/generated")
+        thread_locator = boundary.normalize(thread_id)
+        if persistence_guard is not None:
+            persistence_guard()
+        boundary.create_directory(f"{thread_locator}/{directory}")
         reservation = self._disk_quota().reserve(
             "private",
             amount_bytes=len(content),
-            item_limit_bytes=_GENERATED_IMAGE_MAX_BYTES,
+            item_limit_bytes=item_limit_bytes,
         )
         output: BinaryIO | None = None
         identity: WorkspaceFileIdentity | None = None
@@ -3790,7 +3932,10 @@ class BridgeStorage:
                 with self._thread_mutation_lock:
                     record = self.load_thread(thread_id)
                     for existing in record.artifacts:
-                        if existing.source is ArtifactSource.GENERATED_IMAGE and existing.artifact_id == artifact_id:
+                        if (
+                            existing.source is source
+                            and existing.artifact_id == artifact.artifact_id
+                        ):
                             reservation.release()
                             return existing
                 raise
@@ -3800,6 +3945,8 @@ class BridgeStorage:
             output.flush()
             os.fsync(output.fileno())
             boundary.validate_regular_file_identity(stored_locator, identity)
+            if persistence_guard is not None:
+                persistence_guard()
             reservation.commit(persisted_bytes=len(content))
             with self._thread_mutation_lock:
                 record = self.load_thread(thread_id)
@@ -3807,8 +3954,8 @@ class BridgeStorage:
                     (
                         candidate
                         for candidate in record.artifacts
-                        if candidate.source is ArtifactSource.GENERATED_IMAGE
-                        and candidate.artifact_id == artifact_id
+                        if candidate.source is source
+                        and candidate.artifact_id == artifact.artifact_id
                     ),
                     None,
                 )
@@ -3832,7 +3979,7 @@ class BridgeStorage:
                 if reservation.active:
                     reservation.release()
                 boundary.remove_empty_directory(
-                    f"{thread_locator}/generated", missing_ok=True
+                    f"{thread_locator}/{directory}", missing_ok=True
                 )
             raise
         finally:
@@ -3900,7 +4047,6 @@ class BridgeStorage:
         boundary = self._home_assistant_boundary()
         limits = self._resource_limits()
         workspace = boundary.normalize(snapshot.workspace_path, allow_root=True)
-        self._enforce_aggregate_workspace_limit(boundary, limits)
         try:
             discovered = boundary.manifest_regular_files(
                 workspace,
@@ -3985,32 +4131,6 @@ class BridgeStorage:
                 )
             return record.artifacts
 
-    def _enforce_aggregate_workspace_limit(
-        self,
-        boundary: WorkspaceBoundary,
-        limits: ResourceLimits,
-    ) -> None:
-        """Measure every workspace without touching the mutable quota ledger.
-
-        Archive entry limits describe a single user-requested archive, so they
-        must not constrain a healthy multi-chat workspace tree.  The separate
-        hard ceiling bounds this read-only aggregate traversal while retaining
-        the global workspace byte cap.  Callers publish only private metadata
-        or private archive output; a second aggregate scan cannot make an
-        external workspace mutation atomic and would duplicate this traversal.
-        """
-        try:
-            boundary.measure_regular_files(
-                ".",
-                reject_unsafe=False,
-                max_entries=_WORKSPACE_AGGREGATE_SCAN_MAX_ENTRIES,
-                max_bytes=limits.max_workspace_bytes,
-            )
-        except WorkspaceResourceLimitError:
-            raise QuotaExceededError("workspace") from None
-        except WorkspaceBoundaryError:
-            raise ReservationConflictError("filesystem_scan") from None
-
     def open_artifact(
         self,
         thread_id: str,
@@ -4027,6 +4147,7 @@ class BridgeStorage:
         elif artifact.source in {
             ArtifactSource.WORKSPACE_ARCHIVE,
             ArtifactSource.GENERATED_IMAGE,
+            ArtifactSource.BROWSER_CAPTURE,
         }:
             boundary = self._home_assistant_artifacts_boundary()
         else:
@@ -4145,7 +4266,6 @@ class BridgeStorage:
             snapshot.workspace_path,
             allow_root=True,
         )
-        self._enforce_aggregate_workspace_limit(workspace_boundary, limits)
         try:
             workspace_manifest = workspace_boundary.manifest_regular_files(
                 workspace,

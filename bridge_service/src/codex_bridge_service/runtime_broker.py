@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock, Thread, current_thread
@@ -15,6 +16,8 @@ from .codex_app_server import (
     AppServerNotification,
     AppServerRequest,
 )
+from .browser_broker import BrowserBroker, BrowserInvocationContext
+from .browser_contract import browser_dynamic_tool_spec
 from .event_store import (
     DurableOperationTooLargeError,
     EventDraft,
@@ -24,6 +27,7 @@ from .event_store import (
     OutboxWrite,
     StoredEventRecord,
 )
+from .generated_images import validate_generated_image_result
 from .models import (
     ArtifactRecord,
     InteractionResultRecord,
@@ -101,6 +105,22 @@ class _AppServer(Protocol):
     ) -> bool: ...
 
     def abort_generation(self, expected_generation: int) -> bool: ...
+
+
+class _ImageGenerationAuthority(Protocol):
+    def authorize_image_generation(self, expected_generation: int) -> int | None: ...
+
+    def is_image_generation_authorized(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> bool: ...
+
+    def acquire_image_generation_publication_lease(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> object | None: ...
 
 
 class RuntimeBrokerError(RuntimeError):
@@ -282,6 +302,24 @@ _SAFE_COLLAB_AGENT_STATES = frozenset(
 _SAFE_SUB_AGENT_ACTIVITY_KINDS = frozenset({"started", "interacted", "interrupted"})
 _MAX_ITEM_ACTIVITY_DURATION_MS = 86_400_000
 _MAX_SAFE_AGENT_STATE_COUNT = 9_007_199_254_740_991
+_BROWSER_DYNAMIC_TOOLS = frozenset(
+    {
+        "open",
+        "navigate",
+        "inspect",
+        "click",
+        "type",
+        "select",
+        "wait",
+        "screenshot",
+        "pdf",
+        "close",
+    }
+)
+_MAX_BROWSER_DYNAMIC_TEXT_BYTES = 32 * 1024
+_MAX_BROWSER_DYNAMIC_IMAGE_URL_BYTES = 6 * 1024 * 1024
+_MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES = 32 * 1024
+_MAX_BROWSER_TOOL_REPLAYS_PER_TURN = 128
 _NOTIFICATIONS = (
     "turn/started",
     "item/agentMessage/delta",
@@ -299,6 +337,7 @@ _NOTIFICATIONS = (
     "serverRequest/resolved",
 )
 _REQUESTS = (
+    "item/tool/call",
     "item/commandExecution/requestApproval",
     "item/fileChange/requestApproval",
     "item/permissions/requestApproval",
@@ -320,6 +359,24 @@ class _GeneratedImagePublication:
     result: object
     mime_type: str | None
     payload: dict[str, object]
+    authorized: bool
+    authority_lease: object | None
+
+
+@dataclass(frozen=True, slots=True)
+class _BrowserThreadAuthority:
+    """Ephemeral proof that one fresh Codex thread received our tool namespace."""
+
+    generation: int
+    codex_thread_id: str
+
+
+@dataclass(slots=True)
+class _BrowserToolReplay:
+    """At-most-once record for one app-server dynamic-tool callback."""
+
+    fingerprint: str
+    result: dict[str, object] | None = None
 
 
 class RuntimeBroker:
@@ -339,7 +396,12 @@ class RuntimeBroker:
         cancel_grace_seconds: float | None = None,
         interaction_timeout_seconds: float | None = None,
         run_terminal_listener: Callable[[str, str, str, bool], None] | None = None,
+        image_generation_authority: _ImageGenerationAuthority | None = None,
+        browser_broker: BrowserBroker | None = None,
+        browser_dynamic_tools_enabled: bool = False,
     ) -> None:
+        if type(browser_dynamic_tools_enabled) is not bool:
+            raise ValueError("browser dynamic tool state must be a boolean")
         self.storage = storage
         self.app_server = app_server
         self.gate = runtime_gate
@@ -375,6 +437,17 @@ class RuntimeBroker:
             else _positive_timeout(interaction_timeout_seconds)
         )
         self._run_terminal_listener = run_terminal_listener
+        self._image_generation_authority = image_generation_authority
+        self._browser_broker = browser_broker
+        # This has no durable representation. A restored runtime cannot regain
+        # access to client-owned tools that were registered on a prior Codex
+        # app-server generation.
+        self._browser_dynamic_tools_enabled = browser_dynamic_tools_enabled
+        self._browser_pending_thread_authorities: dict[
+            str, _BrowserThreadAuthority
+        ] = {}
+        self._browser_turn_authorities: dict[str, BrowserInvocationContext] = {}
+        self._browser_tool_replays: dict[str, dict[str, _BrowserToolReplay]] = {}
         self._store = RuntimeStateStore(
             storage.root,
             durable_outbox=storage.durable_outbox,
@@ -963,6 +1036,7 @@ class RuntimeBroker:
                 self._finish_publication_locked(thread_id)
 
     def close(self) -> None:
+        browser_broker = self._browser_broker
         with self._lock:
             if self._closed:
                 return
@@ -989,6 +1063,11 @@ class RuntimeBroker:
         for worker in workers:
             if worker is not owner:
                 worker.join(timeout=min(0.25, self.watchdog_interval_seconds * 2))
+        if browser_broker is not None:
+            try:
+                browser_broker.close()
+            except BaseException:
+                pass
 
     def _run_worker(self, run_id: str) -> None:
         try:
@@ -1111,6 +1190,33 @@ class RuntimeBroker:
                 raise RuntimeAttachmentsUnavailableError()
             inputs = self._turn_input(run)
 
+        image_generation_authority_revision: int | None = None
+        authority = self._image_generation_authority
+        if authority is not None:
+            try:
+                candidate_revision = authority.authorize_image_generation(
+                    generation
+                )
+                if type(candidate_revision) is int and candidate_revision > 0:
+                    image_generation_authority_revision = candidate_revision
+            except (RuntimeError, OSError, ValueError, TypeError, AttributeError):
+                image_generation_authority_revision = None
+        with self._lock:
+            run = self._state.runs[run_id]
+            if generation != self.app_server.generation:
+                raise RuntimeUnavailableError()
+            if run.status in _TERMINAL_RUN_STATES:
+                return
+            run.image_generation_authority_generation = (
+                generation
+                if image_generation_authority_revision is not None
+                else None
+            )
+            run.image_generation_authority_revision = (
+                image_generation_authority_revision
+            )
+            self._persist_locked()
+
         thread_config: dict[str, object] = {
             "default_permissions": policy.permission_profile,
             # Codex keeps thread configuration when resuming. Always send the
@@ -1125,6 +1231,7 @@ class RuntimeBroker:
             "approvalsReviewer": "user",
             "config": thread_config,
         }
+        browser_tools_advertised = False
         if run.codex_thread_id:
             thread_params["threadId"] = run.codex_thread_id
             thread_result = self.app_server.request(
@@ -1134,6 +1241,13 @@ class RuntimeBroker:
             )
         else:
             thread_params["ephemeral"] = False
+            # Client-owned namespace tools are attached at thread creation.
+            # Codex does not retrofit them onto resumed threads, and doing so
+            # would let restored durable state regain a browser authority that
+            # was not recreated by this process.
+            if not run.unattended and self._browser_tools_ready():
+                thread_params["dynamicTools"] = [browser_dynamic_tool_spec()]
+                browser_tools_advertised = True
             thread_result = self.app_server.request(
                 "thread/start",
                 thread_params,
@@ -1161,6 +1275,13 @@ class RuntimeBroker:
                     "The Codex turn was cancelled before it started.",
                 )
                 return
+            if browser_tools_advertised and self._browser_tools_ready():
+                self._browser_pending_thread_authorities[run.run_id] = (
+                    _BrowserThreadAuthority(
+                        generation=generation,
+                        codex_thread_id=codex_thread_id,
+                    )
+                )
             self._persist_locked()
             self._set_thread_projection_locked(run)
 
@@ -1208,6 +1329,7 @@ class RuntimeBroker:
             if run.codex_turn_id and run.codex_turn_id != turn_id:
                 raise RuntimeProtocolMismatchError()
             run.codex_turn_id = turn_id
+            self._authorize_browser_turn_locked(run)
             buffered_callbacks = self._pre_response_callbacks.pop(run_id, [])
             if turn_status != "inProgress":
                 items = turn.get("items")
@@ -1474,6 +1596,39 @@ class RuntimeBroker:
         mime_type = item.get("mimeType", item.get("mime_type"))
         if not isinstance(mime_type, str) or len(mime_type) > 64:
             mime_type = None
+        authorized = False
+        authority_lease: object | None = None
+        authority = self._image_generation_authority
+        if (
+            authority is not None
+            and run.image_generation_authority_generation == generation
+            and run.image_generation_authority_revision is not None
+        ):
+            try:
+                acquire_lease = getattr(
+                    authority,
+                    "acquire_image_generation_publication_lease",
+                    None,
+                )
+                if callable(acquire_lease):
+                    candidate_lease = acquire_lease(
+                        generation,
+                        run.image_generation_authority_revision,
+                    )
+                    ensure_active = getattr(candidate_lease, "ensure_active", None)
+                    release = getattr(candidate_lease, "release", None)
+                    if callable(ensure_active) and callable(release):
+                        authority_lease = candidate_lease
+                        authorized = True
+                else:
+                    # Compatibility for constrained test/dummy authorities.
+                    # Production uses the revocable lease above.
+                    authorized = authority.is_image_generation_authorized(
+                        generation,
+                        run.image_generation_authority_revision,
+                    )
+            except (RuntimeError, OSError, ValueError, TypeError, AttributeError):
+                authorized = False
         return _GeneratedImagePublication(
             run_id=run.run_id,
             thread_id=run.thread_id,
@@ -1485,6 +1640,8 @@ class RuntimeBroker:
             result=item.get("result"),
             mime_type=mime_type,
             payload=payload,
+            authorized=authorized,
+            authority_lease=authority_lease,
         )
 
     def _publish_generated_image_completion(
@@ -1492,26 +1649,45 @@ class RuntimeBroker:
         publication: _GeneratedImagePublication,
     ) -> None:
         artifact: ArtifactRecord | None = None
-        rejected = publication.status not in {"completed", "succeeded"}
+        rejected = (
+            not publication.authorized
+            or publication.status not in {"completed", "succeeded"}
+        )
         failure: BaseException | None = None
-        if not rejected:
-            try:
-                artifact = self.storage.save_generated_image(
-                    thread_id=publication.thread_id,
-                    item_id=publication.item_id,
-                    result=publication.result,
-                    mime_type=publication.mime_type,
-                )
-            except (
-                WorkspaceBoundaryError,
-                OSError,
-                ValueError,
-                ResourceLimitError,
-                RuntimeError,
-            ):
-                rejected = True
-            except BaseException as exc:
-                failure = exc
+        lease = publication.authority_lease
+        ensure_active = getattr(lease, "ensure_active", None)
+        release = getattr(lease, "release", None)
+        try:
+            if not rejected:
+                try:
+                    validate_generated_image_result(
+                        publication.result,
+                        publication.mime_type,
+                    )
+                    if callable(ensure_active):
+                        ensure_active()
+                    kwargs: dict[str, object] = {
+                        "thread_id": publication.thread_id,
+                        "item_id": publication.item_id,
+                        "result": publication.result,
+                        "mime_type": publication.mime_type,
+                    }
+                    if callable(ensure_active):
+                        kwargs["persistence_guard"] = ensure_active
+                    artifact = self.storage.save_generated_image(**kwargs)
+                except (
+                    WorkspaceBoundaryError,
+                    OSError,
+                    ValueError,
+                    ResourceLimitError,
+                    RuntimeError,
+                ):
+                    rejected = True
+                except BaseException as exc:
+                    failure = exc
+        finally:
+            if callable(release):
+                release()
 
         with self._lock:
             try:
@@ -1834,12 +2010,65 @@ class RuntimeBroker:
                 source=params,
             )
 
+    def _browser_tools_ready(self) -> bool:
+        if not self._browser_dynamic_tools_enabled:
+            return False
+        broker = self._browser_broker
+        if broker is None or not callable(getattr(broker, "close_owner", None)):
+            return False
+        try:
+            return broker.ready is True
+        except BaseException:
+            return False
+
+    def _authorize_browser_turn_locked(self, run: RuntimeRunState) -> None:
+        pending = self._browser_pending_thread_authorities.pop(run.run_id, None)
+        if (
+            pending is None
+            or not self._browser_tools_ready()
+            or run.generation != pending.generation
+            or run.codex_thread_id != pending.codex_thread_id
+            or not isinstance(run.codex_turn_id, str)
+        ):
+            return
+        self._browser_turn_authorities[run.run_id] = BrowserInvocationContext(
+            run_id=run.run_id,
+            thread_id=run.thread_id,
+            codex_thread_id=pending.codex_thread_id,
+            turn_id=run.codex_turn_id,
+            generation=pending.generation,
+        )
+        self._browser_tool_replays[run.run_id] = {}
+
+    def _revoke_browser_turn_locked(self, run_id: str) -> None:
+        self._browser_pending_thread_authorities.pop(run_id, None)
+        self._browser_tool_replays.pop(run_id, None)
+        authority = self._browser_turn_authorities.pop(run_id, None)
+        if authority is None:
+            return
+        broker = self._browser_broker
+        close_owner = None if broker is None else getattr(broker, "close_owner", None)
+        if not callable(close_owner):
+            return
+        try:
+            close_owner(authority)
+        except BaseException:
+            # Authority is revoked even if a dead local worker cannot confirm
+            # profile deletion. The worker's process lifecycle performs final
+            # cleanup on exit.
+            return
+
     def _on_server_request(
         self,
         request: AppServerRequest,
         *,
         replaying: bool = False,
     ) -> object:
+        # Dynamic tool calls have their own exact correlation shape. Do this
+        # before the approval parser: a browser callback has no itemId and may
+        # never enter the deferred user-interaction state machine.
+        if request.method == "item/tool/call":
+            return self._on_browser_tool_call(request)
         if request.method in {"execCommandApproval", "applyPatchApproval"}:
             return {"decision": "denied"}
         params = request.params
@@ -1948,6 +2177,78 @@ class RuntimeBroker:
             interaction.event_id = events[0].scope_sequence
             self._persist_locked()
             return DEFERRED_RESPONSE
+
+    def _on_browser_tool_call(self, request: AppServerRequest) -> dict[str, object]:
+        parsed = _browser_tool_call_params(request.params)
+        if parsed is None:
+            return _browser_tool_rejection()
+        codex_thread_id, turn_id, call_id, tool, arguments, fingerprint = parsed
+        with self._lock:
+            run = self._correlated_run_locked(
+                request.generation,
+                codex_thread_id,
+                turn_id,
+            )
+            authority = None if run is None else self._browser_turn_authorities.get(
+                run.run_id
+            )
+            if (
+                run is None
+                or authority is None
+                or authority.generation != request.generation
+                or authority.codex_thread_id != codex_thread_id
+                or authority.turn_id != turn_id
+                or run.status != "running"
+                or run.unattended
+                or not self._browser_tools_ready()
+            ):
+                return _browser_tool_rejection()
+            broker = self._browser_broker
+            if broker is None:
+                return _browser_tool_rejection()
+            replays = self._browser_tool_replays.get(run.run_id)
+            if replays is None:
+                return _browser_tool_rejection()
+            replay = replays.get(call_id)
+            if replay is not None:
+                if replay.fingerprint != fingerprint or replay.result is None:
+                    return _browser_tool_rejection()
+                return deepcopy(replay.result)
+            if len(replays) >= _MAX_BROWSER_TOOL_REPLAYS_PER_TURN:
+                return _browser_tool_rejection()
+            # Reserve the call ID before releasing the runtime lock. If the
+            # worker crashes after a side effect, a retry must not execute it
+            # again merely because the first response was lost.
+            replays[call_id] = _BrowserToolReplay(fingerprint=fingerprint)
+
+        # Browser actions can wait for a page response. Never retain the
+        # global runtime lock while the private worker is active.
+        try:
+            result = _safe_browser_tool_result(
+                broker.invoke(authority, tool, arguments)
+            )
+        except BaseException:
+            result = _browser_tool_rejection()
+
+        with self._lock:
+            current = self._state.runs.get(authority.run_id)
+            if (
+                current is None
+                or current.status != "running"
+                or current.unattended
+                or current.generation != request.generation
+                or current.codex_thread_id != codex_thread_id
+                or current.codex_turn_id != turn_id
+                or self._browser_turn_authorities.get(authority.run_id) != authority
+            ):
+                return _browser_tool_rejection()
+            replay = self._browser_tool_replays.get(authority.run_id, {}).get(call_id)
+            if replay is None or replay.fingerprint != fingerprint:
+                return _browser_tool_rejection()
+            replay.result = deepcopy(result)
+            current.last_activity_at = _now()
+            self._activity[current.run_id] = monotonic()
+        return deepcopy(result)
 
     def _on_server_request_resolved(self, notification: AppServerNotification) -> None:
         params = notification.params
@@ -2157,6 +2458,7 @@ class RuntimeBroker:
     ) -> None:
         if run.status in _TERMINAL_RUN_STATES:
             return
+        self._revoke_browser_turn_locked(run.run_id)
         run.status = status  # type: ignore[assignment]
         run.prompt = None
         run.terminal_message = message
@@ -2672,6 +2974,7 @@ class RuntimeBroker:
             if request_id not in request_ids
         }
         for run_id in run_ids:
+            self._revoke_browser_turn_locked(run_id)
             self._leases.pop(run_id, None)
             self._completion_events.pop(run_id, None)
             self._activity.pop(run_id, None)
@@ -3123,6 +3426,7 @@ class RuntimeBroker:
         for run in self._state.runs.values():
             if run.status in _TERMINAL_RUN_STATES:
                 continue
+            self._revoke_browser_turn_locked(run.run_id)
             run.status = "interrupted"
             run.prompt = None
             run.terminal_message = "The private Codex runtime state is unavailable."
@@ -3268,6 +3572,122 @@ def _empty_answers(params: object) -> dict[str, object]:
             if isinstance(question_id, str) and question_id:
                 answers[question_id] = {"answers": []}
     return {"answers": answers}
+
+
+def _browser_tool_call_params(
+    params: object,
+) -> tuple[str, str, str, str, dict[str, object], str] | None:
+    """Validate the full client-owned browser callback envelope.
+
+    ``item/tool/call`` is intentionally not fed through the generic approval
+    correlation parser: it has no item ID, and accepting optional or unknown
+    envelope fields would weaken the ownership contract at the model boundary.
+    """
+
+    if not isinstance(params, dict) or set(params) != {
+        "arguments",
+        "callId",
+        "namespace",
+        "threadId",
+        "tool",
+        "turnId",
+    }:
+        return None
+    thread_id = params.get("threadId")
+    turn_id = params.get("turnId")
+    call_id = params.get("callId")
+    namespace = params.get("namespace")
+    tool = params.get("tool")
+    arguments = params.get("arguments")
+    identifiers = (thread_id, turn_id, call_id, tool)
+    if any(
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value.encode("utf-8")) > 256
+        for value in identifiers
+    ):
+        return None
+    if namespace != "ha_browser" or tool not in _BROWSER_DYNAMIC_TOOLS:
+        return None
+    if not isinstance(arguments, dict) or len(arguments) > 16:
+        return None
+    try:
+        canonical_arguments = json.dumps(
+            arguments,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):
+        return None
+    if len(canonical_arguments.encode("utf-8")) > _MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES:
+        return None
+    fingerprint = hashlib.sha256(
+        f"{tool}\0{canonical_arguments}".encode("utf-8")
+    ).hexdigest()
+    return thread_id, turn_id, call_id, tool, dict(arguments), fingerprint
+
+
+def _browser_tool_rejection() -> dict[str, object]:
+    return {
+        "success": False,
+        "contentItems": [
+            {
+                "type": "inputText",
+                "text": "Browser action rejected by Home Assistant policy.",
+            }
+        ],
+    }
+
+
+def _safe_browser_tool_result(value: object) -> dict[str, object]:
+    """Keep a compromised helper from returning an unbounded tool payload."""
+
+    if not isinstance(value, dict) or set(value) != {"success", "contentItems"}:
+        return _browser_tool_rejection()
+    success = value.get("success")
+    content_items = value.get("contentItems")
+    if type(success) is not bool or not isinstance(content_items, list):
+        return _browser_tool_rejection()
+    if not 1 <= len(content_items) <= 2:
+        return _browser_tool_rejection()
+    safe_items: list[dict[str, str]] = []
+    for item in content_items:
+        if not isinstance(item, dict):
+            return _browser_tool_rejection()
+        item_type = item.get("type")
+        if item_type == "inputText" and set(item) == {"type", "text"}:
+            text = item.get("text")
+            if (
+                not isinstance(text, str)
+                or not text
+                or len(text.encode("utf-8")) > _MAX_BROWSER_DYNAMIC_TEXT_BYTES
+            ):
+                return _browser_tool_rejection()
+            safe_items.append({"type": "inputText", "text": text})
+            continue
+        if item_type == "inputImage" and set(item) == {"type", "imageUrl"}:
+            image_url = item.get("imageUrl")
+            if (
+                not isinstance(image_url, str)
+                or not image_url.startswith((
+                    "data:image/png;base64,",
+                    "data:image/jpeg;base64,",
+                ))
+            ):
+                return _browser_tool_rejection()
+            try:
+                encoded = image_url.encode("ascii")
+            except UnicodeEncodeError:
+                return _browser_tool_rejection()
+            if len(encoded) > _MAX_BROWSER_DYNAMIC_IMAGE_URL_BYTES:
+                return _browser_tool_rejection()
+            safe_items.append({"type": "inputImage", "imageUrl": image_url})
+            continue
+        return _browser_tool_rejection()
+    return {"success": success, "contentItems": safe_items}
 
 
 def _safe_failure(value: object) -> str:

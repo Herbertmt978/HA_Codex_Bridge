@@ -84,6 +84,14 @@ DIRECTORY_FLAGS = (
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
+STALE_WORKSPACE_PATTERN = re.compile(
+    r"\.sandbox-self-test-[0-9a-f]{32}\Z",
+    re.ASCII,
+)
+STALE_SIBLING_PATTERN = re.compile(
+    r"\.sandbox-sibling-[0-9a-f]{32}\Z",
+    re.ASCII,
+)
 
 
 class SelfTestError(RuntimeError):
@@ -164,6 +172,247 @@ def _unlink_name(parent: Path, name: str) -> None:
             pass
     finally:
         os.close(descriptor)
+
+
+def _entry_identity(metadata: os.stat_result) -> tuple[int, int]:
+    return int(metadata.st_dev), int(metadata.st_ino)
+
+
+def _same_entry(
+    parent_descriptor: int,
+    name: str,
+    identity: tuple[int, int],
+) -> os.stat_result:
+    metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    if _entry_identity(metadata) != identity:
+        raise SelfTestError
+    return metadata
+
+
+def _claim_directory_for_cleanup(
+    descriptor: int,
+    *,
+    uid: int,
+    gid: int,
+    required_mode: int | None,
+) -> tuple[int, int, int, tuple[int, int]]:
+    metadata = os.fstat(descriptor)
+    mode = stat.S_IMODE(metadata.st_mode)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or (metadata.st_uid, metadata.st_gid) not in {(0, 0), (uid, gid)}
+        or (required_mode is not None and mode != required_mode)
+    ):
+        raise SelfTestError
+    identity = _entry_identity(metadata)
+    original = int(metadata.st_uid), int(metadata.st_gid), mode, identity
+    try:
+        os.fchown(descriptor, 0, 0)
+        os.fchmod(descriptor, 0o700)
+        claimed = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(claimed.st_mode)
+            or _entry_identity(claimed) != identity
+            or claimed.st_uid != 0
+            or claimed.st_gid != 0
+            or stat.S_IMODE(claimed.st_mode) != 0o700
+        ):
+            raise SelfTestError
+    except Exception as exc:
+        # A partial claim must never strand /config/workspaces as root-only.
+        # Restore through the held descriptor before surfacing the failed
+        # startup self-test, including when validation fails after mutation.
+        try:
+            _restore_claimed_directory(descriptor, original)
+        except Exception as restore_exc:
+            raise SelfTestError from restore_exc
+        raise SelfTestError from exc
+    return original
+
+
+def _restore_claimed_directory(
+    descriptor: int,
+    original: tuple[int, int, int, tuple[int, int]],
+) -> None:
+    uid, gid, mode, identity = original
+    os.fchown(descriptor, uid, gid)
+    os.fchmod(descriptor, mode)
+    restored = os.fstat(descriptor)
+    if (
+        not stat.S_ISDIR(restored.st_mode)
+        or _entry_identity(restored) != identity
+        or restored.st_uid != uid
+        or restored.st_gid != gid
+        or stat.S_IMODE(restored.st_mode) != mode
+    ):
+        raise SelfTestError
+
+
+def _clear_stale_directory(
+    directory_descriptor: int,
+    *,
+    uid: int,
+    gid: int,
+) -> None:
+    _claim_directory_for_cleanup(
+        directory_descriptor,
+        uid=uid,
+        gid=gid,
+        required_mode=None,
+    )
+    with os.scandir(directory_descriptor) as entries:
+        snapshots = tuple(
+            (entry.name, entry.stat(follow_symlinks=False)) for entry in entries
+        )
+    for name, metadata in snapshots:
+        identity = _entry_identity(metadata)
+        if stat.S_ISDIR(metadata.st_mode):
+            child_descriptor = -1
+            try:
+                child_descriptor = os.open(
+                    name,
+                    DIRECTORY_FLAGS,
+                    dir_fd=directory_descriptor,
+                )
+                opened = os.fstat(child_descriptor)
+                if (
+                    not stat.S_ISDIR(opened.st_mode)
+                    or _entry_identity(opened) != identity
+                ):
+                    raise SelfTestError
+                _clear_stale_directory(
+                    child_descriptor,
+                    uid=uid,
+                    gid=gid,
+                )
+            finally:
+                if child_descriptor >= 0:
+                    os.close(child_descriptor)
+            current = _same_entry(directory_descriptor, name, identity)
+            if not stat.S_ISDIR(current.st_mode):
+                raise SelfTestError
+            os.rmdir(name, dir_fd=directory_descriptor)
+            continue
+        current = _same_entry(directory_descriptor, name, identity)
+        if stat.S_ISDIR(current.st_mode):
+            raise SelfTestError
+        os.unlink(name, dir_fd=directory_descriptor)
+
+
+def _remove_stale_workspace(
+    parent_descriptor: int,
+    name: str,
+    identity: tuple[int, int],
+    *,
+    uid: int,
+    gid: int,
+) -> None:
+    descriptor = -1
+    try:
+        descriptor = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_descriptor)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or _entry_identity(metadata) != identity
+        ):
+            raise SelfTestError
+        _clear_stale_directory(descriptor, uid=uid, gid=gid)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    current = _same_entry(parent_descriptor, name, identity)
+    if not stat.S_ISDIR(current.st_mode):
+        raise SelfTestError
+    os.rmdir(name, dir_fd=parent_descriptor)
+
+
+def _remove_stale_sibling(
+    parent_descriptor: int,
+    name: str,
+    identity: tuple[int, int],
+) -> None:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=parent_descriptor,
+        )
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or _entry_identity(metadata) != identity
+        ):
+            raise SelfTestError
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    current = _same_entry(parent_descriptor, name, identity)
+    if not stat.S_ISREG(current.st_mode):
+        raise SelfTestError
+    os.unlink(name, dir_fd=parent_descriptor)
+
+
+def _cleanup_stale_probe_entries(*, uid: int, gid: int) -> None:
+    """Remove only exact stale probe locators through the held workspace root."""
+
+    if type(uid) is not int or uid <= 0 or type(gid) is not int or gid <= 0:
+        raise SelfTestError
+    root_descriptor = -1
+    original_root: tuple[int, int, int, tuple[int, int]] | None = None
+    try:
+        root_descriptor = os.open(WORKSPACE_ROOT, DIRECTORY_FLAGS)
+        original_root = _claim_directory_for_cleanup(
+            root_descriptor,
+            uid=uid,
+            gid=gid,
+            required_mode=0o700,
+        )
+        try:
+            with os.scandir(root_descriptor) as entries:
+                candidates = tuple(
+                    sorted(
+                        (
+                            entry.name,
+                            entry.stat(follow_symlinks=False),
+                        )
+                        for entry in entries
+                        if STALE_WORKSPACE_PATTERN.fullmatch(entry.name)
+                        or STALE_SIBLING_PATTERN.fullmatch(entry.name)
+                    )
+                )
+            for name, metadata in candidates:
+                identity = _entry_identity(metadata)
+                if STALE_WORKSPACE_PATTERN.fullmatch(name):
+                    if not stat.S_ISDIR(metadata.st_mode):
+                        raise SelfTestError
+                    _remove_stale_workspace(
+                        root_descriptor,
+                        name,
+                        identity,
+                        uid=uid,
+                        gid=gid,
+                    )
+                elif STALE_SIBLING_PATTERN.fullmatch(name):
+                    if not stat.S_ISREG(metadata.st_mode):
+                        raise SelfTestError
+                    _remove_stale_sibling(root_descriptor, name, identity)
+                else:
+                    raise SelfTestError
+            os.fsync(root_descriptor)
+        finally:
+            if original_root is not None:
+                _restore_claimed_directory(root_descriptor, original_root)
+    except SelfTestError:
+        raise
+    except OSError as exc:
+        raise SelfTestError from exc
+    finally:
+        if root_descriptor >= 0:
+            os.close(root_descriptor)
 
 
 def _remove_attestation() -> None:
@@ -646,6 +895,7 @@ def _root() -> int:
         raise SelfTestError
     expected_profile = parent_profile + bwrap_suffix
 
+    _cleanup_stale_probe_entries(uid=uid, gid=gid)
     nonce = secrets.token_hex(16)
     workspace = WORKSPACE_ROOT / f".sandbox-self-test-{nonce}"
     if workspace.parent != WORKSPACE_ROOT or not re.fullmatch(

@@ -93,6 +93,8 @@ class RuntimeRunState(BaseModel):
     codex_turn_id: str | None = Field(default=None, max_length=256)
     turn_start_dispatched: bool = False
     generation: int | None = Field(default=None, ge=1)
+    image_generation_authority_generation: int | None = Field(default=None, ge=1)
+    image_generation_authority_revision: int | None = Field(default=None, ge=1)
     status: RunStatus
     created_at: str = Field(min_length=1, max_length=64)
     total_deadline_at: str | None = Field(default=None, max_length=64)

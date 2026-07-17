@@ -4,13 +4,17 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+import base64
 import json
 import os
 from pathlib import Path
 import random
+import struct
 from threading import Barrier, Event, Lock, RLock
 import time
 from typing import Any
+from types import SimpleNamespace
+import zlib
 
 import pytest
 
@@ -23,6 +27,8 @@ from codex_bridge_service.codex_app_server import (
     AppServerResponseError,
     AppServerTimeoutError,
 )
+from codex_bridge_service.browser_broker import BrowserInvocationContext
+from codex_bridge_service.capabilities import CapabilitiesManager
 from codex_bridge_service.codex_app_server_contract import (
     AppServerProtocolValidator,
     load_bundled_protocol_contract,
@@ -90,6 +96,58 @@ class _HomeAssistantProfileStorage:
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._storage, name)
+
+
+class _ImageGenerationAuthority:
+    def __init__(self, *, available: bool = True) -> None:
+        self.available = available
+        self.authorized_generations: list[int] = []
+        self.revision = 1
+
+    def authorize_image_generation(self, expected_generation: int) -> int | None:
+        if self.available:
+            self.authorized_generations.append(expected_generation)
+            return self.revision
+        return None
+
+    def is_image_generation_authorized(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> bool:
+        return (
+            self.available
+            and expected_generation in self.authorized_generations
+            and expected_revision == self.revision
+        )
+
+
+class _BrowserBroker:
+    def __init__(self, *, ready: bool = True) -> None:
+        self.ready = ready
+        self.invocations: list[
+            tuple[BrowserInvocationContext, str, dict[str, object]]
+        ] = []
+        self.closed_owners: list[BrowserInvocationContext] = []
+        self.closed = False
+
+    def invoke(
+        self,
+        owner: BrowserInvocationContext,
+        tool: str,
+        arguments: dict[str, object],
+    ) -> dict[str, object]:
+        self.invocations.append((owner, tool, dict(arguments)))
+        return {
+            "success": True,
+            "contentItems": [{"type": "inputText", "text": "Browser page ready."}],
+        }
+
+    def close_owner(self, owner: BrowserInvocationContext) -> None:
+        self.closed_owners.append(owner)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 _PROTOCOL_VALIDATOR = AppServerProtocolValidator(load_bundled_protocol_contract())
@@ -332,6 +390,24 @@ class ValidatorBackedAppServer:
         raise AssertionError(f"no scripted result for {method}")
 
 
+class CapabilityValidatorBackedAppServer(ValidatorBackedAppServer):
+    """Runtime fixture exposing the typed provider capability probe."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.provider_capability_result: object = SimpleNamespace(
+            generation=1,
+            image_generation=True,
+            namespace_tools=True,
+            web_search=True,
+        )
+
+    def read_model_provider_capabilities(self) -> object:
+        if isinstance(self.provider_capability_result, BaseException):
+            raise self.provider_capability_result
+        return self.provider_capability_result
+
+
 class BlockingTurnStartAppServer(ValidatorBackedAppServer):
     """Pause one turn/start before the response exposes its new turn ID."""
 
@@ -408,6 +484,9 @@ def _broker(
     cancel_grace_seconds: float = 0.05,
     interaction_timeout_seconds: float = 5.0,
     run_terminal_listener: Callable[[str, str, str, bool], None] | None = None,
+    image_generation_authority: object | None = None,
+    browser_broker: object | None = None,
+    browser_dynamic_tools_enabled: bool = False,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
         storage=storage,
@@ -419,6 +498,9 @@ def _broker(
         cancel_grace_seconds=cancel_grace_seconds,
         interaction_timeout_seconds=interaction_timeout_seconds,
         run_terminal_listener=run_terminal_listener,
+        image_generation_authority=image_generation_authority,
+        browser_broker=browser_broker,
+        browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
     )
     broker.start()
     return broker
@@ -514,6 +596,7 @@ def test_start_registers_nonblocking_protocol_handlers(tmp_path: Path) -> None:
     broker = _broker(storage, client)
     try:
         assert {
+            "item/tool/call",
             "item/commandExecution/requestApproval",
             "item/fileChange/requestApproval",
             "item/permissions/requestApproval",
@@ -526,6 +609,199 @@ def test_start_registers_nonblocking_protocol_handlers(tmp_path: Path) -> None:
             "turn/completed",
             "turn/started",
         }.issubset(client.notification_handlers)
+    finally:
+        broker.close()
+
+
+def test_browser_tools_are_fresh_thread_only_and_revoke_on_completion(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    browser = _BrowserBroker()
+    broker = _broker(
+        storage,
+        client,
+        browser_broker=browser,
+        browser_dynamic_tools_enabled=True,
+    )
+    try:
+        broker.submit_prompt(thread.thread_id, "Use the browser")
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        start_params = _requests(client, "thread/start")[-1]
+        assert start_params["dynamicTools"] == [
+            runtime_broker_module.browser_dynamic_tool_spec()
+        ]
+
+        result = client.emit_request(
+            "item/tool/call",
+            {
+                "namespace": "ha_browser",
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "callId": "call_browser_1",
+                "tool": "open",
+                "arguments": {"url": "https://example.com"},
+            },
+        )
+
+        assert result == {
+            "success": True,
+            "contentItems": [
+                {"type": "inputText", "text": "Browser page ready."}
+            ],
+        }
+        assert browser.invocations == [
+            (
+                BrowserInvocationContext(
+                    run_id=run_id,
+                    thread_id=thread.thread_id,
+                    codex_thread_id=remote_thread_id,
+                    turn_id=turn_id,
+                    generation=1,
+                ),
+                "open",
+                {"url": "https://example.com"},
+            )
+        ]
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        assert browser.closed_owners == [browser.invocations[0][0]]
+
+        broker.submit_prompt(thread.thread_id, "Resume without browser authority")
+        _run_id, resumed_thread_id, resumed_turn_id = _active_ids(
+            storage, thread.thread_id
+        )
+        resume_params = _requests(client, "thread/resume")[-1]
+        assert "dynamicTools" not in resume_params
+        rejected = client.emit_request(
+            "item/tool/call",
+            {
+                "namespace": "ha_browser",
+                "threadId": resumed_thread_id,
+                "turnId": resumed_turn_id,
+                "callId": "call_browser_2",
+                "tool": "open",
+                "arguments": {"url": "https://example.com"},
+            },
+        )
+        assert rejected == runtime_broker_module._browser_tool_rejection()
+        assert len(browser.invocations) == 1
+    finally:
+        broker.close()
+    assert browser.closed is True
+
+
+def test_browser_tool_call_id_is_at_most_once_and_conflicts_fail_closed(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    browser = _BrowserBroker()
+    broker = _broker(
+        storage,
+        client,
+        browser_broker=browser,
+        browser_dynamic_tools_enabled=True,
+    )
+    try:
+        broker.submit_prompt(thread.thread_id, "Open a page")
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        payload = {
+            "namespace": "ha_browser",
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "callId": "call_browser_once",
+            "tool": "open",
+            "arguments": {"url": "https://example.com"},
+        }
+
+        first = client.emit_request("item/tool/call", payload)
+        replay = client.emit_request("item/tool/call", payload)
+        conflict = client.emit_request(
+            "item/tool/call",
+            {
+                **payload,
+                "arguments": {"url": "https://example.org"},
+            },
+        )
+
+        assert replay == first
+        assert conflict == runtime_broker_module._browser_tool_rejection()
+        assert len(browser.invocations) == 1
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        stale_replay = client.emit_request("item/tool/call", payload)
+        assert stale_replay == runtime_broker_module._browser_tool_rejection()
+        assert len(browser.invocations) == 1
+    finally:
+        broker.close()
+
+
+def test_browser_tool_callback_fails_closed_for_stale_unattended_or_extra_fields(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    browser = _BrowserBroker()
+    broker = _broker(
+        storage,
+        client,
+        browser_broker=browser,
+        browser_dynamic_tools_enabled=True,
+    )
+    try:
+        broker.submit_prompt(thread.thread_id, "Open a page")
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        base = {
+            "namespace": "ha_browser",
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "callId": "call_browser_1",
+            "tool": "open",
+            "arguments": {"url": "https://example.com"},
+        }
+        extra = client.request_handlers["item/tool/call"](
+            AppServerRequest(
+                request_id="bad-extra",
+                method="item/tool/call",
+                params={**base, "itemId": "not-allowed"},
+                generation=1,
+            )
+        )
+        stale = client.emit_request(
+            "item/tool/call",
+            {**base, "turnId": "turn_other"},
+        )
+
+        assert extra == runtime_broker_module._browser_tool_rejection()
+        assert stale == runtime_broker_module._browser_tool_rejection()
+        assert browser.invocations == []
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        assert len(browser.closed_owners) == 1
+
+        unattended_thread = _new_thread(storage, tmp_path, name="Unattended")
+        broker.submit_prompt(
+            unattended_thread.thread_id,
+            "Open a page unattended",
+            unattended=True,
+        )
+        _run_id, unattended_remote, unattended_turn = _active_ids(
+            storage, unattended_thread.thread_id
+        )
+        assert "dynamicTools" not in _requests(client, "thread/start")[-1]
+        unattended = client.emit_request(
+            "item/tool/call",
+            {
+                **base,
+                "threadId": unattended_remote,
+                "turnId": unattended_turn,
+                "callId": "call_browser_unattended",
+            },
+        )
+        assert unattended == runtime_broker_module._browser_tool_rejection()
+        assert browser.invocations == []
     finally:
         broker.close()
 
@@ -1082,7 +1358,11 @@ def test_image_completion_never_hashes_or_persists_raw_provider_fields(
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     client = ValidatorBackedAppServer()
-    broker = _broker(storage, client)
+    broker = _broker(
+        storage,
+        client,
+        image_generation_authority=_ImageGenerationAuthority(),
+    )
     signature_sources: list[object] = []
     saved_results: list[object] = []
     original_emit_once = broker._emit_once_locked
@@ -1121,7 +1401,10 @@ def test_image_completion_never_hashes_or_persists_raw_provider_fields(
 
         monkeypatch.setattr(storage, "save_generated_image", save_generated_image)
         monkeypatch.setattr(broker, "_emit_once_locked", capture_emit_once)
-        raw_result = "raw-base64-result-private-secret"
+        raw_result = (
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
         params = {
             "threadId": remote_thread_id,
             "turnId": turn_id,
@@ -1171,7 +1454,11 @@ def test_slow_image_save_does_not_hold_broker_lock(
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     client = ValidatorBackedAppServer()
-    broker = _broker(storage, client)
+    broker = _broker(
+        storage,
+        client,
+        image_generation_authority=_ImageGenerationAuthority(),
+    )
     entered = Event()
     release = Event()
     try:
@@ -1206,7 +1493,10 @@ def test_slow_image_save_does_not_hold_broker_lock(
                 "id": "image-item-blocked",
                 "type": "imageGeneration",
                 "status": "completed",
-                "result": "raw-image-result",
+                "result": (
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                    "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                ),
                 "revisedPrompt": None,
                 "savedPath": None,
             },
@@ -1232,6 +1522,255 @@ def test_slow_image_save_does_not_hold_broker_lock(
         assert completed[0].payload["artifact_id"] == artifact.artifact_id
     finally:
         release.set()
+        broker.close()
+
+
+def test_image_capability_revocation_during_validation_cannot_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sign-out winning while validation is blocked rejects the whole item.
+
+    The real capability manager marks its revision revoked before waiting for
+    the active lease.  The runtime's final lease check then rejects the image
+    before it can reach storage or emit an artifact-complete event.
+    """
+
+    storage, thread = _storage_and_thread(tmp_path)
+    client = CapabilityValidatorBackedAppServer()
+    authority = CapabilitiesManager(storage, client)
+    broker = _broker(storage, client, image_generation_authority=authority)
+    entered = Event()
+    release = Event()
+    saves: list[object] = []
+    original_validate = runtime_broker_module.validate_generated_image_result
+
+    def blocked_validate(*args: object, **kwargs: object) -> tuple[str, bytes]:
+        entered.set()
+        assert release.wait(2)
+        return original_validate(*args, **kwargs)
+
+    monkeypatch.setattr(
+        runtime_broker_module,
+        "validate_generated_image_result",
+        blocked_validate,
+    )
+    monkeypatch.setattr(
+        storage,
+        "save_generated_image",
+        lambda **kwargs: saves.append(kwargs) or pytest.fail("image was saved"),
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Generate only while the ChatGPT capability remains authorized",
+            client_request_id="image-revocation-race",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        params = {
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "completedAtMs": 1_783_936_800_000,
+            "item": {
+                "id": "image-item-revoked-during-validation",
+                "type": "imageGeneration",
+                "status": "completed",
+                "result": (
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                    "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                ),
+                "mimeType": "image/png",
+            },
+        }
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            publish = pool.submit(client.emit_notification, "item/completed", params)
+            assert entered.wait(1)
+            invalidation = pool.submit(authority.invalidate_provider_capabilities)
+            _wait_until(
+                lambda: not authority.is_image_generation_authorized(1, 1),
+                message="capability invalidation did not revoke the publication lease",
+            )
+            assert not invalidation.done()
+            release.set()
+            publish.result(timeout=1)
+            invalidation.result(timeout=1)
+
+        assert saves == []
+        events = storage.list_thread_events(thread.thread_id)
+        assert not [event for event in events if event.event_type == "artifact.added"]
+        completed = [
+            event
+            for event in events
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "image-item-revoked-during-validation"
+        ]
+        assert [event.payload for event in completed] == [
+            {
+                "run_id": run_id,
+                "item_id": "image-item-revoked-during-validation",
+                "item_type": "imageGeneration",
+                "status": "failed",
+                "error": "image_result_rejected",
+            }
+        ]
+    finally:
+        release.set()
+        broker.close()
+
+
+@pytest.mark.parametrize(
+    "authority_state",
+    ["unavailable", "lost", "replaced"],
+)
+def test_image_completion_requires_same_generation_capability_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    authority_state: str,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    authority = _ImageGenerationAuthority(available=authority_state != "unavailable")
+    broker = _broker(
+        storage,
+        client,
+        image_generation_authority=authority,
+    )
+    saves: list[object] = []
+    monkeypatch.setattr(
+        storage,
+        "save_generated_image",
+        lambda **kwargs: saves.append(kwargs) or pytest.fail("image was published"),
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Generate only with verified capability authority",
+            client_request_id=f"image-capability-{authority_state}",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        if authority_state == "lost":
+            authority.available = False
+        elif authority_state == "replaced":
+            authority.revision += 1
+
+        params = {
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+            "completedAtMs": 1_783_936_800_000,
+            "item": {
+                "id": "image-item-capability-gated",
+                "type": "imageGeneration",
+                "status": "completed",
+                "result": (
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                    "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                ),
+                "revisedPrompt": None,
+                "savedPath": None,
+            },
+        }
+        client.emit_notification("item/completed", params)
+        client.emit_notification("item/completed", params)
+
+        assert saves == []
+        completed = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "image-item-capability-gated"
+        ]
+        assert [event.payload for event in completed] == [
+            {
+                "run_id": run_id,
+                "item_id": "image-item-capability-gated",
+                "item_type": "imageGeneration",
+                "status": "failed",
+                "error": "image_result_rejected",
+            }
+        ]
+    finally:
+        broker.close()
+
+
+def test_image_completion_rejects_over_pixel_raster_before_private_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        image_generation_authority=_ImageGenerationAuthority(),
+    )
+    saves: list[object] = []
+    monkeypatch.setattr(
+        storage,
+        "save_generated_image",
+        lambda **kwargs: saves.append(kwargs) or pytest.fail("raster was published"),
+    )
+
+    def png_chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    oversized = b"\x89PNG\r\n\x1a\n" + b"".join(
+        [
+            png_chunk(
+                b"IHDR",
+                struct.pack(">IIBBBBB", 16_384, 16_384, 8, 6, 0, 0, 0),
+            ),
+            png_chunk(b"IDAT", zlib.compress(b"\x00")),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+    encoded = base64.b64encode(oversized).decode("ascii")
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Generate a bounded image",
+            client_request_id="image-raster-boundary",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        client.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_000,
+                "item": {
+                    "id": "image-item-over-pixel",
+                    "type": "imageGeneration",
+                    "status": "completed",
+                    "result": encoded,
+                    "revisedPrompt": None,
+                    "savedPath": None,
+                },
+            },
+        )
+
+        assert saves == []
+        event = next(
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "item.completed"
+            and event.payload.get("item_id") == "image-item-over-pixel"
+        )
+        assert event.payload == {
+            "run_id": run_id,
+            "item_id": "image-item-over-pixel",
+            "item_type": "imageGeneration",
+            "status": "failed",
+            "error": "image_result_rejected",
+        }
+    finally:
         broker.close()
 
 

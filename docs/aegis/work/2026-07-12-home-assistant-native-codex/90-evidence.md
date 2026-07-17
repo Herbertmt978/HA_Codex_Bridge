@@ -573,3 +573,25 @@ accompanies the
 | Connection-state truthfulness | No false global **Connection issue** remained after the successful run, including after the secondary Files failure path. |
 | Open acceptance boundaries | The current PDF artifact scan still returns the typed `409` local Files conflict, so PDF/archive/restore acceptance is not claimed. External Nabu Casa/Cloudflare routing, cold restore, arbitrary image rollback, and the secure App-owned browser worker remain unproven. |
 | Release workflow follow-up | A manual paired HACS release gap was discovered. The paired-release workflow now waits for signed App publication and is policy-tested; its first live automatic exercise remains the next App release and is not claimed as part of this acceptance. |
+
+## 0.8.4 acceptance-foundations candidate
+
+App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex `0.144.5` is a
+source candidate only. It has no release tag, immutable digest, publication
+run, or target-HA acceptance at this checkpoint.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| PDF repair | Selected-workspace artifact listing and archive creation no longer depend on an aggregate workspace-root scan. Linux regressions prove a regular PDF remains available beside unrelated unreadable stale debris, while mutation quota uncertainty still fails closed. Root-side startup cleanup accepts only exact lowercase 32-hex self-test locators and restores ownership/mode after injected partial failures. Real target list/archive/preview/download remains pending. |
+| Image generation | Provider capability negotiation, generation/revision authority, revocable publication leases, strict PNG/JPEG/WebP validation, idempotent private persistence, and sign-out race coverage pass. A deterministic blocked-validation test proves revocation wins without an artifact or `artifact.added` event. Real ChatGPT-account prompt -> Files preview -> download remains pending. |
+| Remote transport | The Docker harness passes isolated LAN, Nabu-shaped, and Cloudflare-shaped profiles for prompt retry, distinct upload cancellation, exact 8 MiB chunk replay, WebSocket reconnect, trusted forwarded-header normalization, and artifact 206/416 resume. These are post-TLS-termination synthetic shapes; no real Nabu Casa or Cloudflare external capture is claimed. |
+| Recovery evidence | Strict offline collectors validate redacted, descriptor-bound, distinct pre/post snapshots and never mutate Home Assistant. Successful output is labelled `evidence_format_validated` / `offline_snapshot_consistency`; destructive cold restore and retained-image recovery remain pending. |
+| Browser worker | The high-level contract, correlated at-most-once dynamic-tool broker, policy proxy, redirect checks, bounded private artifacts, cancellation, and pinned worker scaffold are covered. Current HAOS denied the required user/network namespace and native Chromium sandbox path, while the parent App profile can read App-private data and open sockets. No attestation is created and `browser_v1` is not advertised. No extra privilege, host networking, or sandbox bypass is used. |
+| Frontend | ESLint passed; 294 unit tests and 17 Playwright flows passed; deterministic generated-asset checks passed. |
+| Python and Integration | Ruff, `compileall`, release sync, and Codex lock checks passed. The Linux Integration suite passed 318 tests. The decisive Python 3.14 Docker Bridge run passed 1,596 tests with 13 platform skips; the CI-like non-root focused rerun passed 19 with 1 skip. |
+| Repository validation | The pinned hassfest image reports one valid Integration and zero invalid integrations. Its CI mount is now scoped to `custom_components`, preventing ignored local build manifests from being recursively misidentified as integrations. |
+| Review | Independent final review reported no actionable correctness, security, or acceptance-claim finding. It confirmed descriptor-bound PDF reads, revocation-aware image publication, absent browser capability without attestation, and offline/redacted remote and recovery collectors. |
+
+The release may publish these completed foundations, but it must keep the real
+target PDF/image, authorized external transport, destructive recovery, and
+browser isolation gates open until each has separate controlled evidence.

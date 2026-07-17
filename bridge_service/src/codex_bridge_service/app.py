@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from .account import AppServerAccountProbe, CodexAccountProbe
 from .auth_coordinator import CodexAuthCoordinator
 from .automations import AutomationError, AutomationStore, AutomationValidationError
+from .browser_broker import BrowserBroker
 from .build_info import BuildInfo
 from .capabilities import CapabilitiesManager
 from .codex_app_server import CodexAppServerClient, CodexAppServerError
@@ -81,6 +82,17 @@ _AUTH_STATE_FILENAME = "auth-state.json"
 _OUTBOX_MARKER_FIELD = "_bridge_operation"
 
 
+def _browser_broker_ready(broker: BrowserBroker | None) -> bool:
+    """Use only an explicitly injected browser with its worker proof live."""
+
+    if broker is None or not callable(getattr(broker, "close_owner", None)):
+        return False
+    try:
+        return broker.ready is True
+    except BaseException:
+        return False
+
+
 def _load_durable_auth_status(path: Path) -> CodexAuthStatusRecord | None:
     """Load the safe auth projection without trusting outbox metadata."""
 
@@ -142,6 +154,7 @@ def create_app(
     model_discovery_timeout_seconds: float = 5.0,
     model_cache_ttl_seconds: float = 600.0,
     enable_mcp: bool = False,
+    browser_broker: BrowserBroker | None = None,
 ) -> FastAPI:
     if type(enable_mcp) is not bool:
         raise ValueError("MCP enabled state must be a boolean")
@@ -166,6 +179,11 @@ def create_app(
         and resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else None
     )
+    browser_dynamic_tools_enabled = (
+        resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        and runner_factory is None
+        and _browser_broker_ready(browser_broker)
+    )
     resolved_app_server: _AppServerLifecycle | None = None
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         resolved_app_server = (
@@ -177,13 +195,23 @@ def create_app(
                 client_version=(
                     resolved_build_info.app_version
                     or resolved_build_info.bridge_version
-                    or "0.7.2"
+                    or "0.7.3"
                 ),
                 # RuntimeBroker state transitions are ordered protocol events.
                 # One bounded callback worker preserves app-server FIFO order.
                 callback_workers=1,
                 enable_mcp=enable_mcp,
+                # Dynamic tools alter the Codex app-server protocol surface.
+                # The explicit opt-in is coupled to an injected, attested
+                # browser broker rather than merely shipping Chromium bytes.
+                enable_experimental_api=browser_dynamic_tools_enabled,
             )
+        )
+        # Factory-owned clients must opt into the experimental protocol
+        # themselves. A browser broker alone can never enable it implicitly.
+        browser_dynamic_tools_enabled = (
+            browser_dynamic_tools_enabled
+            and getattr(resolved_app_server, "enable_experimental_api", False) is True
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
     resolved_runner: Any = None
@@ -383,6 +411,22 @@ def create_app(
         workspace_root=workspace_root,
         resource_limits=resolved_resource_limits,
     )
+    if browser_dynamic_tools_enabled:
+        configure_browser_sink = getattr(browser_broker, "set_artifact_sink", None)
+        if not callable(configure_browser_sink):
+            browser_dynamic_tools_enabled = False
+        else:
+            try:
+                configure_browser_sink(
+                    lambda owner, kind, mime_type, content: storage.save_browser_artifact(
+                        thread_id=owner.thread_id,
+                        kind=kind,
+                        mime_type=mime_type,
+                        content=content,
+                    ).artifact_id
+                )
+            except (OSError, RuntimeError, TypeError, ValueError):
+                browser_dynamic_tools_enabled = False
     resolved_automations: AutomationStore | None = None
     resolved_capabilities_manager: CapabilitiesManager | None = None
     resolved_agents_manager: WorkspaceAgentsManager | None = None
@@ -543,6 +587,9 @@ def create_app(
     app.state.capabilities_manager = resolved_capabilities_manager
     app.state.agents_manager = resolved_agents_manager
     app.state.mcp_manager = resolved_mcp_manager
+    app.state.browser_broker = (
+        browser_broker if browser_dynamic_tools_enabled else None
+    )
     feature_capabilities = ["api_v1", "legacy_v0"]
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         feature_capabilities.extend(
@@ -562,6 +609,8 @@ def create_app(
             and resolved_mcp_manager.elicitation_handler_registered
         ):
             feature_capabilities.append("mcp_admin_v1")
+        if browser_dynamic_tools_enabled:
+            feature_capabilities.append("browser_v1")
     app.state.feature_capabilities = tuple(feature_capabilities)
     app.state.auth_manager = (
         None
@@ -609,6 +658,11 @@ def create_app(
             cast(RuntimeGate, resolved_runtime_gate),
             resource_limits=resolved_resource_limits,
             run_terminal_listener=automation_run_terminal,
+            image_generation_authority=resolved_capabilities_manager,
+            browser_broker=(
+                browser_broker if browser_dynamic_tools_enabled else None
+            ),
+            browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(

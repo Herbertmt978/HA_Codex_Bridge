@@ -2,6 +2,33 @@
 
 All notable App changes are recorded here.
 
+## 0.8.4
+
+- Repairs the typed PDF **Files** `409` by keeping selected-workspace listing,
+  archive, preview, and download independent of unrelated stale workspace-root
+  debris while preserving fail-closed aggregate quota checks for mutations.
+- Removes only exact stale sandbox self-test locators during root-side startup,
+  with descriptor-bound identity checks and ownership rollback on partial
+  cleanup failure.
+- Adds ChatGPT-account image generation behind runtime-advertised
+  `imageGeneration` and `namespaceTools` capabilities. Generated PNG, JPEG,
+  and WebP output is strictly validated, revocation-leased, and stored only as
+  a private Home Assistant artifact; no API key or browser/provider route is
+  introduced.
+- Adds a provider-neutral LAN, Nabu-shaped, and Cloudflare-shaped transport
+  harness plus redacted offline evidence collectors for external-route and
+  cold-restore/retained-image acceptance. Synthetic or hand-written evidence
+  cannot mark either real-system gate accepted.
+- Adds the fixed high-level App-owned browser protocol, broker, policy proxy,
+  and pinned worker scaffold. The capability remains absent because current
+  HAOS isolation cannot prove that Chromium is separated from App-private
+  data and direct sockets; no sandbox bypass or extra privilege is enabled.
+- Limits hassfest discovery to the Integration tree so ignored local build
+  manifests cannot be mistaken for Home Assistant integrations.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.3` without changing its Integration API compatibility.
+
 ## 0.8.3
 
 - Brings the Home Assistant workspace materially closer to Codex desktop with

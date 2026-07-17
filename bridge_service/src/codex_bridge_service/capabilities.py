@@ -17,7 +17,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from threading import RLock
+from threading import Condition, RLock
 from typing import Any, Callable, Iterator
 from urllib.parse import urlsplit
 
@@ -72,6 +72,35 @@ class CapabilitiesConflictError(CapabilitiesError):
 
 class CapabilitiesUnavailableError(CapabilitiesError):
     code = "capabilities_unavailable"
+
+
+class ImageGenerationPublicationLease:
+    """One revocable, in-memory authority to publish a generated image.
+
+    A lease is intentionally not durable and is valid only while its owning
+    ``CapabilitiesManager`` still has the exact verified capability revision.
+    Invalidating ChatGPT/provider capability state marks outstanding leases
+    revoked before it waits for them to drain.  Callers therefore have a
+    linearizable final check immediately before each irreversible persistence
+    boundary, without keeping the runtime broker lock during image validation
+    or disk I/O.
+    """
+
+    __slots__ = ("_manager", "_token")
+
+    def __init__(self, manager: "CapabilitiesManager", token: int) -> None:
+        self._manager = manager
+        self._token = token
+
+    def ensure_active(self) -> None:
+        """Fail closed when sign-out or capability invalidation won the race."""
+
+        self._manager._ensure_image_generation_lease_active(self._token)
+
+    def release(self) -> None:
+        """Release this bounded authority; safe to call repeatedly."""
+
+        self._manager._release_image_generation_lease(self._token)
 
 
 def _safe_text(value: object, *, limit: int = _MAX_TEXT_BYTES) -> str | None:
@@ -157,9 +186,15 @@ class CapabilitiesManager:
             provider_capabilities_ttl_seconds
         )
         self._provider_capabilities_lock = RLock()
+        self._provider_capabilities_condition = Condition(
+            self._provider_capabilities_lock
+        )
         self._provider_capabilities_generation: int | None = None
         self._provider_capabilities_cached_at: float | None = None
         self._provider_capabilities_cache = dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+        self._provider_capabilities_revision = 0
+        self._image_generation_lease_next_token = 0
+        self._image_generation_leases: dict[int, tuple[int, int]] = {}
 
     def provider_capabilities(self) -> dict[str, bool | None]:
         """Return a short-lived provider-capability probe per generation.
@@ -198,6 +233,12 @@ class CapabilitiesManager:
                 ):
                     projected = self._project_provider_capabilities(result)
                     if all(type(value) is bool for value in projected.values()):
+                        if (
+                            self._provider_capabilities_generation
+                            != current_generation
+                            or projected != self._provider_capabilities_cache
+                        ):
+                            self._provider_capabilities_revision += 1
                         self._provider_capabilities_generation = current_generation
                         self._provider_capabilities_cache = projected
                         self._provider_capabilities_cached_at = self._clock()
@@ -214,12 +255,119 @@ class CapabilitiesManager:
             return dict(_UNKNOWN_PROVIDER_CAPABILITIES)
 
     def invalidate_provider_capabilities(self) -> None:
-        """Discard a verified projection after the ChatGPT identity changes."""
+        """Revoke image publication before discarding a changed identity.
 
-        with self._provider_capabilities_lock:
+        The revision flip is visible before this method waits for current image
+        publication leases.  A worker blocked in validation/storage therefore
+        sees revocation at its next persistence check and cannot emit an
+        artifact event after sign-out returns.
+        """
+
+        with self._provider_capabilities_condition:
+            self._provider_capabilities_revision += 1
             self._provider_capabilities_generation = None
             self._provider_capabilities_cached_at = None
             self._provider_capabilities_cache = dict(_UNKNOWN_PROVIDER_CAPABILITIES)
+            while self._image_generation_leases:
+                self._provider_capabilities_condition.wait()
+
+    def authorize_image_generation(self, expected_generation: int) -> int | None:
+        """Verify image generation for one exact app-server generation.
+
+        The probe may block, so the runtime broker calls this before dispatching
+        the owning turn.  A result is authoritative only when both native image
+        generation and namespace tools were positively advertised by the same
+        app-server generation that will own that turn.
+        """
+
+        if type(expected_generation) is not int or expected_generation < 1:
+            return None
+        capabilities = self.provider_capabilities()
+        if not (
+            capabilities["image_generation"] is True
+            and capabilities["namespace_tools"] is True
+        ):
+            return None
+        with self._provider_capabilities_lock:
+            revision = self._provider_capabilities_revision
+            if self.is_image_generation_authorized(expected_generation, revision):
+                return revision
+        return None
+
+    def is_image_generation_authorized(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> bool:
+        """Read a previously verified image-generation authority without I/O."""
+
+        if (
+            type(expected_generation) is not int
+            or expected_generation < 1
+            or type(expected_revision) is not int
+            or expected_revision < 1
+        ):
+            return False
+        with self._provider_capabilities_lock:
+            return self._is_image_generation_authorized_locked(
+                expected_generation,
+                expected_revision,
+            )
+
+    def acquire_image_generation_publication_lease(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> ImageGenerationPublicationLease | None:
+        """Acquire one revocable authority spanning image validation and save.
+
+        The lease must always be released by the caller.  It is deliberately
+        acquired only for an already-authorized completion item, so a slow
+        provider image never blocks normal capability probes or runtime state.
+        """
+
+        with self._provider_capabilities_condition:
+            if not self._is_image_generation_authorized_locked(
+                expected_generation,
+                expected_revision,
+            ):
+                return None
+            self._image_generation_lease_next_token += 1
+            token = self._image_generation_lease_next_token
+            self._image_generation_leases[token] = (
+                expected_generation,
+                expected_revision,
+            )
+            return ImageGenerationPublicationLease(self, token)
+
+    def _ensure_image_generation_lease_active(self, token: int) -> None:
+        with self._provider_capabilities_lock:
+            authority = self._image_generation_leases.get(token)
+            if authority is None or not self._is_image_generation_authorized_locked(
+                *authority
+            ):
+                raise CapabilitiesUnavailableError(
+                    "image generation capability is no longer authorized"
+                )
+
+    def _release_image_generation_lease(self, token: int) -> None:
+        with self._provider_capabilities_condition:
+            if self._image_generation_leases.pop(token, None) is not None:
+                self._provider_capabilities_condition.notify_all()
+
+    def _is_image_generation_authorized_locked(
+        self,
+        expected_generation: int,
+        expected_revision: int,
+    ) -> bool:
+        return (
+            self._app_server_generation() == expected_generation
+            and self._provider_capabilities_generation == expected_generation
+            and self._provider_capabilities_revision == expected_revision
+            and self._provider_capabilities_cached_at is not None
+            and self._provider_capabilities_cache["image_generation"] is True
+            and self._provider_capabilities_cache["namespace_tools"] is True
+        )
 
     def _app_server_generation(self) -> int | None:
         try:
