@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 0.8.5
+
+- Makes generated-image **Open preview** reliably reveal the authenticated
+  Files preview, including when the image was already selected automatically.
+- Adds an inline browser Download action for generated images while retaining
+  the existing Home Assistant-authenticated download path for every artifact.
+- Keeps the Home Assistant document fixed and constrains scrolling to the chat
+  transcript at desktop and narrow widths, so the composer and workspace rails
+  remain in place.
+- Describes image generation truthfully as Codex's provider-native ChatGPT
+  capability and removes unsupported `$imagegen`/local-skill guidance.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.3` without changing its Integration API compatibility.
+
 ## 0.8.4
 
 - Repairs the typed PDF **Files** `409` by keeping selected-workspace listing,

@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.4";
+const PANEL_VERSION = "0.8.5";
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -332,10 +332,12 @@ template.innerHTML = `
     .shell {
       display: grid;
       grid-template-columns: minmax(228px, 278px) minmax(0, 1fr) minmax(228px, 286px);
+      grid-template-rows: minmax(0, 1fr);
       gap: 12px;
       height: 100%;
       max-height: 100vh;
       min-height: 0;
+      overflow: hidden;
       padding: 12px;
       background:
         linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 34%),
@@ -1780,6 +1782,21 @@ template.innerHTML = `
       min-height: 32px;
       padding: 0 10px;
       border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color) 68%);
+      background: var(--surface-bg);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .generated-image-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .generated-image-download {
+      min-height: 32px;
+      padding: 0 10px;
+      border-color: var(--border-color);
       background: var(--surface-bg);
       font-size: 12px;
       font-weight: 650;
@@ -4574,7 +4591,8 @@ template.innerHTML = `
       }
 
       .main-pane {
-        overflow-y: auto;
+        overflow-x: hidden;
+        overflow-y: hidden;
         overscroll-behavior: contain;
       }
 
@@ -4855,6 +4873,7 @@ class CodexBridgePanel extends HTMLElement {
     this._artifactRefreshRetryAttempts = 0;
     this._workspaceArchivePending = false;
     this._artifactPreview = null;
+    this._artifactPreviewLoad = null;
     this._selectedArtifactId = null;
     this._previewToken = 0;
     this._pdfPreviewDocument = null;
@@ -5435,6 +5454,9 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "select-artifact":
         this._selectArtifact(actionTarget.dataset.artifactId || "");
+        break;
+      case "open-artifact-preview":
+        this._openArtifactPreview(actionTarget.dataset.artifactId || "", actionTarget);
         break;
       case "download-artifact":
         this._downloadArtifact(actionTarget.dataset.artifactId || "");
@@ -8315,28 +8337,40 @@ class CodexBridgePanel extends HTMLElement {
       metadata.push(this._formatBytes(artifact.size_bytes));
     }
     const action = artifact?.artifact_id
-      ? this._actionButton("generated-image-open", "select-artifact", `Open generated image ${filename}`)
+      ? this._actionButton("generated-image-open", "open-artifact-preview", `Open generated image ${filename}`)
       : null;
     if (action) {
       action.dataset.artifactId = artifact.artifact_id;
       action.textContent = "Open preview";
+    }
+    const download = artifact?.artifact_id
+      ? this._actionButton("generated-image-download", "download-artifact", `Download generated image ${filename}`)
+      : null;
+    if (download) {
+      download.dataset.artifactId = artifact.artifact_id;
+      download.textContent = "Download";
     }
     const cachedPreview = artifact?.artifact_id === this._artifactPreview?.artifactId
       && this._artifactPreview?.kind === "image"
       ? createPreviewElement(document, this._artifactPreview, { blobUrl: this._artifactPreview.url })
       : null;
     if (cachedPreview && artifact?.artifact_id) {
-      const thumbnail = this._actionButton("generated-image-thumbnail", "select-artifact", `Open generated image ${filename}`);
+      const thumbnail = this._actionButton("generated-image-thumbnail", "open-artifact-preview", `Open generated image ${filename}`);
       thumbnail.dataset.artifactId = artifact.artifact_id;
       thumbnail.append(cachedPreview);
       bubble.append(heading, thumbnail);
     } else {
       bubble.append(heading);
     }
-    bubble.append(
-      this._textElement("span", "generated-image-meta", metadata.join(" · ")),
-      action || this._textElement("span", "generated-image-pending", "Available in Files")
-    );
+    bubble.append(this._textElement("span", "generated-image-meta", metadata.join(" · ")));
+    if (action && download) {
+      const actions = document.createElement("div");
+      actions.className = "generated-image-actions";
+      actions.append(action, download);
+      bubble.append(actions);
+    } else {
+      bubble.append(this._textElement("span", "generated-image-pending", "Available in Files"));
+    }
     article.append(avatar, bubble);
     return article;
   }
@@ -10546,7 +10580,51 @@ class CodexBridgePanel extends HTMLElement {
     await this._loadArtifactPreview(artifactId);
   }
 
-  async _loadArtifactPreview(artifactId) {
+  _openArtifactPreview(artifactId, trigger = null) {
+    if (!artifactId || !this._artifacts.some((artifact) => artifact.artifact_id === artifactId)) {
+      return;
+    }
+
+    this._sideTab = "files";
+    this._renderSideTabs();
+    if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") {
+      this._toggleMobileDrawer("context", trigger);
+    }
+
+    if (artifactId !== this._selectedArtifactId) {
+      void this._selectArtifact(artifactId);
+    } else if (this._artifactPreview?.artifactId !== artifactId) {
+      void this._loadArtifactPreview(artifactId);
+    }
+
+    queueMicrotask(() => {
+      const responsiveDrawer = Boolean(this._contextDrawerMedia?.matches);
+      if (this._sideTab !== "files" || (responsiveDrawer && this._mobileDrawer !== "context")) {
+        return;
+      }
+      this.shadowRoot.getElementById("side-tab-files")?.focus();
+    });
+  }
+
+  _loadArtifactPreview(artifactId) {
+    const currentLoad = this._artifactPreviewLoad;
+    if (currentLoad?.artifactId === artifactId) {
+      return currentLoad.promise;
+    }
+    const promise = this._performArtifactPreviewLoad(artifactId);
+    this._artifactPreviewLoad = { artifactId, promise };
+    void promise.then(
+      () => {
+        if (this._artifactPreviewLoad?.promise === promise) this._artifactPreviewLoad = null;
+      },
+      () => {
+        if (this._artifactPreviewLoad?.promise === promise) this._artifactPreviewLoad = null;
+      }
+    );
+    return promise;
+  }
+
+  async _performArtifactPreviewLoad(artifactId) {
     if (!this._selectedThreadId || !artifactId) {
       return;
     }
@@ -10656,6 +10734,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _clearArtifactPreview() {
     this._previewToken += 1;
+    this._artifactPreviewLoad = null;
     this._disposePdfPreview();
     this._revokePreviewUrl();
     this._artifactPreview = null;

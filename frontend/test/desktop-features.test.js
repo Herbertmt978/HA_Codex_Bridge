@@ -81,7 +81,7 @@ describe("desktop feature surfaces", () => {
     });
   });
 
-  it("renders the general native-tools status with ChatGPT account guidance only", () => {
+  it("renders native image generation as a ChatGPT-backed tool, not an unavailable local skill", () => {
     const host = document.createElement("div");
     renderDesktopFeatureSurface(host, {
       destination: "settings",
@@ -94,7 +94,9 @@ describe("desktop feature surfaces", () => {
     expect(host.textContent).toContain("Image generation");
     expect(host.textContent).toContain("Available");
     expect(host.textContent).toContain("signed-in ChatGPT account");
-    expect(host.textContent).toContain("$imagegen");
+    expect(host.textContent).toContain("Ask for an image naturally in a chat");
+    expect(host.textContent).not.toContain("$imagegen");
+    expect(host.textContent).not.toMatch(/skill guide/i);
     expect(host.textContent).not.toMatch(/API key|token/i);
   });
 

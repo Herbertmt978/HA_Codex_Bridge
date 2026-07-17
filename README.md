@@ -56,18 +56,15 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed and target-smoked release:** App, Integration, and panel
-  `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5` are published from exact main
-  commit `913c08d3393574f799baf0b47e78d31422c12fe1`. Main CI
-  [run 29544350904](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544350904)
-  and the signed App publication
-  [run 29544351022](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544351022)
-  passed. The immutable App digest is
-  `sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`;
-  [provenance attestation 35745773](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35745773)
-  accompanies the
-  [0.8.3 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.3).
-- **Target-HA acceptance (bounded):** On `192.168.50.20`, App and Integration
+- **Latest signed release:** App, Integration, and panel `0.8.4`, Bridge
+  `0.7.3`, and Codex `0.144.5` were published from exact main commit
+  `ccc698e96a2142d46ba96fb1419857461efe81ca`. The signed App publication
+  [run 29571157282](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29571157282)
+  and paired
+  [0.8.4 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.4)
+  passed. This is publication evidence, not a claim that the full target-HA
+  acceptance matrix was completed.
+- **Latest bounded target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
   recovered from a false **Working / Preparing a response / Stop / steer**
@@ -76,12 +73,12 @@ App and Bridge remain private to Home Assistant.
   visible, five-hour usage rendered `Off`, and the Malta prompt exposed
   `Searching the web` and `Using web search` before returning live conditions.
   No false global **Connection issue** remained after the successful run.
-- **0.8.4 candidate:** App/Integration/panel `0.8.4` with Bridge `0.7.3`
-  passes the complete local/frontend/Linux/container matrix and independent
-  review. It repairs selected-workspace PDF reads, adds revocation-safe private
-  image artifacts, and adds strict remote/recovery evidence tooling. It is not
-  represented as signed, installed, or target accepted until those checks
-  actually happen.
+- **0.8.5 candidate:** App/Integration/panel `0.8.5` with Bridge `0.7.3`
+  makes generated-image preview and authenticated browser download explicit,
+  constrains scrolling to the transcript, and removes unsupported local
+  `$imagegen` guidance. Its frontend unit and browser suites pass locally; it
+  is not represented as signed, installed, or target accepted until those
+  checks actually happen.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,
@@ -92,10 +89,8 @@ App and Bridge remain private to Home Assistant.
   proxy and redacted remote-evidence contract now pass, while authorized
   external Nabu Casa and Cloudflare route captures remain pending. Cold
   restore, arbitrary image rollback, and the
-  secure App-owned browser worker remain open. A manual
-  paired HACS release gap was found; the paired-release workflow is now
-  policy-tested, while its first live automatic exercise remains the next App
-  release.
+  secure App-owned browser worker remain open. The paired App/Integration
+  release workflow completed its first live automatic exercise for `0.8.4`.
 - **Browser automation:** secure App-owned browser-worker follow-up is tracked
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).

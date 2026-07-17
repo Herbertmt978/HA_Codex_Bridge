@@ -147,6 +147,13 @@ and WebP output as private artifacts, then makes them available through Home
 Assistant's authenticated path. Capability absence or a failed probe leaves
 these tools unavailable.
 
+The App deliberately does not mount the desktop machine's local skill bundle.
+Image generation here is the provider-native tool, so a model-authored remark
+about an unavailable local image skill guide is narration rather than a
+capability result. The advertised native-tool status and the presence of a
+validated generated artifact are authoritative. The panel does not instruct
+users to invoke a non-existent App-local `$imagegen` skill.
+
 ## Run stages and private previews
 
 The panel presents plan stages, allowlisted tool activity, file/line totals,
@@ -188,14 +195,13 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Candidate App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
-`0.144.5` passes the local PDF repair, revocation-safe private image artifact,
-LAN/Nabu-shaped/Cloudflare-shaped synthetic transport, offline recovery
-evidence, frontend, Linux, Docker, hassfest, and independent-review gates. It
-is not yet signed, installed, or target-HA accepted. Real target PDF and image
-flows, authorized external Nabu Casa/Cloudflare captures, destructive cold
-restore/retained-image rollback, and browser-worker isolation attestation
-remain separate gates.
+Candidate App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex
+`0.144.5` repairs generated-image preview, adds explicit authenticated browser
+download, and makes the transcript the only chat scrollport. It also removes
+unsupported local `$imagegen` guidance because image generation is supplied by
+the provider-native capability. The frontend unit and browser acceptance suites
+pass locally; signed publication, installation, and target-HA validation remain
+separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
@@ -214,17 +220,16 @@ with attestation `35670902`. This acceptance does not establish image-
 generation, plugin/marketplace, MCP, external-routing, cold-restore, or
 arbitrary prior-image rollback acceptance.
 
-App/Integration/panel `0.8.3` with Bridge `0.7.2` and Codex `0.144.5` is the
+App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex `0.144.5` is the
 latest signed release. It was published from exact main commit
-`913c08d3393574f799baf0b47e78d31422c12fe1`; main CI `29544350904` and the
-signed App publication `29544351022` passed. The immutable App digest is
-`sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`,
-with
-[provenance attestation 35745773](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35745773)
-and the
-[0.8.3 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.3).
+`ccc698e96a2142d46ba96fb1419857461efe81ca`; signed App publication
+`29571157282` passed and the paired
+[0.8.4 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.4)
+points to that commit. This publication evidence does not claim that `0.8.4`
+completed the target-HA matrix.
 
-On target Home Assistant `192.168.50.20`, App and Integration `0.8.3` reported
+The latest bounded target smoke remains `0.8.3`. On target Home Assistant
+`192.168.50.20`, App and Integration `0.8.3` reported
 Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects, and chat history
 were retained. The old `0.8.0 PDF acceptance` thread recovered from the false
 **Working / Preparing a response / Stop / steer** state to a truthful ready/
@@ -240,9 +245,8 @@ wide-screen alignment pass. Artifact-index and preview failures remain local to
 PDF artifact scan still returns the typed `409` local Files conflict, so
 PDF/archive/restore acceptance is not claimed. External Nabu Casa/Cloudflare
 routing, cold restore, arbitrary image rollback, and the secure App-owned
-browser worker remain unproven. A manual paired HACS release gap was found; the
-paired-release workflow is now policy-tested, while its first live automatic
-exercise remains the next App release.
+browser worker remain unproven. The paired App/Integration release workflow
+completed its first live automatic exercise for `0.8.4`.
 
 The signed, live-accepted `0.6.5` matrix remains historical evidence only. App `0.6.1` is known-bad
 on target HAOS because its sandbox self-test required `writableRoots` exactly

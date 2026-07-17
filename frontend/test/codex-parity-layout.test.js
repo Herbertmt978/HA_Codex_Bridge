@@ -37,6 +37,8 @@ describe("Codex desktop parity layout", () => {
     expect(stylesheet).toMatch(/grid-template-columns:\s*clamp\(300px,\s*20vw,\s*330px\)\s+minmax\(0,\s*1fr\)\s+clamp\(342px,\s*calc\(22vw \+ 12px\),\s*372px\)/);
     expect(stylesheet).toMatch(/\.main-header\s*\{[^}]*calc\(\(100% - var\(--conversation-width\)\) \/ 2\)/s);
     expect(stylesheet).toMatch(/\.side-pane\s*\{[^}]*margin:\s*64px 12px 12px 0;[^}]*border-radius:\s*18px;/s);
+    expect(stylesheet).toMatch(/\.shell\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*overflow:\s*hidden;/s);
+    expect(stylesheet).toMatch(/\.pane\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
     expect(stylesheet).toMatch(/\.conversation-scroll\s*\{[^}]*overflow:\s*auto;/s);
     expect(stylesheet).toMatch(/\.interaction-region\s*\{[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/s);
 
@@ -46,6 +48,14 @@ describe("Codex desktop parity layout", () => {
       root.getElementById("run-activity"),
       root.getElementById("interaction-region"),
     ]));
+  });
+
+  it("keeps the transcript as the only narrow-screen scrollport", () => {
+    const panel = createPanel();
+    const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
+
+    expect(stylesheet).toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\n\s+\.main-pane\s*\{[^}]*overflow-y:\s*hidden;/);
+    expect(stylesheet).not.toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*\n\s+\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
   });
 
   it("renders a compact footer composer and Codex-style activity sections", () => {
