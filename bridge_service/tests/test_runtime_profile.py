@@ -13,6 +13,19 @@ from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
 
 
+class _ReadyBrowserBroker:
+    ready = True
+
+    def set_artifact_sink(self, _sink) -> None:
+        pass
+
+    def close_owner(self, _owner) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
 def _registered_paths(app) -> set[str]:
     return set(app.openapi()["paths"])
 
@@ -191,6 +204,10 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
 
     assert isinstance(app.state.automations, AutomationStore)
     assert isinstance(app.state.capabilities_manager, CapabilitiesManager)
+    assert (
+        app.state.runner._image_generation_authority
+        is app.state.capabilities_manager
+    )
     assert isinstance(app.state.agents_manager, WorkspaceAgentsManager)
     assert isinstance(app.state.mcp_manager, McpManager)
     assert app.state.mcp_manager.enabled is False
@@ -229,6 +246,29 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
     assert external.state.mcp_manager is None
     assert external.state.feature_capabilities == ("api_v1", "legacy_v0")
     assert "/automations" not in external_paths
+
+
+def test_home_assistant_enables_dynamic_browser_only_for_a_ready_injected_broker(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspaces"
+    codex_home = tmp_path / "codex-home"
+    workspace_root.mkdir()
+    codex_home.mkdir()
+
+    app = create_app(
+        root_path=tmp_path / "state",
+        auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        codex_home=codex_home,
+        browser_broker=_ReadyBrowserBroker(),
+    )
+
+    assert app.state.codex_app_server.enable_experimental_api is True
+    assert app.state.browser_broker is not None
+    assert "browser_v1" in app.state.feature_capabilities
+    assert app.state.runner._browser_dynamic_tools_enabled is True
 
 
 def test_home_assistant_profile_rejects_legacy_exec_runner_before_composition(

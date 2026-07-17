@@ -57,6 +57,7 @@ class ArtifactSource(StrEnum):
     WORKSPACE = "workspace"
     WORKSPACE_ARCHIVE = "workspace_archive"
     GENERATED_IMAGE = "generated_image"
+    BROWSER_CAPTURE = "browser_capture"
 
 
 class EventScope(StrEnum):

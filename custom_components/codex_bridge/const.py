@@ -49,7 +49,7 @@ PANEL_COMPONENT_NAME = "codex-bridge-panel"
 PANEL_URL_PATH = "codex-bridge"
 PANEL_ICON = "mdi:robot-outline"
 STATIC_URL_BASE = "/codex_bridge_static"
-PANEL_ASSET_VERSION = "0.8.3"
+PANEL_ASSET_VERSION = "0.8.4"
 PANEL_MODULE_URL = f"{STATIC_URL_BASE}/codex-bridge-panel.js?v={PANEL_ASSET_VERSION}"
 
 DATA_ENTRIES = "entries"

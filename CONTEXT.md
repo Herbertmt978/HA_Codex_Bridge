@@ -29,34 +29,33 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest target-HA-accepted coordinated release: App, Integration, and panel
-  `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5` (experimental and `amd64` only).
-  App publication run `29511116947` produced immutable digest
-  `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
-  and attestation `35670902`.
-- Latest signed publication: App/Integration/panel `0.8.2`, Bridge `0.7.2`,
-  and Codex `0.144.5`. App publication run `29536061100` completed the
-  immutable-image, signature, SBOM, and exact-main provenance workflow. The
-  coordinated components were installed on the target HA, retained ChatGPT Pro
-  and history, reported the expected versions, and loaded without the prior
-  false global connection banner. This was a bounded smoke check, not the full
-  PDF/archive/restore acceptance matrix; `0.7.5` remains the latest fully
-  target-accepted release.
-- Candidate App/Integration/panel `0.8.3` with Bridge `0.7.2` and Codex
-  `0.144.5` is not published or target-HA accepted. It preserves the typed local
-  **Files** recovery boundary while replacing the remaining dashboard-like
-  geometry with one Codex-style 840-pixel reading rail, a compact composer, a
-  floating Activity card, bounded Outputs/Subagents/Background/Browser/Sources
-  information, and viewport-safe run details. Successful replies and healthy
-  connection state survive secondary artifact-index, archive, and preview
-  failures.
+- Latest signed and bounded target-HA-accepted coordinated release:
+  App/Integration/panel `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5`
+  (experimental and `amd64` only). Main CI `29544350904` and signed App
+  publication `29544351022` produced immutable digest
+  `sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`
+  with provenance attestation `35745773`. The target smoke retained ChatGPT
+  Pro/history, recovered stale run state, completed a GPT-5.6-Sol prompt, and
+  exposed native live-search activity without a false global connection error.
+  The typed PDF Files `409` now has a locally covered repair, but real target
+  list/archive/preview/download acceptance remains pending. External Nabu
+  Casa/Cloudflare routing, image generation, arbitrary previous-image rollback,
+  and the secure App-owned browser worker remain explicitly unaccepted.
+- Candidate App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
+  `0.144.5` contains the local PDF repair, provider-gated private image
+  artifact path, three-profile synthetic transport harness, strict offline
+  recovery evidence tooling, and an inert browser-worker scaffold. Full local,
+  Linux, container, frontend, transport, hassfest, and independent-review
+  gates pass. It has no signed publication or target-HA acceptance yet.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF
   acceptance failed: the aggregate workspace root contained stale
   sandbox-test debris, including root-owned unreadable entries, and `0.8.1`
   misreported that operational scan failure as HTTP 400 unsafe content in the
-  selected chat. PDF indexing, archive, and preview remain failed/pending.
+  selected chat. That historical target gate remains failed; the local repair
+  is covered, while target PDF indexing, archive, preview, and download remain
+  pending.
 - Secure browser-worker follow-up is issue #43. Per ADR 0006, interactive
   Chromium remains deferred pending its separate App-owned isolation and
   enforced egress boundary.
@@ -68,10 +67,9 @@ to the App or Bridge.
 - Earlier signed release evidence remains in `codex_bridge_app/CHANGELOG.md`
   and the repository Releases page. Target-Home-Assistant acceptance is always
   bounded to the recorded checks rather than every capability mutation.
-- App/Integration `0.6.6` is the prior signed publication. The `0.6.5` matrix
-  remains live-accepted only within the historical boundaries recorded in
-  `90-evidence.md`; neither historical claim supersedes the current bounded
-  `0.7.5` evidence above.
+- The `0.6.5` matrix remains live-accepted only within the historical
+  boundaries recorded in `90-evidence.md`; no historical claim supersedes the
+  current bounded `0.7.5` evidence above.
 - Supervisor discovery advertises a validated private App IP, retains its
   stable Supervisor UUID, and changes a bounded non-secret marker on every
   start so Home Assistant re-delivers otherwise unchanged discovery. The

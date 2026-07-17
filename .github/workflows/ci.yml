@@ -81,7 +81,8 @@ jobs:
           HASSFEST_IMAGE: ghcr.io/home-assistant/hassfest@sha256:5fc3c5d7df109d248a61acfb0a675b38b1e4dc3a202feb260a8e33696f9803e3
         run: >-
           docker run --rm --pull=always
-          --volume "${GITHUB_WORKSPACE}:/github/workspace"
+          --workdir /github/workspace/custom_components
+          --volume "${GITHUB_WORKSPACE}/custom_components:/github/workspace/custom_components"
           "${HASSFEST_IMAGE}"
 
   windows-updater:

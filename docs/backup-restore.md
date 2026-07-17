@@ -13,6 +13,11 @@ marketplace configuration, and private `AGENTS.md` rollback snapshots. These
 records are useful recovery state, but they are not portable credentials: do
 not copy ChatGPT session files or OAuth authorization URLs into a new host.
 
+The controlled target-HA procedure and strict redacted snapshot format are in
+the [cold restore and retained-image acceptance runbook](acceptance/cold-restore.md).
+Its collector validates evidence shape and pre/post consistency only; it does
+not create, restore, delete, export, upgrade, downgrade, or restart anything.
+
 ## Current recovery plan
 
 Prepare a cold Home Assistant backup and, where one is already operated, retain

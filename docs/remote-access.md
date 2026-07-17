@@ -55,8 +55,11 @@ HTTPS and WebSocket behavior exactly as required by Home Assistant.
 
 ## Test and recover
 
-Remote-access acceptance remains release work. Before relying on a route, test
-it with a harmless workspace:
+Remote-access acceptance remains release work. The synthetic proxy contract and
+offline redacted-evidence validator are documented in the
+[remote-path acceptance runbook](acceptance/remote-access.md); they do not
+replace an authorized run from the actual external network. Before relying on a
+route, test it with a harmless workspace:
 
 1. Sign in to Home Assistant through the intended route.
 2. Complete a ChatGPT sign-in, cancel a separate pending sign-in, and test
@@ -69,6 +72,11 @@ it with a harmless workspace:
    restart it. Add a harmless trusted HTTPS server and complete its explicit
    OAuth flow through the panel; verify provider tools appear without changing
    the browser origin. Do not test with a private-IP endpoint.
+
+For release acceptance, also exercise the full v1 8 MiB resumable chunk,
+response-lost idempotent retry, cancellation, artifact `Range`/`If-Range`
+resume, and unsatisfied `416` path. Record only the redacted categorical
+summary accepted by the offline collector; do not export raw browser traffic.
 
 If the panel loses connection, reload the Home Assistant page and use normal HA
 diagnostics. Do not expose the Bridge or create an alternate browser-to-Codex

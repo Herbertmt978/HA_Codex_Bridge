@@ -277,6 +277,73 @@ def test_provider_capabilities_invalidate_immediately_after_auth_identity_change
     assert server.provider_capability_calls == 2
 
 
+def test_image_generation_authority_is_verified_and_generation_scoped(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=True,
+        namespace_tools=True,
+        web_search=True,
+    )
+    manager = CapabilitiesManager(Storage(tmp_path), server)
+
+    authority = manager.authorize_image_generation(1)
+    assert type(authority) is int and authority > 0
+    assert manager.is_image_generation_authorized(1, authority) is True
+    assert server.provider_capability_calls == 1
+
+    server.generation = 2
+    assert manager.is_image_generation_authorized(1, authority) is False
+    assert manager.is_image_generation_authorized(2, authority) is False
+    assert server.provider_capability_calls == 1
+
+
+def test_image_generation_authority_fails_closed_after_invalidation_or_unknown(
+    tmp_path: Path,
+) -> None:
+    server = FakeServer()
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=True,
+        namespace_tools=True,
+        web_search=True,
+    )
+    manager = CapabilitiesManager(Storage(tmp_path), server)
+    authority = manager.authorize_image_generation(1)
+    assert type(authority) is int and authority > 0
+
+    manager.invalidate_provider_capabilities()
+    assert manager.is_image_generation_authorized(1, authority) is False
+
+    server.provider_capability_result = RuntimeError("probe unavailable")
+    assert manager.authorize_image_generation(1) is None
+    assert manager.is_image_generation_authorized(1, authority) is False
+
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=True,
+        namespace_tools=False,
+        web_search=True,
+    )
+    assert manager.authorize_image_generation(1) is None
+    assert manager.is_image_generation_authorized(1, authority) is False
+
+    server.provider_capability_result = SimpleNamespace(
+        generation=1,
+        image_generation=True,
+        namespace_tools=True,
+        web_search=True,
+    )
+    manager.invalidate_provider_capabilities()
+    replacement_authority = manager.authorize_image_generation(1)
+    assert type(replacement_authority) is int
+    assert replacement_authority != authority
+    assert manager.is_image_generation_authorized(1, authority) is False
+    assert manager.is_image_generation_authorized(1, replacement_authority) is True
+
+
 def test_unknown_provider_capability_failures_are_immediately_retryable(
     tmp_path: Path,
 ) -> None:

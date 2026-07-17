@@ -6,30 +6,30 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App: `0.8.2` (`amd64` only, experimental)
-- Published Integration: `0.8.2`
-- Latest target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.3`
-- Candidate Bridge: `0.7.2`
+- Published App/Integration: `0.8.3` (`amd64` only, experimental)
+- Latest bounded target-HA smoke: `0.8.3`
+- Historical fully target-HA-accepted App/Integration: `0.7.5`
+- Candidate App/Integration: `0.8.4`
+- Candidate Bridge: `0.7.3`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.8.3` with Bridge `0.7.2` is pending signed
-publication and real Home Assistant validation; coordinated `0.7.5` remains
-the fully accepted baseline. Signed and target-smoked App `0.8.2` carries the
-verified Codex `0.144.5` runtime, restores aggregate scan failures to the typed,
-retryable local **Files** contract, and keeps secondary artifact failures out
-of global connection state. The candidate moves the panel materially closer to
-Codex desktop with one aligned reading rail, a continuous transcript, compact
-composer, floating Activity card, bounded subagent status, and viewport-safe
-mobile run details.
+Candidate App/Integration `0.8.4` with Bridge `0.7.3` is pending signed
+publication and real Home Assistant validation. Signed and target-smoked
+`0.8.3` remains the latest bounded target matrix; coordinated `0.7.5` remains
+the historical fully accepted baseline. The candidate repairs selected-
+workspace PDF reads, adds provider-gated private image artifacts, supplies
+provider-neutral remote and recovery evidence tooling, and carries a fixed
+browser-worker scaffold that remains unavailable until HAOS can prove its
+process, filesystem, and network isolation.
 
-The `0.8.2` publication, signature, SBOM, and provenance workflow passed in
-[run 29536061100](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29536061100).
+The `0.8.3` publication, signature, SBOM, and provenance workflow passed in
+[run 29544351022](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544351022).
 The App and Integration were installed on the target HA, retained ChatGPT Pro
-and history, reported the coordinated versions, and loaded without the prior
-false global connection banner. That was a bounded smoke check rather than a
-completed PDF/archive/restore acceptance matrix.
+and history, recovered stale run state, completed a GPT-5.6-Sol prompt, and
+showed native web-search activity without the prior false global connection
+banner. That was a bounded smoke check rather than a completed PDF, image,
+external-routing, or recovery acceptance matrix.
 
 The 0.8.1 live exercise proved installation/pairing, ChatGPT Pro/history,
 version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`, native

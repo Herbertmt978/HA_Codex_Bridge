@@ -1,5 +1,5 @@
 /**
- * Deterministic same-origin transport harness.
+ * Deterministic same-origin transport profile harness.
  *
  * `--server` is a deliberately tiny fake HA upstream. It records an accepted
  * prompt before dropping its first response, so the client must retry with the
@@ -18,6 +18,16 @@ const HTTP_PROMPT_PATH = "/api/prompt";
 const HTTP_STATE_PATH = "/debug/state";
 const WEBSOCKET_PATH = "/api/websocket";
 const MAX_REQUEST_BYTES = 16 * 1024;
+const REMOTE_THREAD_ID = "thr_transport";
+const UPLOAD_CHUNK_BYTES = Number(process.env.TRANSPORT_UPLOAD_CHUNK_BYTES ?? 8 * 1024 * 1024);
+assert.equal(UPLOAD_CHUNK_BYTES, 8 * 1024 * 1024, "transport contract fixes v1 chunks at 8 MiB");
+const UPLOAD_BYTES = Buffer.alloc(UPLOAD_CHUNK_BYTES, 0x61);
+const UPLOAD_SHA256 = createHash("sha256").update(UPLOAD_BYTES).digest("hex");
+const ARTIFACT_BYTES = Buffer.from("resume-through-the-ha-proxy-path");
+const ARTIFACT_ETAG = createHash("sha256").update(ARTIFACT_BYTES).digest("hex");
+const REMOTE_API_PATH = `/api/codex_bridge/threads/${REMOTE_THREAD_ID}`;
+const UPLOADS_PATH = `${REMOTE_API_PATH}/uploads`;
+const ARTIFACT_PATH = `${REMOTE_API_PATH}/artifacts/art_transport`;
 
 function json(response, status, body) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -46,6 +56,46 @@ function readJson(request) {
     });
     request.on("error", reject);
   });
+}
+
+function readUploadChunk(request) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > UPLOAD_CHUNK_BYTES) {
+        reject(new Error("chunk_too_large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks)));
+    request.on("error", reject);
+  });
+}
+
+function uploadSessionPayload(session) {
+  return {
+    upload_id: session.upload_id,
+    thread_id: REMOTE_THREAD_ID,
+    ...session.manifest,
+    chunk_size: UPLOAD_CHUNK_BYTES,
+    total_chunks: 1,
+    received_indices: [...session.chunks.keys()].sort((left, right) => left - right),
+    next_offset: session.chunks.has(0) ? session.manifest.size_bytes : 0,
+    status: session.status,
+  };
+}
+
+function parseByteRange(value) {
+  const match = /^bytes=(\d+)-(\d*)$/.exec(value ?? "");
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = match[2] ? Number(match[2]) : ARTIFACT_BYTES.length - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) return null;
+  return { start, end: Math.min(end, ARTIFACT_BYTES.length - 1) };
 }
 
 function websocketFrame(payload) {
@@ -106,9 +156,23 @@ function validRequestId(value) {
   return typeof value === "string" && /^[A-Za-z0-9._:-]{1,256}$/.test(value);
 }
 
+function ingressHeaders(request) {
+  return {
+    host: request.headers.host ?? "",
+    forwarded_host: request.headers["x-forwarded-host"] ?? "",
+    forwarded_proto: request.headers["x-forwarded-proto"] ?? "",
+    profile: request.headers["x-transport-profile"] ?? "",
+    cf_ray: request.headers["cf-ray"] ?? "",
+  };
+}
+
 function createUpstream() {
   const prompts = new Map();
   const requests = [];
+  const uploads = new Map();
+  const uploadChunkAttempts = [];
+  const artifactRequests = [];
+  let artifactDrops = 0;
   let websocketConnections = 0;
   const websocketAfterCursors = [];
   const websocketCommands = [];
@@ -124,10 +188,153 @@ function createUpstream() {
         prompt_attempts: requests.length,
         processed_prompts: prompts.size,
         requests,
+        uploads: [...uploads.values()].map((session) => uploadSessionPayload(session)),
+        upload_chunk_attempts: uploadChunkAttempts,
+        artifact_requests: artifactRequests,
         websocket_connections: websocketConnections,
         websocket_after_cursors: websocketAfterCursors,
         websocket_commands: websocketCommands,
       });
+      return;
+    }
+
+    if (url.pathname.startsWith(`${REMOTE_API_PATH}/uploads`)) {
+      const match = new RegExp(`^${REMOTE_API_PATH}/uploads(?:/([^/]+)(?:/(chunks/\\d+|complete))?)?$`).exec(url.pathname);
+      if (match === null) {
+        json(response, 404, { code: "not_found" });
+        return;
+      }
+      const [, uploadId, action] = match;
+      if (request.method === "POST" && uploadId === undefined) {
+        let manifest;
+        try {
+          manifest = await readJson(request);
+        } catch (error) {
+          json(response, 400, { code: error.message });
+          return;
+        }
+        if (
+          typeof manifest?.filename !== "string" ||
+          typeof manifest?.size_bytes !== "number" ||
+          manifest.size_bytes < 1 ||
+          typeof manifest?.sha256 !== "string"
+        ) {
+          json(response, 400, { code: "request_invalid" });
+          return;
+        }
+        const created = {
+          upload_id: `upl_transport_${uploads.size + 1}`,
+          manifest,
+          chunks: new Map(),
+          status: "active",
+          lost_response: false,
+        };
+        uploads.set(created.upload_id, created);
+        json(response, 201, uploadSessionPayload(created));
+        return;
+      }
+
+      const upload = uploads.get(uploadId);
+      if (upload === undefined) {
+        json(response, 404, { code: "not_found" });
+        return;
+      }
+      if (request.method === "GET" && action === undefined) {
+        json(response, 200, uploadSessionPayload(upload));
+        return;
+      }
+      if (request.method === "DELETE" && action === undefined) {
+        upload.status = "cancelled";
+        json(response, 200, uploadSessionPayload(upload));
+        return;
+      }
+      if (request.method === "POST" && action === "complete") {
+        if (upload.status !== "active" || !upload.chunks.has(0)) {
+          json(response, 409, { code: "upload_incomplete" });
+          return;
+        }
+        upload.status = "completed";
+        json(response, 201, { attachment_id: "att_transport", sha256: upload.manifest.sha256 });
+        return;
+      }
+      if (request.method === "PUT" && action === "chunks/0") {
+        let body;
+        try {
+          body = await readUploadChunk(request);
+        } catch (error) {
+          json(response, 400, { code: error.message });
+          return;
+        }
+        const digest = createHash("sha256").update(body).digest("hex");
+        const valid =
+          upload.status === "active" &&
+          request.headers["upload-offset"] === "0" &&
+          request.headers["x-chunk-sha256"] === upload.manifest.sha256 &&
+          body.length === upload.manifest.size_bytes &&
+          digest === upload.manifest.sha256;
+        if (!valid) {
+          json(response, 400, { code: "request_invalid" });
+          return;
+        }
+        const replayed = upload.chunks.has(0);
+        upload.chunks.set(0, digest);
+        uploadChunkAttempts.push({
+          upload_id: upload.upload_id,
+          index: 0,
+          replayed,
+          path: url.pathname,
+          ...ingressHeaders(request),
+        });
+        if (!replayed && !upload.lost_response) {
+          upload.lost_response = true;
+          // The binary chunk is committed before the proxy loses its response.
+          request.socket.destroy();
+          return;
+        }
+        json(response, 200, uploadSessionPayload(upload));
+        return;
+      }
+      json(response, 404, { code: "not_found" });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === ARTIFACT_PATH) {
+      const requested = parseByteRange(request.headers.range);
+      artifactRequests.push({
+        path: url.pathname,
+        range: request.headers.range ?? "",
+        if_range: request.headers["if-range"] ?? "",
+        ...ingressHeaders(request),
+      });
+      if (requested === null || requested.start >= ARTIFACT_BYTES.length) {
+        response.writeHead(416, {
+          "accept-ranges": "bytes",
+          "content-range": `bytes */${ARTIFACT_BYTES.length}`,
+          etag: `"${ARTIFACT_ETAG}"`,
+          "content-length": "0",
+        });
+        response.end();
+        return;
+      }
+      if (request.headers["if-range"] !== `"${ARTIFACT_ETAG}"`) {
+        json(response, 400, { code: "if_range_invalid" });
+        return;
+      }
+      const bytes = ARTIFACT_BYTES.subarray(requested.start, requested.end + 1);
+      response.writeHead(206, {
+        "accept-ranges": "bytes",
+        "content-type": "application/octet-stream",
+        "content-range": `bytes ${requested.start}-${requested.end}/${ARTIFACT_BYTES.length}`,
+        etag: `"${ARTIFACT_ETAG}"`,
+        "content-length": String(bytes.length),
+      });
+      if (artifactDrops === 0 && requested.start === 0) {
+        artifactDrops += 1;
+        response.write(bytes.subarray(0, Math.ceil(bytes.length / 2)));
+        setTimeout(() => request.socket.destroy(), 25);
+        return;
+      }
+      response.end(bytes);
       return;
     }
     if (request.method !== "POST" || url.pathname !== HTTP_PROMPT_PATH) {
@@ -165,8 +372,7 @@ function createUpstream() {
     requests.push({
       path: url.pathname,
       client_request_id: requestId,
-      host: request.headers.host ?? "",
-      forwarded_proto: request.headers["x-forwarded-proto"] ?? "",
+      ...ingressHeaders(request),
     });
 
     const record = prompts.get(requestId);
@@ -246,6 +452,7 @@ function createUpstream() {
             type: message.type,
             after: message.after,
             path: url.pathname,
+            ...ingressHeaders(request),
           });
           socket.write(
             websocketFrame({
@@ -375,8 +582,124 @@ async function reconnectingWebsocketMessages(origin) {
   return batches;
 }
 
+function uploadManifest(filename, bytes, sha256) {
+  return {
+    filename,
+    mime_type: "application/octet-stream",
+    relative_path: `evidence/${filename}`,
+    size_bytes: bytes.length,
+    sha256,
+  };
+}
+
+async function remotePathRecovery(origin) {
+  const requestPaths = [];
+  const sameOriginFetch = async (path, init) => {
+    assert.ok(path.startsWith("/"), "browser request paths must remain relative");
+    const url = endpoint(origin, path);
+    requestPaths.push(path);
+    return fetch(url, init);
+  };
+
+  const created = await sameOriginFetch(UPLOADS_PATH, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(uploadManifest("recovery.bin", UPLOAD_BYTES, UPLOAD_SHA256)),
+  });
+  assert.equal(created.status, 201, "v1 upload creation must cross the proxy");
+  const upload = await created.json();
+  const uploadPath = `${UPLOADS_PATH}/${upload.upload_id}`;
+  const chunkPath = `${uploadPath}/chunks/0`;
+  const chunkRequest = {
+    method: "PUT",
+    headers: {
+      "Upload-Offset": "0",
+      "X-Chunk-SHA256": UPLOAD_SHA256,
+      "content-type": "application/octet-stream",
+    },
+    body: UPLOAD_BYTES,
+  };
+
+  let lostChunkResponse = false;
+  try {
+    lostChunkResponse = (await sameOriginFetch(chunkPath, chunkRequest)).ok;
+  } catch {
+    // The synthetic HA path commits this chunk, then loses only its response.
+  }
+  assert.equal(lostChunkResponse, false, "the first committed chunk response must be lost");
+
+  const afterLoss = await sameOriginFetch(uploadPath);
+  assert.equal(afterLoss.status, 200, "upload status must survive the response loss");
+  assert.deepEqual((await afterLoss.json()).received_indices, [0]);
+
+  const retry = await sameOriginFetch(chunkPath, chunkRequest);
+  assert.equal(retry.status, 200, "retrying the same chunk must be idempotent");
+  assert.deepEqual((await retry.json()).received_indices, [0]);
+
+  const completed = await sameOriginFetch(`${uploadPath}/complete`, { method: "POST" });
+  assert.equal(completed.status, 201, "completed upload must use the v1 proxy path");
+
+  const cancelledCreate = await sameOriginFetch(UPLOADS_PATH, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(uploadManifest("cancel.bin", Buffer.from("cancel"), createHash("sha256").update("cancel").digest("hex"))),
+  });
+  assert.equal(cancelledCreate.status, 201);
+  const cancelledUpload = await cancelledCreate.json();
+  const cancelled = await sameOriginFetch(`${UPLOADS_PATH}/${cancelledUpload.upload_id}`, {
+    method: "DELETE",
+  });
+  assert.equal(cancelled.status, 200, "upload cancellation must use the v1 proxy path");
+  assert.equal((await cancelled.json()).status, "cancelled");
+
+  const firstRange = await sameOriginFetch(ARTIFACT_PATH, {
+    headers: { Range: `bytes=0-${ARTIFACT_BYTES.length - 1}`, "If-Range": `"${ARTIFACT_ETAG}"` },
+  });
+  assert.equal(firstRange.status, 206, "artifact range must be served through the proxy");
+  assert.equal(firstRange.headers.get("etag"), `"${ARTIFACT_ETAG}"`);
+  const reader = firstRange.body.getReader();
+  const partial = [];
+  let interrupted = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      partial.push(Buffer.from(value));
+    }
+  } catch {
+    interrupted = true;
+  }
+  const received = Buffer.concat(partial);
+  assert.equal(interrupted, true, "the first artifact response must disconnect mid-download");
+  assert.ok(received.length > 0 && received.length < ARTIFACT_BYTES.length);
+
+  const resumed = await sameOriginFetch(ARTIFACT_PATH, {
+    headers: {
+      Range: `bytes=${received.length}-${ARTIFACT_BYTES.length - 1}`,
+      "If-Range": `"${ARTIFACT_ETAG}"`,
+    },
+  });
+  assert.equal(resumed.status, 206, "artifact reconnect must resume with a range request");
+  assert.deepEqual(Buffer.concat([received, Buffer.from(await resumed.arrayBuffer())]), ARTIFACT_BYTES);
+
+  const unsatisfied = await sameOriginFetch(ARTIFACT_PATH, {
+    headers: { Range: "bytes=999-1000", "If-Range": `"${ARTIFACT_ETAG}"` },
+  });
+  assert.equal(unsatisfied.status, 416, "an unsatisfied artifact range must stay typed");
+  assert.equal(unsatisfied.headers.get("content-range"), `bytes */${ARTIFACT_BYTES.length}`);
+
+  return { requestPaths, upload_id: upload.upload_id };
+}
+
 async function runClient() {
   const origin = process.env.PROXY_ORIGIN ?? "http://127.0.0.1:8080";
+  const expectedIngress = {
+    host: process.env.TRANSPORT_EXPECTED_HOST ?? "ha-lan.invalid",
+    forwarded_host: process.env.TRANSPORT_EXPECTED_HOST ?? "ha-lan.invalid",
+    forwarded_proto: process.env.TRANSPORT_EXPECTED_PROTO ?? "http",
+    profile: process.env.TRANSPORT_EXPECTED_PROFILE ?? "lan",
+    cf_ray: process.env.TRANSPORT_EXPECTED_CF_RAY ?? "",
+  };
   await waitForProxy(origin);
 
   const promptEndpoint = endpoint(origin, HTTP_PROMPT_PATH);
@@ -388,7 +711,14 @@ async function runClient() {
   };
   const request = {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      // Trusted proxies must overwrite, not append to, hostile client input.
+      "x-forwarded-host": "attacker.invalid",
+      "x-forwarded-proto": "file",
+      "x-transport-profile": "attacker",
+      "cf-ray": "attacker-ray",
+    },
     body: JSON.stringify(payload),
   };
 
@@ -407,6 +737,8 @@ async function runClient() {
     replayed: true,
     client_request_id: requestId,
   });
+
+  const remote = await remotePathRecovery(origin);
 
   const stream = await reconnectingWebsocketMessages(origin);
   assert.deepEqual(
@@ -445,10 +777,84 @@ async function runClient() {
     "the retry must preserve client_request_id",
   );
   assert.deepEqual(state.requests.map((entry) => entry.path), [HTTP_PROMPT_PATH, HTTP_PROMPT_PATH]);
-  assert.ok(state.requests.every((entry) => entry.host === "proxy"));
-  assert.ok(state.requests.every((entry) => entry.forwarded_proto === "http"));
+  const ingressRecords = [
+    ...state.requests,
+    ...state.upload_chunk_attempts,
+    ...state.artifact_requests,
+    ...state.websocket_commands,
+  ];
+  assert.ok(ingressRecords.length > 0);
+  for (const entry of ingressRecords) {
+    assert.deepEqual(
+      {
+        host: entry.host,
+        forwarded_host: entry.forwarded_host,
+        forwarded_proto: entry.forwarded_proto,
+        profile: entry.profile,
+        cf_ray: entry.cf_ray,
+      },
+      expectedIngress,
+      "each route must normalize spoofable ingress headers to its trusted profile",
+    );
+  }
+  assert.deepEqual(
+    state.upload_chunk_attempts.map(({ upload_id, index, replayed, path }) => ({
+      upload_id,
+      index,
+      replayed,
+      path,
+    })),
+    [
+      {
+        upload_id: remote.upload_id,
+        index: 0,
+        replayed: false,
+        path: `${UPLOADS_PATH}/${remote.upload_id}/chunks/0`,
+      },
+      {
+        upload_id: remote.upload_id,
+        index: 0,
+        replayed: true,
+        path: `${UPLOADS_PATH}/${remote.upload_id}/chunks/0`,
+      },
+    ],
+    "the response-lost chunk must be committed once and replayed once through the proxy",
+  );
+  assert.deepEqual(
+    state.artifact_requests.map(({ path, range, if_range }) => ({
+      path,
+      range,
+      if_range,
+    })),
+    [
+      {
+        path: ARTIFACT_PATH,
+        range: `bytes=0-${ARTIFACT_BYTES.length - 1}`,
+        if_range: `"${ARTIFACT_ETAG}"`,
+      },
+      {
+        path: ARTIFACT_PATH,
+        range: `bytes=${Math.ceil(ARTIFACT_BYTES.length / 2)}-${ARTIFACT_BYTES.length - 1}`,
+        if_range: `"${ARTIFACT_ETAG}"`,
+      },
+      {
+        path: ARTIFACT_PATH,
+        range: "bytes=999-1000",
+        if_range: `"${ARTIFACT_ETAG}"`,
+      },
+    ],
+    "artifact resume and 416 checks must preserve Range and If-Range through the proxy",
+  );
+  assert.ok(
+    remote.requestPaths.every((path) => path.startsWith("/api/codex_bridge/")),
+    "the synthetic browser must use only relative Home Assistant API paths",
+  );
+  const browserEvidence = JSON.stringify({ remote, state });
+  assert.equal(browserEvidence.includes("transport-test-token"), false, "browser evidence must redact tokens");
+  assert.equal(/https?:\/\/[^\s]*(?:app|bridge|upstream)/i.test(browserEvidence), false, "browser evidence must not contain private App or Bridge URLs");
+  assert.equal(/(?:access_token|authorization|cookie)/i.test(browserEvidence), false, "browser evidence must not contain credential fields");
 
-  process.stdout.write("transport proxy harness passed\n");
+  process.stdout.write(`transport ${expectedIngress.profile} profile passed\n`);
 }
 
 if (process.argv.includes("--server")) {

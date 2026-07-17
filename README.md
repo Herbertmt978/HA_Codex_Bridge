@@ -76,13 +76,23 @@ App and Bridge remain private to Home Assistant.
   visible, five-hour usage rendered `Off`, and the Malta prompt exposed
   `Searching the web` and `Using web search` before returning live conditions.
   No false global **Connection issue** remained after the successful run.
+- **0.8.4 candidate:** App/Integration/panel `0.8.4` with Bridge `0.7.3`
+  passes the complete local/frontend/Linux/container matrix and independent
+  review. It repairs selected-workspace PDF reads, adds revocation-safe private
+  image artifacts, and adds strict remote/recovery evidence tooling. It is not
+  represented as signed, installed, or target accepted until those checks
+  actually happen.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,
-  Browser state, and Sources. The current PDF artifact scan still returns the
-  typed `409` local **Files** conflict, so PDF/archive/restore acceptance is
-  not claimed. External Nabu Casa/Cloudflare routing, cold restore, arbitrary
-  image rollback, and the secure App-owned browser worker remain open. A manual
+  Browser state, and Sources. The typed PDF **Files** `409` has a locally
+  covered repair that isolates selected-artifact reads from unrelated stale
+  workspace debris; real target-HA list/archive/preview/download acceptance is
+  still pending. The parameterized LAN/Nabu-shaped/Cloudflare-shaped synthetic
+  proxy and redacted remote-evidence contract now pass, while authorized
+  external Nabu Casa and Cloudflare route captures remain pending. Cold
+  restore, arbitrary image rollback, and the
+  secure App-owned browser worker remain open. A manual
   paired HACS release gap was found; the paired-release workflow is now
   policy-tested, while its first live automatic exercise remains the next App
   release.
