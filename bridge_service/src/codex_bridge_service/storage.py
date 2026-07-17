@@ -15,6 +15,8 @@ import zipfile
 from contextlib import contextmanager, nullcontext
 from collections.abc import Iterator, Mapping
 
+from pydantic import ValidationError
+
 from .codex_auth import AUTH_EXPIRED_MESSAGE
 from .event_store import BridgeEventStore, DurableOutbox, EventDraft, OutboxWrite
 from .limits import CodexLimitsProbe
@@ -2365,6 +2367,100 @@ class BridgeStorage:
                 continue
             merged.append(artifact)
         record.artifacts = merged
+
+    def recover_orphaned_runtime_projections(
+        self,
+        *,
+        owned_projections: Mapping[
+            str,
+            tuple[str, str | None, str | None, str | None],
+        ],
+    ) -> int:
+        """Clear stale runtime ownership without resolving workspace paths.
+
+        This startup-only recovery boundary accepts only schema-valid private
+        records with canonical filenames, but does not resolve their workspace.
+        A missing runtime checkpoint must not leave a chat permanently busy,
+        and an unrelated invalid, unreadable, or unavailable thread must not
+        block startup before the normal readiness path can report it safely.
+        """
+        repaired = 0
+        with self._thread_mutation_lock:
+            for target in self.threads_dir.glob("*.json"):
+                try:
+                    record = ThreadRecord.model_validate_json(
+                        target.read_text(encoding="utf-8")
+                    )
+                except (OSError, UnicodeError, ValidationError):
+                    continue
+                if target != self._thread_path(record.thread_id):
+                    continue
+                owned = owned_projections.get(record.thread_id)
+                if owned is not None:
+                    (
+                        expected_status,
+                        expected_run_id,
+                        expected_turn_id,
+                        expected_codex_thread_id,
+                    ) = owned
+                    if (
+                        record.status != expected_status
+                        or record.active_run_id != expected_run_id
+                        or record.active_turn_id != expected_turn_id
+                        or record.codex_thread_id != expected_codex_thread_id
+                        or record.pending_prompts
+                        or record.last_error is not None
+                    ):
+                        record.status = expected_status
+                        record.active_run_id = expected_run_id
+                        record.active_turn_id = expected_turn_id
+                        record.codex_thread_id = expected_codex_thread_id
+                        record.pending_prompts = []
+                        record.last_error = None
+                        self._touch_thread(record)
+                        self._commit_prepared_thread_with_events_locked(
+                            record,
+                            (
+                                EventDraft(
+                                    scope="thread",
+                                    thread_id=record.thread_id,
+                                    event_type="runtime.state_recovered",
+                                    payload={
+                                        "reason": "runtime-owned thread projection reconciled"
+                                    },
+                                ),
+                            ),
+                        )
+                        repaired += 1
+                    continue
+                if not (
+                    record.status in {"queued", "running"}
+                    or record.active_run_id is not None
+                    or record.active_turn_id is not None
+                    or record.pending_prompts
+                ):
+                    continue
+                record.status = "error"
+                record.active_run_id = None
+                record.active_turn_id = None
+                record.pending_prompts = []
+                record.last_error = (
+                    "Codex runtime ownership was not recovered after bridge startup."
+                )
+                self._touch_thread(record)
+                self._commit_prepared_thread_with_events_locked(
+                    record,
+                    (
+                        EventDraft(
+                            scope="thread",
+                            thread_id=record.thread_id,
+                            event_type="runtime.state_recovered",
+                            payload={"reason": "orphaned thread runtime projection"},
+                        ),
+                    ),
+                )
+                repaired += 1
+        return repaired
 
     def fail_home_assistant_run_without_workspace_validation(
         self,

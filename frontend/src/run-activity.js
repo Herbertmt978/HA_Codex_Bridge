@@ -238,6 +238,23 @@ function safeAgentStateCounts(value) {
   };
 }
 
+function clearTerminalSubagentActivity(snapshot) {
+  if (!snapshot?.active) return snapshot;
+  const counts = { ...snapshot.counts };
+  delete counts.pendingInit;
+  delete counts.running;
+  const labels = [];
+  if (snapshot.completed) labels.push(`${snapshot.completed} complete`);
+  if (snapshot.attention) labels.push(`${snapshot.attention} need${snapshot.attention === 1 ? "s" : ""} attention`);
+  return {
+    ...snapshot,
+    counts,
+    total: snapshot.completed + snapshot.attention,
+    active: 0,
+    label: labels.join(" \u00b7 "),
+  };
+}
+
 function latestSubagentSnapshot(events, runId) {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
@@ -335,6 +352,28 @@ function runEventState(events, runId) {
   return "";
 }
 
+function terminalEventState(eventType) {
+  if (typeof eventType !== "string" || !eventType.startsWith("run.")) return "";
+  const state = eventType.slice(4);
+  return TERMINAL_STATES.has(state) ? state : "";
+}
+
+function latestTerminalRunId(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (!terminalEventState(event.event_type)) continue;
+    const runId = eventRunId(event);
+    if (runId) return runId;
+  }
+  return "";
+}
+
+function latestLiveEventRunId(events) {
+  const runId = latestEventRunId(events);
+  if (!runId) return "";
+  return TERMINAL_STATES.has(runEventState(events, runId)) ? "" : runId;
+}
+
 function assistantState(events, runId) {
   let latest = null;
   for (const event of events) {
@@ -388,17 +427,32 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     && /^[A-Za-z0-9_.:-]{1,256}$/u.test(thread.active_run_id)
     ? thread.active_run_id
     : "";
-  const runId = activeRunId || latestEventRunId(normalizedEvents);
-  const eventState = runEventState(normalizedEvents, runId);
+  const threadIsBusy = BUSY_STATUSES.has(threadStatus);
+  const threadHasLiveProjection = threadIsBusy || threadStatus === "queued";
+  const hasThreadStatus = Boolean(threadStatus);
+  // A persisted idle snapshot is authoritative. Do not let an orphaned
+  // active_run_id or an unfinished historical delta resurrect a run in the UI.
+  // For an idle thread, retain only the most recent run with a terminal event
+  // so its completed/failed metrics remain visible.
+  const runId = threadHasLiveProjection
+    ? activeRunId || latestLiveEventRunId(normalizedEvents)
+    : hasThreadStatus
+      ? latestTerminalRunId(normalizedEvents)
+      : activeRunId || latestEventRunId(normalizedEvents);
+  const scopedEvents = runId
+    ? normalizedEvents.filter((event) => eventBelongsToRun(event, runId))
+    : normalizedEvents.filter((event) => !eventRunId(event) && terminalEventState(event.event_type));
+  const eventState = runEventState(scopedEvents, runId);
   let state = "idle";
   if (threadStatus === "queued") state = "queued";
   else if (threadStatus === "error") state = "failed";
-  else if (TERMINAL_STATES.has(eventState) && (activeRunId || threadStatus === "idle" || !threadStatus)) state = eventState;
-  else if (activeRunId || BUSY_STATUSES.has(threadStatus)) state = "running";
+  else if (threadIsBusy && !activeRunId) state = "running";
+  else if (TERMINAL_STATES.has(eventState)) state = eventState;
+  else if (threadIsBusy) state = "running";
   else if (eventState === "queued") state = "queued";
-  else if (eventState === "running") state = "running";
+  else if (!hasThreadStatus && (activeRunId || eventState === "running")) state = "running";
 
-  const plan = currentPlan(normalizedEvents, runId);
+  const plan = currentPlan(scopedEvents, runId);
   const activeStep = plan.activeIndex === null ? null : {
     index: plan.activeIndex + 1,
     total: plan.steps.length,
@@ -406,12 +460,12 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     status: plan.steps[plan.activeIndex].status,
     completedCount: plan.completedCount,
   };
-  const reasoningText = reasoningSummary(normalizedEvents, runId);
-  const startedItem = latestItemStart(normalizedEvents, runId);
-  const files = patchCounts(normalizedEvents, runId);
+  const reasoningText = reasoningSummary(scopedEvents, runId);
+  const startedItem = latestItemStart(scopedEvents, runId);
+  const files = patchCounts(scopedEvents, runId);
   const history = [];
   const seenHistory = new Set();
-  for (const event of normalizedEvents) {
+  for (const event of scopedEvents) {
     if (!eventBelongsToRun(event, runId)) continue;
     const payload = eventPayload(event);
     if (event.event_type === "plan.updated" && Array.isArray(payload.plan)) {
@@ -433,8 +487,13 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   }
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
-  const assistant = assistantState(normalizedEvents, runId);
-  const subagents = latestSubagentSnapshot(normalizedEvents, runId);
+  const projectedAssistant = assistantState(scopedEvents, runId);
+  const assistant = projectedAssistant === "streaming" && state !== "running"
+    ? "idle"
+    : projectedAssistant;
+  const subagents = terminal
+    ? clearTerminalSubagentActivity(latestSubagentSnapshot(scopedEvents, runId))
+    : latestSubagentSnapshot(scopedEvents, runId);
   const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
   let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
   if (!action && state === "queued") action = "Waiting in queue";

@@ -5954,3 +5954,140 @@ def test_corrupt_runtime_checkpoint_is_quarantined_and_thread_is_repaired(
         assert fresh.status == "starting"
     finally:
         broker.close()
+
+
+def test_missing_runtime_checkpoint_repairs_orphaned_busy_thread_projection(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    record = storage.load_thread(thread.thread_id)
+    record.status = "running"
+    record.active_run_id = "run_lost_checkpoint"
+    record.active_turn_id = "turn_lost_checkpoint"
+    storage.save_thread(record)
+    assert not (storage.root / "runtime-state.json").exists()
+
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        repaired = storage.load_thread(thread.thread_id)
+        assert repaired.status == "error"
+        assert repaired.active_run_id is None
+        assert repaired.active_turn_id is None
+        assert repaired.pending_prompts == []
+        assert repaired.last_error == (
+            "Codex runtime ownership was not recovered after bridge startup."
+        )
+        recovered_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "runtime.state_recovered"
+        )
+        assert recovered_event.payload == {
+            "reason": "orphaned thread runtime projection"
+        }
+        assert recovered_event.operation_id is not None
+    finally:
+        broker.close()
+
+
+def test_orphan_repair_preserves_thread_owned_by_nonterminal_runtime_run(
+    tmp_path: Path,
+) -> None:
+    storage, owned_thread = _storage_and_thread(tmp_path)
+    orphan_thread = _new_thread(storage, tmp_path, name="OrphanedProjection")
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        owned_run = broker.submit_prompt(
+            owned_thread.thread_id,
+            "Keep current ownership",
+            client_request_id="owned-projection",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        orphan = storage.load_thread(orphan_thread.thread_id)
+        orphan.status = "running"
+        orphan.active_run_id = "run_orphaned_projection"
+        orphan.active_turn_id = "turn_orphaned_projection"
+        storage.save_thread(orphan)
+
+        with broker._lock:
+            broker._repair_orphaned_thread_projections_locked()
+
+        owned = storage.load_thread(owned_thread.thread_id)
+        assert owned.status == "running"
+        assert owned.active_run_id == owned_run.run_id
+        repaired = storage.load_thread(orphan_thread.thread_id)
+        assert repaired.status == "error"
+        assert repaired.active_run_id is None
+        assert repaired.active_turn_id is None
+    finally:
+        broker.close()
+
+
+def test_orphan_repair_reprojects_mismatched_nonterminal_runtime_owner(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        owned_run = broker.submit_prompt(
+            thread.thread_id,
+            "Keep exact current ownership",
+            client_request_id="mismatched-owned-projection",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, _remote_thread_id, expected_turn_id = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        stale = storage.load_thread(thread.thread_id)
+        stale.active_run_id = "run_lost_projection"
+        stale.active_turn_id = "turn_lost_projection"
+        stale.codex_thread_id = "thread_lost_projection"
+        storage.save_thread(stale)
+
+        with broker._lock:
+            broker._repair_orphaned_thread_projections_locked()
+
+        repaired = storage.load_thread(thread.thread_id)
+        assert repaired.status == "running"
+        assert repaired.active_run_id == owned_run.run_id
+        assert repaired.active_turn_id == expected_turn_id
+        assert repaired.codex_thread_id == _remote_thread_id
+        recovered_event = next(
+            event
+            for event in storage.event_store.replay(
+                after_cursor=0,
+                scopes=("thread",),
+                thread_ids=(thread.thread_id,),
+            ).events
+            if event.event_type == "runtime.state_recovered"
+        )
+        assert recovered_event.payload == {
+            "reason": "runtime-owned thread projection reconciled"
+        }
+    finally:
+        broker.close()
+
+
+def test_orphan_repair_does_not_block_startup_on_malformed_unrelated_thread(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    malformed = storage.threads_dir / "malformed.json"
+    malformed.write_text('{"thread_id":', encoding="utf-8")
+
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        assert broker.runtime_snapshot().active_turns == 0
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert malformed.read_text(encoding="utf-8") == '{"thread_id":'
+    finally:
+        broker.close()

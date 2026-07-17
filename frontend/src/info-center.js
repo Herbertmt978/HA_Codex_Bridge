@@ -1,5 +1,7 @@
 const MAX_ROWS = 8;
 const MAX_ARTIFACTS = 1000;
+const MAX_COUNT = 1000000;
+const MAX_HISTORY_ITEMS = 32;
 const MAX_SAFE_BYTES = 1024 ** 5;
 const SAFE_VERSION = /^[0-9][0-9A-Za-z.+-]{0,31}$/u;
 
@@ -42,6 +44,76 @@ const PROJECT_KINDS = Object.freeze({
   project: "Project workspace",
   imported: "Imported workspace",
 });
+
+const RUN_ACTIVITY_STATES = Object.freeze({
+  idle: "Ready",
+  queued: "Queued",
+  running: "Working",
+  completed: "Completed",
+  failed: "Needs attention",
+  cancelled: "Stopped",
+  interrupted: "Interrupted",
+});
+
+// run-activity.js intentionally emits these short, presentation-safe labels.
+// Keep this list closed so arbitrary event/action text cannot enter the card.
+const SAFE_ACTIVITY_LABELS = new Set([
+  "Preparing a response",
+  "Running a command",
+  "Compacting context",
+  "Delegating to an agent",
+  "Calling a tool",
+  "Applying file changes",
+  "Generating an image",
+  "Viewing an image",
+  "Calling an MCP tool",
+  "Planning the work",
+  "Thinking through the request",
+  "Waiting",
+  "Working with a sub-agent",
+  "Searching the web",
+  "Reading files",
+  "Listing files",
+  "Searching files",
+  "Opening a web page",
+  "Finding text in a page",
+  "Using web search",
+  "Adding files",
+  "Updating files",
+  "Deleting files",
+  "Starting a sub-agent",
+  "Steering a sub-agent",
+  "Resuming a sub-agent",
+  "Waiting for sub-agents",
+  "Closing a sub-agent",
+  "Sub-agent started",
+  "Sub-agent active",
+  "Sub-agent interrupted",
+  "Working on the request",
+  "Waiting in queue",
+  "Generating a response",
+  "Run completed",
+  "Run failed",
+  "Run cancelled",
+  "Run interrupted",
+]);
+
+const WEB_ACTIVITY_LABELS = new Set([
+  "Searching the web",
+  "Opening a web page",
+  "Finding text in a page",
+  "Using web search",
+]);
+
+export const INFO_SECTION_IDS = Object.freeze([
+  "outputs",
+  "subagents",
+  "background",
+  "browser",
+  "sources",
+  "usage",
+  "system",
+]);
 
 export const INFO_TABS = Object.freeze([
   Object.freeze({ id: "activity", label: "Activity" }),
@@ -109,6 +181,66 @@ function safePercent(value) {
   return `${Math.round(value)}% remaining`;
 }
 
+function safeCount(value) {
+  return Number.isSafeInteger(value) && value >= 0
+    ? Math.min(MAX_COUNT, value)
+    : 0;
+}
+
+function safeActivityLabel(value) {
+  return typeof value === "string" && SAFE_ACTIVITY_LABELS.has(value) ? value : "";
+}
+
+function safeRunActivity(value) {
+  if (!isRecord(value)) {
+    return {
+      state: "No active run",
+      action: "",
+      actionHistoryCount: 0,
+      files: { changed: 0, additions: 0, deletions: 0 },
+      subagents: null,
+      webSearchActive: false,
+    };
+  }
+  const stateValue = value.state || value.status;
+  const state = typeof stateValue === "string" && stateValue
+    ? safeEnum(stateValue, RUN_ACTIVITY_STATES, "Unavailable")
+    : "No active run";
+  const action = safeActivityLabel(value.currentActivity || value.action);
+  const history = Array.isArray(value.actionHistory)
+    ? value.actionHistory.slice(0, MAX_HISTORY_ITEMS).filter((item) => (
+      isRecord(item) ? safeActivityLabel(item.label) : safeActivityLabel(item)
+    )).length
+    : 0;
+  const files = isRecord(value.files) ? value.files : {};
+  const subagentInput = isRecord(value.subagents) ? value.subagents : null;
+  const subagents = subagentInput
+    ? {
+      total: safeCount(subagentInput.total),
+      active: safeCount(subagentInput.active),
+      completed: safeCount(subagentInput.completed),
+      attention: safeCount(subagentInput.attention),
+    }
+    : null;
+  return {
+    state,
+    action,
+    actionHistoryCount: history,
+    files: {
+      changed: safeCount(files.changed),
+      additions: safeCount(files.additions),
+      deletions: safeCount(files.deletions),
+    },
+    subagents,
+    webSearchActive: value.webSearchActive === true || value.web_search_active === true || WEB_ACTIVITY_LABELS.has(action),
+  };
+}
+
+function safeSourceCount(value) {
+  if (Array.isArray(value)) return Math.min(MAX_ARTIFACTS, value.length);
+  return safeCount(value);
+}
+
 function safeArtifactSummary(artifacts) {
   if (!Array.isArray(artifacts)) {
     return { count: 0, bytes: 0 };
@@ -157,6 +289,9 @@ export function getInfoCenterViewModel({
   project = {},
   artifacts = [],
   panelVersion = "",
+  runActivity = null,
+  browser = {},
+  sources = [],
 } = {}) {
   const safeStatus = isRecord(status) ? status : {};
   const auth = isRecord(safeStatus.auth) ? safeStatus.auth : {};
@@ -170,6 +305,23 @@ export function getInfoCenterViewModel({
   const safeThread = isRecord(thread) ? thread : {};
   const safeProject = isRecord(project) ? project : {};
   const fileSummary = safeArtifactSummary(artifacts);
+  const attachmentCount = Array.isArray(safeThread.attachments)
+    ? Math.min(MAX_ARTIFACTS, safeThread.attachments.length)
+    : 0;
+  const activitySnapshot = safeRunActivity(runActivity);
+  const providerCapabilities = isRecord(safeStatus.provider_capabilities)
+    ? safeStatus.provider_capabilities
+    : {};
+  const safeBrowser = isRecord(browser) ? browser : {};
+  const webSearchAvailable = providerCapabilities.web_search === true
+    || safeBrowser.web_search === true;
+  const webSearchUnavailable = providerCapabilities.web_search === false
+    || safeBrowser.web_search === false;
+  const sourceCount = Math.max(
+    safeSourceCount(sources),
+    safeSourceCount(safeBrowser.source_count),
+    safeSourceCount(safeBrowser.sources),
+  );
   const runState = safeEnum(safeThread.status, RUN_STATES, "No active run");
   const connected = auth.state === "ok" && auth.auth_required === false && account.auth_mode === "chatgpt";
   const appReady = app.connected === true;
@@ -191,14 +343,69 @@ export function getInfoCenterViewModel({
     ],
   );
 
-  const files = section(
-    "files",
-    "Files",
+  const outputs = section(
+    "outputs",
+    "Outputs",
     fileSummary.count ? "Files created or attached in this chat are ready to review." : "No files are available for this chat yet.",
     [
       ["Available files", String(fileSummary.count)],
       ["Known size", formatBytes(fileSummary.bytes)],
+      ["Attachments", String(attachmentCount)],
       ["Workspace archive", safeThread.thread_id ? "Available from the Files section" : "Select a chat first"],
+    ],
+  );
+
+  const subagents = section(
+    "subagents",
+    "Subagents",
+    activitySnapshot.subagents?.total
+      ? "Aggregate sub-agent activity is shown without names or prompts."
+      : "No sub-agent activity has been reported for this run.",
+    [
+      ["Total", String(activitySnapshot.subagents?.total || 0)],
+      ["Active", String(activitySnapshot.subagents?.active || 0)],
+      ["Completed", String(activitySnapshot.subagents?.completed || 0)],
+      ["Needs attention", String(activitySnapshot.subagents?.attention || 0)],
+    ],
+  );
+
+  const background = section(
+    "background",
+    "Background activity",
+    activitySnapshot.action || activitySnapshot.state === "Working"
+      ? `This chat is ${activitySnapshot.state.toLowerCase()}.`
+      : "No background activity is currently reported.",
+    [
+      ["Run", activitySnapshot.state],
+      ["Current step", activitySnapshot.action || "Unavailable"],
+      ["Recent stages", String(activitySnapshot.actionHistoryCount)],
+      ["Files changed", String(activitySnapshot.files.changed)],
+    ],
+  );
+
+  const browserSection = section(
+    "browser",
+    "Browser",
+    activitySnapshot.webSearchActive
+      ? "Web search is active for this run."
+      : webSearchAvailable
+        ? "Web search is available when the run requests it."
+        : "No browser activity is currently reported.",
+    [
+      ["Web search", webSearchAvailable ? "Available" : webSearchUnavailable ? "Unavailable" : "Unknown"],
+      ["Current use", activitySnapshot.webSearchActive ? "Active" : "Not active"],
+    ],
+  );
+
+  const sourcesSection = section(
+    "sources",
+    "Sources",
+    sourceCount
+      ? `${sourceCount} source${sourceCount === 1 ? "" : "s"} reported for this run.`
+      : "No source context is available for this run.",
+    [
+      ["Sources", String(sourceCount)],
+      ["Details", sourceCount ? "Available in the transcript" : "Unavailable"],
     ],
   );
 
@@ -233,5 +440,14 @@ export function getInfoCenterViewModel({
     ],
   );
 
-  return { tabs: INFO_TABS, activity, files, usage, system };
+  const sections = [outputs, subagents, background, browserSection, sourcesSection, usage, system];
+  return {
+    tabs: INFO_TABS,
+    sections,
+    // Legacy aliases remain stable for callers that render the existing tabs.
+    activity,
+    files: outputs,
+    usage,
+    system,
+  };
 }

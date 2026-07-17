@@ -81,25 +81,26 @@ describe("artifact previews", () => {
     expect(panel._error).toBe("Bridge request failed");
   });
 
-  it.each([401, 403, 502, 503, 504])("surfaces preview HTTP %s as a global error", async (status) => {
+  it.each([401, 403, 502, 503, 504])("keeps preview HTTP %s local to Files", async (status) => {
     const panel = createPanel(createArtifact());
     vi.spyOn(window, "fetch").mockResolvedValue(new Response("preview unavailable", { status }));
 
     await panel._loadArtifactPreview(panel._selectedArtifactId);
 
-    expect(panel._error).toBe("Preview failed");
-    expect(panel._artifactPreview).toBeNull();
-    expect(panel.shadowRoot.getElementById("error-strip").classList).toContain("visible");
+    expect(panel._error).toBe("");
+    expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
+    expect(panel.shadowRoot.getElementById("error-strip").classList).not.toContain("visible");
+    expect(panel.shadowRoot.querySelector('[data-action="retry-artifact-preview"]')).not.toBeNull();
   });
 
-  it("surfaces a browser preview network failure globally", async () => {
+  it("keeps a browser preview network failure local to Files", async () => {
     const panel = createPanel(createArtifact());
     vi.spyOn(window, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
     await panel._loadArtifactPreview(panel._selectedArtifactId);
 
-    expect(panel._error).toBe("Failed to fetch");
-    expect(panel._artifactPreview).toBeNull();
+    expect(panel._error).toBe("");
+    expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
   });
 
   it("fetches a capped image artifact and creates a local preview URL", async () => {

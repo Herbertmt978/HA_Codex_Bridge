@@ -34,21 +34,22 @@ to the App or Bridge.
   App publication run `29511116947` produced immutable digest
   `sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
   and attestation `35670902`.
-- Latest signed publication: App/Integration/panel `0.8.1`, Bridge `0.7.1`,
-  and Codex `0.144.5`. App publication run `29527193037` produced immutable
-  digest
-  `sha256:2df98ca0452262a8336b82ec4842ba681c49b44c22a28983a7a10b3d9692e8a2`;
-  signature, SBOM, and provenance verification passed.
-- Candidate App/Integration/panel `0.8.2` with Bridge `0.7.2` and Codex
-  `0.144.5` is not published or target-HA accepted. It restores operational
-  aggregate workspace-scan failures to the typed, retryable local **Files**
-  contract, keeps every secondary artifact failure local to **Files**, and
-  calibrates the wide panel to the Codex desktop navigation, conversation,
-  composer, and full-height context geometry. A standards-based, user-invoked
-  Focus mode removes Home Assistant's surrounding chrome without weakening the
-  browser-to-HA boundary. Healthy component versions are available in the
-  System information tab while only runtime attention enters the transcript
-  surface.
+- Latest signed publication: App/Integration/panel `0.8.2`, Bridge `0.7.2`,
+  and Codex `0.144.5`. App publication run `29536061100` completed the
+  immutable-image, signature, SBOM, and exact-main provenance workflow. The
+  coordinated components were installed on the target HA, retained ChatGPT Pro
+  and history, reported the expected versions, and loaded without the prior
+  false global connection banner. This was a bounded smoke check, not the full
+  PDF/archive/restore acceptance matrix; `0.7.5` remains the latest fully
+  target-accepted release.
+- Candidate App/Integration/panel `0.8.3` with Bridge `0.7.2` and Codex
+  `0.144.5` is not published or target-HA accepted. It preserves the typed local
+  **Files** recovery boundary while replacing the remaining dashboard-like
+  geometry with one Codex-style 840-pixel reading rail, a compact composer, a
+  floating Activity card, bounded Outputs/Subagents/Background/Browser/Sources
+  information, and viewport-safe run details. Successful replies and healthy
+  connection state survive secondary artifact-index, archive, and preview
+  failures.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF
@@ -89,12 +90,13 @@ to the App or Bridge.
 - A typed, temporary artifact-scan reservation preserves the previous artifact
   snapshot and does not turn a healthy chat or completed response into a false
   connection failure, even where the selected chat is idle.
-- The current panel keeps the chat surface at a bounded reading width with a
-  clean Codex-style left navigation tree, title-first chat rows, one action
-  menu, correct archive collapse/search and search icon, 44px mobile targets,
-  transcript-adjacent decisions, and collapsed mobile settings/limits. It
-  retains theme-derived contrast and accessible disclosure, selection,
-  progress, and retry state.
+- The current panel keeps one continuous transcript surface at a bounded
+  840-pixel reading width with a Codex-style left navigation tree, title-first
+  chat rows, one action menu, correct archive collapse/search and search icon,
+  44px mobile targets, transcript-adjacent decisions, a compact footer
+  composer, and a floating information card. It retains theme-derived contrast
+  and accessible disclosure, selection, progress, retry, reduced-motion, and
+  viewport-safe run-stage state.
 - On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
   denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
   read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally

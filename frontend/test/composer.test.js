@@ -61,6 +61,36 @@ describe("prompt composer mutation contract", () => {
     expect(status.textContent).toBe("");
   });
 
+  it("keeps the visible composer action, accessible name, and tooltip in sync", () => {
+    const panel = createPanel();
+    const send = panel.shadowRoot.getElementById("send-button");
+
+    panel._renderComposerState(panel._activeThread);
+    expect(send.textContent).toContain("Send");
+    expect(send.getAttribute("aria-label")).toBe("Send");
+    expect(send.title).toBe("Send message to Codex");
+    expect(send.dataset.tooltip).toBe("Send message to Codex");
+
+    panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "run-one" };
+    panel._renderComposerState(panel._activeThread);
+    expect(send.textContent).toContain("Steer");
+    expect(send.getAttribute("aria-label")).toBe("Steer");
+    expect(send.title).toMatch(/queue steering/i);
+    expect(send.dataset.tooltip).toBe(send.title);
+
+    panel._promptMutation = {
+      threadId: "thread-alpha",
+      state: "retryable",
+      prompt: "Retry this",
+      clientRequestId: "request-one",
+    };
+    panel._renderComposerState(panel._activeThread);
+    expect(send.textContent).toContain("Retry");
+    expect(send.getAttribute("aria-label")).toBe("Retry");
+    expect(send.title).toMatch(/retry this message safely/i);
+    expect(send.dataset.tooltip).toBe(send.title);
+  });
+
   it("locks the composer before awaiting the Bridge and sends one stable request id", async () => {
     const panel = createPanel();
     const prompt = panel.shadowRoot.getElementById("prompt-input");
