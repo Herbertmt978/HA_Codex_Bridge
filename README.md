@@ -56,15 +56,15 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed release:** App, Integration, and panel `0.8.7`, Bridge
+- **Latest signed release:** App, Integration, and panel `0.8.8`, Bridge
   `0.7.3`, and Codex `0.144.5` were published from exact main commit
-  `31c09549221b2cb4be17bee9b1376eb2eab7f025`. The signed App publication
-  [run 29591598644](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29591598644)
+  `63878bfcf23ed302d7d86e48b7353b4fd9e52288`. The signed App publication
+  [run 29597045103](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29597045103)
   and paired
-  [0.8.7 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.7)
+  [0.8.8 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.8)
   passed. The immutable image digest is
-  `sha256:85fc4b375b582e3b733b001525eb7432c46c331f237575d4627dbd8795cd2ed3`,
-  with attestation `35855122`.
+  `sha256:df29572aa4eb95a2000b0970ee670dee6d2cc007d90b3cbcb0c8a19cc4fdfa4f`,
+  with attestation `35867567`.
 - **Last prompt-path target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
@@ -87,10 +87,11 @@ App and Bridge remain private to Home Assistant.
   SHA-256 `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
   The Chrome automation event did not surface this blob download, so acceptance
   was based on the file written by the browser rather than that event hook.
-- **0.8.8 candidate:** generic Files rows now expose the same authenticated
-  **Prepare download** -> **Preparing...** -> **Save file** handoff already used
-  by generated-image and PDF controls. Candidate publication and live generic-
-  artifact acceptance remain separate gates; no credential is placed in a URL.
+- **0.8.9 candidate:** interrupted long responses remain visible as partial
+  output with a safe failure category; fresh usage data can recover a stale
+  limit block without a race; and compact chat creation, refresh, and rail
+  controls match the surrounding Codex-style UI. Publication and target-HA
+  acceptance remain separate gates.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,

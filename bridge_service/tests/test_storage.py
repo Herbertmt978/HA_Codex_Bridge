@@ -11,6 +11,7 @@ from codex_bridge_service.limits import CodexLimitsProbe
 from codex_bridge_service.models import (
     DEFAULT_MODEL,
     DEFAULT_THINKING_LEVEL,
+    LimitsStatusRecord,
     ProjectKind,
     RunMode,
 )
@@ -902,6 +903,205 @@ def test_limits_probe_refreshes_saved_status(tmp_path) -> None:
     assert status.primary.remaining_percent == 80.0
     assert status.secondary is not None
     assert status.secondary.remaining_percent == 50.0
+
+
+def test_newer_unblocked_limits_snapshot_clears_an_older_block(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        updated_at="2026-07-17T12:00:01Z",
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.blocked is False
+    assert merged.message is None
+    assert merged.updated_at == "2026-07-17T12:00:01Z"
+
+
+def test_newer_same_second_unblocked_limits_snapshot_clears_a_block(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00.100000Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        updated_at="2026-07-17T12:00:00.200000Z",
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.blocked is False
+    assert merged.message is None
+    assert merged.updated_at == "2026-07-17T12:00:00.200000Z"
+
+
+def test_precise_same_second_snapshot_is_newer_than_legacy_whole_second_block(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        updated_at="2026-07-17T12:00:00.200000Z",
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.blocked is False
+    assert merged.message is None
+
+
+def test_legacy_whole_second_snapshot_cannot_clear_a_newer_precise_block(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00.200000Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        updated_at="2026-07-17T12:00:00Z",
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.blocked is True
+    assert merged.message == "Codex usage limits have been reached."
+
+
+def test_older_blocked_snapshot_inherits_newer_precise_block_message(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00.200000Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message=None,
+        updated_at="2026-07-17T12:00:00Z",
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.message == "Codex usage limits have been reached."
+    assert merged.updated_at == "2026-07-17T12:00:00.200000Z"
+
+
+@pytest.mark.parametrize("snapshot_updated_at", ["2026-07-17T12:00:00Z", "2026-07-17T11:59:59Z"])
+def test_equal_or_older_unblocked_limits_snapshot_cannot_clear_a_newer_block(
+    tmp_path,
+    snapshot_updated_at: str,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    current = LimitsStatusRecord(
+        available=True,
+        blocked=True,
+        message="Codex usage limits have been reached.",
+        updated_at="2026-07-17T12:00:00Z",
+    )
+    snapshot = LimitsStatusRecord(
+        available=True,
+        blocked=False,
+        message=None,
+        updated_at=snapshot_updated_at,
+    )
+
+    merged = storage._merge_limits_status(current, snapshot)
+
+    assert merged.blocked is True
+    assert merged.message == "Codex usage limits have been reached."
+    assert merged.updated_at == "2026-07-17T12:00:00Z"
+
+
+class _BlockingLimitsProbe:
+    def __init__(self, snapshot: LimitsStatusRecord) -> None:
+        self.snapshot = snapshot
+        self.probe_entered = Event()
+        self.release_probe = Event()
+
+    def probe(self) -> LimitsStatusRecord:
+        self.probe_entered.set()
+        assert self.release_probe.wait(timeout=2)
+        return self.snapshot.model_copy(deep=True)
+
+
+def test_limits_refresh_cannot_overwrite_a_concurrent_terminal_block(tmp_path) -> None:
+    probe = _BlockingLimitsProbe(
+        LimitsStatusRecord(
+            available=True,
+            blocked=False,
+            message=None,
+            updated_at="2026-07-17T12:00:00.200000Z",
+        )
+    )
+    storage = BridgeStorage(root_path=tmp_path, limits_probe=probe)
+    marker_entered = Event()
+
+    def mark_blocked() -> LimitsStatusRecord:
+        marker_entered.set()
+        return storage.mark_limits_blocked("Codex usage limits have been reached.")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        refresh = executor.submit(storage.get_limits_status, refresh=True)
+        assert probe.probe_entered.wait(timeout=1)
+        marker = executor.submit(mark_blocked)
+        assert marker_entered.wait(timeout=1)
+        assert not marker.done()
+        probe.release_probe.set()
+        refresh.result(timeout=2)
+        marker.result(timeout=2)
+
+    status = storage.get_limits_status()
+    assert status.blocked is True
+    assert status.message == "Codex usage limits have been reached."
+
+
+def test_delayed_token_count_snapshot_cannot_clear_a_terminal_block(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    blocked = storage.mark_limits_blocked("Codex usage limits have been reached.")
+
+    updated = storage.update_limits_from_rate_data(
+        {
+            "primary": {"used_percent": 20, "window_minutes": 300},
+            "secondary": {"used_percent": 30, "window_minutes": 10080},
+            "plan_type": "pro",
+        }
+    )
+
+    assert updated.blocked is True
+    assert updated.message == "Codex usage limits have been reached."
+    assert updated.updated_at == blocked.updated_at
+    assert updated.primary is not None
+    assert updated.primary.used_percent == 20
 
 
 def test_limits_probe_uses_live_backend_snapshot_when_auth_is_available(

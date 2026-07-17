@@ -21343,6 +21343,39 @@ function assistantState(events, runId) {
   }
   return latest?.event_type === "message.delta" ? "streaming" : latest?.event_type === "message.completed" ? "complete" : "idle";
 }
+var SAFE_FAILURE_MESSAGES = Object.freeze({
+  "auth.expired": "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+  "context.window_exceeded": "The Codex conversation context is full.",
+  "limits.exhausted": "Codex usage limits have been reached.",
+  "model.unsupported": "The selected Codex model is not supported.",
+  "network.http_connection_failed": "Codex could not connect to the service.",
+  "network.response_stream_connection_failed": "Codex could not connect to the response stream.",
+  "network.response_stream_disconnected": "The Codex response stream disconnected before completion.",
+  "network.response_stream_retry_exhausted": "Codex could not recover the response stream after several attempts.",
+  "policy.cyber": "Codex could not complete this request because of its safety policy.",
+  "request.invalid": "Codex could not process this request.",
+  "run.failed": "Codex could not complete the turn.",
+  "run.orphaned": "Bridge restarted while this run was active.",
+  "sandbox.error": "The Codex sandbox could not complete the turn.",
+  "service.internal_error": "The Codex service encountered an internal error.",
+  "service.overloaded": "The Codex service is temporarily overloaded.",
+  "session.budget_exhausted": "The Codex session budget has been reached.",
+  "thread.rollback_failed": "Codex could not restore the conversation after the turn failed.",
+  "turn.not_steerable": "The active Codex turn cannot accept this follow-up yet."
+});
+function getSafeRunFailureMessage(event) {
+  if (event?.event_type !== "run.failed") return "";
+  const failureType = safeText(eventPayload(event).failure_type, 96);
+  return SAFE_FAILURE_MESSAGES[failureType] || SAFE_FAILURE_MESSAGES["run.failed"];
+}
+function runFailureMessage(events, runId) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.event_type !== "run.failed" || !eventBelongsToRun(event, runId)) continue;
+    return getSafeRunFailureMessage(event);
+  }
+  return "";
+}
 function reasoningSummary(events, runId) {
   let latest = null;
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -21425,7 +21458,8 @@ function getRunActivityViewModel(thread = {}, events = []) {
   addHistory(history, seenHistory, reasoningText, "reasoning");
   const terminal = TERMINAL_STATES.has(state);
   const projectedAssistant = assistantState(scopedEvents, runId);
-  const assistant = projectedAssistant === "streaming" && state !== "running" ? "idle" : projectedAssistant;
+  const assistant = projectedAssistant === "streaming" ? ["failed", "cancelled", "interrupted"].includes(state) ? "partial" : state === "running" ? "streaming" : "idle" : projectedAssistant;
+  const failureMessage = state === "failed" ? runFailureMessage(scopedEvents, runId) : "";
   const subagents = terminal ? clearTerminalSubagentActivity(latestSubagentSnapshot(scopedEvents, runId)) : latestSubagentSnapshot(scopedEvents, runId);
   const stepAction = activeStep?.status === "completed" ? "" : activeStep?.label;
   let action = state === "running" ? stepAction || reasoningText || startedItem?.label || "" : "";
@@ -21449,7 +21483,8 @@ function getRunActivityViewModel(thread = {}, events = []) {
     files,
     subagents,
     assistant,
-    assistantState: assistant
+    assistantState: assistant,
+    failureMessage
   };
 }
 
@@ -22878,7 +22913,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.8.8";
+var PANEL_VERSION = "0.8.9";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -23478,6 +23513,34 @@ template.innerHTML = `
       min-height: 0;
     }
 
+    .section-scroll {
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--muted-color) 28%, transparent) transparent;
+    }
+
+    .section-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .section-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .section-scroll::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted-color) 28%, transparent);
+      background-clip: padding-box;
+    }
+
+    .section-scroll::-webkit-scrollbar-button {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+
     .section-scroll,
     .message-list,
     .side-scroll {
@@ -23666,6 +23729,16 @@ template.innerHTML = `
       flex-wrap: wrap;
     }
 
+    .panel-form .form-actions > button {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .panel-form .send-button {
+      width: auto;
+      min-width: max-content;
+    }
+
     .text-button {
       height: 34px;
       padding: 0 12px;
@@ -23817,6 +23890,20 @@ template.innerHTML = `
       gap: 6px;
       align-items: center;
       flex: 0 0 auto;
+    }
+
+    #refresh-thread-button {
+      width: 32px;
+      height: 32px;
+      background: transparent;
+      border-color: transparent;
+      border-radius: 7px;
+    }
+
+    #refresh-thread-button:hover,
+    #refresh-thread-button:focus-visible {
+      border-color: var(--border-color);
+      background: var(--surface-muted);
     }
 
     .chat-list {
@@ -26158,6 +26245,14 @@ template.innerHTML = `
       font-weight: 700;
     }
 
+    .run-step-failure {
+      display: block;
+      margin-top: 2px;
+      color: var(--error-color);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
     .run-step-section-label {
       color: var(--muted-color);
       font-size: 10px;
@@ -27657,7 +27752,7 @@ var iconSvg = (path) => `
 var icons = {
   brand: iconSvg('<path d="m10 4-6 4v8l6 4v-3l-3-2V9l3-2Z"></path><path d="m14 4 6 4v8l-6 4v-3l3-2V9l-3-2Z"></path><path d="M10 12h4"></path><path d="M9 15h6"></path><path d="M8 18h8"></path>'),
   plus: iconSvg('<path d="M12 5v14"></path><path d="M5 12h14"></path>'),
-  refresh: iconSvg('<path d="M20 11a8 8 0 1 0 2 5.3"></path><path d="M20 4v7h-7"></path>'),
+  refresh: iconSvg('<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v6h-6"></path>'),
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
   folderUpload: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M12 17V9"></path><path d="m8.5 12.5 3.5-3.5 3.5 3.5"></path>'),
   send: iconSvg('<path d="m22 2-7 20-4-9-9-4 20-7Z"></path><path d="M22 2 11 13"></path>'),
@@ -30352,8 +30447,8 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!limits) {
       return "No limit snapshot yet.";
     }
-    if (limits.blocked && limits.message) {
-      return limits.message;
+    if (limits.blocked) {
+      return "Codex usage limits have been reached.";
     }
     const normalizedPlan = normalizePlanType(limits.plan_type);
     const plan = normalizedPlan === "Unknown" ? "Codex" : normalizedPlan;
@@ -30417,7 +30512,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const limits = this._status?.limits;
     if (limits?.blocked) {
-      const message = "Codex usage is currently unavailable for this ChatGPT account.";
+      const message = "Codex usage limits have been reached.";
       return {
         key: `limits:${message}`,
         tone: "error",
@@ -30428,10 +30523,11 @@ var CodexBridgePanel = class extends HTMLElement {
       if (this._isResolvedAuthError(this._activeThread.last_error)) {
         return null;
       }
+      const safeFailure = this._runActivityForThread().failureMessage;
       return {
-        key: `thread:${this._selectedThreadId}:${this._activeThread.last_error}`,
+        key: `thread:${this._selectedThreadId}:${safeFailure || "run.failed"}`,
         tone: "error",
-        message: "The latest Codex run did not complete. Refresh the chat or try again."
+        message: safeFailure || "The latest Codex run did not complete. Refresh the chat or try again."
       };
     }
     const diagnosticsError = this._status?.diagnostics?.last_error;
@@ -30540,7 +30636,7 @@ var CodexBridgePanel = class extends HTMLElement {
       copy.append(indicator, this._textElement("span", "", activity.action));
       region.append(copy);
     }
-    if (hasStepDetails || activity.busy) {
+    if (hasStepDetails || activity.busy || activity.failureMessage) {
       const wrap = document.createElement("div");
       wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
       wrap.dataset.state = activity.state;
@@ -30588,6 +30684,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const tooltipTitle = this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity");
       tooltipTitle.id = `${tooltipId}-title`;
       tooltip.append(tooltipTitle);
+      if (activity.failureMessage) {
+        tooltip.append(this._textElement("span", "run-step-failure", activity.failureMessage));
+      }
       const stages = Array.isArray(activity.stages) ? activity.stages.slice(0, 12) : [];
       if (stages.length) {
         tooltip.append(this._textElement("span", "run-step-section-label", "Stages"));
@@ -30712,15 +30811,26 @@ var CodexBridgePanel = class extends HTMLElement {
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
     const text2 = this._streamingAssistantText(activity);
-    if (activity.assistantState !== "streaming" || !text2) {
+    const isStreaming = activity.assistantState === "streaming";
+    const isPartial = activity.assistantState === "partial";
+    if (!isStreaming && !isPartial || !text2) {
       existing?.remove();
       return;
     }
     messageList.querySelector(".empty-state")?.remove();
-    const article = this._renderMessage("assistant", text2, "streaming", false, "Assistant");
-    article.classList.add("streaming");
+    const article = this._renderMessage(
+      "assistant",
+      text2,
+      isPartial ? "partial" : "streaming",
+      false,
+      isPartial ? "Partial response" : "Assistant"
+    );
+    article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
-    article.setAttribute("aria-label", "Assistant response in progress");
+    article.setAttribute(
+      "aria-label",
+      isPartial ? "Assistant partial response" : "Assistant response in progress"
+    );
     if (existing) {
       existing.replaceWith(article);
     } else {
@@ -30728,7 +30838,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _streamingAssistantText(activity) {
-    if (activity.assistantState !== "streaming") return "";
+    if (!["streaming", "partial"].includes(activity.assistantState)) return "";
     let text2 = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
@@ -30786,7 +30896,11 @@ var CodexBridgePanel = class extends HTMLElement {
       return this._textElement("div", "event-row", "Steer queue cleared");
     }
     if (event.event_type === "run.failed") {
-      return this._textElement("div", "event-row", `Run failed: ${payload.error || "Unknown error"}`);
+      return this._textElement(
+        "div",
+        "event-row",
+        `Run failed: ${getSafeRunFailureMessage(event) || "Codex could not complete the turn."}`
+      );
     }
     if (event.event_type === "run.cancelled") {
       return this._textElement("div", "event-row", "Run cancelled");

@@ -29,15 +29,15 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.7`, Bridge
+- Latest signed coordinated release: App/Integration/panel `0.8.8`, Bridge
   `0.7.3`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29591598644` and the paired Integration release were produced
-  from exact main commit `31c09549221b2cb4be17bee9b1376eb2eab7f025`.
+  publication `29597045103` and the paired Integration release were produced
+  from exact main commit `63878bfcf23ed302d7d86e48b7353b4fd9e52288`.
   The immutable image digest is
-  `sha256:85fc4b375b582e3b733b001525eb7432c46c331f237575d4627dbd8795cd2ed3`
-  with attestation `35855122`. The latest target exercise is `0.8.7`; it
-  retained ChatGPT Pro/history, preview, and transcript-only scrolling, and a
-  complete generated-image browser download was verified on disk. The
+  `sha256:df29572aa4eb95a2000b0970ee670dee6d2cc007d90b3cbcb0c8a19cc4fdfa4f`
+  with attestation `35867567`. The latest target installation is `0.8.8`; it
+  retained ChatGPT Pro/history, preview, and transcript-only scrolling. The
+  last complete generated-image browser-download acceptance is `0.8.7`. The
   last bounded prompt-path smoke remains `0.8.3`; it retained ChatGPT Pro/history,
   recovered stale run state, completed a GPT-5.6-Sol prompt, and exposed native
   live-search activity without a false global connection error.
@@ -45,17 +45,18 @@ to the App or Bridge.
   list/archive/preview/download acceptance remains pending. External Nabu
   Casa/Cloudflare routing, arbitrary previous-image rollback, and the secure
   App-owned browser worker remain explicitly unaccepted.
-- Signed App/Integration/panel `0.8.7` is installed with Bridge `0.7.3` and
+- Signed App/Integration/panel `0.8.8` is installed with Bridge `0.7.3` and
   Codex `0.144.5`; ChatGPT Pro, projects, history, generated-image preview, and
-  transcript-only scrolling remained healthy. The browser persisted a complete
-  3,276,457-byte PNG with the expected signature and SHA-256
+  transcript-only scrolling remained healthy. During the preceding `0.8.7`
+  acceptance, the browser persisted a complete 3,276,457-byte PNG with the
+  expected signature and SHA-256
   `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
   Chrome's automation event did not report the blob download, so the persisted
   file is the acceptance evidence.
-- Candidate `0.8.8` makes the authenticated **Prepare download** ->
-  **Preparing...** -> **Save file** state visible on generic Files rows as well
-  as generated-image and PDF controls. Candidate publication and live generic-
-  artifact acceptance remain separate gates; credentials never enter a URL.
+- Candidate `0.8.9` preserves partial long responses after provider stream
+  failures, safely classifies Codex failure categories, repairs stale/racing
+  usage-limit state, and fixes compact chat-creation and rail controls. Its
+  publication and target-HA acceptance remain separate gates.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF

@@ -364,6 +364,16 @@ class _GeneratedImagePublication:
 
 
 @dataclass(frozen=True, slots=True)
+class _SafeFailure:
+    """A fixed public failure projection for untrusted Codex error data."""
+
+    message: str
+    failure_type: str
+    blocked: bool = False
+    auth_required: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class _BrowserThreadAuthority:
     """Ephemeral proof that one fresh Codex thread received our tool namespace."""
 
@@ -2445,8 +2455,8 @@ class RuntimeBroker:
             classification = (
                 info.get("codexErrorInfo") if isinstance(info, dict) else None
             )
-            safe = _safe_failure(classification)
-            self._terminalize_locked(run, "failed", safe)
+            failure = _safe_failure(classification)
+            self._terminalize_locked(run, "failed", failure.message, failure=failure)
 
     def _terminalize_locked(
         self,
@@ -2454,6 +2464,7 @@ class RuntimeBroker:
         status: str,
         message: str | None,
         *,
+        failure: _SafeFailure | None = None,
         preceding_events: tuple[EventDraft, ...] = (),
     ) -> None:
         if run.status in _TERMINAL_RUN_STATES:
@@ -2492,6 +2503,12 @@ class RuntimeBroker:
         payload: dict[str, object] = {"run_id": run.run_id}
         if message:
             payload["error" if status == "failed" else "message"] = message
+        if status == "failed" and failure is not None:
+            payload["failure_type"] = failure.failure_type
+            if failure.blocked:
+                payload["blocked"] = True
+            if failure.auth_required:
+                payload["auth_required"] = True
         run.emitted_signatures = []
         run.completed_item_ids = []
         self._compact_terminal_state_locked()
@@ -2541,6 +2558,15 @@ class RuntimeBroker:
             if run.generation is not None:
                 self.app_server.abort_generation(run.generation)
             raise RuntimeUnavailableError() from persistence_error
+
+        if status == "failed" and failure is not None and failure.blocked:
+            try:
+                self.storage.mark_limits_blocked(failure.message)
+            except Exception:
+                # A secondary limits projection must not erase the durable
+                # terminal turn result or turn an account-limit response into
+                # a raw storage error.
+                pass
 
         if self._run_terminal_listener is not None:
             try:
@@ -3690,20 +3716,97 @@ def _safe_browser_tool_result(value: object) -> dict[str, object]:
     return {"success": success, "contentItems": safe_items}
 
 
-def _safe_failure(value: object) -> str:
+def _safe_failure(value: object) -> _SafeFailure:
+    """Map Codex's versioned failure union onto a fixed public contract.
+
+    Provider messages, details, HTTP codes, paths, and payload values are all
+    intentionally ignored.  Codex 0.144.5 uses both string and tagged-object
+    variants for this union, so recognize only known discriminants.
+    """
+
     known = {
-        "usageLimitExceeded": "Codex usage limits have been reached.",
-        "unauthorized": "The ChatGPT login is no longer authorized.",
-        "sandboxError": "The Codex sandbox could not complete the turn.",
-        "serverOverloaded": "The Codex service is temporarily overloaded.",
+        "usageLimitExceeded": _SafeFailure(
+            "Codex usage limits have been reached.",
+            "limits.exhausted",
+            blocked=True,
+        ),
+        "unauthorized": _SafeFailure(
+            "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+            "auth.expired",
+            auth_required=True,
+        ),
+        "contextWindowExceeded": _SafeFailure(
+            "The Codex conversation context is full.",
+            "context.window_exceeded",
+        ),
+        "sessionBudgetExceeded": _SafeFailure(
+            "The Codex session budget has been reached.",
+            "session.budget_exhausted",
+        ),
+        "serverOverloaded": _SafeFailure(
+            "The Codex service is temporarily overloaded.",
+            "service.overloaded",
+        ),
+        "sandboxError": _SafeFailure(
+            "The Codex sandbox could not complete the turn.",
+            "sandbox.error",
+        ),
+        "cyberPolicy": _SafeFailure(
+            "Codex could not complete this request because of its safety policy.",
+            "policy.cyber",
+        ),
+        "internalServerError": _SafeFailure(
+            "The Codex service encountered an internal error.",
+            "service.internal_error",
+        ),
+        "badRequest": _SafeFailure(
+            "Codex could not process this request.",
+            "request.invalid",
+        ),
+        "threadRollbackFailed": _SafeFailure(
+            "Codex could not restore the conversation after the turn failed.",
+            "thread.rollback_failed",
+        ),
+        "other": _SafeFailure("Codex could not complete the turn.", "run.failed"),
+        "httpConnectionFailed": _SafeFailure(
+            "Codex could not connect to the service.",
+            "network.http_connection_failed",
+        ),
+        "responseStreamConnectionFailed": _SafeFailure(
+            "Codex could not connect to the response stream.",
+            "network.response_stream_connection_failed",
+        ),
+        "responseStreamDisconnected": _SafeFailure(
+            "The Codex response stream disconnected before completion.",
+            "network.response_stream_disconnected",
+        ),
+        "responseTooManyFailedAttempts": _SafeFailure(
+            "Codex could not recover the response stream after several attempts.",
+            "network.response_stream_retry_exhausted",
+        ),
+        "activeTurnNotSteerable": _SafeFailure(
+            "The active Codex turn cannot accept this follow-up yet.",
+            "turn.not_steerable",
+        ),
     }
     if isinstance(value, str):
-        return known.get(value, "Codex could not complete the turn.")
+        return known.get(value, known["other"])
     if isinstance(value, dict):
+        # `type` is retained for a safe compatibility projection of older
+        # runtimes.  Current tagged unions use their sole key instead.
         kind = value.get("type")
-        if isinstance(kind, str):
-            return known.get(kind, "Codex could not complete the turn.")
-    return "Codex could not complete the turn."
+        if isinstance(kind, str) and kind in known:
+            return known[kind]
+        for kind in (
+            "httpConnectionFailed",
+            "responseStreamConnectionFailed",
+            "responseStreamDisconnected",
+            "responseTooManyFailedAttempts",
+            "activeTurnNotSteerable",
+        ):
+            if kind in value:
+                return known[kind]
+    return known["other"]
 
 
 def _fingerprint(value: object) -> str:
