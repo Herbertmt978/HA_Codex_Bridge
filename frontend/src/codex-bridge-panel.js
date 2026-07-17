@@ -26,7 +26,9 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.6";
+const PANEL_VERSION = "0.8.7";
+const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
+const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
 const AUTH_VERIFICATION_HOSTS = new Set([
   "auth.openai.com",
@@ -4874,6 +4876,10 @@ class CodexBridgePanel extends HTMLElement {
     this._workspaceArchivePending = false;
     this._artifactPreview = null;
     this._artifactPreviewLoad = null;
+    this._preparedArtifactDownload = null;
+    this._preparedArtifactDownloadTimer = null;
+    this._artifactDownloadPendingId = null;
+    this._artifactDownloadGeneration = 0;
     this._selectedArtifactId = null;
     this._previewToken = 0;
     this._pdfPreviewDocument = null;
@@ -5022,6 +5028,7 @@ class CodexBridgePanel extends HTMLElement {
     this._uploadAbortController?.abort();
     this._uploadAbortController = null;
     this._hideTooltip();
+    this._invalidateArtifactDownloads();
     this._clearArtifactPreview();
     this._mobileDrawerMedia?.removeEventListener("change", this._mobileDrawerMediaListener);
     this._mobileDrawerMediaListening = false;
@@ -8344,11 +8351,23 @@ class CodexBridgePanel extends HTMLElement {
       action.textContent = "Open preview";
     }
     const download = artifact?.artifact_id
-      ? this._actionButton("generated-image-download", "download-artifact", `Download generated image ${filename}`)
+      ? this._actionButton(
+        "generated-image-download",
+        "download-artifact",
+        this._artifactDownloadActionLabel(artifact.artifact_id, filename, "generated image")
+      )
       : null;
     if (download) {
       download.dataset.artifactId = artifact.artifact_id;
-      download.textContent = "Download";
+      const downloadState = this._artifactDownloadState(artifact.artifact_id);
+      download.textContent = downloadState === "pending"
+        ? "Preparing..."
+        : downloadState === "prepared"
+          ? "Save file"
+          : downloadState === "prepare"
+            ? "Prepare download"
+            : "Download";
+      download.disabled = downloadState === "pending";
     }
     const cachedPreview = artifact?.artifact_id === this._artifactPreview?.artifactId
       && this._artifactPreview?.kind === "image"
@@ -8716,6 +8735,17 @@ class CodexBridgePanel extends HTMLElement {
       archiveButton.setAttribute("aria-busy", String(this._workspaceArchivePending));
     }
     this._syncSelectedArtifact();
+    if (
+      this._preparedArtifactDownload
+      && (
+        this._preparedArtifactDownload.threadId !== this._selectedThreadId
+        || !this._artifacts.some(
+          (artifact) => artifact.artifact_id === this._preparedArtifactDownload.artifactId
+        )
+      )
+    ) {
+      this._clearPreparedArtifactDownload();
+    }
     container.replaceChildren();
 
     const refreshState = this._artifactRefreshState;
@@ -8760,9 +8790,13 @@ class CodexBridgePanel extends HTMLElement {
       const download = this._actionButton(
         "download-button small",
         "download-artifact",
-        `Download ${artifact.filename || "artifact"}`
+        this._artifactDownloadActionLabel(
+          artifact.artifact_id,
+          artifact.filename || "artifact"
+        )
       );
       download.dataset.artifactId = String(artifact.artifact_id || "");
+      download.disabled = this._artifactDownloadState(artifact.artifact_id) === "pending";
       this._appendTrustedIcon(download, icons.download);
       row.append(select, download);
       container.append(row);
@@ -8875,10 +8909,26 @@ class CodexBridgePanel extends HTMLElement {
     const retry = this._actionButton("pdf-preview-retry", "retry-pdf-preview", "Retry PDF preview");
     this._appendTrustedIcon(retry, icons.refresh);
     retry.append(this._textElement("span", "", "Retry"));
-    const download = this._actionButton("pdf-preview-download", "download-artifact", `Download ${preview.filename || "PDF"}`);
+    const download = this._actionButton(
+      "pdf-preview-download",
+      "download-artifact",
+      this._artifactDownloadActionLabel(preview.artifactId, preview.filename || "PDF")
+    );
     download.dataset.artifactId = preview.artifactId;
+    const downloadState = this._artifactDownloadState(preview.artifactId);
+    download.disabled = downloadState === "pending";
     this._appendTrustedIcon(download, icons.download);
-    download.append(this._textElement("span", "", "Download"));
+    download.append(this._textElement(
+      "span",
+      "",
+      downloadState === "pending"
+        ? "Preparing..."
+        : downloadState === "prepared"
+          ? "Save file"
+          : downloadState === "prepare"
+            ? "Prepare download"
+            : "Download"
+    ));
     const pageControls = document.createElement("div");
     pageControls.className = "pdf-preview-control-group";
     pageControls.append(previous, pageStatus, next);
@@ -9681,6 +9731,7 @@ class CodexBridgePanel extends HTMLElement {
       this._threadSelectionEpoch += 1;
       this._threadSnapshotEpoch += 1;
       this._threadRefreshGraceUntil = 0;
+      this._invalidateArtifactDownloads();
       this._artifacts = [];
       this._selectedArtifactId = null;
       this._clearArtifactPreview();
@@ -10574,6 +10625,7 @@ class CodexBridgePanel extends HTMLElement {
     if (!artifactId || artifactId === this._selectedArtifactId) {
       return;
     }
+    this._invalidateArtifactDownloads();
     this._clearArtifactPreview();
     this._selectedArtifactId = artifactId;
     this._render();
@@ -10689,10 +10741,11 @@ class CodexBridgePanel extends HTMLElement {
       const previewBlob = validPdf ? new Blob([blob], { type: PDF_MIME_TYPE }) : blob;
       const descriptor = previewDescriptor(artifact, previewBlob, { validatedPdf: validPdf });
       if (descriptor.kind === "text") {
+        descriptor.blob = previewBlob;
         descriptor.text = await blob.text();
       } else if (descriptor.kind === "image" || descriptor.kind === "pdf") {
         descriptor.url = URL.createObjectURL(previewBlob);
-        if (descriptor.kind === "pdf") descriptor.blob = previewBlob;
+        descriptor.blob = previewBlob;
       } else if (pdfCandidate) {
         descriptor.notice = "Preview blocked because the file did not contain a valid PDF header.";
       }
@@ -10740,14 +10793,162 @@ class CodexBridgePanel extends HTMLElement {
     this._artifactPreview = null;
   }
 
+  _completeCachedArtifactDownload(artifactId) {
+    const artifact = this._artifacts.find((item) => item.artifact_id === artifactId);
+    const blob = this._artifactPreview?.artifactId === artifactId
+      && this._artifactPreview.blob instanceof Blob
+      && Number(artifact?.size_bytes) > 0
+      && this._artifactPreview.blob.size === Number(artifact.size_bytes)
+      ? this._artifactPreview.blob
+      : null;
+    if (!blob) return null;
+    return {
+      artifactId,
+      blob,
+      filename: sanitizeFilename(
+        artifact?.filename || artifact?.relative_path || "codex-artifact",
+        "codex-artifact"
+      ),
+      threadId: this._selectedThreadId,
+    };
+  }
+
+  _readyArtifactDownload(artifactId) {
+    const prepared = this._preparedArtifactDownload;
+    if (
+      prepared?.artifactId === artifactId
+      && prepared.threadId === this._selectedThreadId
+      && prepared.blob instanceof Blob
+    ) {
+      return prepared;
+    }
+    return this._completeCachedArtifactDownload(artifactId);
+  }
+
+  _clearPreparedArtifactDownload() {
+    if (this._preparedArtifactDownloadTimer !== null) {
+      window.clearTimeout(this._preparedArtifactDownloadTimer);
+      this._preparedArtifactDownloadTimer = null;
+    }
+    this._preparedArtifactDownload = null;
+  }
+
+  _invalidateArtifactDownloads() {
+    this._artifactDownloadGeneration += 1;
+    this._artifactDownloadPendingId = null;
+    this._clearPreparedArtifactDownload();
+  }
+
+  _setPreparedArtifactDownload(prepared) {
+    this._clearPreparedArtifactDownload();
+    this._preparedArtifactDownload = prepared;
+    this._preparedArtifactDownloadTimer = window.setTimeout(() => {
+      if (this._preparedArtifactDownload === prepared) {
+        this._preparedArtifactDownload = null;
+        this._preparedArtifactDownloadTimer = null;
+        this._refreshArtifactDownloadUi();
+      }
+    }, PREPARED_DOWNLOAD_TTL_MS);
+  }
+
+  _artifactDownloadState(artifactId) {
+    if (this._artifactDownloadPendingId === artifactId) return "pending";
+    const prepared = this._preparedArtifactDownload;
+    if (prepared?.artifactId === artifactId && prepared.threadId === this._selectedThreadId) {
+      return "prepared";
+    }
+    return this._completeCachedArtifactDownload(artifactId) ? "cached" : "prepare";
+  }
+
+  _artifactDownloadActionLabel(artifactId, filename, qualifier = "") {
+    const subject = `${qualifier ? `${qualifier} ` : ""}${filename || "artifact"}`;
+    const state = this._artifactDownloadState(artifactId);
+    if (state === "pending") return `Preparing ${subject}`;
+    if (state === "prepared") return `Save ${subject}`;
+    if (state === "prepare") return `Prepare download ${subject}`;
+    return `Download ${subject}`;
+  }
+
+  _refreshArtifactDownloadUi() {
+    for (const button of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
+      const artifactId = button.dataset.artifactId || "";
+      const artifact = this._artifacts.find((item) => item.artifact_id === artifactId);
+      const filename = artifact?.filename || artifact?.relative_path || "artifact";
+      const generatedImageButton = button.classList.contains("generated-image-download");
+      const label = this._artifactDownloadActionLabel(
+        artifactId,
+        filename,
+        generatedImageButton ? "generated image" : ""
+      );
+      const state = this._artifactDownloadState(artifactId);
+      button.disabled = state === "pending";
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.dataset.tooltip = label;
+      const visibleLabel = state === "pending"
+        ? "Preparing..."
+        : state === "prepared"
+          ? "Save file"
+          : state === "prepare"
+            ? "Prepare download"
+            : "Download";
+      if (generatedImageButton) {
+        button.textContent = visibleLabel;
+      } else if (button.classList.contains("pdf-preview-download")) {
+        const text = button.querySelector("span");
+        if (text) text.textContent = visibleLabel;
+      }
+    }
+  }
+
+  _handoffBrowserDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.hidden = true;
+    document.body.append(link);
+    try {
+      link.click();
+    } catch (error) {
+      link.remove();
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+    window.setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, DOWNLOAD_HANDOFF_GRACE_MS);
+  }
+
   async _downloadArtifact(artifactId) {
     if (!this._selectedThreadId || !artifactId) {
       return;
     }
+    const downloadThreadId = this._selectedThreadId;
+    const readyDownload = this._readyArtifactDownload(artifactId);
+    if (readyDownload) {
+      try {
+        this._handoffBrowserDownload(readyDownload.blob, readyDownload.filename);
+        if (this._preparedArtifactDownload === readyDownload) {
+          this._clearPreparedArtifactDownload();
+          this._refreshArtifactDownloadUi();
+        }
+        this._clearError();
+      } catch (error) {
+        this._setError(error);
+      }
+      return;
+    }
+    if (this._artifactDownloadPendingId === artifactId) return;
+
+    const downloadGeneration = ++this._artifactDownloadGeneration;
+    this._artifactDownloadPendingId = artifactId;
+    this._refreshArtifactDownloadUi();
     try {
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const threadSegment = encodeURIComponent(this._selectedThreadId);
+      const threadSegment = encodeURIComponent(downloadThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
       const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
         headers,
@@ -10757,24 +10958,39 @@ class CodexBridgePanel extends HTMLElement {
         throw new Error(payload.message || "Download failed");
       }
       const blob = await response.blob();
+      if (
+        downloadGeneration !== this._artifactDownloadGeneration
+        || downloadThreadId !== this._selectedThreadId
+        || !this.isConnected
+        || !this._artifacts.some((artifact) => artifact.artifact_id === artifactId)
+      ) return;
       const contentDisposition = response.headers.get("Content-Disposition") || "";
       const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
       const filename = sanitizeFilename(filenameMatch ? filenameMatch[1] : "codex-artifact", "codex-artifact");
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      try {
-        link.href = url;
-        link.download = filename;
-        link.hidden = true;
-        document.body.append(link);
-        link.click();
-      } finally {
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      }
+      this._setPreparedArtifactDownload({
+        artifactId,
+        blob,
+        filename,
+        threadId: downloadThreadId,
+      });
       this._clearError();
     } catch (error) {
-      this._setError(error);
+      if (
+        downloadGeneration === this._artifactDownloadGeneration
+        && downloadThreadId === this._selectedThreadId
+        && this.isConnected
+        && this._artifacts.some((artifact) => artifact.artifact_id === artifactId)
+      ) {
+        this._setError(error);
+      }
+    } finally {
+      if (
+        downloadGeneration === this._artifactDownloadGeneration
+        && this._artifactDownloadPendingId === artifactId
+      ) {
+        this._artifactDownloadPendingId = null;
+      }
+      this._refreshArtifactDownloadUi();
     }
   }
 

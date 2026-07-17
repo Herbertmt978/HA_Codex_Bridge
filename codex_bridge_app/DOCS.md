@@ -195,15 +195,20 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Signed App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex `0.144.5`
+Signed App/Integration/panel `0.8.6` with Bridge `0.7.3` and Codex `0.144.5`
 is installed on the target Home Assistant. ChatGPT Pro, projects, and history
 were retained; generated-image preview and transcript-only scrolling passed.
-The live browser download probe did not receive a native download event.
-Candidate `0.8.6` keeps the authenticated Home Assistant fetch and hardens the
-final browser handoff by attaching the hidden anchor while clicked and
-deferring blob-URL revocation. Its local unit and Playwright tests cover delayed
-multi-megabyte payload bytes and filenames; signed publication and target
-download acceptance remain separate gates.
+The live browser download probe still did not emit a native event or persist a
+file. Candidate `0.8.7` reuses a complete authenticated preview synchronously
+inside the user's active click and retains the temporary anchor and blob URL
+together for a bounded 60-second grace period. Unpreviewed artifacts retain the
+authenticated fetch as an explicit **Prepare download** step, followed by a
+synchronous **Save file** click; no Home Assistant credential enters a URL.
+Unsaved prepared bytes expire after 60 seconds and are cleared on panel
+disconnect or context change.
+Its unit and browser tests cover the cached user-activation path, delayed
+multi-megabyte fallback, payload bytes, filenames, and bounded cleanup; signed
+publication and target download acceptance remain separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,

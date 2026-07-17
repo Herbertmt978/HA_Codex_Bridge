@@ -247,6 +247,59 @@ for (const viewport of [
   });
 }
 
+test("downloads a cached generated-image preview inside the user activation", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+
+  await page.evaluate(() => {
+    const generatedImage = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 77]);
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    window.__codexBridgeCachedDownloadUserActive = null;
+    window.__codexBridgeCachedDownloadFetched = false;
+    HTMLAnchorElement.prototype.click = function () {
+      window.__codexBridgeCachedDownloadUserActive = navigator.userActivation.isActive;
+      return originalAnchorClick.call(this);
+    };
+    const panel = document.querySelector("codex-bridge-panel");
+    const artifact = {
+      artifact_id: "art_generated_cached",
+      filename: "generated-cached.png",
+      relative_path: "generated-cached.png",
+      mime_type: "image/png",
+      size_bytes: generatedImage.byteLength,
+      source: "generated_image",
+    };
+    const harnessFetch = window.fetch;
+    window.fetch = async (url, init) => {
+      const pathname = new URL(String(url), window.location.origin).pathname;
+      if (pathname.endsWith("/artifacts/art_generated_cached")) {
+        window.__codexBridgeCachedDownloadFetched = true;
+      }
+      return harnessFetch(url, init);
+    };
+    panel._artifacts = [...panel._artifacts, artifact];
+    panel._artifactPreview = {
+      artifactId: artifact.artifact_id,
+      filename: artifact.filename,
+      kind: "image",
+      blob: new Blob([generatedImage], { type: artifact.mime_type }),
+    };
+    const card = panel._renderGeneratedImageCard({ sequence: 19_999, payload: {} }, artifact);
+    panel.shadowRoot.getElementById("message-list").append(card);
+  });
+
+  const downloadEvent = page.waitForEvent("download");
+  await page.locator("codex-bridge-panel").locator(
+    '.generated-image-download[data-artifact-id="art_generated_cached"]'
+  ).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("generated-cached.png");
+  expect([...await readFile(await download.path())]).toEqual([137, 80, 78, 71, 13, 10, 26, 10, 77]);
+  expect(await page.evaluate(() => window.__codexBridgeCachedDownloadUserActive)).toBe(true);
+  expect(await page.evaluate(() => window.__codexBridgeCachedDownloadFetched)).toBe(false);
+  await expect(page.locator('a[download="generated-cached.png"]')).toBeAttached();
+});
+
 test("downloads a generated image through the authenticated browser artifact path", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
@@ -290,10 +343,18 @@ test("downloads a generated image through the authenticated browser artifact pat
     panel.shadowRoot.getElementById("message-list").append(card);
   });
 
-  const downloadEvent = page.waitForEvent("download");
-  await page.locator("codex-bridge-panel").locator(
+  const downloadButton = page.locator("codex-bridge-panel").locator(
     '.generated-image-download[data-artifact-id="art_generated_download"]'
-  ).click();
+  );
+  await expect(downloadButton).toHaveAttribute(
+    "aria-label",
+    "Prepare download generated image generated-tree.png"
+  );
+  await downloadButton.click();
+  await expect(downloadButton).toHaveAttribute("aria-label", "Save generated image generated-tree.png");
+
+  const downloadEvent = page.waitForEvent("download");
+  await downloadButton.click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toBe("generated-tree.png");
   const downloadedBytes = await readFile(await download.path());
@@ -301,6 +362,7 @@ test("downloads a generated image through the authenticated browser artifact pat
   expect([...downloadedBytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   expect(downloadedBytes.at(-1)).toBe(77);
   expect(await page.evaluate(() => window.__codexBridgeDownloadAnchorConnected)).toBe(true);
+  await expect(page.locator('a[download="generated-tree.png"]')).toBeAttached();
 });
 
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
