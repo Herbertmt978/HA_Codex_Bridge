@@ -46,7 +46,7 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-- **Target-HA accepted release:** App, Integration, and panel `0.7.5`, Bridge
+- **Historical fully target-HA-accepted release:** App, Integration, and panel `0.7.5`, Bridge
   `0.6.3`, and Codex `0.144.5` were installed and running on target Home
   Assistant `192.168.50.20` on 2026-07-16. ChatGPT Pro remained connected. A
   fresh direct chat defaulted to `gpt-5.6-sol` with `low` thinking; the catalogue
@@ -56,25 +56,36 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed and installed App:** `0.8.2`, bundling Bridge `0.7.2` and
-  Codex `0.144.5`. App publication
-  [run 29536061100](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29536061100)
-  completed its immutable-image, signature, SBOM, and provenance workflow. The
-  App and Integration were then installed on the target HA, retained ChatGPT
-  Pro and history, reported the coordinated versions, and loaded without a
-  false global connection banner. This was a bounded live smoke check rather
-  than a completed PDF/archive/restore acceptance matrix, so `0.7.5` remains
-  the latest fully target-accepted release.
-- **Candidate, not yet accepted:** App, Integration, and panel `0.8.3`, Bridge
-  `0.7.2`, and Codex `0.144.5` continue that recovery contract and move the
-  panel materially closer to Codex desktop. Header, transcript, safe live
-  actions, interactions, and composer share one 840-pixel reading rail; the
-  compact Activity card exposes Outputs, bounded Subagent counts, Background
-  activity, Browser state, and Sources; mobile run details stay inside the
-  viewport. Successful replies can no longer be replaced by a secondary
-  artifact-index, archive, or preview error, and an orphaned runtime projection
-  can no longer leave an idle chat stuck on **Preparing a response**. Signed
-  publication and the full target-HA matrix are still required.
+- **Latest signed and target-smoked release:** App, Integration, and panel
+  `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5` are published from exact main
+  commit `913c08d3393574f799baf0b47e78d31422c12fe1`. Main CI
+  [run 29544350904](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544350904)
+  and the signed App publication
+  [run 29544351022](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544351022)
+  passed. The immutable App digest is
+  `sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`;
+  [provenance attestation 35745773](https://github.com/Herbertmt978/HA_Codex_Bridge/attestations/35745773)
+  accompanies the
+  [0.8.3 release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.3).
+- **Target-HA acceptance (bounded):** On `192.168.50.20`, App and Integration
+  `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
+  and chat history were retained. The former `0.8.0 PDF acceptance` thread
+  recovered from a false **Working / Preparing a response / Stop / steer**
+  state to a truthful ready/Run completed state. A fresh GPT-5.6-Sol prompt
+  completed, Sol/Terra/Luna and advertised Max/Ultra reasoning levels were
+  visible, five-hour usage rendered `Off`, and the Malta prompt exposed
+  `Searching the web` and `Using web search` before returning live conditions.
+  No false global **Connection issue** remained after the successful run.
+- **Codex parity and open boundaries:** Header, transcript, safe live actions,
+  interactions, and composer share one 840-pixel reading rail; the compact
+  Activity card exposes Outputs, bounded Subagent counts, Background activity,
+  Browser state, and Sources. The current PDF artifact scan still returns the
+  typed `409` local **Files** conflict, so PDF/archive/restore acceptance is
+  not claimed. External Nabu Casa/Cloudflare routing, cold restore, arbitrary
+  image rollback, and the secure App-owned browser worker remain open. A manual
+  paired HACS release gap was found; the paired-release workflow is now
+  policy-tested, while its first live automatic exercise remains the next App
+  release.
 - **Browser automation:** secure App-owned browser-worker follow-up is tracked
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).

@@ -12,5 +12,5 @@
 | Baseline | 2026-07-12 | Current before HA-native migration | [Initial architecture baseline](baseline/2026-07-12-initial-baseline.md) |
 | Design spec | 2026-07-12 | Approved for implementation | [Home Assistant-native Codex](specs/2026-07-12-home-assistant-native-codex-design.md) |
 | Implementation plan | 2026-07-12 | Approved for execution | [Home Assistant-native Codex implementation](plans/2026-07-12-home-assistant-native-codex.md) |
-| Work record | 2026-07-16 | Signed and target-smoked `0.8.2`; Codex-parity `0.8.3` candidate in release validation | [Home Assistant-native Codex execution](work/2026-07-12-home-assistant-native-codex/20-checkpoint.md) |
-| Candidate evidence | 2026-07-16 | Bounded `0.8.2` publication/live evidence and local `0.8.3` parity matrix; full target acceptance pending | [Home Assistant-native Codex execution evidence](work/2026-07-12-home-assistant-native-codex/90-evidence.md) |
+| Work record | 2026-07-16 | `0.8.3` signed, published, and bounded target-HA acceptance complete | [Home Assistant-native Codex execution](work/2026-07-12-home-assistant-native-codex/20-checkpoint.md) |
+| Release evidence | 2026-07-16 | `0.8.3` exact-main publication and bounded target-HA evidence; PDF/archive/restore and browser-worker boundaries remain open | [Home Assistant-native Codex execution evidence](work/2026-07-12-home-assistant-native-codex/90-evidence.md) |
