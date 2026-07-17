@@ -420,6 +420,7 @@ class RuntimeBroker:
                 self._repair_thread_projections_after_state_reset_locked()
             generation = self.app_server.generation
             self._reconcile_generation_locked(generation, reason="bridge restarted")
+            self._repair_orphaned_thread_projections_locked()
             self._started = True
 
     def delete_thread(self, thread_id: str) -> None:
@@ -3020,6 +3021,30 @@ class RuntimeBroker:
                 ),
             )
         self._recovered_corrupt_state = False
+
+    def _repair_orphaned_thread_projections_locked(self) -> None:
+        """Clear stale busy thread state without disturbing owned runtime work.
+
+        Thread records are a public projection of the private runtime
+        checkpoint.  A checkpoint can legitimately be absent after an
+        interrupted first write, so startup must not leave its old projection
+        permanently busy merely because there was no corrupt file to
+        quarantine.  Conversely, never clear a projection belonging to a
+        non-terminal run the in-memory checkpoint still owns.
+        """
+        owned_projections = {
+            run.thread_id: (
+                "queued" if run.status == "queued" else "running",
+                None if run.status == "queued" else run.run_id,
+                run.codex_turn_id,
+                run.codex_thread_id,
+            )
+            for run in self._state.runs.values()
+            if run.status not in _TERMINAL_RUN_STATES
+        }
+        self.storage.recover_orphaned_runtime_projections(
+            owned_projections=owned_projections,
+        )
 
     def _persist_locked(
         self,

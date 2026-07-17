@@ -72,8 +72,9 @@ App and Bridge remain private to Home Assistant.
   compact Activity card exposes Outputs, bounded Subagent counts, Background
   activity, Browser state, and Sources; mobile run details stay inside the
   viewport. Successful replies can no longer be replaced by a secondary
-  artifact-index, archive, or preview error. Signed publication and the full
-  target-HA matrix are still required.
+  artifact-index, archive, or preview error, and an orphaned runtime projection
+  can no longer leave an idle chat stuck on **Preparing a response**. Signed
+  publication and the full target-HA matrix are still required.
 - **Browser automation:** secure App-owned browser-worker follow-up is tracked
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).

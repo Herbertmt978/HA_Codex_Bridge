@@ -98,6 +98,17 @@ async function seedRunStageActivity(page) {
     const harness = window.__codexHarness;
     const threadId = "thr_vba_1";
     const runId = "run_stage_tooltip";
+    const runningThread = harness.updateThread(threadId, {
+      status: "running",
+      active_run_id: runId,
+    });
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._activeThread = runningThread;
+    panel._threads = panel._threads.map((thread) => (
+      thread.thread_id === threadId ? runningThread : thread
+    ));
+    panel._renderThreadRunState(runningThread);
+    panel._renderComposerState(runningThread);
     harness.emitThreadEvent(threadId, "run.started", { run_id: runId });
     harness.emitThreadEvent(threadId, "plan.updated", {
       run_id: runId,

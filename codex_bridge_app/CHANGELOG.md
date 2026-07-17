@@ -18,6 +18,9 @@ All notable App changes are recorded here.
 - Keeps artifact-index, archive, and preview failures local to **Files** after a
   successful thread/status refresh, preventing a valid reply from becoming a
   false global **Connection issue**.
+- Repairs orphaned busy thread projections when a private runtime checkpoint is
+  missing after restart, and prevents an authoritative idle chat from reviving
+  stale **Working**, **Preparing a response**, streaming, or steer controls.
 - Adds bounded local retry states for file indexing, archive creation, and
   previews without replacing healthy connection or transcript state.
 - Makes the run-stage activity popover viewport-safe on mobile and preserves

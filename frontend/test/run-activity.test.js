@@ -196,6 +196,94 @@ describe("run activity view model", () => {
     expect(complete.state).toBe("completed");
   });
 
+  it("does not resurrect orphaned activity from an idle thread snapshot", () => {
+    const model = getRunActivityViewModel(
+      { status: "idle", active_run_id: "run-old" },
+      [
+        event(1, "item.started", { item_type: "agentMessage" }, "run-old"),
+        event(2, "message.delta", { text: "stale response" }, "run-old"),
+      ],
+    );
+
+    expect(model).toMatchObject({
+      state: "idle",
+      busy: false,
+      runId: "",
+      action: "",
+      assistantState: "idle",
+    });
+  });
+
+  it("keeps terminal history while ignoring stale work from another run", () => {
+    const model = getRunActivityViewModel(
+      { status: "idle", active_run_id: "run-old" },
+      [
+        event(1, "run.completed", {}, "run-current"),
+        event(2, "message.delta", { text: "stale response" }, "run-old"),
+        event(3, "item.started", { item_type: "agentMessage" }, "run-old"),
+      ],
+    );
+
+    expect(model).toMatchObject({
+      state: "completed",
+      busy: false,
+      runId: "run-current",
+      action: "Run completed",
+      assistantState: "idle",
+    });
+  });
+
+  it("keeps event-only activity working when a thread snapshot has no status", () => {
+    const model = getRunActivityViewModel(
+      { active_run_id: "run-activity" },
+      [event(1, "run.started", {}, "run-activity")],
+    );
+
+    expect(model).toMatchObject({ state: "running", busy: true, runId: "run-activity" });
+  });
+
+  it("retains a terminal event that has no run identifier", () => {
+    const model = getRunActivityViewModel(
+      { status: "idle", active_run_id: "run-old" },
+      [event(1, "run.completed", {}, null)],
+    );
+
+    expect(model).toMatchObject({ state: "completed", terminal: true, action: "Run completed" });
+  });
+
+  it("keeps a busy snapshot active when it has no current run identifier", () => {
+    const model = getRunActivityViewModel(
+      { status: "running", active_run_id: null },
+      [event(1, "run.completed", {}, "run-historical")],
+    );
+
+    expect(model).toMatchObject({ state: "running", busy: true, runId: "", action: "Working on the request" });
+  });
+
+  it("uses the current queued run instead of terminal history", () => {
+    const model = getRunActivityViewModel(
+      { status: "queued", active_run_id: null },
+      [
+        event(1, "run.completed", {}, "run-historical"),
+        event(2, "run.queued", {}, "run-current"),
+      ],
+    );
+
+    expect(model).toMatchObject({ state: "queued", busy: true, runId: "run-current", action: "Waiting in queue" });
+  });
+
+  it("never leaves a terminal run in streaming response state", () => {
+    const model = getRunActivityViewModel(
+      { status: "idle", active_run_id: null },
+      [
+        event(1, "run.completed", {}, "run-complete"),
+        event(2, "message.delta", { text: "late stale delta" }, "run-complete"),
+      ],
+    );
+
+    expect(model).toMatchObject({ state: "completed", busy: false, assistantState: "idle" });
+  });
+
   it("joins reasoning summary chunks and keeps a terminal event when a later event has no run id", () => {
     const chunks = [
       event(1, "reasoning.summary_delta", { item_id: "reason-1", summary_index: 0, delta: "first " }),

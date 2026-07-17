@@ -13,7 +13,7 @@ function event(sequence, event_type, payload = {}) {
   };
 }
 
-function createPanel({ status = "running", events = [] } = {}) {
+function createPanel({ status = "running", activeRunId = "run-activity", events = [] } = {}) {
   const panel = document.createElement("codex-bridge-panel");
   document.body.append(panel);
   const thread = {
@@ -23,7 +23,7 @@ function createPanel({ status = "running", events = [] } = {}) {
     status,
     mode: "edit",
     attachments: [],
-    active_run_id: "run-activity",
+    active_run_id: activeRunId,
   };
   panel._config = { api_version: 1, connection_type: "supervisor", panel_title: "Codex Bridge" };
   panel._status = {
@@ -139,6 +139,25 @@ describe("panel run activity integration", () => {
     expect(messageList?.querySelector("article.message.assistant.streaming")).toBeNull();
     expect(messageList?.textContent).toContain("Final answer");
     expect(messageList?.textContent).not.toContain("Partial answer");
+  });
+
+  it("does not show a stale preparing state for an idle thread with orphaned events", () => {
+    const panel = createPanel({
+      status: "idle",
+      activeRunId: "run-old",
+      events: [
+        event(1, "item.started", { run_id: "run-old", item_type: "agentMessage" }),
+        event(2, "message.delta", { run_id: "run-old", text: "stale response" }),
+      ],
+    });
+    panel._render(true);
+
+    expect(panel.shadowRoot.getElementById("thread-status-text")?.textContent).toBe("");
+    expect(panel.shadowRoot.getElementById("stop-run-button")?.classList.contains("hidden")).toBe(true);
+    expect(panel.shadowRoot.getElementById("prompt-input")?.placeholder).toBe("Message Codex through Home Assistant");
+    expect(panel.shadowRoot.getElementById("message-list")?.getAttribute("aria-busy")).toBe("false");
+    expect(panel.shadowRoot.querySelector("article.message.assistant.streaming")).toBeNull();
+    expect(panel.shadowRoot.getElementById("run-activity")?.textContent).not.toContain("Preparing a response");
   });
 
   it("refreshes the Activity card for every accepted streamed run event", () => {
