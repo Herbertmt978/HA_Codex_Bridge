@@ -22878,7 +22878,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.8.7";
+var PANEL_VERSION = "0.8.8";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -23510,6 +23510,19 @@ template.innerHTML = `
       width: 28px;
       height: 28px;
       border-radius: 7px;
+    }
+
+    .download-button.small.has-state-label {
+      width: auto;
+      min-width: 28px;
+      padding: 0 8px;
+    }
+
+    .download-state-label {
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .tool-button {
@@ -31251,8 +31264,17 @@ var CodexBridgePanel = class extends HTMLElement {
         )
       );
       download.dataset.artifactId = String(artifact.artifact_id || "");
-      download.disabled = this._artifactDownloadState(artifact.artifact_id) === "pending";
+      const downloadState = this._artifactDownloadState(artifact.artifact_id);
+      download.disabled = downloadState === "pending";
       this._appendTrustedIcon(download, icons.download);
+      const downloadStateLabel = this._textElement(
+        "span",
+        "download-state-label",
+        this._artifactDownloadVisibleLabel(downloadState)
+      );
+      downloadStateLabel.hidden = downloadState === "cached";
+      download.classList.toggle("has-state-label", downloadState !== "cached");
+      download.append(downloadStateLabel);
       row.append(select, download);
       container.append(row);
     }
@@ -33096,6 +33118,12 @@ var CodexBridgePanel = class extends HTMLElement {
     if (state === "prepare") return `Prepare download ${subject}`;
     return `Download ${subject}`;
   }
+  _artifactDownloadVisibleLabel(state) {
+    if (state === "pending") return "Preparing...";
+    if (state === "prepared") return "Save file";
+    if (state === "prepare") return "Prepare download";
+    return "Download";
+  }
   _refreshArtifactDownloadUi() {
     for (const button2 of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
       const artifactId = button2.dataset.artifactId || "";
@@ -33112,12 +33140,19 @@ var CodexBridgePanel = class extends HTMLElement {
       button2.setAttribute("aria-label", label);
       button2.title = label;
       button2.dataset.tooltip = label;
-      const visibleLabel = state === "pending" ? "Preparing..." : state === "prepared" ? "Save file" : state === "prepare" ? "Prepare download" : "Download";
+      const visibleLabel = this._artifactDownloadVisibleLabel(state);
       if (generatedImageButton) {
         button2.textContent = visibleLabel;
       } else if (button2.classList.contains("pdf-preview-download")) {
         const text2 = button2.querySelector("span");
         if (text2) text2.textContent = visibleLabel;
+      } else if (button2.classList.contains("download-button")) {
+        const text2 = button2.querySelector(".download-state-label");
+        if (text2) {
+          text2.textContent = visibleLabel;
+          text2.hidden = state === "cached";
+        }
+        button2.classList.toggle("has-state-label", state !== "cached");
       }
     }
   }

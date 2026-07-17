@@ -6,30 +6,34 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App/Integration: `0.8.6` (`amd64` only, experimental)
-- Latest installed target exercise: `0.8.6`
+- Published App/Integration: `0.8.7` (`amd64` only, experimental)
+- Latest installed target exercise: `0.8.7`
 - Historical fully target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.7`
+- Candidate App/Integration: `0.8.8`
 - Candidate Bridge: `0.7.3`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Signed App/Integration `0.8.6` with Bridge `0.7.3` is installed on the target
+Signed App/Integration `0.8.7` with Bridge `0.7.3` is installed on the target
 Home Assistant. It retained ChatGPT Pro, projects, and history; generated-image
-preview and transcript-only scrolling passed. Real Chrome still did not emit a
-download or persist the generated image. Candidate `0.8.7` reuses a complete
-authenticated preview inside the user's active click and retains the temporary
-anchor and blob URL together for 60 seconds. Unpreviewed outputs use an
-explicit **Prepare download** then synchronous **Save file** flow. Coordinated
-`0.7.5` remains the historical fully accepted baseline.
+preview and transcript-only scrolling passed. The browser persisted a complete
+3,276,457-byte generated PNG with the expected signature and SHA-256
+`F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
+Candidate `0.8.8` exposes the authenticated **Prepare download** ->
+**Preparing...** -> **Save file** state on generic Files rows as well as the
+existing generated-image and PDF controls. Coordinated `0.7.5` remains the
+historical fully accepted baseline.
 
-The `0.8.6` publication, signature, SBOM, and provenance workflow passed in
-[run 29587857673](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29587857673).
+The `0.8.7` publication, signature, SBOM, and provenance workflow passed in
+[run 29591598644](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29591598644).
 Its paired
-[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.6)
-points to exact main commit `e94ca852bb4b38cfb262b71992fbf4e42aa0b0d1`.
+[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.7)
+points to exact main commit `31c09549221b2cb4be17bee9b1376eb2eab7f025`.
+The immutable image digest is
+`sha256:85fc4b375b582e3b733b001525eb7432c46c331f237575d4627dbd8795cd2ed3`,
+with attestation `35855122`.
 The following earlier bounded target smoke remains evidence for `0.8.3`, not a
-claim that `0.8.6` completed the broader target matrix:
+claim that `0.8.7` completed the broader target matrix:
 The App and Integration were installed on the target HA, retained ChatGPT Pro
 and history, recovered stale run state, completed a GPT-5.6-Sol prompt, and
 showed native web-search activity without the prior false global connection

@@ -56,14 +56,15 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed release:** App, Integration, and panel `0.8.6`, Bridge
+- **Latest signed release:** App, Integration, and panel `0.8.7`, Bridge
   `0.7.3`, and Codex `0.144.5` were published from exact main commit
-  `e94ca852bb4b38cfb262b71992fbf4e42aa0b0d1`. The signed App publication
-  [run 29587857673](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29587857673)
+  `31c09549221b2cb4be17bee9b1376eb2eab7f025`. The signed App publication
+  [run 29591598644](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29591598644)
   and paired
-  [0.8.6 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.6)
-  passed. This is publication evidence, not a claim that the full target-HA
-  acceptance matrix was completed.
+  [0.8.7 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.7)
+  passed. The immutable image digest is
+  `sha256:85fc4b375b582e3b733b001525eb7432c46c331f237575d4627dbd8795cd2ed3`,
+  with attestation `35855122`.
 - **Last prompt-path target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
@@ -79,17 +80,17 @@ App and Bridge remain private to Home Assistant.
   Files; the HA document stayed fixed while the transcript remained the only
   scrollport. The live browser download probe did not receive a native download
   event, so download acceptance remains failed for `0.8.5`.
-- **0.8.6 target result:** the coordinated signed release installed cleanly and
+- **0.8.7 target result:** the coordinated signed release installed cleanly and
   retained ChatGPT Pro, history, generated-image preview, and transcript-only
-  scrolling. Its next-task blob cleanup still raced real Chrome: the browser
-  emitted no download and persisted no file.
-- **0.8.7 candidate:** the signed `0.8.6` release was installed successfully and
-  preview remained healthy, but real Chrome still neither emitted a download
-  nor wrote the generated image. This follow-up reuses a complete authenticated
-  preview synchronously inside the user's click and keeps the temporary anchor
-  and blob URL alive together for 60 seconds. Unpreviewed artifacts use an
-  explicit **Prepare download** then **Save file** flow, keeping their final
-  handoff synchronous too; no credential is placed in a URL.
+  scrolling. A browser download persisted the complete 3,276,457-byte PNG in
+  the redirected Windows Downloads folder with the expected PNG signature and
+  SHA-256 `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
+  The Chrome automation event did not surface this blob download, so acceptance
+  was based on the file written by the browser rather than that event hook.
+- **0.8.8 candidate:** generic Files rows now expose the same authenticated
+  **Prepare download** -> **Preparing...** -> **Save file** handoff already used
+  by generated-image and PDF controls. Candidate publication and live generic-
+  artifact acceptance remain separate gates; no credential is placed in a URL.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,

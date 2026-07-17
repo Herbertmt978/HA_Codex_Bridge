@@ -398,6 +398,40 @@ describe("artifact previews", () => {
     );
   });
 
+  it("shows prepare, pending, and save states on generic file rows", async () => {
+    const artifact = createArtifact({ filename: "large-output.bin", mime_type: "application/octet-stream" });
+    const panel = createPanel(artifact);
+    panel._renderArtifacts();
+    const download = panel.shadowRoot.querySelector('.file-row [data-action="download-artifact"]');
+    const stateLabel = download.querySelector(".download-state-label");
+
+    expect(download.getAttribute("aria-label")).toBe("Prepare download large-output.bin");
+    expect(download.classList).toContain("has-state-label");
+    expect(stateLabel.hidden).toBe(false);
+    expect(stateLabel.textContent).toBe("Prepare download");
+
+    panel._artifactDownloadPendingId = artifact.artifact_id;
+    panel._refreshArtifactDownloadUi();
+
+    expect(download.disabled).toBe(true);
+    expect(download.getAttribute("aria-label")).toBe("Preparing large-output.bin");
+    expect(stateLabel.textContent).toBe("Preparing...");
+
+    panel._artifactDownloadPendingId = null;
+    panel._preparedArtifactDownload = {
+      artifactId: artifact.artifact_id,
+      blob: new Blob(["complete output"]),
+      filename: artifact.filename,
+      threadId: panel._selectedThreadId,
+    };
+    panel._refreshArtifactDownloadUi();
+
+    expect(download.disabled).toBe(false);
+    expect(download.getAttribute("aria-label")).toBe("Save large-output.bin");
+    expect(stateLabel.hidden).toBe(false);
+    expect(stateLabel.textContent).toBe("Save file");
+  });
+
   it("expires a prepared download that is not saved", async () => {
     vi.useFakeTimers();
     previewUrlStubs();
