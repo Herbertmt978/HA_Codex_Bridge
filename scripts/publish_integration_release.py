@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -22,6 +23,7 @@ from urllib.request import Request, urlopen
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 VERSION_RE = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 MAX_TAG_DEPTH = 8
+TAG_READBACK_RETRY_DELAYS = (0.25, 0.5, 1.0, 2.0)
 
 
 class PublishError(RuntimeError):
@@ -202,9 +204,16 @@ def _ensure_tag(client: GitHubClient, version: str, expected_sha: str, *, existi
             raise PublishError("GitHub API created an unexpected tag object")
     elif response.status not in (409, 422):
         raise PublishError(f"could not create Integration tag (HTTP {response.status})")
-    # A 409/422 is a concurrent creator or an API validation failure. Refetch and
-    # accept it only when it now resolves exactly; never repair an old tag.
+    # A newly-created ref can take a moment to become readable through GitHub's
+    # ref endpoint. Poll that read-after-write window briefly, accepting only the
+    # exact immutable commit. A visible mismatch still fails immediately and is
+    # never moved or repaired.
     actual = _resolve_tag_commit(client, version)
+    for delay in TAG_READBACK_RETRY_DELAYS:
+        if actual is not None:
+            break
+        time.sleep(delay)
+        actual = _resolve_tag_commit(client, version)
     if actual != expected_sha:
         raise PublishError("Integration tag creation race did not resolve to expected commit")
 

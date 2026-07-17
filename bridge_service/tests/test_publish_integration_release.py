@@ -122,6 +122,78 @@ def test_create_tag_race_accepts_only_exact_winner() -> None:
         publisher.publish(client=client(mismatch), version="1.2.3", expected_sha=SHA, changelog=CHANGELOG, run_url=RUN)
 
 
+@pytest.mark.parametrize("create_status", [201, 422])
+def test_create_tag_readback_retries_temporary_absence(
+    monkeypatch: pytest.MonkeyPatch, create_status: int
+) -> None:
+    delays: list[float] = []
+    monkeypatch.setattr(publisher.time, "sleep", delays.append)
+    api = QueueAPI(
+        (404, {}),
+        (404, {}),
+        (create_status, ref() if create_status == 201 else {}),
+        (404, {}),
+        (404, {}),
+        (200, ref()),
+        (201, release()),
+        (200, release()),
+        (200, ref()),
+    )
+
+    publisher.publish(
+        client=client(api),
+        version="1.2.3",
+        expected_sha=SHA,
+        changelog=CHANGELOG,
+        run_url=RUN,
+    )
+
+    assert delays == [0.25, 0.5]
+
+
+def test_create_tag_readback_fails_closed_after_bounded_absence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+    monkeypatch.setattr(publisher.time, "sleep", delays.append)
+    api = QueueAPI(
+        (404, {}),
+        (404, {}),
+        (201, ref()),
+        *[(404, {}) for _ in range(1 + len(publisher.TAG_READBACK_RETRY_DELAYS))],
+    )
+
+    with pytest.raises(publisher.PublishError, match="race"):
+        publisher.publish(
+            client=client(api),
+            version="1.2.3",
+            expected_sha=SHA,
+            changelog=CHANGELOG,
+            run_url=RUN,
+        )
+
+    assert delays == list(publisher.TAG_READBACK_RETRY_DELAYS)
+
+
+def test_create_tag_readback_rejects_visible_mismatch_without_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+    monkeypatch.setattr(publisher.time, "sleep", delays.append)
+    api = QueueAPI((404, {}), (404, {}), (201, ref()), (200, ref(OTHER)))
+
+    with pytest.raises(publisher.PublishError, match="race"):
+        publisher.publish(
+            client=client(api),
+            version="1.2.3",
+            expected_sha=SHA,
+            changelog=CHANGELOG,
+            run_url=RUN,
+        )
+
+    assert delays == []
+
+
 def test_create_release_race_refetches_and_validates_winner() -> None:
     api = QueueAPI((404, {}), (404, {}), (201, ref()), (200, ref()), (422, {}), (200, release()), (200, ref()))
     publisher.publish(client=client(api), version="1.2.3", expected_sha=SHA, changelog=CHANGELOG, run_url=RUN)
