@@ -6,25 +6,28 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App/Integration: `0.8.3` (`amd64` only, experimental)
+- Published App/Integration: `0.8.4` (`amd64` only, experimental)
 - Latest bounded target-HA smoke: `0.8.3`
 - Historical fully target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.4`
+- Candidate App/Integration: `0.8.5`
 - Candidate Bridge: `0.7.3`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Candidate App/Integration `0.8.4` with Bridge `0.7.3` is pending signed
-publication and real Home Assistant validation. Signed and target-smoked
-`0.8.3` remains the latest bounded target matrix; coordinated `0.7.5` remains
-the historical fully accepted baseline. The candidate repairs selected-
-workspace PDF reads, adds provider-gated private image artifacts, supplies
-provider-neutral remote and recovery evidence tooling, and carries a fixed
-browser-worker scaffold that remains unavailable until HAOS can prove its
-process, filesystem, and network isolation.
+Candidate App/Integration `0.8.5` with Bridge `0.7.3` is pending signed
+publication and real Home Assistant validation. Signed `0.8.4` is the latest
+published release, target-smoked `0.8.3` remains the latest bounded target
+matrix, and coordinated `0.7.5` remains the historical fully accepted
+baseline. The candidate repairs generated-image preview, adds an explicit
+authenticated browser download, keeps scrolling inside the transcript, and
+removes unsupported local `$imagegen` guidance.
 
-The `0.8.3` publication, signature, SBOM, and provenance workflow passed in
-[run 29544351022](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29544351022).
+The `0.8.4` publication, signature, SBOM, and provenance workflow passed in
+[run 29571157282](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29571157282).
+Its paired
+[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.4)
+points to exact main commit `ccc698e96a2142d46ba96fb1419857461efe81ca`.
+The following bounded target smoke remains evidence for `0.8.3`, not `0.8.4`:
 The App and Integration were installed on the target HA, retained ChatGPT Pro
 and history, recovered stale run state, completed a GPT-5.6-Sol prompt, and
 showed native web-search activity without the prior false global connection

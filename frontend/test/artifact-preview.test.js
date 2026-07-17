@@ -410,7 +410,7 @@ describe("artifact previews", () => {
     expect(loadPreview).toHaveBeenCalledWith(generated.artifact_id);
   });
 
-  it("renders a generated image as a safe inline result and opens its authenticated preview", () => {
+  it("opens an auto-selected generated image in Files without re-fetching its authenticated preview", async () => {
     const artifact = createArtifact({
       artifact_id: "generated-safe",
       filename: "C:\\private\\<img src=x onerror=alert(1)>.png",
@@ -419,7 +419,16 @@ describe("artifact previews", () => {
       source: "generated_image",
     });
     const panel = createPanel(artifact);
-    const selectArtifact = vi.spyOn(panel, "_selectArtifact").mockResolvedValue();
+    panel._sideTab = "activity";
+    panel._artifactPreview = {
+      artifactId: artifact.artifact_id,
+      filename: artifact.filename,
+      contentType: artifact.mime_type,
+      kind: "image",
+      url: `blob:${window.location.origin}/generated-safe`,
+    };
+    panel._renderSideTabs();
+    const loadPreview = vi.spyOn(panel, "_loadArtifactPreview").mockResolvedValue();
     const card = panel._renderEvent({
       event_type: "artifact.added",
       sequence: 7,
@@ -431,13 +440,78 @@ describe("artifact previews", () => {
     expect(card.textContent).toContain("Generated image");
     expect(card.textContent).not.toContain("C:\\private");
     expect(card.textContent).not.toContain("/private/should-not-appear.png");
-    expect(card.querySelector("img")).toBeNull();
+    expect(card.querySelector("img")?.getAttribute("src"))
+      .toBe(`blob:${window.location.origin}/generated-safe`);
     expect(card.querySelector("script")).toBeNull();
-    const open = card.querySelector('[data-action="select-artifact"]');
+    const open = card.querySelector('[data-action="open-artifact-preview"]');
+    expect(open).not.toBeNull();
     expect(open.getAttribute("aria-label")).toContain("Open generated image");
 
     open.click();
-    expect(selectArtifact).toHaveBeenCalledWith(artifact.artifact_id);
+    await vi.waitFor(() => expect(panel._sideTab).toBe("files"));
+    expect(panel.shadowRoot.querySelector('[data-side-tab="files"]')?.getAttribute("aria-selected")).toBe("true");
+    expect(panel.shadowRoot.querySelector('[data-side-tab-panel="files"]')).not.toHaveProperty("hidden", true);
+    expect(loadPreview).not.toHaveBeenCalled();
+  });
+
+  it("reuses an in-flight generated-image preview without reclaiming a later tab choice", async () => {
+    previewUrlStubs();
+    const artifact = createArtifact({
+      artifact_id: "generated-loading",
+      filename: "generated-loading.png",
+      mime_type: "image/png",
+      source: "generated_image",
+    });
+    const panel = createPanel(artifact);
+    panel._sideTab = "activity";
+    panel._renderSideTabs();
+    let resolvePreview;
+    const pendingResponse = new Promise((resolve) => { resolvePreview = resolve; });
+    const fetchSpy = vi.spyOn(window, "fetch").mockReturnValue(pendingResponse);
+    const initialLoad = panel._loadArtifactPreview(artifact.artifact_id);
+    const card = panel._renderEvent({
+      event_type: "artifact.added",
+      sequence: 8,
+      payload: { artifact_id: artifact.artifact_id },
+    });
+    panel.shadowRoot.getElementById("message-list").append(card);
+
+    card.querySelector('[data-action="open-artifact-preview"]').click();
+    expect(panel._sideTab).toBe("files");
+    const usageTab = panel.shadowRoot.querySelector('[data-side-tab="usage"]');
+    panel._sideTab = "usage";
+    panel._renderSideTabs();
+    usageTab.focus();
+    resolvePreview(new Response("image", { status: 200, headers: { "Content-Type": "image/png" } }));
+    await initialLoad;
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(panel._sideTab).toBe("usage");
+    expect(panel.shadowRoot.activeElement).toBe(usageTab);
+  });
+
+  it("exposes generated-image download and delegates to the authenticated downloader", () => {
+    const artifact = createArtifact({
+      artifact_id: "generated-download",
+      filename: "generated.png",
+      mime_type: "image/png",
+      source: "generated_image",
+    });
+    const panel = createPanel(artifact);
+    const downloadArtifact = vi.spyOn(panel, "_downloadArtifact").mockResolvedValue();
+    const card = panel._renderEvent({
+      event_type: "artifact.added",
+      sequence: 8,
+      payload: { artifact_id: artifact.artifact_id },
+    });
+    panel.shadowRoot.getElementById("message-list").append(card);
+
+    const download = card.querySelector('[data-action="download-artifact"]');
+    expect(download).not.toBeNull();
+    expect(download.getAttribute("aria-label")).toContain("Download");
+
+    download.click();
+    expect(downloadArtifact).toHaveBeenCalledWith(artifact.artifact_id);
   });
 
   it("keeps unassociated generated-image events chronological without inventing a preview link", () => {

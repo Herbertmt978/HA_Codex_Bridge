@@ -375,7 +375,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
-      text(documentRef, "p", "Image generation uses the signed-in ChatGPT account. Ask naturally, or type $imagegen in a chat.", "desktop-note")
+      text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
   }
   return section;

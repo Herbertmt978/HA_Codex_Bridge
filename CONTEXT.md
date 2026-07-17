@@ -29,24 +29,22 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed and bounded target-HA-accepted coordinated release:
-  App/Integration/panel `0.8.3`, Bridge `0.7.2`, and Codex `0.144.5`
-  (experimental and `amd64` only). Main CI `29544350904` and signed App
-  publication `29544351022` produced immutable digest
-  `sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`
-  with provenance attestation `35745773`. The target smoke retained ChatGPT
-  Pro/history, recovered stale run state, completed a GPT-5.6-Sol prompt, and
-  exposed native live-search activity without a false global connection error.
+- Latest signed coordinated release: App/Integration/panel `0.8.4`, Bridge
+  `0.7.3`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
+  publication `29571157282` and the paired Integration release were produced
+  from exact main commit `ccc698e96a2142d46ba96fb1419857461efe81ca`.
+  Latest bounded target smoke remains `0.8.3`; it retained ChatGPT Pro/history,
+  recovered stale run state, completed a GPT-5.6-Sol prompt, and exposed native
+  live-search activity without a false global connection error.
   The typed PDF Files `409` now has a locally covered repair, but real target
   list/archive/preview/download acceptance remains pending. External Nabu
   Casa/Cloudflare routing, image generation, arbitrary previous-image rollback,
   and the secure App-owned browser worker remain explicitly unaccepted.
-- Candidate App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
-  `0.144.5` contains the local PDF repair, provider-gated private image
-  artifact path, three-profile synthetic transport harness, strict offline
-  recovery evidence tooling, and an inert browser-worker scaffold. Full local,
-  Linux, container, frontend, transport, hassfest, and independent-review
-  gates pass. It has no signed publication or target-HA acceptance yet.
+- Candidate App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex
+  `0.144.5` makes generated-image preview and authenticated browser download
+  explicit, constrains scrolling to the transcript, and removes unsupported
+  local `$imagegen` guidance. Frontend unit and browser gates pass locally. It
+  has no signed publication or target-HA acceptance yet.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF
@@ -59,7 +57,8 @@ to the App or Bridge.
 - Secure browser-worker follow-up is issue #43. Per ADR 0006, interactive
   Chromium remains deferred pending its separate App-owned isolation and
   enforced egress boundary.
-- Target Home Assistant `192.168.50.20` accepted that matrix on 2026-07-16.
+- Target Home Assistant `192.168.50.20` completed the bounded `0.8.3` smoke on
+  2026-07-16.
   ChatGPT Pro remained connected; a fresh direct chat defaulted to
   `gpt-5.6-sol` with `low` thinking. The runtime catalogue exposed Sol, Terra,
   and Luna plus Low, Medium, High, XHigh, Max, and Ultra where advertised. The

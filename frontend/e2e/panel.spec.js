@@ -189,6 +189,105 @@ test("keeps hostile Codex content inert and on the Home Assistant origin", async
   expect(pageErrors).toEqual([]);
 });
 
+for (const viewport of [
+  { name: "desktop", width: 1680, height: 720 },
+  { name: "mobile", width: 390, height: 844 },
+]) {
+  test(`keeps a long transcript inside its own ${viewport.name} scrollport`, async ({ page }) => {
+  await page.setViewportSize({ width: viewport.width, height: viewport.height });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const threadId = panel._selectedThreadId;
+    panel._events = Array.from({ length: 36 }, (_, index) => ({
+      event_id: `evt_scroll_${index}`,
+      thread_id: threadId,
+      sequence: 10_000 + index,
+      event_type: "message.completed",
+      payload: {
+        text: `Transcript entry ${index + 1}: ${"A long Home Assistant transcript must remain inside the Codex conversation scroller. ".repeat(9)}`,
+      },
+      timestamp: new Date().toISOString(),
+    }));
+    panel._forceMessageRebuild = true;
+    panel._renderMessages();
+  });
+
+  const scrollContract = await page.evaluate(() => {
+    const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
+    const documentScroller = document.scrollingElement;
+    const shell = root?.querySelector(".shell");
+    const main = root?.querySelector(".main-pane");
+    const transcript = root?.getElementById("conversation-scroll");
+    const composer = root?.querySelector(".composer-shell");
+    const composerTopBefore = composer?.getBoundingClientRect().top || 0;
+    if (transcript) transcript.scrollTop = Math.floor(transcript.scrollHeight / 2);
+    return {
+      documentClientHeight: documentScroller?.clientHeight || 0,
+      documentScrollHeight: documentScroller?.scrollHeight || 0,
+      shellHeight: shell?.getBoundingClientRect().height || 0,
+      mainScrollHeight: main?.scrollHeight || 0,
+      mainClientHeight: main?.clientHeight || 0,
+      transcriptScrollHeight: transcript?.scrollHeight || 0,
+      transcriptClientHeight: transcript?.clientHeight || 0,
+      transcriptScrollTop: transcript?.scrollTop || 0,
+      composerTopBefore,
+      composerTopAfter: composer?.getBoundingClientRect().top || 0,
+    };
+  });
+
+  expect(scrollContract.documentScrollHeight).toBeLessThanOrEqual(scrollContract.documentClientHeight + 1);
+  expect(scrollContract.shellHeight).toBeCloseTo(scrollContract.documentClientHeight, 0);
+  expect(scrollContract.mainScrollHeight).toBeLessThanOrEqual(scrollContract.mainClientHeight + 1);
+  expect(scrollContract.transcriptScrollHeight).toBeGreaterThan(scrollContract.transcriptClientHeight);
+  expect(scrollContract.transcriptScrollTop).toBeGreaterThan(0);
+  expect(scrollContract.composerTopAfter).toBeCloseTo(scrollContract.composerTopBefore, 1);
+  });
+}
+
+test("downloads a generated image through the authenticated browser artifact path", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const artifact = {
+      artifact_id: "art_generated_download",
+      filename: "generated-tree.png",
+      relative_path: "generated-tree.png",
+      mime_type: "image/png",
+      size_bytes: 12,
+      source: "generated_image",
+    };
+    const harnessFetch = window.fetch;
+    window.fetch = async (url, init) => {
+      const pathname = new URL(String(url), window.location.origin).pathname;
+      if (pathname.endsWith("/artifacts/art_generated_download")) {
+        return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]), {
+          status: 200,
+          headers: {
+            "Content-Disposition": 'attachment; filename="generated-tree.png"',
+            "Content-Type": "image/png",
+          },
+        });
+      }
+      return harnessFetch(url, init);
+    };
+    panel._artifacts = [...panel._artifacts, artifact];
+    const card = panel._renderGeneratedImageCard({ sequence: 20_000, payload: {} }, artifact);
+    panel.shadowRoot.getElementById("message-list").append(card);
+  });
+
+  const downloadEvent = page.waitForEvent("download");
+  await page.locator("codex-bridge-panel").locator(
+    '.generated-image-download[data-artifact-id="art_generated_download"]'
+  ).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("generated-tree.png");
+});
+
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const requests = [];
