@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.7";
+const PANEL_VERSION = "0.8.8";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -685,6 +685,19 @@ template.innerHTML = `
       width: 28px;
       height: 28px;
       border-radius: 7px;
+    }
+
+    .download-button.small.has-state-label {
+      width: auto;
+      min-width: 28px;
+      padding: 0 8px;
+    }
+
+    .download-state-label {
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .tool-button {
@@ -8796,8 +8809,17 @@ class CodexBridgePanel extends HTMLElement {
         )
       );
       download.dataset.artifactId = String(artifact.artifact_id || "");
-      download.disabled = this._artifactDownloadState(artifact.artifact_id) === "pending";
+      const downloadState = this._artifactDownloadState(artifact.artifact_id);
+      download.disabled = downloadState === "pending";
       this._appendTrustedIcon(download, icons.download);
+      const downloadStateLabel = this._textElement(
+        "span",
+        "download-state-label",
+        this._artifactDownloadVisibleLabel(downloadState)
+      );
+      downloadStateLabel.hidden = downloadState === "cached";
+      download.classList.toggle("has-state-label", downloadState !== "cached");
+      download.append(downloadStateLabel);
       row.append(select, download);
       container.append(row);
     }
@@ -10869,6 +10891,13 @@ class CodexBridgePanel extends HTMLElement {
     return `Download ${subject}`;
   }
 
+  _artifactDownloadVisibleLabel(state) {
+    if (state === "pending") return "Preparing...";
+    if (state === "prepared") return "Save file";
+    if (state === "prepare") return "Prepare download";
+    return "Download";
+  }
+
   _refreshArtifactDownloadUi() {
     for (const button of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
       const artifactId = button.dataset.artifactId || "";
@@ -10885,18 +10914,19 @@ class CodexBridgePanel extends HTMLElement {
       button.setAttribute("aria-label", label);
       button.title = label;
       button.dataset.tooltip = label;
-      const visibleLabel = state === "pending"
-        ? "Preparing..."
-        : state === "prepared"
-          ? "Save file"
-          : state === "prepare"
-            ? "Prepare download"
-            : "Download";
+      const visibleLabel = this._artifactDownloadVisibleLabel(state);
       if (generatedImageButton) {
         button.textContent = visibleLabel;
       } else if (button.classList.contains("pdf-preview-download")) {
         const text = button.querySelector("span");
         if (text) text.textContent = visibleLabel;
+      } else if (button.classList.contains("download-button")) {
+        const text = button.querySelector(".download-state-label");
+        if (text) {
+          text.textContent = visibleLabel;
+          text.hidden = state === "cached";
+        }
+        button.classList.toggle("has-state-label", state !== "cached");
       }
     }
   }

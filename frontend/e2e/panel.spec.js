@@ -365,6 +365,53 @@ test("downloads a generated image through the authenticated browser artifact pat
   await expect(page.locator('a[download="generated-tree.png"]')).toBeAttached();
 });
 
+test("shows the prepare and save states on a generic Files-row download", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
+    const artifact = {
+      artifact_id: "art_generic_download",
+      filename: "workspace-output.bin",
+      relative_path: "workspace-output.bin",
+      mime_type: "application/octet-stream",
+      size_bytes: 16,
+    };
+    const harnessFetch = window.fetch;
+    window.fetch = async (url, init) => {
+      const pathname = new URL(String(url), window.location.origin).pathname;
+      if (pathname.endsWith("/artifacts/art_generic_download")) {
+        await new Promise((resolveRequest) => setTimeout(resolveRequest, 75));
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: {
+            "Content-Disposition": 'attachment; filename="workspace-output.bin"',
+            "Content-Type": "application/octet-stream",
+          },
+        });
+      }
+      return harnessFetch(url, init);
+    };
+    panel._artifacts = [...panel._artifacts, artifact];
+    panel._sideTab = "files";
+    panel._renderSideTabs();
+    panel._renderArtifacts();
+  });
+
+  const panel = page.locator("codex-bridge-panel");
+  const downloadButton = panel.locator(
+    '.download-button[data-artifact-id="art_generic_download"]'
+  );
+  await expect(downloadButton).toHaveText("Prepare download");
+
+  await downloadButton.click();
+  await expect(downloadButton).toBeEnabled();
+  await expect(downloadButton).toHaveText("Save file");
+});
+
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const requests = [];

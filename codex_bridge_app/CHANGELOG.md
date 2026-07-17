@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 0.8.8
+
+- Shows the complete two-step download state on generic Files rows: authenticated
+  outputs move from **Prepare download** through **Preparing...** to a synchronous
+  **Save file** handoff, matching the generated-image and PDF controls.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.3` without changing its Integration API compatibility.
+
 ## 0.8.7
 
 - Reuses a complete, authenticated artifact preview for the browser download

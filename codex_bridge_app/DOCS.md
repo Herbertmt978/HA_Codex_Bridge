@@ -195,20 +195,19 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Signed App/Integration/panel `0.8.6` with Bridge `0.7.3` and Codex `0.144.5`
+Signed App/Integration/panel `0.8.7` with Bridge `0.7.3` and Codex `0.144.5`
 is installed on the target Home Assistant. ChatGPT Pro, projects, and history
 were retained; generated-image preview and transcript-only scrolling passed.
-The live browser download probe still did not emit a native event or persist a
-file. Candidate `0.8.7` reuses a complete authenticated preview synchronously
-inside the user's active click and retains the temporary anchor and blob URL
-together for a bounded 60-second grace period. Unpreviewed artifacts retain the
-authenticated fetch as an explicit **Prepare download** step, followed by a
-synchronous **Save file** click; no Home Assistant credential enters a URL.
-Unsaved prepared bytes expire after 60 seconds and are cleared on panel
-disconnect or context change.
-Its unit and browser tests cover the cached user-activation path, delayed
-multi-megabyte fallback, payload bytes, filenames, and bounded cleanup; signed
-publication and target download acceptance remain separate gates.
+The browser persisted a complete 3,276,457-byte PNG with the expected signature
+and SHA-256
+`F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
+Chrome's automation event did not report the blob download, so the persisted
+file is the acceptance evidence. Candidate `0.8.8` makes the authenticated
+**Prepare download** -> **Preparing...** -> **Save file** handoff visible on
+generic Files rows as well as generated-image and PDF controls. Unsaved prepared
+bytes expire after 60 seconds and are cleared on panel disconnect or context
+change; no Home Assistant credential enters a URL. Candidate publication and
+live generic-artifact acceptance remain separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
