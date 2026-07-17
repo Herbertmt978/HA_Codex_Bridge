@@ -33,7 +33,7 @@ function previewUrlStubs() {
   const revokeObjectUrl = vi.fn();
   URL.createObjectURL = createObjectUrl;
   URL.revokeObjectURL = revokeObjectUrl;
-  return { createObjectUrl };
+  return { createObjectUrl, revokeObjectUrl };
 }
 
 describe("artifact previews", () => {
@@ -42,6 +42,7 @@ describe("artifact previews", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     URL.createObjectURL = originalCreateObjectUrl;
     URL.revokeObjectURL = originalRevokeObjectUrl;
@@ -339,6 +340,51 @@ describe("artifact previews", () => {
       { headers: {} }
     );
     expect(clickSpy).toHaveBeenCalledOnce();
+  });
+
+  it("hands downloads to a connected anchor before revoking the blob URL", async () => {
+    vi.useFakeTimers();
+    const urls = previewUrlStubs();
+    const panel = createPanel(createArtifact({ filename: "generated-tree.png" }));
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("download", {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="generated-tree.png"' },
+      })
+    );
+    let connectedAtClick = null;
+    let downloadAtClick = "";
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+      connectedAtClick = this.isConnected;
+      downloadAtClick = this.download;
+    });
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(connectedAtClick).toBe(true);
+    expect(downloadAtClick).toBe("generated-tree.png");
+    expect(document.querySelector('a[download="generated-tree.png"]')).toBeNull();
+    expect(urls.revokeObjectUrl).not.toHaveBeenCalled();
+
+    await vi.runAllTimersAsync();
+    expect(urls.revokeObjectUrl).toHaveBeenCalledWith(
+      `blob:${window.location.origin}/artifact-preview`
+    );
+  });
+
+  it("does not allocate a browser download when the authenticated fetch fails", async () => {
+    const urls = previewUrlStubs();
+    const panel = createPanel(createArtifact({ filename: "generated-tree.png" }));
+    vi.spyOn(window, "fetch").mockResolvedValue(new Response("unavailable", { status: 503 }));
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await panel._downloadArtifact(panel._selectedArtifactId);
+
+    expect(urls.createObjectUrl).not.toHaveBeenCalled();
+    expect(urls.revokeObjectUrl).not.toHaveBeenCalled();
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(panel._error).toBe("Download failed");
   });
 
   it("uses the separate bounded preview limit for generated images without weakening generic artifact limits", async () => {

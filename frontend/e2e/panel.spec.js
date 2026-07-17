@@ -252,6 +252,12 @@ test("downloads a generated image through the authenticated browser artifact pat
   await selectHarnessThread(page);
 
   await page.evaluate(() => {
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    window.__codexBridgeDownloadAnchorConnected = null;
+    HTMLAnchorElement.prototype.click = function () {
+      window.__codexBridgeDownloadAnchorConnected = this.isConnected;
+      return originalAnchorClick.call(this);
+    };
     const panel = document.querySelector("codex-bridge-panel");
     const artifact = {
       artifact_id: "art_generated_download",
@@ -265,7 +271,11 @@ test("downloads a generated image through the authenticated browser artifact pat
     window.fetch = async (url, init) => {
       const pathname = new URL(String(url), window.location.origin).pathname;
       if (pathname.endsWith("/artifacts/art_generated_download")) {
-        return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]), {
+        await new Promise((resolveRequest) => setTimeout(resolveRequest, 75));
+        const generatedImage = new Uint8Array(2 * 1024 * 1024);
+        generatedImage.set([137, 80, 78, 71, 13, 10, 26, 10]);
+        generatedImage[generatedImage.length - 1] = 77;
+        return new Response(generatedImage, {
           status: 200,
           headers: {
             "Content-Disposition": 'attachment; filename="generated-tree.png"',
@@ -286,6 +296,11 @@ test("downloads a generated image through the authenticated browser artifact pat
   ).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toBe("generated-tree.png");
+  const downloadedBytes = await readFile(await download.path());
+  expect(downloadedBytes).toHaveLength(2 * 1024 * 1024);
+  expect([...downloadedBytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(downloadedBytes.at(-1)).toBe(77);
+  expect(await page.evaluate(() => window.__codexBridgeDownloadAnchorConnected)).toBe(true);
 });
 
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {

@@ -195,13 +195,15 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Candidate App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex
-`0.144.5` repairs generated-image preview, adds explicit authenticated browser
-download, and makes the transcript the only chat scrollport. It also removes
-unsupported local `$imagegen` guidance because image generation is supplied by
-the provider-native capability. The frontend unit and browser acceptance suites
-pass locally; signed publication, installation, and target-HA validation remain
-separate gates.
+Signed App/Integration/panel `0.8.5` with Bridge `0.7.3` and Codex `0.144.5`
+is installed on the target Home Assistant. ChatGPT Pro, projects, and history
+were retained; generated-image preview and transcript-only scrolling passed.
+The live browser download probe did not receive a native download event.
+Candidate `0.8.6` keeps the authenticated Home Assistant fetch and hardens the
+final browser handoff by attaching the hidden anchor while clicked and
+deferring blob-URL revocation. Its local unit and Playwright tests cover delayed
+multi-megabyte payload bytes and filenames; signed publication and target
+download acceptance remain separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
