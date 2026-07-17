@@ -206,15 +206,6 @@ class ScriptedPeer:
                     }
                 )
             self._send_result(request, action)
-        elif mode == "result_then_notifications":
-            self._send_result(request, action)
-            for notification in action.get("notifications", []):
-                self._send(
-                    {
-                        "method": notification["method"],
-                        "params": notification.get("params"),
-                    }
-                )
         elif mode == "crash":
             os._exit(int(action.get("exit_code", 23)))
         else:

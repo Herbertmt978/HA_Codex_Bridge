@@ -678,14 +678,16 @@ def test_real_runtime_broker_preserves_a_rapid_five_thousand_word_response(
                 }
             },
             "turn/start": {
-                "mode": "result_then_notifications",
                 "result": {
                     "turn": {
                         "id": remote_turn_id,
                         "items": [],
                         "status": "inProgress",
                     }
-                },
+                }
+            },
+            "emit/long-response": {
+                "mode": "notifications_then_echo",
                 "notifications": [
                     {
                         "method": "item/agentMessage/delta",
@@ -765,14 +767,26 @@ def test_real_runtime_broker_preserves_a_rapid_five_thousand_word_response(
             client_request_id="long-response-transport",
         )
 
-        _wait_until(
-            lambda: any(
-                event.event_type
-                in {"run.completed", "run.failed", "run.interrupted", "run.cancelled"}
+        def run_started() -> bool:
+            record = storage.load_thread(local_thread.thread_id)
+            return record.active_run_id is not None and any(
+                event.event_type == "run.started"
+                and event.payload.get("run_id") == record.active_run_id
                 for event in storage.list_thread_events(local_thread.thread_id)
-            ),
+            )
+
+        _wait_until(
+            run_started,
             timeout=10.0,
-            message="long-response App-server turn did not reach a terminal event",
+            message="long-response run did not start",
+        )
+        assert client.request("emit/long-response", timeout_seconds=30.0) == {
+            "echo": None
+        }
+        _wait_until(
+            lambda: storage.load_thread(local_thread.thread_id).status == "idle",
+            timeout=10.0,
+            message="long-response run did not complete",
         )
 
         events = storage.list_thread_events(local_thread.thread_id)
