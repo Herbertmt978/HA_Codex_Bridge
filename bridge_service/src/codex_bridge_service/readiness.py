@@ -48,7 +48,10 @@ def evaluate_readiness(
             state="fatal",
             reasons=("runtime_unavailable",),
         )
-    if getattr(auth_status, "auth_required", None) is True:
+    if (
+        getattr(auth_status, "state", None) != "ok"
+        or getattr(auth_status, "auth_required", None) is not False
+    ):
         return ReadinessStateRecord(
             state="auth_required",
             reasons=("authentication_required",),

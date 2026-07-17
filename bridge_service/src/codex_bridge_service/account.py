@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 from math import isfinite
 from pathlib import Path
@@ -26,6 +28,45 @@ SAFE_CHATGPT_PLAN_TYPES = frozenset(
         "unknown",
     }
 )
+
+_ACCOUNT_OWNER_CONTEXT = b"ha-codex-bridge/account-owner/v1\0chatgpt\0"
+_ACCOUNT_UNVERIFIED_CONTEXT = b"ha-codex-bridge/account-owner/v1\0unverified"
+_MAX_ACCOUNT_IDENTITY_LENGTH = 512
+
+
+def account_owner_marker(response: object, secret: str) -> str | None:
+    """Derive an opaque private owner marker from an authoritative account read."""
+
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("account owner marker secret is invalid")
+    if not isinstance(response, dict):
+        return None
+    account = response.get("account")
+    if not isinstance(account, dict) or account.get("type") != "chatgpt":
+        return None
+    email = account.get("email")
+    if not isinstance(email, str):
+        return None
+    normalized = email.strip().casefold()
+    if not normalized or len(normalized) > _MAX_ACCOUNT_IDENTITY_LENGTH:
+        return None
+    return hmac.new(
+        secret.encode("utf-8"),
+        _ACCOUNT_OWNER_CONTEXT + normalized.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def account_unverified_marker(secret: str) -> str:
+    """Return a private sentinel that can detach unverifiable provider state."""
+
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("account owner marker secret is invalid")
+    return hmac.new(
+        secret.encode("utf-8"),
+        _ACCOUNT_UNVERIFIED_CONTEXT,
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def normalize_chatgpt_plan_type(value: object) -> str | None:

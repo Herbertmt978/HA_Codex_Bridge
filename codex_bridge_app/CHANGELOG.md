@@ -2,6 +2,36 @@
 
 All notable App changes are recorded here.
 
+## 0.8.11
+
+- Keeps Home Assistant chats, projects, transcripts, files, workspace settings,
+  archive state, and automation targets independent of the signed-in ChatGPT
+  account.
+- Privately binds native Codex thread handles to their owning ChatGPT account;
+  after an account change, the same Home Assistant chat starts a fresh provider
+  thread instead of attempting to resume one owned by the previous account.
+- Detaches unowned pre-0.8.11 provider handles once during migration without
+  deleting or partitioning local history. No account identity or binding marker
+  is exposed through the panel, API, events, diagnostics, or logs.
+- Reconciles account-update hints through an authoritative account read under
+  the runtime gate. Identity-less reads detach private provider continuity and
+  keep UI and automation turns blocked until ownership is verifiable.
+- Invalidates an account read or device-login poll if a newer account-update
+  hint arrives before it finishes, so a stale account can never be published
+  ready or rebound after the user switches accounts.
+- Rechecks account admission when each queued prompt becomes active. Prompts
+  queued before an account switch stop locally without starting or resuming a
+  provider thread, while the Home Assistant chat and its prompt remain visible.
+- Requires the authoritative auth state to be fully `ok` before broker
+  admission or automation target preparation, so transient account checks and
+  sign-out cannot leave behind local chat mutations.
+- Settles recovered runtime checkpoints before account binding, preventing an
+  interrupted run from restoring a previous account's provider thread during
+  startup.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.6` without changing its Integration API compatibility.
+
 ## 0.8.10
 
 - Coalesces adjacent Codex text deltas into ordered, bounded batches before the

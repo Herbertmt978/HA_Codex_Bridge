@@ -70,6 +70,8 @@ _UNSET = object()
 _WORKSPACE_ID_PATTERN = re.compile(r"^ws_[0-9a-f]{12}$")
 _UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_ACCOUNT_BINDING_FILENAME = "account-binding.json"
+_ACCOUNT_BINDING_SCHEMA_VERSION = 1
 _UPLOAD_MANIFEST_MAX_BYTES = 64 * 1024
 _UPLOAD_MAX_FILENAME_BYTES = 255
 _UPLOAD_MAX_RELATIVE_PATH_BYTES = 2048
@@ -2283,6 +2285,110 @@ class BridgeStorage:
             directories, key=lambda item: item.count("/"), reverse=True
         ):
             boundary.remove_empty_directory(directory, missing_ok=True)
+
+    def bind_codex_account(self, owner_marker: str) -> int:
+        """Bind cached provider threads to one private ChatGPT account owner."""
+
+        if not isinstance(owner_marker, str) or not _SHA256_PATTERN.fullmatch(
+            owner_marker
+        ):
+            raise ValueError("Codex account owner marker is invalid.")
+
+        with self._automation_target_lock:
+            with self._thread_mutation_lock:
+                current = self._load_codex_account_binding_locked()
+                if current == owner_marker:
+                    return 0
+                if (
+                    self._automation_project_reservations
+                    or self._automation_thread_reservations
+                ):
+                    raise ProjectMutationError(
+                        "Codex account binding cannot change while automation is reserved"
+                    )
+
+                records: list[ThreadRecord] = []
+                for target in sorted(
+                    self.threads_dir.glob("*.json"),
+                    key=lambda path: path.name,
+                ):
+                    try:
+                        record = ThreadRecord.model_validate_json(
+                            target.read_text(encoding="utf-8")
+                        )
+                    except (OSError, UnicodeError, ValidationError):
+                        raise ValueError(
+                            "A stored chat cannot be rebound safely."
+                        ) from None
+                    if target != self._thread_path(record.thread_id):
+                        raise ValueError("A stored chat cannot be rebound safely.")
+                    records.append(record)
+
+                detached = 0
+                for record in records:
+                    if (
+                        record.codex_thread_id is None
+                        and record.active_turn_id is None
+                        and record.active_run_id is None
+                        and not record.pending_prompts
+                        and record.status == "idle"
+                        and record.last_error is None
+                    ):
+                        continue
+                    record.codex_thread_id = None
+                    record.active_turn_id = None
+                    record.active_run_id = None
+                    record.pending_prompts.clear()
+                    record.status = "idle"
+                    record.last_error = None
+                    self._prepare_thread_for_save_locked(record)
+                    self._commit_prepared_thread_with_events_locked(
+                        record,
+                        (
+                            EventDraft(
+                                scope="thread",
+                                thread_id=record.thread_id,
+                                event_type="runtime.account_binding_detached",
+                                payload={
+                                    "reason": (
+                                        "Chat will use the current ChatGPT account."
+                                    )
+                                },
+                            ),
+                        ),
+                    )
+                    detached += 1
+
+                # Write the binding last. If the process stops during the
+                # idempotent detach loop, the next observation retries instead
+                # of blessing any provider handle that may still be stale.
+                self._atomic_write_json(
+                    self.root / _ACCOUNT_BINDING_FILENAME,
+                    {
+                        "schema_version": _ACCOUNT_BINDING_SCHEMA_VERSION,
+                        "owner_marker": owner_marker,
+                    },
+                )
+                return detached
+
+    def _load_codex_account_binding_locked(self) -> str | None:
+        target = self.root / _ACCOUNT_BINDING_FILENAME
+        try:
+            payload = json.loads(target.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            raise ValueError("The Codex account binding is invalid.") from None
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"schema_version", "owner_marker"}
+            or payload.get("schema_version") != _ACCOUNT_BINDING_SCHEMA_VERSION
+        ):
+            raise ValueError("The Codex account binding is invalid.")
+        marker = payload.get("owner_marker")
+        if not isinstance(marker, str) or not _SHA256_PATTERN.fullmatch(marker):
+            raise ValueError("The Codex account binding is invalid.")
+        return marker
 
     def save_thread(self, record: ThreadRecord) -> None:
         with self._thread_mutation_lock:

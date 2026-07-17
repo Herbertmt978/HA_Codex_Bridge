@@ -13,8 +13,9 @@ from codex_bridge_service.automations import (
     AutomationValidationError,
     ScheduleValidationError,
 )
-from codex_bridge_service.models import RuntimeProfile
+from codex_bridge_service.models import RunMode, RuntimeProfile
 from codex_bridge_service.routes.automations import create_router
+from codex_bridge_service.storage import BridgeStorage
 
 
 NOW = datetime(2026, 7, 15, 9, 0, tzinfo=UTC)
@@ -50,6 +51,39 @@ def test_store_persists_safe_definition_and_calculates_rrule_in_utc(tmp_path):
     restored = AutomationStore(tmp_path)
     assert restored.get(created["automation_id"])["revision"] == 1
     assert restored.list()[0]["next_run_at"] == "2026-07-15T09:30:00Z"
+
+
+def test_account_rebind_preserves_continue_thread_automation_target(tmp_path):
+    root = tmp_path / "bridge"
+    storage = BridgeStorage(root_path=root)
+    thread = storage.create_thread(
+        title="Scheduled continuation",
+        mode=RunMode.OBSERVE,
+    )
+    automations = AutomationStore(root)
+    definition = automations.create(
+        _payload(target={"kind": "continue_thread", "thread_id": thread.thread_id}),
+        now=NOW,
+    )
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-account-a"
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account("b" * 64) == 1
+
+    restored = AutomationStore(root).get(definition["automation_id"])
+    assert restored["target"] == {
+        "kind": "continue_thread",
+        "thread_id": thread.thread_id,
+    }
+    with storage.prepare_automation_target(
+        restored["target"],
+        title=restored["name"],
+        mode=RunMode(restored["mode"]),
+    ) as target:
+        assert target.thread_id == thread.thread_id
+        assert target.codex_thread_id is None
 
 
 @pytest.mark.parametrize("value", ["cached", "LIVE", 1, [], {}])
@@ -874,6 +908,43 @@ def _dispatch_test_app(tmp_path, *, target_kind: str):
         )
         target = {"kind": "continue_thread", "thread_id": "thr_dispatch"}
     return app, runner, target_record, target
+
+
+@pytest.mark.parametrize(
+    ("auth_state", "auth_required"),
+    [
+        ("unavailable", True),
+        ("checking", False),
+        ("logout_running", False),
+    ],
+)
+def test_dispatch_blocks_before_workspace_mutation_when_auth_is_not_ready(
+    tmp_path,
+    auth_state,
+    auth_required,
+):
+    app, runner, _target_record, target = _dispatch_test_app(
+        tmp_path,
+        target_kind="continue_thread",
+    )
+    app.state.sandbox_ready = True
+    app.state.codex_app_server.ready = True
+    app.state.auth_coordinator = SimpleNamespace(
+        status=lambda: SimpleNamespace(
+            state=auth_state,
+            auth_required=auth_required,
+        )
+    )
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+    claim = app.state.automations.run_now(automation["automation_id"], now=NOW)
+
+    with pytest.raises(AutomationValidationError, match="not ready"):
+        app.state.automation_dispatch(claim)
+
+    assert runner.submissions == []
 
 
 @pytest.mark.parametrize("target_kind", ["standalone", "continue_thread"])

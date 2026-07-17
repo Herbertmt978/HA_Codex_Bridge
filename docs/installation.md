@@ -119,6 +119,18 @@ Integration does not save an unverified endpoint.
    removes an established session.
 5. Create a Project and grant a small workspace below `/config/workspaces`.
 
+Chats, projects, transcripts, files, workspace settings, and automation targets
+belong to the private Bridge store rather than a particular ChatGPT account.
+After an account switch they remain in place; only the prior account's native
+Codex thread handle is detached, and the next message starts a fresh provider
+conversation through the account that is currently signed in. The existing
+local transcript is not automatically submitted to the new account.
+If Codex reports a signed-in account without a stable identity, the Bridge
+keeps the local records visible, detaches private provider continuity, and
+blocks prompts and automations until ownership can be verified. A prompt that
+was already queued when an account change is observed is stopped locally
+before Codex can start or resume a provider thread.
+
 ## Configure capabilities
 
 After the first reversible chat, the panel's administrator-only navigation can

@@ -487,6 +487,7 @@ def _broker(
     image_generation_authority: object | None = None,
     browser_broker: object | None = None,
     browser_dynamic_tools_enabled: bool = False,
+    provider_admission_check: Callable[[], bool] | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
         storage=storage,
@@ -501,6 +502,7 @@ def _broker(
         image_generation_authority=image_generation_authority,
         browser_broker=browser_broker,
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+        provider_admission_check=provider_admission_check,
     )
     broker.start()
     return broker
@@ -2493,6 +2495,75 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
         broker.close()
 
 
+def test_account_rebind_keeps_local_chat_and_starts_a_fresh_provider_thread(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        assert storage.bind_codex_account("a" * 64) == 0
+        broker.submit_prompt(
+            thread.thread_id,
+            "First account prompt",
+            client_request_id="account-a-first",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, first_remote_thread, first_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        _complete(
+            client,
+            remote_thread_id=first_remote_thread,
+            turn_id=first_turn,
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+
+        assert storage.bind_codex_account("a" * 64) == 0
+        broker.submit_prompt(
+            thread.thread_id,
+            "Same account follow-up",
+            client_request_id="account-a-follow-up",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 2)
+        _run_id, resumed_remote_thread, resumed_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        assert resumed_remote_thread == first_remote_thread
+        _complete(
+            client,
+            remote_thread_id=resumed_remote_thread,
+            turn_id=resumed_turn,
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+        events_before_switch = storage.list_thread_events(thread.thread_id)
+
+        assert storage.bind_codex_account("b" * 64) == 1
+        assert storage.load_thread(thread.thread_id).thread_id == thread.thread_id
+        broker.submit_prompt(
+            thread.thread_id,
+            "New account continuation",
+            client_request_id="account-b-continuation",
+        )
+        _wait_until(lambda: len(_requests(client, "thread/start")) == 2)
+        _run_id, second_remote_thread, _second_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+
+        assert second_remote_thread != first_remote_thread
+        assert len(_requests(client, "thread/resume")) == 1
+        events_after_switch = storage.list_thread_events(thread.thread_id)
+        assert events_after_switch[: len(events_before_switch)] == events_before_switch
+        assert events_after_switch[len(events_before_switch)].event_type == (
+            "runtime.account_binding_detached"
+        )
+    finally:
+        broker.close()
+
+
 def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
     tmp_path: Path,
 ) -> None:
@@ -2727,6 +2798,197 @@ def test_client_request_id_is_globally_idempotent_and_other_threads_queue(
         _wait_until(
             lambda: storage.load_thread(second_thread.thread_id).status == "running"
         )
+    finally:
+        broker.close()
+
+
+def test_new_prompt_is_rejected_before_provider_or_local_acceptance_when_admission_closed(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: False,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must not be accepted",
+                client_request_id="admission-rejected",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert not client.requests
+        assert not any(
+            event.event_type in {"message.created", "run.queued", "run.started"}
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+    finally:
+        broker.close()
+
+
+def test_admission_rebind_is_reloaded_before_provider_thread_selection(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    stored = storage.load_thread(thread.thread_id)
+    stored.codex_thread_id = "provider-account-a"
+    storage.save_thread(stored)
+    client = ValidatorBackedAppServer()
+
+    def detach_previous_account() -> bool:
+        rebound = storage.load_thread(thread.thread_id)
+        rebound.codex_thread_id = None
+        storage.save_thread(rebound)
+        return True
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=detach_previous_account,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Start under the newly verified account",
+            client_request_id="admission-rebind",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert len(_requests(client, "thread/start")) == 1
+        assert not _requests(client, "thread/resume")
+    finally:
+        broker.close()
+
+
+def test_idempotent_replay_does_not_require_current_provider_admission(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission = {"allowed": True}
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        accepted = broker.submit_prompt(
+            thread.thread_id,
+            "Persist this exact request",
+            client_request_id="admission-idempotent-replay",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+        provider_request_count = len(client.requests)
+
+        admission["allowed"] = False
+        replay = broker.submit_prompt(
+            thread.thread_id,
+            "Persist this exact request",
+            client_request_id="admission-idempotent-replay",
+        )
+
+        assert replay.run_id == accepted.run_id
+        assert replay.status == "completed"
+        assert len(client.requests) == provider_request_count
+    finally:
+        broker.close()
+
+
+def test_provider_admission_check_failure_rejects_prompt_without_leaking_error(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+
+    def broken_admission_check() -> bool:
+        raise RuntimeError("private auth-coordinator failure")
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=broken_admission_check,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must fail closed",
+                client_request_id="admission-check-failed",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert "private auth-coordinator failure" not in str(rejected.value)
+        assert not client.requests
+        assert storage.load_thread(thread.thread_id).status == "idle"
+    finally:
+        broker.close()
+
+
+def test_queued_prompt_is_cancelled_without_provider_request_when_admission_closes(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="AdmissionClosed")
+    client = ValidatorBackedAppServer()
+    admission = {"allowed": True}
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        broker.submit_prompt(
+            active_thread.thread_id,
+            "Keep the runtime occupied",
+            client_request_id="admission-active",
+        )
+        _active_run_id, remote_thread_id, turn_id = _active_ids(
+            storage,
+            active_thread.thread_id,
+        )
+        queued = broker.submit_prompt(
+            queued_thread.thread_id,
+            "Must not reach the changed account",
+            client_request_id="admission-queued",
+        )
+        assert queued.status == "queued"
+        provider_request_counts = {
+            method: len(_requests(client, method))
+            for method in ("thread/start", "thread/resume", "turn/start")
+        }
+
+        admission["allowed"] = False
+        _complete(
+            client,
+            remote_thread_id=remote_thread_id,
+            turn_id=turn_id,
+        )
+
+        _wait_until(
+            lambda: any(
+                event.event_type == "run.cancelled"
+                and event.payload.get("run_id") == queued.run_id
+                for event in storage.list_thread_events(queued_thread.thread_id)
+            ),
+            message="queued prompt was not cancelled after provider admission closed",
+        )
+        assert {
+            method: len(_requests(client, method))
+            for method in ("thread/start", "thread/resume", "turn/start")
+        } == provider_request_counts
+        queued_record = storage.load_thread(queued_thread.thread_id)
+        assert queued_record.status == "idle"
+        assert queued_record.codex_thread_id is None
+        assert broker.runtime_snapshot().queued_prompts == 0
     finally:
         broker.close()
 

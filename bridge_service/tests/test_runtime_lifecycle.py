@@ -19,6 +19,7 @@ from codex_bridge_service.codex_app_server import (
 from codex_bridge_service.limits import AppServerLimitsProbe
 from codex_bridge_service.model_catalog import AppServerModelCatalogProbe
 from codex_bridge_service.models import CodexAuthStatusRecord, RunMode, RuntimeProfile
+from codex_bridge_service.runtime_broker import RuntimeAuthenticationRequiredError
 
 
 def _workspace(tmp_path: Path) -> Path:
@@ -44,6 +45,7 @@ class _SharedClient:
         self.generation = 1
         self.server_version: str | None = None
         self.authenticated = True
+        self.account_email = "first-account@example.test"
         self.fail_catalogue = False
         self.model = "gpt-5.6-sol"
         self.effort = "ultra"
@@ -148,7 +150,11 @@ class _SharedClient:
         if method == "account/read":
             return {
                 "account": (
-                    {"type": "chatgpt", "planType": "plus"}
+                    {
+                        "type": "chatgpt",
+                        "email": self.account_email,
+                        "planType": "plus",
+                    }
                     if self.authenticated
                     else None
                 )
@@ -228,10 +234,12 @@ class _Auth:
         self,
         *,
         required: bool = False,
+        state: str = "ok",
         events: list[str] | None = None,
         fail_start: bool = False,
     ) -> None:
         self.required = required
+        self.state = state
         self.events = events
         self.fail_start = fail_start
 
@@ -246,7 +254,10 @@ class _Auth:
             self.events.append("auth.close")
 
     def status(self) -> CodexAuthStatusRecord:
-        return CodexAuthStatusRecord(auth_required=self.required)
+        return CodexAuthStatusRecord(
+            state=self.state,
+            auth_required=self.required,
+        )
 
 
 class _LifecycleClient(_SharedClient):
@@ -293,6 +304,25 @@ class _Runner:
         self.events.append("runner.close")
 
 
+class _RestartProjectionRunner:
+    """Model one recovered run publishing its terminal thread projection."""
+
+    def __init__(self, storage, thread_id: str, provider_thread_id: str) -> None:
+        self.storage = storage
+        self.thread_id = thread_id
+        self.provider_thread_id = provider_thread_id
+
+    def start(self) -> None:
+        record = self.storage.load_thread(self.thread_id)
+        record.codex_thread_id = self.provider_thread_id
+        record.status = "error"
+        record.last_error = "The Codex runtime restarted before the turn completed."
+        self.storage.save_thread(record)
+
+    def close(self) -> None:
+        pass
+
+
 def _ha_app(tmp_path: Path, client: _SharedClient, **kwargs):
     return create_app(
         root_path=tmp_path / "data",
@@ -310,6 +340,7 @@ def _seed_blocked_thread(app, *, name: str):
     storage = app.state.storage
     original_profile = storage.runtime_profile
     assert storage.workspace_root is not None
+    workspace_name = name.lower().replace(" ", "-")
     try:
         # These tests assert the pre-run readiness gate. On Windows, secure HA
         # dir_fd workspace mutation is intentionally unavailable, so seed an
@@ -318,13 +349,20 @@ def _seed_blocked_thread(app, *, name: str):
         storage.runtime_profile = RuntimeProfile.EXTERNAL_LEGACY
         project = storage.create_project(
             name=name,
-            root_path=str(storage.workspace_root / name.lower().replace(" ", "-")),
+            root_path=str(storage.workspace_root / workspace_name),
         )
-        return storage.create_thread(
+        thread = storage.create_thread(
             title=name,
             mode=RunMode.EDIT,
             project_id=project.project_id,
         )
+        # HOME_ASSISTANT records are portable paths beneath workspace_root.
+        # Normalize the temporary legacy seed before restoring the real profile.
+        project.root_path = workspace_name
+        thread.workspace_path = workspace_name
+        storage.save_project(project)
+        storage.save_thread(thread)
+        return thread
     finally:
         storage.runtime_profile = original_profile
 
@@ -360,6 +398,70 @@ def test_main_ha_composition_defers_catalogue_and_turns_to_shared_runtime(
     assert captured["enable_mcp"] is False
     assert captured["model_discovery_timeout_seconds"] == 10.0
     assert captured["model_cache_ttl_seconds"] == 600.0
+
+
+def test_ha_startup_rebinds_only_provider_threads_when_account_changes(
+    tmp_path: Path,
+) -> None:
+    client = _SharedClient()
+    first_app = _ha_app(tmp_path, client)
+    thread = _seed_blocked_thread(first_app, name="Account-neutral history")
+    record = first_app.state.storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-before-owner-tracking"
+    first_app.state.storage.save_thread(record)
+
+    with TestClient(first_app):
+        migrated = first_app.state.storage.load_thread(thread.thread_id)
+
+    assert migrated.thread_id == thread.thread_id
+    assert migrated.codex_thread_id is None
+
+    migrated.codex_thread_id = "provider-thread-current-account"
+    first_app.state.storage.save_thread(migrated)
+    same_account_app = _ha_app(tmp_path, client)
+    with TestClient(same_account_app):
+        unchanged = same_account_app.state.storage.load_thread(thread.thread_id)
+
+    assert unchanged.codex_thread_id == "provider-thread-current-account"
+
+    client.account_email = "second-account@example.test"
+    changed_account_app = _ha_app(tmp_path, client)
+    with TestClient(changed_account_app):
+        rebound = changed_account_app.state.storage.load_thread(thread.thread_id)
+
+    assert rebound.thread_id == thread.thread_id
+    assert rebound.codex_thread_id is None
+
+
+def test_changed_account_detaches_provider_projection_restored_during_startup(
+    tmp_path: Path,
+) -> None:
+    client = _SharedClient()
+    first_app = _ha_app(tmp_path, client)
+    thread = _seed_blocked_thread(first_app, name="Interrupted account history")
+
+    with TestClient(first_app):
+        pass
+
+    client.account_email = "second-account@example.test"
+    stale_provider_thread_id = "provider-thread-from-first-account"
+    changed_account_app = _ha_app(
+        tmp_path,
+        client,
+        runner_factory=lambda storage: _RestartProjectionRunner(
+            storage,
+            thread.thread_id,
+            stale_provider_thread_id,
+        ),
+    )
+
+    with TestClient(changed_account_app):
+        rebound = changed_account_app.state.storage.load_thread(thread.thread_id)
+
+    assert rebound.thread_id == thread.thread_id
+    assert rebound.codex_thread_id is None
+    assert rebound.status == "idle"
+    assert rebound.last_error is None
 
 
 @pytest.mark.skipif(
@@ -680,6 +782,42 @@ def test_ha_readiness_reports_ready_auth_required_and_degraded_catalogue(
         }
 
 
+@pytest.mark.parametrize(
+    ("auth_state", "auth_required"),
+    [
+        ("ok", True),
+        ("checking", False),
+        ("logout_running", False),
+    ],
+)
+def test_native_broker_final_admission_uses_authoritative_ready_auth_status(
+    tmp_path: Path,
+    auth_state: str,
+    auth_required: bool,
+) -> None:
+    client = _SharedClient()
+    auth = _Auth(required=auth_required, state=auth_state)
+    app = _ha_app(
+        tmp_path,
+        client,
+        auth_coordinator_factory=lambda _client: auth,
+    )
+    thread = _seed_blocked_thread(app, name="Auth fence")
+
+    with TestClient(app):
+        with pytest.raises(RuntimeAuthenticationRequiredError):
+            app.state.runner.submit_prompt(
+                thread.thread_id,
+                "Must not reach Codex",
+                client_request_id="auth-fence-direct",
+            )
+
+    assert "thread/start" not in client.calls
+    assert "thread/resume" not in client.calls
+    assert "turn/start" not in client.calls
+    assert app.state.storage.load_thread(thread.thread_id).status == "idle"
+
+
 def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(
     tmp_path: Path,
 ) -> None:
@@ -837,7 +975,7 @@ def test_lifecycle_startup_failure_closes_owned_resources_in_reverse_order(
         with TestClient(app):
             pass
 
-    assert events[-3:] == ["runner.close", "auth.close", "client.close"]
+    assert events[-3:] == ["auth.close", "runner.close", "client.close"]
 
 
 def test_lifecycle_normal_shutdown_closes_resources_in_reverse_order(
@@ -863,10 +1001,10 @@ def test_lifecycle_normal_shutdown_closes_resources_in_reverse_order(
 
     assert events == [
         "client.start",
-        "auth.start",
         "runner.start",
-        "runner.close",
+        "auth.start",
         "auth.close",
+        "runner.close",
         "client.close",
     ]
 
@@ -910,7 +1048,7 @@ def test_disabled_mcp_cleans_only_native_mcp_root_before_runtime_start(
         ),
         ("config/mcpServer/reload", None),
     ]
-    assert events[:3] == ["client.start", "auth.start", "runner.start"]
+    assert events[:3] == ["client.start", "runner.start", "auth.start"]
 
 
 def test_enabled_mcp_sanitizes_before_activating_runtime_generation(
@@ -966,7 +1104,7 @@ def test_enabled_mcp_sanitizes_before_activating_runtime_generation(
     assert client.user_mcp_servers == {
         "safe": {"url": "https://mcp.vendor.example/stream"}
     }
-    assert events[:3] == ["client.start", "auth.start", "runner.start"]
+    assert events[:3] == ["client.start", "runner.start", "auth.start"]
 
 
 def test_disabled_mcp_cleanup_failure_keeps_runtime_non_ready(

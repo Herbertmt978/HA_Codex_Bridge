@@ -35,6 +35,7 @@ from .resource_limits import (
     ResourceLimitError,
     ResourceLimits,
 )
+from .readiness import evaluate_readiness
 from .routes import (
     approvals,
     agents,
@@ -251,22 +252,26 @@ def create_app(
                     _app.state.runtime_startup_failed = True
                     yield
                     return
-            if resolved_auth_coordinator is not None:
-                await asyncio.to_thread(resolved_auth_coordinator.start)
             runner_start = getattr(resolved_runner, "start", None)
             if callable(runner_start):
                 await asyncio.to_thread(runner_start)
+            # Recover and settle any private runtime checkpoint before the
+            # authoritative account binding runs. A changed account can then
+            # detach a provider thread restored by crash recovery before the
+            # application becomes request-ready.
+            if resolved_auth_coordinator is not None:
+                await asyncio.to_thread(resolved_auth_coordinator.start)
             yield
         finally:
             try:
                 try:
-                    runner_close = getattr(resolved_runner, "close", None)
-                    if callable(runner_close):
-                        await asyncio.to_thread(runner_close)
+                    if resolved_auth_coordinator is not None:
+                        await asyncio.to_thread(resolved_auth_coordinator.close)
                 finally:
                     try:
-                        if resolved_auth_coordinator is not None:
-                            await asyncio.to_thread(resolved_auth_coordinator.close)
+                        runner_close = getattr(resolved_runner, "close", None)
+                        if callable(runner_close):
+                            await asyncio.to_thread(runner_close)
                     finally:
                         try:
                             if resolved_runtime_gate is not None:
@@ -528,6 +533,8 @@ def create_app(
                 initial_status=initial_auth_status,
                 state_listener_fatal=True,
                 runtime_gate=resolved_runtime_gate,
+                account_owner_secret=auth_token,
+                account_binding_listener=storage.bind_codex_account,
             )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
@@ -649,6 +656,22 @@ def create_app(
             # Most interactive runs are not automation-owned.
             return
 
+    def provider_account_admission_ready() -> bool:
+        """Fail closed unless the authoritative auth owner permits a new turn."""
+
+        coordinator = resolved_auth_coordinator
+        status_method = getattr(coordinator, "status", None)
+        if not callable(status_method):
+            return False
+        try:
+            auth_status = status_method()
+        except Exception:
+            return False
+        return (
+            getattr(auth_status, "state", None) == "ok"
+            and getattr(auth_status, "auth_required", True) is False
+        )
+
     resolved_runner = (
         runner_factory(storage)
         if runner_factory is not None
@@ -663,6 +686,7 @@ def create_app(
                 browser_broker if browser_dynamic_tools_enabled else None
             ),
             browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+            provider_admission_check=provider_account_admission_ready,
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(
@@ -684,6 +708,9 @@ def create_app(
     def dispatch_automation(claim: Mapping[str, Any]) -> object:
         if resolved_automations is None or resolved_runner is None:
             raise RuntimeError("automations are unavailable")
+        readiness = evaluate_readiness(app.state, include_catalogue=False)
+        if readiness.state in {"auth_required", "fatal"}:
+            raise AutomationValidationError("Codex is not ready")
         automation_id = str(claim.get("automation_id", ""))
         automation_run_id = str(claim.get("automation_run_id", ""))
         definition = resolved_automations.get(automation_id)

@@ -595,3 +595,37 @@ run, or target-HA acceptance at this checkpoint.
 The release may publish these completed foundations, but it must keep the real
 target PDF/image, authorized external transport, destructive recovery, and
 browser isolation gates open until each has separate controlled evidence.
+
+## 0.8.10 signed long-response release
+
+App, Integration, and panel `0.8.10`, Bridge `0.7.5`, and Codex `0.144.5`
+were published from exact main commit
+`9fdfe53671d4773f3e955abb2720b408d874cd29`. Publication run
+`29613120991` completed successfully and created the paired Integration
+release. The immutable generic image digest is
+`sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`;
+provenance attestation `35904448`, signature verification, and the SBOM
+attestation passed. This publication evidence does not by itself claim a live
+5,000-word target-HA result.
+
+## 0.8.11 account-neutral chat candidate
+
+App/Integration/panel `0.8.11` with Bridge `0.7.6` and Codex `0.144.5` is a
+source candidate at this checkpoint. It has no release tag, immutable digest,
+publication run, or target-HA account-switch acceptance yet.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| Root cause | HA chats persisted a native `codex_thread_id` without recording which ChatGPT account owned it, so a new account could receive an invalid `thread/resume`. |
+| Private identity boundary | The authoritative `account/read` email is normalized and HMAC-SHA-256 keyed by the existing private Bridge token. Only the opaque 64-hex marker reaches storage. Email, token, and marker remain absent from the panel, API, events, diagnostics, and logs. |
+| Static local state | Account rebinding preserves chat/project IDs, titles, transcript events, attachments, artifacts, workspaces, model/thinking settings, archive state, and scheduled `continue_thread` targets. It clears only provider/runtime projection and adds one safe detach event. |
+| Migration and compatibility | The first post-upgrade account observation detaches pre-0.8.11 unowned provider handles once. The same account later retains `thread/resume`; a different account makes the same HA chat use `thread/start`. Local history is visible but is not silently replayed to the new provider conversation. |
+| Authoritative/fail-closed behavior | `account/updated` is only a hint and triggers a generation-checked `account/read` under the runtime gate. A newer hint invalidates an account read or active-login poll already in flight, preventing stale binding or a stale ready projection. An identity-less ChatGPT response detaches provider continuity and leaves prompt and automation admission auth-blocked. A notification received during an active turn marks auth unavailable; reconciliation runs after the turn settles. |
+| Queued admission fence | Every newly accepted prompt and every queued prompt promoted to active rechecks authoritative account admission. A prompt queued before an account change terminalizes locally as cancelled without any `thread/start`, `thread/resume`, or `turn/start`; its Home Assistant chat and durable user-message event remain visible. Exact idempotent readback remains available without starting provider work. |
+| Transient-state admission | Shared readiness and the broker's final callback require exactly `state == ok` and `auth_required == false`. `checking` and `logout_running` therefore fail before automation target preparation and cannot leave a standalone chat or changed continuation settings behind. |
+| Crash recovery | A lifecycle RED test proved that the previous startup order could detach and then restore the old provider ID. Runtime checkpoint recovery now settles before account binding, so a changed account removes any restored ID before request readiness. |
+| TDD evidence | Owner-marker/coordinator tests first failed on the missing helper/callback; storage tests first failed on the missing binding method; lifecycle composition first failed because the legacy provider handle remained attached; recovered-checkpoint, in-flight notification, active-login-poll, and queued-promotion tests then failed on stale startup/auth/admission behavior. Each focused slice passed after its minimal repair. |
+| Complete Bridge suite | Final Windows/Python 3.14 plugin-independent matrix after transient-auth hardening: `1464 passed, 217 skipped` in 270.44 seconds. Repository-wide Ruff, compileall, and diff hygiene passed. |
+| Focused final-hardening matrix | Auth state/coordinator, storage, lifecycle, broker, and automation tests passed `347 passed, 6 skipped` in 93.60 seconds after the startup-order, authoritative-update, in-flight-read, identity-less, queued-promotion, transient-state, and unattended-admission repairs. |
+| Frontend gates | ESLint passed; all `320` Vitest unit tests passed; the production panel and local PDF worker rebuilt; and all `22` Playwright browser flows passed. |
+| Open gates | Protected CI, signed publication, installation, an actual different-account switch, and bounded existing-chat prompt acceptance remain pending. |

@@ -56,15 +56,15 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed release:** App, Integration, and panel `0.8.9`, Bridge
-  `0.7.4`, and Codex `0.144.5` were published from exact main commit
-  `2538a6de2f44e25a3a74e331287ca45d72547249`. The signed App publication
-  [run 29604382155](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29604382155)
+- **Latest signed release:** App, Integration, and panel `0.8.10`, Bridge
+  `0.7.5`, and Codex `0.144.5` were published from exact main commit
+  `9fdfe53671d4773f3e955abb2720b408d874cd29`. The signed App publication
+  [run 29613120991](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29613120991)
   and paired
-  [0.8.9 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.9)
+  [0.8.10 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.10)
   passed. The immutable image digest is
-  `sha256:083eafe2a76be930843c436a4106f2e73e1337715b2e47f71e1af04862c1ef31`,
-  with attestation `35885291`.
+  `sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`,
+  with provenance attestation `35904448` and a verified SBOM attestation.
 - **Last prompt-path target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
@@ -92,12 +92,23 @@ App and Bridge remain private to Home Assistant.
   5,000-word prompts stopped after the same short prefix. The partial text was
   preserved, but long-response acceptance failed because rapid token deltas
   could overflow the App-server callback queue and restart Codex.
-- **0.8.10 candidate:** adjacent text deltas are now losslessly coalesced into
+- **0.8.10 long-response repair:** adjacent text deltas are losslessly coalesced into
   bounded ordered batches before durable publication. A scripted App-server
   peer exercises the real client and Runtime Broker pipeline, reconstructs
   exactly 5,000 distinct words, keeps the same Codex generation, and records
   one successful terminal event. A genuine restart is shown as
   **Run interrupted**, not a generic failure.
+- **0.8.11 account-neutral chat candidate:** Home Assistant chat IDs, projects,
+  transcripts, files, workspace settings, archive state, and automation targets
+  are no longer coupled to one ChatGPT account. A private owner binding detaches
+  only a stale Codex provider-thread handle when the account changes; the same
+  visible chat then starts a fresh provider conversation through the currently
+  signed-in account. The first upgrade detaches legacy unowned handles once.
+  Account-update hints are authoritatively re-read under the runtime gate;
+  identity-less reads detach private continuity and auth-block prompts and
+  automations until ownership is verifiable. Local producer/storage/runtime/
+  lifecycle coverage passes without exposing an email or owner marker; signed
+  publication and target-HA account-switch acceptance remain separate gates.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,
@@ -164,6 +175,22 @@ is established, normal panel use can remain on the Home Assistant origin.
 Initial sign-in and re-authentication still require browser access to the
 approved ChatGPT device-auth page. This account flow does not use an OpenAI API
 key.
+
+Chats are Home Assistant/Bridge records, not per-account copies. Signing out or
+signing into another ChatGPT account does not delete, hide, duplicate, or move
+their local history. When the authenticated account changes, the Bridge drops
+only the old account's private Codex thread handle; the next message in that
+same chat starts a fresh provider conversation through the account that is now
+connected. Earlier local transcript and files remain visible, but they are not
+silently replayed into the new provider conversation.
+If an authoritative Codex account read cannot provide a stable identity, the
+Bridge conservatively detaches provider continuity and keeps prompts and
+automations blocked until a later read verifies the account. The local chat and
+its contents remain available throughout. Account changes also invalidate an
+account check already in flight and stop any previously queued prompt locally
+before it can start or resume a provider thread under the new account. Brief
+checking and sign-out states are blocked before an automation can prepare or
+change a local target.
 
 ## Automations and Codex capabilities
 

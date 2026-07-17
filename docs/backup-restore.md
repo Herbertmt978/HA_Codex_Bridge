@@ -12,6 +12,10 @@ thread/project history, uploaded artifacts, configured MCP metadata, plugin and
 marketplace configuration, and private `AGENTS.md` rollback snapshots. These
 records are useful recovery state, but they are not portable credentials: do
 not copy ChatGPT session files or OAuth authorization URLs into a new host.
+The private account-binding record contains only an opaque keyed digest; it is
+not an email or a reusable credential. Keep it with the Bridge state so a
+restored installation cannot blindly resume a provider thread under a different
+ChatGPT account.
 
 The controlled target-HA procedure and strict redacted snapshot format are in
 the [cold restore and retained-image acceptance runbook](acceptance/cold-restore.md).

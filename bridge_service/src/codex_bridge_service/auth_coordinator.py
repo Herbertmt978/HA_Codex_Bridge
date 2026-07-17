@@ -7,6 +7,7 @@ from threading import Lock
 from time import monotonic
 from typing import Any, Protocol
 
+from .account import account_owner_marker, account_unverified_marker
 from .codex_app_server import AppServerNotification
 from .models import CodexAuthStatusRecord
 from .runtime_gate import (
@@ -31,7 +32,6 @@ from .auth_state import (
     cleared_device_fields,
     now,
     parse_device_login,
-    updated_account_status,
 )
 
 _ACCOUNT_READ_PARAMS = {"refreshToken": False}
@@ -83,6 +83,8 @@ class CodexAuthCoordinator:
         initial_status: CodexAuthStatusRecord | None = None,
         state_listener_fatal: bool = False,
         runtime_gate: RuntimeGate | None = None,
+        account_owner_secret: str | None = None,
+        account_binding_listener: Callable[[str], None] | None = None,
         account_read_timeout_seconds: float = 5.0,
         active_login_poll_interval_seconds: float = 2.0,
     ) -> None:
@@ -100,6 +102,12 @@ class CodexAuthCoordinator:
             or active_login_poll_interval_seconds < 0
         ):
             raise ValueError("active login poll interval must be non-negative")
+        if (account_owner_secret is None) != (account_binding_listener is None):
+            raise ValueError(
+                "account owner secret and binding listener must be configured together"
+            )
+        if account_owner_secret is not None and not account_owner_secret:
+            raise ValueError("account owner secret is invalid")
         self._client = client
         self._account_read_timeout_seconds = float(account_read_timeout_seconds)
         self._active_login_poll_interval_seconds = float(
@@ -108,6 +116,8 @@ class CodexAuthCoordinator:
         self._state_listener = state_listener
         self._state_listener_fatal = state_listener_fatal
         self._runtime_gate = runtime_gate
+        self._account_owner_secret = account_owner_secret
+        self._account_binding_listener = account_binding_listener
         self._lock = Lock()
         self._status = (
             initial_status.model_copy(deep=True)
@@ -120,6 +130,8 @@ class CodexAuthCoordinator:
         self._revision = self._status.revision
         self._operation_sequence = 0
         self._operation: tuple[int, str] | None = None
+        self._account_update_revision = 0
+        self._operation_account_update_revision = 0
         self._active_login_id: str | None = None
         self._active_login_generation: int | None = None
         self._active_login_polling = False
@@ -147,6 +159,7 @@ class CodexAuthCoordinator:
             if self._operation is not None:
                 raise AuthOperationConflictError()
             register_handlers = not self._handlers_registered
+            self._acquire_runtime_auth_locked()
             operation = self._begin_operation_locked("start")
 
         try:
@@ -180,7 +193,7 @@ class CodexAuthCoordinator:
         """Return a detached public snapshot; legacy error text is never projected."""
 
         del last_error
-        login_poll: tuple[str, int] | None = None
+        login_poll: tuple[str, int, int] | None = None
         with self._lock:
             if self._closed:
                 return self._copy_status_locked()
@@ -218,10 +231,18 @@ class CodexAuthCoordinator:
                     assert self._active_login_id is not None
                     self._active_login_polling = True
                     self._active_login_last_polled_at = monotonic()
-                    login_poll = (self._active_login_id, generation)
+                    login_poll = (
+                        self._active_login_id,
+                        generation,
+                        self._account_update_revision,
+                    )
                     operation = None
                     checking = None
                 else:
+                    try:
+                        self._acquire_runtime_auth_locked()
+                    except AuthOperationConflictError:
+                        return self._copy_status_locked()
                     operation = self._begin_operation_locked("status_reconcile")
                     self._clear_active_login_locked()
                     checking = self._set_status_locked(
@@ -436,6 +457,7 @@ class CodexAuthCoordinator:
         with self._lock:
             self._require_open_locked()
             self._require_idle_mutation_locked()
+            self._acquire_runtime_auth_locked()
             operation = self._begin_operation_locked("reconcile")
             self._clear_active_login_locked()
         try:
@@ -561,11 +583,47 @@ class CodexAuthCoordinator:
         with self._lock:
             if self._closed or notification.generation != self._client.generation:
                 return
+            # Notifications are hints rather than an authoritative identity
+            # source, but an update observed while account/read is in flight
+            # makes that read's snapshot stale. Record the hint before checking
+            # operation ownership so the in-flight result cannot publish ready.
+            self._account_update_revision += 1
             if self._operation is not None or self._active_login_id is not None:
                 return
-            normalized = updated_account_status(params, self._status)
-            published = self._set_status_locked(**normalized)
-        self._notify(published)
+            try:
+                self._acquire_runtime_auth_locked()
+            except AuthOperationConflictError:
+                # A notification is only a hint. If a turn currently owns the
+                # runtime, fail closed and let the next status reconciliation
+                # perform the authoritative read after that turn settles.
+                self._observed_generation = None
+                published = self._set_status_locked(
+                    state="unavailable",
+                    busy=False,
+                    auth_required=True,
+                    auth_mode=None,
+                    plan_type=None,
+                    message=MESSAGE_UNAVAILABLE,
+                    **cleared_device_fields(),
+                )
+                operation = None
+            else:
+                operation = self._begin_operation_locked("account_updated")
+                published = None
+        if published is not None:
+            self._notify(published)
+            return
+        assert operation is not None
+        try:
+            generation, response = self._read_account()
+        except Exception:
+            self._finish_with_failure(
+                operation,
+                state="unavailable",
+                message=MESSAGE_UNAVAILABLE,
+            )
+            return
+        self._finish_account_read(operation, generation, response)
 
     def _cancel_known_login(
         self,
@@ -631,10 +689,43 @@ class CodexAuthCoordinator:
                 state="unavailable",
                 message=MESSAGE_UNAVAILABLE,
             )
+        binding_marker, owner_verified = self._binding_observation(
+            response,
+            normalized,
+        )
         with self._lock:
             if not self._operation_matches_locked(operation):
                 return self._copy_status_locked()
-            if generation != self._client.generation:
+            generation_is_current = generation == self._client.generation
+            observation_is_current = (
+                self._operation_account_update_revision
+                == self._account_update_revision
+            )
+        if not observation_is_current:
+            return self._finish_with_failure(
+                operation,
+                state="unavailable",
+                message=MESSAGE_UNAVAILABLE,
+            )
+        if generation_is_current and binding_marker is not None:
+            try:
+                self._bind_account_owner(binding_marker)
+            except Exception:
+                return self._finish_with_failure(
+                    operation,
+                    state="unavailable",
+                    message=MESSAGE_UNAVAILABLE,
+                )
+        if not owner_verified:
+            normalized = self._unverified_account_status()
+        with self._lock:
+            if not self._operation_matches_locked(operation):
+                return self._copy_status_locked()
+            observation_is_current = (
+                self._operation_account_update_revision
+                == self._account_update_revision
+            )
+            if generation != self._client.generation or not observation_is_current:
                 self._operation = None
                 self._observed_generation = None
                 self._cancel_requested = False
@@ -668,7 +759,7 @@ class CodexAuthCoordinator:
 
     def _finish_active_login_poll(
         self,
-        login_poll: tuple[str, int],
+        login_poll: tuple[str, int, int],
         generation: int,
         response: Any,
     ) -> CodexAuthStatusRecord:
@@ -676,7 +767,11 @@ class CodexAuthCoordinator:
             normalized = account_status(response)
         except (TypeError, ValueError):
             return self._finish_active_login_poll_failure(login_poll)
-        login_id, login_generation = login_poll
+        binding_marker, owner_verified = self._binding_observation(
+            response,
+            normalized,
+        )
+        login_id, login_generation, account_update_revision = login_poll
         with self._lock:
             if (
                 self._closed
@@ -685,15 +780,66 @@ class CodexAuthCoordinator:
                 or self._active_login_generation != login_generation
             ):
                 return self._copy_status_locked()
-            self._active_login_polling = False
             if (
                 self._operation is not None
                 or generation != self._client.generation
                 or generation != login_generation
             ):
+                self._active_login_polling = False
+                return self._copy_status_locked()
+            if account_update_revision != self._account_update_revision:
+                observation_is_current = False
+            else:
+                observation_is_current = True
+        if not observation_is_current:
+            return self._finish_active_login_poll_invalidated(login_poll)
+        with self._lock:
+            if (
+                self._closed
+                or not self._active_login_polling
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+            ):
                 return self._copy_status_locked()
             self._observed_generation = generation
             if normalized["state"] == "logged_out":
+                self._active_login_polling = False
+                return self._copy_status_locked()
+        if binding_marker is not None:
+            try:
+                self._bind_account_owner(binding_marker)
+            except Exception:
+                return self._finish_active_login_binding_failure(login_poll)
+        if not owner_verified:
+            normalized = self._unverified_account_status()
+        with self._lock:
+            if (
+                self._closed
+                or not self._active_login_polling
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+                or self._operation is not None
+                or generation != self._client.generation
+                or generation != login_generation
+            ):
+                return self._copy_status_locked()
+            if account_update_revision != self._account_update_revision:
+                observation_is_current = False
+            else:
+                observation_is_current = True
+        if not observation_is_current:
+            return self._finish_active_login_poll_invalidated(login_poll)
+        with self._lock:
+            if (
+                self._closed
+                or not self._active_login_polling
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+                or self._operation is not None
+                or generation != self._client.generation
+                or generation != login_generation
+                or account_update_revision != self._account_update_revision
+            ):
                 return self._copy_status_locked()
             self._cancel_requested = False
             self._clear_active_login_locked()
@@ -704,11 +850,71 @@ class CodexAuthCoordinator:
         self._notify(published)
         return published.model_copy(deep=True)
 
+    def _finish_active_login_binding_failure(
+        self,
+        login_poll: tuple[str, int, int],
+    ) -> CodexAuthStatusRecord:
+        login_id, login_generation, _account_update_revision = login_poll
+        with self._lock:
+            if (
+                self._closed
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+            ):
+                return self._copy_status_locked()
+            self._cancel_requested = False
+            self._clear_active_login_locked()
+            published = self._set_status_locked(
+                state="unavailable",
+                busy=False,
+                auth_required=True,
+                auth_mode=None,
+                plan_type=None,
+                message=MESSAGE_UNAVAILABLE,
+                **cleared_device_fields(),
+            )
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
+        self._notify(published)
+        return published.model_copy(deep=True)
+
+    def _finish_active_login_poll_invalidated(
+        self,
+        login_poll: tuple[str, int, int],
+    ) -> CodexAuthStatusRecord:
+        login_id, login_generation, _account_update_revision = login_poll
+        with self._lock:
+            if (
+                self._closed
+                or not self._active_login_polling
+                or self._active_login_id != login_id
+                or self._active_login_generation != login_generation
+            ):
+                return self._copy_status_locked()
+            self._observed_generation = None
+            self._cancel_requested = False
+            self._clear_active_login_locked()
+            published = self._set_status_locked(
+                state="unavailable",
+                busy=False,
+                auth_required=True,
+                auth_mode=None,
+                plan_type=None,
+                message=MESSAGE_UNAVAILABLE,
+                **cleared_device_fields(),
+            )
+            runtime_lease = self._take_runtime_auth_lease_locked()
+        if runtime_lease is not None:
+            runtime_lease.release()
+        self._notify(published)
+        return published.model_copy(deep=True)
+
     def _finish_active_login_poll_failure(
         self,
-        login_poll: tuple[str, int],
+        login_poll: tuple[str, int, int],
     ) -> CodexAuthStatusRecord:
-        login_id, login_generation = login_poll
+        login_id, login_generation, _account_update_revision = login_poll
         with self._lock:
             if (
                 self._active_login_id == login_id
@@ -716,6 +922,37 @@ class CodexAuthCoordinator:
             ):
                 self._active_login_polling = False
             return self._copy_status_locked()
+
+    def _binding_observation(
+        self,
+        response: Any,
+        normalized: dict[str, Any],
+    ) -> tuple[str | None, bool]:
+        if self._account_owner_secret is None or self._account_binding_listener is None:
+            return None, True
+        if normalized.get("state") == "ok":
+            marker = account_owner_marker(response, self._account_owner_secret)
+            if marker is not None:
+                return marker, True
+            return account_unverified_marker(self._account_owner_secret), False
+        return account_unverified_marker(self._account_owner_secret), True
+
+    @staticmethod
+    def _unverified_account_status() -> dict[str, Any]:
+        return {
+            "state": "unavailable",
+            "busy": False,
+            "auth_required": True,
+            "auth_mode": None,
+            "plan_type": None,
+            "message": MESSAGE_UNAVAILABLE,
+            **cleared_device_fields(),
+        }
+
+    def _bind_account_owner(self, marker: str) -> None:
+        listener = self._account_binding_listener
+        if listener is not None:
+            listener(marker)
 
     def _finish_with_failure(
         self,
@@ -786,6 +1023,7 @@ class CodexAuthCoordinator:
         self._operation_sequence += 1
         operation = (self._operation_sequence, kind)
         self._operation = operation
+        self._operation_account_update_revision = self._account_update_revision
         return operation
 
     def _operation_matches_locked(self, operation: tuple[int, str]) -> bool:

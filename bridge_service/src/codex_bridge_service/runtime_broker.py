@@ -151,6 +151,15 @@ class RuntimeUnavailableError(RuntimeBrokerError):
         super().__init__("The Codex app server is unavailable.")
 
 
+class RuntimeAuthenticationRequiredError(RuntimeBrokerError):
+    code = "authentication_required"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "ChatGPT sign-in must be verified before Codex can start a turn."
+        )
+
+
 class RuntimeClosedError(RuntimeBrokerError):
     code = "runtime_closed"
     status_code = 503
@@ -409,6 +418,7 @@ class RuntimeBroker:
         image_generation_authority: _ImageGenerationAuthority | None = None,
         browser_broker: BrowserBroker | None = None,
         browser_dynamic_tools_enabled: bool = False,
+        provider_admission_check: Callable[[], bool] | None = None,
     ) -> None:
         if type(browser_dynamic_tools_enabled) is not bool:
             raise ValueError("browser dynamic tool state must be a boolean")
@@ -453,6 +463,7 @@ class RuntimeBroker:
         # access to client-owned tools that were registered on a prior Codex
         # app-server generation.
         self._browser_dynamic_tools_enabled = browser_dynamic_tools_enabled
+        self._provider_admission_check = provider_admission_check
         self._browser_pending_thread_authorities: dict[
             str, _BrowserThreadAuthority
         ] = {}
@@ -580,6 +591,15 @@ class RuntimeBroker:
                     if existing is not None
                     else _outcome_record(existing_outcome)
                 )
+
+            if not self._provider_admission_allowed():
+                raise RuntimeAuthenticationRequiredError()
+            # The admission check can authoritatively detach provider-owned
+            # continuity during an account rebind. Refresh every field that is
+            # captured into the new run so the previous account's thread ID
+            # cannot survive that check.
+            thread = self.storage.get_thread(thread_id)
+            self.storage.resolve_workspace_path(thread.workspace_path)
 
             self._ensure_request_capacity_locked()
 
@@ -1093,6 +1113,16 @@ class RuntimeBroker:
             if lease is None:
                 return
             lease.wait_until_active(timeout_seconds=queue_wait_timeout)
+            if not self._provider_admission_allowed():
+                with self._lock:
+                    run = self._state.runs.get(run_id)
+                    if run is not None and run.status not in _TERMINAL_RUN_STATES:
+                        self._terminalize_locked(
+                            run,
+                            "cancelled",
+                            "The prompt was stopped while the ChatGPT account was changing.",
+                        )
+                return
             self._start_turn(run_id)
             self._watch_turn(run_id)
         except (RuntimeLeaseCancelledError, RuntimeLeaseTimeoutError):
@@ -1154,6 +1184,14 @@ class RuntimeBroker:
         finally:
             with self._lock:
                 self._workers.discard(current_thread())
+
+    def _provider_admission_allowed(self) -> bool:
+        if self._provider_admission_check is None:
+            return True
+        try:
+            return self._provider_admission_check() is True
+        except Exception:
+            return False
 
     def _start_turn(self, run_id: str) -> None:
         with self._lock:
