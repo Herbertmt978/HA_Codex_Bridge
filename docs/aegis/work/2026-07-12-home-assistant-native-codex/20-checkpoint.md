@@ -14,11 +14,11 @@
   queued-state, archived-chat, scheduled `continue_thread`, authoritative
   account-update, in-flight read/login invalidation, identity-less fail-closed,
   promoted-queue admission, atomic prompt-lease continuity capture,
-  deletion-safe auth lock ordering, and recovered-checkpoint coverage.
-  The fresh complete Bridge matrix passed with `1471 passed, 217 skipped` in
-  239.97 seconds; the focused account/runtime matrix passed `354 passed,
-  6 skipped` in 84.83 seconds. Frontend lint, `320` unit tests, the production
-  build, and `22` browser tests also passed.
+  deletion-safe auth lock ordering, missing-historical-workspace recovery, and
+  recovered-checkpoint coverage. The fresh complete Bridge matrix passed with
+  `1472 passed, 218 skipped` in 282.17 seconds; the focused account/runtime
+  matrix passed `355 passed, 6 skipped` in 88.35 seconds. Frontend lint, `320`
+  unit tests, the production build, and `22` browser tests also passed.
 - **Evidence refs:** `90-evidence.md` records signed `0.8.10` publication and
   bounded `0.8.11` local evidence. The implementation plan is
   `../../plans/2026-07-17-account-agnostic-chats.md`.

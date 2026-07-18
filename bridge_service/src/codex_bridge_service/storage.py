@@ -2341,7 +2341,13 @@ class BridgeStorage:
                     record.pending_prompts.clear()
                     record.status = "idle"
                     record.last_error = None
-                    self._prepare_thread_for_save_locked(record)
+                    # Account rebinding changes only the provider/runtime
+                    # projection. A historical HA chat may legitimately point
+                    # at a workspace or artifact removed outside the Bridge;
+                    # revalidating that unchanged local state here would block
+                    # every otherwise healthy sign-in. The record was already
+                    # schema-validated above and its canonical filename was
+                    # checked, matching startup runtime-projection recovery.
                     self._commit_prepared_thread_with_events_locked(
                         record,
                         (

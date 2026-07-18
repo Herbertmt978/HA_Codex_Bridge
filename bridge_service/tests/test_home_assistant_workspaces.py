@@ -28,6 +28,32 @@ def _home_assistant_storage(tmp_path) -> tuple[BridgeStorage, Path, Path]:
     return storage, state_root, workspace_root
 
 
+def test_account_rebind_detaches_provider_when_historical_workspace_is_missing(
+    tmp_path,
+) -> None:
+    storage, state_root, workspace_root = _home_assistant_storage(tmp_path)
+    thread = storage.create_thread(title="Historical chat", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-account-a"
+    storage.save_thread(record)
+    thread_path = state_root / "threads" / f"{thread.thread_id}.json"
+    before = json.loads(thread_path.read_text(encoding="utf-8"))
+    (workspace_root / record.workspace_path).rmdir()
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    assert storage.bind_codex_account("b" * 64) == 0
+
+    payload = json.loads(thread_path.read_text(encoding="utf-8"))
+    before.pop("_bridge_operation", None)
+    payload.pop("_bridge_operation", None)
+    assert payload == {**before, "codex_thread_id": None}
+    binding = json.loads(
+        (state_root / "account-binding.json").read_text(encoding="utf-8")
+    )
+    assert binding["owner_marker"] == "b" * 64
+
+
 def test_home_assistant_projects_use_only_relative_portable_workspace_paths(tmp_path) -> None:
     storage, _, workspace_root = _home_assistant_storage(tmp_path)
 

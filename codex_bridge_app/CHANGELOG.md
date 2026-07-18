@@ -40,6 +40,9 @@ All notable App changes are recorded here.
 - Runs authoritative account reconciliation outside the runtime broker lock,
   then repeats deletion and idempotency validation before acceptance, avoiding
   the storage-to-broker lock inversion with concurrent chat/project deletion.
+- Rebinds only provider/runtime metadata without resolving unchanged historical
+  workspaces, attachments, or artifacts, so one old chat whose backing files
+  were removed outside the Bridge cannot block a healthy account switch.
 - Settles recovered runtime checkpoints before account binding, preventing an
   interrupted run from restoring a previous account's provider thread during
   startup.

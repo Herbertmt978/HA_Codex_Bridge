@@ -224,6 +224,35 @@ def test_codex_account_binding_preserves_same_owner_and_detaches_changed_owner(
     assert storage.load_thread(thread.thread_id).codex_thread_id is None
 
 
+def test_codex_account_binding_does_not_revalidate_unchanged_local_state(
+    tmp_path, monkeypatch
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Historical chat", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-account-a"
+    storage.save_thread(record)
+
+    def reject_unrelated_local_validation(_record) -> None:
+        raise AssertionError("account rebinding revalidated unchanged local state")
+
+    monkeypatch.setattr(
+        storage,
+        "_prepare_thread_for_save_locked",
+        reject_unrelated_local_validation,
+    )
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    payload = json.loads(
+        (tmp_path / "threads" / f"{thread.thread_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["codex_thread_id"] is None
+    assert payload["status"] == "idle"
+
+
 def test_codex_account_binding_clears_pre_provider_runtime_projection(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = storage.create_thread(title="Queued locally", mode=RunMode.FULL_AUTO)
