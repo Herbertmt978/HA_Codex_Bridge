@@ -194,6 +194,7 @@ class CodexAuthCoordinator:
 
         del last_error
         login_poll: tuple[str, int, int] | None = None
+        blocked: CodexAuthStatusRecord | None = None
         with self._lock:
             if self._closed:
                 return self._copy_status_locked()
@@ -242,15 +243,30 @@ class CodexAuthCoordinator:
                     try:
                         self._acquire_runtime_auth_locked()
                     except AuthOperationConflictError:
-                        return self._copy_status_locked()
-                    operation = self._begin_operation_locked("status_reconcile")
-                    self._clear_active_login_locked()
-                    checking = self._set_status_locked(
-                        state="checking",
-                        busy=True,
-                        message=MESSAGE_CHECKING,
-                        **cleared_device_fields(),
-                    )
+                        operation = None
+                        checking = None
+                        blocked = self._set_status_locked(
+                            state="unavailable",
+                            busy=False,
+                            auth_required=True,
+                            auth_mode=None,
+                            plan_type=None,
+                            message=MESSAGE_UNAVAILABLE,
+                            **cleared_device_fields(),
+                        )
+                    else:
+                        operation = self._begin_operation_locked("status_reconcile")
+                        self._clear_active_login_locked()
+                        checking = self._set_status_locked(
+                            state="checking",
+                            busy=True,
+                            auth_required=True,
+                            message=MESSAGE_CHECKING,
+                            **cleared_device_fields(),
+                        )
+        if blocked is not None:
+            self._notify(blocked)
+            return blocked
         if retry_start:
             return self.start()
         if checking is not None:

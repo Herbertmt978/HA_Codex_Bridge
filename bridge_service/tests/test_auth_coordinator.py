@@ -593,6 +593,36 @@ def test_account_update_during_active_turn_blocks_until_owner_is_reconciled() ->
     ]
 
 
+def test_generation_change_fails_closed_while_runtime_gate_is_owned() -> None:
+    first = _chatgpt_account(email="first-account@example.test")
+    second = _chatgpt_account(email="second-account@example.test")
+    client = FakeAppServerClient(generation=1)
+    client.script("account/read", first, second)
+    gate = RuntimeGate(limits=ResourceLimits())
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(client, states, runtime_gate=gate)
+    coordinator.start()
+    active = gate.reserve_prompt(client_request_id="generation-active")
+
+    client.generation = 2
+    blocked = coordinator.status()
+
+    assert blocked.state == "unavailable"
+    assert blocked.busy is False
+    assert blocked.auth_required is True
+    assert blocked.auth_mode is None
+    assert blocked.plan_type is None
+    assert states[-1] == blocked
+    assert [call.method for call in client.calls].count("account/read") == 1
+
+    active.release()
+    recovered = coordinator.status()
+
+    assert recovered.state == "ok"
+    assert recovered.auth_required is False
+    assert [call.method for call in client.calls].count("account/read") == 2
+
+
 @pytest.mark.parametrize("login_id", [None, "missing"], ids=["null", "missing"])
 def test_uncorrelated_completion_cannot_replace_the_active_login(
     login_id: str | None,
