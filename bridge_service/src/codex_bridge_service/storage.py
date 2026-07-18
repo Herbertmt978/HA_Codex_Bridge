@@ -2327,7 +2327,8 @@ class BridgeStorage:
                 detached = 0
                 for record in records:
                     if (
-                        record.codex_thread_id is None
+                        record.codex_session_id is None
+                        and record.codex_thread_id is None
                         and record.active_turn_id is None
                         and record.active_run_id is None
                         and not record.pending_prompts
@@ -2335,6 +2336,7 @@ class BridgeStorage:
                         and record.last_error is None
                     ):
                         continue
+                    record.codex_session_id = None
                     record.codex_thread_id = None
                     record.active_turn_id = None
                     record.active_run_id = None

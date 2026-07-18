@@ -61,7 +61,7 @@ def test_readiness_round_trips_validated_injected_build_information(tmp_path) ->
             "release_lock_digest": "b" * 64,
         },
         "architecture": "amd64",
-        "capabilities": ["api_v1", "legacy_v0"],
+        "capabilities": ["api_v1", "legacy_v0", "interactions_v2"],
         "sandbox": {"contract_version": None, "attested": False},
         "readiness": {"state": "ready", "reasons": []},
     }
@@ -91,7 +91,7 @@ def test_readiness_defaults_are_safe_and_keep_existing_status_field(tmp_path) ->
         "codex": {"version": None},
         "image": {"revision": None, "release_lock_digest": None},
         "architecture": "unknown",
-        "capabilities": ["api_v1", "legacy_v0"],
+        "capabilities": ["api_v1", "legacy_v0", "interactions_v2"],
         "sandbox": {"contract_version": None, "attested": False},
         "readiness": {"state": "ready", "reasons": []},
     }

@@ -29565,9 +29565,6 @@ var CodexBridgePanel = class extends HTMLElement {
       await this._callWS(request.action, {
         interaction_id: interaction.interaction_id,
         thread_id: interaction.thread_id,
-        run_id: interaction.run_id,
-        turn_id: interaction.turn_id,
-        item_id: interaction.item_id,
         ...request.payload,
         client_request_id: mutation.clientRequestId
       });
@@ -29687,16 +29684,13 @@ var CodexBridgePanel = class extends HTMLElement {
     const kind = ["command_approval", "file_change_approval", "user_input"].includes(value.kind) ? value.kind : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
     const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
-    if (!interactionId || actualThreadId !== threadId || !kind || !identifier(value.run_id, 128) || !identifier(value.turn_id, 256) || !identifier(value.item_id, 256) || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (kind === "user_input" ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
+    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (kind === "user_input" ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
       return null;
     }
     return {
       interaction_id: interactionId,
       kind,
       thread_id: actualThreadId,
-      run_id: value.run_id,
-      turn_id: value.turn_id,
-      item_id: value.item_id,
       event_id: value.event_id,
       status: "pending",
       expires_at: expiresAt,

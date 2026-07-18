@@ -206,6 +206,51 @@ class ThreadViewRecord(ThreadRecord):
     effective_thinking_level: str = DEFAULT_THINKING_LEVEL
 
 
+class PublicThreadRecord(BaseModel):
+    """Browser-safe projection of a locally stored Home Assistant chat.
+
+    Provider session/thread/turn and local runtime ownership stay private to
+    the App.  The browser receives durable chat metadata only.
+    """
+
+    thread_id: str
+    project_id: str | None = None
+    title: str
+    workspace_id: str
+    workspace_path: str
+    status: str
+    mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    last_error: str | None = None
+    attachments: list[AttachmentRecord] = Field(default_factory=list)
+    artifacts: list[ArtifactRecord] = Field(default_factory=list)
+    model_override: str | None = None
+    thinking_override: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    archived_at: str | None = None
+    project_name: str
+    project_root_path: str
+    project_kind: ProjectKind = ProjectKind.PROJECT
+    default_model: str = DEFAULT_MODEL
+    default_thinking_level: str = DEFAULT_THINKING_LEVEL
+    effective_model: str = DEFAULT_MODEL
+    effective_thinking_level: str = DEFAULT_THINKING_LEVEL
+
+    @classmethod
+    def from_thread_view(cls, record: ThreadViewRecord) -> "PublicThreadRecord":
+        return cls.model_validate(
+            record.model_dump(
+                exclude={
+                    "codex_session_id",
+                    "codex_thread_id",
+                    "active_turn_id",
+                    "active_run_id",
+                    "pending_prompts",
+                }
+            )
+        )
+
+
 class RunRecord(BaseModel):
     run_id: str
     thread_id: str
@@ -302,12 +347,11 @@ class InteractionDisplayRecord(BaseModel):
 
 
 class PendingInteractionRecord(BaseModel):
+    """Browser-safe interaction addressed solely by a local interaction id."""
+
     interaction_id: str = Field(min_length=1, max_length=128)
     kind: Literal["command_approval", "file_change_approval", "user_input"]
     thread_id: str = Field(min_length=1, max_length=128)
-    run_id: str = Field(min_length=1, max_length=128)
-    turn_id: str = Field(min_length=1, max_length=256)
-    item_id: str = Field(min_length=1, max_length=256)
     event_id: int = Field(ge=0)
     status: Literal["pending"] = "pending"
     expires_at: str = Field(min_length=1, max_length=64)
@@ -325,9 +369,6 @@ class PendingInteractionCollectionRecord(BaseModel):
 
 class InteractionDecisionRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=128)
-    run_id: str = Field(min_length=1, max_length=128)
-    turn_id: str = Field(min_length=1, max_length=256)
-    item_id: str = Field(min_length=1, max_length=256)
     decision: Literal["accept", "decline", "cancel"]
     client_request_id: str = Field(min_length=1, max_length=256)
 
@@ -339,9 +380,6 @@ class InteractionAnswerRecord(BaseModel):
 
 class InteractionAnswerRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=128)
-    run_id: str = Field(min_length=1, max_length=128)
-    turn_id: str = Field(min_length=1, max_length=256)
-    item_id: str = Field(min_length=1, max_length=256)
     answers: list[InteractionAnswerRecord] = Field(min_length=1, max_length=32)
     client_request_id: str = Field(min_length=1, max_length=256)
 
@@ -435,6 +473,7 @@ class BridgeReadinessRecord(BaseModel):
         Literal[
             "api_v1",
             "legacy_v0",
+            "interactions_v2",
             "automations_v1",
             "mcp_admin_v1",
             "skills_v1",

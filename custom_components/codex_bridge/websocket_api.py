@@ -931,9 +931,6 @@ async def ws_list_pending_interactions(
         vol.Required("type"): f"{DOMAIN}/decide_interaction",
         vol.Required("interaction_id"): str,
         vol.Required("thread_id"): str,
-        vol.Required("run_id"): str,
-        vol.Required("turn_id"): str,
-        vol.Required("item_id"): str,
         vol.Required("decision"): vol.In(["accept", "decline", "cancel"]),
         vol.Required("client_request_id"): str,
     }
@@ -952,9 +949,6 @@ async def ws_decide_interaction(
                 key: msg[key]
                 for key in (
                     "thread_id",
-                    "run_id",
-                    "turn_id",
-                    "item_id",
                     "decision",
                     "client_request_id",
                 )
@@ -969,9 +963,6 @@ async def ws_decide_interaction(
         vol.Required("type"): f"{DOMAIN}/answer_interaction",
         vol.Required("interaction_id"): str,
         vol.Required("thread_id"): str,
-        vol.Required("run_id"): str,
-        vol.Required("turn_id"): str,
-        vol.Required("item_id"): str,
         vol.Required("answers"): vol.All(
             [
                 {
@@ -1001,9 +992,6 @@ async def ws_answer_interaction(
                 key: msg[key]
                 for key in (
                     "thread_id",
-                    "run_id",
-                    "turn_id",
-                    "item_id",
                     "answers",
                     "client_request_id",
                 )

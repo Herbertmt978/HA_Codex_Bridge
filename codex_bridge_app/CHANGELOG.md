@@ -29,6 +29,9 @@ All notable App changes are recorded here.
 - Returns the existing fail-closed auth snapshot while runtime ownership blocks
   reconciliation, preventing frequent Home Assistant status polls from
   generating duplicate revisions and durable `auth.status_changed` events.
+- Invalidates shared model and provider-capability catalogues when the private
+  account owner changes even if both accounts report the same plan, so model
+  and reasoning choices always reflect the account currently signed in.
 - Invalidates an account read or device-login poll if a newer account-update
   hint arrives before it finishes, so a stale account can never be published
   ready or rebound after the user switches accounts.
@@ -41,6 +44,10 @@ All notable App changes are recorded here.
 - Requires the authoritative auth state to be fully `ok` before broker
   admission or automation target preparation, so transient account checks and
   sign-out cannot leave behind local chat mutations.
+- Gives scheduled runs a one-shot broker admission before creating or changing
+  their target chat, transfers that exact lease into prompt submission, and
+  replays an existing automation outcome without creating or editing a chat.
+  Logout and automation dispatch therefore have one atomic winner.
 - Reserves prompt ownership before the final account-admission check and
   provider-thread lookup, making account rebinding atomic with provider
   continuity selection and preventing a detached previous-account thread from
@@ -55,6 +62,14 @@ All notable App changes are recorded here.
 - Settles recovered runtime checkpoints before account binding, preventing an
   interrupted run from restoring a previous account's provider thread during
   startup.
+- Keeps provider session/thread/turn handles, active runtime ownership, and
+  queued prompt internals out of browser-facing thread responses while
+  preserving the complete private record inside the App.
+- Addresses approvals and questions through an App-local interaction ID. The
+  browser no longer receives provider run, turn, or item locators, and durable
+  event replay redacts legacy provider-continuity fields at read time.
+- Advertises the safer interaction contract explicitly so a newer Integration
+  fails locally and actionably when temporarily paired with an older App.
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
 - Bundles Bridge `0.7.6` without changing its Integration API compatibility.

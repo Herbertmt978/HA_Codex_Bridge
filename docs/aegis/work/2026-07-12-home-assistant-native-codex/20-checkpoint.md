@@ -16,9 +16,15 @@
   promoted-queue admission, atomic prompt-lease continuity capture,
   deletion-safe auth lock ordering, missing-historical-workspace recovery,
   stale-login generation recovery, active-steer admission, blocked-poll auth
-  deduplication, and recovered-checkpoint coverage. The fresh complete Bridge
-  matrix passed with `1473 passed, 218 skipped` in 261.97 seconds; the focused
-  account/runtime matrix passed `356 passed, 6 skipped` in 86.06 seconds.
+  deduplication, owner-aware provider catalogues, atomic automation target
+  admission/replay, browser-safe thread and interaction projections,
+  historical-event read-time redaction, and recovered-checkpoint coverage.
+  The fresh complete Bridge matrix passed with
+  `1496 passed, 218 skipped` in 299.39 seconds; the final focused
+  account-neutral/runtime/privacy slice passed `295 passed, 3 skipped`, and
+  the complete Runtime Broker suite passed `195 passed, 3 skipped`. The exact
+  Linux/Python 3.14 Home Assistant Integration matrix
+  passed `319 passed` against Home Assistant 2026.7.2.
   Frontend lint, `320` unit tests, the production build, and `22` browser tests
   also passed.
 - **Evidence refs:** `90-evidence.md` records signed `0.8.10` publication and
@@ -63,7 +69,8 @@
 - **Canonical ownership:** the auth coordinator owns authoritative
   `account/read`; Bridge storage owns the persisted provider-thread handle.
 - **Compatibility:** the public auth/thread models and Integration API do not
-  gain an account identifier or account-specific chat partition.
+  gain an account identifier or account-specific chat partition. Public thread
+  responses now explicitly omit private provider/runtime continuity fields.
 - **Privacy:** email is used only transiently to derive a keyed opaque marker;
   neither value nor the Bridge secret enters browser APIs, events, diagnostics,
   logs, or release artifacts.

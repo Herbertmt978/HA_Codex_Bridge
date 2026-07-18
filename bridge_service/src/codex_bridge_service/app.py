@@ -496,7 +496,23 @@ def create_app(
                 initial_auth_identity_status.auth_mode,
                 initial_auth_identity_status.auth_required,
                 initial_auth_identity_status.plan_type,
+                None,
             )
+            auth_catalog_owner_marker: str | None = None
+
+            def invalidate_provider_catalogs() -> None:
+                invalidate_catalog = getattr(
+                    resolved_model_catalog_probe, "invalidate", None
+                )
+                if callable(invalidate_catalog):
+                    invalidate_catalog()
+                if resolved_capabilities_manager is not None:
+                    resolved_capabilities_manager.invalidate_provider_capabilities()
+
+            def bind_codex_account(owner_marker: str) -> None:
+                nonlocal auth_catalog_owner_marker
+                storage.bind_codex_account(owner_marker)
+                auth_catalog_owner_marker = owner_marker
 
             def persist_auth_status(status: CodexAuthStatusRecord) -> None:
                 nonlocal auth_catalog_identity
@@ -505,19 +521,14 @@ def create_app(
                     status.auth_mode,
                     status.auth_required,
                     status.plan_type,
+                    auth_catalog_owner_marker,
                 )
                 # Transient auth projections close prompt/automation admission,
                 # but they are not an authoritative entitlement identity. Wait
                 # for the settled account/read result before invalidating the
                 # shared model/capability caches.
                 if not status.busy and next_catalog_identity != auth_catalog_identity:
-                    invalidate_catalog = getattr(
-                        resolved_model_catalog_probe, "invalidate", None
-                    )
-                    if callable(invalidate_catalog):
-                        invalidate_catalog()
-                    if resolved_capabilities_manager is not None:
-                        resolved_capabilities_manager.invalidate_provider_capabilities()
+                    invalidate_provider_catalogs()
                     auth_catalog_identity = next_catalog_identity
                 storage.durable_outbox.commit_json(
                     operation_id=f"auth-status:{status.revision}",
@@ -538,7 +549,7 @@ def create_app(
                 state_listener_fatal=True,
                 runtime_gate=resolved_runtime_gate,
                 account_owner_secret=auth_token,
-                account_binding_listener=storage.bind_codex_account,
+                account_binding_listener=bind_codex_account,
             )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
@@ -601,7 +612,10 @@ def create_app(
     app.state.browser_broker = (
         browser_broker if browser_dynamic_tools_enabled else None
     )
-    feature_capabilities = ["api_v1", "legacy_v0"]
+    # A new Integration must not send provider continuation identifiers to an
+    # older App.  It therefore requires this negotiated public-only contract
+    # before it surfaces any actionable interaction.
+    feature_capabilities = ["api_v1", "legacy_v0", "interactions_v2"]
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         feature_capabilities.extend(
             [
@@ -730,20 +744,61 @@ def create_app(
             web_search = claim.get("web_search")
             if web_search is not None and not supports_web_search(app.state):
                 raise AutomationValidationError("web search is unavailable")
-            with storage.prepare_automation_target(
-                target,
-                title=definition["name"],
-                mode=mode,
-                model_override=definition.get("model"),
-                thinking_override=definition.get("thinking"),
-            ) as thread:
-                run = resolved_runner.submit_prompt(
-                    thread.thread_id,
+            request_id = f"automation:{automation_run_id}"
+
+            def submit_new_target(*, admission: object | None = None) -> object:
+                with storage.prepare_automation_target(
+                    target,
+                    title=definition["name"],
+                    mode=mode,
+                    model_override=definition.get("model"),
+                    thinking_override=definition.get("thinking"),
+                ) as thread:
+                    submission: dict[str, object] = {
+                        "client_request_id": request_id,
+                        "unattended": True,
+                        "web_search": web_search,
+                    }
+                    if admission is not None:
+                        submission["admission"] = admission
+                    return resolved_runner.submit_prompt(
+                        thread.thread_id,
+                        definition["prompt"],
+                        **submission,
+                    )
+
+            admit_prompt = getattr(resolved_runner, "admit_prompt", None)
+            if not callable(admit_prompt):
+                # Lightweight legacy/test runners do not own the HA runtime
+                # gate. Preserve their narrow adapter contract.
+                run = submit_new_target()
+            else:
+                with admit_prompt(
                     definition["prompt"],
-                    client_request_id=f"automation:{automation_run_id}",
+                    client_request_id=request_id,
                     unattended=True,
                     web_search=web_search,
-                )
+                ) as admission:
+                    replay_run = admission.replay_run
+                    if replay_run is None:
+                        run = submit_new_target(admission=admission)
+                    else:
+                        if target.get("kind") == "continue_thread":
+                            replay_matches = (
+                                replay_run.thread_id == target.get("thread_id")
+                            )
+                        else:
+                            replay_thread = storage.load_thread(replay_run.thread_id)
+                            replay_matches = (
+                                replay_thread.archived_at is None
+                                and replay_thread.project_id
+                                == target.get("project_id")
+                            )
+                        if not replay_matches:
+                            raise AutomationValidationError(
+                                "automation replay target does not match"
+                            )
+                        run = replay_run
         except (ProjectMutationError, FileNotFoundError) as error:
             raise AutomationValidationError(str(error)) from None
         resolved_automations.mark_running(

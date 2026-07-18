@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock, Thread, current_thread
 from time import monotonic
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Iterator, Literal, Protocol, cast
 from uuid import uuid4
 
 from .codex_app_server import (
@@ -398,6 +399,52 @@ class _BrowserToolReplay:
     result: dict[str, object] | None = None
 
 
+class PromptAdmission:
+    """Opaque one-shot ownership of one exact prompt admission decision."""
+
+    __slots__ = (
+        "_broker",
+        "_client_request_id",
+        "_fingerprint",
+        "_lease",
+        "_replay_run",
+        "_state",
+        "_unattended",
+        "_web_search",
+    )
+
+    def __init__(
+        self,
+        broker: RuntimeBroker,
+        *,
+        client_request_id: str,
+        fingerprint: str,
+        unattended: bool,
+        web_search: Literal["live", "disabled"] | None,
+        lease: RuntimeLease | None,
+        replay_run: RunRecord | None = None,
+    ) -> None:
+        self._broker = broker
+        self._client_request_id = client_request_id
+        self._fingerprint = fingerprint
+        self._unattended = unattended
+        self._web_search = web_search
+        self._lease = lease
+        self._replay_run = replay_run
+        self._state: Literal["reserved", "replay", "transferred", "released"] = (
+            "replay" if replay_run is not None else "reserved"
+        )
+
+    @property
+    def replay_run(self) -> RunRecord | None:
+        if self._replay_run is None:
+            return None
+        return self._replay_run.model_copy(deep=True)
+
+    def __repr__(self) -> str:
+        return f"PromptAdmission(state={self._state!r})"
+
+
 class RuntimeBroker:
     """Durable, bounded broker for the single supervised Codex app-server."""
 
@@ -482,6 +529,7 @@ class RuntimeBroker:
             self._recovered_corrupt_state = True
         self._lock = RLock()
         self._leases: dict[str, RuntimeLease] = {}
+        self._pending_prompt_admissions: dict[str, PromptAdmission] = {}
         self._completion_events: dict[str, Event] = {}
         self._server_requests: dict[str, AppServerRequest] = {}
         self._item_paths: dict[tuple[str, str], list[str]] = {}
@@ -542,6 +590,123 @@ class RuntimeBroker:
                 self._purge_threads_locked(thread_ids)
                 self.storage.delete_project(project_id)
 
+    @contextmanager
+    def admit_prompt(
+        self,
+        prompt: str,
+        *,
+        client_request_id: str,
+        unattended: bool = False,
+        web_search: Literal["live", "disabled"] | None = None,
+    ) -> Iterator[PromptAdmission]:
+        """Reserve prompt capacity before a caller mutates its target.
+
+        Exact durable replays carry no live lease. Fresh admissions own one
+        exact RuntimeGate lease until ``submit_prompt`` atomically transfers
+        it into the accepted run, or this context releases it on every failure.
+        """
+
+        if type(unattended) is not bool:
+            raise ValueError("unattended must be a boolean")
+        if web_search is not None and (
+            type(web_search) is not str or web_search not in {"live", "disabled"}
+        ):
+            raise ValueError("web_search must be live or disabled")
+        normalized_prompt = _prompt(prompt)
+        request_id = _identifier(
+            client_request_id, limit=256, label="client request id"
+        )
+        _require_message_event_capacity(
+            prompt=normalized_prompt,
+            client_request_id=request_id,
+            maximum_bytes=self.limits.max_event_payload_bytes,
+        )
+        fingerprint = _fingerprint(normalized_prompt)
+
+        with self._lock:
+            self._require_started_locked()
+            replay = self._prompt_admission_replay_locked(
+                request_id,
+                fingerprint=fingerprint,
+                unattended=unattended,
+                web_search=web_search,
+            )
+            if replay is not None:
+                admission = PromptAdmission(
+                    self,
+                    client_request_id=request_id,
+                    fingerprint=fingerprint,
+                    unattended=unattended,
+                    web_search=web_search,
+                    lease=None,
+                    replay_run=replay,
+                )
+            else:
+                self._raise_for_pending_prompt_admission_locked(
+                    request_id,
+                    fingerprint=fingerprint,
+                    unattended=unattended,
+                    web_search=web_search,
+                )
+                self._ensure_request_capacity_locked()
+                admission = None
+
+        if admission is None:
+            # The authoritative account read may bind storage, so it must run
+            # without the broker lock and before this caller mutates a target.
+            if not self._provider_admission_allowed():
+                raise RuntimeAuthenticationRequiredError()
+            with self._lock:
+                self._require_started_locked()
+                replay = self._prompt_admission_replay_locked(
+                    request_id,
+                    fingerprint=fingerprint,
+                    unattended=unattended,
+                    web_search=web_search,
+                )
+                if replay is not None:
+                    admission = PromptAdmission(
+                        self,
+                        client_request_id=request_id,
+                        fingerprint=fingerprint,
+                        unattended=unattended,
+                        web_search=web_search,
+                        lease=None,
+                        replay_run=replay,
+                    )
+                else:
+                    self._raise_for_pending_prompt_admission_locked(
+                        request_id,
+                        fingerprint=fingerprint,
+                        unattended=unattended,
+                        web_search=web_search,
+                    )
+                    self._ensure_request_capacity_locked()
+                    lease = self.gate.reserve_prompt(client_request_id=request_id)
+                    try:
+                        # Once this lease exists, an account bind cannot race
+                        # target preparation or provider-continuity capture.
+                        if not self._provider_admission_allowed():
+                            raise RuntimeAuthenticationRequiredError()
+                        admission = PromptAdmission(
+                            self,
+                            client_request_id=request_id,
+                            fingerprint=fingerprint,
+                            unattended=unattended,
+                            web_search=web_search,
+                            lease=lease,
+                        )
+                        self._pending_prompt_admissions[request_id] = admission
+                    except BaseException:
+                        lease.release()
+                        raise
+
+        assert admission is not None
+        try:
+            yield admission
+        finally:
+            self._release_prompt_admission(admission)
+
     def submit_prompt(
         self,
         thread_id: str,
@@ -550,6 +715,7 @@ class RuntimeBroker:
         client_request_id: str | None = None,
         unattended: bool = False,
         web_search: Literal["live", "disabled"] | None = None,
+        admission: PromptAdmission | None = None,
     ) -> RunRecord:
         if type(unattended) is not bool:
             raise ValueError("unattended must be a boolean")
@@ -570,6 +736,20 @@ class RuntimeBroker:
 
         with self._lock:
             self._require_started_locked()
+            self._validate_prompt_admission_locked(
+                admission,
+                request_id=request_id,
+                fingerprint=_fingerprint(prompt),
+                unattended=unattended,
+                web_search=web_search,
+            )
+            if admission is None:
+                self._raise_for_pending_prompt_admission_locked(
+                    request_id,
+                    fingerprint=_fingerprint(prompt),
+                    unattended=unattended,
+                    web_search=web_search,
+                )
             # Broker-owned deletion holds this same lock. Revalidate here so a
             # submit that resolved metadata before deletion cannot resurrect
             # runtime ownership after the chat has been removed.
@@ -596,13 +776,28 @@ class RuntimeBroker:
         # that broker-owned deletion acquires before ``self._lock``. Never run
         # that potentially mutating reconciliation while holding the broker
         # lock; repeat every admission-sensitive broker check after it returns.
-        if not self._provider_admission_allowed():
-            raise RuntimeAuthenticationRequiredError()
-        thread = self.storage.get_thread(thread_id)
-        self.storage.resolve_workspace_path(thread.workspace_path)
+        if admission is None:
+            if not self._provider_admission_allowed():
+                raise RuntimeAuthenticationRequiredError()
+            thread = self.storage.get_thread(thread_id)
+            self.storage.resolve_workspace_path(thread.workspace_path)
 
         with self._lock:
             self._require_started_locked()
+            self._validate_prompt_admission_locked(
+                admission,
+                request_id=request_id,
+                fingerprint=_fingerprint(prompt),
+                unattended=unattended,
+                web_search=web_search,
+            )
+            if admission is None:
+                self._raise_for_pending_prompt_admission_locked(
+                    request_id,
+                    fingerprint=_fingerprint(prompt),
+                    unattended=unattended,
+                    web_search=web_search,
+                )
             # A delete or concurrent idempotent submission can complete while
             # the authoritative auth read runs without the broker lock.
             self.storage.load_thread(thread_id)
@@ -624,7 +819,9 @@ class RuntimeBroker:
                     else _outcome_record(existing_outcome)
                 )
 
-            self._ensure_request_capacity_locked()
+            self._ensure_request_capacity_locked(
+                reserved_request_id=(request_id if admission is not None else None)
+            )
 
             if any(
                 run.thread_id == thread_id and run.status == "cancelling"
@@ -676,10 +873,16 @@ class RuntimeBroker:
                 # provider-continuity read. The prompt lease excludes account
                 # binding, so an account update cannot detach the stored Codex
                 # thread after it is captured into this run.
-                lease = self.gate.reserve_prompt(client_request_id=request_id)
+                lease = (
+                    admission._lease
+                    if admission is not None
+                    else self.gate.reserve_prompt(client_request_id=request_id)
+                )
+                if lease is None:
+                    raise RuntimeRequestConflictError()
                 run: RuntimeRunState | None = None
                 try:
-                    if not self._provider_admission_allowed():
+                    if admission is None and not self._provider_admission_allowed():
                         raise RuntimeAuthenticationRequiredError()
                     thread = self.storage.get_thread(thread_id)
                     self.storage.resolve_workspace_path(thread.workspace_path)
@@ -727,9 +930,14 @@ class RuntimeBroker:
                     )
                     self._leases[run.run_id] = lease
                     self._completion_events[run.run_id] = Event()
+                    if admission is not None:
+                        self._transfer_prompt_admission_locked(admission)
                 except BaseException:
                     if run is None:
-                        lease.release()
+                        if admission is None:
+                            lease.release()
+                        else:
+                            self._release_prompt_admission_locked(admission)
                     else:
                         self._rollback_submission_locked(run, lease)
                     raise
@@ -953,9 +1161,6 @@ class RuntimeBroker:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         decision: str,
         client_request_id: str,
     ) -> InteractionResultRecord:
@@ -969,9 +1174,6 @@ class RuntimeBroker:
             interaction, request = self._claim_interaction_locked(
                 interaction_id,
                 thread_id=thread_id,
-                run_id=run_id,
-                turn_id=turn_id,
-                item_id=item_id,
                 client_request_id=request_id,
                 response_fingerprint=response_fingerprint,
                 expected_kinds={"command_approval", "file_change_approval"},
@@ -1037,9 +1239,6 @@ class RuntimeBroker:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         answers: list[dict[str, object]] | dict[str, list[str]],
         client_request_id: str,
     ) -> InteractionResultRecord:
@@ -1056,9 +1255,6 @@ class RuntimeBroker:
             interaction, request = self._claim_interaction_locked(
                 interaction_id,
                 thread_id=thread_id,
-                run_id=run_id,
-                turn_id=turn_id,
-                item_id=item_id,
                 client_request_id=request_id,
                 response_fingerprint=response_fingerprint,
                 expected_kinds={"user_input"},
@@ -1116,6 +1312,8 @@ class RuntimeBroker:
             if self._closed:
                 return
             self._closed = True
+            for admission in tuple(self._pending_prompt_admissions.values()):
+                self._release_prompt_admission_locked(admission)
             generations: set[int] = set()
             for run in self._state.runs.values():
                 if run.status in _TERMINAL_RUN_STATES:
@@ -1237,6 +1435,107 @@ class RuntimeBroker:
             return self._provider_admission_check() is True
         except Exception:
             return False
+
+    def _prompt_admission_replay_locked(
+        self,
+        request_id: str,
+        *,
+        fingerprint: str,
+        unattended: bool,
+        web_search: Literal["live", "disabled"] | None,
+    ) -> RunRecord | None:
+        outcome = self._state.request_idempotency.get(request_id)
+        if outcome is None:
+            return None
+        if (
+            outcome.fingerprint != fingerprint
+            or outcome.unattended != unattended
+            or outcome.web_search != web_search
+        ):
+            raise RuntimeRequestConflictError()
+        if outcome.status == "uncertain":
+            raise RuntimeSteerOutcomeUnknownError()
+        run = self._state.runs.get(outcome.run_id)
+        return _run_record(run) if run is not None else _outcome_record(outcome)
+
+    def _raise_for_pending_prompt_admission_locked(
+        self,
+        request_id: str,
+        *,
+        fingerprint: str,
+        unattended: bool,
+        web_search: Literal["live", "disabled"] | None,
+    ) -> None:
+        pending = self._pending_prompt_admissions.get(request_id)
+        if pending is None:
+            return
+        if (
+            pending._fingerprint != fingerprint
+            or pending._unattended != unattended
+            or pending._web_search != web_search
+        ):
+            raise RuntimeRequestConflictError()
+        raise RuntimePromptPendingError()
+
+    def _validate_prompt_admission_locked(
+        self,
+        admission: PromptAdmission | None,
+        *,
+        request_id: str,
+        fingerprint: str,
+        unattended: bool,
+        web_search: Literal["live", "disabled"] | None,
+    ) -> None:
+        if admission is None:
+            return
+        if (
+            admission._broker is not self
+            or admission._state != "reserved"
+            or self._pending_prompt_admissions.get(request_id) is not admission
+            or admission._client_request_id != request_id
+            or admission._fingerprint != fingerprint
+            or admission._unattended != unattended
+            or admission._web_search != web_search
+            or admission._lease is None
+            or admission._lease.state not in {"active", "queued"}
+        ):
+            raise RuntimeRequestConflictError()
+
+    def _transfer_prompt_admission_locked(
+        self,
+        admission: PromptAdmission,
+    ) -> None:
+        if (
+            admission._state != "reserved"
+            or self._pending_prompt_admissions.get(admission._client_request_id)
+            is not admission
+        ):
+            raise RuntimeRequestConflictError()
+        self._pending_prompt_admissions.pop(admission._client_request_id, None)
+        admission._state = "transferred"
+
+    def _release_prompt_admission(self, admission: PromptAdmission) -> None:
+        with self._lock:
+            self._release_prompt_admission_locked(admission)
+
+    def _release_prompt_admission_locked(
+        self,
+        admission: PromptAdmission,
+    ) -> None:
+        if admission._state != "reserved":
+            return
+        if (
+            self._pending_prompt_admissions.get(admission._client_request_id)
+            is admission
+        ):
+            self._pending_prompt_admissions.pop(admission._client_request_id, None)
+        admission._state = "released"
+        lease = admission._lease
+        if lease is not None:
+            # ``release`` is atomic for active and queued RuntimeGate leases;
+            # unlike cancel it also closes an active owner that promoted while
+            # cleanup raced the queue.
+            lease.release()
 
     def _start_turn(self, run_id: str) -> None:
         with self._lock:
@@ -1448,7 +1747,7 @@ class RuntimeBroker:
                 self._emit_once_locked(
                     run,
                     "run.started",
-                    {"run_id": run.run_id, "turn_id": run.codex_turn_id},
+                    {"run_id": run.run_id},
                 )
             self._callback_replays_in_progress.add(run_id)
 
@@ -1645,7 +1944,7 @@ class RuntimeBroker:
             self._emit_once_locked(
                 run,
                 "run.started",
-                {"run_id": run.run_id, "turn_id": run.codex_turn_id},
+                {"run_id": run.run_id},
             )
             return
         if notification.method == "turn/completed":
@@ -2393,9 +2692,6 @@ class RuntimeBroker:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         client_request_id: str,
         response_fingerprint: str,
         expected_kinds: set[str] | None = None,
@@ -2403,12 +2699,7 @@ class RuntimeBroker:
         interaction = self._state.interactions.get(interaction_id)
         if interaction is None:
             raise InteractionNotFoundError()
-        if (
-            interaction.thread_id != thread_id
-            or interaction.run_id != run_id
-            or interaction.turn_id != turn_id
-            or interaction.item_id != item_id
-        ):
+        if interaction.thread_id != thread_id:
             raise TurnChangedError()
         if expected_kinds is not None and interaction.kind not in expected_kinds:
             raise TurnChangedError()
@@ -3341,8 +3632,21 @@ class RuntimeBroker:
         except (ThreadNotFoundError, WorkspaceBoundaryError, OSError):
             pass
 
-    def _ensure_request_capacity_locked(self) -> None:
-        if len(self._state.request_idempotency) < _MAX_REQUEST_OUTCOMES:
+    def _ensure_request_capacity_locked(
+        self,
+        *,
+        reserved_request_id: str | None = None,
+    ) -> None:
+        pending = len(self._pending_prompt_admissions)
+        if (
+            reserved_request_id is not None
+            and self._pending_prompt_admissions.get(reserved_request_id) is not None
+        ):
+            pending -= 1
+        if (
+            len(self._state.request_idempotency) + pending
+            < _MAX_REQUEST_OUTCOMES
+        ):
             return
         missing_threads: set[str] = set()
         for thread_id in {
@@ -3369,7 +3673,10 @@ class RuntimeBroker:
                 if interaction.thread_id not in missing_threads
             }
             self._persist_locked()
-        if len(self._state.request_idempotency) >= _MAX_REQUEST_OUTCOMES:
+        if (
+            len(self._state.request_idempotency) + pending
+            >= _MAX_REQUEST_OUTCOMES
+        ):
             raise RuntimeStateCapacityError()
 
     def _compact_terminal_state_locked(self) -> None:
@@ -3511,6 +3818,8 @@ class RuntimeBroker:
         if self._fatal_error:
             return
         self._fatal_error = True
+        for admission in tuple(self._pending_prompt_admissions.values()):
+            self._release_prompt_admission_locked(admission)
         for run_id in tuple(self._pre_response_callbacks):
             self._discard_pre_response_callbacks_locked(run_id)
         self._pre_response_request_owners.clear()
@@ -3581,9 +3890,6 @@ def _public_interaction(
         interaction_id=interaction.interaction_id,
         kind=interaction.kind,
         thread_id=interaction.thread_id,
-        run_id=interaction.run_id,
-        turn_id=interaction.turn_id,
-        item_id=interaction.item_id,
         event_id=interaction.event_id,
         expires_at=interaction.expires_at,
         display=interaction.display,

@@ -151,7 +151,7 @@ def test_codex_account_binding_migration_detaches_only_runtime_projection(
     storage.archive_thread(thread.thread_id)
 
     record = storage.load_thread(thread.thread_id)
-    record.codex_session_id = "legacy-session-must-remain"
+    record.codex_session_id = "legacy-session-account-a"
     record.codex_thread_id = "provider-thread-account-a"
     record.active_turn_id = "provider-turn-stale"
     record.active_run_id = "run-stale"
@@ -185,7 +185,7 @@ def test_codex_account_binding_migration_detaches_only_runtime_projection(
     assert after.created_at == before.created_at
     assert after.updated_at == before.updated_at
     assert after.archived_at == before.archived_at
-    assert after.codex_session_id == before.codex_session_id
+    assert after.codex_session_id is None
     assert after.attachments == [attachment]
     assert after.artifacts == artifacts
     assert storage.load_project(project.project_id) == project_before
@@ -222,6 +222,22 @@ def test_codex_account_binding_preserves_same_owner_and_detaches_changed_owner(
 
     assert storage.bind_codex_account("b" * 64) == 1
     assert storage.load_thread(thread.thread_id).codex_thread_id is None
+
+
+def test_codex_account_binding_detaches_legacy_exec_session_only(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Legacy continuity", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+
+    record = storage.load_thread(thread.thread_id)
+    record.codex_session_id = "legacy-session-account-a"
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    rebound = storage.load_thread(thread.thread_id)
+    assert rebound.codex_session_id is None
+    assert rebound.codex_thread_id is None
+    assert rebound.status == "idle"
 
 
 def test_codex_account_binding_does_not_revalidate_unchanged_local_state(

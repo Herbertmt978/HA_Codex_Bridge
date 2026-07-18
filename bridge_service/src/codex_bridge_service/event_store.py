@@ -1504,6 +1504,21 @@ _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
             "source",
         }
     ),
+    "interaction.created": frozenset(
+        {
+            "interaction_id",
+            "kind",
+            "thread_id",
+            "event_id",
+            "status",
+            "expires_at",
+            "display",
+            "allowed_actions",
+        }
+    ),
+    "interaction.resolved": frozenset({"interaction_id", "status"}),
+    "interaction.expired": frozenset({"interaction_id"}),
+    "interaction.outcome_unknown": frozenset({"interaction_id"}),
     # The retired exec adapter used to forward the complete provider JSON.
     # Keep only routing metadata so private cwd/auth/prompt fields cannot enter
     # either the canonical v1 replay or its list-shaped v0 adapter.
@@ -1543,6 +1558,19 @@ _LEGACY_EVENT_FIELDS: dict[str, frozenset[str]] = {
     ),
 }
 
+_PRIVATE_BROWSER_EVENT_FIELDS = frozenset(
+    {
+        "turn_id",
+        "codex_turn_id",
+        "codex_thread_id",
+        "codex_session_id",
+        "active_turn_id",
+        "active_run_id",
+        "provider_request_id",
+        "provider_method",
+    }
+)
+
 
 def _public_event_payload(
     event_type: str,
@@ -1560,6 +1588,39 @@ def _public_event_payload(
     if fields is None or not isinstance(payload, Mapping):
         return payload
     return {key: payload[key] for key in fields if key in payload}
+
+
+def project_public_event_payload(
+    event_type: str,
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Project historical and fresh events through the browser trust boundary.
+
+    Writes already use the public schema, but old durable journals can predate
+    a field removal.  Replay and SSE must apply the same rule at read time.
+    Item IDs remain available for the panel's safe activity coalescing; provider
+    turn/session/thread correlation never does.
+    """
+
+    candidate = _public_event_payload(event_type, payload)
+    if not isinstance(candidate, Mapping):
+        return {}
+    return _redact_browser_private_fields(candidate)
+
+
+def _redact_browser_private_fields(value: Mapping[str, Any]) -> dict[str, Any]:
+    def redact(item: Any) -> Any:
+        if isinstance(item, Mapping):
+            return {
+                key: redact(child)
+                for key, child in item.items()
+                if key not in _PRIVATE_BROWSER_EVENT_FIELDS
+            }
+        if isinstance(item, list):
+            return [redact(child) for child in item]
+        return item
+
+    return redact(value)
 
 
 def _event_fingerprint(

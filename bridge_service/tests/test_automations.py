@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -997,4 +998,156 @@ def test_dispatch_revalidates_deleted_target_without_starting_codex(tmp_path):
     assert response.status_code == 202
     assert response.json()["status"] == "blocked"
     assert response.json()["dispatchable"] is False
+    assert runner.submissions == []
+
+
+@pytest.mark.parametrize("target_kind", ["standalone", "continue_thread"])
+def test_dispatch_replays_existing_runtime_run_without_mutating_target(
+    tmp_path,
+    target_kind,
+):
+    app, runner, _target_record, target = _dispatch_test_app(
+        tmp_path,
+        target_kind=target_kind,
+    )
+    app.state.sandbox_ready = True
+    app.state.codex_app_server.ready = True
+    app.state.auth_coordinator = SimpleNamespace(
+        status=lambda: SimpleNamespace(state="ok", auth_required=False)
+    )
+    replay_thread_id = (
+        target["thread_id"]
+        if target_kind == "continue_thread"
+        else "thr_standalone_replay"
+    )
+    replay = SimpleNamespace(
+        run_id="run_automation_replay",
+        thread_id=replay_thread_id,
+    )
+    if target_kind == "standalone":
+        app.state.storage.load_thread = lambda _thread_id: SimpleNamespace(
+            project_id=target["project_id"],
+            archived_at=None,
+        )
+    app.state.storage.prepare_automation_target = lambda *_args, **_kwargs: (
+        pytest.fail("an exact runtime replay must not mutate its target")
+    )
+
+    @contextmanager
+    def admit_prompt(*_args, **_kwargs):
+        yield SimpleNamespace(replay_run=replay)
+
+    runner.admit_prompt = admit_prompt
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+    claim = app.state.automations.run_now(automation["automation_id"], now=NOW)
+
+    result = app.state.automation_dispatch(claim)
+
+    assert result is replay
+    assert runner.submissions == []
+    [record] = app.state.automations.list_runs(automation["automation_id"])
+    assert record["status"] == "running"
+    assert record["bridge_run_id"] == replay.run_id
+
+
+def test_dispatch_rejects_continuation_replay_for_another_thread_without_mutation(
+    tmp_path,
+):
+    app, runner, _target_record, target = _dispatch_test_app(
+        tmp_path,
+        target_kind="continue_thread",
+    )
+    app.state.sandbox_ready = True
+    app.state.codex_app_server.ready = True
+    app.state.auth_coordinator = SimpleNamespace(
+        status=lambda: SimpleNamespace(state="ok", auth_required=False)
+    )
+    app.state.storage.prepare_automation_target = lambda *_args, **_kwargs: (
+        pytest.fail("a mismatched replay must not mutate its target")
+    )
+
+    @contextmanager
+    def admit_prompt(*_args, **_kwargs):
+        yield SimpleNamespace(
+            replay_run=SimpleNamespace(
+                run_id="run_other_thread",
+                thread_id="thr_other",
+            )
+        )
+
+    runner.admit_prompt = admit_prompt
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+    claim = app.state.automations.run_now(automation["automation_id"], now=NOW)
+
+    with pytest.raises(AutomationValidationError, match="replay target"):
+        app.state.automation_dispatch(claim)
+
+    assert runner.submissions == []
+
+
+@pytest.mark.parametrize("replay_state", ["other_project", "archived", "missing"])
+def test_dispatch_rejects_invalid_standalone_replay_without_mutation(
+    tmp_path,
+    replay_state,
+):
+    app, runner, _target_record, target = _dispatch_test_app(
+        tmp_path,
+        target_kind="standalone",
+    )
+    app.state.sandbox_ready = True
+    app.state.codex_app_server.ready = True
+    app.state.auth_coordinator = SimpleNamespace(
+        status=lambda: SimpleNamespace(state="ok", auth_required=False)
+    )
+    app.state.storage.prepare_automation_target = lambda *_args, **_kwargs: (
+        pytest.fail("an invalid replay must not create a target")
+    )
+    if replay_state == "missing":
+
+        def load_replay_thread(_thread_id):
+            raise FileNotFoundError("replay thread is missing")
+
+    else:
+
+        def load_replay_thread(_thread_id):
+            return SimpleNamespace(
+                project_id=(
+                    "prj_other"
+                    if replay_state == "other_project"
+                    else target["project_id"]
+                ),
+                archived_at=(
+                    "2026-07-15T09:01:00Z"
+                    if replay_state == "archived"
+                    else None
+                ),
+            )
+
+    app.state.storage.load_thread = load_replay_thread
+
+    @contextmanager
+    def admit_prompt(*_args, **_kwargs):
+        yield SimpleNamespace(
+            replay_run=SimpleNamespace(
+                run_id="run_standalone_replay",
+                thread_id="thr_standalone_replay",
+            )
+        )
+
+    runner.admit_prompt = admit_prompt
+    automation = app.state.automations.create(
+        _payload(target=target),
+        now=NOW,
+    )
+    claim = app.state.automations.run_now(automation["automation_id"], now=NOW)
+
+    with pytest.raises(AutomationValidationError):
+        app.state.automation_dispatch(claim)
+
     assert runner.submissions == []

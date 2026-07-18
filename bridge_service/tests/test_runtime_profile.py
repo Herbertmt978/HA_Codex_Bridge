@@ -214,6 +214,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
     assert app.state.feature_capabilities == (
         "api_v1",
         "legacy_v0",
+        "interactions_v2",
         "automations_v1",
         "skills_v1",
         "plugins_v1",
@@ -244,7 +245,11 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
     assert external.state.capabilities_manager is None
     assert external.state.agents_manager is None
     assert external.state.mcp_manager is None
-    assert external.state.feature_capabilities == ("api_v1", "legacy_v0")
+    assert external.state.feature_capabilities == (
+        "api_v1",
+        "legacy_v0",
+        "interactions_v2",
+    )
     assert "/automations" not in external_paths
 
 

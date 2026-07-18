@@ -855,9 +855,6 @@ async def test_answer_interaction_forwards_exact_bounded_values_contract() -> No
         "type": f"{DOMAIN}/answer_interaction",
         "interaction_id": "int_1",
         "thread_id": "thr_1",
-        "run_id": "run_1",
-        "turn_id": "turn_1",
-        "item_id": "item_1",
         "answers": [{"question_id": "question_1", "values": ["yes"]}],
         "client_request_id": "answer-1",
     }
@@ -868,9 +865,6 @@ async def test_answer_interaction_forwards_exact_bounded_values_contract() -> No
     runtime.client.async_answer_interaction.assert_awaited_once_with(
         "int_1",
         thread_id="thr_1",
-        run_id="run_1",
-        turn_id="turn_1",
-        item_id="item_1",
         answers=[{"question_id": "question_1", "values": ["yes"]}],
         client_request_id="answer-1",
     )

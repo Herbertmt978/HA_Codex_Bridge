@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..auth import require_bridge_token
-from ..event_store import ThreadEventSequenceExpiredError
+from ..event_store import ThreadEventSequenceExpiredError, project_public_event_payload
 from ..models import ThreadEventRecord
 from ..storage import ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
@@ -43,7 +43,7 @@ def stream_thread_events(
         for event in events:
             yield f"id: {event.sequence}\n"
             yield f"event: {event.event_type}\n"
-            yield f"data: {json.dumps(event.model_dump())}\n\n"
+            yield f"data: {json.dumps(_public_thread_event(event).model_dump())}\n\n"
 
     return StreamingResponse(emit(), media_type="text/event-stream")
 
@@ -62,7 +62,10 @@ def replay_thread_events(
     )
     try:
         request.app.state.storage.load_thread(thread_id)
-        return request.app.state.storage.list_thread_events(thread_id, after=after)
+        return [
+            _public_thread_event(event)
+            for event in request.app.state.storage.list_thread_events(thread_id, after=after)
+        ]
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except ThreadEventSequenceExpiredError as exc:
@@ -86,4 +89,10 @@ def _thread_cursor_expired(error: ThreadEventSequenceExpiredError) -> HTTPExcept
                 "thread_id": error.thread_id,
             },
         },
+    )
+
+
+def _public_thread_event(event: ThreadEventRecord) -> ThreadEventRecord:
+    return event.model_copy(
+        update={"payload": project_public_event_payload(event.event_type, event.payload)}
     )

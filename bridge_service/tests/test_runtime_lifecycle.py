@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
-import os
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
+from codex_bridge_service.auth_coordinator import AuthOperationConflictError
 from codex_bridge_service.automations import AutomationValidationError
 from codex_bridge_service.build_info import BuildInfo
 from codex_bridge_service.codex_app_server import (
@@ -606,6 +608,55 @@ def test_account_entitlement_change_invalidates_shared_catalogue(
     assert client.calls.count("model/list") == model_calls * 2
 
 
+def test_account_owner_change_invalidates_shared_provider_caches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _SharedClient()
+    client.model = "gpt-5.5"
+    client.effort = "medium"
+    app = _ha_app(tmp_path, client)
+
+    with TestClient(app):
+        probe = app.state.model_catalog_probe
+        first = probe.probe()
+        model_calls = client.calls.count("model/list")
+        capability_invalidations: list[None] = []
+        original_invalidate = (
+            app.state.capabilities_manager.invalidate_provider_capabilities
+        )
+
+        def invalidate_provider_capabilities() -> None:
+            capability_invalidations.append(None)
+            original_invalidate()
+
+        monkeypatch.setattr(
+            app.state.capabilities_manager,
+            "invalidate_provider_capabilities",
+            invalidate_provider_capabilities,
+        )
+        client.account_email = "second-account@example.test"
+        client.model = "gpt-5.6-terra"
+        client.effort = "max"
+        notification = AppServerNotification(
+            method="account/updated",
+            params={"authMode": "chatgpt", "planType": "plus"},
+            generation=client.generation,
+        )
+
+        client.notification_handlers["account/updated"](notification)
+        refreshed = probe.probe()
+        client.notification_handlers["account/updated"](notification)
+        cached = probe.probe()
+
+        assert first.default_model == "gpt-5.5"
+        assert refreshed.default_model == "gpt-5.6-terra"
+        assert refreshed.default_thinking_level == "max"
+        assert cached is refreshed
+        assert capability_invalidations == [None]
+        assert client.calls.count("model/list") == model_calls * 2
+
+
 def test_first_status_after_auth_recovery_uses_the_refreshed_catalogue(
     tmp_path: Path,
 ) -> None:
@@ -908,6 +959,179 @@ def test_account_update_blocks_broker_and_automation_before_local_mutation(
         assert not worker.is_alive()
         assert errors == []
         assert app.state.auth_coordinator.status().state == "ok"
+
+
+def test_automation_auth_admission_wins_before_continuation_target_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BlockingLogoutClient(_SharedClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block_account_read = False
+            self.account_read_entered = threading.Event()
+            self.account_read_release = threading.Event()
+
+        def request(self, method, params=None, **kwargs):
+            if method == "account/logout":
+                self.calls.append(method)
+                self.requests.append((method, deepcopy(params)))
+                self.authenticated = False
+                return {}
+            if method == "account/read" and self.block_account_read:
+                self.block_account_read = False
+                self.account_read_entered.set()
+                if not self.account_read_release.wait(10):
+                    raise AssertionError("blocked account/read was not released")
+            return super().request(method, params, **kwargs)
+
+    client = BlockingLogoutClient()
+    app = _ha_app(tmp_path, client)
+    reserve_entered = threading.Event()
+    reserve_release = threading.Event()
+    dispatch_errors: list[BaseException] = []
+    logout_errors: list[BaseException] = []
+
+    with TestClient(app):
+        thread = _seed_blocked_thread(app, name="Auth admission race")
+        automation = app.state.automations.create(
+            {
+                "name": "Auth admission race",
+                "prompt": "Do not create a target after logout admission wins.",
+                "target": {
+                    "kind": "continue_thread",
+                    "thread_id": thread.thread_id,
+                },
+                "mode": "observe",
+                "schedule": {
+                    "kind": "rrule",
+                    "rule": "RRULE:FREQ=DAILY",
+                    "start_at": "2026-07-18T01:00:00Z",
+                    "timezone": "UTC",
+                },
+            }
+        )
+        claim = app.state.automations.run_now(automation["automation_id"])
+        original_reserve = app.state.runtime_gate.reserve_prompt
+
+        def paused_reserve_prompt(*, client_request_id: str):
+            reserve_entered.set()
+            if not reserve_release.wait(10):
+                raise AssertionError("prompt reservation was not released")
+            return original_reserve(client_request_id=client_request_id)
+
+        monkeypatch.setattr(
+            app.state.runtime_gate,
+            "reserve_prompt",
+            paused_reserve_prompt,
+        )
+
+        def dispatch() -> None:
+            try:
+                app.state.automation_dispatch(claim)
+            except BaseException as exc:  # pragma: no cover - asserted below
+                dispatch_errors.append(exc)
+
+        dispatch_worker = threading.Thread(target=dispatch, daemon=True)
+        dispatch_worker.start()
+        assert reserve_entered.wait(3)
+
+        client.block_account_read = True
+
+        def logout() -> None:
+            try:
+                app.state.auth_coordinator.logout()
+            except BaseException as exc:  # pragma: no cover - asserted below
+                logout_errors.append(exc)
+
+        logout_worker = threading.Thread(target=logout, daemon=True)
+        logout_worker.start()
+        assert client.account_read_entered.wait(3)
+
+        reserve_release.set()
+        dispatch_worker.join(3)
+        assert not dispatch_worker.is_alive()
+        client.account_read_release.set()
+        logout_worker.join(3)
+        assert not logout_worker.is_alive()
+
+        unchanged = app.state.storage.load_thread(thread.thread_id)
+        assert unchanged.mode is RunMode.EDIT
+        assert unchanged.status == "idle"
+        assert len(dispatch_errors) == 1
+        assert logout_errors == []
+        assert "thread/start" not in client.calls
+        assert "turn/start" not in client.calls
+
+
+def test_automation_prompt_admission_blocks_logout_before_target_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _SharedClient()
+    app = _ha_app(tmp_path, client)
+    prepare_entered = threading.Event()
+    prepare_release = threading.Event()
+    dispatch_errors: list[BaseException] = []
+
+    with TestClient(app):
+        thread = _seed_blocked_thread(app, name="Prompt admission wins")
+        automation = app.state.automations.create(
+            {
+                "name": "Prompt admission wins",
+                "prompt": "Keep the admitted account for this automation turn.",
+                "target": {
+                    "kind": "continue_thread",
+                    "thread_id": thread.thread_id,
+                },
+                "mode": "observe",
+                "schedule": {
+                    "kind": "rrule",
+                    "rule": "RRULE:FREQ=DAILY",
+                    "start_at": "2026-07-18T01:00:00Z",
+                    "timezone": "UTC",
+                },
+            }
+        )
+        claim = app.state.automations.run_now(automation["automation_id"])
+        original_prepare = app.state.storage.prepare_automation_target
+
+        @contextmanager
+        def paused_prepare(*args, **kwargs):
+            prepare_entered.set()
+            if not prepare_release.wait(10):
+                raise AssertionError("target preparation was not released")
+            with original_prepare(*args, **kwargs) as prepared:
+                yield prepared
+
+        monkeypatch.setattr(
+            app.state.storage,
+            "prepare_automation_target",
+            paused_prepare,
+        )
+
+        def dispatch() -> None:
+            try:
+                app.state.automation_dispatch(claim)
+            except BaseException as exc:  # pragma: no cover - asserted below
+                dispatch_errors.append(exc)
+
+        worker = threading.Thread(target=dispatch, daemon=True)
+        worker.start()
+        assert prepare_entered.wait(3)
+        assert app.state.runtime_gate.snapshot().active_turns == 1
+
+        with pytest.raises(AuthOperationConflictError):
+            app.state.auth_coordinator.logout()
+
+        assert "account/logout" not in client.calls
+        prepare_release.set()
+        worker.join(3)
+        assert not worker.is_alive()
+        assert dispatch_errors == []
+        _wait_until(lambda: "turn/start" in client.calls)
+        changed = app.state.storage.load_thread(thread.thread_id)
+        assert changed.mode is RunMode.OBSERVE
 
 
 def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(

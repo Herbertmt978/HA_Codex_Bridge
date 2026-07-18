@@ -63,9 +63,6 @@ def decide_interaction(
     result = request.app.state.runner.decide_approval(
         interaction_id,
         thread_id=payload.thread_id,
-        run_id=payload.run_id,
-        turn_id=payload.turn_id,
-        item_id=payload.item_id,
         decision=payload.decision,
         client_request_id=payload.client_request_id,
     )
@@ -93,9 +90,6 @@ def answer_interaction(
     result = request.app.state.runner.answer_user_input(
         interaction_id,
         thread_id=payload.thread_id,
-        run_id=payload.run_id,
-        turn_id=payload.turn_id,
-        item_id=payload.item_id,
         answers=[answer.model_dump() for answer in payload.answers],
         client_request_id=payload.client_request_id,
     )
