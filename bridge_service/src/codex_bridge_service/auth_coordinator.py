@@ -193,77 +193,99 @@ class CodexAuthCoordinator:
         """Return a detached public snapshot; legacy error text is never projected."""
 
         del last_error
-        login_poll: tuple[str, int, int] | None = None
-        blocked: CodexAuthStatusRecord | None = None
-        with self._lock:
-            if self._closed:
-                return self._copy_status_locked()
-            if not self._started:
-                if self._operation is not None:
+        while True:
+            login_poll: tuple[str, int, int] | None = None
+            blocked: CodexAuthStatusRecord | None = None
+            stale_login_lease: RuntimeLease | None = None
+            restart_after_stale_login = False
+            with self._lock:
+                if self._closed:
                     return self._copy_status_locked()
-                retry_start = True
-                operation = None
-                checking = None
-            else:
-                retry_start = False
-                generation = self._client.generation
-                poll_due = (
-                    self._operation is None
-                    and not self._active_login_polling
-                    and self._active_login_id is not None
-                    and self._active_login_generation == generation
-                    and (
-                        self._active_login_last_polled_at is None
-                        or monotonic() - self._active_login_last_polled_at
-                        >= self._active_login_poll_interval_seconds
-                    )
-                )
-                needs_reconcile = self._operation is None and (
-                    self._status.state == "unavailable"
-                    or self._observed_generation != generation
-                    or (
-                        self._active_login_generation is not None
-                        and self._active_login_generation != generation
-                    )
-                )
-                if not needs_reconcile and not poll_due:
-                    return self._copy_status_locked()
-                if poll_due:
-                    assert self._active_login_id is not None
-                    self._active_login_polling = True
-                    self._active_login_last_polled_at = monotonic()
-                    login_poll = (
-                        self._active_login_id,
-                        generation,
-                        self._account_update_revision,
-                    )
+                if not self._started:
+                    if self._operation is not None:
+                        return self._copy_status_locked()
+                    retry_start = True
                     operation = None
                     checking = None
                 else:
-                    try:
-                        self._acquire_runtime_auth_locked()
-                    except AuthOperationConflictError:
+                    retry_start = False
+                    generation = self._client.generation
+                    poll_due = (
+                        self._operation is None
+                        and not self._active_login_polling
+                        and self._active_login_id is not None
+                        and self._active_login_generation == generation
+                        and (
+                            self._active_login_last_polled_at is None
+                            or monotonic() - self._active_login_last_polled_at
+                            >= self._active_login_poll_interval_seconds
+                        )
+                    )
+                    stale_login_generation = (
+                        self._active_login_generation is not None
+                        and self._active_login_generation != generation
+                    )
+                    needs_reconcile = self._operation is None and (
+                        self._status.state == "unavailable"
+                        or self._observed_generation != generation
+                        or stale_login_generation
+                    )
+                    if not needs_reconcile and not poll_due:
+                        return self._copy_status_locked()
+                    if poll_due:
+                        assert self._active_login_id is not None
+                        self._active_login_polling = True
+                        self._active_login_last_polled_at = monotonic()
+                        login_poll = (
+                            self._active_login_id,
+                            generation,
+                            self._account_update_revision,
+                        )
                         operation = None
                         checking = None
-                        blocked = self._set_status_locked(
-                            state="unavailable",
-                            busy=False,
-                            auth_required=True,
-                            auth_mode=None,
-                            plan_type=None,
-                            message=MESSAGE_UNAVAILABLE,
-                            **cleared_device_fields(),
-                        )
-                    else:
-                        operation = self._begin_operation_locked("status_reconcile")
+                    elif stale_login_generation:
+                        # The old App-server generation can no longer complete
+                        # this device code. Clear its correlation before
+                        # releasing the lease so every late callback is inert,
+                        # then restart admission and acquire a fresh lease.
+                        self._cancel_requested = False
                         self._clear_active_login_locked()
-                        checking = self._set_status_locked(
-                            state="checking",
-                            busy=True,
-                            auth_required=True,
-                            message=MESSAGE_CHECKING,
-                            **cleared_device_fields(),
-                        )
+                        stale_login_lease = self._take_runtime_auth_lease_locked()
+                        restart_after_stale_login = True
+                        operation = None
+                        checking = None
+                    else:
+                        try:
+                            self._acquire_runtime_auth_locked()
+                        except AuthOperationConflictError:
+                            operation = None
+                            checking = None
+                            blocked = self._set_status_locked(
+                                state="unavailable",
+                                busy=False,
+                                auth_required=True,
+                                auth_mode=None,
+                                plan_type=None,
+                                message=MESSAGE_UNAVAILABLE,
+                                **cleared_device_fields(),
+                            )
+                        else:
+                            operation = self._begin_operation_locked(
+                                "status_reconcile"
+                            )
+                            self._clear_active_login_locked()
+                            checking = self._set_status_locked(
+                                state="checking",
+                                busy=True,
+                                auth_required=True,
+                                message=MESSAGE_CHECKING,
+                                **cleared_device_fields(),
+                            )
+            if restart_after_stale_login:
+                if stale_login_lease is not None:
+                    stale_login_lease.release()
+                continue
+            break
         if blocked is not None:
             self._notify(blocked)
             return blocked

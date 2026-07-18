@@ -942,9 +942,11 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     client = FakeAppServerClient(generation=1)
     client.script("account/read", _signed_out_account(), _chatgpt_account())
     client.script("account/login/start", _device_login("stale-login"))
-    coordinator = _coordinator(client)
+    gate = RuntimeGate(limits=ResourceLimits())
+    coordinator = _coordinator(client, runtime_gate=gate)
     coordinator.start()
     active = coordinator.start_device_login()
+    assert gate.snapshot().auth_mutation_active is True
     client.generation = 2
 
     recovered = coordinator.status()
@@ -954,6 +956,17 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     assert recovered.revision > active.revision
     assert recovered.verification_uri is None
     assert recovered.user_code is None
+    assert gate.snapshot().auth_mutation_active is False
+    client.emit(
+        "account/login/completed",
+        {"loginId": "stale-login", "success": True, "error": None},
+        generation=1,
+    )
+    unchanged = coordinator.status()
+    assert unchanged.revision == recovered.revision
+    assert unchanged.state == "ok"
+    prompt = gate.reserve_prompt(client_request_id="post-restart-login")
+    prompt.release()
     assert client.calls[-1] == AppServerCall(
         "account/read", {"refreshToken": False}, 5.0
     )

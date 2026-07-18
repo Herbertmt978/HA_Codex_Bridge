@@ -23,6 +23,9 @@ All notable App changes are recorded here.
 - Fails closed if an App-server generation change needs account reconciliation
   while a turn owns the runtime gate, preventing the previous generation's
   ready status from admitting work before account ownership is reverified.
+- Discards an active device login when its App-server generation restarts,
+  releases the obsolete auth lease outside the coordinator lock, and performs
+  a fresh authoritative account read instead of leaving all turns blocked.
 - Invalidates an account read or device-login poll if a newer account-update
   hint arrives before it finishes, so a stale account can never be published
   ready or rebound after the user switches accounts.
