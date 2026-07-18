@@ -2833,6 +2833,46 @@ def test_new_prompt_is_rejected_before_provider_or_local_acceptance_when_admissi
         broker.close()
 
 
+def test_reconciling_provider_admission_runs_without_broker_lock(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal admission_checks
+        admission_checks += 1
+        if admission_checks > 1:
+            return True
+
+        def probe_broker_lock() -> bool:
+            acquired = broker._lock.acquire(timeout=0.5)
+            if acquired:
+                broker._lock.release()
+            return acquired
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(probe_broker_lock).result(timeout=1)
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Reconcile auth without inverting the deletion lock order",
+            client_request_id="admission-outside-broker-lock",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert admission_checks == 3
+    finally:
+        broker.close()
+
+
 def test_admission_rebind_is_reloaded_before_provider_thread_selection(
     tmp_path: Path,
 ) -> None:

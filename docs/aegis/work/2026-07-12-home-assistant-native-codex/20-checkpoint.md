@@ -13,11 +13,11 @@
 - **Completed:** Producer, storage-owner, runtime-consumer, lifecycle, privacy,
   queued-state, archived-chat, scheduled `continue_thread`, authoritative
   account-update, in-flight read/login invalidation, identity-less fail-closed,
-  promoted-queue admission, atomic prompt-lease continuity capture, and
-  recovered-checkpoint coverage.
-  The fresh complete Bridge matrix passed with `1470 passed, 217 skipped` in
-  243.36 seconds; the focused account/runtime matrix passed `353 passed,
-  6 skipped` in 85.43 seconds. Frontend lint, `320` unit tests, the production
+  promoted-queue admission, atomic prompt-lease continuity capture,
+  deletion-safe auth lock ordering, and recovered-checkpoint coverage.
+  The fresh complete Bridge matrix passed with `1471 passed, 217 skipped` in
+  239.97 seconds; the focused account/runtime matrix passed `354 passed,
+  6 skipped` in 84.83 seconds. Frontend lint, `320` unit tests, the production
   build, and `22` browser tests also passed.
 - **Evidence refs:** `90-evidence.md` records signed `0.8.10` publication and
   bounded `0.8.11` local evidence. The implementation plan is
@@ -75,6 +75,10 @@
   its final auth check and storage reload. An account rebind that wins first is
   observed by the prompt; one that loses cannot detach provider continuity
   until the prompt lease is released.
+- **Lock ordering:** potentially reconciling auth admission runs without the
+  broker lock. The broker then repeats started, deletion, and idempotency checks
+  before mutation; its final check is safe because the prompt lease already
+  excludes every account-binding path.
 - **Runtime ordering:** crash recovery settles before authoritative account
   binding. A changed account therefore removes any provider ID restored from a
   nonterminal checkpoint before Home Assistant begins serving requests.

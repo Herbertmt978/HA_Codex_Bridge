@@ -592,14 +592,37 @@ class RuntimeBroker:
                     else _outcome_record(existing_outcome)
                 )
 
-            if not self._provider_admission_allowed():
-                raise RuntimeAuthenticationRequiredError()
-            # The admission check can authoritatively detach provider-owned
-            # continuity during an account rebind. Refresh every field that is
-            # captured into the new run so the previous account's thread ID
-            # cannot survive that check.
-            thread = self.storage.get_thread(thread_id)
-            self.storage.resolve_workspace_path(thread.workspace_path)
+        # Auth reconciliation can bind account ownership through storage locks
+        # that broker-owned deletion acquires before ``self._lock``. Never run
+        # that potentially mutating reconciliation while holding the broker
+        # lock; repeat every admission-sensitive broker check after it returns.
+        if not self._provider_admission_allowed():
+            raise RuntimeAuthenticationRequiredError()
+        thread = self.storage.get_thread(thread_id)
+        self.storage.resolve_workspace_path(thread.workspace_path)
+
+        with self._lock:
+            self._require_started_locked()
+            # A delete or concurrent idempotent submission can complete while
+            # the authoritative auth read runs without the broker lock.
+            self.storage.load_thread(thread_id)
+            existing_outcome = self._state.request_idempotency.get(request_id)
+            if existing_outcome is not None:
+                existing = self._state.runs.get(existing_outcome.run_id)
+                if (
+                    existing_outcome.thread_id != thread_id
+                    or existing_outcome.fingerprint != _fingerprint(prompt)
+                    or existing_outcome.unattended != unattended
+                    or existing_outcome.web_search != web_search
+                ):
+                    raise RuntimeRequestConflictError()
+                if existing_outcome.status == "uncertain":
+                    raise RuntimeSteerOutcomeUnknownError()
+                return (
+                    _run_record(existing)
+                    if existing is not None
+                    else _outcome_record(existing_outcome)
+                )
 
             self._ensure_request_capacity_locked()
 

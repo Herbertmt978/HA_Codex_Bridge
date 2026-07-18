@@ -37,6 +37,9 @@ All notable App changes are recorded here.
   continuity selection and preventing a detached previous-account thread from
   being resumed by a newly accepted turn. Any admission or local run-state
   validation failure releases that reservation without accepting the prompt.
+- Runs authoritative account reconciliation outside the runtime broker lock,
+  then repeats deletion and idempotency validation before acceptance, avoiding
+  the storage-to-broker lock inversion with concurrent chat/project deletion.
 - Settles recovered runtime checkpoints before account binding, preventing an
   interrupted run from restoring a previous account's provider thread during
   startup.
