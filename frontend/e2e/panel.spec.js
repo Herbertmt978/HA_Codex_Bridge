@@ -753,11 +753,11 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(decisions[0].payload).toMatchObject({
     interaction_id: "int_command_harness",
     thread_id: "thr_vba_1",
-    run_id: "run_harness",
-    turn_id: "turn_harness",
-    item_id: "item_command_harness",
     decision: "accept",
   });
+  expect(decisions[0].payload).not.toHaveProperty("run_id");
+  expect(decisions[0].payload).not.toHaveProperty("turn_id");
+  expect(decisions[0].payload).not.toHaveProperty("item_id");
   expect(decisions[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 
   await question.getByLabel("Source and tests").check();
@@ -768,11 +768,11 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(answers[0].payload).toMatchObject({
     interaction_id: "int_question_harness",
     thread_id: "thr_vba_1",
-    run_id: "run_harness",
-    turn_id: "turn_harness",
-    item_id: "item_question_harness",
     answers: [{ question_id: "scope", values: ["Source and tests"] }],
   });
+  expect(answers[0].payload).not.toHaveProperty("run_id");
+  expect(answers[0].payload).not.toHaveProperty("turn_id");
+  expect(answers[0].payload).not.toHaveProperty("item_id");
   expect(answers[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 });
 

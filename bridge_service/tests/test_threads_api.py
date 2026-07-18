@@ -19,6 +19,7 @@ from codex_bridge_service.models import (
     CodexAuthStatusRecord,
     CodexModelCatalogRecord,
     CodexModelRecord,
+    PendingPromptRecord,
     RunMode,
     RunRecord,
     RuntimeProfile,
@@ -75,6 +76,56 @@ class BusyDeleteRunner(FakeRunner):
 
     def delete_project(self, _project_id: str) -> None:
         raise RuntimeThreadBusyError()
+
+
+def test_thread_list_and_detail_hide_private_runtime_continuity(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    thread = app.state.storage.create_thread(
+        title="Account-neutral history",
+        mode=RunMode.FULL_AUTO,
+    )
+    private = app.state.storage.load_thread(thread.thread_id)
+    private.codex_session_id = "legacy-provider-session"
+    private.codex_thread_id = "provider-thread-account-a"
+    private.active_turn_id = "provider-turn-account-a"
+    private.active_run_id = "run_private"
+    private.pending_prompts = [
+        PendingPromptRecord(
+            run_id="run_private",
+            prompt="Do not expose this queued provider input",
+            created_at="2026-07-18T12:00:00Z",
+        )
+    ]
+    app.state.storage.save_thread(private)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    listed = client.get("/threads", headers=headers)
+    detail = client.get(f"/threads/{thread.thread_id}", headers=headers)
+
+    assert listed.status_code == 200
+    assert detail.status_code == 200
+    for payload in (listed.json()[0], detail.json()):
+        assert payload["thread_id"] == thread.thread_id
+        assert payload["title"] == "Account-neutral history"
+        assert payload["status"] == "idle"
+        for private_field in {
+            "codex_session_id",
+            "codex_thread_id",
+            "active_turn_id",
+            "active_run_id",
+            "pending_prompts",
+        }:
+            assert private_field not in payload
+
+    preserved = app.state.storage.load_thread(thread.thread_id)
+    assert preserved.codex_thread_id == "provider-thread-account-a"
+    assert preserved.active_turn_id == "provider-turn-account-a"
+    assert preserved.active_run_id == "run_private"
 
 
 @pytest.mark.parametrize(

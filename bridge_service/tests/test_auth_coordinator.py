@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from codex_bridge_service.account import account_owner_marker
 from codex_bridge_service.auth_coordinator import (
     AuthCoordinatorClosedError,
     AuthOperationConflictError,
@@ -17,6 +18,8 @@ from codex_bridge_service.auth_coordinator import (
 )
 from codex_bridge_service.codex_app_server import AppServerNotification
 from codex_bridge_service.models import CodexAuthStatusRecord
+from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.runtime_gate import RuntimeGate
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +339,302 @@ def test_matching_generation_and_login_id_complete_login_with_final_read() -> No
     _assert_monotonic(states)
 
 
+def test_login_completion_binds_private_owner_while_auth_is_exclusive() -> None:
+    secret = "stable-bridge-secret"
+    account = _chatgpt_account(
+        email="new-account@example.test",
+        plan_type="pro",
+    )
+    client = FakeAppServerClient(generation=7)
+    client.script("account/read", _signed_out_account(), account)
+    client.script("account/login/start", _device_login("login-correct"))
+    gate = RuntimeGate(limits=ResourceLimits())
+    publications: list[str] = []
+
+    def bind_owner(marker: str) -> None:
+        assert gate.snapshot().auth_mutation_active is True
+        publications.append(f"binding:{marker}")
+
+    def publish_status(status: CodexAuthStatusRecord) -> None:
+        publications.append(f"status:{status.state}")
+
+    coordinator = CodexAuthCoordinator(
+        client,
+        state_listener=publish_status,
+        runtime_gate=gate,
+        account_owner_secret=secret,
+        account_binding_listener=bind_owner,
+    )
+    coordinator.start()
+    coordinator.start_device_login()
+
+    client.emit(
+        "account/login/completed",
+        {"loginId": "login-correct", "success": True, "error": None},
+        generation=7,
+    )
+
+    marker = account_owner_marker(account, secret)
+    assert marker is not None
+    assert publications[-2:] == [f"binding:{marker}", "status:ok"]
+    assert gate.snapshot().auth_mutation_active is False
+
+
+def test_plan_only_account_update_does_not_rebind_private_owner() -> None:
+    secret = "stable-bridge-secret"
+    account = _chatgpt_account(email="same-account@example.test")
+    client = FakeAppServerClient()
+    refreshed = _chatgpt_account(
+        email="same-account@example.test",
+        plan_type="pro",
+    )
+    client.script("account/read", account, refreshed)
+    bindings: list[str] = []
+    coordinator = _coordinator(
+        client,
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+
+    coordinator.start()
+    client.emit("account/updated", {"planType": "pro"})
+
+    assert bindings == [
+        account_owner_marker(account, secret),
+        account_owner_marker(refreshed, secret),
+    ]
+    assert coordinator.status().plan_type == "pro"
+
+
+def test_account_update_rereads_authoritative_owner_before_rebinding() -> None:
+    secret = "stable-bridge-secret"
+    first = _chatgpt_account(email="first-account@example.test")
+    second = _chatgpt_account(
+        email="second-account@example.test",
+        plan_type="pro",
+    )
+    client = FakeAppServerClient()
+    client.script("account/read", first, second)
+    bindings: list[str] = []
+    coordinator = _coordinator(
+        client,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+
+    coordinator.start()
+    client.emit(
+        "account/updated",
+        {"authMode": "chatgpt", "planType": "free"},
+    )
+
+    assert bindings == [
+        account_owner_marker(first, secret),
+        account_owner_marker(second, secret),
+    ]
+    assert coordinator.status().state == "ok"
+    assert coordinator.status().plan_type == "pro"
+    assert [call.method for call in client.calls].count("account/read") == 2
+
+
+def test_account_update_blocks_readiness_while_authoritative_read_is_in_flight() -> None:
+    entered = Event()
+    release = Event()
+    client = FakeAppServerClient()
+    client.script(
+        "account/read",
+        _chatgpt_account(),
+        BlockedReply(
+            _chatgpt_account(plan_type="pro"),
+            entered,
+            release,
+        ),
+    )
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(
+        client,
+        states,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+    )
+    coordinator.start()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        updating = executor.submit(
+            client.emit,
+            "account/updated",
+            {"planType": "pro"},
+        )
+        assert entered.wait(10)
+        checking = coordinator.status()
+
+        assert checking.state == "checking"
+        assert checking.busy is True
+        assert checking.auth_required is True
+        assert states[-1] == checking
+
+        release.set()
+        updating.result(timeout=12)
+
+    ready = coordinator.status()
+    assert ready.state == "ok"
+    assert ready.auth_required is False
+    assert ready.plan_type == "pro"
+
+
+def test_account_update_invalidates_an_in_flight_authoritative_read() -> None:
+    secret = "stable-bridge-secret"
+    entered = Event()
+    release = Event()
+    first = _chatgpt_account(email="first-account@example.test")
+    second = _chatgpt_account(
+        email="second-account@example.test",
+        plan_type="pro",
+    )
+    client = FakeAppServerClient()
+    client.script(
+        "account/read",
+        BlockedReply(first, entered, release),
+        second,
+    )
+    bindings: list[str] = []
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(
+        client,
+        states,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        starting = executor.submit(coordinator.start)
+        assert entered.wait(10)
+        client.emit("account/updated", {"planType": "pro"})
+        release.set()
+        invalidated = starting.result(timeout=12)
+
+    assert invalidated.state == "unavailable"
+    assert invalidated.auth_required is True
+    assert bindings == []
+    assert all(state.state != "ok" for state in states)
+
+    recovered = coordinator.status()
+
+    assert recovered.state == "ok"
+    assert recovered.auth_required is False
+    assert recovered.plan_type == "pro"
+    assert bindings == [account_owner_marker(second, secret)]
+    assert [call.method for call in client.calls].count("account/read") == 2
+
+
+def test_identityless_chatgpt_account_detaches_and_stays_auth_required() -> None:
+    secret = "stable-bridge-secret"
+    first = _chatgpt_account(email="first-account@example.test")
+    identityless = {
+        "account": {"type": "chatgpt", "planType": "pro"},
+        "requiresOpenaiAuth": True,
+    }
+    client = FakeAppServerClient()
+    client.script("account/read", first, identityless)
+    bindings: list[str] = []
+    coordinator = _coordinator(
+        client,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+
+    coordinator.start()
+    client.emit("account/updated", {"planType": "pro"})
+
+    assert len(bindings) == 2
+    assert bindings[0] == account_owner_marker(first, secret)
+    assert bindings[1] != bindings[0]
+    assert len(bindings[1]) == 64
+    status = coordinator.status()
+    assert status.state == "unavailable"
+    assert status.auth_required is True
+    assert status.auth_mode is None
+
+
+def test_account_update_during_active_turn_blocks_until_owner_is_reconciled() -> None:
+    secret = "stable-bridge-secret"
+    first = _chatgpt_account(email="first-account@example.test")
+    second = _chatgpt_account(email="second-account@example.test")
+    client = FakeAppServerClient()
+    client.script("account/read", first, second)
+    gate = RuntimeGate(limits=ResourceLimits())
+    bindings: list[str] = []
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(
+        client,
+        states,
+        runtime_gate=gate,
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+    coordinator.start()
+    active = gate.reserve_prompt(client_request_id="active-turn")
+
+    client.emit("account/updated", {"planType": "pro"})
+    emitted_blocked = states[-1]
+    emitted_count = len(states)
+
+    blocked = coordinator.status()
+    blocked_again = coordinator.status()
+    assert blocked.state == "unavailable"
+    assert blocked.auth_required is True
+    assert blocked.revision == emitted_blocked.revision
+    assert blocked_again.revision == emitted_blocked.revision
+    assert len(states) == emitted_count
+    assert [call.method for call in client.calls].count("account/read") == 1
+
+    active.release()
+    recovered = coordinator.status()
+
+    assert recovered.state == "ok"
+    assert recovered.auth_required is False
+    assert bindings == [
+        account_owner_marker(first, secret),
+        account_owner_marker(second, secret),
+    ]
+
+
+def test_generation_change_fails_closed_while_runtime_gate_is_owned() -> None:
+    first = _chatgpt_account(email="first-account@example.test")
+    second = _chatgpt_account(email="second-account@example.test")
+    client = FakeAppServerClient(generation=1)
+    client.script("account/read", first, second)
+    gate = RuntimeGate(limits=ResourceLimits())
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(client, states, runtime_gate=gate)
+    coordinator.start()
+    active = gate.reserve_prompt(client_request_id="generation-active")
+
+    client.generation = 2
+    blocked = coordinator.status()
+    blocked_count = len(states)
+    blocked_again = coordinator.status()
+
+    assert blocked.state == "unavailable"
+    assert blocked.busy is False
+    assert blocked.auth_required is True
+    assert blocked.auth_mode is None
+    assert blocked.plan_type is None
+    assert states[-1] == blocked
+    assert blocked_again.revision == blocked.revision
+    assert len(states) == blocked_count
+    assert [call.method for call in client.calls].count("account/read") == 1
+
+    active.release()
+    recovered = coordinator.status()
+
+    assert recovered.state == "ok"
+    assert recovered.auth_required is False
+    assert [call.method for call in client.calls].count("account/read") == 2
+
+
 @pytest.mark.parametrize("login_id", [None, "missing"], ids=["null", "missing"])
 def test_uncorrelated_completion_cannot_replace_the_active_login(
     login_id: str | None,
@@ -386,6 +685,58 @@ def test_status_poll_recovers_active_login_when_completion_notification_is_misse
     assert recovered.auth_mode == "chatgpt"
     assert recovered.plan_type == "pro"
     assert recovered.user_code is None
+
+
+def test_account_update_invalidates_an_in_flight_active_login_poll() -> None:
+    secret = "stable-bridge-secret"
+    entered = Event()
+    release = Event()
+    stale = _chatgpt_account(email="first-account@example.test")
+    current = _chatgpt_account(
+        email="second-account@example.test",
+        plan_type="pro",
+    )
+    client = FakeAppServerClient(generation=7)
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        BlockedReply(stale, entered, release),
+        current,
+    )
+    client.script("account/login/start", _device_login("login-correct"))
+    bindings: list[str] = []
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(
+        client,
+        states,
+        active_login_poll_interval_seconds=0,
+        account_owner_secret=secret,
+        account_binding_listener=bindings.append,
+    )
+    coordinator.start()
+    coordinator.start_device_login()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        polling = executor.submit(coordinator.status)
+        assert entered.wait(10)
+        client.emit("account/updated", {"planType": "pro"})
+        release.set()
+        invalidated = polling.result(timeout=12)
+
+    stale_marker = account_owner_marker(stale, secret)
+    assert stale_marker is not None
+    assert invalidated.state == "unavailable"
+    assert invalidated.auth_required is True
+    assert stale_marker not in bindings
+    assert all(state.state != "ok" for state in states)
+
+    recovered = coordinator.status()
+
+    assert recovered.state == "ok"
+    assert recovered.auth_required is False
+    assert recovered.plan_type == "pro"
+    assert bindings[-1] == account_owner_marker(current, secret)
+    assert [call.method for call in client.calls].count("account/read") == 3
 
 
 def test_status_poll_keeps_device_code_until_account_is_authoritatively_signed_in() -> None:
@@ -603,9 +954,11 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     client = FakeAppServerClient(generation=1)
     client.script("account/read", _signed_out_account(), _chatgpt_account())
     client.script("account/login/start", _device_login("stale-login"))
-    coordinator = _coordinator(client)
+    gate = RuntimeGate(limits=ResourceLimits())
+    coordinator = _coordinator(client, runtime_gate=gate)
     coordinator.start()
     active = coordinator.start_device_login()
+    assert gate.snapshot().auth_mutation_active is True
     client.generation = 2
 
     recovered = coordinator.status()
@@ -615,6 +968,17 @@ def test_status_poll_recovers_an_active_login_after_app_server_restart() -> None
     assert recovered.revision > active.revision
     assert recovered.verification_uri is None
     assert recovered.user_code is None
+    assert gate.snapshot().auth_mutation_active is False
+    client.emit(
+        "account/login/completed",
+        {"loginId": "stale-login", "success": True, "error": None},
+        generation=1,
+    )
+    unchanged = coordinator.status()
+    assert unchanged.revision == recovered.revision
+    assert unchanged.state == "ok"
+    prompt = gate.reserve_prompt(client_request_id="post-restart-login")
+    prompt.release()
     assert client.calls[-1] == AppServerCall(
         "account/read", {"refreshToken": False}, 5.0
     )
@@ -686,26 +1050,26 @@ def test_concurrent_auth_mutations_conflict_while_login_start_is_in_flight() -> 
         starting.result(timeout=12)
 
 
-@pytest.mark.parametrize(
-    "auth_mode",
-    ["apikey", "personalAccessToken", "chatgptAuthTokens", "agentIdentity"],
-)
-def test_account_updates_block_unsupported_auth_modes(auth_mode: str) -> None:
+def test_account_update_cannot_override_authoritative_unsupported_auth_mode() -> None:
     client = FakeAppServerClient()
-    client.script("account/read", _signed_out_account())
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        {"account": {"type": "apiKey"}, "requiresOpenaiAuth": True},
+    )
     coordinator = _coordinator(client)
     coordinator.start()
 
     client.emit(
         "account/updated",
-        {"authMode": auth_mode, "planType": None},
+        {"authMode": "chatgpt", "planType": "pro"},
     )
 
     status = coordinator.status()
     assert status.state == "unsupported"
     assert status.busy is False
     assert status.auth_required is True
-    assert status.auth_mode == auth_mode
+    assert status.auth_mode == "apikey"
     assert status.message is not None
     assert "sign out" in status.message.lower()
     assert "chatgpt" in status.message.lower()
@@ -753,7 +1117,12 @@ def test_auth_state_changes_publish_without_chat_context_and_repeat_occurrences(
     None
 ):
     client = FakeAppServerClient()
-    client.script("account/read", _signed_out_account())
+    client.script(
+        "account/read",
+        _signed_out_account(),
+        _signed_out_account(),
+        _signed_out_account(),
+    )
     states: list[Any] = []
     coordinator = _coordinator(client, states)
     coordinator.start()
@@ -763,7 +1132,13 @@ def test_auth_state_changes_publish_without_chat_context_and_repeat_occurrences(
     first_revision = coordinator.status().revision
     client.emit("account/updated", update)
 
-    assert coordinator.status().revision == first_revision + 1
+    assert coordinator.status().revision == first_revision + 2
+    assert [state.state for state in states[-4:]] == [
+        "checking",
+        "logged_out",
+        "checking",
+        "logged_out",
+    ]
     assert all(not hasattr(state, "chat_id") for state in states)
     _assert_monotonic(states)
 
@@ -828,7 +1203,12 @@ def test_fatal_durable_listener_failure_propagates_to_the_owner() -> None:
 
 def test_sparse_account_updates_preserve_auth_and_merge_plan_fields() -> None:
     client = FakeAppServerClient()
-    client.script("account/read", _chatgpt_account(plan_type="plus"))
+    client.script(
+        "account/read",
+        _chatgpt_account(plan_type="plus"),
+        _chatgpt_account(plan_type="plus"),
+        _chatgpt_account(plan_type="pro"),
+    )
     coordinator = _coordinator(client)
     initial = coordinator.start()
 
@@ -837,11 +1217,11 @@ def test_sparse_account_updates_preserve_auth_and_merge_plan_fields() -> None:
     client.emit("account/updated", {"planType": "pro"})
     updated = coordinator.status()
 
-    assert unchanged.revision == initial.revision + 1
+    assert unchanged.revision == initial.revision + 2
     assert unchanged.state == "ok"
     assert unchanged.auth_mode == "chatgpt"
     assert unchanged.plan_type == "plus"
-    assert updated.revision == unchanged.revision + 1
+    assert updated.revision == unchanged.revision + 2
     assert updated.state == "ok"
     assert updated.auth_mode == "chatgpt"
     assert updated.plan_type == "pro"

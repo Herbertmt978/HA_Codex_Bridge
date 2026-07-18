@@ -29,13 +29,14 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.9`, Bridge
-  `0.7.4`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29604382155` and the paired Integration release were produced
-  from exact main commit `2538a6de2f44e25a3a74e331287ca45d72547249`.
+- Latest signed coordinated release: App/Integration/panel `0.8.10`, Bridge
+  `0.7.5`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
+  publication `29613120991` and the paired Integration release were produced
+  from exact main commit `9fdfe53671d4773f3e955abb2720b408d874cd29`.
   The immutable image digest is
-  `sha256:083eafe2a76be930843c436a4106f2e73e1337715b2e47f71e1af04862c1ef31`
-  with attestation `35885291`. The latest target installation is `0.8.9`; it
+  `sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`
+  with provenance attestation `35904448` and a verified SBOM attestation. The
+  latest recorded target installation remains `0.8.9`; it
   retained ChatGPT Pro/history, preview, and transcript-only scrolling. The
   last complete generated-image browser-download acceptance is `0.8.7`. The
   last bounded prompt-path smoke remains `0.8.3`; it retained ChatGPT Pro/history,
@@ -56,10 +57,21 @@ to the App or Bridge.
 - Two live 5,000-word prompts on `0.8.9` stopped after the same short prefix.
   Partial-output preservation passed, but long-response acceptance failed:
   rapid token deltas could overflow the App-server callback queue and restart
-  Codex. Candidate `0.8.10` with Bridge `0.7.5` coalesces adjacent text deltas
-  into bounded ordered callbacks and reports a genuine restart as
-  **Run interrupted**. Publication and target-HA acceptance remain separate
-  gates.
+  Codex. Signed `0.8.10` with Bridge `0.7.5` coalesces adjacent text deltas into
+  bounded ordered callbacks and reports a genuine restart as **Run
+  interrupted**. Target-HA long-response acceptance remains a separate gate.
+- Candidate `0.8.11` with Bridge `0.7.6` makes local chats account-neutral.
+  Projects, chat IDs, transcripts, files, workspace settings, archive state,
+  and automation targets remain static across ChatGPT account changes. A
+  private HMAC owner marker detaches only the stale provider-thread/runtime
+  projection, so the next prompt in the same chat starts through the currently
+  connected account. Pre-0.8.11 unowned handles detach once. No email, Bridge
+  secret, or marker is projected into browser APIs, events, diagnostics, or
+  logs. Account-update hints are authoritatively re-read; identity-less reads
+  detach provider continuity and auth-block UI/automation turns until verified.
+  A newer hint invalidates any account read already in flight, and queued
+  prompts recheck admission before making a provider request.
+  Signed publication and target-HA account-switch acceptance remain open.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF

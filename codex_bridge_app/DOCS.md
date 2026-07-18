@@ -195,19 +195,19 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Signed App/Integration/panel `0.8.9` with Bridge `0.7.4` and Codex `0.144.5`
-is installed on the target Home Assistant. ChatGPT Pro, projects, and history
-were retained; generated-image preview and transcript-only scrolling passed.
-During the preceding `0.8.7` acceptance, the browser persisted a complete
-3,276,457-byte PNG with the expected signature and SHA-256
-`F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
-Chrome's automation event did not report the blob download, so the persisted
-file is the acceptance evidence. Two live 5,000-word prompts on `0.8.9`
-preserved a short partial response but exposed callback backpressure that
-restarted Codex. Candidate `0.8.10` with Bridge `0.7.5` coalesces rapid text
-deltas into bounded ordered callbacks and reports a genuine restart as
-**Run interrupted**. Candidate publication and target-HA acceptance remain
-separate gates.
+Signed App/Integration/panel `0.8.10` with Bridge `0.7.5` and Codex `0.144.5`
+is published. It coalesces rapid text deltas into bounded ordered callbacks and
+reports a genuine restart as **Run interrupted**. Candidate `0.8.11` with
+Bridge `0.7.6` keeps Home Assistant chats, projects, transcripts, files,
+workspace settings, archive state, and automation targets local and static
+across an observed ChatGPT account change. It detaches only stale private
+provider-thread continuity, so the next message starts a fresh provider
+conversation through the newly connected account. Identity-less account reads
+detach private provider continuity and leave prompts and automations blocked
+until an authoritative account read can verify ownership. A newer account hint
+invalidates an account check already in flight, and a prompt queued before the
+switch is stopped locally before any provider start or resume request.
+Candidate publication and target-HA acceptance remain separate gates.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,

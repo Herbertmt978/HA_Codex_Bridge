@@ -42,13 +42,18 @@ workspace paths, or workspace secrets.
   answer without web-search activity as a live result.
 
 The target-HA-accepted coordinated baseline is App/Integration `0.7.5` with
-Bridge `0.6.3` and Codex `0.144.5`. The latest signed and installed release is
-App/Integration/panel `0.8.9` with Bridge `0.7.4` and Codex `0.144.5`.
-Its partial-output recovery worked, but two live 5,000-word prompts exposed a
-callback-backpressure restart after the same short prefix. Candidate `0.8.10`
-with Bridge `0.7.5` coalesces rapid text deltas before durable publication and
-reports a typed runtime interruption if Codex genuinely restarts. Signed
-publication and bounded target-HA acceptance remain pending. The historical
+Bridge `0.6.3` and Codex `0.144.5`. The latest signed release is
+App/Integration/panel `0.8.10` with Bridge `0.7.5` and Codex `0.144.5`; it
+coalesces rapid text deltas and reports a typed runtime interruption if Codex
+genuinely restarts. Candidate `0.8.11` with Bridge `0.7.6` keeps Home
+Assistant chats, projects, transcripts, files, workspace settings, archive
+state, and automation targets local and static across an observed ChatGPT
+account change. It detaches only stale private provider-thread continuity; an
+identity-less account read detaches that private continuity and blocks prompts
+and automations until ownership is verified. In-flight account reads are
+invalidated by newer account hints, and queued prompts recheck ownership before
+making a provider request. Signed publication and bounded
+target-HA acceptance for `0.8.11` remain pending. The historical
 0.8.0 live exercise passed install/pairing, ChatGPT Pro/history, versions,
 GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage
 history, and subagent stage history, but PDF indexing/archive returned

@@ -12,6 +12,7 @@ from codex_bridge_service.models import (
     DEFAULT_MODEL,
     DEFAULT_THINKING_LEVEL,
     LimitsStatusRecord,
+    PendingPromptRecord,
     ProjectKind,
     RunMode,
 )
@@ -114,6 +115,186 @@ def test_create_thread_persists_project_metadata_and_defaults(tmp_path) -> None:
     assert payload["thinking_override"] is None
     assert events[0].event_type == "thread.created"
     assert events[0].payload["project_id"] == project.project_id
+
+
+def test_codex_account_binding_migration_detaches_only_runtime_projection(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    project = storage.create_project(
+        name="Static chat project",
+        root_path=str(tmp_path / "projects" / "static-chat"),
+        default_model="gpt-5.6-sol",
+        default_thinking_level="high",
+    )
+    thread = storage.create_thread(
+        title="Static chat",
+        mode=RunMode.EDIT,
+        project_id=project.project_id,
+        model_override="gpt-5.6-luna",
+        thinking_override="low",
+    )
+    attachment = storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="context.txt",
+        mime_type="text/plain",
+        content=b"local attachment",
+    )
+    artifact_path = Path(thread.workspace_path) / "result.md"
+    artifact_path.write_text("# Local artifact\n", encoding="utf-8")
+    artifacts = storage.sync_thread_artifacts(thread.thread_id)
+    storage.append_thread_event(
+        thread_id=thread.thread_id,
+        event_type="message.completed",
+        payload={"role": "assistant", "text": "Local transcript remains."},
+    )
+    storage.archive_thread(thread.thread_id)
+
+    record = storage.load_thread(thread.thread_id)
+    record.codex_session_id = "legacy-session-account-a"
+    record.codex_thread_id = "provider-thread-account-a"
+    record.active_turn_id = "provider-turn-stale"
+    record.active_run_id = "run-stale"
+    record.status = "error"
+    record.last_error = "Codex could not complete the turn."
+    record.pending_prompts = [
+        PendingPromptRecord(
+            run_id="run-pending",
+            prompt="queued before re-auth",
+            created_at="2026-07-17T10:00:00Z",
+        )
+    ]
+    storage.save_thread(record)
+    before = storage.load_thread(thread.thread_id)
+    project_before = storage.load_project(project.project_id)
+    events_before = storage.list_thread_events(thread.thread_id)
+
+    detached = storage.bind_codex_account("a" * 64)
+
+    after = storage.load_thread(thread.thread_id)
+    events_after = storage.list_thread_events(thread.thread_id)
+    assert detached == 1
+    assert after.thread_id == before.thread_id
+    assert after.title == before.title
+    assert after.project_id == before.project_id
+    assert after.workspace_id == before.workspace_id
+    assert after.workspace_path == before.workspace_path
+    assert after.mode == before.mode
+    assert after.model_override == before.model_override
+    assert after.thinking_override == before.thinking_override
+    assert after.created_at == before.created_at
+    assert after.updated_at == before.updated_at
+    assert after.archived_at == before.archived_at
+    assert after.codex_session_id is None
+    assert after.attachments == [attachment]
+    assert after.artifacts == artifacts
+    assert storage.load_project(project.project_id) == project_before
+    assert events_after[:-1] == events_before
+    assert events_after[-1].event_type == "runtime.account_binding_detached"
+    assert events_after[-1].payload == {
+        "reason": "Chat will use the current ChatGPT account."
+    }
+    assert "a" * 64 not in json.dumps(events_after[-1].payload)
+    assert after.codex_thread_id is None
+    assert after.active_turn_id is None
+    assert after.active_run_id is None
+    assert after.pending_prompts == []
+    assert after.status == "idle"
+    assert after.last_error is None
+
+
+def test_codex_account_binding_preserves_same_owner_and_detaches_changed_owner(
+    tmp_path,
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Account-neutral", mode=RunMode.FULL_AUTO)
+
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-account-a"
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account("a" * 64) == 0
+    assert (
+        storage.load_thread(thread.thread_id).codex_thread_id
+        == "provider-thread-account-a"
+    )
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    assert storage.load_thread(thread.thread_id).codex_thread_id is None
+
+
+def test_codex_account_binding_detaches_legacy_exec_session_only(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Legacy continuity", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+
+    record = storage.load_thread(thread.thread_id)
+    record.codex_session_id = "legacy-session-account-a"
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    rebound = storage.load_thread(thread.thread_id)
+    assert rebound.codex_session_id is None
+    assert rebound.codex_thread_id is None
+    assert rebound.status == "idle"
+
+
+def test_codex_account_binding_does_not_revalidate_unchanged_local_state(
+    tmp_path, monkeypatch
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Historical chat", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-account-a"
+    storage.save_thread(record)
+
+    def reject_unrelated_local_validation(_record) -> None:
+        raise AssertionError("account rebinding revalidated unchanged local state")
+
+    monkeypatch.setattr(
+        storage,
+        "_prepare_thread_for_save_locked",
+        reject_unrelated_local_validation,
+    )
+
+    assert storage.bind_codex_account("b" * 64) == 1
+    payload = json.loads(
+        (tmp_path / "threads" / f"{thread.thread_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["codex_thread_id"] is None
+    assert payload["status"] == "idle"
+
+
+def test_codex_account_binding_clears_pre_provider_runtime_projection(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Queued locally", mode=RunMode.FULL_AUTO)
+    assert storage.bind_codex_account("a" * 64) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.active_run_id = "run-before-provider-thread"
+    record.status = "queued"
+    record.last_error = "stale runtime projection"
+    record.pending_prompts = [
+        PendingPromptRecord(
+            run_id=record.active_run_id,
+            prompt="queued before account switch",
+            created_at="2026-07-17T10:00:00Z",
+        )
+    ]
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account("b" * 64) == 1
+
+    rebound = storage.load_thread(thread.thread_id)
+    assert rebound.codex_thread_id is None
+    assert rebound.active_turn_id is None
+    assert rebound.active_run_id is None
+    assert rebound.pending_prompts == []
+    assert rebound.status == "idle"
+    assert rebound.last_error is None
 
 
 def test_create_thread_rejects_blank_title(tmp_path) -> None:

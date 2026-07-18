@@ -71,6 +71,18 @@ _FORWARDED_REQUEST_HEADERS = {
     "upload-offset": "Upload-Offset",
     "x-chunk-sha256": "X-Chunk-SHA256",
 }
+_PRIVATE_THREAD_CONTINUITY_FIELDS = frozenset(
+    {
+        "codex_session_id",
+        "codex_thread_id",
+        "active_turn_id",
+        "active_run_id",
+        "pending_prompts",
+    }
+)
+_PRIVATE_INTERACTION_CONTINUITY_FIELDS = frozenset(
+    {"run_id", "turn_id", "item_id"}
+)
 
 
 def _path_segment(value: object) -> str:
@@ -139,6 +151,30 @@ def _bounded_mapping(value: object) -> dict[str, Any]:
     if not isinstance(value, dict) or len(value) > 16:
         raise BridgeApiEndpointError("payload_invalid")
     return value
+
+
+def _public_thread_payload(value: object) -> dict[str, Any]:
+    """Defence in depth for an older App returning private runtime handles."""
+
+    if not isinstance(value, dict):
+        raise BridgeApiEndpointError("thread_payload_invalid")
+    return {
+        key: item
+        for key, item in value.items()
+        if key not in _PRIVATE_THREAD_CONTINUITY_FIELDS
+    }
+
+
+def _public_interaction_payload(value: object) -> dict[str, Any]:
+    """Defence in depth against provider locators from a skewed App."""
+
+    if not isinstance(value, dict):
+        raise BridgeApiEndpointError("interaction_payload_invalid")
+    return {
+        key: item
+        for key, item in value.items()
+        if key not in _PRIVATE_INTERACTION_CONTINUITY_FIELDS
+    }
 
 
 def _positive_int(value: object) -> int:
@@ -629,10 +665,15 @@ class BridgeApiClient:
         self, include_archived: bool = False
     ) -> list[dict[str, Any]]:
         suffix = "?include_archived=true" if include_archived else ""
-        return await self._async_json("GET", f"/threads{suffix}")
+        payload = await self._async_json("GET", f"/threads{suffix}")
+        if not isinstance(payload, list):
+            raise BridgeApiEndpointError("thread_payload_invalid")
+        return [_public_thread_payload(item) for item in payload]
 
     async def async_get_thread(self, thread_id: str) -> dict[str, Any]:
-        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}")
+        return _public_thread_payload(
+            await self._async_json("GET", f"/threads/{_path_segment(thread_id)}")
+        )
 
     async def async_create_thread(
         self,
@@ -652,32 +693,40 @@ class BridgeApiClient:
             payload["model_override"] = model_override
         if thinking_override is not None:
             payload["thinking_override"] = thinking_override
-        return await self._async_json(
-            "POST",
-            "/threads",
-            json_body=payload,
-            expected_status={201},
+        return _public_thread_payload(
+            await self._async_json(
+                "POST",
+                "/threads",
+                json_body=payload,
+                expected_status={201},
+            )
         )
 
     async def async_update_thread(
         self, thread_id: str, updates: dict[str, Any]
     ) -> dict[str, Any]:
-        return await self._async_json(
-            "PATCH",
-            f"/threads/{_path_segment(thread_id)}",
-            json_body=updates,
+        return _public_thread_payload(
+            await self._async_json(
+                "PATCH",
+                f"/threads/{_path_segment(thread_id)}",
+                json_body=updates,
+            )
         )
 
     async def async_archive_thread(self, thread_id: str) -> dict[str, Any]:
-        return await self._async_json(
-            "POST",
-            f"/threads/{_path_segment(thread_id)}/archive",
+        return _public_thread_payload(
+            await self._async_json(
+                "POST",
+                f"/threads/{_path_segment(thread_id)}/archive",
+            )
         )
 
     async def async_restore_thread(self, thread_id: str) -> dict[str, Any]:
-        return await self._async_json(
-            "POST",
-            f"/threads/{_path_segment(thread_id)}/restore",
+        return _public_thread_payload(
+            await self._async_json(
+                "POST",
+                f"/threads/{_path_segment(thread_id)}/restore",
+            )
         )
 
     async def async_delete_thread(self, thread_id: str) -> None:
@@ -811,22 +860,25 @@ class BridgeApiClient:
     async def async_list_pending_interactions(
         self, *, thread_id: str | None = None
     ) -> dict[str, Any]:
-        self.require_api_v1()
+        self.require_capability("interactions_v2")
         suffix = "" if thread_id is None else f"?thread_id={_path_segment(thread_id)}"
-        return await self._async_json("GET", f"/interactions/pending{suffix}")
+        payload = await self._async_json("GET", f"/interactions/pending{suffix}")
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            raise BridgeApiEndpointError("interaction_payload_invalid")
+        return {
+            **payload,
+            "items": [_public_interaction_payload(item) for item in payload["items"]],
+        }
 
     async def async_decide_interaction(
         self,
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         decision: str,
         client_request_id: str,
     ) -> dict[str, Any]:
-        self.require_api_v1()
+        self.require_capability("interactions_v2")
         if decision not in {"accept", "decline", "cancel"}:
             raise BridgeApiEndpointError("decision_invalid")
         return await self._async_json(
@@ -834,9 +886,6 @@ class BridgeApiClient:
             f"/interactions/{_path_segment(interaction_id)}/decision",
             json_body={
                 "thread_id": _path_segment(thread_id),
-                "run_id": _path_segment(run_id),
-                "turn_id": _path_segment(turn_id),
-                "item_id": _path_segment(item_id),
                 "decision": decision,
                 "client_request_id": _client_request_id(client_request_id),
             },
@@ -847,22 +896,16 @@ class BridgeApiClient:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         answers: list[dict[str, Any]],
         client_request_id: str,
     ) -> dict[str, Any]:
-        self.require_api_v1()
+        self.require_capability("interactions_v2")
         normalized_answers = _interaction_answers(answers)
         return await self._async_json(
             "POST",
             f"/interactions/{_path_segment(interaction_id)}/answer",
             json_body={
                 "thread_id": _path_segment(thread_id),
-                "run_id": _path_segment(run_id),
-                "turn_id": _path_segment(turn_id),
-                "item_id": _path_segment(item_id),
                 "answers": normalized_answers,
                 "client_request_id": _client_request_id(client_request_id),
             },

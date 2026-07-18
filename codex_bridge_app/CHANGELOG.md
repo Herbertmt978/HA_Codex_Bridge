@@ -2,6 +2,79 @@
 
 All notable App changes are recorded here.
 
+## 0.8.11
+
+- Keeps Home Assistant chats, projects, transcripts, files, workspace settings,
+  archive state, and automation targets independent of the signed-in ChatGPT
+  account.
+- Privately binds native Codex thread handles to their owning ChatGPT account;
+  after an account change, the same Home Assistant chat starts a fresh provider
+  thread instead of attempting to resume one owned by the previous account.
+- Detaches unowned pre-0.8.11 provider handles once during migration without
+  deleting or partitioning local history. No account identity or binding marker
+  is exposed through the panel, API, events, diagnostics, or logs.
+- Reconciles account-update hints through an authoritative account read under
+  the runtime gate. Identity-less reads detach private provider continuity and
+  keep UI and automation turns blocked until ownership is verifiable.
+- Publishes each account-change hint as `checking` and auth-required before the
+  authoritative read begins, closing direct-prompt and automation admission
+  before local mutation while deferring catalogue invalidation until the
+  settled account result.
+- Fails closed if an App-server generation change needs account reconciliation
+  while a turn owns the runtime gate, preventing the previous generation's
+  ready status from admitting work before account ownership is reverified.
+- Discards an active device login when its App-server generation restarts,
+  releases the obsolete auth lease outside the coordinator lock, and performs
+  a fresh authoritative account read instead of leaving all turns blocked.
+- Returns the existing fail-closed auth snapshot while runtime ownership blocks
+  reconciliation, preventing frequent Home Assistant status polls from
+  generating duplicate revisions and durable `auth.status_changed` events.
+- Invalidates shared model and provider-capability catalogues when the private
+  account owner changes even if both accounts report the same plan, so model
+  and reasoning choices always reflect the account currently signed in.
+- Invalidates an account read or device-login poll if a newer account-update
+  hint arrives before it finishes, so a stale account can never be published
+  ready or rebound after the user switches accounts.
+- Rechecks account admission when each queued prompt becomes active. Prompts
+  queued before an account switch stop locally without starting or resuming a
+  provider thread, while the Home Assistant chat and its prompt remain visible.
+- Rechecks account admission inside the active-run branch before accepting an
+  interactive follow-up, so an account-update hint raced against the request
+  cannot persist or send a stale `turn/steer`.
+- Requires the authoritative auth state to be fully `ok` before broker
+  admission or automation target preparation, so transient account checks and
+  sign-out cannot leave behind local chat mutations.
+- Gives scheduled runs a one-shot broker admission before creating or changing
+  their target chat, transfers that exact lease into prompt submission, and
+  replays an existing automation outcome without creating or editing a chat.
+  Logout and automation dispatch therefore have one atomic winner.
+- Reserves prompt ownership before the final account-admission check and
+  provider-thread lookup, making account rebinding atomic with provider
+  continuity selection and preventing a detached previous-account thread from
+  being resumed by a newly accepted turn. Any admission or local run-state
+  validation failure releases that reservation without accepting the prompt.
+- Runs authoritative account reconciliation outside the runtime broker lock,
+  then repeats deletion and idempotency validation before acceptance, avoiding
+  the storage-to-broker lock inversion with concurrent chat/project deletion.
+- Rebinds only provider/runtime metadata without resolving unchanged historical
+  workspaces, attachments, or artifacts, so one old chat whose backing files
+  were removed outside the Bridge cannot block a healthy account switch.
+- Settles recovered runtime checkpoints before account binding, preventing an
+  interrupted run from restoring a previous account's provider thread during
+  startup.
+- Keeps provider session/thread/turn handles, active runtime ownership, and
+  queued prompt internals out of browser-facing thread responses while
+  preserving the complete private record inside the App.
+- Addresses approvals and questions through an App-local interaction ID. The
+  browser no longer receives provider run, turn, or item locators, and durable
+  event replay redacts legacy provider-continuity fields at read time.
+- Advertises the safer interaction contract only from the HA-native profile,
+  so a newer Integration fails locally and actionably when temporarily paired
+  with an older App while the legacy external profile promises no absent route.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.6` without changing its Integration API compatibility.
+
 ## 0.8.10
 
 - Coalesces adjacent Codex text deltas into ordered, bounded batches before the

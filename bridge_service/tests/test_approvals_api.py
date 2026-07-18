@@ -172,9 +172,6 @@ class RuntimeBrokerDouble:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         decision: str,
         client_request_id: str,
     ) -> dict[str, Any]:
@@ -182,12 +179,6 @@ class RuntimeBrokerDouble:
         if failure is not None:
             raise failure
         item = self._require_item(interaction_id, thread_id=thread_id)
-        if (item["run_id"], item["turn_id"], item["item_id"]) != (
-            run_id,
-            turn_id,
-            item_id,
-        ):
-            raise _problem(409, "turn_changed")
         if item["kind"] not in {"command_approval", "file_change_approval"}:
             raise _problem(409, "interaction_kind_mismatch")
         key = ("decision", interaction_id, client_request_id)
@@ -216,9 +207,6 @@ class RuntimeBrokerDouble:
         interaction_id: str,
         *,
         thread_id: str,
-        run_id: str,
-        turn_id: str,
-        item_id: str,
         answers: list[Mapping[str, object]],
         client_request_id: str,
     ) -> dict[str, Any]:
@@ -226,12 +214,6 @@ class RuntimeBrokerDouble:
         if failure is not None:
             raise failure
         item = self._require_item(interaction_id, thread_id=thread_id)
-        if (item["run_id"], item["turn_id"], item["item_id"]) != (
-            run_id,
-            turn_id,
-            item_id,
-        ):
-            raise _problem(409, "turn_changed")
         if item["kind"] != "user_input":
             raise _problem(409, "interaction_kind_mismatch")
         key = ("answer", interaction_id, client_request_id)
@@ -363,9 +345,6 @@ def test_pending_interactions_are_thread_scoped_provider_neutral_and_safe(
                 "interaction_id",
                 "kind",
                 "thread_id",
-                "run_id",
-                "turn_id",
-                "item_id",
                 "event_id",
                 "status",
                 "expires_at",
@@ -419,6 +398,26 @@ def test_malformed_broker_projection_is_redacted_at_http_boundary(
     }
     assert "reusable-secret" not in response.text
     assert "private@example.test" not in response.text
+
+
+def test_pending_interaction_projection_never_exposes_provider_correlation(
+    tmp_path: Path,
+) -> None:
+    """The browser can act on a local interaction id, never Codex turn/item ids."""
+    app = _ha_app(tmp_path, RuntimeBrokerDouble([_command_approval()]))
+
+    with TestClient(app) as client:
+        response = client.get(INTERACTIONS_PATH, headers=AUTHORIZATION)
+
+    assert response.status_code == 200
+    interaction = response.json()["items"][0]
+    assert interaction["interaction_id"] == "interaction-command-1"
+    assert interaction["thread_id"] == "thread-alpha"
+    assert "run_id" not in interaction
+    assert "turn_id" not in interaction
+    assert "item_id" not in interaction
+    assert "turn-7" not in response.text
+    assert "item-command-4" not in response.text
 
 
 @pytest.mark.parametrize(

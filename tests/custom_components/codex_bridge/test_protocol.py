@@ -53,6 +53,7 @@ def test_parses_a_typed_immutable_v1_ready_record() -> None:
     assert ready.capabilities == (
         "api_v1",
         "legacy_v0",
+        "interactions_v2",
         "automations_v1",
         "mcp_admin_v1",
         "skills_v1",

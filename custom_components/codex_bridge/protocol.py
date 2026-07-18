@@ -52,6 +52,7 @@ _KNOWN_CAPABILITIES = frozenset(
     {
         "api_v1",
         "legacy_v0",
+        "interactions_v2",
         "automations_v1",
         "mcp_admin_v1",
         "skills_v1",

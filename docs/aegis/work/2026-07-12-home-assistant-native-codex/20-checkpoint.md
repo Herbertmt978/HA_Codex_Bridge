@@ -2,41 +2,101 @@
 
 ## TodoCheckpointDraft
 
-- **State:** `0.8.4` acceptance-foundations release candidate under review
-- **Current todo:** Publish the reviewed candidate, then prove its PDF and image paths on target HA. Real external Nabu Casa/Cloudflare transport, cold restore/retained-image rollback, and browser isolation remain environment gates.
-- **Active slice:** `Herb/0.8.4-acceptance-foundations` starts from signed `0.8.3` plus the paired-release/evidence fixes now on main. It isolates selected PDF reads from aggregate debris, adds revocation-safe private image artifacts, adds provider-neutral transport/recovery evidence tooling, and keeps the browser worker absent without isolation attestation.
-- **Completed:** HA-native App/Integration runtime, ChatGPT account login, dynamic models/reasoning, limits, live search, durable automations, skills/plugins/MCP/instructions surfaces, run stages/subagent summaries, safe local PDF.js preview, the reviewed `0.8.4` source candidate, and signed App `0.8.3` with its bounded target smoke.
-- **Evidence refs:** `90-evidence.md` records the historical `0.8.1` failed PDF gate, `0.8.2` signed publication/target smoke, published `0.8.3` matrix, and bounded pre-release `0.8.4` local evidence.
-- **Release state:** `0.8.3` is published and target-smoked. Main commit `913c08d3393574f799baf0b47e78d31422c12fe1`, CI `29544350904`, App publication `29544351022`, immutable digest `sha256:bd8c9b1e275e5f832a64d81d8aabb163c8f8d4e755ec317a6eeac530788741fa`, and provenance attestation `35745773` are recorded in the evidence file.
-- **Open boundaries:** real target-HA PDF list/archive/preview/download and image-generation acceptance remain pending. Authorized external Nabu Casa/Cloudflare captures, destructive cold restore/retained-image rollback, and browser-worker isolation/attestation remain unproven. The first live automatic paired HACS release is also pending.
-- **Next step:** publish the protected `0.8.4` candidate and record only the target checks that actually pass.
+- **State:** `0.8.11` account-neutral chat candidate under local verification.
+- **Current todo:** Complete repository gates, protected review, immutable signed
+  publication, coordinated target-HA installation, and a bounded existing-chat
+  prompt under the currently signed-in ChatGPT account.
+- **Active slice:** `Herb/0.8.11-account-rebind` starts from signed `0.8.10`.
+  It privately associates native Codex thread handles with one ChatGPT owner,
+  detaches stale handles after an account change, and deliberately leaves every
+  Home Assistant chat/project/transcript/file/workspace/automation record static.
+- **Completed:** Producer, storage-owner, runtime-consumer, lifecycle, privacy,
+  queued-state, archived-chat, scheduled `continue_thread`, authoritative
+  account-update, in-flight read/login invalidation, identity-less fail-closed,
+  promoted-queue admission, atomic prompt-lease continuity capture,
+  deletion-safe auth lock ordering, missing-historical-workspace recovery,
+  stale-login generation recovery, active-steer admission, blocked-poll auth
+  deduplication, owner-aware provider catalogues, atomic automation target
+  admission/replay, browser-safe thread and interaction projections,
+  historical-event read-time redaction, and recovered-checkpoint coverage.
+  The fresh complete Bridge matrix passed with
+  `1496 passed, 218 skipped` in 299.39 seconds; the final focused
+  account-neutral/runtime/privacy slice passed `295 passed, 3 skipped`, and
+  the complete Runtime Broker suite passed `195 passed, 3 skipped`. The exact
+  Linux/Python 3.14 Home Assistant Integration matrix
+  passed `319 passed` against Home Assistant 2026.7.2.
+  Frontend lint, `320` unit tests, the production build, and `22` browser tests
+  also passed.
+- **Evidence refs:** `90-evidence.md` records signed `0.8.10` publication and
+  bounded `0.8.11` local evidence. The implementation plan is
+  `../../plans/2026-07-17-account-agnostic-chats.md`.
+- **Release state:** `0.8.10` is the latest signed release: main commit
+  `9fdfe53671d4773f3e955abb2720b408d874cd29`, publication `29613120991`,
+  digest
+  `sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`,
+  and provenance attestation `35904448`.
+- **Open boundaries:** `0.8.11` CI/publication/install/account-switch acceptance;
+  real Nabu Casa/Cloudflare captures; destructive cold restore and arbitrary
+  retained-image rollback; and browser-worker isolation/attestation.
+- **Next step:** finish all local gates, push the reviewed branch, merge only
+  after required checks pass, then install Integration first and App second.
 
 ## Workflow state
 
-- **Package Manager:** npm (via root `package-lock.json`)
-- **Frontend:** framework-free JavaScript Web Component bundled with esbuild
-- **Verification:** `npm run lint`, `npm run test:unit`, `npm run build`, Python/Ruff/HA contract suites, App packaging/security checks, then target-HA acceptance
+- **Package manager:** npm via root `package-lock.json`.
+- **Frontend:** framework-free JavaScript Web Component bundled with esbuild.
+- **Runtime:** App/Integration/panel `0.8.11`, Bridge `0.7.6`, locked Codex
+  `0.144.5`.
+- **Verification:** frontend lint/unit/build; Ruff; full Bridge pytest; release
+  projection and Codex-lock checks; protected Linux/HA/browser/App-build CI;
+  signed digest/provenance/SBOM; target-HA smoke.
 
 ## ResumeStateHint
 
-- **Repository:** repository root
-- **Worktree:** `.worktrees/090-open-acceptance`
-- **Branch:** `Herb/0.8.4-acceptance-foundations`
-- **Integrated main head:** `670ef649eeafaa4c5840206c22db1d9b6b1a2c7d` (`0.8.3` release plus paired-release and evidence-date fixes).
-- **Worktree status at checkpoint:** clean at track creation. The original main worktree's unrelated modified test and untracked branding/worktree files remain untouched.
-- **Current focused matrix:** Candidate Integration/App/panel `0.8.4`, Bridge `0.7.3`, and Codex `0.144.5`; published bounded target-smoked `0.8.3`, signed-but-failed target exercise `0.8.1`, signed target smoke `0.8.2`, and fully accepted `0.7.5` remain bounded historical evidence.
-- **Historical image evidence:** Signed immutable App `0.6.6` digest is `sha256:aab2882333a70354624c5ec3a461f738f5a3495ab5340b3161f4e941c6fe4767`; signed and live-accepted App `0.6.5` digest is `sha256:d0bb3954f535324f174189f06a0256169dc08464897c64b4f5b5ffd99bfe5f60`. Neither may be attributed to `0.7.0`.
-- **Required readback on resume:** `10-intent.md`, this file, the approved spec/plan, current `git status`, latest main/PR/release state, and the final live-acceptance section in `90-evidence.md`.
+- **Repository:** repository root.
+- **Worktree:** `.worktrees/0811-account-rebind`.
+- **Branch:** `Herb/0.8.11-account-rebind`.
+- **Integrated main head:** `9fdfe53671d4773f3e955abb2720b408d874cd29`.
+- **Original checkout:** contains unrelated user changes and must remain
+  untouched.
+- **Required readback:** `AGENTS.md`, `CONTEXT.md`, the account-neutral plan,
+  current Git/GitHub release state, and the final `90-evidence.md` section.
 
 ## DriftCheckDraft
 
-- **Intent alignment:** yes. Browser traffic remains on Home Assistant; only the private App/Bridge contacts Codex/OpenAI.
-- **Compatibility:** API v1 Supervisor discovery is primary; explicit private external v0 remains the recovery path. The published Bridge is `0.6.0`; granular authenticated capabilities make new Integration/old App pairings fail locally with update guidance.
-- **Discovery boundary:** publisher and consumer accept only literal RFC1918/ULA App IPs. Tokens are validated only against that origin and are never placed in browser-visible configuration or logs.
-- **Restart recovery:** each publication retains the Supervisor UUID and changes only a bounded non-secret marker so Supervisor re-pushes an otherwise equal discovery record.
-- **Failure behavior:** a valid but unreachable App remains visible for administrator retry and is not persisted or used to replace an existing entry until authenticated readiness succeeds.
-- **Model/limits behavior:** catalogue and reasoning levels remain Codex-discovered; stale results retry after 15 seconds and prefer verified last-known-good over the installed bundled catalogue, with static fallback last. GPT-5.6 and model-specific Max/Ultra are not hardcoded. Account changes expire stale entitlement data; duration-classified limits represent weekly-only and disabled five-hour windows correctly.
-- **Panel behavior:** `0.7.0` retains the Codex-style chat tree and adds live action/streaming/step telemetry plus Scheduled, Skills, Plugins, MCP, Instructions, About, Security, and system-information surfaces. Typed transient artifact reservations preserve the previous artifact snapshot and do not become a connection error, even where the selected chat is idle.
-- **MCP boundary:** MCP is disabled by default and requires an explicit App option plus restart. Every pre-service and production app-server path suppresses MCP while disabled; startup removes the durable native MCP root with a compare-and-swap write and fails readiness closed if cleanup cannot be proved. HTTPS/DNS checks remain best effort rather than connection-time egress enforcement.
-- **Release discipline:** App images remain immutable. `0.8.4` is a source candidate only; `0.8.3` remains the latest signed, published, target-smoked matrix. PDF/image target acceptance, real remote routing, destructive recovery, and browser isolation are not implied by a successful build or update.
-- **Decision:** release the completed foundations without advertising the browser capability or claiming any unrun environment gate.
+- **Intent alignment:** browser traffic remains on Home Assistant; only the
+  private App/Bridge contacts Codex/OpenAI.
+- **Canonical ownership:** the auth coordinator owns authoritative
+  `account/read`; Bridge storage owns the persisted provider-thread handle.
+- **Compatibility:** the public auth/thread models and Integration API do not
+  gain an account identifier or account-specific chat partition. Public thread
+  responses now explicitly omit private provider/runtime continuity fields.
+- **Privacy:** email is used only transiently to derive a keyed opaque marker;
+  neither value nor the Bridge secret enters browser APIs, events, diagnostics,
+  logs, or release artifacts.
+- **Failure behavior:** a binding failure keeps auth unavailable. The private
+  binding file is written last, so interruption repeats an idempotent detach
+  instead of blessing a stale handle.
+- **Concurrency behavior:** a newer account hint invalidates an account check
+  already in flight. Queued prompts recheck authoritative admission when
+  promoted and stop locally before any provider request if ownership changed.
+- **Admission linearization:** a new prompt reserves runtime ownership before
+  its final auth check and storage reload. An account rebind that wins first is
+  observed by the prompt; one that loses cannot detach provider continuity
+  until the prompt lease is released.
+- **Lock ordering:** potentially reconciling auth admission runs without the
+  broker lock. The broker then repeats started, deletion, and idempotency checks
+  before mutation; its final check is safe because the prompt lease already
+  excludes every account-binding path.
+- **Runtime ordering:** crash recovery settles before authoritative account
+  binding. A changed account therefore removes any provider ID restored from a
+  nonterminal checkpoint before Home Assistant begins serving requests.
+- **Migration:** first `0.8.11` observation detaches legacy unowned handles once;
+  same-account native continuity is retained afterward, while changed accounts
+  start a fresh provider conversation in the same local chat.
+- **Identity-less behavior:** the locked app-server email field is nullable.
+  When it is absent, the Bridge uses only a private unverified sentinel to
+  detach provider continuity and keeps UI/automation admission auth-blocked;
+  no credential-derived identity is guessed or exposed.
+- **Release discipline:** `0.8.11` remains a source candidate until protected
+  CI, immutable publication, and target acceptance all complete.

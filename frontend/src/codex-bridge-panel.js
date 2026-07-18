@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "0.8.10";
+const PANEL_VERSION = "0.8.11";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -6830,9 +6830,6 @@ class CodexBridgePanel extends HTMLElement {
       await this._callWS(request.action, {
         interaction_id: interaction.interaction_id,
         thread_id: interaction.thread_id,
-        run_id: interaction.run_id,
-        turn_id: interaction.turn_id,
-        item_id: interaction.item_id,
         ...request.payload,
         client_request_id: mutation.clientRequestId,
       });
@@ -6987,9 +6984,6 @@ class CodexBridgePanel extends HTMLElement {
       !interactionId ||
       actualThreadId !== threadId ||
       !kind ||
-      !identifier(value.run_id, 128) ||
-      !identifier(value.turn_id, 256) ||
-      !identifier(value.item_id, 256) ||
       !Number.isSafeInteger(value.event_id) ||
       value.event_id < 0 ||
       value.status !== "pending" ||
@@ -7005,9 +6999,6 @@ class CodexBridgePanel extends HTMLElement {
       interaction_id: interactionId,
       kind,
       thread_id: actualThreadId,
-      run_id: value.run_id,
-      turn_id: value.turn_id,
-      item_id: value.item_id,
       event_id: value.event_id,
       status: "pending",
       expires_at: expiresAt,

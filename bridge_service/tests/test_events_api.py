@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -9,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.event_store import EventWaitCapacityError
-from codex_bridge_service.models import RunMode, RuntimeProfile
+from codex_bridge_service.models import RunMode, RuntimeProfile, ThreadEventRecord
 
 
 AUTHORIZATION = {
@@ -140,6 +141,134 @@ def test_global_replay_and_wait_return_the_canonical_v1_batch(
     assert payload["has_more"] is False
     assert [event["event_type"] for event in payload["events"]] == ["runtime.ready"]
     assert payload["next_cursor"] == payload["events"][-1]["cursor"]
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "extra_params"),
+    [
+        ("/events/replay", "replay", []),
+        ("/events/wait", "wait", [("timeout_seconds", "0")]),
+    ],
+)
+def test_global_event_reads_redact_historical_provider_turn_continuity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    method: str,
+    extra_params: list[tuple[str, str]],
+) -> None:
+    app = _app(tmp_path)
+    historic = SimpleNamespace(
+        cursor=1,
+        event_id="event-historic-1",
+        scope="thread",
+        thread_id="thread-historic",
+        event_type="run.started",
+        payload={
+            "run_id": "run-local",
+            "turn_id": "provider-turn-private",
+            "codex_thread_id": "provider-thread-private",
+        },
+        timestamp="2026-07-18T12:00:00Z",
+    )
+    batch = SimpleNamespace(
+        events=[historic],
+        next_cursor=1,
+        minimum_cursor=0,
+        has_more=False,
+        heartbeat=False,
+    )
+    monkeypatch.setattr(app.state.event_store, method, lambda **_kwargs: batch)
+
+    response = TestClient(app).get(
+        path,
+        headers=AUTHORIZATION,
+        params=[("after", "0"), *extra_params],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["events"][0]["payload"] == {"run_id": "run-local"}
+    assert "provider-turn-private" not in response.text
+    assert "provider-thread-private" not in response.text
+
+
+@pytest.mark.parametrize("suffix", ["events", "events/replay"])
+def test_thread_event_reads_redact_historical_provider_turn_continuity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    suffix: str,
+) -> None:
+    app = _app(tmp_path)
+    thread = app.state.storage.create_thread(title="Historic", mode=RunMode.EDIT)
+    historic = ThreadEventRecord(
+        event_id="thread-event-historic-1",
+        thread_id=thread.thread_id,
+        sequence=1,
+        event_type="run.started",
+        payload={
+            "run_id": "run-local",
+            "turn_id": "provider-turn-private",
+            "codex_session_id": "provider-session-private",
+        },
+        timestamp="2026-07-18T12:00:00Z",
+    )
+    monkeypatch.setattr(
+        app.state.storage,
+        "list_thread_events",
+        lambda *_args, **_kwargs: [historic],
+    )
+
+    response = TestClient(app).get(
+        f"/threads/{thread.thread_id}/{suffix}",
+        headers=AUTHORIZATION,
+    )
+
+    assert response.status_code == 200
+    if suffix == "events":
+        assert "provider-turn-private" not in response.text
+        assert "provider-session-private" not in response.text
+        assert '"run_id": "run-local"' in response.text
+    else:
+        assert response.json()[0]["payload"] == {"run_id": "run-local"}
+
+
+def test_historical_interaction_created_never_projects_run_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _app(tmp_path)
+    historic = SimpleNamespace(
+        cursor=1,
+        event_id="event-historic-interaction",
+        scope="thread",
+        thread_id="thread-historic",
+        event_type="interaction.created",
+        payload={
+            "interaction_id": "interaction-local",
+            "thread_id": "thread-historic",
+            "run_id": "run-private",
+            "turn_id": "turn-private",
+        },
+        timestamp="2026-07-18T12:00:00Z",
+    )
+    batch = SimpleNamespace(
+        events=[historic],
+        next_cursor=1,
+        minimum_cursor=0,
+        has_more=False,
+        heartbeat=False,
+    )
+    monkeypatch.setattr(app.state.event_store, "replay", lambda **_kwargs: batch)
+
+    response = TestClient(app).get("/events/replay", headers=AUTHORIZATION)
+
+    assert response.status_code == 200
+    assert response.json()["events"][0]["payload"] == {
+        "interaction_id": "interaction-local",
+        "thread_id": "thread-historic",
+    }
+    assert "run-private" not in response.text
+    assert "turn-private" not in response.text
 
 
 def test_global_replay_filters_auth_runtime_and_thread_scopes(

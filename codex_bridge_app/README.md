@@ -6,34 +6,36 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Published App/Integration: `0.8.9` (`amd64` only, experimental)
+- Latest signed App/Integration: `0.8.10` (`amd64` only, experimental)
 - Latest installed target exercise: `0.8.9`
 - Historical fully target-HA-accepted App/Integration: `0.7.5`
-- Candidate App/Integration: `0.8.10`
-- Candidate Bridge: `0.7.5`
+- Candidate App/Integration: `0.8.11`
+- Candidate Bridge: `0.7.6`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
 
-Signed App/Integration `0.8.9` with Bridge `0.7.4` is installed on the target
-Home Assistant. It retained ChatGPT Pro, projects, and history; generated-image
-preview and transcript-only scrolling remained available. During the preceding `0.8.7`
-acceptance, the browser persisted a complete 3,276,457-byte generated PNG with
-the expected signature and SHA-256
-`F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
-Two live 5,000-word prompts on `0.8.9` stopped after the same short prefix: the
-partial response was preserved, but the long-response gate failed. Candidate
-`0.8.10` losslessly coalesces rapid text deltas before durable publication and
-distinguishes a typed runtime interruption from a provider failure.
+Signed App/Integration `0.8.10` with Bridge `0.7.5` is published. It losslessly
+coalesces rapid text deltas before durable publication and distinguishes a typed
+runtime interruption from a provider failure. Candidate `0.8.11` with Bridge
+`0.7.6` keeps Home Assistant chats, projects, transcripts, files, workspace
+settings, archive state, and automation targets local and static across an
+observed ChatGPT account change. It detaches only the prior account's private
+provider-thread continuity, so the next message starts a fresh provider
+conversation through the newly connected account. If Codex cannot provide a
+stable account identity, the Bridge detaches private provider continuity and
+keeps prompts and automations auth-blocked until ownership can be verified.
+In-flight account checks and promoted queued prompts are revalidated so a
+switch cannot publish a stale account or resume its provider thread.
 Coordinated `0.7.5` remains the historical fully accepted baseline.
 
-The `0.8.9` publication, signature, SBOM, and provenance workflow passed in
-[run 29604382155](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29604382155).
+The `0.8.10` publication, signature, SBOM, and provenance workflow passed in
+[run 29613120991](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29613120991).
 Its paired
-[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.9)
-points to exact main commit `2538a6de2f44e25a3a74e331287ca45d72547249`.
+[Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.10)
+points to exact main commit `9fdfe53671d4773f3e955abb2720b408d874cd29`.
 The immutable image digest is
-`sha256:083eafe2a76be930843c436a4106f2e73e1337715b2e47f71e1af04862c1ef31`,
-with attestation `35885291`.
+`sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`,
+with provenance attestation `35904448` and a verified SBOM attestation.
 The following earlier bounded target smoke remains evidence for `0.8.3`, not a
 claim that `0.8.8` completed the broader target matrix:
 The App and Integration were installed on the target HA, retained ChatGPT Pro

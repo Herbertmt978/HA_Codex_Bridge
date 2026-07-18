@@ -7,7 +7,11 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import ValidationError
 
 from ..auth import require_bridge_token
-from ..event_store import EventCursorExpiredError, EventWaitCapacityError
+from ..event_store import (
+    EventCursorExpiredError,
+    EventWaitCapacityError,
+    project_public_event_payload,
+)
 from ..models import EventBatchRecord, EventRecord, EventScope
 
 
@@ -156,7 +160,10 @@ def _project_event(value: object) -> EventRecord:
         scope=_required_value(value, "scope"),
         thread_id=_required_value(value, "thread_id"),
         event_type=_required_value(value, "event_type"),
-        payload=_required_value(value, "payload"),
+        payload=project_public_event_payload(
+            _required_value(value, "event_type"),
+            _required_value(value, "payload"),
+        ),
         timestamp=_required_value(value, "timestamp"),
     )
 

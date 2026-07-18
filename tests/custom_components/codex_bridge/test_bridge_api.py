@@ -798,6 +798,42 @@ async def test_rejects_path_and_cursor_injection_before_network_access() -> None
         await client.async_get_thread("../status?token=secret")
 
 
+async def test_thread_responses_strip_private_runtime_continuity(
+    bridge_server_factory,
+) -> None:
+    private_thread = {
+        "thread_id": "thr_safe",
+        "title": "Account-neutral history",
+        "status": "idle",
+        "codex_session_id": "legacy-provider-session",
+        "codex_thread_id": "provider-thread-account-a",
+        "active_turn_id": "provider-turn-account-a",
+        "active_run_id": "run_private",
+        "pending_prompts": [{"prompt": "private queued input"}],
+    }
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/threads":
+            return web.json_response([private_thread])
+        if request.path == "/threads/thr_safe":
+            return web.json_response(private_thread)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        listed = await client.async_list_threads()
+        detail = await client.async_get_thread("thr_safe")
+
+    expected = {
+        "thread_id": "thr_safe",
+        "title": "Account-neutral history",
+        "status": "idle",
+    }
+    assert listed == [expected]
+    assert detail == expected
+
+
 async def test_v1_rejects_legacy_buffered_file_and_event_transports(
     bridge_server_factory,
 ) -> None:
@@ -844,6 +880,22 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
                     "heartbeat": request.path == "/events/wait",
                 }
             )
+        if request.path == "/interactions/pending":
+            return web.json_response(
+                {
+                    "items": [
+                        {
+                            "interaction_id": "int_safe",
+                            "thread_id": "thr_safe",
+                            "run_id": "run_private",
+                            "turn_id": "turn_private",
+                            "item_id": "item_private",
+                        }
+                    ],
+                    "count": 1,
+                    "thread_id": "thr_safe",
+                }
+            )
         if request.path.endswith("/prompts"):
             return web.json_response({"ok": True}, status=202)
         return web.json_response({"ok": True})
@@ -857,25 +909,19 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
         )
         await client.async_wait_events(after=3)
         await client.async_cancel_auth_login()
-        await client.async_list_pending_interactions(thread_id="thr_safe")
+        interactions = await client.async_list_pending_interactions(thread_id="thr_safe")
         await client.async_send_prompt(
             "thr_safe", "hello", client_request_id="request-1"
         )
         await client.async_decide_interaction(
             "int_safe",
             thread_id="thr_safe",
-            run_id="run_safe",
-            turn_id="turn_safe",
-            item_id="item_safe",
             decision="accept",
             client_request_id="decision-1",
         )
         await client.async_answer_interaction(
             "int_safe",
             thread_id="thr_safe",
-            run_id="run_safe",
-            turn_id="turn_safe",
-            item_id="item_safe",
             answers=[{"question_id": "question_safe", "values": ["yes"]}],
             client_request_id="answer-1",
         )
@@ -889,6 +935,16 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
     assert bodies["/threads/thr_safe/prompts"]["client_request_id"] == "request-1"
     assert bodies["/interactions/int_safe/answer"]["answers"] == [
         {"question_id": "question_safe", "values": ["yes"]}
+    ]
+    assert bodies["/interactions/int_safe/decision"] == {
+        "thread_id": "thr_safe",
+        "decision": "accept",
+        "client_request_id": "decision-1",
+    }
+    assert "turn_safe" not in repr(bodies)
+    assert "item_safe" not in repr(bodies)
+    assert interactions["items"] == [
+        {"interaction_id": "int_safe", "thread_id": "thr_safe"}
     ]
 
 
@@ -935,9 +991,6 @@ async def test_interaction_answers_are_strict_bounded_and_unique(
                 await client.async_answer_interaction(
                     "int_safe",
                     thread_id="thr_safe",
-                    run_id="run_safe",
-                    turn_id="turn_safe",
-                    item_id="item_safe",
                     answers=answers,
                     client_request_id="answer-1",
                 )

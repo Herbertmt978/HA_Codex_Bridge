@@ -2,7 +2,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, 
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
-from ..models import RunMode, RuntimeProfile, ThreadViewRecord
+from ..models import PublicThreadRecord, RunMode, RuntimeProfile, ThreadViewRecord
 from ..runtime_broker import RuntimeUnavailableError
 from ..storage import ProjectNotFoundError, ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
@@ -54,6 +54,10 @@ def _compatible_default_thinking(model_record) -> str:
     return model_record.thinking_levels[0]
 
 
+def _public_thread(record: ThreadViewRecord) -> PublicThreadRecord:
+    return PublicThreadRecord.from_thread_view(record)
+
+
 def _repair_or_validate_model_effort(
     model_catalog,
     *,
@@ -79,13 +83,13 @@ def _repair_or_validate_model_effort(
 
 
 @router.post(
-    "/threads", response_model=ThreadViewRecord, status_code=status.HTTP_201_CREATED
+    "/threads", response_model=PublicThreadRecord, status_code=status.HTTP_201_CREATED
 )
 def create_thread(
     payload: CreateThreadRequest,
     request: Request,
     authorization: str | None = Header(default=None),
-) -> ThreadViewRecord:
+) -> PublicThreadRecord:
     require_bridge_token(
         authorization=authorization,
         request=request,
@@ -159,9 +163,7 @@ def create_thread(
             direct_defaults_provisional=model_catalog.stale,
         )
     try:
-        return request.app.state.storage.create_thread(
-            **create_kwargs,
-        )
+        return _public_thread(request.app.state.storage.create_thread(**create_kwargs))
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=404, detail="project not found") from exc
     except WorkspaceNotFoundError as exc:
@@ -170,38 +172,43 @@ def create_thread(
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
-@router.get("/threads", response_model=list[ThreadViewRecord])
+@router.get("/threads", response_model=list[PublicThreadRecord])
 def list_threads(
     request: Request,
     include_archived: bool = Query(default=False),
     authorization: str | None = Header(default=None),
-) -> list[ThreadViewRecord]:
+) -> list[PublicThreadRecord]:
     require_bridge_token(
         authorization=authorization,
         request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
-        return request.app.state.storage.list_threads(include_archived=include_archived)
+        return [
+            _public_thread(record)
+            for record in request.app.state.storage.list_threads(
+                include_archived=include_archived
+            )
+        ]
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workspace path not found") from exc
     except WorkspaceBoundaryError as exc:
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
-@router.get("/threads/{thread_id}", response_model=ThreadViewRecord)
+@router.get("/threads/{thread_id}", response_model=PublicThreadRecord)
 def get_thread(
     thread_id: str,
     request: Request,
     authorization: str | None = Header(default=None),
-) -> ThreadViewRecord:
+) -> PublicThreadRecord:
     require_bridge_token(
         authorization=authorization,
         request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
-        return request.app.state.storage.get_thread(thread_id)
+        return _public_thread(request.app.state.storage.get_thread(thread_id))
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except WorkspaceNotFoundError as exc:
@@ -210,13 +217,13 @@ def get_thread(
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
-@router.patch("/threads/{thread_id}", response_model=ThreadViewRecord)
+@router.patch("/threads/{thread_id}", response_model=PublicThreadRecord)
 def update_thread(
     thread_id: str,
     payload: UpdateThreadRequest,
     request: Request,
     authorization: str | None = Header(default=None),
-) -> ThreadViewRecord:
+) -> PublicThreadRecord:
     require_bridge_token(
         authorization=authorization,
         request=request,
@@ -251,9 +258,11 @@ def update_thread(
             )
             if repaired_thinking is not None:
                 updates["thinking_override"] = repaired_thinking
-        return request.app.state.storage.update_thread(
-            thread_id,
-            **updates,
+        return _public_thread(
+            request.app.state.storage.update_thread(
+                thread_id,
+                **updates,
+            )
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
@@ -265,19 +274,19 @@ def update_thread(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/threads/{thread_id}/archive", response_model=ThreadViewRecord)
+@router.post("/threads/{thread_id}/archive", response_model=PublicThreadRecord)
 def archive_thread(
     thread_id: str,
     request: Request,
     authorization: str | None = Header(default=None),
-) -> ThreadViewRecord:
+) -> PublicThreadRecord:
     require_bridge_token(
         authorization=authorization,
         request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
-        return request.app.state.storage.archive_thread(thread_id)
+        return _public_thread(request.app.state.storage.archive_thread(thread_id))
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except WorkspaceNotFoundError as exc:
@@ -286,19 +295,19 @@ def archive_thread(
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
 
 
-@router.post("/threads/{thread_id}/restore", response_model=ThreadViewRecord)
+@router.post("/threads/{thread_id}/restore", response_model=PublicThreadRecord)
 def restore_thread(
     thread_id: str,
     request: Request,
     authorization: str | None = Header(default=None),
-) -> ThreadViewRecord:
+) -> PublicThreadRecord:
     require_bridge_token(
         authorization=authorization,
         request=request,
         expected_token=request.app.state.auth_token,
     )
     try:
-        return request.app.state.storage.restore_thread(thread_id)
+        return _public_thread(request.app.state.storage.restore_thread(thread_id))
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except WorkspaceNotFoundError as exc:

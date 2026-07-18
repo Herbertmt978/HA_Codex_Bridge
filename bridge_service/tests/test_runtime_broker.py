@@ -49,7 +49,7 @@ from codex_bridge_service.runtime_broker import (
     RuntimeBrokerError,
     RuntimeEventPayloadTooLargeError,
 )
-from codex_bridge_service.runtime_gate import RuntimeGate
+from codex_bridge_service.runtime_gate import RuntimeGate, RuntimeMutationConflictError
 from codex_bridge_service.runtime_policy import (
     RuntimeProtocolMismatchError,
     approval_display,
@@ -487,6 +487,7 @@ def _broker(
     image_generation_authority: object | None = None,
     browser_broker: object | None = None,
     browser_dynamic_tools_enabled: bool = False,
+    provider_admission_check: Callable[[], bool] | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
         storage=storage,
@@ -501,6 +502,7 @@ def _broker(
         image_generation_authority=image_generation_authority,
         browser_broker=browser_broker,
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+        provider_admission_check=provider_admission_check,
     )
     broker.start()
     return broker
@@ -533,17 +535,32 @@ def _active_ids(
     record = storage.load_thread(thread_id)
     assert record.active_run_id is not None
     assert record.codex_thread_id is not None
-    turn_requests = storage.list_thread_events(thread_id)
-    started = [
-        event
-        for event in turn_requests
-        if event.event_type == "run.started"
-        and event.payload.get("run_id") == record.active_run_id
-    ]
-    assert started
-    turn_id = started[-1].payload["turn_id"]
-    assert isinstance(turn_id, str)
-    return record.active_run_id, record.codex_thread_id, turn_id
+    # Provider continuity stays in private runtime/thread storage.  Browser
+    # events deliberately contain only the local run identifier.
+    assert record.active_turn_id is not None
+    return record.active_run_id, record.codex_thread_id, record.active_turn_id
+
+
+def _private_interaction(
+    broker: RuntimeBroker,
+    interaction_id: str,
+) -> Any:
+    """Expose broker-only continuity to tests without widening the public API."""
+    with broker._lock:
+        interaction = broker._state.interactions.get(interaction_id)
+        assert interaction is not None
+        return interaction
+
+
+def _private_run(
+    broker: RuntimeBroker,
+    run_id: str,
+) -> Any:
+    """Expose broker-only provider continuity to tests without public events."""
+    with broker._lock:
+        run = broker._state.runs.get(run_id)
+        assert run is not None
+        return run
 
 
 def _complete(
@@ -2493,6 +2510,75 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
         broker.close()
 
 
+def test_account_rebind_keeps_local_chat_and_starts_a_fresh_provider_thread(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        assert storage.bind_codex_account("a" * 64) == 0
+        broker.submit_prompt(
+            thread.thread_id,
+            "First account prompt",
+            client_request_id="account-a-first",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, first_remote_thread, first_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        _complete(
+            client,
+            remote_thread_id=first_remote_thread,
+            turn_id=first_turn,
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+
+        assert storage.bind_codex_account("a" * 64) == 0
+        broker.submit_prompt(
+            thread.thread_id,
+            "Same account follow-up",
+            client_request_id="account-a-follow-up",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 2)
+        _run_id, resumed_remote_thread, resumed_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+        assert resumed_remote_thread == first_remote_thread
+        _complete(
+            client,
+            remote_thread_id=resumed_remote_thread,
+            turn_id=resumed_turn,
+        )
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+        events_before_switch = storage.list_thread_events(thread.thread_id)
+
+        assert storage.bind_codex_account("b" * 64) == 1
+        assert storage.load_thread(thread.thread_id).thread_id == thread.thread_id
+        broker.submit_prompt(
+            thread.thread_id,
+            "New account continuation",
+            client_request_id="account-b-continuation",
+        )
+        _wait_until(lambda: len(_requests(client, "thread/start")) == 2)
+        _run_id, second_remote_thread, _second_turn = _active_ids(
+            storage,
+            thread.thread_id,
+        )
+
+        assert second_remote_thread != first_remote_thread
+        assert len(_requests(client, "thread/resume")) == 1
+        events_after_switch = storage.list_thread_events(thread.thread_id)
+        assert events_after_switch[: len(events_before_switch)] == events_before_switch
+        assert events_after_switch[len(events_before_switch)].event_type == (
+            "runtime.account_binding_detached"
+        )
+    finally:
+        broker.close()
+
+
 def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
     tmp_path: Path,
 ) -> None:
@@ -2727,6 +2813,589 @@ def test_client_request_id_is_globally_idempotent_and_other_threads_queue(
         _wait_until(
             lambda: storage.load_thread(second_thread.thread_id).status == "running"
         )
+    finally:
+        broker.close()
+
+
+def test_new_prompt_is_rejected_before_provider_or_local_acceptance_when_admission_closed(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: False,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must not be accepted",
+                client_request_id="admission-rejected",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert not client.requests
+        assert not any(
+            event.event_type in {"message.created", "run.queued", "run.started"}
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+    finally:
+        broker.close()
+
+
+def test_active_steer_rechecks_provider_admission_under_broker_lock(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    race = False
+    steer_admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal steer_admission_checks
+        if not race:
+            return True
+        steer_admission_checks += 1
+        return steer_admission_checks == 1
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        active = broker.submit_prompt(
+            thread.thread_id,
+            "Start before the account update",
+            client_request_id="steer-auth-race-active",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        race = True
+
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must not steer after the account update",
+                client_request_id="steer-auth-race-follow-up",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert steer_admission_checks == 2
+        assert not _requests(client, "turn/steer")
+        assert "steer-auth-race-follow-up" not in broker._state.request_idempotency
+        assert broker._state.runs[active.run_id].status in {"starting", "running"}
+        assert not any(
+            event.event_type == "message.created"
+            and event.payload.get("client_request_id")
+            == "steer-auth-race-follow-up"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
+def test_reconciling_provider_admission_runs_without_broker_lock(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal admission_checks
+        admission_checks += 1
+        if admission_checks > 1:
+            return True
+
+        def probe_broker_lock() -> bool:
+            acquired = broker._lock.acquire(timeout=0.5)
+            if acquired:
+                broker._lock.release()
+            return acquired
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(probe_broker_lock).result(timeout=1)
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Reconcile auth without inverting the deletion lock order",
+            client_request_id="admission-outside-broker-lock",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert admission_checks == 3
+    finally:
+        broker.close()
+
+
+def test_admission_rebind_is_reloaded_before_provider_thread_selection(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    stored = storage.load_thread(thread.thread_id)
+    stored.codex_thread_id = "provider-account-a"
+    storage.save_thread(stored)
+    client = ValidatorBackedAppServer()
+
+    def detach_previous_account() -> bool:
+        rebound = storage.load_thread(thread.thread_id)
+        rebound.codex_thread_id = None
+        storage.save_thread(rebound)
+        return True
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=detach_previous_account,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Start under the newly verified account",
+            client_request_id="admission-rebind",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert len(_requests(client, "thread/start")) == 1
+        assert not _requests(client, "thread/resume")
+    finally:
+        broker.close()
+
+
+def test_provider_continuity_is_reloaded_after_prompt_lease_is_reserved(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    assert storage.bind_codex_account("a" * 64) == 0
+    stored = storage.load_thread(thread.thread_id)
+    stored.codex_thread_id = "provider-account-a"
+    storage.save_thread(stored)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: True,
+    )
+    original_reserve = broker.gate.reserve_prompt
+
+    def rebind_before_reserve(*, client_request_id: str):
+        auth_lease = broker.gate.acquire_auth_mutation()
+        try:
+            assert storage.bind_codex_account("b" * 64) == 1
+        finally:
+            auth_lease.release()
+        return original_reserve(client_request_id=client_request_id)
+
+    broker.gate.reserve_prompt = rebind_before_reserve  # type: ignore[method-assign]
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Use only continuity verified under the prompt lease",
+            client_request_id="admission-lease-reload",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert len(_requests(client, "thread/start")) == 1
+        assert not _requests(client, "thread/resume")
+        assert storage.bind_codex_account("b" * 64) == 0
+    finally:
+        broker.close()
+
+
+def test_second_admission_rejection_releases_reserved_prompt_lease(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal admission_checks
+        admission_checks += 1
+        return admission_checks == 1
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Reject after the prompt lease is reserved",
+                client_request_id="admission-after-reserve-rejected",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert admission_checks == 2
+        assert not client.requests
+        assert not any(
+            event.event_type in {"message.created", "run.queued", "run.started"}
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert not broker._state.request_idempotency
+    finally:
+        broker.close()
+
+
+def test_prompt_admission_owns_exact_gate_lease_before_submission(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with broker.admit_prompt(
+            "Reserve before preparing the automation target",
+            client_request_id="automation:admission-transfer",
+            unattended=True,
+        ) as admission:
+            lease = admission._lease
+            assert lease is not None
+            assert broker.runtime_snapshot().active_turns == 1
+            with pytest.raises(RuntimeMutationConflictError):
+                broker.gate.acquire_auth_mutation()
+
+            run = broker.submit_prompt(
+                thread.thread_id,
+                "Reserve before preparing the automation target",
+                client_request_id="automation:admission-transfer",
+                unattended=True,
+                admission=admission,
+            )
+
+            assert broker._leases[run.run_id] is lease
+            assert admission._state == "transferred"
+        assert broker.runtime_snapshot().active_turns == 1
+    finally:
+        broker.close()
+
+
+def test_prompt_admission_context_releases_an_untransferred_lease(
+    tmp_path: Path,
+) -> None:
+    storage, _thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with pytest.raises(ProjectMutationError, match="target disappeared"):
+            with broker.admit_prompt(
+                "Do not leak capacity after target preparation fails",
+                client_request_id="automation:admission-release",
+                unattended=True,
+            ):
+                raise ProjectMutationError("target disappeared")
+
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert not broker._pending_prompt_admissions
+        auth = broker.gate.acquire_auth_mutation()
+        auth.release()
+    finally:
+        broker.close()
+
+
+def test_prompt_admission_replays_exact_outcome_without_auth_or_gate_capacity(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission_allowed = {"value": True}
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: admission_allowed["value"],
+    )
+    try:
+        accepted = broker.submit_prompt(
+            thread.thread_id,
+            "Replay the accepted automation run",
+            client_request_id="automation:admission-replay",
+            unattended=True,
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+        admission_allowed["value"] = False
+
+        with broker.admit_prompt(
+            "Replay the accepted automation run",
+            client_request_id="automation:admission-replay",
+            unattended=True,
+        ) as admission:
+            assert admission.replay_run is not None
+            assert admission.replay_run.run_id == accepted.run_id
+            assert admission.replay_run.thread_id == thread.thread_id
+            assert admission._lease is None
+            assert broker.runtime_snapshot().active_turns == 0
+            assert broker.runtime_snapshot().queued_prompts == 0
+    finally:
+        broker.close()
+
+
+def test_pending_prompt_admission_does_not_share_its_gate_lease(
+    tmp_path: Path,
+) -> None:
+    storage, _thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with broker.admit_prompt(
+            "One target preparation owns this request",
+            client_request_id="automation:admission-pending",
+            unattended=True,
+        ):
+            with pytest.raises(RuntimeBrokerError) as duplicate:
+                with broker.admit_prompt(
+                    "One target preparation owns this request",
+                    client_request_id="automation:admission-pending",
+                    unattended=True,
+                ):
+                    pytest.fail("a duplicate admission must not be yielded")
+            _assert_broker_error(duplicate, "thread_prompt_pending")
+
+            with pytest.raises(RuntimeBrokerError) as mismatch:
+                with broker.admit_prompt(
+                    "Different input cannot reuse this request",
+                    client_request_id="automation:admission-pending",
+                    unattended=True,
+                ):
+                    pytest.fail("a mismatched admission must not be yielded")
+            _assert_broker_error(mismatch, "runtime_request_conflict")
+
+            assert broker.runtime_snapshot().active_turns == 1
+            assert broker.runtime_snapshot().queued_prompts == 0
+    finally:
+        broker.close()
+
+
+def test_prompt_admission_argument_mismatch_releases_without_local_acceptance(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with pytest.raises(RuntimeBrokerError) as mismatch:
+            with broker.admit_prompt(
+                "Admitted automation input",
+                client_request_id="automation:admission-mismatch",
+                unattended=True,
+            ) as admission:
+                broker.submit_prompt(
+                    thread.thread_id,
+                    "Changed automation input",
+                    client_request_id="automation:admission-mismatch",
+                    unattended=True,
+                    admission=admission,
+                )
+
+        _assert_broker_error(mismatch, "runtime_request_conflict")
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert not broker._state.request_idempotency
+        assert not broker._pending_prompt_admissions
+        assert not client.requests
+        assert not any(
+            event.event_type in {"message.created", "run.queued", "run.started"}
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
+def test_pending_prompt_admission_reserves_idempotency_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_broker_module, "_MAX_REQUEST_OUTCOMES", 1)
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with broker.admit_prompt(
+            "Reserve the only request outcome slot",
+            client_request_id="automation:admission-capacity",
+            unattended=True,
+        ):
+            with pytest.raises(RuntimeBrokerError) as exhausted:
+                broker.submit_prompt(
+                    thread.thread_id,
+                    "Cannot steal the reserved outcome slot",
+                    client_request_id="interactive-capacity-steal",
+                )
+            _assert_broker_error(exhausted, "runtime_idempotency_capacity")
+
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+    finally:
+        broker.close()
+
+
+def test_run_construction_failure_after_reservation_releases_prompt_lease(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    stored = storage.load_thread(thread.thread_id)
+    stored.model_override = f"legacy-{'m' * 128}"
+    storage.save_thread(stored)
+    assert len(storage.get_thread(thread.thread_id).effective_model) > 128
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with pytest.raises(ValueError, match="model"):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Reject the invalid legacy runtime state safely",
+                client_request_id="construction-after-reserve-rejected",
+            )
+
+        assert not client.requests
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        auth_lease = broker.gate.acquire_auth_mutation()
+        auth_lease.release()
+    finally:
+        broker.close()
+
+
+def test_idempotent_replay_does_not_require_current_provider_admission(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission = {"allowed": True}
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        accepted = broker.submit_prompt(
+            thread.thread_id,
+            "Persist this exact request",
+            client_request_id="admission-idempotent-replay",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+        provider_request_count = len(client.requests)
+
+        admission["allowed"] = False
+        replay = broker.submit_prompt(
+            thread.thread_id,
+            "Persist this exact request",
+            client_request_id="admission-idempotent-replay",
+        )
+
+        assert replay.run_id == accepted.run_id
+        assert replay.status == "completed"
+        assert len(client.requests) == provider_request_count
+    finally:
+        broker.close()
+
+
+def test_provider_admission_check_failure_rejects_prompt_without_leaking_error(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+
+    def broken_admission_check() -> bool:
+        raise RuntimeError("private auth-coordinator failure")
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=broken_admission_check,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must fail closed",
+                client_request_id="admission-check-failed",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert "private auth-coordinator failure" not in str(rejected.value)
+        assert not client.requests
+        assert storage.load_thread(thread.thread_id).status == "idle"
+    finally:
+        broker.close()
+
+
+def test_queued_prompt_is_cancelled_without_provider_request_when_admission_closes(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="AdmissionClosed")
+    client = ValidatorBackedAppServer()
+    admission = {"allowed": True}
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        broker.submit_prompt(
+            active_thread.thread_id,
+            "Keep the runtime occupied",
+            client_request_id="admission-active",
+        )
+        _active_run_id, remote_thread_id, turn_id = _active_ids(
+            storage,
+            active_thread.thread_id,
+        )
+        queued = broker.submit_prompt(
+            queued_thread.thread_id,
+            "Must not reach the changed account",
+            client_request_id="admission-queued",
+        )
+        assert queued.status == "queued"
+        provider_request_counts = {
+            method: len(_requests(client, method))
+            for method in ("thread/start", "thread/resume", "turn/start")
+        }
+
+        admission["allowed"] = False
+        _complete(
+            client,
+            remote_thread_id=remote_thread_id,
+            turn_id=turn_id,
+        )
+
+        _wait_until(
+            lambda: any(
+                event.event_type == "run.cancelled"
+                and event.payload.get("run_id") == queued.run_id
+                for event in storage.list_thread_events(queued_thread.thread_id)
+            ),
+            message="queued prompt was not cancelled after provider admission closed",
+        )
+        assert {
+            method: len(_requests(client, method))
+            for method in ("thread/start", "thread/resume", "turn/start")
+        } == provider_request_counts
+        queued_record = storage.load_thread(queued_thread.thread_id)
+        assert queued_record.status == "idle"
+        assert queued_record.codex_thread_id is None
+        assert broker.runtime_snapshot().queued_prompts == 0
     finally:
         broker.close()
 
@@ -3442,7 +4111,7 @@ def test_deleting_terminal_thread_reclaims_idempotency_capacity(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        old_run = broker.submit_prompt(
+        broker.submit_prompt(
             old_thread.thread_id,
             "Retained terminal request",
             client_request_id="delete-capacity-old",
@@ -3478,9 +4147,6 @@ def test_deleting_terminal_thread_reclaims_idempotency_capacity(
         broker.answer_user_input(
             thread_id=old_thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=old_run.run_id,
-            turn_id=turn_id,
-            item_id="delete-capacity-question",
             answers={"scope": ["Source"]},
             client_request_id="delete-capacity-answer",
         )
@@ -4034,7 +4700,7 @@ def test_late_previous_turn_notifications_cannot_bind_a_resumed_run(
             and event.payload.get("run_id") == second.run_id
         ]
         assert len(second_started) == 1
-        assert second_started[0].payload["turn_id"] == new_turn_id
+        assert _private_run(broker, second.run_id).codex_turn_id == new_turn_id
         assert any(
             event.event_type == "message.delta"
             and event.payload.get("text") == "Buffered current output"
@@ -4056,7 +4722,7 @@ def test_pre_response_requests_are_replayed_only_for_the_validated_turn(
     client.block_next_turn_start = True
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Buffer approval until the turn is identified",
             client_request_id="pre-response-approval-run",
@@ -4117,14 +4783,14 @@ def test_pre_response_requests_are_replayed_only_for_the_validated_turn(
             if response[0].request_id == "provider-pre-response-stale"
         )
         assert stale_response[1] == {"decision": "decline"}
-        assert pending["item_id"] == "current-item"
+        assert (
+            _private_interaction(broker, pending["interaction_id"]).item_id
+            == "current-item"
+        )
 
         decided = broker.decide_approval(
             thread_id=thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=run.run_id,
-            turn_id="codex-turn-1",
-            item_id="current-item",
             decision="decline",
             client_request_id="pre-response-current-decision",
         )
@@ -4893,7 +5559,7 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Approve safely",
             client_request_id="client-approval-run",
@@ -4933,8 +5599,12 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
         pending = _pending_one(broker, thread.thread_id)
         assert pending["kind"] == expected_kind
         assert pending["thread_id"] == thread.thread_id
-        assert pending["turn_id"] == turn_id
-        assert pending["item_id"] == params["itemId"]
+        private_interaction = _private_interaction(
+            broker,
+            pending["interaction_id"],
+        )
+        assert private_interaction.turn_id == turn_id
+        assert private_interaction.item_id == params["itemId"]
         safe_pending = json.dumps(pending)
         assert "provider-request-private-1" not in safe_pending
         assert (
@@ -4959,9 +5629,6 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
         kwargs = {
             "thread_id": thread.thread_id,
             "interaction_id": pending["interaction_id"],
-            "run_id": run.run_id,
-            "turn_id": turn_id,
-            "item_id": params["itemId"],
             "decision": "accept",
             "client_request_id": "client-decision-1",
         }
@@ -5198,7 +5865,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
     )
     broker.start()
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Ask after some work",
             client_request_id="interaction-idle-refresh",
@@ -5235,9 +5902,6 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
         result = broker.answer_user_input(
             thread_id=thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=run.run_id,
-            turn_id=turn_id,
-            item_id="idle-refresh-question",
             answers={"scope": ["Source only"]},
             client_request_id="idle-refresh-answer",
         )
@@ -5259,7 +5923,7 @@ def test_cancel_approval_transitions_run_to_cancelled(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Cancel from approval",
             client_request_id="cancel-decision-active",
@@ -5294,9 +5958,6 @@ def test_cancel_approval_transitions_run_to_cancelled(
         result = broker.decide_approval(
             thread_id=thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=run.run_id,
-            turn_id=turn_id,
-            item_id="cancel-decision-item",
             decision="cancel",
             client_request_id="cancel-decision-response",
         )
@@ -5327,7 +5988,7 @@ def test_unknown_cancel_response_still_activates_cancel_watchdog(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client, cancel_grace_seconds=0.03)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Cancel despite uncertain write",
             client_request_id="cancel-unknown-active",
@@ -5367,9 +6028,6 @@ def test_unknown_cancel_response_still_activates_cancel_watchdog(
             broker.decide_approval(
                 thread_id=thread.thread_id,
                 interaction_id=pending["interaction_id"],
-                run_id=run.run_id,
-                turn_id=turn_id,
-                item_id="cancel-unknown-item",
                 decision="cancel",
                 client_request_id="cancel-unknown-response",
             )
@@ -5400,7 +6058,7 @@ def test_provider_resolution_race_after_cancel_write_still_cancels_run(
     broker = _broker(storage, client, cancel_grace_seconds=0.03)
     original_respond = client.respond
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Cancel across provider resolution race",
             client_request_id="cancel-resolved-race-active",
@@ -5452,9 +6110,6 @@ def test_provider_resolution_race_after_cancel_write_still_cancels_run(
             broker.decide_approval(
                 thread_id=thread.thread_id,
                 interaction_id=pending["interaction_id"],
-                run_id=run.run_id,
-                turn_id=turn_id,
-                item_id="cancel-race-item",
                 decision="cancel",
                 client_request_id="cancel-race-response",
             )
@@ -5797,7 +6452,7 @@ def test_rename_approval_displays_source_and_destination_paths(tmp_path: Path) -
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Rename safely",
             client_request_id="rename-approval-run",
@@ -5841,9 +6496,6 @@ def test_rename_approval_displays_source_and_destination_paths(tmp_path: Path) -
         broker.decide_approval(
             thread_id=thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=run.run_id,
-            turn_id=turn_id,
-            item_id="rename-item",
             decision="decline",
             client_request_id="rename-decline",
         )
@@ -5907,9 +6559,6 @@ def test_blocked_interaction_write_does_not_hold_broker_lock(
         kwargs = {
             "interaction_id": pending["interaction_id"],
             "thread_id": thread.thread_id,
-            "run_id": run.run_id,
-            "turn_id": turn_id,
-            "item_id": "blocked-write-item",
             "decision": "accept",
             "client_request_id": "client-blocked-decision",
         }
@@ -5955,7 +6604,7 @@ def test_thread_delete_waits_for_inflight_interaction_publication(
     release = Event()
     original_respond = client.respond
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Resolve without orphaning events",
             client_request_id=f"delete-{response_kind}-active",
@@ -6032,18 +6681,12 @@ def test_thread_delete_waits_for_inflight_interaction_publication(
                 return broker.decide_approval(
                     thread_id=thread.thread_id,
                     interaction_id=pending["interaction_id"],
-                    run_id=run.run_id,
-                    turn_id=turn_id,
-                    item_id="delete-approval-item",
                     decision="accept",
                     client_request_id="delete-approval-response",
                 )
             return broker.answer_user_input(
                 thread_id=thread.thread_id,
                 interaction_id=pending["interaction_id"],
-                run_id=run.run_id,
-                turn_id=turn_id,
-                item_id="delete-question-item",
                 answers={"scope": ["Source"]},
                 client_request_id="delete-question-response",
             )
@@ -6084,7 +6727,7 @@ def test_failed_interaction_write_is_persisted_as_outcome_unknown(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Approval outcome",
             client_request_id="client-response-failure",
@@ -6125,9 +6768,6 @@ def test_failed_interaction_write_is_persisted_as_outcome_unknown(
         kwargs = {
             "interaction_id": pending["interaction_id"],
             "thread_id": thread.thread_id,
-            "run_id": run.run_id,
-            "turn_id": turn_id,
-            "item_id": "failed-write-item",
             "decision": "accept",
             "client_request_id": "client-failed-decision",
         }
@@ -6219,7 +6859,7 @@ def test_user_question_deferred_answer_is_exact_and_secret_questions_are_rejecte
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Ask",
             client_request_id="client-question-run",
@@ -6261,9 +6901,6 @@ def test_user_question_deferred_answer_is_exact_and_secret_questions_are_rejecte
                 broker.answer_user_input(
                     thread_id=thread.thread_id,
                     interaction_id=pending["interaction_id"],
-                    run_id=run.run_id,
-                    turn_id=turn_id,
-                    item_id="question-item-1",
                     answers=answers,
                     client_request_id=f"client-invalid-answer-{index}",
                 )
@@ -6272,9 +6909,6 @@ def test_user_question_deferred_answer_is_exact_and_secret_questions_are_rejecte
         result = broker.answer_user_input(
             thread_id=thread.thread_id,
             interaction_id=pending["interaction_id"],
-            run_id=run.run_id,
-            turn_id=turn_id,
-            item_id="question-item-1",
             answers={"scope": ["Source and docs"]},
             client_request_id="client-answer-1",
         )
@@ -6316,7 +6950,7 @@ def test_provider_resolved_notification_expires_token_and_blocks_late_decision(
     client = ValidatorBackedAppServer()
     broker = _broker(storage, client)
     try:
-        run = broker.submit_prompt(
+        broker.submit_prompt(
             thread.thread_id,
             "Resolve",
             client_request_id="client-resolved-run",
@@ -6359,9 +6993,6 @@ def test_provider_resolved_notification_expires_token_and_blocks_late_decision(
             broker.decide_approval(
                 thread_id=thread.thread_id,
                 interaction_id=pending["interaction_id"],
-                run_id=run.run_id,
-                turn_id=turn_id,
-                item_id="command-resolved-1",
                 decision="accept",
                 client_request_id="client-too-late",
             )
@@ -6656,7 +7287,10 @@ def test_cold_restart_expires_pending_and_quarantines_responding_interaction(
         )
 
     interactions_by_item = {
-        interaction.item_id: interaction
+        _private_interaction(
+            original_broker,
+            interaction.interaction_id,
+        ).item_id: interaction
         for interaction in original_broker.pending_interactions(thread.thread_id)
     }
     pending = interactions_by_item["restart-pending-item"]

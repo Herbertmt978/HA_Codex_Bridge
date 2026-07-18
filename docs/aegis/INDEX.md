@@ -13,5 +13,6 @@
 | Design spec | 2026-07-12 | Approved for implementation | [Home Assistant-native Codex](specs/2026-07-12-home-assistant-native-codex-design.md) |
 | Implementation plan | 2026-07-12 | Approved for execution | [Home Assistant-native Codex implementation](plans/2026-07-12-home-assistant-native-codex.md) |
 | Implementation plan | 2026-07-17 | Active acceptance-track execution | [Open acceptance gates](plans/2026-07-17-open-acceptance-gates.md) |
-| Work record | 2026-07-17 | `0.8.4` acceptance-foundations candidate; environment gates remain open | [Home Assistant-native Codex execution](work/2026-07-12-home-assistant-native-codex/20-checkpoint.md) |
-| Release evidence | 2026-07-17 | `0.8.4` bounded local evidence plus historical `0.8.3` publication/target smoke | [Home Assistant-native Codex execution evidence](work/2026-07-12-home-assistant-native-codex/90-evidence.md) |
+| Implementation plan | 2026-07-17 | Active account-rebinding repair | [Account-agnostic Home Assistant chats](plans/2026-07-17-account-agnostic-chats.md) |
+| Work record | 2026-07-17 | `0.8.11` account-neutral chat candidate; publication and target gates open | [Home Assistant-native Codex execution](work/2026-07-12-home-assistant-native-codex/20-checkpoint.md) |
+| Release evidence | 2026-07-17 | Signed `0.8.10` plus bounded `0.8.11` local account-rebinding evidence | [Home Assistant-native Codex execution evidence](work/2026-07-12-home-assistant-native-codex/90-evidence.md) |
