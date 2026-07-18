@@ -608,11 +608,15 @@ provenance attestation `35904448`, signature verification, and the SBOM
 attestation passed. This publication evidence does not by itself claim a live
 5,000-word target-HA result.
 
-## 0.8.11 account-neutral chat candidate
+## 0.8.11 signed account-neutral chat release and target acceptance
 
-App/Integration/panel `0.8.11` with Bridge `0.7.6` and Codex `0.144.5` is a
-source candidate at this checkpoint. It has no release tag, immutable digest,
-publication run, or target-HA account-switch acceptance yet.
+App/Integration/panel `0.8.11` with Bridge `0.7.6` and Codex `0.144.5` was
+published from exact main commit `5387a2abcdeac3a5a3c01fe96876634af56542ad`.
+Signed App publication `29633146637`, the paired Integration release,
+signature, SBOM, and provenance checks passed. The immutable image digest is
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+The target Home Assistant accepted account-neutral chats while preserving the
+existing **Test** chat history.
 
 | Evidence or acceptance item | Status |
 | --- | --- |
@@ -640,4 +644,20 @@ publication run, or target-HA account-switch acceptance yet.
 | Home Assistant Integration | A disposable WSL-native Python 3.14.5 environment installed the repository's exact pinned `requirements-test.txt`, including Home Assistant 2026.7.2, and the full Integration matrix passed `319 passed` in 10.83 seconds. This covers the browser-safe thread/interaction projections, capability negotiation, and defensive old-App compatibility path on the same operating-system family used by CI and the App. |
 | Frontend gates | ESLint passed; all `320` Vitest unit tests passed; the production panel and local PDF worker rebuilt; and all `22` Playwright browser flows passed. |
 | Independent review | Final Terra review found no P0-P2 defect after checking account-neutral persistence, provider-continuity privacy, version skew, admission/idempotency races, lock order, and the updated regression harness. |
-| Open gates | Protected CI, signed publication, installation, an actual different-account switch, and bounded existing-chat prompt acceptance remain pending. |
+| Publication and target acceptance | Signed publication and the bounded target account-neutral acceptance completed. Existing **Test** history remained visible; local chats continued against the currently signed-in ChatGPT account without account-partitioning browser state. |
+
+## 1.0.0 stable-promotion source evidence
+
+This section records source work only. App/Integration/panel are promoted to
+`1.0.0`; Bridge remains `0.7.6`; Codex remains `0.144.5`; and the App lifecycle
+stage is `stable`. No `1.0.0` tag, signed image digest, publication workflow, or
+target-Home-Assistant installation is claimed at this checkpoint.
+
+| Evidence or acceptance item | Status |
+| --- | --- |
+| Stable metadata | App configuration, Integration manifest, panel constant, package metadata, Docker/runtime projections, and release notes are synchronized for `1.0.0`. The App remains explicitly `amd64`; stable status is not an official Home Assistant or HACS endorsement. |
+| Composer Send-state RED/GREEN | A frontend regression first demonstrated that the Send control stayed disabled after a typed draft until a separate render/Refresh. The prompt input path now re-renders canonical composer state after storing the per-chat draft; focused tests prove nonblank input enables Send and whitespace disables it. |
+| Explicit release versioning | `scripts/sync_app_release.py --set-version 1.0.0` provides a forward-only stable-version path. New tests prove it updates App projections, rejects equal, older, or prerelease targets, and restores every already-committed projection after an injected third-file replacement failure. |
+| Account-neutral continuity | The accepted `0.8.11` static-chat contract is retained: chat/project/transcript/file/workspace/archive/automation state is local and static; only stale private provider continuity is detached when the ChatGPT account changes. |
+| Fresh local release gates | Ruff, compileall, synchronized-release and Codex-lock checks passed. The full isolated Bridge matrix passed `1500 passed, 218 skipped`; release/security/updater focus passed `57 passed, 1 skipped`; the WSL Home Assistant Integration matrix passed `319 passed`; ESLint and all `321` Vitest units passed; the production panel/PDF worker rebuilt; and all `22` Playwright flows passed. |
+| Open capability boundaries | Target PDF Files list/archive/preview/download acceptance, real Nabu Casa/Cloudflare remote-path acceptance, cold restore and arbitrary retained-image rollback, and secure App-owned browser-worker isolation remain open. |

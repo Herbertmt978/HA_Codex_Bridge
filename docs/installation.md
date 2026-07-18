@@ -2,12 +2,22 @@
 
 ## Status before you start
 
-This guide covers the target-HA-accepted experimental, `amd64`-only App,
-Integration, and panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. The matrix
-was installed and running on target Home Assistant `192.168.50.20` on
-2026-07-16. App publication run `29511116947` produced immutable digest
-`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`
-and attestation `35670902`.
+The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
+Bridge `0.7.6` with Codex `0.144.5`. Confirm that the signed `1.0.0` release is
+present on GitHub before installing.
+It fixes a panel-only composer defect so **Send** changes state immediately as a
+prompt is typed, and retains account-neutral local chats across a ChatGPT
+account switch. This remains a custom Integration/App repository: HACS or Home
+Assistant installation does not imply a HACS or Home Assistant listing, review,
+endorsement, or support.
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified on the target Home Assistant.
 
 Provider-gated native web search defaults to Live for Supervisor prompts and
 automations, re-negotiates automatically after ChatGPT sign-in, and guides
@@ -174,7 +184,7 @@ device-auth page.
 - Read [remote access](remote-access.md) before exposing Home Assistant
   remotely.
 - Enable App auto-update only after making a cold backup and accepting the
-  experimental update/recovery limits described below.
+  documented update/recovery limits described below.
 - Make a cold backup before an App change; see
   [backup and recovery](backup-restore.md).
 - Never paste device codes, cookies, bearer tokens, or API keys into App

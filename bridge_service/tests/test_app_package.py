@@ -45,7 +45,7 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
     assert config.get("startup", "application") == "application"
     assert config.get("boot", "auto") == "auto"
     assert config["init"] is False
-    assert config["stage"] == "experimental"
+    assert config["stage"] == "stable"
     assert config["backup"] == "cold"
     assert config["arch"] == ["amd64"]
     assert config["image"] == "ghcr.io/herbertmt978/ha-codex-bridge-app"

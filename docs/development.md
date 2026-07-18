@@ -6,7 +6,7 @@
 | --- | --- |
 | `custom_components/codex_bridge` | Home Assistant Integration and panel surface. |
 | `bridge_service` | Private Bridge API, runtime coordination, and tests. |
-| `codex_bridge_app` | Experimental Supervisor App definition, sandbox, and App documentation. |
+| `codex_bridge_app` | Stable, `amd64`-only Supervisor App definition, sandbox, and App documentation. |
 | `frontend` | Panel source and browser tests. |
 | `bridge_service/src/codex_bridge_service/automations.py` | Durable automation definitions, schedules, claims, and bounded run history. |
 | `bridge_service/src/codex_bridge_service/capabilities.py` | Workspace skills, plugins, and marketplace adapter. |
@@ -53,22 +53,23 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current target-HA-accepted matrix is Integration/App/panel `0.7.5`, Bridge
-`0.6.3`, and Codex `0.144.5`. On 2026-07-16 ChatGPT Pro remained connected; a
-fresh direct chat defaulted to `gpt-5.6-sol`/`low`; the runtime exposed Sol,
-Terra, Luna, and Low through Ultra where advertised; and the compact composer
-showed five-hour `Off` and Week `60%`. The natural Malta weather prompt recorded
-`Searching the web` and returned current live conditions. Provider-gated native
+The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
+Bridge `0.7.6` with Codex `0.144.5`.
+Preserve its immediate composer Send-state rendering and the account-neutral
+local-chat contract: local records remain after a ChatGPT account switch while
+stale private provider-thread continuity is detached. Provider-gated native
 search remains separate from the disabled model-controlled shell network.
-Image generation, plugins/marketplaces, MCP, external routing, cold restore,
-and arbitrary prior-image rollback were not exercised in this acceptance pass.
-Preserve the compact composer and canonical-version release tests. The
-published/signed `0.7.0` baseline has generic image digest
-`sha256:04e0cd5f805e4f0f587ebdfa6c3e6f7516f6650c444850a59d7e5765930d31ea`
-with amd64 child
-`sha256:7d60cb8c7bfe696f6432fb9b744434ca63ca8f8f92724ab580aa1dbf32addfcc`.
-Main CI `29471288344` and publication `29471288457` succeeded, with signature,
-SBOM, and provenance on the [release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.7.0).
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified. PDF list/archive/preview/download, external
+routing, cold restore, arbitrary prior-image rollback, and the secure
+App-owned browser worker remain unproven. Preserve the compact composer and
+canonical-version release tests.
 Its catalogue recovery must remain ordered:
 live app-server discovery first, then a verified last-known-good record, then
 the dynamically read installed Codex bundled catalogue, and static fallback

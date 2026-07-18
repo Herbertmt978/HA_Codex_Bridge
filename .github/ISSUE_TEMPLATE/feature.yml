@@ -25,7 +25,7 @@ body:
     id: boundary
     attributes:
       label: Security and compatibility considerations
-      description: Explain any impact on HA-only browser access, workspaces, login, or the experimental App.
+      description: Explain any impact on HA-only browser access, workspaces, login, or the stable, amd64-only Supervisor App.
   - type: checkboxes
     id: checks
     attributes:

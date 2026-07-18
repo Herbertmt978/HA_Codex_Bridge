@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -121,6 +122,77 @@ def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) ->
     assert (
         ROOT / "bridge_service/src/codex_bridge_service/build_info.py"
     ).read_bytes() == untouched["bridge_version"]
+
+
+def test_set_version_updates_all_managed_app_projection_files(tmp_path: Path) -> None:
+    root = _fixture(tmp_path)
+    current_version, _codex_version, bridge_version = _canonical_versions()
+    current_major, _current_minor, _current_patch = current_version.split(".")
+    target_version = f"{int(current_major) + 1}.0.0"
+
+    result = _run(root, "--set-version", target_version)
+    assert result.returncode == 0, result.stderr
+    assert _run(root, "--check").returncode == 0
+
+    config = (root / "codex_bridge_app/config.yaml").read_text(encoding="utf-8")
+    dockerfile = (root / "codex_bridge_app/Dockerfile").read_text(encoding="utf-8")
+    run = (
+        root / "codex_bridge_app/rootfs/etc/s6-overlay/s6-rc.d/codex-bridge/run"
+    ).read_text(encoding="utf-8")
+    changelog = (root / "codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
+    assert f'version: "{target_version}"' in config
+    assert f'io.hass.version="{target_version}"' in dockerfile
+    assert f'CODEX_BRIDGE_APP_VERSION="{target_version}"' in dockerfile
+    assert f"CODEX_BRIDGE_APP_VERSION={target_version}" in run
+    assert f'CODEX_BRIDGE_VERSION="{bridge_version}"' in dockerfile
+    assert f"CODEX_BRIDGE_VERSION={bridge_version}" in run
+    assert changelog.index(f"## {target_version}") < changelog.index(
+        f"## {current_version}"
+    )
+
+
+@pytest.mark.parametrize("version", ["0.8.11", "0.8.10", "1.0.0-rc.1"])
+def test_set_version_rejects_non_monotonic_or_unstable_versions(
+    tmp_path: Path, version: str
+) -> None:
+    root = _fixture(tmp_path)
+
+    result = _run(root, "--set-version", version)
+
+    assert result.returncode != 0
+    assert "version" in result.stderr.lower()
+
+
+def test_atomic_replace_rolls_back_every_committed_file_on_mid_commit_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _script_module()
+    paths = [tmp_path / f"projection-{index}.txt" for index in range(4)]
+    originals = {}
+    changes = {}
+    for index, path in enumerate(paths):
+        original = f"original-{index}\n".encode()
+        path.write_bytes(original)
+        originals[path] = original
+        changes[path] = f"updated-{index}\n".encode()
+
+    real_replace = os.replace
+    replace_calls = 0
+
+    def fail_third_commit(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
+        nonlocal replace_calls
+        replace_calls += 1
+        if replace_calls == 3:
+            raise PermissionError("injected mid-commit failure")
+        real_replace(source, target)
+
+    monkeypatch.setattr(module.os, "replace", fail_third_commit)
+
+    with pytest.raises(PermissionError, match="injected mid-commit failure"):
+        module._atomic_replace(changes)
+
+    assert {path: path.read_bytes() for path in paths} == originals
+    assert [path for path in tmp_path.iterdir() if path.name.startswith(".")] == []
 
 
 def test_check_fails_on_projection_drift_without_writing(tmp_path: Path) -> None:

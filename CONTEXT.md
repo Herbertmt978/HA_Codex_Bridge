@@ -29,41 +29,25 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed coordinated release: App/Integration/panel `0.8.10`, Bridge
-  `0.7.5`, and Codex `0.144.5` (experimental and `amd64` only). Signed App
-  publication `29613120991` and the paired Integration release were produced
-  from exact main commit `9fdfe53671d4773f3e955abb2720b408d874cd29`.
-  The immutable image digest is
-  `sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`
-  with provenance attestation `35904448` and a verified SBOM attestation. The
-  latest recorded target installation remains `0.8.9`; it
-  retained ChatGPT Pro/history, preview, and transcript-only scrolling. The
-  last complete generated-image browser-download acceptance is `0.8.7`. The
-  last bounded prompt-path smoke remains `0.8.3`; it retained ChatGPT Pro/history,
-  recovered stale run state, completed a GPT-5.6-Sol prompt, and exposed native
-  live-search activity without a false global connection error.
-  The typed PDF Files `409` now has a locally covered repair, but real target
-  list/archive/preview/download acceptance remains pending. External Nabu
-  Casa/Cloudflare routing, arbitrary previous-image rollback, and the secure
-  App-owned browser worker remain explicitly unaccepted.
-- Signed App/Integration/panel `0.8.9` is installed with Bridge `0.7.4` and
-  Codex `0.144.5`; ChatGPT Pro, projects, history, generated-image preview, and
-  transcript-only scrolling remained healthy. During the preceding `0.8.7`
-  acceptance, the browser persisted a complete 3,276,457-byte PNG with the
-  expected signature and SHA-256
-  `F211434D64D69C2246A600445B9B69DDAB82D6D676D32FD0D215D178DB7D31FF`.
-  Chrome's automation event did not report the blob download, so the persisted
-  file is the acceptance evidence.
-- Two live 5,000-word prompts on `0.8.9` stopped after the same short prefix.
-  Partial-output preservation passed, but long-response acceptance failed:
-  rapid token deltas could overflow the App-server callback queue and restart
-  Codex. Signed `0.8.10` with Bridge `0.7.5` coalesces adjacent text deltas into
-  bounded ordered callbacks and reports a genuine restart as **Run
-  interrupted**. Target-HA long-response acceptance remains a separate gate.
-- Candidate `0.8.11` with Bridge `0.7.6` makes local chats account-neutral.
-  Projects, chat IDs, transcripts, files, workspace settings, archive state,
-  and automation targets remain static across ChatGPT account changes. A
-  private HMAC owner marker detaches only the stale provider-thread/runtime
+- Latest signed and target-accepted coordinated release: App/Integration/panel
+  `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` (`amd64`). It was published
+  from exact main commit `5387a2abcdeac3a5a3c01fe96876634af56542ad` by signed
+  App publication `29633146637`; the immutable image digest is
+  `sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+  The paired Integration release, signature, SBOM, and provenance checks
+  passed. Target Home Assistant retained the existing **Test** chat history and
+  accepted account-neutral chat continuity across the signed-in ChatGPT account.
+  This is bounded evidence, not a claim that every optional capability has been
+  accepted.
+- The `1.0.0` stable promotion is current source work only: App, Integration,
+  and panel `1.0.0`, Bridge `0.7.6`, Codex `0.144.5`, and App lifecycle stage
+  `stable`. It adds a regression-tested immediate composer Send-state update
+  after typed input and explicit stable-version synchronization tooling. It has
+  not yet been signed, published, or installed on the target Home Assistant.
+- The account-neutral contract introduced in `0.8.11` makes local chats static
+  across ChatGPT account changes. Projects, chat IDs, transcripts, files,
+  workspace settings, archive state, and automation targets remain static.
+  A private HMAC owner marker detaches only the stale provider-thread/runtime
   projection, so the next prompt in the same chat starts through the currently
   connected account. Pre-0.8.11 unowned handles detach once. No email, Bridge
   secret, or marker is projected into browser APIs, events, diagnostics, or
@@ -71,7 +55,13 @@ to the App or Bridge.
   detach provider continuity and auth-block UI/automation turns until verified.
   A newer hint invalidates any account read already in flight, and queued
   prompts recheck admission before making a provider request.
-  Signed publication and target-HA account-switch acceptance remain open.
+  Signed publication and target-HA account-switch acceptance completed for
+  `0.8.11`; the same release discipline remains required for `1.0.0`.
+- The typed PDF Files `409` has a locally covered repair, but real target
+  list/archive/preview/download acceptance remains pending. Real Nabu
+  Casa/Cloudflare remote-path acceptance, cold restore and arbitrary
+  previous-image rollback, and the secure App-owned browser worker remain
+  explicitly unaccepted.
 - The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
   history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
   native web-search source/stage history, and subagent stage history. Its PDF

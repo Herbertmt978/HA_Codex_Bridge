@@ -12,8 +12,8 @@ Read the [README](README.md), [App documentation](codex_bridge_app/DOCS.md), and
 - Home Assistant version and installation type.
 - Integration/Bridge version and App version, if installed.
 - Processor architecture (`amd64` is the current App target).
-- Whether the report concerns the experimental App or an optional external
-  Bridge.
+- Whether the report concerns the stable, `amd64`-only Supervisor App or an
+  optional external Bridge.
 - A minimal reproduction and redacted App/Integration diagnostics.
 
 Never include device codes, bearer tokens, cookies, credentials, full private
@@ -41,27 +41,25 @@ workspace paths, or workspace secrets.
   network is separate from provider-side web search. Do not treat a plausible
   answer without web-search activity as a live result.
 
-The target-HA-accepted coordinated baseline is App/Integration `0.7.5` with
-Bridge `0.6.3` and Codex `0.144.5`. The latest signed release is
-App/Integration/panel `0.8.10` with Bridge `0.7.5` and Codex `0.144.5`; it
-coalesces rapid text deltas and reports a typed runtime interruption if Codex
-genuinely restarts. Candidate `0.8.11` with Bridge `0.7.6` keeps Home
-Assistant chats, projects, transcripts, files, workspace settings, archive
-state, and automation targets local and static across an observed ChatGPT
-account change. It detaches only stale private provider-thread continuity; an
-identity-less account read detaches that private continuity and blocks prompts
-and automations until ownership is verified. In-flight account reads are
-invalidated by newer account hints, and queued prompts recheck ownership before
-making a provider request. Signed publication and bounded
-target-HA acceptance for `0.8.11` remain pending. The historical
-0.8.0 live exercise passed install/pairing, ChatGPT Pro/history, versions,
-GPT-5.6 models, Max/Ultra, five-hour `Off`, native web-search source/stage
-history, and subagent stage history, but PDF indexing/archive returned
-persistent HTTP 409 after an App restart. That PDF result remains historical;
-current target PDF list/archive/preview/download acceptance is still pending.
-Issue #43 tracks the secure App-owned browser-worker follow-up; interactive
+The stable `1.0.0` App/Integration/panel release retains the
+`amd64`-only Supervisor scope, Bridge `0.7.6`, and Codex `0.144.5`. It fixes a
+panel-only composer defect: **Send** now enables or disables immediately as a
+prompt is typed, without needing a refresh. The local chat contract is account
+neutral: chats, projects, transcripts, files, workspace settings, archive
+state, and automation targets remain available across a ChatGPT account
+change; only stale private provider-thread continuity is detached. Verify the
+signed `1.0.0` release and immutable-image evidence on GitHub before installing.
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified. Target acceptance remains deliberately bounded:
+PDF list/archive/preview/download, external Nabu Casa/Cloudflare routing, cold
+restore, arbitrary App-image rollback, and the secure App-owned browser worker
+are not yet accepted. Issue #43 tracks the browser-worker follow-up; interactive
 Chromium remains deferred under ADR 0006. The historical `0.7.1` live list
 returned `capabilities_unavailable` (HTTP 503); that is not a current result.
-For recovery, use a cold backup or an existing private external Bridge;
-external blocked-network routing, cold restore, and App-image rollback remain
-unproven.
+For recovery, use a cold backup or an existing private external Bridge.

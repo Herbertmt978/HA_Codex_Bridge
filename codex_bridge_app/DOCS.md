@@ -195,19 +195,30 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-Signed App/Integration/panel `0.8.10` with Bridge `0.7.5` and Codex `0.144.5`
-is published. It coalesces rapid text deltas into bounded ordered callbacks and
-reports a genuine restart as **Run interrupted**. Candidate `0.8.11` with
-Bridge `0.7.6` keeps Home Assistant chats, projects, transcripts, files,
-workspace settings, archive state, and automation targets local and static
-across an observed ChatGPT account change. It detaches only stale private
-provider-thread continuity, so the next message starts a fresh provider
-conversation through the newly connected account. Identity-less account reads
-detach private provider continuity and leave prompts and automations blocked
-until an authoritative account read can verify ownership. A newer account hint
-invalidates an account check already in flight, and a prompt queued before the
-switch is stopped locally before any provider start or resume request.
-Candidate publication and target-HA acceptance remain separate gates.
+The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
+Bridge `0.7.6` with Codex `0.144.5`. Verify its signed release and immutable
+image evidence on GitHub before installing. It
+fixes the panel-only composer defect so **Send** is rendered immediately after
+each prompt edit. It also retains the account-neutral local-chat contract:
+Home Assistant chats, projects, transcripts, files, workspace settings, archive
+state, and automation targets remain local and static across a ChatGPT account
+change. Only stale private provider-thread continuity is detached, so the next
+message starts a fresh provider conversation through the newly connected account.
+Identity-less account reads detach that private continuity and block prompts and
+automations until ownership is verified. A newer account hint invalidates an
+account check already in flight, and a prompt queued before the switch is
+stopped locally before any provider start or resume request.
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified on target Home Assistant. The remaining bounds are
+unchanged: PDF list/archive/preview/download, external Nabu Casa/Cloudflare
+routing, cold restore, arbitrary App-image rollback, and the secure App-owned
+browser worker remain unproven.
 
 The historical fully target-HA-accepted matrix, App, Integration, and panel
 `0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,

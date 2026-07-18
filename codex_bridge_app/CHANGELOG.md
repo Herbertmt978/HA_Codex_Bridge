@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 1.0.0
+
+- Promotes the Supervisor App from Home Assistant's experimental lifecycle
+  stage to stable while retaining the explicit `amd64` support boundary.
+- Enables the composer Send action immediately when a prompt is entered or
+  pasted, removing the need for an unrelated refresh before clicking Send.
+- Adds an explicit, monotonic `--set-version X.Y.Z` release-sync path so major
+  and minor App releases update every owned immutable-image projection without
+  manual edits, with rollback if a later file replacement fails.
+- Carries forward the account-neutral Home Assistant chat contract accepted on
+  target HAOS in `0.8.11`: local chats and history remain visible while the
+  currently signed-in ChatGPT account starts fresh private provider continuity.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.6` without changing its Integration API compatibility.
+
 ## 0.8.11
 
 - Keeps Home Assistant chats, projects, transcripts, files, workspace settings,
