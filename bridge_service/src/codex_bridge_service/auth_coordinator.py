@@ -260,15 +260,13 @@ class CodexAuthCoordinator:
                         except AuthOperationConflictError:
                             operation = None
                             checking = None
-                            blocked = self._set_status_locked(
-                                state="unavailable",
-                                busy=False,
-                                auth_required=True,
-                                auth_mode=None,
-                                plan_type=None,
-                                message=MESSAGE_UNAVAILABLE,
-                                **cleared_device_fields(),
-                            )
+                            blocked_projection = self._unverified_account_status()
+                            if self._status.model_dump(
+                                exclude={"revision", "updated_at"}
+                            ) == blocked_projection:
+                                blocked = self._copy_status_locked()
+                            else:
+                                blocked = self._set_status_locked(**blocked_projection)
                         else:
                             operation = self._begin_operation_locked(
                                 "status_reconcile"

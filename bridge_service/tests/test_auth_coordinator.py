@@ -566,8 +566,10 @@ def test_account_update_during_active_turn_blocks_until_owner_is_reconciled() ->
     client.script("account/read", first, second)
     gate = RuntimeGate(limits=ResourceLimits())
     bindings: list[str] = []
+    states: list[CodexAuthStatusRecord] = []
     coordinator = _coordinator(
         client,
+        states,
         runtime_gate=gate,
         account_owner_secret=secret,
         account_binding_listener=bindings.append,
@@ -576,10 +578,16 @@ def test_account_update_during_active_turn_blocks_until_owner_is_reconciled() ->
     active = gate.reserve_prompt(client_request_id="active-turn")
 
     client.emit("account/updated", {"planType": "pro"})
+    emitted_blocked = states[-1]
+    emitted_count = len(states)
 
     blocked = coordinator.status()
+    blocked_again = coordinator.status()
     assert blocked.state == "unavailable"
     assert blocked.auth_required is True
+    assert blocked.revision == emitted_blocked.revision
+    assert blocked_again.revision == emitted_blocked.revision
+    assert len(states) == emitted_count
     assert [call.method for call in client.calls].count("account/read") == 1
 
     active.release()
@@ -606,6 +614,8 @@ def test_generation_change_fails_closed_while_runtime_gate_is_owned() -> None:
 
     client.generation = 2
     blocked = coordinator.status()
+    blocked_count = len(states)
+    blocked_again = coordinator.status()
 
     assert blocked.state == "unavailable"
     assert blocked.busy is False
@@ -613,6 +623,8 @@ def test_generation_change_fails_closed_while_runtime_gate_is_owned() -> None:
     assert blocked.auth_mode is None
     assert blocked.plan_type is None
     assert states[-1] == blocked
+    assert blocked_again.revision == blocked.revision
+    assert len(states) == blocked_count
     assert [call.method for call in client.calls].count("account/read") == 1
 
     active.release()

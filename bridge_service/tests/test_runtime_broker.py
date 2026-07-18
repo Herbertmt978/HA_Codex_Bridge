@@ -2833,6 +2833,57 @@ def test_new_prompt_is_rejected_before_provider_or_local_acceptance_when_admissi
         broker.close()
 
 
+def test_active_steer_rechecks_provider_admission_under_broker_lock(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    race = False
+    steer_admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal steer_admission_checks
+        if not race:
+            return True
+        steer_admission_checks += 1
+        return steer_admission_checks == 1
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        active = broker.submit_prompt(
+            thread.thread_id,
+            "Start before the account update",
+            client_request_id="steer-auth-race-active",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        race = True
+
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Must not steer after the account update",
+                client_request_id="steer-auth-race-follow-up",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert steer_admission_checks == 2
+        assert not _requests(client, "turn/steer")
+        assert "steer-auth-race-follow-up" not in broker._state.request_idempotency
+        assert broker._state.runs[active.run_id].status in {"starting", "running"}
+        assert not any(
+            event.event_type == "message.created"
+            and event.payload.get("client_request_id")
+            == "steer-auth-race-follow-up"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
 def test_reconciling_provider_admission_runs_without_broker_lock(
     tmp_path: Path,
 ) -> None:

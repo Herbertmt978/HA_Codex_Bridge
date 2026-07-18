@@ -26,12 +26,18 @@ All notable App changes are recorded here.
 - Discards an active device login when its App-server generation restarts,
   releases the obsolete auth lease outside the coordinator lock, and performs
   a fresh authoritative account read instead of leaving all turns blocked.
+- Returns the existing fail-closed auth snapshot while runtime ownership blocks
+  reconciliation, preventing frequent Home Assistant status polls from
+  generating duplicate revisions and durable `auth.status_changed` events.
 - Invalidates an account read or device-login poll if a newer account-update
   hint arrives before it finishes, so a stale account can never be published
   ready or rebound after the user switches accounts.
 - Rechecks account admission when each queued prompt becomes active. Prompts
   queued before an account switch stop locally without starting or resuming a
   provider thread, while the Home Assistant chat and its prompt remain visible.
+- Rechecks account admission inside the active-run branch before accepting an
+  interactive follow-up, so an account-update hint raced against the request
+  cannot persist or send a stale `turn/steer`.
 - Requires the authoritative auth state to be fully `ok` before broker
   admission or automation target preparation, so transient account checks and
   sign-out cannot leave behind local chat mutations.

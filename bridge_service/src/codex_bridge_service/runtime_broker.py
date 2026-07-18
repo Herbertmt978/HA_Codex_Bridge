@@ -640,6 +640,12 @@ class RuntimeBroker:
 
             active = self._active_run_for_thread_locked(thread_id)
             if active is not None:
+                # The authoritative account can fail closed after the
+                # pre-lock check. An active run already owns a prompt lease,
+                # so this final check cannot reconcile account ownership; it
+                # only fences the steer before any local or provider acceptance.
+                if not self._provider_admission_allowed():
+                    raise RuntimeAuthenticationRequiredError()
                 if unattended or active.unattended:
                     raise RuntimePromptPendingError()
                 if not active.codex_thread_id or not active.codex_turn_id:
