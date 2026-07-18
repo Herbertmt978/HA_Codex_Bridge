@@ -615,10 +615,11 @@ def create_app(
     # A new Integration must not send provider continuation identifiers to an
     # older App.  It therefore requires this negotiated public-only contract
     # before it surfaces any actionable interaction.
-    feature_capabilities = ["api_v1", "legacy_v0", "interactions_v2"]
+    feature_capabilities = ["api_v1", "legacy_v0"]
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         feature_capabilities.extend(
             [
+                "interactions_v2",
                 "automations_v1",
                 "skills_v1",
                 "plugins_v1",

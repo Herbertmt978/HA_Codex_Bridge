@@ -68,8 +68,9 @@ All notable App changes are recorded here.
 - Addresses approvals and questions through an App-local interaction ID. The
   browser no longer receives provider run, turn, or item locators, and durable
   event replay redacts legacy provider-continuity fields at read time.
-- Advertises the safer interaction contract explicitly so a newer Integration
-  fails locally and actionably when temporarily paired with an older App.
+- Advertises the safer interaction contract only from the HA-native profile,
+  so a newer Integration fails locally and actionably when temporarily paired
+  with an older App while the legacy external profile promises no absent route.
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
 - Bundles Bridge `0.7.6` without changing its Integration API compatibility.
