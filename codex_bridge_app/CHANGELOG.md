@@ -16,6 +16,10 @@ All notable App changes are recorded here.
 - Reconciles account-update hints through an authoritative account read under
   the runtime gate. Identity-less reads detach private provider continuity and
   keep UI and automation turns blocked until ownership is verifiable.
+- Publishes each account-change hint as `checking` and auth-required before the
+  authoritative read begins, closing direct-prompt and automation admission
+  before local mutation while deferring catalogue invalidation until the
+  settled account result.
 - Invalidates an account read or device-login poll if a newer account-update
   hint arrives before it finishes, so a stale account can never be published
   ready or rebound after the user switches accounts.

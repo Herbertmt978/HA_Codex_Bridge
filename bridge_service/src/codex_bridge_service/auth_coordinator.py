@@ -609,11 +609,19 @@ class CodexAuthCoordinator:
                 operation = None
             else:
                 operation = self._begin_operation_locked("account_updated")
-                published = None
+                published = self._set_status_locked(
+                    state="checking",
+                    busy=True,
+                    auth_required=True,
+                    auth_mode=None,
+                    plan_type=None,
+                    message=MESSAGE_CHECKING,
+                    **cleared_device_fields(),
+                )
         if published is not None:
             self._notify(published)
+        if operation is None:
             return
-        assert operation is not None
         try:
             generation, response = self._read_account()
         except Exception:

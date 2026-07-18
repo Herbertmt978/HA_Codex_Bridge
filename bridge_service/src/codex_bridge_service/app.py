@@ -506,7 +506,11 @@ def create_app(
                     status.auth_required,
                     status.plan_type,
                 )
-                if next_catalog_identity != auth_catalog_identity:
+                # Transient auth projections close prompt/automation admission,
+                # but they are not an authoritative entitlement identity. Wait
+                # for the settled account/read result before invalidating the
+                # shared model/capability caches.
+                if not status.busy and next_catalog_identity != auth_catalog_identity:
                     invalidate_catalog = getattr(
                         resolved_model_catalog_probe, "invalidate", None
                     )

@@ -438,6 +438,50 @@ def test_account_update_rereads_authoritative_owner_before_rebinding() -> None:
     assert [call.method for call in client.calls].count("account/read") == 2
 
 
+def test_account_update_blocks_readiness_while_authoritative_read_is_in_flight() -> None:
+    entered = Event()
+    release = Event()
+    client = FakeAppServerClient()
+    client.script(
+        "account/read",
+        _chatgpt_account(),
+        BlockedReply(
+            _chatgpt_account(plan_type="pro"),
+            entered,
+            release,
+        ),
+    )
+    states: list[CodexAuthStatusRecord] = []
+    coordinator = _coordinator(
+        client,
+        states,
+        runtime_gate=RuntimeGate(limits=ResourceLimits()),
+    )
+    coordinator.start()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        updating = executor.submit(
+            client.emit,
+            "account/updated",
+            {"planType": "pro"},
+        )
+        assert entered.wait(10)
+        checking = coordinator.status()
+
+        assert checking.state == "checking"
+        assert checking.busy is True
+        assert checking.auth_required is True
+        assert states[-1] == checking
+
+        release.set()
+        updating.result(timeout=12)
+
+    ready = coordinator.status()
+    assert ready.state == "ok"
+    assert ready.auth_required is False
+    assert ready.plan_type == "pro"
+
+
 def test_account_update_invalidates_an_in_flight_authoritative_read() -> None:
     secret = "stable-bridge-secret"
     entered = Event()
@@ -1033,7 +1077,13 @@ def test_auth_state_changes_publish_without_chat_context_and_repeat_occurrences(
     first_revision = coordinator.status().revision
     client.emit("account/updated", update)
 
-    assert coordinator.status().revision == first_revision + 1
+    assert coordinator.status().revision == first_revision + 2
+    assert [state.state for state in states[-4:]] == [
+        "checking",
+        "logged_out",
+        "checking",
+        "logged_out",
+    ]
     assert all(not hasattr(state, "chat_id") for state in states)
     _assert_monotonic(states)
 
@@ -1112,11 +1162,11 @@ def test_sparse_account_updates_preserve_auth_and_merge_plan_fields() -> None:
     client.emit("account/updated", {"planType": "pro"})
     updated = coordinator.status()
 
-    assert unchanged.revision == initial.revision + 1
+    assert unchanged.revision == initial.revision + 2
     assert unchanged.state == "ok"
     assert unchanged.auth_mode == "chatgpt"
     assert unchanged.plan_type == "plus"
-    assert updated.revision == unchanged.revision + 1
+    assert updated.revision == unchanged.revision + 2
     assert updated.state == "ok"
     assert updated.auth_mode == "chatgpt"
     assert updated.plan_type == "pro"

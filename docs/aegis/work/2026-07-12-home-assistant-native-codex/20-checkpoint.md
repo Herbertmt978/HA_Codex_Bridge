@@ -14,9 +14,9 @@
   queued-state, archived-chat, scheduled `continue_thread`, authoritative
   account-update, in-flight read/login invalidation, identity-less fail-closed,
   promoted-queue admission, and recovered-checkpoint coverage.
-  The fresh complete Bridge matrix passed with `1464 passed, 217 skipped` in
-  270.44 seconds; the focused account/runtime matrix passed `347 passed,
-  6 skipped` in 93.60 seconds. Frontend lint, `320` unit tests, the production
+  The fresh complete Bridge matrix passed with `1466 passed, 217 skipped` in
+  250.73 seconds; the focused account/runtime matrix passed `349 passed,
+  6 skipped` in 87.74 seconds. Frontend lint, `320` unit tests, the production
   build, and `22` browser tests also passed.
 - **Evidence refs:** `90-evidence.md` records signed `0.8.10` publication and
   bounded `0.8.11` local evidence. The implementation plan is

@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
+from codex_bridge_service.automations import AutomationValidationError
 from codex_bridge_service.build_info import BuildInfo
 from codex_bridge_service.codex_app_server import (
     AppServerNotification,
@@ -816,6 +817,97 @@ def test_native_broker_final_admission_uses_authoritative_ready_auth_status(
     assert "thread/resume" not in client.calls
     assert "turn/start" not in client.calls
     assert app.state.storage.load_thread(thread.thread_id).status == "idle"
+
+
+def test_account_update_blocks_broker_and_automation_before_local_mutation(
+    tmp_path: Path,
+) -> None:
+    class BlockingAccountClient(_SharedClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block_account_read = False
+            self.account_read_entered = threading.Event()
+            self.account_read_release = threading.Event()
+
+        def request(self, method, params=None, **kwargs):
+            if method == "account/read" and self.block_account_read:
+                self.block_account_read = False
+                self.account_read_entered.set()
+                if not self.account_read_release.wait(10):
+                    raise AssertionError("blocked account/read was not released")
+            return super().request(method, params, **kwargs)
+
+    client = BlockingAccountClient()
+    app = _ha_app(tmp_path, client)
+    thread = _seed_blocked_thread(app, name="Account update fence")
+    errors: list[BaseException] = []
+
+    with TestClient(app):
+        client.account_email = "second-account@example.test"
+        client.block_account_read = True
+        notification = AppServerNotification(
+            method="account/updated",
+            params={"authMode": "chatgpt", "planType": "pro"},
+            generation=client.generation,
+        )
+
+        def emit_update() -> None:
+            try:
+                client.notification_handlers["account/updated"](notification)
+            except BaseException as exc:  # pragma: no cover - asserted below
+                errors.append(exc)
+
+        worker = threading.Thread(target=emit_update, daemon=True)
+        worker.start()
+        assert client.account_read_entered.wait(3)
+        checking = app.state.auth_coordinator.status()
+        assert checking.state == "checking"
+        assert checking.auth_required is True
+
+        provider_calls = client.calls.count("thread/start") + client.calls.count(
+            "thread/resume"
+        )
+        with pytest.raises(RuntimeAuthenticationRequiredError):
+            app.state.runner.submit_prompt(
+                thread.thread_id,
+                "Must not reach Codex during account reconciliation",
+                client_request_id="account-update-fence",
+            )
+
+        automation = app.state.automations.create(
+            {
+                "name": "Account update automation fence",
+                "prompt": "Must not mutate the target while auth is checking.",
+                "target": {
+                    "kind": "continue_thread",
+                    "thread_id": thread.thread_id,
+                },
+                "mode": "observe",
+                "schedule": {
+                    "kind": "rrule",
+                    "rule": "RRULE:FREQ=DAILY",
+                    "start_at": "2026-07-18T01:00:00Z",
+                    "timezone": "UTC",
+                },
+            }
+        )
+        claim = app.state.automations.run_now(automation["automation_id"])
+        with pytest.raises(AutomationValidationError, match="not ready"):
+            app.state.automation_dispatch(claim)
+
+        unchanged = app.state.storage.load_thread(thread.thread_id)
+        assert unchanged.mode is RunMode.EDIT
+        assert unchanged.status == "idle"
+        assert client.calls.count("thread/start") + client.calls.count(
+            "thread/resume"
+        ) == provider_calls
+        assert "turn/start" not in client.calls
+
+        client.account_read_release.set()
+        worker.join(3)
+        assert not worker.is_alive()
+        assert errors == []
+        assert app.state.auth_coordinator.status().state == "ok"
 
 
 def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(
