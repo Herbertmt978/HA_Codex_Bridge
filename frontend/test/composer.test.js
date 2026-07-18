@@ -61,6 +61,26 @@ describe("prompt composer mutation contract", () => {
     expect(status.textContent).toBe("");
   });
 
+  it("enables the send action as soon as the user enters a prompt", () => {
+    const panel = createPanel();
+    panel._render(true);
+
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    const send = panel.shadowRoot.getElementById("send-button");
+    expect(send.disabled).toBe(true);
+
+    prompt.value = "Continue this chat";
+    prompt.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+
+    expect(panel._draftForThread("thread-alpha")).toBe("Continue this chat");
+    expect(send.disabled).toBe(false);
+
+    prompt.value = "   ";
+    prompt.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+
+    expect(send.disabled).toBe(true);
+  });
+
   it("keeps the visible composer action, accessible name, and tooltip in sync", () => {
     const panel = createPanel();
     const send = panel.shadowRoot.getElementById("send-button");

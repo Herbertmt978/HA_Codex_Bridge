@@ -11,7 +11,7 @@ Codex/OpenAI from your home network.
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
-[![App status](https://img.shields.io/badge/App-Experimental-F59E0B?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
+[![App status](https://img.shields.io/badge/App-Stable-22C55E?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
 
 [Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
@@ -56,15 +56,19 @@ App and Bridge remain private to Home Assistant.
 - **Native live search:** the natural prompt `what is the weather in Malta like
   today` recorded `Searching the web` run activity and returned current live
   conditions. This is provider-side search, not shell-command networking.
-- **Latest signed release:** App, Integration, and panel `0.8.10`, Bridge
-  `0.7.5`, and Codex `0.144.5` were published from exact main commit
-  `9fdfe53671d4773f3e955abb2720b408d874cd29`. The signed App publication
-  [run 29613120991](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29613120991)
+- **Latest signed release and account-switch acceptance:** App, Integration,
+  and panel `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` were published from
+  exact main commit `5387a2abcdeac3a5a3c01fe96876634af56542ad`. The signed App publication
+  [run 29633146637](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/runs/29633146637)
   and paired
-  [0.8.10 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.10)
+  [0.8.11 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.11)
   passed. The immutable image digest is
-  `sha256:736250059793d068bec0bb94dceec582c1272b82b18d837158857d2ca946b4c0`,
-  with provenance attestation `35904448` and a verified SBOM attestation.
+  `sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`,
+  with verified signature, provenance, and SBOM attestations. The target Home
+  Assistant retained its existing `Test` chat, project, transcript, settings,
+  and ChatGPT Pro session after the coordinated upgrade; the newly connected
+  account completed the exact account-switch acceptance prompt in that same
+  chat without resuming the previous account's private provider thread.
 - **Last prompt-path target-HA smoke:** On `192.168.50.20`, App and Integration
   `0.8.3` reported Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects,
   and chat history were retained. The former `0.8.0 PDF acceptance` thread
@@ -98,17 +102,11 @@ App and Bridge remain private to Home Assistant.
   exactly 5,000 distinct words, keeps the same Codex generation, and records
   one successful terminal event. A genuine restart is shown as
   **Run interrupted**, not a generic failure.
-- **0.8.11 account-neutral chat candidate:** Home Assistant chat IDs, projects,
-  transcripts, files, workspace settings, archive state, and automation targets
-  are no longer coupled to one ChatGPT account. A private owner binding detaches
-  only a stale Codex provider-thread handle when the account changes; the same
-  visible chat then starts a fresh provider conversation through the currently
-  signed-in account. The first upgrade detaches legacy unowned handles once.
-  Account-update hints are authoritatively re-read under the runtime gate;
-  identity-less reads detach private continuity and auth-block prompts and
-  automations until ownership is verifiable. Local producer/storage/runtime/
-  lifecycle coverage passes without exposing an email or owner marker; signed
-  publication and target-HA account-switch acceptance remain separate gates.
+- **Stable 1.0.0 release:** the App moves to Home Assistant's stable lifecycle
+  stage and retains the account-neutral chat contract accepted in `0.8.11`.
+  The composer now enables **Send** immediately as a prompt is entered, without
+  waiting for an unrelated status refresh. This lifecycle promotion does not
+  widen filesystem, network, authentication, architecture, or recovery scope.
 - **Codex parity and open boundaries:** Header, transcript, safe live actions,
   interactions, and composer share one 840-pixel reading rail; the compact
   Activity card exposes Outputs, bounded Subagent counts, Background activity,
@@ -125,17 +123,18 @@ App and Bridge remain private to Home Assistant.
   in issue #43; interactive Chromium remains deferred by
   [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md).
 
-The App remains experimental and `amd64` only. Nabu Casa and reverse-proxy
-routing preserve the same browser-to-HA trust boundary, but blocked-workplace
-routing, cold restore, and arbitrary previous-image rollback still require
-environment-specific acceptance. Historical details remain in the
+The stable App currently supports `amd64` Home Assistant OS. Nabu Casa and
+reverse-proxy routing preserve the same browser-to-HA trust boundary, but
+blocked-workplace routing, cold restore, and arbitrary previous-image rollback
+remain capability-specific limitations rather than part of the stable support
+claim. Historical details remain in the
 [changelog](codex_bridge_app/CHANGELOG.md) and signed
 [releases](https://github.com/Herbertmt978/HA_Codex_Bridge/releases).
 
 </details>
 
 > [!IMPORTANT]
-> The App is experimental and currently supports `amd64` Home Assistant OS.
+> The App is stable and currently supports `amd64` Home Assistant OS.
 > Installing the HACS Integration alone provides the panel but does not run
 > Codex; install the Supervisor App as well, or explicitly configure the
 > advanced private external Bridge.
@@ -153,7 +152,7 @@ environment-specific acceptance. Historical details remain in the
    Assistant so its Supervisor discovery handler is active.
 2. In **Settings -> Apps -> App store -> Repositories**, add
    <https://github.com/Herbertmt978/HA_Codex_Bridge>. Wait until the store
-   offers App `0.8.2` or newer, then install and start **Codex Bridge**. Do not
+   offers App `1.0.0` or newer, then install and start **Codex Bridge**. Do not
    install App `0.6.1`; it fails closed during target-HAOS readiness.
 3. In **Settings -> Devices & services**, confirm the discovered **Codex
    Bridge** Integration. Supervisor advertises the App's private HA-network IP

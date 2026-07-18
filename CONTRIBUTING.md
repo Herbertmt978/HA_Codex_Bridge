@@ -1,7 +1,7 @@
 # Contributing to Home Assistant Codex Bridge
 
 This repository contains a Home Assistant Integration, a private Bridge
-service, and an experimental Supervisor App. Preserve the boundary: browsers
+service, and a stable, `amd64`-only Supervisor App. Preserve the boundary: browsers
 talk to Home Assistant; Home Assistant talks privately to the Bridge; Codex
 works only in an explicitly granted workspace.
 
@@ -26,26 +26,26 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current target-HA-accepted matrix is Integration/App/panel `0.7.5`, Bridge
-`0.6.3`, and Codex `0.144.5` (experimental, `amd64` only). Provider-gated native
-web search defaults to Live for Supervisor prompts and automations, with bounded
+The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
+Bridge `0.7.6` with Codex `0.144.5`. It
+adds the immediate composer Send-state update and preserves the account-neutral
+local-chat contract: local chats survive a ChatGPT account switch while stale
+private provider-thread continuity is detached. Provider-gated native web
+search defaults to Live for Supervisor prompts and automations, with bounded
 time-sensitive guidance; model-controlled shell networking remains disabled.
 Signed-in image generation requires both `imageGeneration` and `namespaceTools`,
-uses no API key, and keeps bounded PNG/JPEG/WebP artifacts private. The compact
-composer is a presentation change and does not expand authority. Signed App
-`0.7.5` carries the verified Codex runtime at immutable digest
-`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`;
-publication run `29511116947` verified its signature, SBOM, and provenance.
-Target-Home-Assistant evidence for the published/live-accepted `0.7.1` release
-is bounded: versions, ChatGPT Pro retention, dynamic GPT-5.6, five-hour `Off`,
-chat/history, management-form retention, skill mutations, App auto-update, and
-MCP form cancellation were observed. Its live plugin/marketplace list returned
-`capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.5` acceptance covered runtime,
-account, model catalogue, compact composer, and native live search only; it did
-not exercise image generation, plugins/marketplaces, or MCP. External blocked-
-network routing, cold restore, and previous-image rollback remain unproven. A
-source checkout, local image, or unit test is not release evidence.
+uses no API key, and keeps bounded PNG/JPEG/WebP artifacts private.
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified. Target acceptance for PDF list/archive/preview/
+download, external blocked-network routing, cold restore, arbitrary prior-image
+rollback, and the secure App-owned browser worker remains unproven. A source
+checkout, local image, or unit test is not release evidence.
 
 ## Local checks
 

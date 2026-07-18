@@ -22916,7 +22916,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "0.8.11";
+var PANEL_VERSION = "1.0.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -28446,6 +28446,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (target.id === "prompt-input") {
       this._draft = target.value;
       this._setDraftForThread(this._selectedThreadId, target.value);
+      this._renderComposerState(this._activeThread);
       return;
     }
     if (target.id === "search-input") {

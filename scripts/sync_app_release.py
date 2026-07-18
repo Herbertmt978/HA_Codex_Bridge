@@ -8,8 +8,10 @@ script projects those values into App release files; it never edits the
 Integration or Bridge package metadata.
 
 The default operation is a read-only check suitable for CI.  ``--bump-patch``
-(``--update`` is an alias) increments the App patch version and atomically
-replaces all four release projections after every input has passed validation.
+(``--update`` is an alias) increments the App patch version, while
+``--set-version X.Y.Z`` selects an explicit newer stable version.  Both write
+modes validate every input before replacing the four release projections and
+roll back already-committed replacements if a later commit fails.
 """
 
 from __future__ import annotations
@@ -307,19 +309,26 @@ def _config_projected(source: ManagedFile, app_version: str) -> str:
 
 def _atomic_replace(changes: Mapping[Path, bytes]) -> None:
     temporaries: dict[Path, Path] = {}
-    try:
-        for path, payload in changes.items():
-            _regular_file(path, "managed release file")
-            fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-            temporary = Path(name)
-            temporaries[path] = temporary
-            os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
+    originals: dict[Path, bytes] = {}
+    committed: list[Path] = []
+
+    def stage(path: Path, payload: bytes, *, purpose: str) -> Path:
+        fd, name = tempfile.mkstemp(
+            prefix=f".{path.name}.{purpose}-", dir=path.parent
+        )
+        temporary = Path(name)
+        try:
             with os.fdopen(fd, "wb") as handle:
+                os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
                 handle.write(payload)
                 handle.flush()
                 os.fsync(handle.fileno())
-        for path, temporary in temporaries.items():
-            os.replace(temporary, path)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        return temporary
+
+    def fsync_directories(*, best_effort: bool = False) -> None:
         for directory in {path.parent for path in changes}:
             try:
                 fd = os.open(directory, os.O_RDONLY)
@@ -327,15 +336,49 @@ def _atomic_replace(changes: Mapping[Path, bytes]) -> None:
                 continue
             try:
                 os.fsync(fd)
+            except OSError:
+                if not best_effort:
+                    raise
             finally:
                 os.close(fd)
-    except BaseException:
+
+    try:
+        for path, payload in changes.items():
+            _regular_file(path, "managed release file")
+            originals[path] = path.read_bytes()
+            temporary = stage(path, payload, purpose="release")
+            temporaries[path] = temporary
+        for path, temporary in temporaries.items():
+            os.replace(temporary, path)
+            committed.append(path)
+        fsync_directories()
+    except BaseException as commit_error:
+        rollback_errors: list[tuple[Path, BaseException]] = []
+        for path in reversed(committed):
+            rollback: Path | None = None
+            try:
+                rollback = stage(path, originals[path], purpose="rollback")
+                os.replace(rollback, path)
+            except BaseException as rollback_error:
+                rollback_errors.append((path, rollback_error))
+            finally:
+                if rollback is not None:
+                    rollback.unlink(missing_ok=True)
+        fsync_directories(best_effort=True)
         for temporary in temporaries.values():
             temporary.unlink(missing_ok=True)
+        if rollback_errors:
+            paths = ", ".join(str(path) for path, _error in rollback_errors)
+            raise ReleaseSyncError(
+                "release projection update failed and rollback was incomplete "
+                f"for: {paths}; restore those files and rerun --check"
+            ) from commit_error
         raise
 
 
-def synchronize(root: Path, *, mode: str) -> ReleaseMetadata:
+def synchronize(
+    root: Path, *, mode: str, target_version: str | None = None
+) -> ReleaseMetadata:
     config_path, lock_path, docker_path, run_path, changelog_path = _paths(root)
     app_version, config = _app_version_from_config(config_path)
     bridge_version = _bridge_version_from_project(root / "bridge_service" / "pyproject.toml")
@@ -349,9 +392,24 @@ def synchronize(root: Path, *, mode: str) -> ReleaseMetadata:
         if _changelog_version(changelog.text) != app_version:
             raise ReleaseSyncError("release projection drift in App changelog")
         return ReleaseMetadata(app_version, bridge_version, codex_version, lock_digest)
-    match = APP_VERSION_PATTERN.fullmatch(app_version)
-    assert match is not None
-    next_version = f"{match.group(1)}.{match.group(2)}.{int(match.group(3)) + 1}"
+    if mode == "bump-patch":
+        match = APP_VERSION_PATTERN.fullmatch(app_version)
+        assert match is not None
+        next_version = (
+            f"{match.group(1)}.{match.group(2)}.{int(match.group(3)) + 1}"
+        )
+    elif mode == "set-version":
+        next_version = _validate_app_version(
+            target_version, label="target App version"
+        )
+        if tuple(map(int, next_version.split("."))) <= tuple(
+            map(int, app_version.split("."))
+        ):
+            raise ReleaseSyncError(
+                "target App version must be greater than the current App version"
+            )
+    else:
+        raise ReleaseSyncError(f"unsupported release sync mode: {mode}")
     docker_text = _projected(docker.text, app_version=next_version, bridge_version=bridge_version, codex_version=codex_version, lock_digest=lock_digest, dockerfile=True)
     run_text = _projected(run.text, app_version=next_version, bridge_version=bridge_version, codex_version=codex_version, lock_digest=lock_digest, dockerfile=False)
     config_text = _config_projected(config, next_version)
@@ -378,14 +436,18 @@ def main(argv: list[str] | None = None) -> int:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--check", action="store_const", const="check", dest="mode", help="verify projections without writing (default)")
     modes.add_argument("--bump-patch", "--update", action="store_const", const="bump-patch", dest="mode", help="increment the App patch version and update projections")
+    modes.add_argument("--set-version", metavar="X.Y.Z", dest="target_version", help="set an explicit newer stable App version and update projections")
     parser.set_defaults(mode="check")
     args = parser.parse_args(argv)
+    mode = "set-version" if args.target_version is not None else args.mode
     try:
-        metadata = synchronize(args.root.resolve(), mode=args.mode)
+        metadata = synchronize(
+            args.root.resolve(), mode=mode, target_version=args.target_version
+        )
     except (OSError, ReleaseSyncError) as exc:
         print(f"release sync failed: {exc}", file=sys.stderr)
         return 1
-    if args.mode == "check":
+    if mode == "check":
         print(
             "release projections are synchronized "
             f"(App {metadata.app_version}, Bridge {metadata.bridge_version}, "

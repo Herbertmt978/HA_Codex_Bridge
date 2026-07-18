@@ -71,27 +71,28 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The current target-HA-accepted matrix (Integration/App/panel `0.7.5`, Bridge
-`0.6.3`, Codex `0.144.5`) is experimental and `amd64` only. Native Live web
-search is provider-gated for Supervisor prompts and automations; bounded time-
-sensitive guidance does not relax the blocked model-controlled shell network.
-Image generation is gated by both `imageGeneration` and `namespaceTools`, uses
-a signed-in ChatGPT account rather than an API key, and keeps only bounded
-private PNG/JPEG/WebP artifacts. The compact composer is a presentation change,
-not an expansion of authority. Signed App `0.7.5` has immutable digest
-`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`;
-publication run `29511116947` verified its signature, SBOM, and provenance.
-Target-Home-Assistant acceptance remains bounded. The target-HA-accepted
-`0.7.1` retest confirmed management-form retention, skill mutations, and MCP
-form cancellation; its live plugin/marketplace list returned
-`capabilities_unavailable` (HTTP 503), so no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The `0.7.5` acceptance covered runtime,
-account, model catalogue, compact composer, and native live search only; it did
-not exercise image generation, plugins/marketplaces, or MCP. The first unattended
-App update is proven; external blocked-network routing, cold restore, and
-previous-image rollback remain unproven. Arbitrary prior-image selection is not
-a validated Supervisor rollback mechanism; recover with a cold backup or an
-existing private external Bridge.
+The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
+Bridge `0.7.6` with Codex `0.144.5`. Verify its signed release and immutable
+image evidence on GitHub before installing.
+Its composer Send-state fix and account-neutral local-chat contract are
+presentation and continuity improvements, not expansions of authority. Native
+Live web search remains provider-gated for Supervisor prompts and automations;
+bounded time-sensitive guidance does not relax the blocked model-controlled
+shell network. Image generation remains gated by both `imageGeneration` and
+`namespaceTools`, uses a signed-in ChatGPT account rather than an API key, and
+keeps only bounded private PNG/JPEG/WebP artifacts.
+
+The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
+uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
+`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
+`29633146637`, and immutable image digest
+`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
+Its signature, SBOM, provenance, account-switch behavior, and preserved local
+chat history were verified. Target acceptance remains bounded: the first
+unattended App update is proven, but external blocked-network routing, cold
+restore, arbitrary prior-image selection, and the secure App-owned browser
+worker remain unproven. PDF list/archive/preview/download acceptance is also
+not claimed. Recover with a cold backup or an existing private external Bridge.
 
 Artifact previews remain on the Home Assistant origin. PDFs are fetched only
 through the administrator-authenticated artifact route, checked against an 8 MB
