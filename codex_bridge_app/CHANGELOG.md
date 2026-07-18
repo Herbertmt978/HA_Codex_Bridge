@@ -32,6 +32,11 @@ All notable App changes are recorded here.
 - Requires the authoritative auth state to be fully `ok` before broker
   admission or automation target preparation, so transient account checks and
   sign-out cannot leave behind local chat mutations.
+- Reserves prompt ownership before the final account-admission check and
+  provider-thread lookup, making account rebinding atomic with provider
+  continuity selection and preventing a detached previous-account thread from
+  being resumed by a newly accepted turn. Any admission or local run-state
+  validation failure releases that reservation without accepting the prompt.
 - Settles recovered runtime checkpoints before account binding, preventing an
   interrupted run from restoring a previous account's provider thread during
   startup.

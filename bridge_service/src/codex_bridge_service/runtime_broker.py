@@ -643,51 +643,67 @@ class RuntimeBroker:
                 steer = None
 
             if steer is None:
-                accepted_at = datetime.now(UTC)
-                now = accepted_at.isoformat()
-                run = RuntimeRunState(
-                    run_id=f"run_{uuid4().hex[:16]}",
-                    client_request_id=request_id,
-                    thread_id=thread_id,
-                    unattended=unattended,
-                    web_search=web_search,
-                    prompt=prompt,
-                    prompt_fingerprint=_fingerprint(prompt),
-                    mode=thread.mode,
-                    model=thread.effective_model,
-                    effort=thread.effective_thinking_level,
-                    workspace_path=thread.workspace_path,
-                    # Stored uploads are deliberately inert unless a future
-                    # explicit, checksum-bound attachment-selection API opts
-                    # into them.  A text-only prompt must never leak every
-                    # historical upload merely because it belongs to a thread.
-                    attachment_ids=[],
-                    attachment_manifest_fingerprint=_attachment_manifest([]),
-                    codex_thread_id=thread.codex_thread_id,
-                    status="starting",
-                    created_at=now,
-                    total_deadline_at=(
-                        accepted_at
-                        + timedelta(seconds=self.limits.run_total_timeout_seconds)
-                    ).isoformat(),
-                    last_activity_at=now,
-                )
+                # Reserve prompt ownership before the final admission check and
+                # provider-continuity read. The prompt lease excludes account
+                # binding, so an account update cannot detach the stored Codex
+                # thread after it is captured into this run.
                 lease = self.gate.reserve_prompt(client_request_id=request_id)
-                if lease.state == "queued":
-                    run.status = "queued"
-                self._state.runs[run.run_id] = run
-                self._state.request_idempotency[request_id] = RuntimeRequestOutcome(
-                    run_id=run.run_id,
-                    thread_id=thread_id,
-                    kind="prompt",
-                    unattended=unattended,
-                    web_search=web_search,
-                    fingerprint=run.prompt_fingerprint,
-                    status="accepted",
-                    run_status=run.status,
-                )
-                self._leases[run.run_id] = lease
-                self._completion_events[run.run_id] = Event()
+                run: RuntimeRunState | None = None
+                try:
+                    if not self._provider_admission_allowed():
+                        raise RuntimeAuthenticationRequiredError()
+                    thread = self.storage.get_thread(thread_id)
+                    self.storage.resolve_workspace_path(thread.workspace_path)
+                    accepted_at = datetime.now(UTC)
+                    now = accepted_at.isoformat()
+                    run = RuntimeRunState(
+                        run_id=f"run_{uuid4().hex[:16]}",
+                        client_request_id=request_id,
+                        thread_id=thread_id,
+                        unattended=unattended,
+                        web_search=web_search,
+                        prompt=prompt,
+                        prompt_fingerprint=_fingerprint(prompt),
+                        mode=thread.mode,
+                        model=thread.effective_model,
+                        effort=thread.effective_thinking_level,
+                        workspace_path=thread.workspace_path,
+                        # Stored uploads are deliberately inert unless a future
+                        # explicit, checksum-bound attachment-selection API opts
+                        # into them.  A text-only prompt must never leak every
+                        # historical upload merely because it belongs to a thread.
+                        attachment_ids=[],
+                        attachment_manifest_fingerprint=_attachment_manifest([]),
+                        codex_thread_id=thread.codex_thread_id,
+                        status="starting",
+                        created_at=now,
+                        total_deadline_at=(
+                            accepted_at
+                            + timedelta(seconds=self.limits.run_total_timeout_seconds)
+                        ).isoformat(),
+                        last_activity_at=now,
+                    )
+                    if lease.state == "queued":
+                        run.status = "queued"
+                    self._state.runs[run.run_id] = run
+                    self._state.request_idempotency[request_id] = RuntimeRequestOutcome(
+                        run_id=run.run_id,
+                        thread_id=thread_id,
+                        kind="prompt",
+                        unattended=unattended,
+                        web_search=web_search,
+                        fingerprint=run.prompt_fingerprint,
+                        status="accepted",
+                        run_status=run.status,
+                    )
+                    self._leases[run.run_id] = lease
+                    self._completion_events[run.run_id] = Event()
+                except BaseException:
+                    if run is None:
+                        lease.release()
+                    else:
+                        self._rollback_submission_locked(run, lease)
+                    raise
                 try:
                     initial_events = [
                         EventDraft(

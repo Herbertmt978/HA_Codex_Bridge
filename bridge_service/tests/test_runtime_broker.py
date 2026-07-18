@@ -2867,6 +2867,113 @@ def test_admission_rebind_is_reloaded_before_provider_thread_selection(
         broker.close()
 
 
+def test_provider_continuity_is_reloaded_after_prompt_lease_is_reserved(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    assert storage.bind_codex_account("a" * 64) == 0
+    stored = storage.load_thread(thread.thread_id)
+    stored.codex_thread_id = "provider-account-a"
+    storage.save_thread(stored)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: True,
+    )
+    original_reserve = broker.gate.reserve_prompt
+
+    def rebind_before_reserve(*, client_request_id: str):
+        auth_lease = broker.gate.acquire_auth_mutation()
+        try:
+            assert storage.bind_codex_account("b" * 64) == 1
+        finally:
+            auth_lease.release()
+        return original_reserve(client_request_id=client_request_id)
+
+    broker.gate.reserve_prompt = rebind_before_reserve  # type: ignore[method-assign]
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Use only continuity verified under the prompt lease",
+            client_request_id="admission-lease-reload",
+        )
+
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        assert len(_requests(client, "thread/start")) == 1
+        assert not _requests(client, "thread/resume")
+        assert storage.bind_codex_account("b" * 64) == 0
+    finally:
+        broker.close()
+
+
+def test_second_admission_rejection_releases_reserved_prompt_lease(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission_checks = 0
+
+    def admission_check() -> bool:
+        nonlocal admission_checks
+        admission_checks += 1
+        return admission_checks == 1
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        with pytest.raises(RuntimeBrokerError) as rejected:
+            broker.submit_prompt(
+                thread.thread_id,
+                "Reject after the prompt lease is reserved",
+                client_request_id="admission-after-reserve-rejected",
+            )
+
+        _assert_broker_error(rejected, "authentication_required")
+        assert admission_checks == 2
+        assert not client.requests
+        assert not any(
+            event.event_type in {"message.created", "run.queued", "run.started"}
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert not broker._state.request_idempotency
+    finally:
+        broker.close()
+
+
+def test_run_construction_failure_after_reservation_releases_prompt_lease(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    stored = storage.load_thread(thread.thread_id)
+    stored.model_override = f"legacy-{'m' * 128}"
+    storage.save_thread(stored)
+    assert len(storage.get_thread(thread.thread_id).effective_model) > 128
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        with pytest.raises(ValueError, match="model"):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Reject the invalid legacy runtime state safely",
+                client_request_id="construction-after-reserve-rejected",
+            )
+
+        assert not client.requests
+        assert broker.runtime_snapshot().active_turns == 0
+        assert broker.runtime_snapshot().queued_prompts == 0
+        auth_lease = broker.gate.acquire_auth_mutation()
+        auth_lease.release()
+    finally:
+        broker.close()
+
+
 def test_idempotent_replay_does_not_require_current_provider_admission(
     tmp_path: Path,
 ) -> None:
