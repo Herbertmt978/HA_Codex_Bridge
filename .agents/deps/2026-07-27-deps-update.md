@@ -25,6 +25,20 @@ Validation for this change:
 - `python scripts/sync_app_release.py --check`
 - the pull request's workflow-policy and App-image checks
 
+## FastAPI runtime refresh
+
+The bridge's FastAPI floor moves from `0.139.0` to `0.140.7`. The deployed
+Home Assistant App requirements are regenerated from the bridge project so the
+runtime image receives the same reviewed version instead of leaving the update
+only in development metadata.
+
+Validation for this change:
+
+- `python -m pytest -q bridge_service/tests`
+- `python -m ruff check bridge_service`
+- `python scripts/stage_app_context.py --arch amd64`
+- the pull request's Integration and Bridge tests and App-image build
+
 ## Compatible Node tooling refresh
 
 The panel toolchain now uses `@playwright/test` 1.62.0, ESLint 10.8.0, and

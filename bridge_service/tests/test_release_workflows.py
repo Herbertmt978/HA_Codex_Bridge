@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import tomllib
 from typing import Any, Iterator
 
 import yaml
@@ -417,6 +418,32 @@ def test_ci_repository_validators_use_digest_pinned_images() -> None:
     )
     assert "hacs/action@" not in source
     assert "home-assistant/actions/hassfest@" not in source
+
+
+def test_deployed_runtime_covers_the_bridge_fastapi_floor() -> None:
+    project = tomllib.loads(
+        (ROOT / "bridge_service" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    fastapi_requirements = [
+        requirement
+        for requirement in project["project"]["dependencies"]
+        if requirement.startswith("fastapi")
+    ]
+    assert len(fastapi_requirements) == 1
+    floor_match = re.fullmatch(
+        r"fastapi>=(\d+)\.(\d+)\.(\d+)",
+        fastapi_requirements[0],
+    )
+    assert floor_match, "the bridge FastAPI floor must use a reviewable stable version"
+
+    runtime = (ROOT / "codex_bridge_app" / "requirements-runtime.txt").read_text(
+        encoding="utf-8"
+    )
+    pins = re.findall(r"(?m)^fastapi==(\d+)\.(\d+)\.(\d+) \\$", runtime)
+    assert len(pins) == 1, "the deployed App runtime must contain one FastAPI pin"
+    assert tuple(map(int, pins[0])) >= tuple(map(int, floor_match.groups())), (
+        "regenerate the deployed App requirements after raising the bridge floor"
+    )
 
 
 def test_dependabot_and_codeowners_cover_ci_policy() -> None:
