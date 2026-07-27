@@ -9,8 +9,8 @@ the Bridge must not start the helper or fall back to a parent-network browser.
 
 ## Built-image evidence
 
-The staged amd64 App image built successfully from the pinned Home Assistant
-Alpine 3.24 base and reported Chromium `150.0.7871.128`.
+The previously staged amd64 App image built successfully from the pinned Home
+Assistant Alpine 3.24 base and reported Chromium `150.0.7871.124`.
 
 The required isolation proof failed in that built image:
 
