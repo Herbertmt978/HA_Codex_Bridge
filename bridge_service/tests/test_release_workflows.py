@@ -444,6 +444,20 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
     assert github_actions, "Dependabot must keep pinned GitHub Actions current"
     assert any(item.get("directory") == "/" for item in github_actions)
 
+    root_npm = next(
+        item
+        for item in updates
+        if isinstance(item, dict)
+        and item.get("package-ecosystem") == "npm"
+        and item.get("directory") == "/"
+    )
+    assert root_npm.get("ignore") == [
+        {
+            "dependency-name": "jsdom",
+            "update-types": ["version-update:semver-major"],
+        }
+    ], "jsdom majors must not silently raise the repository's supported Node floor"
+
     root_pip = next(
         item
         for item in updates

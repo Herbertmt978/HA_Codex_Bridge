@@ -18,6 +18,11 @@ updates:
     patterns:
       - "*"
     multi-ecosystem-group: weekly-maintenance
+    ignore:
+      # jsdom 30 drops the Node 20 support retained by this repository.
+      - dependency-name: "jsdom"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: pip
     directory: "/"
