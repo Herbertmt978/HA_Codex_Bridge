@@ -74,6 +74,16 @@ def _walk_uses(value: Any) -> Iterator[str]:
             yield from _walk_uses(child)
 
 
+def _walk_mappings(value: Any) -> Iterator[dict[str, Any]]:
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk_mappings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_mappings(child)
+
+
 def test_all_workflows_parse_with_on_key_and_minimal_defaults() -> None:
     for name in WORKFLOW_NAMES:
         document, _ = _workflow(name)
@@ -95,6 +105,22 @@ def test_every_external_action_is_pinned_to_a_full_commit_sha() -> None:
             if not action.startswith("./") and not FULL_SHA.fullmatch(action)
         ]
         assert not unpinned, f"{name} has unpinned or non-immutable actions: {unpinned}"
+
+
+def test_setup_uv_keeps_pruning_the_actions_cache() -> None:
+    setup_uv_steps: list[dict[str, Any]] = []
+    for name in WORKFLOW_NAMES:
+        document, _ = _workflow(name)
+        setup_uv_steps.extend(
+            mapping
+            for mapping in _walk_mappings(document)
+            if str(mapping.get("uses", "")).startswith("astral-sh/setup-uv@")
+        )
+
+    assert len(setup_uv_steps) == 6
+    assert all(
+        step.get("with", {}).get("prune-cache") is True for step in setup_uv_steps
+    ), "setup-uv v9 must preserve the previous pruned-cache behavior explicitly"
 
 
 def test_app_build_stages_reproducible_amd64_context_and_uses_official_builder() -> None:
