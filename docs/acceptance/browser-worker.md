@@ -3,14 +3,14 @@
 ## Decision
 
 The App image contains the fixed Chromium worker boundary and pinned Chromium
-`150.0.7871.124-r0`, but the `ha_browser` capability is deliberately **not
+`150.0.7871.128-r0`, but the `ha_browser` capability is deliberately **not
 advertised**.  A missing browser-worker attestation is a hard not-ready state;
 the Bridge must not start the helper or fall back to a parent-network browser.
 
 ## Built-image evidence
 
-The staged amd64 App image built successfully from the pinned Home Assistant
-Alpine 3.24 base and reported Chromium `150.0.7871.124`.
+The previously staged amd64 App image built successfully from the pinned Home
+Assistant Alpine 3.24 base and reported Chromium `150.0.7871.124`.
 
 The required isolation proof failed in that built image:
 
