@@ -22,12 +22,12 @@
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@eslint/js": "10.0.1",
-    "@playwright/test": "1.62.0",
+    "@playwright/test": "1.62.1",
     "esbuild": "0.28.1",
     "eslint": "10.8.0",
     "globals": "17.8.0",
     "jsdom": "29.1.1",
-    "pdfjs-dist": "6.1.200",
+    "pdfjs-dist": "6.2.108",
     "vitest": "4.1.10"
   }
 }
