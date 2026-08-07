@@ -24,6 +24,8 @@ FILE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW
 REPAIR_FILE_FLAGS = FILE_FLAGS | getattr(os, "O_NONBLOCK", 0)
 TOKEN_PATTERN = re.compile(rb"[A-Za-z0-9_-]{64}")
 RESTORED_OWNER = (0, 0)
+RESTORE_MAXIMUM_DEPTH = 256
+RESTORE_MAXIMUM_ENTRIES = 250_000
 APP_OWNED_TREES = (
     Path("/data/bridge"),
     Path("/data/codex-home"),
@@ -219,11 +221,26 @@ def _restore_regular_owner(
 def _restore_directory_contents(
     descriptor: int, *, root_device: int, uid: int, gid: int
 ) -> None:
-    with os.scandir(descriptor) as entries:
-        for entry in entries:
+    visited = 0
+    stack = [(descriptor, os.scandir(descriptor), False, 0)]
+    try:
+        while stack:
+            current_descriptor, entries, owned_descriptor, depth = stack[-1]
+            try:
+                entry = next(entries)
+            except StopIteration:
+                entries.close()
+                stack.pop()
+                if owned_descriptor:
+                    os.close(current_descriptor)
+                continue
+
+            visited += 1
+            if visited > RESTORE_MAXIMUM_ENTRIES:
+                raise BootstrapError("private runtime tree exceeds its entry limit")
             metadata = os.stat(
                 entry.name,
-                dir_fd=descriptor,
+                dir_fd=current_descriptor,
                 follow_symlinks=False,
             )
             if metadata.st_dev != root_device:
@@ -234,7 +251,7 @@ def _restore_directory_contents(
                 continue
             if stat.S_ISREG(metadata.st_mode):
                 _restore_regular_owner(
-                    descriptor,
+                    current_descriptor,
                     entry.name,
                     metadata,
                     root_device=root_device,
@@ -243,11 +260,16 @@ def _restore_directory_contents(
                 )
                 continue
             if stat.S_ISDIR(metadata.st_mode):
+                child_depth = depth + 1
+                if child_depth > RESTORE_MAXIMUM_DEPTH:
+                    raise BootstrapError("private runtime tree exceeds its depth limit")
                 _owner_needs_restore(metadata, uid=uid, gid=gid)
                 child_descriptor = -1
                 try:
                     child_descriptor = os.open(
-                        entry.name, DIRECTORY_FLAGS, dir_fd=descriptor
+                        entry.name,
+                        DIRECTORY_FLAGS,
+                        dir_fd=current_descriptor,
                     )
                     opened = os.fstat(child_descriptor)
                     if (
@@ -258,12 +280,6 @@ def _restore_directory_contents(
                         raise BootstrapError(
                             "private runtime directory changed during restore repair"
                         )
-                    _restore_directory_contents(
-                        child_descriptor,
-                        root_device=root_device,
-                        uid=uid,
-                        gid=gid,
-                    )
                     _restore_descriptor_owner(
                         child_descriptor,
                         opened,
@@ -271,12 +287,28 @@ def _restore_directory_contents(
                         gid=gid,
                         regular_file=False,
                     )
+                    child_entries = os.scandir(child_descriptor)
+                    stack.append(
+                        (
+                            child_descriptor,
+                            child_entries,
+                            True,
+                            child_depth,
+                        )
+                    )
+                    child_descriptor = -1
                 finally:
                     if child_descriptor >= 0:
                         os.close(child_descriptor)
                 continue
             if _owner_needs_restore(metadata, uid=uid, gid=gid):
                 raise BootstrapError("restored private runtime entry has an unsafe type")
+    finally:
+        while stack:
+            current_descriptor, entries, owned_descriptor, _depth = stack.pop()
+            entries.close()
+            if owned_descriptor:
+                os.close(current_descriptor)
 
 
 def _restore_tree_owner(path: Path, *, uid: int, gid: int) -> None:

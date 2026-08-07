@@ -195,11 +195,14 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
-Bridge `0.7.6` with Codex `0.144.5`. Verify its signed release and immutable
-image evidence on GitHub before installing. It
-fixes the panel-only composer defect so **Send** is rendered immediately after
-each prompt edit. It also retains the account-neutral local-chat contract:
+The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
+`0.7.6` with Codex `0.144.5`. The compatible Integration and panel remain
+`1.0.0` because the restore bootstrap does not change their API or UI. Verify
+the App's signed `1.0.1` image and immutable publication evidence on GitHub
+before installing. App `1.0.1` repairs supported restored ownership and fixed
+private modes before dropping privileges. The compatible panel fixes the composer
+defect so **Send** is rendered immediately after each prompt edit and retains
+the account-neutral local-chat contract:
 Home Assistant chats, projects, transcripts, files, workspace settings, archive
 state, and automation targets remain local and static across a ChatGPT account
 change. Only stale private provider-thread continuity is detached, so the next

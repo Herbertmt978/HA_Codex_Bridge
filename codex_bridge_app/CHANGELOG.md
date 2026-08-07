@@ -13,6 +13,9 @@ All notable App changes are recorded here.
   remains disabled pending its separate isolation and egress proof.
 - Keeps full target cold-restore and retained-image recovery acceptance as
   separate operator evidence rather than inferring it from this repair.
+- Keeps the compatible Integration and panel at `1.0.0`; their version
+  authorities remain independent because this App-only repair does not change
+  the negotiated API or browser bundle.
 - Bundles the Sigstore-verified Codex runtime `0.144.5`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
 - Bundles Bridge `0.7.6` without changing its Integration API compatibility.

@@ -239,3 +239,32 @@ def test_restore_detects_a_directory_replacement_race(
         module._restore_tree_owner(tree, uid=TARGET_UID, gid=TARGET_GID)
 
     assert _owner(moved) == (0, 0)
+
+
+def test_restore_walk_rejects_a_tree_beyond_its_depth_limit(
+    tmp_path: Path,
+) -> None:
+    module = _load_initializer()
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    current = tree
+    for _depth in range(module.RESTORE_MAXIMUM_DEPTH + 1):
+        current /= "d"
+        current.mkdir()
+
+    with pytest.raises(module.BootstrapError, match="depth limit"):
+        module._restore_tree_owner(tree, uid=TARGET_UID, gid=TARGET_GID)
+
+
+def test_restore_walk_rejects_a_tree_beyond_its_entry_limit(
+    tmp_path: Path,
+) -> None:
+    module = _load_initializer()
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    for name in ("one", "two", "three"):
+        _write(tree / name, name.encode(), 0o600)
+    module.RESTORE_MAXIMUM_ENTRIES = 2
+
+    with pytest.raises(module.BootstrapError, match="entry limit"):
+        module._restore_tree_owner(tree, uid=TARGET_UID, gid=TARGET_GID)
