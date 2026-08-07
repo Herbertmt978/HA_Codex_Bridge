@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.0.1
+
+- Repairs App startup after a Home Assistant cold restore by reconciling
+  restored App-owned Bridge, Codex-home, workspace, and token ownership before
+  the service drops privileges, while retaining descriptor-relative no-follow
+  checks and fixed private modes.
+- Refreshes the exact Alpine Chromium package to `150.0.7871.181-r0` so the
+  reproducible `amd64` App image remains buildable. The browser capability
+  remains disabled pending its separate isolation and egress proof.
+- Keeps full target cold-restore and retained-image recovery acceptance as
+  separate operator evidence rather than inferring it from this repair.
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.6` without changing its Integration API compatibility.
+
 ## 1.0.0
 
 - Promotes the Supervisor App from Home Assistant's experimental lifecycle

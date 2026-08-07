@@ -5,7 +5,7 @@ ARG TARGETARCH
 LABEL \
     io.hass.type="app" \
     io.hass.arch="amd64" \
-    io.hass.version="1.0.0"
+    io.hass.version="1.0.1"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -21,8 +21,8 @@ RUN set -eux; \
     # connection-time-egress proof exists, but the worker image itself must
     # use one reproducible Chromium package rather than a moving repository
     # default.  The exact Alpine 3.24 package is amd64-only by App contract.
-    apk add --no-cache chromium=150.0.7871.128-r0; \
-    test "$(/usr/bin/chromium-browser --product-version)" = "150.0.7871.128"; \
+    apk add --no-cache chromium=150.0.7871.181-r0; \
+    test "$(/usr/bin/chromium-browser --product-version)" = "150.0.7871.181"; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
     python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \
@@ -49,7 +49,7 @@ RUN set -eux; \
 
 EXPOSE 8766
 
-ENV CODEX_BRIDGE_APP_VERSION="1.0.0" \
+ENV CODEX_BRIDGE_APP_VERSION="1.0.1" \
     CODEX_BRIDGE_VERSION="0.7.6" \
     CODEX_BRIDGE_CODEX_VERSION="0.144.5" \
     CODEX_BRIDGE_ARCH="amd64" \

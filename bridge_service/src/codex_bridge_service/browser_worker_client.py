@@ -27,7 +27,7 @@ BROWSER_WORKER_ATTESTATION_PATH = Path(
     "/run/codex-bridge/browser-worker-attestation.json"
 )
 BROWSER_WORKER_PROTOCOL = "browser-worker-v1"
-CHROMIUM_VERSION = "150.0.7871.128"
+CHROMIUM_VERSION = "150.0.7871.181"
 MAX_REQUEST_BYTES = 64 * 1024
 # An 8 MiB PDF may expand to just under 11.2 MiB in base64 plus its JSON shell.
 MAX_RESPONSE_BYTES = 12 * 1024 * 1024

@@ -21,7 +21,20 @@ DIRECTORY_FLAGS = (
     | getattr(os, "O_NOFOLLOW", 0)
 )
 FILE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+REPAIR_FILE_FLAGS = FILE_FLAGS | getattr(os, "O_NONBLOCK", 0)
 TOKEN_PATTERN = re.compile(rb"[A-Za-z0-9_-]{64}")
+RESTORED_OWNER = (0, 0)
+APP_OWNED_TREES = (
+    Path("/data/bridge"),
+    Path("/data/codex-home"),
+    Path("/config/workspaces"),
+)
+BRIDGE_TOKEN_PATH = Path("/data/bridge-token")
+CODEX_CONFIG_PATH = Path("/data/codex-home/config.toml")
+APP_OWNED_PRIVATE_FILES = (
+    (BRIDGE_TOKEN_PATH, 0o600),
+    (CODEX_CONFIG_PATH, 0o600),
+)
 CONFIG_PAYLOAD = b"""cli_auth_credentials_store = "file"
 default_permissions = "ha_bridge"
 
@@ -123,6 +136,212 @@ def _managed_config_is_safe(payload: bytes) -> bool:
 
 class BootstrapError(RuntimeError):
     """Persistent App state is unsafe or cannot be initialized."""
+
+
+def _same_inode(first: os.stat_result, second: os.stat_result) -> bool:
+    return (
+        first.st_dev == second.st_dev
+        and first.st_ino == second.st_ino
+        and stat.S_IFMT(first.st_mode) == stat.S_IFMT(second.st_mode)
+    )
+
+
+def _owner_needs_restore(
+    metadata: os.stat_result, *, uid: int, gid: int
+) -> bool:
+    owner = (metadata.st_uid, metadata.st_gid)
+    if owner == (uid, gid):
+        return False
+    if owner != RESTORED_OWNER:
+        raise BootstrapError("private runtime entry has an unexpected owner")
+    return True
+
+
+def _restore_descriptor_owner(
+    descriptor: int,
+    metadata: os.stat_result,
+    *,
+    uid: int,
+    gid: int,
+    regular_file: bool,
+) -> None:
+    if not _owner_needs_restore(metadata, uid=uid, gid=gid):
+        return
+    if regular_file and metadata.st_nlink != 1:
+        raise BootstrapError("restored private runtime file has unsafe hard links")
+    mode = stat.S_IMODE(metadata.st_mode)
+    os.fchown(descriptor, uid, gid)
+    # chown may clear set-ID mode bits, so retain the restored ordinary mode.
+    os.fchmod(descriptor, mode)
+    verified = os.fstat(descriptor)
+    if (
+        not _same_inode(metadata, verified)
+        or verified.st_uid != uid
+        or verified.st_gid != gid
+        or stat.S_IMODE(verified.st_mode) != mode
+    ):
+        raise BootstrapError("private runtime ownership repair could not be verified")
+
+
+def _restore_regular_owner(
+    parent_descriptor: int,
+    name: str,
+    expected: os.stat_result,
+    *,
+    root_device: int,
+    uid: int,
+    gid: int,
+) -> None:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            name, REPAIR_FILE_FLAGS, dir_fd=parent_descriptor
+        )
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_dev != root_device
+            or not _same_inode(expected, metadata)
+        ):
+            raise BootstrapError("private runtime file changed during restore repair")
+        _restore_descriptor_owner(
+            descriptor,
+            metadata,
+            uid=uid,
+            gid=gid,
+            regular_file=True,
+        )
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _restore_directory_contents(
+    descriptor: int, *, root_device: int, uid: int, gid: int
+) -> None:
+    with os.scandir(descriptor) as entries:
+        for entry in entries:
+            metadata = os.stat(
+                entry.name,
+                dir_fd=descriptor,
+                follow_symlinks=False,
+            )
+            if metadata.st_dev != root_device:
+                raise BootstrapError("private runtime tree crosses a filesystem boundary")
+            if stat.S_ISLNK(metadata.st_mode):
+                # Symlink ownership is irrelevant inside these private parent
+                # directories.  Leaving it untouched avoids any target race.
+                continue
+            if stat.S_ISREG(metadata.st_mode):
+                _restore_regular_owner(
+                    descriptor,
+                    entry.name,
+                    metadata,
+                    root_device=root_device,
+                    uid=uid,
+                    gid=gid,
+                )
+                continue
+            if stat.S_ISDIR(metadata.st_mode):
+                _owner_needs_restore(metadata, uid=uid, gid=gid)
+                child_descriptor = -1
+                try:
+                    child_descriptor = os.open(
+                        entry.name, DIRECTORY_FLAGS, dir_fd=descriptor
+                    )
+                    opened = os.fstat(child_descriptor)
+                    if (
+                        not stat.S_ISDIR(opened.st_mode)
+                        or opened.st_dev != root_device
+                        or not _same_inode(metadata, opened)
+                    ):
+                        raise BootstrapError(
+                            "private runtime directory changed during restore repair"
+                        )
+                    _restore_directory_contents(
+                        child_descriptor,
+                        root_device=root_device,
+                        uid=uid,
+                        gid=gid,
+                    )
+                    _restore_descriptor_owner(
+                        child_descriptor,
+                        opened,
+                        uid=uid,
+                        gid=gid,
+                        regular_file=False,
+                    )
+                finally:
+                    if child_descriptor >= 0:
+                        os.close(child_descriptor)
+                continue
+            if _owner_needs_restore(metadata, uid=uid, gid=gid):
+                raise BootstrapError("restored private runtime entry has an unsafe type")
+
+
+def _restore_tree_owner(path: Path, *, uid: int, gid: int) -> None:
+    parent_descriptor = os.open(path.parent, DIRECTORY_FLAGS)
+    descriptor = -1
+    try:
+        expected = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        descriptor = os.open(path.name, DIRECTORY_FLAGS, dir_fd=parent_descriptor)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISDIR(metadata.st_mode) or not _same_inode(expected, metadata):
+            raise BootstrapError("private runtime tree changed during restore repair")
+        _owner_needs_restore(metadata, uid=uid, gid=gid)
+        _restore_directory_contents(
+            descriptor,
+            root_device=metadata.st_dev,
+            uid=uid,
+            gid=gid,
+        )
+        _restore_descriptor_owner(
+            descriptor,
+            metadata,
+            uid=uid,
+            gid=gid,
+            regular_file=False,
+        )
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_descriptor)
+
+
+def _restore_private_file(
+    parent: Path,
+    name: str,
+    *,
+    mode: int,
+    uid: int,
+    gid: int,
+) -> None:
+    parent_descriptor = os.open(parent, DIRECTORY_FLAGS)
+    descriptor = -1
+    try:
+        descriptor = os.open(name, REPAIR_FILE_FLAGS, dir_fd=parent_descriptor)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise BootstrapError("restored private runtime file is unsafe")
+        if _owner_needs_restore(metadata, uid=uid, gid=gid):
+            os.fchown(descriptor, uid, gid)
+        os.fchmod(descriptor, mode)
+        verified = os.fstat(descriptor)
+        if (
+            not _same_inode(metadata, verified)
+            or verified.st_uid != uid
+            or verified.st_gid != gid
+            or stat.S_IMODE(verified.st_mode) != mode
+        ):
+            raise BootstrapError("private runtime file repair could not be verified")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_descriptor)
 
 
 def _secure_directory(path: Path, *, mode: int, uid: int, gid: int) -> None:
@@ -256,6 +475,20 @@ def _exists_nofollow(parent: Path, name: str) -> bool:
         os.close(parent_descriptor)
 
 
+def _restore_app_state(*, uid: int, gid: int) -> None:
+    for path in APP_OWNED_TREES:
+        _restore_tree_owner(path, uid=uid, gid=gid)
+    for path, mode in APP_OWNED_PRIVATE_FILES:
+        if _exists_nofollow(path.parent, path.name):
+            _restore_private_file(
+                path.parent,
+                path.name,
+                mode=mode,
+                uid=uid,
+                gid=gid,
+            )
+
+
 def initialize() -> None:
     account = pwd.getpwnam("codexbridge")
     group = grp.getgrnam("codexbridge")
@@ -268,8 +501,13 @@ def initialize() -> None:
     _secure_directory(Path("/tmp/codex-bridge"), mode=0o700, uid=uid, gid=gid)
     _secure_directory(Path("/run/codex-bridge"), mode=0o750, uid=0, gid=gid)
 
-    token_parent = Path("/data")
-    token_name = "bridge-token"
+    # Supervisor restores App backup contents as root.  Reconcile only the
+    # trees this App later uses as its non-root runtime; /data itself and the
+    # root-owned discovery identity deliberately stay outside this allowlist.
+    _restore_app_state(uid=uid, gid=gid)
+
+    token_parent = BRIDGE_TOKEN_PATH.parent
+    token_name = BRIDGE_TOKEN_PATH.name
     if not _exists_nofollow(token_parent, token_name):
         token = secrets.token_urlsafe(48).encode("ascii")
         if TOKEN_PATTERN.fullmatch(token) is None:
@@ -293,8 +531,8 @@ def initialize() -> None:
     if TOKEN_PATTERN.fullmatch(token) is None:
         raise BootstrapError("stored credential has an invalid shape")
 
-    config_parent = Path("/data/codex-home")
-    config_name = "config.toml"
+    config_parent = CODEX_CONFIG_PATH.parent
+    config_name = CODEX_CONFIG_PATH.name
     if not _exists_nofollow(config_parent, config_name):
         _atomic_write(
             config_parent,
