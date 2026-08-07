@@ -71,10 +71,13 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
-Bridge `0.7.6` with Codex `0.144.5`. Verify its signed release and immutable
-image evidence on GitHub before installing.
-Its composer Send-state fix and account-neutral local-chat contract are
+The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
+`0.7.6` with Codex `0.144.5`; the compatible Integration and panel remain
+`1.0.0` because their API and UI do not change. Verify the App's signed `1.0.1`
+image and immutable publication evidence on GitHub before installing. The App
+repairs only allowlisted restored ownership and fixed private modes before it
+drops privileges. The compatible panel's composer Send-state fix and
+account-neutral local-chat contract are
 presentation and continuity improvements, not expansions of authority. Native
 Live web search remains provider-gated for Supervisor prompts and automations;
 bounded time-sensitive guidance does not relax the blocked model-controlled

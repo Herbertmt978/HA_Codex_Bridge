@@ -55,6 +55,15 @@ jobs:
           -p pytest_asyncio.plugin
           -p pytest_timeout
 
+      - name: Test Supervisor cold-restore ownership repair as root
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          sudo --preserve-env=PYTEST_DISABLE_PLUGIN_AUTOLOAD
+          "$(command -v python)" -m pytest -q
+          bridge_service/tests/test_app_restore_repair.py
+          -p pytest_timeout --timeout=30
+
       - name: Check release authorities
         run: |
           python scripts/sync_app_release.py --check

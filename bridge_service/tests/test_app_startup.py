@@ -108,6 +108,18 @@ def test_bootstrap_uses_descriptor_relative_nofollow_operations() -> None:
     assert "shutil.rmtree" not in text
 
 
+def test_bootstrap_reconciles_only_the_non_root_app_owned_restore_scope() -> None:
+    source = (LIBEXEC / "initialize_runtime.py").read_text(encoding="utf-8")
+    assert 'Path("/data/bridge")' in source
+    assert 'Path("/data/codex-home")' in source
+    assert 'Path("/config/workspaces")' in source
+    assert source.index("_restore_app_state(uid=uid, gid=gid)") < source.index(
+        "token = _read_private_file("
+    )
+    assert "_restore_tree_owner(Path(\"/data\")" not in source
+    assert "/data/bridge-discovery-uuid" not in source
+
+
 def test_codex_uses_file_credentials_and_bridge_token_file() -> None:
     text = _text()
     assert (

@@ -27,6 +27,9 @@ jobs:
       contents: read
     outputs:
       expected_sha: ${{ steps.expected.outputs.expected_sha }}
+      app_version: ${{ steps.versions.outputs.app_version }}
+      integration_version: ${{ steps.versions.outputs.integration_version }}
+      publish_integration: ${{ steps.versions.outputs.publish_integration }}
     steps:
       - name: Check out the triggering revision without credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,22 +68,46 @@ jobs:
           python scripts/sync_app_release.py --check
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
-      - name: Require the changelog to lead with the released App version
+      - name: Resolve independently versioned release surfaces
+        id: versions
         shell: bash
         run: |
           python - <<'PY'
+          import json
+          import os
           from pathlib import Path
           import re
 
           config = Path("codex_bridge_app/config.yaml").read_text(encoding="utf-8")
           changelog = Path("codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
-          versions = re.findall(
+          app_versions = re.findall(
               r'(?m)^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$',
               config,
           )
           headings = re.findall(r'(?m)^## ([0-9]+\.[0-9]+\.[0-9]+)\s*$', changelog)
-          if len(versions) != 1 or not headings or headings[0] != versions[0]:
+          if len(app_versions) != 1 or not headings or headings[0] != app_versions[0]:
               raise SystemExit("App config.yaml and CHANGELOG.md release versions differ")
+
+          manifest = json.loads(
+              Path("custom_components/codex_bridge/manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          integration_version = manifest.get("version")
+          if (
+              not isinstance(integration_version, str)
+              or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", integration_version) is None
+          ):
+              raise SystemExit("Integration manifest must contain one stable version")
+
+          app_version = app_versions[0]
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"app_version={app_version}\n")
+              output.write(f"integration_version={integration_version}\n")
+              output.write(
+                  "publish_integration="
+                  f"{'true' if app_version == integration_version else 'false'}\n"
+              )
           PY
 
   publish:
@@ -97,9 +124,11 @@ jobs:
       packages: write # Let the reusable builder publish GHCR objects.
 
   release-integration:
-    name: Publish the paired Integration release
+    name: Publish a matching Integration release
     needs: [validate, publish]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.validate.outputs.publish_integration == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # Create only the verified, exact-main Integration tag/release.
@@ -122,22 +151,15 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Read the canonical synchronized release version
+      - name: Use the matching Integration release version
         id: version
         shell: bash
+        env:
+          APP_VERSION: ${{ needs.validate.outputs.app_version }}
+          INTEGRATION_VERSION: ${{ needs.validate.outputs.integration_version }}
         run: |
-          version="$(python - <<'PY'
-          from pathlib import Path
-          import re
-
-          text = Path("codex_bridge_app/config.yaml").read_text(encoding="utf-8")
-          matches = re.findall(r'(?m)^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$', text)
-          if len(matches) != 1:
-              raise SystemExit("config.yaml must contain one stable App version")
-          print(matches[0])
-          PY
-          )"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          test "${APP_VERSION}" = "${INTEGRATION_VERSION}"
+          echo "version=${INTEGRATION_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create or verify the exact paired Integration release
         shell: bash

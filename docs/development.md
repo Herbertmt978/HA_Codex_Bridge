@@ -53,12 +53,14 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The stable `1.0.0` App/Integration/panel release is `amd64` only and uses
-Bridge `0.7.6` with Codex `0.144.5`.
-Preserve its immediate composer Send-state rendering and the account-neutral
-local-chat contract: local records remain after a ChatGPT account switch while
-stale private provider-thread continuity is detached. Provider-gated native
-search remains separate from the disabled model-controlled shell network.
+The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
+`0.7.6` with Codex `0.144.5`; the compatible Integration and panel remain
+`1.0.0`. Preserve their independent version authorities when an App-only fix
+does not change the negotiated API or panel. Preserve the panel's immediate
+composer Send-state rendering and the account-neutral local-chat contract:
+local records remain after a ChatGPT account switch while stale private
+provider-thread continuity is detached. Provider-gated native search remains
+separate from the disabled model-controlled shell network.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
