@@ -1,4 +1,8 @@
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist/legacy/build/pdf.min.mjs";
+import {
+  GlobalWorkerOptions,
+  getDocument,
+  version as pdfjsVersion,
+} from "pdfjs-dist/legacy/build/pdf.min.mjs";
 
 const PDF_PREVIEW_MAX_PAGES = 1000;
 const PDF_PREVIEW_MAX_CANVAS_PIXELS = 12_000_000;
@@ -7,7 +11,9 @@ const PDF_PREVIEW_MAX_DECODED_CANVAS_BYTES = PDF_PREVIEW_MAX_DECODED_IMAGE_PIXEL
 const PDF_PREVIEW_MIN_SCALE = 0.35;
 const PDF_PREVIEW_MAX_SCALE = 3;
 
-GlobalWorkerOptions.workerSrc = new URL("./codex-bridge-pdf-worker.js?v=6.1.200", import.meta.url).href;
+const pdfWorkerUrl = new URL("./codex-bridge-pdf-worker.js", import.meta.url);
+pdfWorkerUrl.searchParams.set("v", pdfjsVersion);
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl.href;
 
 function boundedScale(value) {
   return Math.min(PDF_PREVIEW_MAX_SCALE, Math.max(PDF_PREVIEW_MIN_SCALE, value));

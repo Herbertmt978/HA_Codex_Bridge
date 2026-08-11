@@ -25,11 +25,21 @@ not create, restore, delete, export, upgrade, downgrade, or restart anything.
 ## Current recovery plan
 
 Prepare a cold Home Assistant backup and, where one is already operated, retain
-a private external Bridge. This cold restore runbook has not yet completed
-release acceptance, so test it on the intended Home Assistant installation
-before relying on it. App-image rollback is also not validated. Do not assume
-Supervisor can select an arbitrary earlier App image until a prior immutable
-App tag and its restore procedure are published and tested.
+a private external Bridge. App `1.0.1` and newer reconcile ownership of restored
+App-private Bridge and Codex state, the dedicated workspace tree, and the
+Bridge token before starting the non-root service. The trusted initializer does
+not follow symlinks and reapplies only the fixed private modes owned by the App;
+it does not broaden the `/config/workspaces` mapping or make an unsafe backup
+valid.
+
+This repair lets an existing supported cold restore recover from Supervisor
+having recreated App-owned files as `root`. It is not evidence that every cold
+restore, account state, backup payload, or retained image is valid. The cold
+restore runbook has not yet completed release acceptance, so test it on the
+intended Home Assistant installation before relying on it. App-image rollback
+is also not validated. Do not assume Supervisor can select an arbitrary earlier
+App image until a prior immutable App tag and its restore procedure are
+published and tested.
 
 ## Create a cold backup
 
@@ -53,11 +63,17 @@ from being submitted twice, but it does not make an unreviewed workspace safe.
 1. Stop the App on the target Home Assistant installation.
 2. Restore the selected cold backup through Home Assistant's supported restore
    workflow.
-3. Start the App and check readiness. If it reports `sandbox_unavailable`, do
-   not loosen permissions; retain redacted diagnostics and stop the rollout.
-4. Open the administrator panel and verify the ChatGPT session. Be prepared to
+3. Confirm that App `1.0.1` or newer is installed, then start it and check
+   readiness. Its trusted initializer repairs supported restored ownership and
+   private modes before the service drops privileges. If an older restored App
+   remains in **Error**, update it rather than deleting its data or repeating
+   the restore.
+4. If readiness still fails or reports `sandbox_unavailable`, do not loosen
+   permissions or run a broad recursive `chown`/`chmod`; retain redacted
+   diagnostics and stop the rollout.
+5. Open the administrator panel and verify the ChatGPT session. Be prepared to
    select **Sign in with ChatGPT** again rather than copying credentials.
-5. Inspect the restored workspace before asking Codex to change it.
+6. Inspect the restored workspace before asking Codex to change it.
 
 Removing the Integration or App intentionally does not remove workspace files.
 Review and back up `/config/workspaces` before cleanup. For switching from an

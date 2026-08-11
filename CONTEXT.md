@@ -39,11 +39,13 @@ to the App or Bridge.
   accepted account-neutral chat continuity across the signed-in ChatGPT account.
   This is bounded evidence, not a claim that every optional capability has been
   accepted.
-- The `1.0.0` stable promotion is current source work only: App, Integration,
-  and panel `1.0.0`, Bridge `0.7.6`, Codex `0.144.5`, and App lifecycle stage
-  `stable`. It adds a regression-tested immediate composer Send-state update
-  after typed input and explicit stable-version synchronization tooling. It has
-  not yet been signed, published, or installed on the target Home Assistant.
+- The signed stable `1.0.0` App/Integration/panel release uses Bridge `0.7.6`
+  with Codex `0.144.5` and retains the regression-tested immediate composer
+  Send-state update after typed input.
+- App `1.0.1` is the bounded cold-restore recovery release. The compatible
+  Integration and panel remain `1.0.0` because the App bootstrap repair does
+  not change their API or UI. Signed publication and target acceptance must be
+  verified independently before the restore gate is closed.
 - The account-neutral contract introduced in `0.8.11` makes local chats static
   across ChatGPT account changes. Projects, chat IDs, transcripts, files,
   workspace settings, archive state, and automation targets remain static.
@@ -56,7 +58,7 @@ to the App or Bridge.
   A newer hint invalidates any account read already in flight, and queued
   prompts recheck admission before making a provider request.
   Signed publication and target-HA account-switch acceptance completed for
-  `0.8.11`; the same release discipline remains required for `1.0.0`.
+  `0.8.11`; the same release discipline remains required for App `1.0.1`.
 - The typed PDF Files `409` has a locally covered repair, but real target
   list/archive/preview/download acceptance remains pending. Real Nabu
   Casa/Cloudflare remote-path acceptance, cold restore and arbitrary

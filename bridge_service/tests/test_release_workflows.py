@@ -335,6 +335,25 @@ def test_release_publishes_an_idempotent_exact_main_integration_release() -> Non
         or "commits/main" in normalized
     ), "release must bind publication to the exact main commit SHA"
     assert "config.yaml" in normalized and "version" in normalized
+    validate = document["jobs"]["validate"]
+    assert validate["outputs"] == {
+        "expected_sha": "${{ steps.expected.outputs.expected_sha }}",
+        "app_version": "${{ steps.versions.outputs.app_version }}",
+        "integration_version": "${{ steps.versions.outputs.integration_version }}",
+        "publish_integration": "${{ steps.versions.outputs.publish_integration }}",
+    }
+    versions_step = next(
+        step
+        for step in validate["steps"]
+        if isinstance(step, dict)
+        and step.get("name") == "Resolve independently versioned release surfaces"
+    )
+    assert versions_step["id"] == "versions"
+    versions_source = str(versions_step["run"])
+    assert "custom_components/codex_bridge/manifest.json" in versions_source
+    assert "app_version == integration_version" in versions_source
+    assert "publish_integration=" in versions_source
+
     paired_release = document["jobs"]["release-integration"]
     assert paired_release["needs"] == ["validate", "publish"], (
         "the Integration tag/release must wait for the signed manifest and its "
@@ -348,6 +367,9 @@ def test_release_publishes_an_idempotent_exact_main_integration_release() -> Non
     ), "contents: write must be granted only after App publication succeeds"
     paired_condition = str(paired_release["if"])
     assert "refs/heads/main" in paired_condition
+    assert "needs.validate.outputs.publish_integration == 'true'" in paired_condition, (
+        "an App-only version bump must not publish a misleading HACS Integration release"
+    )
 
     paired_steps = paired_release["steps"]
     checkout = next(
@@ -392,6 +414,20 @@ def test_release_publishes_an_idempotent_exact_main_integration_release() -> Non
     assert "draft" in helper_source and "prerelease" in helper_source
     assert "max_tag_depth" in helper_source
     assert "git ls-remote" not in paired_source
+
+    version_step = next(
+        step
+        for step in paired_steps
+        if isinstance(step, dict)
+        and step.get("name") == "Use the matching Integration release version"
+    )
+    assert version_step["env"] == {
+        "APP_VERSION": "${{ needs.validate.outputs.app_version }}",
+        "INTEGRATION_VERSION": "${{ needs.validate.outputs.integration_version }}",
+    }
+    assert 'test "${APP_VERSION}" = "${INTEGRATION_VERSION}"' in str(
+        version_step["run"]
+    )
 
 
 def test_ci_uses_the_hash_verified_official_actionlint_binary() -> None:
