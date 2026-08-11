@@ -3,7 +3,7 @@
 ## Decision
 
 The App image contains the fixed Chromium worker boundary and pinned Chromium
-`150.0.7871.181-r0`, but the `ha_browser` capability is deliberately **not
+`151.0.7922.108-r0`, but the `ha_browser` capability is deliberately **not
 advertised**.  A missing browser-worker attestation is a hard not-ready state;
 the Bridge must not start the helper or fall back to a parent-network browser.
 
