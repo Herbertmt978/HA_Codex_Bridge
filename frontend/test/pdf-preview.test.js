@@ -1,11 +1,15 @@
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getDocumentMock } = vi.hoisted(() => ({ getDocumentMock: vi.fn() }));
+const { getDocumentMock, globalWorkerOptionsMock } = vi.hoisted(() => ({
+  getDocumentMock: vi.fn(),
+  globalWorkerOptionsMock: {},
+}));
 
 vi.mock("pdfjs-dist/legacy/build/pdf.min.mjs", () => ({
-  GlobalWorkerOptions: {},
+  GlobalWorkerOptions: globalWorkerOptionsMock,
   getDocument: getDocumentMock,
+  version: "6.2.108",
 }));
 
 import {
@@ -35,6 +39,12 @@ describe("bounded PDF preview runtime", () => {
     }));
     expect(PDF_PREVIEW_MAX_DECODED_IMAGE_PIXELS).toBe(12_000_000);
     expect(PDF_PREVIEW_MAX_DECODED_CANVAS_BYTES).toBe(48_000_000);
+  });
+
+  it("uses the bundled PDF.js version to invalidate a cached worker", () => {
+    expect(globalWorkerOptionsMock.workerSrc).toContain(
+      "codex-bridge-pdf-worker.js?v=6.2.108"
+    );
   });
 
   it("cancels the retained PDF.js render task when its preview is disposed", async () => {

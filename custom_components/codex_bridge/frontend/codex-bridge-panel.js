@@ -720,7 +720,7 @@ var t = { 9306(t2, e2, i2) {
     return t3;
   };
 }, 4644(t2, e2, i2) {
-  var n2, s2, r2, a2 = i2(7811), o2 = i2(3724), l2 = i2(4576), h2 = i2(4901), c2 = i2(34), d2 = i2(9297), u2 = i2(6955), p2 = i2(6823), g2 = i2(6699), m2 = i2(6840), f2 = i2(2106), b2 = i2(1625), y2 = i2(2787), v2 = i2(2967), w2 = i2(8227), x2 = i2(3392), A2 = i2(1181), E2 = A2.enforce, C2 = A2.get, S2 = l2.Int8Array, T2 = S2 && S2.prototype, _2 = l2.Uint8ClampedArray, k2 = _2 && _2.prototype, M2 = S2 && y2(S2), D2 = T2 && y2(T2), P2 = Object.prototype, I2 = l2.TypeError, O2 = w2("toStringTag"), R2 = x2("TYPED_ARRAY_TAG"), B2 = "TypedArrayConstructor", L2 = a2 && !!v2 && "Opera" !== u2(l2.opera), N2 = false, U2 = { Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1, Int16Array: 2, Uint16Array: 2, Int32Array: 4, Uint32Array: 4, Float32Array: 4, Float64Array: 8 }, H2 = { BigInt64Array: 8, BigUint64Array: 8 }, getTypedArrayConstructor = function(t3) {
+  var n2, s2, r2, a2 = i2(7811), o2 = i2(3724), l2 = i2(4576), h2 = i2(4901), c2 = i2(34), d2 = i2(9297), u2 = i2(6955), p2 = i2(6823), g2 = i2(6699), m2 = i2(6840), f2 = i2(2106), b2 = i2(1625), y2 = i2(2787), v2 = i2(2967), w2 = i2(8227), x2 = i2(3392), A2 = i2(1181), E2 = A2.enforce, C2 = A2.get, S2 = l2.Int8Array, T2 = S2 && S2.prototype, _2 = l2.Uint8ClampedArray, k2 = _2 && _2.prototype, D2 = S2 && y2(S2), M2 = T2 && y2(T2), P2 = Object.prototype, I2 = l2.TypeError, O2 = w2("toStringTag"), R2 = x2("TYPED_ARRAY_TAG"), B2 = "TypedArrayConstructor", L2 = a2 && !!v2 && "Opera" !== u2(l2.opera), N2 = false, U2 = { Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1, Int16Array: 2, Uint16Array: 2, Int32Array: 4, Uint32Array: 4, Float32Array: 4, Float64Array: 8 }, H2 = { BigInt64Array: 8, BigUint64Array: 8 }, getTypedArrayConstructor = function(t3) {
     var e3 = y2(t3);
     if (c2(e3)) {
       var i3 = C2(e3);
@@ -733,20 +733,20 @@ var t = { 9306(t2, e2, i2) {
   };
   for (n2 in U2) (r2 = (s2 = l2[n2]) && s2.prototype) ? E2(r2)[B2] = s2 : L2 = false;
   for (n2 in H2) (r2 = (s2 = l2[n2]) && s2.prototype) && (E2(r2)[B2] = s2);
-  if (!L2 || !h2(M2) || M2 === Function.prototype) {
-    M2 = function TypedArray() {
+  if (!L2 || !h2(D2) || D2 === Function.prototype) {
+    D2 = function TypedArray() {
       throw new I2("Incorrect invocation");
     };
-    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2], M2);
+    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2], D2);
   }
-  if (!L2 || !D2 || D2 === P2) {
-    D2 = M2.prototype;
-    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2].prototype, D2);
+  if (!L2 || !M2 || M2 === P2) {
+    M2 = D2.prototype;
+    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2].prototype, M2);
   }
-  L2 && y2(k2) !== D2 && v2(k2, D2);
-  if (o2 && !d2(D2, O2)) {
+  L2 && y2(k2) !== M2 && v2(k2, M2);
+  if (o2 && !d2(M2, O2)) {
     N2 = true;
-    f2(D2, O2, { configurable: true, get: function() {
+    f2(M2, O2, { configurable: true, get: function() {
       return c2(this) ? this[R2] : void 0;
     } });
     for (n2 in U2) l2[n2] && g2(l2[n2].prototype, R2, n2);
@@ -755,7 +755,7 @@ var t = { 9306(t2, e2, i2) {
     if (isTypedArray(t3)) return t3;
     throw new I2("Target is not a typed array");
   }, aTypedArrayConstructor: function(t3) {
-    if (h2(t3) && (!v2 || b2(M2, t3))) return t3;
+    if (h2(t3) && (!v2 || b2(D2, t3))) return t3;
     throw new I2(p2(t3) + " is not a typed array constructor");
   }, exportTypedArrayMethod: function(t3, e3, i3, n3) {
     if (o2) {
@@ -770,7 +770,7 @@ var t = { 9306(t2, e2, i2) {
           }
         }
       }
-      D2[t3] && !i3 || m2(D2, t3, i3 ? e3 : L2 && T2[t3] || e3, n3);
+      M2[t3] && !i3 || m2(M2, t3, i3 ? e3 : L2 && T2[t3] || e3, n3);
     }
   }, exportTypedArrayStaticMethod: function(t3, e3, i3) {
     var n3, s3;
@@ -782,9 +782,9 @@ var t = { 9306(t2, e2, i2) {
           } catch (t4) {
           }
         }
-        if (M2[t3] && !i3) return;
+        if (D2[t3] && !i3) return;
         try {
-          return m2(M2, t3, i3 ? e3 : L2 && M2[t3] || e3);
+          return m2(D2, t3, i3 ? e3 : L2 && D2[t3] || e3);
         } catch (t4) {
         }
       }
@@ -794,7 +794,7 @@ var t = { 9306(t2, e2, i2) {
     if (!c2(t3)) return false;
     var e3 = u2(t3);
     return "DataView" === e3 || d2(U2, e3) || d2(H2, e3);
-  }, isTypedArray, TypedArray: M2, TypedArrayPrototype: D2 };
+  }, isTypedArray, TypedArray: D2, TypedArrayPrototype: M2 };
 }, 5370(t2, e2, i2) {
   var n2 = i2(6198);
   t2.exports = function(t3, e3, i3) {
@@ -2294,8 +2294,17 @@ var t = { 9306(t2, e2, i2) {
     }
     return m2 ? s2(m2, this, e3) : new b2(a2(this), { remaining: e3 });
   } });
+}, 1806(t2, e2, i2) {
+  var n2 = i2(6518), s2 = i2(8551), r2 = i2(4659), a2 = i2(2652), o2 = i2(1767);
+  n2({ target: "Iterator", proto: true, real: true }, { toArray: function toArray() {
+    var t3 = [], e3 = 0;
+    a2(o2(s2(this)), function(i3) {
+      r2(t3, e3++, i3);
+    }, { IS_RECORD: true });
+    return t3;
+  } });
 }, 9112(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(3724), r2 = i2(4576), a2 = i2(7751), o2 = i2(9504), l2 = i2(9565), h2 = i2(4901), c2 = i2(34), d2 = i2(4376), u2 = i2(9297), p2 = i2(655), g2 = i2(6198), m2 = i2(4659), f2 = i2(9039), b2 = i2(8235), y2 = i2(4495), v2 = r2.JSON, w2 = r2.Number, x2 = r2.SyntaxError, A2 = v2 && v2.parse, E2 = a2("Object", "keys"), C2 = Object.getOwnPropertyDescriptor, S2 = o2("".charAt), T2 = o2("".slice), _2 = o2(/./.exec), k2 = o2([].push), M2 = /^\d$/, D2 = /^[1-9]$/, P2 = /^[\d-]$/, I2 = /^[\t\n\r ]$/, internalize = function(t3, e3, i3, n3) {
+  var n2 = i2(6518), s2 = i2(3724), r2 = i2(4576), a2 = i2(7751), o2 = i2(9504), l2 = i2(9565), h2 = i2(4901), c2 = i2(34), d2 = i2(4376), u2 = i2(9297), p2 = i2(655), g2 = i2(6198), m2 = i2(4659), f2 = i2(9039), b2 = i2(8235), y2 = i2(4495), v2 = r2.JSON, w2 = r2.Number, x2 = r2.SyntaxError, A2 = v2 && v2.parse, E2 = a2("Object", "keys"), C2 = Object.getOwnPropertyDescriptor, S2 = o2("".charAt), T2 = o2("".slice), _2 = o2(/./.exec), k2 = o2([].push), D2 = /^\d$/, M2 = /^[1-9]$/, P2 = /^[\d-]$/, I2 = /^[\t\n\r ]$/, internalize = function(t3, e3, i3, n3) {
     var s3, r3, a3, o3, h3, p3 = t3[e3], m3 = n3 && p3 === n3.value, f3 = m3 && "string" == typeof n3.source ? { source: n3.source } : {};
     if (c2(p3)) {
       var b3 = d2(p3), y3 = m3 ? n3.nodes : b3 ? [] : {};
@@ -2409,17 +2418,17 @@ var t = { 9306(t2, e2, i2) {
     "-" === S2(t3, i3) && i3++;
     if ("0" === S2(t3, i3)) i3++;
     else {
-      if (!_2(D2, S2(t3, i3))) throw new x2("Failed to parse number at: " + i3);
-      i3 = this.skip(M2, i3 + 1);
+      if (!_2(M2, S2(t3, i3))) throw new x2("Failed to parse number at: " + i3);
+      i3 = this.skip(D2, i3 + 1);
     }
     if ("." === S2(t3, i3)) {
       var n3 = i3 + 1;
-      if (n3 === (i3 = this.skip(M2, n3))) throw new x2("Failed to parse number's fraction at: " + i3);
+      if (n3 === (i3 = this.skip(D2, n3))) throw new x2("Failed to parse number's fraction at: " + i3);
     }
     if ("e" === S2(t3, i3) || "E" === S2(t3, i3)) {
       i3++;
       "+" !== S2(t3, i3) && "-" !== S2(t3, i3) || i3++;
-      if (i3 === (i3 = this.skip(M2, i3))) throw new x2("Failed to parse number's exponent value at: " + i3);
+      if (i3 === (i3 = this.skip(D2, i3))) throw new x2("Failed to parse number's exponent value at: " + i3);
     }
     return this.node(0, w2(T2(t3, e3, i3)), e3, i3);
   }, keyword: function(t3) {
@@ -2452,7 +2461,7 @@ var t = { 9306(t2, e2, i2) {
     })(t3, e3);
   } });
 }, 3110(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(7751), r2 = i2(8745), a2 = i2(9565), o2 = i2(9504), l2 = i2(9039), h2 = i2(4376), c2 = i2(4901), d2 = i2(5810), u2 = i2(757), p2 = i2(2195), g2 = i2(655), m2 = i2(7680), f2 = i2(8235), b2 = i2(3392), y2 = i2(4495), v2 = i2(7819), w2 = String, x2 = s2("JSON", "stringify"), A2 = o2(/./.exec), E2 = o2("".charAt), C2 = o2("".charCodeAt), S2 = o2("".replace), T2 = o2("".slice), _2 = o2([].push), k2 = o2(1.1.toString), M2 = /[\uD800-\uDFFF]/g, D2 = /^[\uD800-\uDBFF]$/, P2 = /^[\uDC00-\uDFFF]$/, I2 = b2(), O2 = I2.length, R2 = !y2 || l2(function() {
+  var n2 = i2(6518), s2 = i2(7751), r2 = i2(8745), a2 = i2(9565), o2 = i2(9504), l2 = i2(9039), h2 = i2(4376), c2 = i2(4901), d2 = i2(5810), u2 = i2(757), p2 = i2(2195), g2 = i2(655), m2 = i2(7680), f2 = i2(8235), b2 = i2(3392), y2 = i2(4495), v2 = i2(7819), w2 = String, x2 = s2("JSON", "stringify"), A2 = o2(/./.exec), E2 = o2("".charAt), C2 = o2("".charCodeAt), S2 = o2("".replace), T2 = o2("".slice), _2 = o2([].push), k2 = o2(1.1.toString), D2 = /[\uD800-\uDFFF]/g, M2 = /^[\uD800-\uDBFF]$/, P2 = /^[\uDC00-\uDFFF]$/, I2 = b2(), O2 = I2.length, R2 = !y2 || l2(function() {
     var t3 = s2("Symbol")("stringify detection");
     return "[null]" !== x2([t3]) || "{}" !== x2({ a: t3 }) || "{}" !== x2(Object(t3));
   }), B2 = l2(function() {
@@ -2468,7 +2477,7 @@ var t = { 9306(t2, e2, i2) {
     }
   } : x2, fixIllFormedJSON = function(t3, e3, i3) {
     var n3 = E2(i3, e3 - 1), s3 = E2(i3, e3 + 1);
-    return A2(D2, t3) && !A2(P2, s3) || A2(P2, t3) && !A2(D2, n3) ? "\\u" + k2(C2(t3, 0), 16) : t3;
+    return A2(M2, t3) && !A2(P2, s3) || A2(P2, t3) && !A2(M2, n3) ? "\\u" + k2(C2(t3, 0), 16) : t3;
   }, getReplacerFunction = function(t3) {
     if (c2(t3)) return t3;
     if (h2(t3)) {
@@ -2493,7 +2502,7 @@ var t = { 9306(t2, e2, i2) {
       return !v2 && d2(i4) ? I2 + (_2(s3, i4.rawJSON) - 1) : i4;
     }, i3);
     if ("string" != typeof r3) return r3;
-    B2 && (r3 = S2(r3, M2, fixIllFormedJSON));
+    B2 && (r3 = S2(r3, D2, fixIllFormedJSON));
     if (v2) return r3;
     for (var o3 = "", l3 = r3.length, h3 = 0; h3 < l3; h3++) {
       var u3 = E2(r3, h3);
@@ -2555,8 +2564,8 @@ var t = { 9306(t2, e2, i2) {
     }
     for (var s3, c3, x2, A2, E2, C2, S2 = [], T2 = 0, _2 = 0; _2 < e3.length; _2++) {
       s3 = e3[_2];
-      for (var k2 = 0, M2 = 0; M2 < S2.length; M2++) {
-        c3 = S2[M2];
+      for (var k2 = 0, D2 = 0; D2 < S2.length; D2++) {
+        c3 = S2[D2];
         if (h2(s3) < h2(c3)) {
           C2 = s3;
           s3 = c3;
@@ -2565,9 +2574,9 @@ var t = { 9306(t2, e2, i2) {
         A2 = (x2 = twosum(s3, c3)).hi;
         E2 = x2.lo;
         if (h2(A2) === l2) {
-          var D2 = A2 === l2 ? 1 : -1;
-          T2 += D2;
-          if (h2(s3 = s3 - D2 * u2 - D2 * u2) < h2(c3)) {
+          var M2 = A2 === l2 ? 1 : -1;
+          T2 += M2;
+          if (h2(s3 = s3 - M2 * u2 - M2 * u2) < h2(c3)) {
             C2 = s3;
             s3 = c3;
             c3 = C2;
@@ -2831,8 +2840,8 @@ var t = { 9306(t2, e2, i2) {
   if (_2.constructor !== T2) {
     m2 || o2(_2, "constructor", a2(1, T2));
     for (var k2 in u2) if (l2(u2, k2)) {
-      var M2 = u2[k2], D2 = M2.s;
-      l2(T2, D2) || o2(T2, D2, a2(6, M2.c));
+      var D2 = u2[k2], M2 = D2.s;
+      l2(T2, M2) || o2(T2, M2, a2(6, D2.c));
     }
   }
 }, 5781(t2, e2, i2) {
@@ -2848,70 +2857,73 @@ var t = { 9306(t2, e2, i2) {
 } };
 var e = {};
 function __webpack_require__(i2) {
-  var n2 = e[i2];
+  const n2 = e[i2];
   if (void 0 !== n2) return n2.exports;
-  var s2 = e[i2] = { exports: {} };
+  const s2 = e[i2] = { exports: {} };
   t[i2].call(s2.exports, s2, s2.exports, __webpack_require__);
   return s2.exports;
 }
 __webpack_require__.d = (t2, e2) => {
-  for (var i2 in e2) __webpack_require__.o(e2, i2) && !__webpack_require__.o(t2, i2) && Object.defineProperty(t2, i2, { enumerable: true, get: e2[i2] });
+  if (Array.isArray(e2)) for (var i2 = 0; i2 < e2.length; ) {
+    var n2 = e2[i2++], s2 = e2[i2++];
+    __webpack_require__.o(t2, n2) ? 0 === s2 && i2++ : 0 === s2 ? Object.defineProperty(t2, n2, { enumerable: true, value: e2[i2++] }) : Object.defineProperty(t2, n2, { enumerable: true, get: s2 });
+  }
+  else for (var n2 in e2) __webpack_require__.o(e2, n2) && !__webpack_require__.o(t2, n2) && Object.defineProperty(t2, n2, { enumerable: true, get: e2[n2] });
 };
 __webpack_require__.o = (t2, e2) => Object.prototype.hasOwnProperty.call(t2, e2);
-__webpack_require__(4423), __webpack_require__(4114), __webpack_require__(8111), __webpack_require__(2489), __webpack_require__(5367), __webpack_require__(2731), __webpack_require__(9577), __webpack_require__(6632), __webpack_require__(4226), __webpack_require__(9486), __webpack_require__(456), __webpack_require__(5781);
+__webpack_require__(4423), __webpack_require__(4114), __webpack_require__(8111), __webpack_require__(2489), __webpack_require__(5367), __webpack_require__(2731), __webpack_require__(7642), __webpack_require__(8004), __webpack_require__(3853), __webpack_require__(5876), __webpack_require__(2475), __webpack_require__(5024), __webpack_require__(1698), __webpack_require__(9577), __webpack_require__(6632), __webpack_require__(4226), __webpack_require__(9486), __webpack_require__(456), __webpack_require__(5781);
 var i = !("object" != typeof process || process + "" != "[object process]" || process.versions.nw || process.versions.electron && process.type && "browser" !== process.type);
 var n = [1 / 0, 1 / 0, -1 / 0, -1 / 0];
 var s = new Float32Array(n);
 var r = [1e-3, 0, 0, 1e-3, 0, 0];
-var a = 1.35;
-var o = "http://www.w3.org/2000/svg";
-var l = 1;
-var h = 2;
-var c = 4;
-var d = 16;
-var u = 32;
-var p = 64;
-var g = 128;
-var m = 256;
-var f = { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2, ENABLE_STORAGE: 3 };
-var b = "pdfjs_internal_id_";
-var y = "pdfjs_internal_editor_";
-var v = { DISABLE: -1, NONE: 0, FREETEXT: 3, HIGHLIGHT: 9, STAMP: 13, INK: 15, POPUP: 16, SIGNATURE: 101, COMMENT: 102 };
-var w = { RESIZE: 1, CREATE: 2, FREETEXT_SIZE: 11, FREETEXT_COLOR: 12, FREETEXT_OPACITY: 13, INK_COLOR: 21, INK_THICKNESS: 22, INK_OPACITY: 23, INK_COLOR_AND_OPACITY: 24, HIGHLIGHT_COLOR: 31, HIGHLIGHT_THICKNESS: 32, HIGHLIGHT_FREE: 33, HIGHLIGHT_SHOW_ALL: 34, DRAW_STEP: 41 };
-var x = { PRINT: 4, MODIFY_CONTENTS: 8, COPY: 16, MODIFY_ANNOTATIONS: 32, FILL_INTERACTIVE_FORMS: 256, COPY_FOR_ACCESSIBILITY: 512, ASSEMBLE: 1024, PRINT_HIGH_QUALITY: 2048 };
-var A = 0;
-var E = 1;
-var C = 2;
+var a = "http://www.w3.org/2000/svg";
+var o = 1;
+var l = 2;
+var h = 4;
+var c = 16;
+var d = 32;
+var u = 64;
+var p = 128;
+var g = 256;
+var m = { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2, ENABLE_STORAGE: 3 };
+var f = "pdfjs_internal_id_";
+var b = "pdfjs_internal_editor_";
+var y = { DISABLE: -1, NONE: 0, FREETEXT: 3, HIGHLIGHT: 9, STAMP: 13, INK: 15, POPUP: 16, SIGNATURE: 101, COMMENT: 102 };
+var v = { RESIZE: 1, CREATE: 2, FREETEXT_SIZE: 11, FREETEXT_COLOR: 12, FREETEXT_OPACITY: 13, INK_COLOR: 21, INK_THICKNESS: 22, INK_OPACITY: 23, INK_COLOR_AND_OPACITY: 24, HIGHLIGHT_COLOR: 31, HIGHLIGHT_THICKNESS: 32, HIGHLIGHT_FREE: 33, HIGHLIGHT_SHOW_ALL: 34, DRAW_STEP: 41 };
+var w = { PRINT: 4, MODIFY_CONTENTS: 8, COPY: 16, MODIFY_ANNOTATIONS: 32, FILL_INTERACTIVE_FORMS: 256, COPY_FOR_ACCESSIBILITY: 512, ASSEMBLE: 1024, PRINT_HIGH_QUALITY: 2048 };
+var x = 0;
+var A = 1;
+var E = 2;
+var C = 3;
 var S = 3;
-var T = 3;
-var _ = 4;
-var k = { GRAYSCALE_1BPP: 1, RGB_24BPP: 2, RGBA_32BPP: 3 };
-var M = { TEXT: 1, LINK: 2, FREETEXT: 3, LINE: 4, SQUARE: 5, CIRCLE: 6, POLYGON: 7, POLYLINE: 8, HIGHLIGHT: 9, UNDERLINE: 10, SQUIGGLY: 11, STRIKEOUT: 12, STAMP: 13, CARET: 14, INK: 15, POPUP: 16, FILEATTACHMENT: 17, SOUND: 18, MOVIE: 19, WIDGET: 20, SCREEN: 21, PRINTERMARK: 22, TRAPNET: 23, WATERMARK: 24, THREED: 25, REDACT: 26, RICHMEDIA: 27 };
+var T = 4;
+var _ = { GRAYSCALE_1BPP: 1, RGB_24BPP: 2, RGBA_32BPP: 3 };
+var k = { TEXT: 1, LINK: 2, FREETEXT: 3, LINE: 4, SQUARE: 5, CIRCLE: 6, POLYGON: 7, POLYLINE: 8, HIGHLIGHT: 9, UNDERLINE: 10, SQUIGGLY: 11, STRIKEOUT: 12, STAMP: 13, CARET: 14, INK: 15, POPUP: 16, FILEATTACHMENT: 17, SOUND: 18, MOVIE: 19, WIDGET: 20, SCREEN: 21, PRINTERMARK: 22, TRAPNET: 23, WATERMARK: 24, THREED: 25, REDACT: 26, RICHMEDIA: 27 };
 var D = 1;
-var P = 2;
-var I = 3;
-var O = 4;
-var R = 5;
-var B = { ERRORS: 0, WARNINGS: 1, INFOS: 5 };
-var L = { dependency: 1, setLineWidth: 2, setLineCap: 3, setLineJoin: 4, setMiterLimit: 5, setDash: 6, setRenderingIntent: 7, setFlatness: 8, setGState: 9, save: 10, restore: 11, transform: 12, moveTo: 13, lineTo: 14, curveTo: 15, curveTo2: 16, curveTo3: 17, closePath: 18, rectangle: 19, stroke: 20, closeStroke: 21, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25, closeFillStroke: 26, closeEOFillStroke: 27, endPath: 28, clip: 29, eoClip: 30, beginText: 31, endText: 32, setCharSpacing: 33, setWordSpacing: 34, setHScale: 35, setLeading: 36, setFont: 37, setTextRenderingMode: 38, setTextRise: 39, moveText: 40, setLeadingMoveText: 41, setTextMatrix: 42, nextLine: 43, showText: 44, showSpacedText: 45, nextLineShowText: 46, nextLineSetSpacingShowText: 47, setCharWidth: 48, setCharWidthAndBounds: 49, setStrokeColorSpace: 50, setFillColorSpace: 51, setStrokeColor: 52, setStrokeColorN: 53, setFillColor: 54, setFillColorN: 55, setStrokeGray: 56, setFillGray: 57, setStrokeRGBColor: 58, setFillRGBColor: 59, setStrokeCMYKColor: 60, setFillCMYKColor: 61, shadingFill: 62, beginInlineImage: 63, beginImageData: 64, endInlineImage: 65, paintXObject: 66, markPoint: 67, markPointProps: 68, beginMarkedContent: 69, beginMarkedContentProps: 70, endMarkedContent: 71, beginCompat: 72, endCompat: 73, paintFormXObjectBegin: 74, paintFormXObjectEnd: 75, beginGroup: 76, endGroup: 77, beginAnnotation: 80, endAnnotation: 81, paintImageMaskXObject: 83, paintImageMaskXObjectGroup: 84, paintImageXObject: 85, paintInlineImageXObject: 86, paintInlineImageXObjectGroup: 87, paintImageXObjectRepeat: 88, paintImageMaskXObjectRepeat: 89, paintSolidColorImageMask: 90, constructPath: 91, setStrokeTransparent: 92, setFillTransparent: 93, rawFillPath: 94 };
-var N = 0;
-var U = 1;
-var H = 2;
-var z = 3;
-var G = 4;
-var j = { NEED_PASSWORD: 1, INCORRECT_PASSWORD: 2 };
-var W = B.WARNINGS;
+var M = 2;
+var P = 3;
+var I = 4;
+var O = 5;
+var R = { ERRORS: 0, WARNINGS: 1, INFOS: 5 };
+var B = { dependency: 1, setLineWidth: 2, setLineCap: 3, setLineJoin: 4, setMiterLimit: 5, setDash: 6, setRenderingIntent: 7, setFlatness: 8, setGState: 9, save: 10, restore: 11, transform: 12, moveTo: 13, lineTo: 14, curveTo: 15, curveTo2: 16, curveTo3: 17, closePath: 18, rectangle: 19, stroke: 20, closeStroke: 21, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25, closeFillStroke: 26, closeEOFillStroke: 27, endPath: 28, clip: 29, eoClip: 30, beginText: 31, endText: 32, setCharSpacing: 33, setWordSpacing: 34, setHScale: 35, setLeading: 36, setFont: 37, setTextRenderingMode: 38, setTextRise: 39, moveText: 40, setLeadingMoveText: 41, setTextMatrix: 42, nextLine: 43, showText: 44, showSpacedText: 45, nextLineShowText: 46, nextLineSetSpacingShowText: 47, setCharWidth: 48, setCharWidthAndBounds: 49, setStrokeColorSpace: 50, setFillColorSpace: 51, setStrokeColor: 52, setStrokeColorN: 53, setFillColor: 54, setFillColorN: 55, setStrokeGray: 56, setFillGray: 57, setStrokeRGBColor: 58, setFillRGBColor: 59, setStrokeCMYKColor: 60, setFillCMYKColor: 61, shadingFill: 62, beginInlineImage: 63, beginImageData: 64, endInlineImage: 65, paintXObject: 66, markPoint: 67, markPointProps: 68, beginMarkedContent: 69, beginMarkedContentProps: 70, endMarkedContent: 71, beginCompat: 72, endCompat: 73, paintFormXObjectBegin: 74, paintFormXObjectEnd: 75, beginGroup: 76, endGroup: 77, beginAnnotation: 80, endAnnotation: 81, paintImageMaskXObject: 83, paintImageMaskXObjectGroup: 84, paintImageXObject: 85, paintInlineImageXObject: 86, paintInlineImageXObjectGroup: 87, paintImageXObjectRepeat: 88, paintImageMaskXObjectRepeat: 89, paintSolidColorImageMask: 90, constructPath: 91, setStrokeTransparent: 92, setFillTransparent: 93, rawFillPath: 94 };
+var L = 0;
+var N = 1;
+var U = 2;
+var H = 3;
+var z = 4;
+var G = { NEED_PASSWORD: 1, INCORRECT_PASSWORD: 2 };
+var j = R.WARNINGS;
 function setVerbosityLevel(t2) {
-  Number.isInteger(t2) && (W = t2);
+  Number.isInteger(t2) && (j = t2);
 }
 function getVerbosityLevel() {
-  return W;
+  return j;
 }
 function info(t2) {
-  W >= B.INFOS && console.info(`Info: ${t2}`);
+  j >= R.INFOS && console.info(`Info: ${t2}`);
 }
 function warn(t2) {
-  W >= B.WARNINGS && console.warn(`Warning: ${t2}`);
+  j >= R.WARNINGS && console.warn(`Warning: ${t2}`);
 }
 function unreachable(t2) {
   throw new Error(t2);
@@ -2962,7 +2974,7 @@ function shadow(t2, e2, i2, n2 = false) {
   Object.defineProperty(t2, e2, { value: i2, enumerable: !n2, configurable: true, writable: false });
   return i2;
 }
-var V = (function BaseExceptionClosure() {
+var W = (function BaseExceptionClosure() {
   function BaseException(t2, e2) {
     this.message = t2;
     this.name = e2;
@@ -2971,36 +2983,36 @@ var V = (function BaseExceptionClosure() {
   BaseException.constructor = BaseException;
   return BaseException;
 })();
-var PasswordException = class extends V {
+var PasswordException = class extends W {
   constructor(t2, e2) {
     super(t2, "PasswordException");
     this.code = e2;
   }
 };
-var UnknownErrorException = class extends V {
+var UnknownErrorException = class extends W {
   constructor(t2, e2) {
     super(t2, "UnknownErrorException");
     this.details = e2;
   }
 };
-var InvalidPDFException = class extends V {
+var InvalidPDFException = class extends W {
   constructor(t2) {
     super(t2, "InvalidPDFException");
   }
 };
-var ResponseException = class extends V {
+var ResponseException = class extends W {
   constructor(t2, e2, i2) {
     super(t2, "ResponseException");
     this.status = e2;
     this.missing = i2;
   }
 };
-var FormatError = class extends V {
+var FormatError = class extends W {
   constructor(t2) {
     super(t2, "FormatError");
   }
 };
-var AbortException = class extends V {
+var AbortException = class extends W {
   constructor(t2) {
     super(t2, "AbortException");
   }
@@ -3167,14 +3179,14 @@ var Util = class {
     this.#e(t2, i2, s2, a2, e2, n2, r2, o2, 3 * (3 * (n2 - r2) - e2 + o2), 6 * (e2 - 2 * n2 + r2), 3 * (n2 - e2), l2);
   }
 };
+var V = null;
 var $ = null;
-var q = null;
 function normalizeUnicode(t2) {
-  if (!$) {
-    $ = /([\u00a0\u00b5\u037e\u0eb3\u2000-\u200a\u202f\u2126\ufb00-\ufb04\ufb06\ufb20-\ufb36\ufb38-\ufb3c\ufb3e\ufb40\ufb41\ufb43\ufb44\ufb46-\ufba1\ufba4-\ufba9\ufbae-\ufbb1\ufbd3-\ufbdc\ufbde-\ufbe7\ufbea-\ufbf8\ufbfc\ufbfd\ufc00-\ufc5d\ufc64-\ufcf1\ufcf5-\ufd3d\ufd88\ufdf4\ufdfa\ufdfb\ufe71\ufe77\ufe79\ufe7b\ufe7d]+)|(\ufb05+)/gu;
-    q = /* @__PURE__ */ new Map([["ﬅ", "ſt"]]);
+  if (!V) {
+    V = /([\u00a0\u00b5\u037e\u0eb3\u2000-\u200a\u202f\u2126\ufb00-\ufb04\ufb06\ufb20-\ufb36\ufb38-\ufb3c\ufb3e\ufb40\ufb41\ufb43\ufb44\ufb46-\ufba1\ufba4-\ufba9\ufbae-\ufbb1\ufbd3-\ufbdc\ufbde-\ufbe7\ufbea-\ufbf8\ufbfc\ufbfd\ufc00-\ufc5d\ufc64-\ufcf1\ufcf5-\ufd3d\ufd88\ufdf4\ufdfa\ufdfb\ufe71\ufe77\ufe79\ufe7b\ufe7d]+)|(\ufb05+)/gu;
+    $ = /* @__PURE__ */ new Map([["ﬅ", "ſt"]]);
   }
-  return t2.replaceAll($, (t3, e2, i2) => e2 ? e2.normalize("NFKC") : q.get(i2));
+  return t2.replaceAll(V, (t3, e2, i2) => e2 ? e2.normalize("NFKC") : $.get(i2));
 }
 function getUuid() {
   if ("function" == typeof crypto.randomUUID) return crypto.randomUUID();
@@ -3195,11 +3207,15 @@ function getUuid() {
 var makeArr = () => [];
 var makeMap = () => /* @__PURE__ */ new Map();
 var makeObj = () => /* @__PURE__ */ Object.create(null);
+var makeSet = () => /* @__PURE__ */ new Set();
 "function" != typeof Blob.prototype.bytes && (Blob.prototype.bytes = async function() {
   return new Uint8Array(await this.arrayBuffer());
 });
 "function" != typeof Response.prototype.bytes && (Response.prototype.bytes = async function() {
   return new Uint8Array(await this.arrayBuffer());
+});
+"function" != typeof Iterator.prototype.join && (Iterator.prototype.join = function(t2) {
+  return [...this].join(t2);
 });
 __webpack_require__(1701);
 function MathClamp(t2, e2, i2) {
@@ -3303,7 +3319,24 @@ var XfaText = class _XfaText {
     return !("textarea" === t2 || "input" === t2 || "option" === t2 || "select" === t2);
   }
 };
+var q = /url\(|image-set\(/i;
+var K = /^on/i;
 var XfaLayer = class {
+  static get _allowedHtmlElements() {
+    return shadow(this, "_allowedHtmlElements", /* @__PURE__ */ new Set(["a", "b", "br", "button", "div", "i", "img", "input", "label", "li", "ol", "option", "p", "select", "span", "sub", "sup", "textarea", "ul"]));
+  }
+  static get _allowedSvgElements() {
+    return shadow(this, "_allowedSvgElements", /* @__PURE__ */ new Set(["ellipse", "line", "path", "rect", "svg"]));
+  }
+  static get _allowedRichTextElements() {
+    return shadow(this, "_allowedRichTextElements", /* @__PURE__ */ new Set(["a", "b", "br", "div", "i", "li", "ol", "p", "span", "sub", "sup", "ul"]));
+  }
+  static get _allowedRichTextAttributes() {
+    return shadow(this, "_allowedRichTextAttributes", /* @__PURE__ */ new Set(["class", "dir", "style"]));
+  }
+  static get _allowedRichTextStyles() {
+    return shadow(this, "_allowedRichTextStyles", /* @__PURE__ */ new Set(["color", "font", "fontFamily", "fontSize", "fontStretch", "fontStyle", "fontWeight", "kerningMode", "letterSpacing", "lineHeight", "margin", "marginBottom", "marginLeft", "marginRight", "marginTop", "orphans", "paddingLeft", "paddingRight", "breakAfter", "breakBefore", "breakInside", "tabInterval", "tabStop", "textAlign", "textDecoration", "textIndent", "transform", "verticalAlign", "widows"]));
+  }
   static setupStorage(t2, e2, i2, n2, s2) {
     const r2 = n2.getValue(e2, { value: null });
     switch (i2.name) {
@@ -3343,7 +3376,7 @@ var XfaLayer = class {
   static setAttributes({ html: t2, element: e2, storage: i2 = null, intent: n2, linkService: s2 }) {
     const { attributes: r2 } = e2, a2 = t2 instanceof HTMLAnchorElement;
     "radio" === r2.type && (r2.name = `${r2.name}-${n2}`);
-    for (const [e3, i3] of Object.entries(r2)) if (null != i3) switch (e3) {
+    for (const [e3, i3] of Object.entries(r2)) if (null != i3 && !K.test(e3) && ("richText" !== n2 || this._allowedRichTextAttributes.has(e3))) switch (e3) {
       case "class":
         i3.length && t2.setAttribute(e3, i3.join(" "));
         break;
@@ -3353,7 +3386,10 @@ var XfaLayer = class {
         t2.setAttribute("data-element-id", i3);
         break;
       case "style":
-        Object.assign(t2.style, i3);
+        if ("richText" === n2) {
+          const e4 = this._allowedRichTextStyles;
+          for (const [n3, s3] of Object.entries(i3)) e4.has(n3) && !q.test(s3) && (t2.style[n3] = s3);
+        } else Object.assign(t2.style, i3);
         break;
       case "textContent":
         t2.textContent = i3;
@@ -3361,11 +3397,14 @@ var XfaLayer = class {
       default:
         (!a2 || "href" !== e3 && "newWindow" !== e3) && t2.setAttribute(e3, i3);
     }
-    a2 && s2.addLinkAttributes(t2, r2.href, r2.newWindow);
+    a2 && s2?.addLinkAttributes(t2, r2.href, r2.newWindow);
     i2 && r2.dataId && this.setupStorage(t2, r2.dataId, e2, i2);
   }
+  static #i(t2, e2, i2) {
+    return "richText" === i2 ? !e2 && this._allowedRichTextElements.has(t2) ? document.createElement(t2) : null : e2 ? e2 === a && this._allowedSvgElements.has(t2) ? document.createElementNS(a, t2) : null : this._allowedHtmlElements.has(t2) ? document.createElement(t2) : null;
+  }
   static render(t2) {
-    const e2 = t2.annotationStorage, i2 = t2.linkService, n2 = t2.xfaHtml, s2 = t2.intent || "display", r2 = document.createElement(n2.name);
+    const e2 = t2.annotationStorage, i2 = t2.linkService, n2 = t2.xfaHtml, s2 = t2.intent || "display", r2 = this.#i(n2.name, n2.attributes?.xmlns, s2) ?? document.createElement("div");
     n2.attributes && this.setAttributes({ html: r2, element: n2, intent: s2, linkService: i2 });
     const a2 = "richText" !== s2, o2 = t2.div;
     o2.append(r2);
@@ -3399,14 +3438,16 @@ var XfaLayer = class {
         r3.append(t4);
         continue;
       }
-      const d2 = o3?.attributes?.xmlns ? document.createElementNS(o3.attributes.xmlns, c2) : document.createElement(c2);
-      r3.append(d2);
-      o3.attributes && this.setAttributes({ html: d2, element: o3, storage: e2, intent: s2, linkService: i2 });
-      if (o3.children?.length > 0) h2.push([o3, -1, d2]);
-      else if (o3.value) {
-        const t4 = document.createTextNode(o3.value);
-        a2 && XfaText.shouldBuildText(c2) && l2.push(t4);
-        d2.append(t4);
+      const d2 = this.#i(c2, o3.attributes?.xmlns, s2);
+      if (d2) {
+        r3.append(d2);
+        o3.attributes && this.setAttributes({ html: d2, element: o3, storage: e2, intent: s2, linkService: i2 });
+        if (o3.children?.length > 0) h2.push([o3, -1, d2]);
+        else if (o3.value) {
+          const t4 = document.createTextNode(o3.value);
+          a2 && XfaText.shouldBuildText(c2) && l2.push(t4);
+          d2.append(t4);
+        }
       }
     }
     for (const t3 of o2.querySelectorAll(".xfaNonInteractive input, .xfaNonInteractive textarea")) t3.setAttribute("readOnly", true);
@@ -3463,7 +3504,7 @@ async function fetchData(t2, e2 = "text") {
     s2.send(null);
   });
 }
-var RenderingCancelledException = class extends V {
+var RenderingCancelledException = class extends W {
   constructor(t2, e2 = 0) {
     super(t2, "RenderingCancelledException");
     this.extraDelay = e2;
@@ -3532,16 +3573,16 @@ function getPdfFilenameFromUrl(t2, e2 = "document.pdf") {
   return e2;
 }
 var StatTimer = class {
-  #i = /* @__PURE__ */ new Map();
+  #n = /* @__PURE__ */ new Map();
   times = [];
   time(t2) {
-    this.#i.has(t2) && warn(`Timer is already running for ${t2}`);
-    this.#i.set(t2, Date.now());
+    this.#n.has(t2) && warn(`Timer is already running for ${t2}`);
+    this.#n.set(t2, Date.now());
   }
   timeEnd(t2) {
-    this.#i.has(t2) || warn(`Timer has not been started for ${t2}`);
-    this.times.push({ name: t2, start: this.#i.get(t2), end: Date.now() });
-    this.#i.delete(t2);
+    this.#n.has(t2) || warn(`Timer has not been started for ${t2}`);
+    this.times.push({ name: t2, start: this.#n.get(t2), end: Date.now() });
+    this.#n.delete(t2);
   }
   toString() {
     const t2 = Math.max(...this.times.map((t3) => t3.name.length));
@@ -3561,12 +3602,12 @@ function stopEvent(t2) {
   t2.stopPropagation();
 }
 var PDFDateString = class {
-  static #n;
+  static #s;
   static toDateObject(t2) {
     if (t2 instanceof Date) return t2;
     if (!t2 || "string" != typeof t2) return null;
-    this.#n ||= new RegExp("^D:(\\d{4})(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?([Z|+\\-])?(\\d{2})?'?(\\d{2})?'?");
-    const e2 = this.#n.exec(t2);
+    this.#s ||= new RegExp("^D:(\\d{4})(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?([Z|+\\-])?(\\d{2})?'?(\\d{2})?'?");
+    const e2 = this.#s.exec(t2);
     if (!e2) return null;
     const i2 = parseInt(e2[1], 10);
     let n2 = parseInt(e2[2], 10);
@@ -3677,7 +3718,7 @@ var OutputScale = class _OutputScale {
     return t2;
   }
 };
-var K = ["image/apng", "image/avif", "image/bmp", "image/gif", "image/jpeg", "image/png", "image/svg+xml", "image/webp", "image/x-icon"];
+var X = ["image/apng", "image/avif", "image/bmp", "image/gif", "image/jpeg", "image/png", "image/svg+xml", "image/webp", "image/x-icon"];
 var ColorScheme = class {
   static get isDarkMode() {
     return shadow(this, "isDarkMode", !!window?.matchMedia?.("(prefers-color-scheme: dark)").matches);
@@ -3767,10 +3808,10 @@ function contrastRatio(t2, e2, i2) {
   const s2 = 0.2126 * i2[0] + 0.7152 * i2[1] + 0.0722 * i2[2];
   return n2 > s2 ? (n2 + 0.05) / (s2 + 0.05) : (s2 + 0.05) / (n2 + 0.05);
 }
-var X = /* @__PURE__ */ new Map();
+var Y = /* @__PURE__ */ new Map();
 function findContrastColor(t2, e2) {
   const i2 = t2[0] + 256 * t2[1] + 65536 * t2[2] + 16777216 * e2[0] + 4294967296 * e2[1] + 1099511627776 * e2[2];
-  let n2 = X.get(i2);
+  let n2 = Y.get(i2);
   if (n2) return n2;
   const s2 = new Float32Array(9), r2 = s2.subarray(0, 3), a2 = s2.subarray(3, 6);
   RGBToHSL(t2, a2);
@@ -3796,7 +3837,7 @@ function findContrastColor(t2, e2) {
   }
   HSLToRGB(a2, r2);
   n2 = Util.makeHexColor(Math.round(255 * r2[0]), Math.round(255 * r2[1]), Math.round(255 * r2[2]));
-  X.set(i2, n2);
+  Y.set(i2, n2);
   return n2;
 }
 function renderRichText({ html: t2, dir: e2, className: i2 }, n2) {
@@ -3819,19 +3860,19 @@ function makePathFromDrawOPS(t2) {
   const e2 = new Path2D();
   if (!t2) return e2;
   for (let i2 = 0, n2 = t2.length; i2 < n2; ) switch (t2[i2++]) {
-    case N:
+    case L:
       e2.moveTo(t2[i2++], t2[i2++]);
       break;
-    case U:
+    case N:
       e2.lineTo(t2[i2++], t2[i2++]);
       break;
-    case H:
+    case U:
       e2.bezierCurveTo(t2[i2++], t2[i2++], t2[i2++], t2[i2++], t2[i2++], t2[i2++]);
       break;
-    case z:
+    case H:
       e2.quadraticCurveTo(t2[i2++], t2[i2++], t2[i2++], t2[i2++]);
       break;
-    case G:
+    case z:
       e2.closePath();
       break;
     default:
@@ -3839,124 +3880,124 @@ function makePathFromDrawOPS(t2) {
   }
   return e2;
 }
-__webpack_require__(4972), __webpack_require__(4628), __webpack_require__(7642), __webpack_require__(8004), __webpack_require__(3853), __webpack_require__(5876), __webpack_require__(2475), __webpack_require__(5024), __webpack_require__(1698), __webpack_require__(8454), __webpack_require__(9452), __webpack_require__(4979), __webpack_require__(3579), __webpack_require__(3110), __webpack_require__(9314), __webpack_require__(1148), __webpack_require__(116), __webpack_require__(9112);
+__webpack_require__(4972), __webpack_require__(4628), __webpack_require__(8454), __webpack_require__(9452), __webpack_require__(4979), __webpack_require__(3579), __webpack_require__(3110), __webpack_require__(9314), __webpack_require__(1148), __webpack_require__(116), __webpack_require__(9112);
 var EditorToolbar = class _EditorToolbar {
-  #s = null;
   #r = null;
-  #a;
-  #o = null;
+  #a = null;
+  #o;
   #l = null;
   #h = null;
   #c = null;
   #d = null;
-  static #u = null;
+  #u = null;
+  static #p = null;
   constructor(t2) {
-    this.#a = t2;
-    _EditorToolbar.#u ||= Object.freeze({ freetext: "pdfjs-editor-remove-freetext-button", highlight: "pdfjs-editor-remove-highlight-button", ink: "pdfjs-editor-remove-ink-button", stamp: "pdfjs-editor-remove-stamp-button", signature: "pdfjs-editor-remove-signature-button" });
+    this.#o = t2;
+    _EditorToolbar.#p ||= Object.freeze({ freetext: "pdfjs-editor-remove-freetext-button", highlight: "pdfjs-editor-remove-highlight-button", ink: "pdfjs-editor-remove-ink-button", stamp: "pdfjs-editor-remove-stamp-button", signature: "pdfjs-editor-remove-signature-button" });
   }
   render() {
-    const t2 = this.#s = document.createElement("div");
+    const t2 = this.#r = document.createElement("div");
     t2.classList.add("editToolbar", "hidden");
     t2.setAttribute("role", "toolbar");
-    const e2 = this.#a._uiManager._signal;
+    const e2 = this.#o._uiManager._signal;
     if (e2 instanceof AbortSignal && !e2.aborted) {
       t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
-      t2.addEventListener("pointerdown", _EditorToolbar.#p, { signal: e2 });
+      t2.addEventListener("pointerdown", _EditorToolbar.#g, { signal: e2 });
     }
-    const i2 = this.#o = document.createElement("div");
+    const i2 = this.#l = document.createElement("div");
     i2.className = "buttons";
     t2.append(i2);
-    const n2 = this.#a.toolbarPosition;
+    const n2 = this.#o.toolbarPosition;
     if (n2) {
-      const { style: e3 } = t2, i3 = "ltr" === this.#a._uiManager.direction ? 1 - n2[0] : n2[0];
+      const { style: e3 } = t2, i3 = "ltr" === this.#o._uiManager.direction ? 1 - n2[0] : n2[0];
       e3.insetInlineEnd = 100 * i3 + "%";
       e3.top = `calc(${100 * n2[1]}% + var(--editor-toolbar-vert-offset))`;
     }
     return t2;
   }
   get div() {
-    return this.#s;
+    return this.#r;
   }
-  static #p(t2) {
+  static #g(t2) {
     t2.stopPropagation();
   }
-  #g(t2) {
-    this.#a._focusEventsAllowed = false;
-    stopEvent(t2);
-  }
   #m(t2) {
-    this.#a._focusEventsAllowed = true;
+    this.#o._focusEventsAllowed = false;
     stopEvent(t2);
   }
   #f(t2) {
-    const e2 = this.#a._uiManager._signal;
+    this.#o._focusEventsAllowed = true;
+    stopEvent(t2);
+  }
+  #b(t2) {
+    const e2 = this.#o._uiManager._signal;
     if (!(e2 instanceof AbortSignal) || e2.aborted) return false;
-    t2.addEventListener("focusin", this.#g.bind(this), { capture: true, signal: e2 });
-    t2.addEventListener("focusout", this.#m.bind(this), { capture: true, signal: e2 });
+    t2.addEventListener("focusin", this.#m.bind(this), { capture: true, signal: e2 });
+    t2.addEventListener("focusout", this.#f.bind(this), { capture: true, signal: e2 });
     t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
     return true;
   }
   hide() {
-    this.#s.classList.add("hidden");
-    this.#r?.hideDropdown();
+    this.#r.classList.add("hidden");
+    this.#a?.hideDropdown();
   }
   show() {
-    this.#s.classList.remove("hidden");
-    this.#l?.shown();
+    this.#r.classList.remove("hidden");
     this.#h?.shown();
+    this.#c?.shown();
   }
   addDeleteButton() {
-    const { editorType: t2, _uiManager: e2 } = this.#a, i2 = document.createElement("button");
+    const { editorType: t2, _uiManager: e2 } = this.#o, i2 = document.createElement("button");
     i2.classList.add("basic", "deleteButton");
     i2.tabIndex = 0;
-    i2.setAttribute("data-l10n-id", _EditorToolbar.#u[t2]);
-    this.#f(i2) && i2.addEventListener("click", (t3) => {
+    i2.setAttribute("data-l10n-id", _EditorToolbar.#p[t2]);
+    this.#b(i2) && i2.addEventListener("click", (t3) => {
       e2.delete();
     }, { signal: e2._signal });
-    this.#o.append(i2);
+    this.#l.append(i2);
   }
-  get #b() {
+  get #y() {
     const t2 = document.createElement("div");
     t2.className = "divider";
     return t2;
   }
   async addAltText(t2) {
     const e2 = await t2.render();
-    this.#f(e2);
-    this.#o.append(e2, this.#b);
-    this.#l = t2;
+    this.#b(e2);
+    this.#l.append(e2, this.#y);
+    this.#h = t2;
   }
   addComment(t2, e2 = null) {
-    if (this.#h) return;
+    if (this.#c) return;
     const i2 = t2.renderForToolbar();
     if (!i2) return;
-    this.#f(i2);
-    const n2 = this.#c = this.#b;
+    this.#b(i2);
+    const n2 = this.#d = this.#y;
     if (e2) {
-      this.#o.insertBefore(i2, e2);
-      this.#o.insertBefore(n2, e2);
-    } else this.#o.append(i2, n2);
-    this.#h = t2;
+      this.#l.insertBefore(i2, e2);
+      this.#l.insertBefore(n2, e2);
+    } else this.#l.append(i2, n2);
+    this.#c = t2;
     t2.toolbar = this;
   }
   addColorPicker(t2) {
-    if (this.#r) return;
-    this.#r = t2;
+    if (this.#a) return;
+    this.#a = t2;
     const e2 = t2.renderButton();
-    this.#f(e2);
-    this.#o.append(e2, this.#b);
+    this.#b(e2);
+    this.#l.append(e2, this.#y);
   }
   async addEditSignatureButton(t2) {
-    const e2 = this.#d = await t2.renderEditButton(this.#a);
-    this.#f(e2);
-    this.#o.append(e2, this.#b);
+    const e2 = this.#u = await t2.renderEditButton(this.#o);
+    this.#b(e2);
+    this.#l.append(e2, this.#y);
   }
   removeButton(t2) {
     if ("comment" === t2) {
-      this.#h?.removeToolbarCommentButton();
-      this.#h = null;
-      this.#c?.remove();
+      this.#c?.removeToolbarCommentButton();
       this.#c = null;
+      this.#d?.remove();
+      this.#d = null;
     }
   }
   async addButton(t2, e2) {
@@ -3979,43 +4020,43 @@ var EditorToolbar = class _EditorToolbar {
   }
   async addButtonBefore(t2, e2, i2) {
     if (!e2 && "comment" === t2) return;
-    const n2 = this.#o.querySelector(i2);
+    const n2 = this.#l.querySelector(i2);
     n2 && "comment" === t2 && this.addComment(e2, n2);
   }
   updateEditSignatureButton(t2) {
-    this.#d && (this.#d.title = t2);
+    this.#u && (this.#u.title = t2);
   }
   remove() {
-    this.#s.remove();
-    this.#r?.destroy();
-    this.#r = null;
+    this.#r.remove();
+    this.#a?.destroy();
+    this.#a = null;
   }
 };
 var FloatingToolbar = class {
-  #o = null;
-  #s = null;
-  #y;
+  #l = null;
+  #r = null;
+  #v;
   constructor(t2) {
-    this.#y = t2;
+    this.#v = t2;
   }
-  #v() {
-    const t2 = this.#s = document.createElement("div");
+  #w() {
+    const t2 = this.#r = document.createElement("div");
     t2.className = "editToolbar";
     t2.setAttribute("role", "toolbar");
-    const e2 = this.#y._signal;
+    const e2 = this.#v._signal;
     e2 instanceof AbortSignal && !e2.aborted && t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
-    const i2 = this.#o = document.createElement("div");
+    const i2 = this.#l = document.createElement("div");
     i2.className = "buttons";
     t2.append(i2);
-    this.#y.hasCommentManager() && this.#w("commentButton", "pdfjs-comment-floating-button", "pdfjs-comment-floating-button-label", () => {
-      this.#y.commentSelection("floating_button");
+    this.#v.hasCommentManager() && this.#x("commentButton", "pdfjs-comment-floating-button", "pdfjs-comment-floating-button-label", () => {
+      this.#v.commentSelection("floating_button");
     });
-    this.#w("highlightButton", "pdfjs-highlight-floating-button1", "pdfjs-highlight-floating-button-label", () => {
-      this.#y.highlightSelection("floating_button");
+    this.#x("highlightButton", "pdfjs-highlight-floating-button1", "pdfjs-highlight-floating-button-label", () => {
+      this.#v.highlightSelection("floating_button");
     });
     return t2;
   }
-  #x(t2, e2) {
+  #A(t2, e2) {
     let i2 = 0, n2 = 0;
     for (const s2 of t2) {
       const t3 = s2.y + s2.height;
@@ -4029,15 +4070,15 @@ var FloatingToolbar = class {
     return [e2 ? 1 - n2 : n2, i2];
   }
   show(t2, e2, i2) {
-    const [n2, s2] = this.#x(e2, i2), { style: r2 } = this.#s ||= this.#v();
-    t2.append(this.#s);
+    const [n2, s2] = this.#A(e2, i2), { style: r2 } = this.#r ||= this.#w();
+    t2.append(this.#r);
     r2.insetInlineEnd = 100 * n2 + "%";
     r2.top = `calc(${100 * s2}% + var(--editor-toolbar-vert-offset))`;
   }
   hide() {
-    this.#s.remove();
+    this.#r.remove();
   }
-  #w(t2, e2, i2, n2) {
+  #x(t2, e2, i2, n2) {
     const s2 = document.createElement("button");
     s2.classList.add("basic", t2);
     s2.tabIndex = 0;
@@ -4046,76 +4087,76 @@ var FloatingToolbar = class {
     s2.append(r2);
     r2.className = "visuallyHidden";
     r2.setAttribute("data-l10n-id", i2);
-    const a2 = this.#y._signal;
+    const a2 = this.#v._signal;
     if (a2 instanceof AbortSignal && !a2.aborted) {
       s2.addEventListener("contextmenu", noContextMenu, { signal: a2 });
       s2.addEventListener("click", n2, { signal: a2 });
     }
-    this.#o.append(s2);
+    this.#l.append(s2);
   }
 };
-var Y = Object.freeze({ internal: "068f09d6-5b37-4f77-a97a-f8ff4f253b68" });
+var J = Object.freeze({ internal: "f63eb798-ea37-4556-98de-f8303ee5a694" });
 function bindEvents(t2, e2, i2) {
   for (const n2 of i2) e2.addEventListener(n2, t2[n2].bind(t2));
 }
 var CurrentPointers = class _CurrentPointers {
-  static #A = NaN;
-  static #E = null;
-  static #C = NaN;
-  static #S = null;
+  static #E = NaN;
+  static #C = null;
+  static #S = NaN;
+  static #T = null;
   static initializeAndAddPointerId(t2) {
-    (_CurrentPointers.#E ||= /* @__PURE__ */ new Set()).add(t2);
+    (_CurrentPointers.#C ||= /* @__PURE__ */ new Set()).add(t2);
   }
   static setPointer(t2, e2) {
-    _CurrentPointers.#A ||= e2;
-    _CurrentPointers.#S ??= t2;
+    _CurrentPointers.#E ||= e2;
+    _CurrentPointers.#T ??= t2;
   }
   static setTimeStamp(t2) {
-    _CurrentPointers.#C = t2;
+    _CurrentPointers.#S = t2;
   }
   static isSamePointerId(t2) {
-    return _CurrentPointers.#A === t2;
+    return _CurrentPointers.#E === t2;
   }
   static isSamePointerIdOrRemove(t2) {
-    if (_CurrentPointers.#A === t2) return true;
-    _CurrentPointers.#E?.delete(t2);
+    if (_CurrentPointers.#E === t2) return true;
+    _CurrentPointers.#C?.delete(t2);
     return false;
   }
   static isSamePointerType(t2) {
-    return _CurrentPointers.#S === t2;
+    return _CurrentPointers.#T === t2;
   }
   static isInitializedAndDifferentPointerType(t2) {
-    return null !== _CurrentPointers.#S && !_CurrentPointers.isSamePointerType(t2);
+    return null !== _CurrentPointers.#T && !_CurrentPointers.isSamePointerType(t2);
   }
   static isSameTimeStamp(t2) {
-    return _CurrentPointers.#C === t2;
+    return _CurrentPointers.#S === t2;
   }
   static isUsingMultiplePointers() {
-    return _CurrentPointers.#E?.size >= 1;
+    return _CurrentPointers.#C?.size >= 1;
   }
   static clearPointerType() {
-    _CurrentPointers.#S = null;
+    _CurrentPointers.#T = null;
   }
   static clearPointerIds() {
-    _CurrentPointers.#A = NaN;
-    _CurrentPointers.#E = null;
+    _CurrentPointers.#E = NaN;
+    _CurrentPointers.#C = null;
   }
   static clearTimeStamp() {
-    _CurrentPointers.#C = NaN;
+    _CurrentPointers.#S = NaN;
   }
 };
 var IdManager = class {
-  #T = 0;
+  #_ = 0;
   get id() {
-    return `${y}${this.#T++}`;
+    return `${b}${this.#_++}`;
   }
 };
 var ImageManager = class _ImageManager {
-  #_ = getUuid();
-  #T = 0;
-  #k = null;
+  #k = getUuid();
+  #_ = 0;
+  #D = null;
   static get _isSVGFittingCanvas() {
-    const t2 = `data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 1 1" width="1" height="1" xmlns="${o}"><rect width="1" height="1" style="fill:red;"/></svg>`, e2 = new OffscreenCanvas(1, 3).getContext("2d", { willReadFrequently: true }), i2 = new Image();
+    const t2 = `data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 1 1" width="1" height="1" xmlns="${a}"><rect width="1" height="1" style="fill:red;"/></svg>`, e2 = new OffscreenCanvas(1, 3).getContext("2d", { willReadFrequently: true }), i2 = new Image();
     i2.src = t2;
     return shadow(this, "_isSVGFittingCanvas", i2.decode().then(() => {
       e2.drawImage(i2, 0, 0, 1, 1, 0, 0, 1, 3);
@@ -4123,15 +4164,15 @@ var ImageManager = class _ImageManager {
     }));
   }
   async #M(t2, e2) {
-    this.#k ||= /* @__PURE__ */ new Map();
-    let i2 = this.#k.get(t2);
+    this.#D ||= /* @__PURE__ */ new Map();
+    let i2 = this.#D.get(t2);
     if (null === i2) return null;
     if (i2?.bitmap) {
       i2.refCounter += 1;
       return i2;
     }
     try {
-      i2 ||= { bitmap: null, id: `image_${this.#_}_${this.#T++}`, refCounter: 0, isSvg: false };
+      i2 ||= { bitmap: null, id: `image_${this.#k}_${this.#_++}`, refCounter: 0, isSvg: false };
       let t3;
       if ("string" == typeof e2) {
         i2.url = e2;
@@ -4158,8 +4199,8 @@ var ImageManager = class _ImageManager {
       warn(t3);
       i2 = null;
     }
-    this.#k.set(t2, i2);
-    i2 && this.#k.set(i2.id, i2);
+    this.#D.set(t2, i2);
+    i2 && this.#D.set(i2.id, i2);
     return i2;
   }
   async getFromFile(t2) {
@@ -4174,8 +4215,8 @@ var ImageManager = class _ImageManager {
     return this.#M(t2, i2);
   }
   async getFromId(t2) {
-    this.#k ||= /* @__PURE__ */ new Map();
-    const e2 = this.#k.get(t2);
+    this.#D ||= /* @__PURE__ */ new Map();
+    const e2 = this.#D.get(t2);
     if (!e2) return null;
     if (e2.bitmap) {
       e2.refCounter += 1;
@@ -4190,26 +4231,26 @@ var ImageManager = class _ImageManager {
     return this.getFromUrl(e2.url);
   }
   getFromCanvas(t2, e2) {
-    this.#k ||= /* @__PURE__ */ new Map();
-    let i2 = this.#k.get(t2);
+    this.#D ||= /* @__PURE__ */ new Map();
+    let i2 = this.#D.get(t2);
     if (i2?.bitmap) {
       i2.refCounter += 1;
       return i2;
     }
     const n2 = new OffscreenCanvas(e2.width, e2.height);
     n2.getContext("2d").drawImage(e2, 0, 0);
-    i2 = { bitmap: n2.transferToImageBitmap(), id: `image_${this.#_}_${this.#T++}`, refCounter: 1, isSvg: false };
-    this.#k.set(t2, i2);
-    this.#k.set(i2.id, i2);
+    i2 = { bitmap: n2.transferToImageBitmap(), id: `image_${this.#k}_${this.#_++}`, refCounter: 1, isSvg: false };
+    this.#D.set(t2, i2);
+    this.#D.set(i2.id, i2);
     return i2;
   }
   getSvgUrl(t2) {
-    const e2 = this.#k.get(t2);
+    const e2 = this.#D.get(t2);
     return e2?.isSvg ? e2.svgUrl : null;
   }
   deleteId(t2) {
-    this.#k ||= /* @__PURE__ */ new Map();
-    const e2 = this.#k.get(t2);
+    this.#D ||= /* @__PURE__ */ new Map();
+    const e2 = this.#D.get(t2);
     if (!e2) return;
     e2.refCounter -= 1;
     if (0 !== e2.refCounter) return;
@@ -4223,78 +4264,78 @@ var ImageManager = class _ImageManager {
     e2.bitmap = null;
   }
   isValidId(t2) {
-    return t2.startsWith(`image_${this.#_}_`);
+    return t2.startsWith(`image_${this.#k}_`);
   }
 };
 var CommandManager = class {
-  #D = [];
-  #P = false;
-  #I;
-  #F = -1;
+  #P = [];
+  #I = false;
+  #F;
+  #O = -1;
   constructor(t2 = 128) {
-    this.#I = t2;
+    this.#F = t2;
   }
   add({ cmd: t2, undo: e2, post: i2, mustExec: n2, type: s2 = NaN, overwriteIfSameType: r2 = false, keepUndo: a2 = false }) {
     n2 && t2();
-    if (this.#P) return;
+    if (this.#I) return;
     const o2 = { cmd: t2, undo: e2, post: i2, type: s2 };
-    if (-1 === this.#F) {
-      this.#D.length > 0 && (this.#D.length = 0);
-      this.#F = 0;
-      this.#D.push(o2);
+    if (-1 === this.#O) {
+      this.#P.length > 0 && (this.#P.length = 0);
+      this.#O = 0;
+      this.#P.push(o2);
       return;
     }
-    if (r2 && this.#D[this.#F].type === s2) {
-      a2 && (o2.undo = this.#D[this.#F].undo);
-      this.#D[this.#F] = o2;
+    if (r2 && this.#P[this.#O].type === s2) {
+      a2 && (o2.undo = this.#P[this.#O].undo);
+      this.#P[this.#O] = o2;
       return;
     }
-    const l2 = this.#F + 1;
-    if (l2 === this.#I) this.#D.splice(0, 1);
+    const l2 = this.#O + 1;
+    if (l2 === this.#F) this.#P.splice(0, 1);
     else {
-      this.#F = l2;
-      l2 < this.#D.length && this.#D.splice(l2);
+      this.#O = l2;
+      l2 < this.#P.length && this.#P.splice(l2);
     }
-    this.#D.push(o2);
+    this.#P.push(o2);
   }
   undo() {
-    if (-1 === this.#F) return;
-    this.#P = true;
-    const { undo: t2, post: e2 } = this.#D[this.#F];
+    if (-1 === this.#O) return;
+    this.#I = true;
+    const { undo: t2, post: e2 } = this.#P[this.#O];
     t2();
     e2?.();
-    this.#P = false;
-    this.#F -= 1;
+    this.#I = false;
+    this.#O -= 1;
   }
   redo() {
-    if (this.#F < this.#D.length - 1) {
-      this.#F += 1;
-      this.#P = true;
-      const { cmd: t2, post: e2 } = this.#D[this.#F];
+    if (this.#O < this.#P.length - 1) {
+      this.#O += 1;
+      this.#I = true;
+      const { cmd: t2, post: e2 } = this.#P[this.#O];
       t2();
       e2?.();
-      this.#P = false;
+      this.#I = false;
     }
   }
   hasSomethingToUndo() {
-    return -1 !== this.#F;
+    return -1 !== this.#O;
   }
   hasSomethingToRedo() {
-    return this.#F < this.#D.length - 1;
+    return this.#O < this.#P.length - 1;
   }
   cleanType(t2) {
-    if (-1 !== this.#F) {
-      for (let e2 = this.#F; e2 >= 0; e2--) if (this.#D[e2].type !== t2) {
-        this.#D.splice(e2 + 1, this.#F - e2);
-        this.#F = e2;
+    if (-1 !== this.#O) {
+      for (let e2 = this.#O; e2 >= 0; e2--) if (this.#P[e2].type !== t2) {
+        this.#P.splice(e2 + 1, this.#O - e2);
+        this.#O = e2;
         return;
       }
-      this.#D.length = 0;
-      this.#F = -1;
+      this.#P.length = 0;
+      this.#O = -1;
     }
   }
   destroy() {
-    this.#D = null;
+    this.#P = null;
   }
 };
 var KeyboardManager = class _KeyboardManager {
@@ -4314,12 +4355,12 @@ var KeyboardManager = class _KeyboardManager {
           if (e2 !== t4) continue;
           t4 && (i3 = r2.slice(4));
         }
-        const [a2, o2] = _KeyboardManager.#O(i3);
+        const [a2, o2] = _KeyboardManager.#R(i3);
         null !== a2 && this.callbacks.getOrInsertComputed(a2, makeArr).push({ callback: n2, options: s2, modifiers: o2 });
       }
     }
   }
-  static #O(t2) {
+  static #R(t2) {
     let e2 = null, i2 = 0;
     for (let n2 of t2.split("+")) {
       n2 = n2.trim();
@@ -4337,7 +4378,7 @@ var KeyboardManager = class _KeyboardManager {
     null === e2 && warn(`KeyboardManager: no key found in shortcut "${t2}"`);
     return [e2, i2];
   }
-  static #R(t2) {
+  static #B(t2) {
     const e2 = /^(?:Key([A-Z])|(?:Digit|Numpad)(\d))$/.exec(t2);
     return e2 ? e2[1]?.toLowerCase() ?? e2[2] : null;
   }
@@ -4345,7 +4386,7 @@ var KeyboardManager = class _KeyboardManager {
     let i2 = this.callbacks.get(e2.key);
     if (!i2) {
       if (/^[a-z]$/i.test(e2.key)) return;
-      const t3 = _KeyboardManager.#R(e2.code);
+      const t3 = _KeyboardManager.#B(e2.code);
       if (null === t3 || t3 === e2.key) return;
       i2 = this.callbacks.get(t3);
       if (!i2) return;
@@ -4389,80 +4430,80 @@ var ColorManager = class _ColorManager {
   }
 };
 var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
-  #B = new AbortController();
-  #L = null;
+  #L = new AbortController();
   #N = null;
-  #U = /* @__PURE__ */ new Map();
+  #U = null;
   #H = /* @__PURE__ */ new Map();
-  #z = null;
+  #z = /* @__PURE__ */ new Map();
   #G = null;
   #j = null;
   #W = null;
-  #V = new CommandManager();
-  #$ = null;
+  #V = null;
+  #$ = new CommandManager();
   #q = null;
   #K = null;
-  #X = 0;
-  #Y = /* @__PURE__ */ new Set();
-  #J = null;
+  #X = null;
+  #Y = 0;
+  #J = /* @__PURE__ */ new Set();
   #Q = null;
-  #Z = /* @__PURE__ */ new Set();
+  #Z = null;
+  #tt = /* @__PURE__ */ new Set();
   _editorUndoBar = null;
-  #tt = false;
   #et = false;
   #it = false;
-  #nt = null;
+  #nt = false;
   #st = null;
   #rt = null;
   #at = null;
-  #ot = false;
-  #lt = null;
-  #ht = new IdManager();
-  #ct = false;
+  #ot = null;
+  #lt = false;
+  #ht = null;
+  #ct = new IdManager();
   #dt = false;
   #ut = false;
-  #pt = null;
+  #pt = false;
   #gt = null;
   #mt = null;
   #ft = null;
   #bt = null;
-  #yt = v.NONE;
-  #vt = /* @__PURE__ */ new Set();
-  #wt = null;
+  #yt = null;
+  #vt = y.NONE;
+  #wt = /* @__PURE__ */ new Set();
   #xt = null;
   #At = null;
   #Et = null;
   #Ct = null;
-  #St = { isEditing: false, isEmpty: true, hasSomethingToUndo: false, hasSomethingToRedo: false, hasSelectedEditor: false, hasSelectedText: false };
-  #Tt = [0, 0];
-  #_t = null;
+  #St = null;
+  #Tt = { isEditing: false, isEmpty: true, hasSomethingToUndo: false, hasSomethingToRedo: false, hasSelectedEditor: false, hasSelectedText: false };
+  #_t = [0, 0];
   #kt = null;
-  #Mt = null;
   #Dt = null;
+  #Mt = null;
   #Pt = null;
+  #It = null;
   static TRANSLATE_SMALL = 1;
   static TRANSLATE_BIG = 10;
   static get _keyboardManager() {
-    const t2 = _AnnotationEditorUIManager.prototype, arrowChecker = (t3) => t3.#kt.contains(document.activeElement) && "BUTTON" !== document.activeElement.tagName && t3.hasSomethingToControl(), textInputChecker = (t3, { target: e3 }) => {
+    const t2 = _AnnotationEditorUIManager.prototype, arrowChecker = (t3) => t3.#Dt.contains(document.activeElement) && "BUTTON" !== document.activeElement.tagName && t3.hasSomethingToControl(), textInputChecker = (t3, { target: e3 }) => {
       if (e3 instanceof HTMLInputElement) {
         const { type: t4 } = e3;
         return "text" !== t4 && "number" !== t4;
       }
       return true;
     }, e2 = this.TRANSLATE_SMALL, i2 = this.TRANSLATE_BIG;
-    return shadow(this, "_keyboardManager", new KeyboardManager([[["ctrl+a", "mac+meta+a"], t2.selectAll, { checker: textInputChecker }], [["ctrl+z", "mac+meta+z"], t2.undo, { checker: textInputChecker }], [["ctrl+y", "ctrl+shift+z", "mac+meta+shift+z", "ctrl+shift+Z", "mac+meta+shift+Z"], t2.redo, { checker: textInputChecker }], [["Backspace", "alt+Backspace", "ctrl+Backspace", "shift+Backspace", "mac+Backspace", "mac+alt+Backspace", "mac+ctrl+Backspace", "Delete", "ctrl+Delete", "shift+Delete", "mac+Delete"], t2.delete, { checker: textInputChecker }], [["Enter"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#kt.contains(e3) && !t3.isEnterHandled }], [["Space"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#kt.contains(document.activeElement) }], [["Escape"], t2.unselectAll], [["ArrowLeft"], t2.translateSelectedEditors, { args: [-e2, 0], checker: arrowChecker }], [["ctrl+ArrowLeft", "mac+shift+ArrowLeft"], t2.translateSelectedEditors, { args: [-i2, 0], checker: arrowChecker }], [["ArrowRight"], t2.translateSelectedEditors, { args: [e2, 0], checker: arrowChecker }], [["ctrl+ArrowRight", "mac+shift+ArrowRight"], t2.translateSelectedEditors, { args: [i2, 0], checker: arrowChecker }], [["ArrowUp"], t2.translateSelectedEditors, { args: [0, -e2], checker: arrowChecker }], [["ctrl+ArrowUp", "mac+shift+ArrowUp"], t2.translateSelectedEditors, { args: [0, -i2], checker: arrowChecker }], [["ArrowDown"], t2.translateSelectedEditors, { args: [0, e2], checker: arrowChecker }], [["ctrl+ArrowDown", "mac+shift+ArrowDown"], t2.translateSelectedEditors, { args: [0, i2], checker: arrowChecker }]]));
+    return shadow(this, "_keyboardManager", new KeyboardManager([[["ctrl+a", "mac+meta+a"], t2.selectAll, { checker: textInputChecker }], [["ctrl+z", "mac+meta+z"], t2.undo, { checker: textInputChecker }], [["ctrl+y", "ctrl+shift+z", "mac+meta+shift+z", "ctrl+shift+Z", "mac+meta+shift+Z"], t2.redo, { checker: textInputChecker }], [["Backspace", "alt+Backspace", "ctrl+Backspace", "shift+Backspace", "mac+Backspace", "mac+alt+Backspace", "mac+ctrl+Backspace", "Delete", "ctrl+Delete", "shift+Delete", "mac+Delete"], t2.delete, { checker: textInputChecker }], [["Enter"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Dt.contains(e3) && !t3.isEnterHandled }], [["Space"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Dt.contains(document.activeElement) }], [["Escape"], t2.unselectAll], [["ArrowLeft"], t2.translateSelectedEditors, { args: [-e2, 0], checker: arrowChecker }], [["ctrl+ArrowLeft", "mac+shift+ArrowLeft"], t2.translateSelectedEditors, { args: [-i2, 0], checker: arrowChecker }], [["ArrowRight"], t2.translateSelectedEditors, { args: [e2, 0], checker: arrowChecker }], [["ctrl+ArrowRight", "mac+shift+ArrowRight"], t2.translateSelectedEditors, { args: [i2, 0], checker: arrowChecker }], [["ArrowUp"], t2.translateSelectedEditors, { args: [0, -e2], checker: arrowChecker }], [["ctrl+ArrowUp", "mac+shift+ArrowUp"], t2.translateSelectedEditors, { args: [0, -i2], checker: arrowChecker }], [["ArrowDown"], t2.translateSelectedEditors, { args: [0, e2], checker: arrowChecker }], [["ctrl+ArrowDown", "mac+shift+ArrowDown"], t2.translateSelectedEditors, { args: [0, i2], checker: arrowChecker }]]));
   }
   constructor(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2, c2, d2, u2, p2, g2, m2) {
-    const f2 = this._signal = this.#B.signal;
-    this.#kt = t2;
+    const f2 = this._signal = this.#L.signal;
+    this.#Dt = t2;
     this.#Mt = e2;
-    this.#Dt = i2;
-    this.#G = n2;
-    this.#$ = s2;
-    this.#xt = r2;
-    this.#Ct = o2;
+    this.#Pt = i2;
+    this.#j = n2;
+    this.#q = s2;
+    this.#At = r2;
+    this.#St = o2;
     this._eventBus = a2;
-    const b2 = { signal: f2, ...Y };
+    const b2 = { signal: f2, ...J };
     a2.on("editingaction", this.onEditingAction.bind(this), b2);
     a2.on("pagechanging", this.onPageChanging.bind(this), b2);
     a2.on("scalechanging", this.onScaleChanging.bind(this), b2);
@@ -4470,23 +4511,23 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     a2.on("setpreference", this.onSetPreference.bind(this), b2);
     a2.on("switchannotationeditorparams", (t3) => this.updateParams(t3.type, t3.value), b2);
     window.addEventListener("pointerdown", () => {
-      this.#dt = true;
+      this.#ut = true;
     }, { capture: true, signal: f2 });
     window.addEventListener("pointerup", () => {
-      this.#dt = false;
+      this.#ut = false;
     }, { capture: true, signal: f2 });
-    window.addEventListener("beforeunload", this.#It.bind(this), { capture: true, signal: f2 });
+    window.addEventListener("beforeunload", this.endCurrentEditing.bind(this), { capture: true, signal: f2 });
     this.#Ft();
     this.#Ot();
     this.#Rt();
-    this.#j = o2.annotationStorage;
-    this.#nt = o2.filterFactory;
-    this.#At = l2;
-    this.#at = h2 || null;
-    this.#tt = c2;
-    this.#et = d2;
-    this.#it = u2;
-    this.#bt = p2 || null;
+    this.#W = o2.annotationStorage;
+    this.#st = o2.filterFactory;
+    this.#Et = l2;
+    this.#ot = h2 || null;
+    this.#et = c2;
+    this.#it = d2;
+    this.#nt = u2;
+    this.#yt = p2 || null;
     this.viewParameters = { realScale: PixelsPerInch.PDF_TO_CSS_UNITS, rotation: 0 };
     this.isShiftKeyDown = false;
     this._editorUndoBar = g2 || null;
@@ -4494,58 +4535,58 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     s2?.setSidebarUiManager(this);
   }
   destroy() {
-    this.#Pt?.resolve();
-    this.#Pt = null;
-    this.#B?.abort();
-    this.#B = null;
-    this._signal = null;
-    for (const t2 of this.#H.values()) t2.destroy();
-    this.#H.clear();
-    this.#U.clear();
-    this.#Z.clear();
-    this.#ft?.clear();
+    this.#It?.resolve();
+    this.#It = null;
+    this.#L?.abort();
     this.#L = null;
-    this.#vt.clear();
-    this.#V.destroy();
-    this.#G?.destroy();
-    this.#$?.destroy();
-    this.#xt?.destroy();
-    this.#lt?.hide();
-    this.#lt = null;
-    this.#mt?.destroy();
-    this.#mt = null;
+    this._signal = null;
+    for (const t2 of this.#z.values()) t2.destroy();
+    this.#z.clear();
+    this.#H.clear();
+    this.#tt.clear();
+    this.#bt?.clear();
     this.#N = null;
-    if (this.#st) {
-      clearTimeout(this.#st);
-      this.#st = null;
+    this.#wt.clear();
+    this.#$.destroy();
+    this.#j?.destroy();
+    this.#q?.destroy();
+    this.#At?.destroy();
+    this.#ht?.hide();
+    this.#ht = null;
+    this.#ft?.destroy();
+    this.#ft = null;
+    this.#U = null;
+    if (this.#rt) {
+      clearTimeout(this.#rt);
+      this.#rt = null;
     }
-    if (this.#_t) {
-      clearTimeout(this.#_t);
-      this.#_t = null;
+    if (this.#kt) {
+      clearTimeout(this.#kt);
+      this.#kt = null;
     }
     this._editorUndoBar?.destroy();
-    this.#Ct = null;
+    this.#St = null;
   }
   combinedSignal(t2) {
     return AbortSignal.any([this._signal, t2.signal]);
   }
   get mlManager() {
-    return this.#bt;
+    return this.#yt;
   }
   get useNewAltTextFlow() {
-    return this.#et;
-  }
-  get useNewAltTextWhenAddingImage() {
     return this.#it;
   }
+  get useNewAltTextWhenAddingImage() {
+    return this.#nt;
+  }
   get hcmFilter() {
-    return shadow(this, "hcmFilter", this.#At ? this.#nt.addHCMFilter(this.#At.foreground, this.#At.background) : "none");
+    return shadow(this, "hcmFilter", this.#Et ? this.#st.addHCMFilter(this.#Et.foreground, this.#Et.background) : "none");
   }
   get direction() {
-    return shadow(this, "direction", getComputedStyle(this.#kt).direction);
+    return shadow(this, "direction", getComputedStyle(this.#Dt).direction);
   }
   get _highlightColors() {
-    return shadow(this, "_highlightColors", this.#at ? new Map(this.#at.split(",").map((t2) => {
+    return shadow(this, "_highlightColors", this.#ot ? new Map(this.#ot.split(",").map((t2) => {
       (t2 = t2.split("=").map((t3) => t3.trim()))[1] = t2[1].toUpperCase();
       return t2;
     })) : null);
@@ -4553,7 +4594,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   get highlightColors() {
     const { _highlightColors: t2 } = this;
     if (!t2) return shadow(this, "highlightColors", null);
-    const e2 = /* @__PURE__ */ new Map(), i2 = !!this.#At;
+    const e2 = /* @__PURE__ */ new Map(), i2 = !!this.#Et;
     for (const [n2, s2] of t2) {
       const t3 = n2.endsWith("_HCM");
       i2 && t3 ? e2.set(n2.replace("_HCM", ""), s2) : i2 || t3 || e2.set(n2, s2);
@@ -4576,32 +4617,32 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
       this.unselectAll();
       this.disableUserSelect(true);
     } else this.disableUserSelect(false);
-    this.#K = t2;
+    this.#X = t2;
   }
   setMainHighlightColorPicker(t2) {
-    this.#mt = t2;
+    this.#ft = t2;
   }
   editAltText(t2, e2 = false) {
-    this.#G?.editAltText(this, t2, e2);
+    this.#j?.editAltText(this, t2, e2);
   }
   hasCommentManager() {
-    return !!this.#$;
+    return !!this.#q;
   }
   editComment(t2, e2, i2, n2) {
-    this.#$?.showDialog(this, t2, e2, i2, n2);
+    this.#q?.showDialog(this, t2, e2, i2, n2);
   }
   selectComment(t2, e2) {
-    const i2 = this.#H.get(t2), n2 = i2?.getEditorByUID(e2);
+    const i2 = this.#z.get(t2), n2 = i2?.getEditorByUID(e2);
     n2?.toggleComment(true, true);
   }
   updateComment(t2) {
-    this.#$?.updateComment(t2.getData());
+    this.#q?.updateComment(t2.getData());
   }
   updatePopupColor(t2) {
-    this.#$?.updatePopupColor(t2);
+    this.#q?.updatePopupColor(t2);
   }
   removeComment(t2) {
-    this.#$?.removeComments([t2.uid]);
+    this.#q?.removeComments([t2.uid]);
   }
   deleteComment(t2, e2) {
     const undo = () => {
@@ -4614,54 +4655,54 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }, undo, mustExec: true });
   }
   toggleComment(t2, e2, i2 = void 0) {
-    this.#$?.toggleCommentPopup(t2, e2, i2);
+    this.#q?.toggleCommentPopup(t2, e2, i2);
   }
   makeCommentColor(t2, e2) {
-    return t2 && this.#$?.makeCommentColor(t2, e2) || null;
+    return t2 && this.#q?.makeCommentColor(t2, e2) || null;
   }
   getCommentDialogElement() {
-    return this.#$?.dialogElement || null;
+    return this.#q?.dialogElement || null;
   }
   async waitForEditorsRendered(t2) {
-    if (this.#H.has(t2 - 1)) return;
+    if (this.#z.has(t2 - 1)) return;
     const { resolve: e2, promise: i2 } = Promise.withResolvers(), onEditorsRendered = (i3) => {
       if (i3.pageNumber === t2) {
         this._eventBus.off("editorsrendered", onEditorsRendered);
         e2();
       }
     };
-    this._eventBus.on("editorsrendered", onEditorsRendered, Y);
+    this._eventBus.on("editorsrendered", onEditorsRendered, J);
     await i2;
   }
   getSignature(t2) {
-    this.#xt?.getSignature({ uiManager: this, editor: t2 });
+    this.#At?.getSignature({ uiManager: this, editor: t2 });
   }
   get signatureManager() {
-    return this.#xt;
+    return this.#At;
   }
   switchToMode(t2, e2) {
-    this._eventBus.on("annotationeditormodechanged", e2, { once: true, signal: this._signal, ...Y });
+    this._eventBus.on("annotationeditormodechanged", e2, { once: true, signal: this._signal, ...J });
     this._eventBus.dispatch("showannotationeditorui", { source: this, mode: t2 });
   }
   setPreference(t2, e2) {
     this._eventBus.dispatch("setpreference", { source: this, name: t2, value: e2 });
   }
   onSetPreference({ name: t2, value: e2 }) {
-    if ("enableNewAltTextWhenAddingImage" === t2) this.#it = e2;
+    if ("enableNewAltTextWhenAddingImage" === t2) this.#nt = e2;
   }
   onPageChanging({ pageNumber: t2 }) {
-    this.#X = t2 - 1;
+    this.#Y = t2 - 1;
   }
   deletePage(t2) {
     for (const e2 of this.getEditors(t2)) e2.remove();
-    this.#H.delete(t2);
-    this.#X === t2 && (this.#X = 0);
+    this.#z.delete(t2);
+    this.#Y === t2 && (this.#Y = 0);
   }
   focusMainContainer() {
-    this.#kt.focus();
+    this.#Dt.focus();
   }
   findParent(t2, e2) {
-    for (const i2 of this.#H.values()) {
+    for (const i2 of this.#z.values()) {
       const { x: n2, y: s2, width: r2, height: a2 } = i2.div.getBoundingClientRect();
       if (t2 >= n2 && t2 <= n2 + r2 && e2 >= s2 && e2 <= s2 + a2) return i2;
     }
@@ -4671,16 +4712,16 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.#Mt.classList.toggle("noUserSelect", t2);
   }
   addShouldRescale(t2) {
-    this.#Z.add(t2);
+    this.#tt.add(t2);
   }
   removeShouldRescale(t2) {
-    this.#Z.delete(t2);
+    this.#tt.delete(t2);
   }
   onScaleChanging({ scale: t2 }) {
     this.commitOrRemove();
     this.viewParameters.realScale = t2 * PixelsPerInch.PDF_TO_CSS_UNITS;
-    for (const t3 of this.#Z) t3.onScaleChanging();
-    this.#K?.onScaleChanging();
+    for (const t3 of this.#tt) t3.onScaleChanging();
+    this.#X?.onScaleChanging();
   }
   onRotationChanging({ pagesRotation: t2 }) {
     this.commitOrRemove();
@@ -4692,7 +4733,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   #Lt(t2) {
     const { currentLayer: e2 } = this;
     if (e2.hasTextLayer(t2)) return e2;
-    for (const e3 of this.#H.values()) if (e3.hasTextLayer(t2)) return e3;
+    for (const e3 of this.#z.values()) if (e3.hasTextLayer(t2)) return e3;
     return null;
   }
   highlightSelection(t2 = "", e2 = false) {
@@ -4701,17 +4742,17 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     const { anchorNode: n2, anchorOffset: s2, focusNode: r2, focusOffset: a2 } = i2, o2 = i2.toString(), l2 = this.#Bt(i2).closest(".textLayer"), h2 = this.getSelectionBoxes(l2);
     if (!h2) return;
     i2.empty();
-    const c2 = this.#Lt(l2), d2 = this.#yt === v.NONE, callback = () => {
+    const c2 = this.#Lt(l2), d2 = this.#vt === y.NONE, callback = () => {
       const i3 = c2?.createAndAddNewEditor({ x: 0, y: 0 }, false, { methodOfCreation: t2, boxes: h2, anchorNode: n2, anchorOffset: s2, focusNode: r2, focusOffset: a2, text: o2 });
       d2 && this.showAllEditors("highlight", true, true);
       e2 && i3?.editComment();
     };
-    d2 ? this.switchToMode(v.HIGHLIGHT, callback) : callback();
+    d2 ? this.switchToMode(y.HIGHLIGHT, callback) : callback();
   }
   commentSelection(t2 = "") {
     this.highlightSelection(t2, true);
   }
-  #It(t2) {
+  endCurrentEditing() {
     this.commitOrRemove();
     this.currentLayer?.endDrawingSession(false);
   }
@@ -4720,21 +4761,21 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     if (!t2 || t2.isCollapsed) return;
     const e2 = this.#Bt(t2).closest(".textLayer"), i2 = this.getSelectionBoxes(e2);
     if (i2) {
-      this.#lt ||= new FloatingToolbar(this);
-      this.#lt.show(e2, i2, "ltr" === this.direction);
+      this.#ht ||= new FloatingToolbar(this);
+      this.#ht.show(e2, i2, "ltr" === this.direction);
     }
   }
   getAndRemoveDataFromAnnotationStorage(t2) {
-    if (!this.#j) return null;
-    const e2 = `${y}${t2}`, i2 = this.#j.getRawValue(e2);
-    i2 && this.#j.remove(e2);
+    if (!this.#W) return null;
+    const e2 = `${b}${t2}`, i2 = this.#W.getRawValue(e2);
+    i2 && this.#W.remove(e2);
     return i2;
   }
   addToAnnotationStorage(t2) {
-    t2.isEmpty() || !this.#j || this.#j.has(t2.id) || this.#j.setValue(t2.id, t2);
+    t2.isEmpty() || !this.#W || this.#W.has(t2.id) || this.#W.setValue(t2.id, t2);
   }
   a11yAlert(t2, e2 = null) {
-    const i2 = this.#Dt;
+    const i2 = this.#Pt;
     if (i2) {
       i2.setAttribute("data-l10n-id", t2);
       e2 ? i2.setAttribute("data-l10n-args", JSON.stringify(e2)) : i2.removeAttribute("data-l10n-args");
@@ -4743,27 +4784,27 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   #Ut() {
     const t2 = document.getSelection();
     if (!t2 || t2.isCollapsed) {
-      if (this.#wt) {
-        this.#lt?.hide();
-        this.#wt = null;
+      if (this.#xt) {
+        this.#ht?.hide();
+        this.#xt = null;
         this.#Ht({ hasSelectedText: false });
       }
       return;
     }
     const { anchorNode: e2 } = t2;
-    if (e2 === this.#wt) return;
+    if (e2 === this.#xt) return;
     const i2 = this.#Bt(t2).closest(".textLayer");
     if (i2) {
-      this.#lt?.hide();
-      this.#wt = e2;
+      this.#ht?.hide();
+      this.#xt = e2;
       this.#Ht({ hasSelectedText: true });
-      if (this.#yt === v.HIGHLIGHT || this.#yt === v.NONE) {
-        this.#yt === v.HIGHLIGHT && this.showAllEditors("highlight", true, true);
-        this.#ot = this.isShiftKeyDown;
+      if (this.#vt === y.HIGHLIGHT || this.#vt === y.NONE) {
+        this.#vt === y.HIGHLIGHT && this.showAllEditors("highlight", true, true);
+        this.#lt = this.isShiftKeyDown;
         if (!this.isShiftKeyDown) {
-          const t3 = this.#yt === v.HIGHLIGHT ? this.#Lt(i2) : null;
+          const t3 = this.#vt === y.HIGHLIGHT ? this.#Lt(i2) : null;
           t3?.toggleDrawing();
-          if (this.#dt) {
+          if (this.#ut) {
             const e3 = new AbortController(), i3 = this.combinedSignal(e3), pointerup = (i4) => {
               if ("pointerup" !== i4.type || 0 === i4.button) {
                 e3.abort();
@@ -4779,74 +4820,74 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
           }
         }
       }
-    } else if (this.#wt) {
-      this.#lt?.hide();
-      this.#wt = null;
+    } else if (this.#xt) {
+      this.#ht?.hide();
+      this.#xt = null;
       this.#Ht({ hasSelectedText: false });
     }
   }
   #zt(t2 = "") {
-    this.#yt === v.HIGHLIGHT ? this.highlightSelection(t2) : this.#tt && this.#Nt();
+    this.#vt === y.HIGHLIGHT ? this.highlightSelection(t2) : this.#et && this.#Nt();
   }
   #Ft() {
     document.addEventListener("selectionchange", this.#Ut.bind(this), { signal: this._signal });
   }
   #Gt() {
-    if (this.#rt) return;
-    this.#rt = new AbortController();
-    const t2 = this.combinedSignal(this.#rt);
+    if (this.#at) return;
+    this.#at = new AbortController();
+    const t2 = this.combinedSignal(this.#at);
     window.addEventListener("focus", this.focus.bind(this), { signal: t2 });
     window.addEventListener("blur", this.blur.bind(this), { signal: t2 });
   }
   #jt() {
-    this.#rt?.abort();
-    this.#rt = null;
+    this.#at?.abort();
+    this.#at = null;
   }
   blur() {
     this.isShiftKeyDown = false;
-    if (this.#ot) {
-      this.#ot = false;
+    if (this.#lt) {
+      this.#lt = false;
       this.#zt("main_toolbar");
     }
     if (!this.hasSelection) return;
     const { activeElement: t2 } = document;
-    for (const e2 of this.#vt) if (e2.div.contains(t2)) {
-      this.#gt = [e2, t2];
+    for (const e2 of this.#wt) if (e2.div.contains(t2)) {
+      this.#mt = [e2, t2];
       e2._focusEventsAllowed = false;
       break;
     }
   }
   focus() {
-    if (!this.#gt) return;
-    const [t2, e2] = this.#gt;
-    this.#gt = null;
+    if (!this.#mt) return;
+    const [t2, e2] = this.#mt;
+    this.#mt = null;
     e2.addEventListener("focusin", () => {
       t2._focusEventsAllowed = true;
     }, { once: true, signal: this._signal });
     e2.focus();
   }
   #Rt() {
-    if (this.#pt) return;
-    this.#pt = new AbortController();
-    const t2 = this.combinedSignal(this.#pt);
+    if (this.#gt) return;
+    this.#gt = new AbortController();
+    const t2 = this.combinedSignal(this.#gt);
     window.addEventListener("keydown", this.keydown.bind(this), { signal: t2 });
     window.addEventListener("keyup", this.keyup.bind(this), { signal: t2 });
   }
   #Wt() {
-    this.#pt?.abort();
-    this.#pt = null;
+    this.#gt?.abort();
+    this.#gt = null;
   }
   #Vt() {
-    if (this.#q) return;
-    this.#q = new AbortController();
-    const t2 = this.combinedSignal(this.#q);
+    if (this.#K) return;
+    this.#K = new AbortController();
+    const t2 = this.combinedSignal(this.#K);
     document.addEventListener("copy", this.copy.bind(this), { signal: t2 });
     document.addEventListener("cut", this.cut.bind(this), { signal: t2 });
     document.addEventListener("paste", this.paste.bind(this), { signal: t2 });
   }
   #$t() {
-    this.#q?.abort();
-    this.#q = null;
+    this.#K?.abort();
+    this.#K = null;
   }
   #Ot() {
     const t2 = this._signal;
@@ -4862,14 +4903,14 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.setEditingState(false);
   }
   dragOver(t2) {
-    for (const { type: e2 } of t2.dataTransfer.items) for (const i2 of this.#Q) if (i2.isHandlingMimeForPasting(e2)) {
+    for (const { type: e2 } of t2.dataTransfer.items) for (const i2 of this.#Z) if (i2.isHandlingMimeForPasting(e2)) {
       t2.dataTransfer.dropEffect = "copy";
       t2.preventDefault();
       return;
     }
   }
   drop(t2) {
-    for (const e2 of t2.dataTransfer.items) for (const i2 of this.#Q) if (i2.isHandlingMimeForPasting(e2.type)) {
+    for (const e2 of t2.dataTransfer.items) for (const i2 of this.#Z) if (i2.isHandlingMimeForPasting(e2.type)) {
       i2.paste(e2, this.currentLayer);
       t2.preventDefault();
       return;
@@ -4877,10 +4918,10 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   copy(t2) {
     t2.preventDefault();
-    this.#L?.commitOrRemove();
+    this.#N?.commitOrRemove();
     if (!this.hasSelection) return;
     const e2 = [];
-    for (const t3 of this.#vt) {
+    for (const t3 of this.#wt) {
       const i2 = t3.serialize(true);
       i2 && e2.push(i2);
     }
@@ -4893,7 +4934,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   async paste(t2) {
     t2.preventDefault();
     const { clipboardData: e2 } = t2;
-    for (const t3 of e2.items) for (const e3 of this.#Q) if (e3.isHandlingMimeForPasting(t3.type)) {
+    for (const t3 of e2.items) for (const e3 of this.#Z) if (e3.isHandlingMimeForPasting(t3.type)) {
       e3.paste(t3, this.currentLayer);
       return;
     }
@@ -4928,13 +4969,13 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   keydown(t2) {
     this.isShiftKeyDown || "Shift" !== t2.key || (this.isShiftKeyDown = true);
-    this.#yt === v.NONE || this.isEditorHandlingKeyboard || _AnnotationEditorUIManager._keyboardManager.exec(this, t2);
+    this.#vt === y.NONE || this.isEditorHandlingKeyboard || _AnnotationEditorUIManager._keyboardManager.exec(this, t2);
   }
   keyup(t2) {
     if (this.isShiftKeyDown && "Shift" === t2.key) {
       this.isShiftKeyDown = false;
-      if (this.#ot) {
-        this.#ot = false;
+      if (this.#lt) {
+        this.#lt = false;
         this.#zt("main_toolbar");
       }
     }
@@ -4956,36 +4997,36 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   updatePageIndex(t2, e2) {
     for (const i3 of this.getEditors(t2)) i3.pageIndex = e2;
-    const i2 = this.#z.get(t2);
+    const i2 = this.#G.get(t2);
     if (i2) {
       i2.pageIndex = e2;
-      this.#H.set(e2, i2);
-      this.#ct ? i2.enable() : i2.disable();
+      this.#z.set(e2, i2);
+      this.#dt ? i2.enable() : i2.disable();
     }
   }
   startUpdatePages() {
-    this.#z = new Map(this.#H);
-    this.#H.clear();
+    this.#G = new Map(this.#z);
+    this.#z.clear();
   }
   endUpdatePages() {
-    this.#z = null;
+    this.#G = null;
   }
   clonePage(t2, e2) {
     for (const i2 of this.getEditors(t2)) {
-      const t3 = i2.serialize(i2.mode !== v.HIGHLIGHT);
+      const t3 = i2.serialize(i2.mode !== y.HIGHLIGHT);
       if (t3) {
         t3.pageIndex = e2;
         t3.id = this.getId();
         t3.isClone = true;
         delete t3.popupRef;
-        this.#j.setValue(t3.id, t3);
+        this.#W.setValue(t3.id, t3);
       }
     }
   }
   findClonesForPage(t2) {
     const e2 = [], { pageIndex: i2 } = t2;
-    for (const [n2, s2] of this.#j) if (s2.pageIndex === i2 && s2.isClone) {
-      this.#j.remove(n2);
+    for (const [n2, s2] of this.#W) if (s2.pageIndex === i2 && s2.isClone) {
+      this.#W.remove(n2);
       e2.push(t2.deserialize(s2).then((e3) => {
         if (e3) {
           e3.isClone = true;
@@ -4996,9 +5037,9 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     return Promise.all(e2);
   }
   #Ht(t2) {
-    if (Object.entries(t2).some(([t3, e2]) => this.#St[t3] !== e2)) {
-      this._eventBus.dispatch("editingstateschanged", { source: this, details: Object.assign(this.#St, t2) });
-      this.#yt === v.HIGHLIGHT && false === t2.hasSelectedEditor && this.#Xt([[w.HIGHLIGHT_FREE, true]]);
+    if (Object.entries(t2).some(([t3, e2]) => this.#Tt[t3] !== e2)) {
+      this._eventBus.dispatch("editingstateschanged", { source: this, details: Object.assign(this.#Tt, t2) });
+      this.#vt === y.HIGHLIGHT && false === t2.hasSelectedEditor && this.#Xt([[v.HIGHLIGHT_FREE, true]]);
     }
   }
   #Xt(t2) {
@@ -5008,7 +5049,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     if (t2) {
       this.#Gt();
       this.#Vt();
-      this.#Ht({ isEditing: this.#yt !== v.NONE, isEmpty: this.#Yt(), hasSomethingToUndo: this.#V.hasSomethingToUndo(), hasSomethingToRedo: this.#V.hasSomethingToRedo(), hasSelectedEditor: false });
+      this.#Ht({ isEditing: this.#vt !== y.NONE, isEmpty: this.#Yt(), hasSomethingToUndo: this.#$.hasSomethingToUndo(), hasSomethingToRedo: this.#$.hasSomethingToRedo(), hasSelectedEditor: false });
     } else {
       this.#jt();
       this.#$t();
@@ -5017,80 +5058,80 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }
   }
   registerEditorTypes(t2) {
-    if (!this.#Q) {
-      this.#Q = t2;
-      for (const t3 of this.#Q) this.#Xt(t3.defaultPropertiesToUpdate);
+    if (!this.#Z) {
+      this.#Z = t2;
+      for (const t3 of this.#Z) this.#Xt(t3.defaultPropertiesToUpdate);
     }
   }
   getId() {
-    return this.#ht.id;
+    return this.#ct.id;
   }
   get currentLayer() {
-    return this.#H.get(this.#X);
+    return this.#z.get(this.#Y);
   }
   getLayer(t2) {
-    return this.#H.get(t2);
+    return this.#z.get(t2);
   }
   get currentPageIndex() {
-    return this.#X;
+    return this.#Y;
   }
   addLayer(t2) {
-    this.#H.set(t2.pageIndex, t2);
-    this.#ct ? t2.enable() : t2.disable();
+    this.#z.set(t2.pageIndex, t2);
+    this.#dt ? t2.enable() : t2.disable();
   }
   removeLayer(t2) {
-    this.#H.delete(t2.pageIndex);
+    this.#z.delete(t2.pageIndex);
   }
   async updateMode(t2, e2 = null, i2 = false, n2 = false, s2 = false, r2 = false) {
-    if (this.#yt !== t2) {
-      if (this.#Pt) {
-        await this.#Pt.promise;
-        if (!this.#Pt) return;
+    if (this.#vt !== t2) {
+      if (this.#It) {
+        await this.#It.promise;
+        if (!this.#It) return;
       }
-      this.#Pt = Promise.withResolvers();
-      this.#K?.commitOrRemove();
-      this.#yt === v.POPUP && this.#$?.hideSidebar();
-      this.#$?.destroyPopup();
-      this.#yt = t2;
-      if (t2 !== v.NONE) {
-        for (const t3 of this.#U.values()) t3.addStandaloneCommentButton();
-        t2 === v.SIGNATURE && await this.#xt?.loadSignatures();
+      this.#It = Promise.withResolvers();
+      this.#X?.commitOrRemove();
+      this.#vt === y.POPUP && this.#q?.hideSidebar();
+      this.#q?.destroyPopup();
+      this.#vt = t2;
+      if (t2 !== y.NONE) {
+        for (const t3 of this.#H.values()) t3.addStandaloneCommentButton();
+        t2 === y.SIGNATURE && await this.#At?.loadSignatures();
         i2 && CurrentPointers.clearPointerType();
         this.setEditingState(true);
         await this.#Jt();
         this.unselectAll();
-        for (const e3 of this.#H.values()) e3.updateMode(t2);
-        if (t2 === v.POPUP) {
-          this.#N ||= await this.#Ct.getAnnotationsByType(new Set(this.#Q.map((t4) => t4._editorType)));
+        for (const e3 of this.#z.values()) e3.updateMode(t2);
+        if (t2 === y.POPUP) {
+          this.#U ||= await this.#St.getAnnotationsByType(new Set(this.#Z.map((t4) => t4._editorType)));
           const t3 = /* @__PURE__ */ new Set(), e3 = [];
-          for (const i3 of this.#U.values()) {
+          for (const i3 of this.#H.values()) {
             const { annotationElementId: n3, hasComment: s3, deleted: r3 } = i3;
             n3 && t3.add(n3);
             s3 && !r3 && e3.push(i3.getData());
           }
-          for (const i3 of this.#N) {
+          for (const i3 of this.#U) {
             const { id: n3, popupRef: s3, contentsObj: r3 } = i3;
-            s3 && r3?.str && !t3.has(n3) && !this.#Y.has(n3) && e3.push(i3);
+            s3 && r3?.str && !t3.has(n3) && !this.#J.has(n3) && e3.push(i3);
           }
-          this.#$?.showSidebar(e3);
+          this.#q?.showSidebar(e3);
         }
         if (e2) {
-          for (const t3 of this.#U.values()) if (t3.uid === e2) {
+          for (const t3 of this.#H.values()) if (t3.uid === e2) {
             this.setSelected(t3);
             r2 ? t3.editComment() : s2 ? t3.enterInEditMode() : t3.focus();
           } else t3.unselect();
-          this.#Pt.resolve();
+          this.#It.resolve();
         } else {
           n2 && this.addNewEditorFromKeyboard();
-          this.#Pt.resolve();
+          this.#It.resolve();
         }
       } else {
         this.setEditingState(false);
         this.#Qt();
-        for (const t3 of this.#U.values()) t3.hideStandaloneCommentButton();
+        for (const t3 of this.#H.values()) t3.hideStandaloneCommentButton();
         this._editorUndoBar?.hide();
         this.toggleComment(null);
-        this.#Pt.resolve();
+        this.#It.resolve();
       }
     }
   }
@@ -5098,90 +5139,90 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.currentLayer.canCreateNewEmptyEditor() && this.currentLayer.addNewEditor();
   }
   updateToolbar(t2) {
-    t2.mode !== this.#yt && this._eventBus.dispatch("switchannotationeditormode", { source: this, ...t2 });
+    t2.mode !== this.#vt && this._eventBus.dispatch("switchannotationeditormode", { source: this, ...t2 });
   }
   updateParams(t2, e2) {
-    if (this.#Q) {
+    if (this.#Z) {
       switch (t2) {
-        case w.CREATE:
+        case v.CREATE:
           this.currentLayer.addNewEditor(e2);
           return;
-        case w.HIGHLIGHT_SHOW_ALL:
+        case v.HIGHLIGHT_SHOW_ALL:
           this._eventBus.dispatch("reporttelemetry", { source: this, details: { type: "editing", data: { type: "highlight", action: "toggle_visibility" } } });
-          (this.#Et ||= /* @__PURE__ */ new Map()).set(t2, e2);
+          (this.#Ct ||= /* @__PURE__ */ new Map()).set(t2, e2);
           this.showAllEditors("highlight", e2);
       }
-      if (this.hasSelection) for (const i2 of this.#vt) i2.updateParams(t2, e2);
-      else for (const i2 of this.#Q) i2.updateDefaultParams(t2, e2);
+      if (this.hasSelection) for (const i2 of this.#wt) i2.updateParams(t2, e2);
+      else for (const i2 of this.#Z) i2.updateDefaultParams(t2, e2);
     }
   }
   showAllEditors(t2, e2, i2 = false) {
-    for (const i3 of this.#U.values()) i3.editorType === t2 && i3.show(e2);
-    (this.#Et?.get(w.HIGHLIGHT_SHOW_ALL) ?? true) !== e2 && this.#Xt([[w.HIGHLIGHT_SHOW_ALL, e2]]);
+    for (const i3 of this.#H.values()) i3.editorType === t2 && i3.show(e2);
+    (this.#Ct?.get(v.HIGHLIGHT_SHOW_ALL) ?? true) !== e2 && this.#Xt([[v.HIGHLIGHT_SHOW_ALL, e2]]);
   }
   enableWaiting(t2 = false) {
-    if (this.#ut !== t2) {
-      this.#ut = t2;
-      for (const e2 of this.#H.values()) {
+    if (this.#pt !== t2) {
+      this.#pt = t2;
+      for (const e2 of this.#z.values()) {
         t2 ? e2.disableClick() : e2.enableClick();
         e2.div.classList.toggle("waiting", t2);
       }
     }
   }
   async #Jt() {
-    if (!this.#ct) {
-      this.#ct = true;
+    if (!this.#dt) {
+      this.#dt = true;
       const t2 = [];
-      for (const e2 of this.#H.values()) t2.push(e2.enable());
+      for (const e2 of this.#z.values()) t2.push(e2.enable());
       await Promise.all(t2);
-      for (const t3 of this.#U.values()) t3.enable();
+      for (const t3 of this.#H.values()) t3.enable();
     }
   }
   #Qt() {
     this.unselectAll();
-    if (this.#ct) {
-      this.#ct = false;
+    if (this.#dt) {
+      this.#dt = false;
+      for (const t2 of this.#z.values()) t2.disable();
       for (const t2 of this.#H.values()) t2.disable();
-      for (const t2 of this.#U.values()) t2.disable();
     }
   }
   *getEditors(t2) {
-    for (const e2 of this.#U.values()) e2.pageIndex === t2 && (yield e2);
+    for (const e2 of this.#H.values()) e2.pageIndex === t2 && (yield e2);
   }
   getEditor(t2) {
-    return this.#U.get(t2);
+    return this.#H.get(t2);
   }
   addEditor(t2) {
-    this.#U.set(t2.id, t2);
+    this.#H.set(t2.id, t2);
   }
   removeEditor(t2) {
     if (t2.div.contains(document.activeElement)) {
-      this.#st && clearTimeout(this.#st);
-      this.#st = setTimeout(() => {
+      this.#rt && clearTimeout(this.#rt);
+      this.#rt = setTimeout(() => {
         this.focusMainContainer();
-        this.#st = null;
+        this.#rt = null;
       }, 0);
     }
-    this.#U.delete(t2.id);
-    t2.annotationElementId && this.#ft?.delete(t2.annotationElementId);
+    this.#H.delete(t2.id);
+    t2.annotationElementId && this.#bt?.delete(t2.annotationElementId);
     this.unselect(t2);
-    t2.annotationElementId && this.#Y.has(t2.annotationElementId) || this.#j?.remove(t2.id);
+    t2.annotationElementId && this.#J.has(t2.annotationElementId) || this.#W?.remove(t2.id);
   }
   addDeletedAnnotationElement(t2) {
-    this.#Y.add(t2.annotationElementId);
+    this.#J.add(t2.annotationElementId);
     this.addChangedExistingAnnotation(t2);
     t2.deleted = true;
   }
   isDeletedAnnotationElement(t2) {
-    return this.#Y.has(t2);
+    return this.#J.has(t2);
   }
   removeDeletedAnnotationElement(t2) {
-    this.#Y.delete(t2.annotationElementId);
+    this.#J.delete(t2.annotationElementId);
     this.removeChangedExistingAnnotation(t2);
     t2.deleted = false;
   }
   #qt(t2) {
-    const e2 = this.#H.get(t2.pageIndex);
+    const e2 = this.#z.get(t2.pageIndex);
     if (e2) e2.addOrRebuild(t2);
     else {
       this.addEditor(t2);
@@ -5189,14 +5230,14 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }
   }
   setActiveEditor(t2) {
-    if (this.#L !== t2) {
-      this.#L = t2;
+    if (this.#N !== t2) {
+      this.#N = t2;
       t2 && this.#Xt(t2.propertiesToUpdate);
     }
   }
   get #Zt() {
     let t2 = null;
-    for (t2 of this.#vt) ;
+    for (t2 of this.#wt) ;
     return t2;
   }
   updateUI(t2) {
@@ -5206,12 +5247,12 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.#Xt(t2.defaultPropertiesToUpdate);
   }
   toggleSelected(t2) {
-    if (this.#vt.has(t2)) {
-      this.#vt.delete(t2);
+    if (this.#wt.has(t2)) {
+      this.#wt.delete(t2);
       t2.unselect();
       this.#Ht({ hasSelectedEditor: this.hasSelection });
     } else {
-      this.#vt.add(t2);
+      this.#wt.add(t2);
       t2.select();
       this.#Xt(t2.propertiesToUpdate);
       this.#Ht({ hasSelectedEditor: true });
@@ -5219,55 +5260,55 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   setSelected(t2) {
     this.updateToolbar({ mode: t2.mode, editId: t2.uid });
-    this.#K?.commitOrRemove();
-    for (const e2 of this.#vt) e2 !== t2 && e2.unselect();
-    this.#$?.destroyPopup();
-    this.#vt.clear();
-    this.#vt.add(t2);
+    this.#X?.commitOrRemove();
+    for (const e2 of this.#wt) e2 !== t2 && e2.unselect();
+    this.#q?.destroyPopup();
+    this.#wt.clear();
+    this.#wt.add(t2);
     t2.select();
     this.#Xt(t2.propertiesToUpdate);
     this.#Ht({ hasSelectedEditor: true });
   }
   get firstSelectedEditor() {
-    return this.#vt.values().next().value;
+    return this.#wt.values().next().value;
   }
   unselect(t2) {
     t2.unselect();
-    this.#vt.delete(t2);
+    this.#wt.delete(t2);
     this.#Ht({ hasSelectedEditor: this.hasSelection });
   }
   get hasSelection() {
-    return 0 !== this.#vt.size;
+    return 0 !== this.#wt.size;
   }
   get isEnterHandled() {
-    return 1 === this.#vt.size && this.firstSelectedEditor.isEnterHandled;
+    return 1 === this.#wt.size && this.firstSelectedEditor.isEnterHandled;
   }
   undo() {
-    this.#V.undo();
-    this.#Ht({ hasSomethingToUndo: this.#V.hasSomethingToUndo(), hasSomethingToRedo: true, isEmpty: this.#Yt() });
+    this.#$.undo();
+    this.#Ht({ hasSomethingToUndo: this.#$.hasSomethingToUndo(), hasSomethingToRedo: true, isEmpty: this.#Yt() });
     this._editorUndoBar?.hide();
   }
   redo() {
-    this.#V.redo();
-    this.#Ht({ hasSomethingToUndo: true, hasSomethingToRedo: this.#V.hasSomethingToRedo(), isEmpty: this.#Yt() });
+    this.#$.redo();
+    this.#Ht({ hasSomethingToUndo: true, hasSomethingToRedo: this.#$.hasSomethingToRedo(), isEmpty: this.#Yt() });
   }
   addCommands(t2) {
-    this.#V.add(t2);
+    this.#$.add(t2);
     this.#Ht({ hasSomethingToUndo: true, hasSomethingToRedo: false, isEmpty: this.#Yt() });
   }
   cleanUndoStack(t2) {
-    this.#V.cleanType(t2);
+    this.#$.cleanType(t2);
   }
   #Yt() {
-    if (0 === this.#U.size) return true;
-    if (1 === this.#U.size) for (const t2 of this.#U.values()) return t2.isEmpty();
+    if (0 === this.#H.size) return true;
+    if (1 === this.#H.size) for (const t2 of this.#H.values()) return t2.isEmpty();
     return false;
   }
   delete() {
     this.commitOrRemove();
     const t2 = this.currentLayer?.endDrawingSession(true);
     if (!this.hasSelection && !t2) return;
-    const e2 = t2 ? [t2] : [...this.#vt], undo = () => {
+    const e2 = t2 ? [t2] : [...this.#wt], undo = () => {
       for (const t3 of e2) this.#qt(t3);
     };
     this.addCommands({ cmd: () => {
@@ -5276,34 +5317,34 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }, undo, mustExec: true });
   }
   commitOrRemove() {
-    this.#L?.commitOrRemove();
+    this.#N?.commitOrRemove();
   }
   hasSomethingToControl() {
-    return this.#L || this.hasSelection;
+    return this.#N || this.hasSelection;
   }
   #Kt(t2) {
-    for (const t3 of this.#vt) t3.unselect();
-    this.#vt.clear();
+    for (const t3 of this.#wt) t3.unselect();
+    this.#wt.clear();
     for (const e2 of t2) if (!e2.isEmpty()) {
-      this.#vt.add(e2);
+      this.#wt.add(e2);
       e2.select();
     }
     this.#Ht({ hasSelectedEditor: this.hasSelection });
   }
   selectAll() {
-    for (const t2 of this.#vt) t2.commit();
-    this.#Kt(this.#U.values());
+    for (const t2 of this.#wt) t2.commit();
+    this.#Kt(this.#H.values());
   }
   unselectAll() {
-    if (this.#L) {
-      this.#L.commitOrRemove();
-      if (this.#yt !== v.NONE) return;
+    if (this.#N) {
+      this.#N.commitOrRemove();
+      if (this.#vt !== y.NONE) return;
     }
-    if (!this.#K?.commitOrRemove()) {
-      this.#$?.destroyPopup();
+    if (!this.#X?.commitOrRemove()) {
+      this.#q?.destroyPopup();
       if (this.hasSelection) {
-        for (const t2 of this.#vt) t2.unselect();
-        this.#vt.clear();
+        for (const t2 of this.#wt) t2.unselect();
+        this.#wt.clear();
         this.#Ht({ hasSelectedEditor: false });
       }
     }
@@ -5311,20 +5352,20 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   translateSelectedEditors(t2, e2, i2 = false) {
     i2 || this.commitOrRemove();
     if (!this.hasSelection) return;
-    this.#Tt[0] += t2;
-    this.#Tt[1] += e2;
-    const [n2, s2] = this.#Tt, r2 = [...this.#vt];
-    this.#_t && clearTimeout(this.#_t);
-    this.#_t = setTimeout(() => {
-      this.#_t = null;
-      this.#Tt[0] = this.#Tt[1] = 0;
+    this.#_t[0] += t2;
+    this.#_t[1] += e2;
+    const [n2, s2] = this.#_t, r2 = [...this.#wt];
+    this.#kt && clearTimeout(this.#kt);
+    this.#kt = setTimeout(() => {
+      this.#kt = null;
+      this.#_t[0] = this.#_t[1] = 0;
       this.addCommands({ cmd: () => {
-        for (const t3 of r2) if (this.#U.has(t3.id)) {
+        for (const t3 of r2) if (this.#H.has(t3.id)) {
           t3.translateInPage(n2, s2);
           t3.translationDone();
         }
       }, undo: () => {
-        for (const t3 of r2) if (this.#U.has(t3.id)) {
+        for (const t3 of r2) if (this.#H.has(t3.id)) {
           t3.translateInPage(-n2, -s2);
           t3.translationDone();
         }
@@ -5338,15 +5379,15 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   setUpDragSession() {
     if (this.hasSelection) {
       this.disableUserSelect(true);
-      this.#J = /* @__PURE__ */ new Map();
-      for (const t2 of this.#vt) this.#J.set(t2, { savedX: t2.x, savedY: t2.y, savedPageIndex: t2.pageIndex, newX: 0, newY: 0, newPageIndex: -1 });
+      this.#Q = /* @__PURE__ */ new Map();
+      for (const t2 of this.#wt) this.#Q.set(t2, { savedX: t2.x, savedY: t2.y, savedPageIndex: t2.pageIndex, newX: 0, newY: 0, newPageIndex: -1 });
     }
   }
   endDragSession() {
-    if (!this.#J) return false;
+    if (!this.#Q) return false;
     this.disableUserSelect(false);
-    const t2 = this.#J;
-    this.#J = null;
+    const t2 = this.#Q;
+    this.#Q = null;
     let e2 = false;
     for (const [{ x: i2, y: n2, pageIndex: s2 }, r2] of t2) {
       r2.newX = i2;
@@ -5356,8 +5397,8 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }
     if (!e2) return false;
     const move = (t3, e3, i2, n2) => {
-      if (this.#U.has(t3.id)) {
-        const s2 = this.#H.get(n2);
+      if (this.#H.has(t3.id)) {
+        const s2 = this.#z.get(n2);
         if (s2) t3._setParentAndPosition(s2, e3, i2);
         else {
           t3.pageIndex = n2;
@@ -5374,7 +5415,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     return true;
   }
   dragSelectedEditors(t2, e2) {
-    if (this.#J) for (const i2 of this.#J.keys()) i2.drag(t2, e2);
+    if (this.#Q) for (const i2 of this.#Q.keys()) i2.drag(t2, e2);
   }
   rebuild(t2) {
     if (null === t2.parent) {
@@ -5390,19 +5431,19 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     } else t2.parent.addOrRebuild(t2);
   }
   get isEditorHandlingKeyboard() {
-    return this.getActive()?.shouldGetKeyboardEvents() || 1 === this.#vt.size && this.firstSelectedEditor.shouldGetKeyboardEvents();
+    return this.getActive()?.shouldGetKeyboardEvents() || 1 === this.#wt.size && this.firstSelectedEditor.shouldGetKeyboardEvents();
   }
   isActive(t2) {
-    return this.#L === t2;
+    return this.#N === t2;
   }
   getActive() {
-    return this.#L;
+    return this.#N;
   }
   getMode() {
-    return this.#yt;
+    return this.#vt;
   }
   isEditingMode() {
-    return this.#yt !== v.NONE;
+    return this.#vt !== y.NONE;
   }
   get imageManager() {
     return shadow(this, "imageManager", new ImageManager());
@@ -5434,30 +5475,30 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     return 0 === o2.length ? null : o2;
   }
   addChangedExistingAnnotation({ annotationElementId: t2, id: e2 }) {
-    (this.#W ||= /* @__PURE__ */ new Map()).set(t2, e2);
+    (this.#V ||= /* @__PURE__ */ new Map()).set(t2, e2);
   }
   removeChangedExistingAnnotation({ annotationElementId: t2 }) {
-    this.#W?.delete(t2);
+    this.#V?.delete(t2);
   }
   renderAnnotationElement(t2) {
-    const e2 = this.#W?.get(t2.data.id);
+    const e2 = this.#V?.get(t2.data.id);
     if (!e2) return;
-    const i2 = this.#j.getRawValue(e2);
-    i2 && (this.#yt !== v.NONE || i2.hasBeenModified) && i2.renderAnnotationElement(t2);
+    const i2 = this.#W.getRawValue(e2);
+    i2 && (this.#vt !== y.NONE || i2.hasBeenModified) && i2.renderAnnotationElement(t2);
   }
   setMissingCanvas(t2, e2, i2) {
-    const n2 = this.#ft?.get(t2);
+    const n2 = this.#bt?.get(t2);
     if (n2) {
       n2.setCanvas(e2, i2);
-      this.#ft.delete(t2);
+      this.#bt.delete(t2);
     }
   }
   addMissingCanvas(t2, e2) {
-    (this.#ft ||= /* @__PURE__ */ new Map()).set(t2, e2);
+    (this.#bt ||= /* @__PURE__ */ new Map()).set(t2, e2);
   }
 };
 var AltText = class _AltText {
-  #l = null;
+  #h = null;
   #te = false;
   #ee = null;
   #ie = null;
@@ -5465,14 +5506,14 @@ var AltText = class _AltText {
   #se = null;
   #re = false;
   #ae = null;
-  #a = null;
+  #o = null;
   #oe = null;
   #le = null;
   #he = false;
   static #ce = null;
   static _l10n = null;
   constructor(t2) {
-    this.#a = t2;
+    this.#o = t2;
     this.#he = t2._uiManager.useNewAltTextFlow;
     _AltText.#ce ||= Object.freeze({ added: "pdfjs-editor-new-alt-text-added-button", "added-label": "pdfjs-editor-new-alt-text-added-button-label", missing: "pdfjs-editor-new-alt-text-missing-button", "missing-label": "pdfjs-editor-new-alt-text-missing-button-label", review: "pdfjs-editor-new-alt-text-to-review-button", "review-label": "pdfjs-editor-new-alt-text-to-review-button-label" });
   }
@@ -5493,13 +5534,13 @@ var AltText = class _AltText {
       t2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-button");
       e2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-button-label");
     }
-    const i2 = this.#a._uiManager._signal;
+    const i2 = this.#o._uiManager._signal;
     t2.addEventListener("contextmenu", noContextMenu, { signal: i2 });
     t2.addEventListener("pointerdown", (t3) => t3.stopPropagation(), { signal: i2 });
     const onClick = (t3) => {
       t3.preventDefault();
-      this.#a._uiManager.editAltText(this.#a);
-      this.#he && this.#a._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_clicked", data: { label: this.#de } });
+      this.#o._uiManager.editAltText(this.#o);
+      this.#he && this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_clicked", data: { label: this.#de } });
     };
     t2.addEventListener("click", onClick, { capture: true, signal: i2 });
     t2.addEventListener("keydown", (e3) => {
@@ -5512,7 +5553,7 @@ var AltText = class _AltText {
     return t2;
   }
   get #de() {
-    return (this.#l ? "added" : null === this.#l && this.guessedText && "review") || "missing";
+    return (this.#h ? "added" : null === this.#h && this.guessedText && "review") || "missing";
   }
   finish() {
     if (this.#ee) {
@@ -5521,27 +5562,27 @@ var AltText = class _AltText {
     }
   }
   isEmpty() {
-    return this.#he ? null === this.#l : !this.#l && !this.#te;
+    return this.#he ? null === this.#h : !this.#h && !this.#te;
   }
   hasData() {
-    return this.#he ? null !== this.#l || !!this.#oe : this.isEmpty();
+    return this.#he ? null !== this.#h || !!this.#oe : this.isEmpty();
   }
   get guessedText() {
     return this.#oe;
   }
   async setGuessedText(t2) {
-    if (null === this.#l) {
+    if (null === this.#h) {
       this.#oe = t2;
       this.#le = await _AltText._l10n.get("pdfjs-editor-new-alt-text-generated-alt-text-with-disclaimer", { generatedAltText: t2 });
       this.#ue();
     }
   }
   toggleAltTextBadge(t2 = false) {
-    if (this.#he && !this.#l) {
+    if (this.#he && !this.#h) {
       if (!this.#ae) {
         const t3 = this.#ae = document.createElement("div");
         t3.className = "noAltTextBadge";
-        this.#a.div.append(t3);
+        this.#o.div.append(t3);
       }
       this.#ae.classList.toggle("hidden", !t2);
     } else {
@@ -5550,21 +5591,21 @@ var AltText = class _AltText {
     }
   }
   serialize(t2) {
-    let e2 = this.#l;
+    let e2 = this.#h;
     t2 || this.#oe !== e2 || (e2 = this.#le);
     return { altText: e2, decorative: this.#te, guessedText: this.#oe, textWithDisclaimer: this.#le };
   }
   get data() {
-    return { altText: this.#l, decorative: this.#te };
+    return { altText: this.#h, decorative: this.#te };
   }
   set data({ altText: t2, decorative: e2, guessedText: i2, textWithDisclaimer: n2, cancel: s2 = false }) {
     if (i2) {
       this.#oe = i2;
       this.#le = n2;
     }
-    if (this.#l !== t2 || this.#te !== e2) {
+    if (this.#h !== t2 || this.#te !== e2) {
       if (!s2) {
-        this.#l = t2;
+        this.#h = t2;
         this.#te = e2;
       }
       this.#ue();
@@ -5580,7 +5621,7 @@ var AltText = class _AltText {
     }
   }
   shown() {
-    this.#a._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_displayed", data: { label: this.#de } });
+    this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_displayed", data: { label: this.#de } });
   }
   destroy() {
     this.#ee?.remove();
@@ -5594,15 +5635,15 @@ var AltText = class _AltText {
     const t2 = this.#ee;
     if (!t2) return;
     if (this.#he) {
-      t2.classList.toggle("done", !!this.#l);
+      t2.classList.toggle("done", !!this.#h);
       t2.setAttribute("data-l10n-id", _AltText.#ce[this.#de]);
       this.#ie?.setAttribute("data-l10n-id", _AltText.#ce[`${this.#de}-label`]);
-      if (!this.#l) {
+      if (!this.#h) {
         this.#ne?.remove();
         return;
       }
     } else {
-      if (!this.#l && !this.#te) {
+      if (!this.#h && !this.#te) {
         t2.classList.remove("done");
         this.#ne?.remove();
         return;
@@ -5615,8 +5656,8 @@ var AltText = class _AltText {
       this.#ne = e2 = document.createElement("span");
       e2.className = "tooltip";
       e2.setAttribute("role", "tooltip");
-      e2.id = `alt-text-tooltip-${this.#a.id}`;
-      const i3 = 100, n2 = this.#a._uiManager._signal;
+      e2.id = `alt-text-tooltip-${this.#o.id}`;
+      const i3 = 100, n2 = this.#o._uiManager._signal;
       n2.addEventListener("abort", () => {
         clearTimeout(this.#se);
         this.#se = null;
@@ -5625,7 +5666,7 @@ var AltText = class _AltText {
         this.#se = setTimeout(() => {
           this.#se = null;
           this.#ne.classList.add("show");
-          this.#a._reportTelemetry({ action: "alt_text_tooltip" });
+          this.#o._reportTelemetry({ action: "alt_text_tooltip" });
         }, i3);
       }, { signal: n2 });
       t2.addEventListener("mouseleave", () => {
@@ -5639,10 +5680,10 @@ var AltText = class _AltText {
     if (this.#te) e2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-decorative-tooltip");
     else {
       e2.removeAttribute("data-l10n-id");
-      e2.textContent = this.#l;
+      e2.textContent = this.#h;
     }
     e2.parentNode || t2.append(e2);
-    const i2 = this.#a.getElementForAltText();
+    const i2 = this.#o.getElementForAltText();
     i2?.setAttribute("aria-describedby", e2.id);
   }
 };
@@ -5650,7 +5691,7 @@ var Comment = class {
   #pe = null;
   #ge = null;
   #me = false;
-  #a = null;
+  #o = null;
   #fe = null;
   #be = null;
   #ye = null;
@@ -5658,25 +5699,25 @@ var Comment = class {
   #we = false;
   #xe = null;
   constructor(t2) {
-    this.#a = t2;
+    this.#o = t2;
   }
   renderForToolbar() {
     const t2 = this.#ge = document.createElement("button");
     t2.className = "comment";
-    return this.#v(t2, false);
+    return this.#w(t2, false);
   }
   renderForStandalone() {
     const t2 = this.#pe = document.createElement("button");
     t2.className = "annotationCommentButton";
-    const e2 = this.#a.commentButtonPosition;
+    const e2 = this.#o.commentButtonPosition;
     if (e2) {
       const { style: i2 } = t2;
-      i2.insetInlineEnd = `calc(${100 * ("ltr" === this.#a._uiManager.direction ? 1 - e2[0] : e2[0])}% - var(--comment-button-dim))`;
+      i2.insetInlineEnd = `calc(${100 * ("ltr" === this.#o._uiManager.direction ? 1 - e2[0] : e2[0])}% - var(--comment-button-dim))`;
       i2.top = `calc(${100 * e2[1]}% - var(--comment-button-dim))`;
-      const n2 = this.#a.commentButtonColor;
+      const n2 = this.#o.commentButtonColor;
       n2 && (i2.backgroundColor = n2);
     }
-    return this.#v(t2, true);
+    return this.#w(t2, true);
   }
   focusButton() {
     setTimeout(() => {
@@ -5685,17 +5726,17 @@ var Comment = class {
   }
   onUpdatedColor() {
     if (!this.#pe) return;
-    const t2 = this.#a.commentButtonColor;
+    const t2 = this.#o.commentButtonColor;
     t2 && (this.#pe.style.backgroundColor = t2);
-    this.#a._uiManager.updatePopupColor(this.#a);
+    this.#o._uiManager.updatePopupColor(this.#o);
   }
   get commentButtonWidth() {
-    return (this.#pe?.getBoundingClientRect().width ?? 0) / this.#a.parent.boundingClientRect.width;
+    return (this.#pe?.getBoundingClientRect().width ?? 0) / this.#o.parent.boundingClientRect.width;
   }
   get commentPopupPositionInLayer() {
     if (this.#xe) return this.#xe;
     if (!this.#pe) return null;
-    const { x: t2, y: e2, height: i2 } = this.#pe.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#a.parent.boundingClientRect;
+    const { x: t2, y: e2, height: i2 } = this.#pe.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#o.parent.boundingClientRect;
     return [(t2 - n2) / r2, (e2 + i2 - s2) / a2];
   }
   set commentPopupPositionInLayer(t2) {
@@ -5718,34 +5759,34 @@ var Comment = class {
       this.#pe.ariaExpanded = e2;
     }
   }
-  #v(t2, e2) {
-    if (!this.#a._uiManager.hasCommentManager()) return null;
+  #w(t2, e2) {
+    if (!this.#o._uiManager.hasCommentManager()) return null;
     t2.tabIndex = "0";
     t2.ariaHasPopup = "dialog";
     if (e2) {
       t2.ariaControls = "commentPopup";
       t2.setAttribute("data-l10n-id", "pdfjs-show-comment-button");
     } else {
-      t2.ariaControlsElements = [this.#a._uiManager.getCommentDialogElement()];
+      t2.ariaControlsElements = [this.#o._uiManager.getCommentDialogElement()];
       t2.setAttribute("data-l10n-id", "pdfjs-editor-add-comment-button");
     }
-    const i2 = this.#a._uiManager._signal;
+    const i2 = this.#o._uiManager._signal;
     if (!(i2 instanceof AbortSignal) || i2.aborted) return t2;
     t2.addEventListener("contextmenu", noContextMenu, { signal: i2 });
     if (e2) {
       t2.addEventListener("focusin", (t3) => {
-        this.#a._focusEventsAllowed = false;
+        this.#o._focusEventsAllowed = false;
         stopEvent(t3);
       }, { capture: true, signal: i2 });
       t2.addEventListener("focusout", (t3) => {
-        this.#a._focusEventsAllowed = true;
+        this.#o._focusEventsAllowed = true;
         stopEvent(t3);
       }, { capture: true, signal: i2 });
     }
     t2.addEventListener("pointerdown", (t3) => t3.stopPropagation(), { signal: i2 });
     const onClick = (e3) => {
       e3.preventDefault();
-      t2 === this.#ge ? this.edit() : this.#a.toggleComment(true);
+      t2 === this.#ge ? this.edit() : this.#o.toggleComment(true);
     };
     t2.addEventListener("click", onClick, { capture: true, signal: i2 });
     t2.addEventListener("keydown", (e3) => {
@@ -5755,10 +5796,10 @@ var Comment = class {
       }
     }, { signal: i2 });
     t2.addEventListener("pointerenter", () => {
-      this.#a.toggleComment(false, true);
+      this.#o.toggleComment(false, true);
     }, { signal: i2 });
     t2.addEventListener("pointerleave", () => {
-      this.#a.toggleComment(false, false);
+      this.#o.toggleComment(false, false);
     }, { signal: i2 });
     return t2;
   }
@@ -5767,13 +5808,13 @@ var Comment = class {
     let i2, n2;
     if (e2) [i2, n2] = e2;
     else {
-      [i2, n2] = this.#a.commentButtonPosition;
-      const { width: t3, height: e3, x: s3, y: r3 } = this.#a;
+      [i2, n2] = this.#o.commentButtonPosition;
+      const { width: t3, height: e3, x: s3, y: r3 } = this.#o;
       i2 = s3 + i2 * t3;
       n2 = r3 + n2 * e3;
     }
-    const s2 = this.#a.parent.boundingClientRect, { x: r2, y: a2, width: o2, height: l2 } = s2;
-    this.#a._uiManager.editComment(this.#a, r2 + i2 * o2, a2 + n2 * l2, { ...t2, parentDimensions: s2 });
+    const s2 = this.#o.parent.boundingClientRect, { x: r2, y: a2, width: o2, height: l2 } = s2;
+    this.#o._uiManager.editComment(this.#o, r2 + i2 * o2, a2 + n2 * l2, { ...t2, parentDimensions: s2 });
   }
   finish() {
     if (this.#ge) {
@@ -5829,13 +5870,13 @@ var Comment = class {
     this.#ye = "";
     this.#be = null;
     this.#ve = null;
-    this.#a = null;
+    this.#o = null;
     this.#me = false;
     this.#we = false;
   }
 };
 var TouchManager = class _TouchManager {
-  #kt;
+  #Dt;
   #Ae = false;
   #Ee = null;
   #Ce;
@@ -5843,20 +5884,20 @@ var TouchManager = class _TouchManager {
   #Te;
   #_e;
   #ke = null;
-  #Me;
-  #De = null;
+  #De;
+  #Me = null;
   #Pe;
   #Ie = null;
   constructor({ container: t2, isPinchingDisabled: e2 = null, isPinchingStopped: i2 = null, onPinchStart: n2 = null, onPinching: s2 = null, onPinchEnd: r2 = null, signal: a2 }) {
-    this.#kt = t2;
+    this.#Dt = t2;
     this.#Ee = i2;
     this.#Ce = e2;
     this.#Se = n2;
     this.#Te = s2;
     this.#_e = r2;
     this.#Pe = new AbortController();
-    this.#Me = AbortSignal.any([a2, this.#Pe.signal]);
-    t2.addEventListener("touchstart", this.#Fe.bind(this), { passive: false, signal: this.#Me });
+    this.#De = AbortSignal.any([a2, this.#Pe.signal]);
+    t2.addEventListener("touchstart", this.#Fe.bind(this), { passive: false, signal: this.#De });
   }
   get MIN_TOUCH_DISTANCE_TO_PINCH() {
     return 35 / OutputScale.pixelRatio;
@@ -5865,7 +5906,7 @@ var TouchManager = class _TouchManager {
     if (this.#Ce?.()) return;
     if (1 === t2.touches.length) {
       if (this.#ke) return;
-      const t3 = this.#ke = new AbortController(), e3 = AbortSignal.any([this.#Me, t3.signal]), i3 = this.#kt, n2 = { capture: true, signal: e3, passive: false }, cancelPointerDown = (t4) => {
+      const t3 = this.#ke = new AbortController(), e3 = AbortSignal.any([this.#De, t3.signal]), i3 = this.#Dt, n2 = { capture: true, signal: e3, passive: false }, cancelPointerDown = (t4) => {
         if ("touch" === t4.pointerType) {
           this.#ke?.abort();
           this.#ke = null;
@@ -5883,7 +5924,7 @@ var TouchManager = class _TouchManager {
     }
     if (!this.#Ie) {
       this.#Ie = new AbortController();
-      const t3 = AbortSignal.any([this.#Me, this.#Ie.signal]), e3 = this.#kt, i3 = { signal: t3, capture: false, passive: false };
+      const t3 = AbortSignal.any([this.#De, this.#Ie.signal]), e3 = this.#Dt, i3 = { signal: t3, capture: false, passive: false };
       e3.addEventListener("touchmove", this.#Oe.bind(this), i3);
       const n2 = this.#Re.bind(this);
       e3.addEventListener("touchend", n2, i3);
@@ -5897,19 +5938,19 @@ var TouchManager = class _TouchManager {
     }
     stopEvent(t2);
     if (2 !== t2.touches.length || this.#Ee?.()) {
-      this.#De = null;
+      this.#Me = null;
       return;
     }
     let [e2, i2] = t2.touches;
     e2.identifier > i2.identifier && ([e2, i2] = [i2, e2]);
-    this.#De = { touch0X: e2.screenX, touch0Y: e2.screenY, touch1X: i2.screenX, touch1Y: i2.screenY };
+    this.#Me = { touch0X: e2.screenX, touch0Y: e2.screenY, touch1X: i2.screenX, touch1Y: i2.screenY };
   }
   #Oe(t2) {
-    if (!this.#De || 2 !== t2.touches.length) return;
+    if (!this.#Me || 2 !== t2.touches.length) return;
     stopEvent(t2);
     let [e2, i2] = t2.touches;
     e2.identifier > i2.identifier && ([e2, i2] = [i2, e2]);
-    const { screenX: n2, screenY: s2 } = e2, { screenX: r2, screenY: a2 } = i2, o2 = this.#De, { touch0X: l2, touch0Y: h2, touch1X: c2, touch1Y: d2 } = o2, u2 = c2 - l2, p2 = d2 - h2, g2 = r2 - n2, m2 = a2 - s2, f2 = Math.hypot(g2, m2) || 1, b2 = Math.hypot(u2, p2) || 1;
+    const { screenX: n2, screenY: s2 } = e2, { screenX: r2, screenY: a2 } = i2, o2 = this.#Me, { touch0X: l2, touch0Y: h2, touch1X: c2, touch1Y: d2 } = o2, u2 = c2 - l2, p2 = d2 - h2, g2 = r2 - n2, m2 = a2 - s2, f2 = Math.hypot(g2, m2) || 1, b2 = Math.hypot(u2, p2) || 1;
     if (!this.#Ae && Math.abs(b2 - f2) <= _TouchManager.MIN_TOUCH_DISTANCE_TO_PINCH) return;
     o2.touch0X = n2;
     o2.touch0Y = s2;
@@ -5929,9 +5970,9 @@ var TouchManager = class _TouchManager {
         this.#Ie = null;
         this.#_e?.();
       }
-      if (this.#De) {
+      if (this.#Me) {
         stopEvent(t2);
-        this.#De = null;
+        this.#Me = null;
         this.#Ae = false;
       }
     }
@@ -5946,8 +5987,8 @@ var TouchManager = class _TouchManager {
 var AnnotationEditor = class _AnnotationEditor {
   #Be = null;
   #Le = null;
-  #l = null;
   #h = null;
+  #c = null;
   #pe = null;
   #Ne = false;
   #Ue = null;
@@ -6324,7 +6365,7 @@ var AnnotationEditor = class _AnnotationEditor {
     e2.preventDefault();
     const { isMac: i2 } = FeatureTest.platform;
     if (0 !== e2.button || e2.ctrlKey && i2) return;
-    this.#l?.toggle(false);
+    this.#h?.toggle(false);
     const n2 = this._isDraggable;
     this._isDraggable = false;
     this.#Ge = [e2.screenX, e2.screenY];
@@ -6339,7 +6380,7 @@ var AnnotationEditor = class _AnnotationEditor {
     const pointerUpCallback = () => {
       s2.abort();
       this.parent.togglePointerEvents(true);
-      this.#l?.toggle(true);
+      this.#h?.toggle(true);
       this._isDraggable = n2;
       this.parent.div.style.cursor = a2;
       this.div.style.cursor = o2;
@@ -6430,12 +6471,12 @@ var AnnotationEditor = class _AnnotationEditor {
     } else m2 ? E2 = MathClamp(Math.abs(b2[0] - f2[0] - x2), l2, 1) / a2 : C2 = MathClamp(Math.abs(b2[1] - f2[1] - A2), h2, 1) / o2;
     const _2 = _AnnotationEditor._round(a2 * E2), k2 = _AnnotationEditor._round(o2 * C2);
     y2 = transf(...p2(_2, k2));
-    const M2 = v2 - y2[0], D2 = w2 - y2[1];
+    const D2 = v2 - y2[0], M2 = w2 - y2[1];
     this.#Ke ||= [this.x, this.y, this.width, this.height];
     this.width = _2;
     this.height = k2;
-    this.x = M2;
-    this.y = D2;
+    this.x = D2;
+    this.y = M2;
     this.setDims();
     this.fixAndSetPosition();
     this._onResizing();
@@ -6443,7 +6484,7 @@ var AnnotationEditor = class _AnnotationEditor {
   _onResizing() {
   }
   altTextFinish() {
-    this.#l?.finish();
+    this.#h?.finish();
   }
   get toolbarButtons() {
     return null;
@@ -6467,7 +6508,7 @@ var AnnotationEditor = class _AnnotationEditor {
   removeEditToolbar() {
     this._editToolbar?.remove();
     this._editToolbar = null;
-    this.#l?.destroy();
+    this.#h?.destroy();
   }
   addContainer(t2) {
     const e2 = this._editToolbar?.div;
@@ -6477,67 +6518,67 @@ var AnnotationEditor = class _AnnotationEditor {
     return this.div.getBoundingClientRect();
   }
   createAltText() {
-    if (!this.#l) {
+    if (!this.#h) {
       AltText.initialize(_AnnotationEditor._l10n);
-      this.#l = new AltText(this);
+      this.#h = new AltText(this);
       if (this.#Be) {
-        this.#l.data = this.#Be;
+        this.#h.data = this.#Be;
         this.#Be = null;
       }
     }
-    return this.#l;
+    return this.#h;
   }
   get altTextData() {
-    return this.#l?.data;
+    return this.#h?.data;
   }
   set altTextData(t2) {
-    this.#l && (this.#l.data = t2);
+    this.#h && (this.#h.data = t2);
   }
   get guessedAltText() {
-    return this.#l?.guessedText;
+    return this.#h?.guessedText;
   }
   async setGuessedAltText(t2) {
-    await this.#l?.setGuessedText(t2);
+    await this.#h?.setGuessedText(t2);
   }
   serializeAltText(t2) {
-    return this.#l?.serialize(t2);
+    return this.#h?.serialize(t2);
   }
   hasAltText() {
-    return !!this.#l && !this.#l.isEmpty();
+    return !!this.#h && !this.#h.isEmpty();
   }
   hasAltTextData() {
-    return this.#l?.hasData() ?? false;
+    return this.#h?.hasData() ?? false;
   }
   focusCommentButton() {
-    this.#h?.focusButton();
+    this.#c?.focusButton();
   }
   addCommentButton() {
-    return this.canAddComment ? this.#h ||= new Comment(this) : null;
+    return this.canAddComment ? this.#c ||= new Comment(this) : null;
   }
   addStandaloneCommentButton() {
     if (this._uiManager.hasCommentManager()) {
       if (this.#pe) this._uiManager.isEditingMode() && this.#pe.classList.remove("hidden");
       else if (this.hasComment) {
-        this.#pe = this.#h.renderForStandalone();
+        this.#pe = this.#c.renderForStandalone();
         this.div.append(this.#pe);
       }
     }
   }
   removeStandaloneCommentButton() {
-    this.#h.removeStandaloneCommentButton();
+    this.#c.removeStandaloneCommentButton();
     this.#pe = null;
   }
   hideStandaloneCommentButton() {
     this.#pe?.classList.add("hidden");
   }
   get comment() {
-    if (!this.#h) return null;
-    const { data: { richText: t2, text: e2, date: i2, deleted: n2 } } = this.#h;
+    if (!this.#c) return null;
+    const { data: { richText: t2, text: e2, date: i2, deleted: n2 } } = this.#c;
     return { text: e2, richText: t2, date: i2, deleted: n2, color: this.getNonHCMColor(), opacity: this.opacity ?? 1 };
   }
   set comment(t2) {
-    this.#h ||= new Comment(this);
-    "object" == typeof t2 && null !== t2 ? this.#h.restoreData(t2) : this.#h.data = t2;
+    this.#c ||= new Comment(this);
+    "object" == typeof t2 && null !== t2 ? this.#c.restoreData(t2) : this.#c.data = t2;
     if (this.hasComment) {
       this.removeCommentButtonFromToolbar();
       this.addStandaloneCommentButton();
@@ -6550,30 +6591,30 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   setCommentData({ comment: t2, popupRef: e2, richText: i2 }) {
     if (!e2) return;
-    this.#h ||= new Comment(this);
-    this.#h.setInitialText(t2, i2);
+    this.#c ||= new Comment(this);
+    this.#c.setInitialText(t2, i2);
     if (!this.annotationElementId) return;
     const n2 = this._uiManager.getAndRemoveDataFromAnnotationStorage(this.annotationElementId);
     n2 && this.updateFromAnnotationLayer(n2);
   }
   get hasEditedComment() {
-    return this.#h?.hasBeenEdited();
+    return this.#c?.hasBeenEdited();
   }
   get hasDeletedComment() {
-    return this.#h?.isDeleted();
+    return this.#c?.isDeleted();
   }
   get hasComment() {
-    return !!this.#h && !this.#h.isEmpty() && !this.#h.isDeleted();
+    return !!this.#c && !this.#c.isEmpty() && !this.#c.isDeleted();
   }
   async editComment(t2) {
-    this.#h ||= new Comment(this);
-    this.#h.edit(t2);
+    this.#c ||= new Comment(this);
+    this.#c.edit(t2);
   }
   toggleComment(t2, e2 = void 0) {
     this.hasComment && this._uiManager.toggleComment(this, t2, e2);
   }
   setSelectedCommentButton(t2) {
-    this.#h.setSelectedButton(t2);
+    this.#c.setSelectedButton(t2);
   }
   addComment(t2) {
     if (this.hasEditedComment) {
@@ -6582,7 +6623,7 @@ var AnnotationEditor = class _AnnotationEditor {
     }
   }
   updateFromAnnotationLayer({ popup: { contents: t2, deleted: e2 } }) {
-    this.#h.data = e2 ? null : t2;
+    this.#c.data = e2 ? null : t2;
   }
   get parentBoundingClientRect() {
     return this.parent.boundingClientRect;
@@ -6613,7 +6654,7 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   #mi() {
     this.#je = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
-    this.#l?.toggle(false);
+    this.#h?.toggle(false);
     this.parent.togglePointerEvents(false);
   }
   #fi(t2, e2, i2) {
@@ -6634,7 +6675,7 @@ var AnnotationEditor = class _AnnotationEditor {
     this._onResizing();
   }
   #bi() {
-    this.#l?.toggle(true);
+    this.#h?.toggle(true);
     this.parent.togglePointerEvents(true);
     this.#ui();
   }
@@ -6749,7 +6790,7 @@ var AnnotationEditor = class _AnnotationEditor {
     return this.color && _AnnotationEditor._colorManager.convert(this._uiManager.getNonHCMColor(this.color));
   }
   onUpdatedColor() {
-    this.#h?.onUpdatedColor();
+    this.#c?.onUpdatedColor();
   }
   getData() {
     const { comment: { text: t2, color: e2, date: i2, opacity: n2, deleted: s2, richText: r2 }, uid: a2, pageIndex: o2, creationDate: l2, modificationDate: h2 } = this;
@@ -6865,22 +6906,22 @@ var AnnotationEditor = class _AnnotationEditor {
     return this._uiManager.makeCommentColor(this.getNonHCMColor(), this.opacity);
   }
   get commentPopupPosition() {
-    return this.#h.commentPopupPositionInLayer;
+    return this.#c.commentPopupPositionInLayer;
   }
   set commentPopupPosition(t2) {
-    this.#h.commentPopupPositionInLayer = t2;
+    this.#c.commentPopupPositionInLayer = t2;
   }
   hasDefaultPopupPosition() {
-    return this.#h.hasDefaultPopupPosition();
+    return this.#c.hasDefaultPopupPosition();
   }
   get commentButtonWidth() {
-    return this.#h.commentButtonWidth;
+    return this.#c.commentButtonWidth;
   }
   get elementBeforePopup() {
     return this.div;
   }
   setCommentButtonStates(t2) {
-    this.#h?.setCommentButtonStates(t2);
+    this.#c?.setCommentButtonStates(t2);
   }
   keydown(t2) {
     if (!this.isResizable || t2.target !== this.div || "Enter" !== t2.key) return;
@@ -6953,7 +6994,7 @@ var AnnotationEditor = class _AnnotationEditor {
       this.div?.classList.add("selectedEditor");
       if (this._editToolbar) {
         this._editToolbar?.show();
-        this.#l?.toggleAltTextBadge(false);
+        this.#h?.toggleAltTextBadge(false);
       } else this.addEditToolbar().then(() => {
         this.div?.classList.contains("selectedEditor") && this._editToolbar?.show();
       });
@@ -6969,7 +7010,7 @@ var AnnotationEditor = class _AnnotationEditor {
       this.div?.classList.remove("selectedEditor");
       this.div?.contains(document.activeElement) && this._uiManager.currentLayer.div.focus({ preventScroll: true });
       this._editToolbar?.hide();
-      this.#l?.toggleAltTextBadge(true);
+      this.#h?.toggleAltTextBadge(true);
       this.hideCommentPopup();
     }
   }
@@ -7096,13 +7137,13 @@ var FakeEditor = class extends AnnotationEditor {
     return this.serializeDeleted();
   }
 };
-var J = 3285377520;
-var Q = 4294901760;
-var Z = 65535;
+var Q = 3285377520;
+var Z = 4294901760;
+var tt = 65535;
 var MurmurHash3_64 = class {
   constructor(t2) {
-    this.h1 = t2 ? 4294967295 & t2 : J;
-    this.h2 = t2 ? 4294967295 & t2 : J;
+    this.h1 = t2 ? 4294967295 & t2 : Q;
+    this.h2 = t2 ? 4294967295 & t2 : Q;
   }
   update(t2) {
     let e2, i2;
@@ -7127,17 +7168,17 @@ var MurmurHash3_64 = class {
     const c2 = 3432918353, d2 = 461845907, u2 = 11601, p2 = 13715;
     for (let t3 = 0; t3 < n2; t3++) if (1 & t3) {
       a2 = r2[t3];
-      a2 = a2 * c2 & Q | a2 * u2 & Z;
+      a2 = a2 * c2 & Z | a2 * u2 & tt;
       a2 = a2 << 15 | a2 >>> 17;
-      a2 = a2 * d2 & Q | a2 * p2 & Z;
+      a2 = a2 * d2 & Z | a2 * p2 & tt;
       l2 ^= a2;
       l2 = l2 << 13 | l2 >>> 19;
       l2 = 5 * l2 + 3864292196;
     } else {
       o2 = r2[t3];
-      o2 = o2 * c2 & Q | o2 * u2 & Z;
+      o2 = o2 * c2 & Z | o2 * u2 & tt;
       o2 = o2 << 15 | o2 >>> 17;
-      o2 = o2 * d2 & Q | o2 * p2 & Z;
+      o2 = o2 * d2 & Z | o2 * p2 & tt;
       h2 ^= o2;
       h2 = h2 << 13 | h2 >>> 19;
       h2 = 5 * h2 + 3864292196;
@@ -7150,9 +7191,9 @@ var MurmurHash3_64 = class {
         a2 ^= e2[4 * n2 + 1] << 8;
       case 1:
         a2 ^= e2[4 * n2];
-        a2 = a2 * c2 & Q | a2 * u2 & Z;
+        a2 = a2 * c2 & Z | a2 * u2 & tt;
         a2 = a2 << 15 | a2 >>> 17;
-        a2 = a2 * d2 & Q | a2 * p2 & Z;
+        a2 = a2 * d2 & Z | a2 * p2 & tt;
         1 & n2 ? l2 ^= a2 : h2 ^= a2;
     }
     this.h1 = l2;
@@ -7161,16 +7202,16 @@ var MurmurHash3_64 = class {
   hexdigest() {
     let t2 = this.h1, e2 = this.h2;
     t2 ^= e2 >>> 1;
-    t2 = 3981806797 * t2 & Q | 36045 * t2 & Z;
-    e2 = 4283543511 * e2 & Q | (2950163797 * (e2 << 16 | t2 >>> 16) & Q) >>> 16;
+    t2 = 3981806797 * t2 & Z | 36045 * t2 & tt;
+    e2 = 4283543511 * e2 & Z | (2950163797 * (e2 << 16 | t2 >>> 16) & Z) >>> 16;
     t2 ^= e2 >>> 1;
-    t2 = 444984403 * t2 & Q | 60499 * t2 & Z;
-    e2 = 3301882366 * e2 & Q | (3120437893 * (e2 << 16 | t2 >>> 16) & Q) >>> 16;
+    t2 = 444984403 * t2 & Z | 60499 * t2 & tt;
+    e2 = 3301882366 * e2 & Z | (3120437893 * (e2 << 16 | t2 >>> 16) & Z) >>> 16;
     t2 ^= e2 >>> 1;
     return (t2 >>> 0).toString(16).padStart(8, "0") + (e2 >>> 0).toString(16).padStart(8, "0");
   }
 };
-var tt = Object.freeze({ map: null, hash: "", transfer: void 0 });
+var et = Object.freeze({ map: null, hash: "", transfer: void 0 });
 var AnnotationStorage = class {
   #Ci = false;
   #Si = null;
@@ -7235,7 +7276,7 @@ var AnnotationStorage = class {
     return new PrintAnnotationStorage(this);
   }
   get serializable() {
-    if (0 === this.#_i.size) return tt;
+    if (0 === this.#_i.size) return et;
     const t2 = /* @__PURE__ */ new Map(), e2 = new MurmurHash3_64(), i2 = [], n2 = /* @__PURE__ */ Object.create(null);
     let s2 = false;
     for (const [i3, r2] of this.#_i) {
@@ -7251,7 +7292,7 @@ var AnnotationStorage = class {
       }
     }
     if (s2) for (const e3 of t2.values()) e3.bitmap && i2.push(e3.bitmap);
-    return t2.size > 0 ? { map: t2, hash: e2.hexdigest(), transfer: i2 } : tt;
+    return t2.size > 0 ? { map: t2, hash: e2.hexdigest(), transfer: i2 } : et;
   }
   get editorStats() {
     let t2 = null;
@@ -7314,46 +7355,46 @@ var AnnotationStorage = class {
   }
 };
 var PrintAnnotationStorage = class extends AnnotationStorage {
-  #Mi = tt;
+  #Di = et;
   constructor(t2) {
     super();
     const { serializable: e2 } = t2;
-    if (e2 === tt) return;
+    if (e2 === et) return;
     const { map: i2, hash: n2, transfer: s2 } = e2, r2 = structuredClone(i2, s2 ? { transfer: s2 } : null);
-    this.#Mi = { map: r2, hash: n2, transfer: [] };
+    this.#Di = { map: r2, hash: n2, transfer: [] };
   }
   get print() {
     unreachable("Should not call PrintAnnotationStorage.print");
   }
   get serializable() {
-    return this.#Mi;
+    return this.#Di;
   }
   get modifiedIds() {
     return shadow(this, "modifiedIds", { ids: /* @__PURE__ */ new Set(), hash: "" });
   }
 };
 __webpack_require__(7588);
-var et = "__forcedDependency";
-var { floor: it, ceil: nt } = Math;
+var it = "__forcedDependency";
+var { floor: nt, ceil: st } = Math;
 function expandBBox(t2, e2, i2, n2, s2, r2) {
   t2[4 * e2 + 0] = Math.min(t2[4 * e2 + 0], i2);
   t2[4 * e2 + 1] = Math.min(t2[4 * e2 + 1], n2);
   t2[4 * e2 + 2] = Math.max(t2[4 * e2 + 2], s2);
   t2[4 * e2 + 3] = Math.max(t2[4 * e2 + 3], r2);
 }
-var st = new Uint32Array(new Uint8Array([255, 255, 0, 0]).buffer)[0];
+var rt = new Uint32Array(new Uint8Array([255, 255, 0, 0]).buffer)[0];
 var BBoxReader = class {
-  #Di;
+  #Mi;
   #Pi;
   constructor(t2, e2) {
-    this.#Di = t2;
+    this.#Mi = t2;
     this.#Pi = e2;
   }
   get length() {
-    return this.#Di.length;
+    return this.#Mi.length;
   }
   isEmpty(t2) {
-    return this.#Di[t2] === st;
+    return this.#Mi[t2] === rt;
   }
   minX(t2) {
     return this.#Pi[4 * t2 + 0] / 256;
@@ -7377,7 +7418,7 @@ var CanvasBBoxTracker = class {
   #Ri;
   #Bi;
   #Li;
-  #Di;
+  #Mi;
   _savesStack = [];
   _markedContentStack = [];
   constructor(t2, e2) {
@@ -7386,16 +7427,16 @@ var CanvasBBoxTracker = class {
     this.#Ni(e2);
   }
   growOperationsCount(t2) {
-    t2 >= this.#Di.length && this.#Ni(t2, this.#Di);
+    t2 >= this.#Mi.length && this.#Ni(t2, this.#Mi);
   }
   #Ni(t2, e2) {
     const i2 = new ArrayBuffer(4 * t2);
     this.#Li = new Uint8ClampedArray(i2);
-    this.#Di = new Uint32Array(i2);
+    this.#Mi = new Uint32Array(i2);
     if (e2 && e2.length > 0) {
-      this.#Di.set(e2);
-      this.#Di.fill(st, e2.length);
-    } else this.#Di.fill(st);
+      this.#Mi.set(e2);
+      this.#Mi.fill(rt, e2.length);
+    } else this.#Mi.fill(rt);
   }
   get clipBox() {
     return this.#Fi;
@@ -7412,7 +7453,7 @@ var CanvasBBoxTracker = class {
     const n2 = this._savesStack.pop();
     if (void 0 !== n2) {
       e2?.(n2, t2);
-      this.#Di[t2] = this.#Di[n2];
+      this.#Mi[t2] = this.#Mi[n2];
     }
     return this;
   }
@@ -7427,7 +7468,7 @@ var CanvasBBoxTracker = class {
     const i2 = this._savesStack.pop();
     if (void 0 !== i2) {
       e2?.(i2, t2);
-      this.#Di[t2] = this.#Di[i2];
+      this.#Mi[t2] = this.#Mi[i2];
     }
     return this;
   }
@@ -7439,7 +7480,7 @@ var CanvasBBoxTracker = class {
     const i2 = this._markedContentStack.pop();
     if (void 0 !== i2) {
       e2?.(i2, t2);
-      this.#Di[t2] = this.#Di[i2];
+      this.#Mi[t2] = this.#Mi[i2];
     }
     return this;
   }
@@ -7498,7 +7539,7 @@ var CanvasBBoxTracker = class {
   }
   recordOperation(t2, e2 = false, i2) {
     if (this._pendingBBoxIdx !== t2) return this;
-    const n2 = it(256 * this.#Oi[0] / this.#Ri), s2 = it(256 * this.#Oi[1] / this.#Bi), r2 = nt(256 * this.#Oi[2] / this.#Ri), a2 = nt(256 * this.#Oi[3] / this.#Bi);
+    const n2 = nt(256 * this.#Oi[0] / this.#Ri), s2 = nt(256 * this.#Oi[1] / this.#Bi), r2 = st(256 * this.#Oi[2] / this.#Ri), a2 = st(256 * this.#Oi[3] / this.#Bi);
     expandBBox(this.#Li, t2, n2, s2, r2, a2);
     if (i2) for (const e3 of i2) for (const i3 of e3) i3 !== t2 && expandBBox(this.#Li, i3, n2, s2, r2, a2);
     e2 || (this._pendingBBoxIdx = -1);
@@ -7515,7 +7556,7 @@ var CanvasBBoxTracker = class {
     return this;
   }
   take() {
-    return new BBoxReader(this.#Di, this.#Li);
+    return new BBoxReader(this.#Mi, this.#Li);
   }
   takeDebugMetadata() {
     throw new Error("Unreachable");
@@ -7561,7 +7602,7 @@ var CanvasBBoxTracker = class {
 };
 var CanvasDependencyTracker = class {
   #Ui = { __proto__: null };
-  #Hi = { __proto__: null, transform: [], moveText: [], sameLineText: [], [et]: [] };
+  #Hi = { __proto__: null, transform: [], moveText: [], sameLineText: [], [it]: [] };
   #zi = /* @__PURE__ */ new Map();
   #Gi = /* @__PURE__ */ new Set();
   #ji = /* @__PURE__ */ new Map();
@@ -7585,7 +7626,7 @@ var CanvasDependencyTracker = class {
   }
   save(t2) {
     this.#Ui = { __proto__: this.#Ui };
-    this.#Hi = { __proto__: this.#Hi, transform: { __proto__: this.#Hi.transform }, moveText: { __proto__: this.#Hi.moveText }, sameLineText: { __proto__: this.#Hi.sameLineText }, [et]: { __proto__: this.#Hi[et] } };
+    this.#Hi = { __proto__: this.#Hi, transform: { __proto__: this.#Hi.transform }, moveText: { __proto__: this.#Hi.moveText }, sameLineText: { __proto__: this.#Hi.sameLineText }, [it]: { __proto__: this.#Hi[it] } };
     this.#$i.save(t2);
     return this;
   }
@@ -7644,7 +7685,7 @@ var CanvasDependencyTracker = class {
     this.#Ui[t2] = this.#zi.get(e2) ?? i2;
   }
   recordFutureForcedDependency(t2, e2) {
-    this.recordIncrementalData(et, e2);
+    this.recordIncrementalData(it, e2);
     return this;
   }
   inheritSimpleDataAsFutureForcedDependencies(t2) {
@@ -7652,7 +7693,7 @@ var CanvasDependencyTracker = class {
     return this;
   }
   inheritPendingDependenciesAsFutureForcedDependencies() {
-    for (const t2 of this.#Gi) this.recordFutureForcedDependency(et, t2);
+    for (const t2 of this.#Gi) this.recordFutureForcedDependency(it, t2);
     return this;
   }
   resetBBox(t2) {
@@ -7727,7 +7768,7 @@ var CanvasDependencyTracker = class {
     return this;
   }
   recordOperation(t2, e2 = false) {
-    this.recordDependencies(t2, [et]);
+    this.recordDependencies(t2, [it]);
     if (this.#Wi) {
       const e3 = ensureDebugMetadata(this.#Wi, t2), { dependencies: i3 } = e3;
       this.#Gi.forEach(i3.add, i3);
@@ -7898,13 +7939,13 @@ var CanvasNestedDependencyTracker = class _CanvasNestedDependencyTracker {
     throw new Error("Unreachable");
   }
 };
-var rt = ["path", "transform", "filter", "strokeColor", "strokeAlpha", "lineWidth", "lineCap", "lineJoin", "miterLimit", "dash"];
-var ot = ["path", "transform", "filter", "fillColor", "fillAlpha", "globalCompositeOperation", "SMask"];
-var lt = ["transform", "SMask", "filter", "fillAlpha", "strokeAlpha", "globalCompositeOperation"];
-var ht = ["filter", "fillColor", "fillAlpha"];
-var ct = ["transform", "leading", "charSpacing", "wordSpacing", "hScale", "textRise", "moveText", "textMatrix", "font", "fontObj", "filter", "fillColor", "textRenderingMode", "SMask", "fillAlpha", "strokeAlpha", "globalCompositeOperation", "sameLineText"];
-var dt = ["transform"];
-var ut = ["transform", "fillColor"];
+var ot = ["path", "transform", "filter", "strokeColor", "strokeAlpha", "lineWidth", "lineCap", "lineJoin", "miterLimit", "dash"];
+var lt = ["path", "transform", "filter", "fillColor", "fillAlpha", "globalCompositeOperation", "SMask"];
+var ht = ["transform", "SMask", "filter", "fillAlpha", "strokeAlpha", "globalCompositeOperation"];
+var ct = ["filter", "fillColor", "fillAlpha"];
+var dt = ["transform", "leading", "charSpacing", "wordSpacing", "hScale", "textRise", "moveText", "textMatrix", "font", "fontObj", "filter", "fillColor", "textRenderingMode", "SMask", "fillAlpha", "strokeAlpha", "globalCompositeOperation", "sameLineText"];
+var ut = ["transform"];
+var pt = ["transform", "fillColor"];
 var CanvasImagesTracker = class _CanvasImagesTracker {
   #Ri;
   #Bi;
@@ -8545,7 +8586,7 @@ function getFactoryUrlProp(t2) {
   throw new Error(`Invalid factory url: "${t2}" must include trailing slash.`);
 }
 var isRefProxy = (t2) => "object" == typeof t2 && Number.isInteger(t2?.num) && t2.num >= 0 && Number.isInteger(t2?.gen) && t2.gen >= 0;
-var pt = function _isValidExplicitDest(t2, e2, i2) {
+var gt = function _isValidExplicitDest(t2, e2, i2) {
   if (!Array.isArray(i2) || i2.length < 2) return false;
   const [n2, s2, ...r2] = i2;
   if (!t2(n2) && !Number.isInteger(n2)) return false;
@@ -8609,16 +8650,16 @@ var LoopbackPort = class {
   }
 };
 __webpack_require__(1689);
-var gt = 1;
-var mt = 2;
-var ft = 1;
-var bt = 2;
-var yt = 3;
-var vt = 4;
-var wt = 5;
-var xt = 6;
-var At = 7;
-var Et = 8;
+var mt = 1;
+var ft = 2;
+var bt = 1;
+var yt = 2;
+var vt = 3;
+var wt = 4;
+var xt = 5;
+var At = 6;
+var Et = 7;
+var Ct = 8;
 function onFn() {
 }
 function wrapReason(t2) {
@@ -8662,9 +8703,9 @@ var MessageHandler = class {
       const e3 = t2.callbackId, i2 = this.callbackCapabilities[e3];
       if (!i2) throw new Error(`Cannot resolve callback ${e3}`);
       delete this.callbackCapabilities[e3];
-      if (t2.callback === gt) i2.resolve(t2.data);
+      if (t2.callback === mt) i2.resolve(t2.data);
       else {
-        if (t2.callback !== mt) throw new Error("Unexpected callback case");
+        if (t2.callback !== ft) throw new Error("Unexpected callback case");
         i2.reject(wrapReason(t2.reason));
       }
       return;
@@ -8674,9 +8715,9 @@ var MessageHandler = class {
     if (t2.callbackId) {
       const i2 = this.sourceName, n2 = t2.sourceName, s2 = this.comObj;
       Promise.try(e2, t2.data).then(function(e3) {
-        s2.postMessage({ sourceName: i2, targetName: n2, callback: gt, callbackId: t2.callbackId, data: e3 });
+        s2.postMessage({ sourceName: i2, targetName: n2, callback: mt, callbackId: t2.callbackId, data: e3 });
       }, function(e3) {
-        s2.postMessage({ sourceName: i2, targetName: n2, callback: mt, callbackId: t2.callbackId, reason: wrapReason(e3) });
+        s2.postMessage({ sourceName: i2, targetName: n2, callback: ft, callbackId: t2.callbackId, reason: wrapReason(e3) });
       });
       return;
     }
@@ -8710,14 +8751,14 @@ var MessageHandler = class {
     }, pull: (t3) => {
       const e3 = Promise.withResolvers();
       this.streamControllers[s2].pullCall = e3;
-      o2.postMessage({ sourceName: r2, targetName: a2, stream: xt, streamId: s2, desiredSize: t3.desiredSize });
+      o2.postMessage({ sourceName: r2, targetName: a2, stream: At, streamId: s2, desiredSize: t3.desiredSize });
       return e3.promise;
     }, cancel: (t3) => {
       assert(t3 instanceof Error, "cancel must have a valid reason");
       const e3 = Promise.withResolvers();
       this.streamControllers[s2].cancelCall = e3;
       this.streamControllers[s2].isClosed = true;
-      o2.postMessage({ sourceName: r2, targetName: a2, stream: ft, streamId: s2, reason: wrapReason(t3) });
+      o2.postMessage({ sourceName: r2, targetName: a2, stream: bt, streamId: s2, reason: wrapReason(t3) });
       return e3.promise;
     } }, i2);
   }
@@ -8730,79 +8771,79 @@ var MessageHandler = class {
         this.sinkCapability = Promise.withResolvers();
         this.ready = this.sinkCapability.promise;
       }
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: vt, streamId: e2, chunk: t3 }, a3);
+      s2.postMessage({ sourceName: i2, targetName: n2, stream: wt, streamId: e2, chunk: t3 }, a3);
     }, close() {
       if (!this.isCancelled) {
         this.isCancelled = true;
-        s2.postMessage({ sourceName: i2, targetName: n2, stream: yt, streamId: e2 });
+        s2.postMessage({ sourceName: i2, targetName: n2, stream: vt, streamId: e2 });
         delete r2.streamSinks[e2];
       }
     }, error(t3) {
       assert(t3 instanceof Error, "error must have a valid reason");
       if (!this.isCancelled) {
         this.isCancelled = true;
-        s2.postMessage({ sourceName: i2, targetName: n2, stream: wt, streamId: e2, reason: wrapReason(t3) });
+        s2.postMessage({ sourceName: i2, targetName: n2, stream: xt, streamId: e2, reason: wrapReason(t3) });
       }
     }, sinkCapability: Promise.withResolvers(), onPull: null, onCancel: null, isCancelled: false, desiredSize: t2.desiredSize, ready: null };
     o2.sinkCapability.resolve();
     o2.ready = o2.sinkCapability.promise;
     this.streamSinks[e2] = o2;
     Promise.try(a2, t2.data, o2).then(function() {
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, success: true });
+      s2.postMessage({ sourceName: i2, targetName: n2, stream: Ct, streamId: e2, success: true });
     }, function(t3) {
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, reason: wrapReason(t3) });
+      s2.postMessage({ sourceName: i2, targetName: n2, stream: Ct, streamId: e2, reason: wrapReason(t3) });
     });
   }
   #bn(t2) {
     const e2 = t2.streamId, i2 = this.sourceName, n2 = t2.sourceName, s2 = this.comObj, r2 = this.streamControllers[e2], a2 = this.streamSinks[e2];
     switch (t2.stream) {
-      case Et:
+      case Ct:
         t2.success ? r2.startCall.resolve() : r2.startCall.reject(wrapReason(t2.reason));
         break;
-      case At:
+      case Et:
         t2.success ? r2.pullCall.resolve() : r2.pullCall.reject(wrapReason(t2.reason));
         break;
-      case xt:
+      case At:
         if (!a2) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: At, streamId: e2, success: true });
+          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, success: true });
           break;
         }
         a2.desiredSize <= 0 && t2.desiredSize > 0 && a2.sinkCapability.resolve();
         a2.desiredSize = t2.desiredSize;
         Promise.try(a2.onPull || onFn).then(function() {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: At, streamId: e2, success: true });
+          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, success: true });
         }, function(t3) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: At, streamId: e2, reason: wrapReason(t3) });
+          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, reason: wrapReason(t3) });
         });
         break;
-      case vt:
+      case wt:
         assert(r2, "enqueue should have stream controller");
         if (r2.isClosed) break;
         r2.controller.enqueue(t2.chunk);
         break;
-      case yt:
+      case vt:
         assert(r2, "close should have stream controller");
         if (r2.isClosed) break;
         r2.isClosed = true;
         r2.controller.close();
         this.#vn(r2, e2);
         break;
-      case wt:
+      case xt:
         assert(r2, "error should have stream controller");
         r2.controller.error(wrapReason(t2.reason));
         this.#vn(r2, e2);
         break;
-      case bt:
+      case yt:
         t2.success ? r2.cancelCall.resolve() : r2.cancelCall.reject(wrapReason(t2.reason));
         this.#vn(r2, e2);
         break;
-      case ft:
+      case bt:
         if (!a2) break;
         const o2 = wrapReason(t2.reason);
         Promise.try(a2.onCancel || onFn, o2).then(function() {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: bt, streamId: e2, success: true });
+          s2.postMessage({ sourceName: i2, targetName: n2, stream: yt, streamId: e2, success: true });
         }, function(t3) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: bt, streamId: e2, reason: wrapReason(t3) });
+          s2.postMessage({ sourceName: i2, targetName: n2, stream: yt, streamId: e2, reason: wrapReason(t3) });
         });
         a2.sinkCapability.reject(o2);
         a2.isCancelled = true;
@@ -8931,19 +8972,19 @@ var DOMFilterFactory = class extends BaseFilterFactory {
   #Sn;
   #Tn;
   #_n;
-  #T = 0;
+  #_ = 0;
   constructor({ docId: t2, ownerDocument: e2 = globalThis.document }) {
     super();
     this.#Sn = t2;
     this.#Tn = e2;
   }
-  get #k() {
+  get #D() {
     return this.#En ||= /* @__PURE__ */ new Map();
   }
   get #kn() {
     return this.#_n ||= /* @__PURE__ */ new Map();
   }
-  get #Mn() {
+  get #Dn() {
     if (!this.#Cn) {
       const t2 = this.#Tn.createElement("div"), { style: e2 } = t2;
       e2.colorScheme = "only light";
@@ -8953,17 +8994,17 @@ var DOMFilterFactory = class extends BaseFilterFactory {
       e2.position = "absolute";
       e2.top = e2.left = 0;
       e2.zIndex = -1;
-      const i2 = this.#Tn.createElementNS(o, "svg");
+      const i2 = this.#Tn.createElementNS(a, "svg");
       i2.setAttribute("width", 0);
       i2.setAttribute("height", 0);
-      this.#Cn = this.#Tn.createElementNS(o, "defs");
+      this.#Cn = this.#Tn.createElementNS(a, "defs");
       t2.append(i2);
       i2.append(this.#Cn);
       this.#Tn.body.append(t2);
     }
     return this.#Cn;
   }
-  #Dn(t2) {
+  #Mn(t2) {
     if (1 === t2.length) {
       const e3 = t2[0], i3 = new Array(256);
       for (let t3 = 0; t3 < 256; t3++) i3[t3] = e3[t3] / 255;
@@ -8988,17 +9029,17 @@ var DOMFilterFactory = class extends BaseFilterFactory {
   }
   addFilter(t2) {
     if (!t2) return "none";
-    let e2 = this.#k.get(t2);
+    let e2 = this.#D.get(t2);
     if (e2) return e2;
-    const [i2, n2, s2] = this.#Dn(t2), r2 = 1 === t2.length ? i2 : `${i2}${n2}${s2}`;
-    e2 = this.#k.get(r2);
+    const [i2, n2, s2] = this.#Mn(t2), r2 = 1 === t2.length ? i2 : `${i2}${n2}${s2}`;
+    e2 = this.#D.get(r2);
     if (e2) {
-      this.#k.set(t2, e2);
+      this.#D.set(t2, e2);
       return e2;
     }
-    const a2 = `g_${this.#Sn}_transfer_map_${this.#T++}`, o2 = this.#Pn(a2);
-    this.#k.set(t2, o2);
-    this.#k.set(r2, o2);
+    const a2 = `g_${this.#Sn}_transfer_map_${this.#_++}`, o2 = this.#Pn(a2);
+    this.#D.set(t2, o2);
+    this.#D.set(r2, o2);
     const l2 = this.#In(a2);
     this.#Fn(i2, n2, s2, l2);
     return o2;
@@ -9021,7 +9062,7 @@ var DOMFilterFactory = class extends BaseFilterFactory {
     t2 = Util.makeHexColor(...r2);
     const a2 = this.#On(e2);
     e2 = Util.makeHexColor(...a2);
-    this.#Mn.style.color = "";
+    this.#Rn();
     if ("#000000" === t2 && "#ffffff" === e2 || t2 === e2) return s2.url;
     const o2 = new Array(256);
     for (let t3 = 0; t3 <= 255; t3++) {
@@ -9030,7 +9071,7 @@ var DOMFilterFactory = class extends BaseFilterFactory {
     }
     const l2 = o2.join(","), h2 = `g_${this.#Sn}_hcm_filter`, c2 = s2.filter = this.#In(h2);
     this.#Fn(l2, l2, l2, c2);
-    this.#Rn(c2);
+    this.#Bn(c2);
     const getSteps = (t3, e3) => {
       const i3 = r2[t3] / 255, n3 = a2[t3] / 255, s3 = new Array(e3 + 1);
       for (let t4 = 0; t4 <= e3; t4++) s3[t4] = i3 + t4 / e3 * (n3 - i3);
@@ -9051,49 +9092,49 @@ var DOMFilterFactory = class extends BaseFilterFactory {
     return "none" !== e2 && FeatureTest.platform.isFirefox ? { "backdrop-filter": e2, "background-color": "transparent" } : null;
   }
   addAlphaFilter(t2) {
-    let e2 = this.#k.get(t2);
+    let e2 = this.#D.get(t2);
     if (e2) return e2;
-    const [i2] = this.#Dn([t2]), n2 = `alpha_${i2}`;
-    e2 = this.#k.get(n2);
+    const [i2] = this.#Mn([t2]), n2 = `alpha_${i2}`;
+    e2 = this.#D.get(n2);
     if (e2) {
-      this.#k.set(t2, e2);
+      this.#D.set(t2, e2);
       return e2;
     }
-    const s2 = `g_${this.#Sn}_alpha_map_${this.#T++}`, r2 = this.#Pn(s2);
-    this.#k.set(t2, r2);
-    this.#k.set(n2, r2);
+    const s2 = `g_${this.#Sn}_alpha_map_${this.#_++}`, r2 = this.#Pn(s2);
+    this.#D.set(t2, r2);
+    this.#D.set(n2, r2);
     const a2 = this.#In(s2);
-    this.#Bn(i2, a2);
+    this.#Ln(i2, a2);
     return r2;
   }
   addLuminosityFilter(t2) {
-    let e2, i2, n2 = this.#k.get(t2 || "luminosity");
+    let e2, i2, n2 = this.#D.get(t2 || "luminosity");
     if (n2) return n2;
     if (t2) {
-      [e2] = this.#Dn([t2]);
+      [e2] = this.#Mn([t2]);
       i2 = `luminosity_${e2}`;
     } else i2 = "luminosity";
-    n2 = this.#k.get(i2);
+    n2 = this.#D.get(i2);
     if (n2) {
-      this.#k.set(t2, n2);
+      this.#D.set(t2, n2);
       return n2;
     }
-    const s2 = `g_${this.#Sn}_luminosity_map_${this.#T++}`, r2 = this.#Pn(s2);
-    this.#k.set(t2, r2);
-    this.#k.set(i2, r2);
+    const s2 = `g_${this.#Sn}_luminosity_map_${this.#_++}`, r2 = this.#Pn(s2);
+    this.#D.set(t2, r2);
+    this.#D.set(i2, r2);
     const a2 = this.#In(s2);
-    this.#Ln(a2);
-    t2 && this.#Bn(e2, a2);
+    this.#Nn(a2);
+    t2 && this.#Ln(e2, a2);
     return r2;
   }
   addKnockoutFilter(t2 = 0) {
-    const e2 = t2 > 0 ? Math.min(1 / t2, 1e6) : 1e6, i2 = `knockout_${e2}`, n2 = this.#k.get(i2);
+    const e2 = t2 > 0 ? Math.min(1 / t2, 1e6) : 1e6, i2 = `knockout_${e2}`, n2 = this.#D.get(i2);
     if (n2) return n2;
-    const s2 = `g_${this.#Sn}_knockout_filter_${this.#T++}`, r2 = this.#Pn(s2);
-    this.#k.set(i2, r2);
-    const a2 = this.#In(s2), l2 = this.#Tn.createElementNS(o, "feComponentTransfer");
-    a2.append(l2);
-    const h2 = this.#Tn.createElementNS(o, "feFuncA");
+    const s2 = `g_${this.#Sn}_knockout_filter_${this.#_++}`, r2 = this.#Pn(s2);
+    this.#D.set(i2, r2);
+    const o2 = this.#In(s2), l2 = this.#Tn.createElementNS(a, "feComponentTransfer");
+    o2.append(l2);
+    const h2 = this.#Tn.createElementNS(a, "feFuncA");
     h2.setAttribute("type", "linear");
     h2.setAttribute("slope", `${e2}`);
     h2.setAttribute("intercept", "0");
@@ -9115,9 +9156,9 @@ var DOMFilterFactory = class extends BaseFilterFactory {
     }
     if (!e2 || !i2) return a2.url;
     const [o2, l2] = [e2, i2].map(this.#On.bind(this));
-    let h2 = Math.round(0.2126 * o2[0] + 0.7152 * o2[1] + 0.0722 * o2[2]), c2 = Math.round(0.2126 * l2[0] + 0.7152 * l2[1] + 0.0722 * l2[2]), [d2, u2] = [n2, s2].map(this.#Nn.bind(this));
+    let h2 = Math.round(0.2126 * o2[0] + 0.7152 * o2[1] + 0.0722 * o2[2]), c2 = Math.round(0.2126 * l2[0] + 0.7152 * l2[1] + 0.0722 * l2[2]), [d2, u2] = [n2, s2].map(this.#Un.bind(this));
     c2 < h2 && ([h2, c2, d2, u2] = [c2, h2, u2, d2]);
-    this.#Mn.style.color = "";
+    this.#Rn();
     const getSteps = (t3, e3, i3) => {
       const n3 = new Array(256), s3 = (c2 - h2) / i3, r3 = t3 / 255, a3 = (e3 - t3) / (255 * i3);
       let o3 = 0;
@@ -9129,7 +9170,7 @@ var DOMFilterFactory = class extends BaseFilterFactory {
       for (let t4 = o3; t4 < 256; t4++) n3[t4] = n3[o3 - 1];
       return n3.join(",");
     }, p2 = `g_${this.#Sn}_hcm_${t2}_filter`, g2 = a2.filter = this.#In(p2);
-    this.#Rn(g2);
+    this.#Bn(g2);
     this.#Fn(getSteps(d2[0], u2[0], 5), getSteps(d2[1], u2[1], 5), getSteps(d2[2], u2[2], 5), g2);
     a2.url = this.#Pn(p2);
     return a2.url;
@@ -9142,56 +9183,62 @@ var DOMFilterFactory = class extends BaseFilterFactory {
       this.#En = null;
       this.#_n?.clear();
       this.#_n = null;
-      this.#T = 0;
+      this.#_ = 0;
     }
   }
-  #Ln(t2) {
-    const e2 = this.#Tn.createElementNS(o, "feColorMatrix");
+  #Nn(t2) {
+    const e2 = this.#Tn.createElementNS(a, "feColorMatrix");
     e2.setAttribute("type", "matrix");
     e2.setAttribute("values", "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.3 0.59 0.11 0 0");
     t2.append(e2);
   }
-  #Rn(t2) {
-    const e2 = this.#Tn.createElementNS(o, "feColorMatrix");
+  #Bn(t2) {
+    const e2 = this.#Tn.createElementNS(a, "feColorMatrix");
     e2.setAttribute("type", "matrix");
     e2.setAttribute("values", "0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 1 0");
     t2.append(e2);
   }
   #In(t2) {
-    const e2 = this.#Tn.createElementNS(o, "filter");
+    const e2 = this.#Tn.createElementNS(a, "filter");
     e2.setAttribute("color-interpolation-filters", "sRGB");
     e2.setAttribute("id", t2);
-    this.#Mn.append(e2);
+    this.#Dn.append(e2);
     return e2;
   }
-  #Un(t2, e2, i2) {
-    const n2 = this.#Tn.createElementNS(o, e2);
+  #Hn(t2, e2, i2) {
+    const n2 = this.#Tn.createElementNS(a, e2);
     n2.setAttribute("type", "discrete");
     n2.setAttribute("tableValues", i2);
     t2.append(n2);
   }
   #Fn(t2, e2, i2, n2) {
-    const s2 = this.#Tn.createElementNS(o, "feComponentTransfer");
+    const s2 = this.#Tn.createElementNS(a, "feComponentTransfer");
     n2.append(s2);
-    this.#Un(s2, "feFuncR", t2);
-    this.#Un(s2, "feFuncG", e2);
-    this.#Un(s2, "feFuncB", i2);
+    this.#Hn(s2, "feFuncR", t2);
+    this.#Hn(s2, "feFuncG", e2);
+    this.#Hn(s2, "feFuncB", i2);
   }
-  #Bn(t2, e2) {
-    const i2 = this.#Tn.createElementNS(o, "feComponentTransfer");
+  #Ln(t2, e2) {
+    const i2 = this.#Tn.createElementNS(a, "feComponentTransfer");
     e2.append(i2);
-    this.#Un(i2, "feFuncA", t2);
+    this.#Hn(i2, "feFuncA", t2);
   }
   #On(t2) {
-    this.#Mn.style.color = t2;
-    return getRGB(getComputedStyle(this.#Mn).getPropertyValue("color"));
+    this.#Dn.style.color = "CanvasText";
+    this.#Dn.style.backgroundColor = t2;
+    return getRGB(getComputedStyle(this.#Dn).getPropertyValue("background-color"));
   }
-  #Hn(t2) {
-    this.#Mn.style.color = t2;
-    return getRGBA(getComputedStyle(this.#Mn).getPropertyValue("color"));
+  #zn(t2) {
+    this.#Dn.style.color = "CanvasText";
+    this.#Dn.style.backgroundColor = t2;
+    return getRGBA(getComputedStyle(this.#Dn).getPropertyValue("background-color"));
   }
-  #Nn(t2) {
-    const [e2, i2, n2, s2] = this.#Hn(t2);
+  #Rn() {
+    this.#Dn.style.color = "";
+    this.#Dn.style.backgroundColor = "";
+  }
+  #Un(t2) {
+    const [e2, i2, n2, s2] = this.#zn(t2);
     if (1 === s2) return [e2, i2, n2];
     const [r2, a2, o2] = this.#On("Canvas");
     return [blend(e2, r2, s2), blend(i2, a2, s2), blend(n2, o2, s2)];
@@ -9277,47 +9324,47 @@ function convertRGBToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, destPos: n2 = 0, 
   }
   return { srcPos: e2 + o2, destPos: n2 };
 }
-var Ct = new class WebGPU {
-  #zn = null;
+var St = new class WebGPU {
   #Gn = null;
   #jn = null;
   #Wn = null;
-  async #Vn() {
+  #Vn = null;
+  async #$n() {
     if (!globalThis.navigator?.gpu) return false;
     try {
       const t2 = await navigator.gpu.requestAdapter();
       if (!t2) return false;
-      this.#Wn = navigator.gpu.getPreferredCanvasFormat();
-      this.#Gn = await t2.requestDevice();
+      this.#Vn = navigator.gpu.getPreferredCanvasFormat();
+      this.#jn = await t2.requestDevice();
       return true;
     } catch {
       return false;
     }
   }
   init() {
-    return this.#zn ||= this.#Vn();
+    return this.#Gn ||= this.#$n();
   }
   get isReady() {
-    return null !== this.#Gn;
+    return null !== this.#jn;
   }
   loadMeshShader() {
-    if (!this.#Gn || this.#jn) return;
-    const t2 = this.#Gn.createShaderModule({ code: "\nstruct Uniforms {\n  offsetX      : f32,\n  offsetY      : f32,\n  scaleX       : f32,\n  scaleY       : f32,\n  paddedWidth  : f32,\n  paddedHeight : f32,\n  borderSize   : f32,\n  _pad         : f32,\n};\n\n@group(0) @binding(0) var<uniform> u : Uniforms;\n\nstruct VertexInput {\n  @location(0) position : vec2<f32>,\n  @location(1) color    : vec4<f32>,\n};\n\nstruct VertexOutput {\n  @builtin(position) position : vec4<f32>,\n  @location(0)       color    : vec3<f32>,\n};\n\n@vertex\nfn vs_main(in : VertexInput) -> VertexOutput {\n  var out : VertexOutput;\n  let cx = (in.position.x + u.offsetX) * u.scaleX;\n  let cy = (in.position.y + u.offsetY) * u.scaleY;\n  out.position = vec4<f32>(\n    ((cx + u.borderSize) / u.paddedWidth) * 2.0 - 1.0,\n    1.0 - ((cy + u.borderSize) / u.paddedHeight) * 2.0,\n    0.0,\n    1.0\n  );\n  out.color = in.color.rgb;\n  return out;\n}\n\n@fragment\nfn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {\n  return vec4<f32>(in.color, 1.0);\n}\n" });
-    this.#jn = this.#Gn.createRenderPipeline({ layout: "auto", vertex: { module: t2, entryPoint: "vs_main", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }, { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "unorm8x4" }] }] }, fragment: { module: t2, entryPoint: "fs_main", targets: [{ format: this.#Wn }] }, primitive: { topology: "triangle-list" } });
+    if (!this.#jn || this.#Wn) return;
+    const t2 = this.#jn.createShaderModule({ code: "\nstruct Uniforms {\n  offsetX      : f32,\n  offsetY      : f32,\n  scaleX       : f32,\n  scaleY       : f32,\n  paddedWidth  : f32,\n  paddedHeight : f32,\n  borderSize   : f32,\n  _pad         : f32,\n};\n\n@group(0) @binding(0) var<uniform> u : Uniforms;\n\nstruct VertexInput {\n  @location(0) position : vec2<f32>,\n  @location(1) color    : vec4<f32>,\n};\n\nstruct VertexOutput {\n  @builtin(position) position : vec4<f32>,\n  @location(0)       color    : vec3<f32>,\n};\n\n@vertex\nfn vs_main(in : VertexInput) -> VertexOutput {\n  var out : VertexOutput;\n  let cx = (in.position.x + u.offsetX) * u.scaleX;\n  let cy = (in.position.y + u.offsetY) * u.scaleY;\n  out.position = vec4<f32>(\n    ((cx + u.borderSize) / u.paddedWidth) * 2.0 - 1.0,\n    1.0 - ((cy + u.borderSize) / u.paddedHeight) * 2.0,\n    0.0,\n    1.0\n  );\n  out.color = in.color.rgb;\n  return out;\n}\n\n@fragment\nfn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {\n  return vec4<f32>(in.color, 1.0);\n}\n" });
+    this.#Wn = this.#jn.createRenderPipeline({ layout: "auto", vertex: { module: t2, entryPoint: "vs_main", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }, { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "unorm8x4" }] }] }, fragment: { module: t2, entryPoint: "fs_main", targets: [{ format: this.#Vn }] }, primitive: { topology: "triangle-list" } });
   }
   draw(t2, e2, i2, n2, s2, r2, a2, o2) {
     this.loadMeshShader();
-    const l2 = this.#Gn, { offsetX: h2, offsetY: c2, scaleX: d2, scaleY: u2 } = n2, p2 = l2.createBuffer({ size: Math.max(t2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    const l2 = this.#jn, { offsetX: h2, offsetY: c2, scaleX: d2, scaleY: u2 } = n2, p2 = l2.createBuffer({ size: Math.max(t2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     t2.byteLength > 0 && l2.queue.writeBuffer(p2, 0, t2);
     const g2 = l2.createBuffer({ size: Math.max(e2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     e2.byteLength > 0 && l2.queue.writeBuffer(g2, 0, e2);
     const m2 = l2.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     l2.queue.writeBuffer(m2, 0, new Float32Array([h2, c2, d2, u2, r2, a2, o2, 0]));
-    const f2 = l2.createBindGroup({ layout: this.#jn.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: m2 } }] }), b2 = new OffscreenCanvas(r2, a2), y2 = b2.getContext("webgpu");
-    y2.configure({ device: l2, format: this.#Wn, alphaMode: s2 ? "opaque" : "premultiplied" });
+    const f2 = l2.createBindGroup({ layout: this.#Wn.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: m2 } }] }), b2 = new OffscreenCanvas(r2, a2), y2 = b2.getContext("webgpu");
+    y2.configure({ device: l2, format: this.#Vn, alphaMode: s2 ? "opaque" : "premultiplied" });
     const v2 = s2 ? { r: s2[0] / 255, g: s2[1] / 255, b: s2[2] / 255, a: 1 } : { r: 0, g: 0, b: 0, a: 0 }, w2 = l2.createCommandEncoder(), x2 = w2.beginRenderPass({ colorAttachments: [{ view: y2.getCurrentTexture().createView(), clearValue: v2, loadOp: "clear", storeOp: "store" }] });
     if (i2 > 0) {
-      x2.setPipeline(this.#jn);
+      x2.setPipeline(this.#Wn);
       x2.setBindGroup(0, f2);
       x2.setVertexBuffer(0, p2);
       x2.setVertexBuffer(1, g2);
@@ -9331,9 +9378,9 @@ var Ct = new class WebGPU {
     return b2.transferToImageBitmap();
   }
 }();
-var St = "Fill";
-var Tt = "Stroke";
-var _t = "Shading";
+var Tt = "Fill";
+var _t = "Stroke";
+var kt = "Shading";
 function applyBoundingBox(t2, e2) {
   if (!e2) return;
   const i2 = e2[2] - e2[0], n2 = e2[3] - e2[1], s2 = new Path2D();
@@ -9341,6 +9388,7 @@ function applyBoundingBox(t2, e2) {
   t2.clip(s2);
 }
 var BaseShadingPattern = class {
+  matrix = null;
   isModifyingCurrentTransform() {
     return false;
   }
@@ -9358,7 +9406,6 @@ var RadialAxialShadingPattern = class extends BaseShadingPattern {
     this._p1 = t2[5];
     this._r0 = t2[6];
     this._r1 = t2[7];
-    this.matrix = null;
   }
   isOriginBased() {
     return 0 === this._p0[0] && 0 === this._p0[1] && (!this.isRadial() || 0 === this._p1[0] && 0 === this._p1[1]);
@@ -9414,7 +9461,7 @@ var RadialAxialShadingPattern = class extends BaseShadingPattern {
   }
   getPattern(t2, e2, i2, n2) {
     let s2;
-    if (n2 === Tt || n2 === St) {
+    if (n2 === _t || n2 === Tt) {
       if (this.isOriginBased()) {
         let n3 = Util.transform(i2, e2.baseTransform);
         this.matrix && (n3 = Util.transform(n3, this.matrix));
@@ -9486,19 +9533,19 @@ function drawTriangle(t2, e2, i2, n2, s2, r2, a2, o2) {
   }
   const p2 = (l2[2 * i2] + e2.offsetX) * e2.scaleX, g2 = (l2[2 * i2 + 1] + e2.offsetY) * e2.scaleY, m2 = (l2[2 * n2] + e2.offsetX) * e2.scaleX, f2 = (l2[2 * n2 + 1] + e2.offsetY) * e2.scaleY, b2 = (l2[2 * s2] + e2.offsetX) * e2.scaleX, y2 = (l2[2 * s2 + 1] + e2.offsetY) * e2.scaleY;
   if (g2 >= y2) return;
-  const v2 = h2[4 * r2], w2 = h2[4 * r2 + 1], x2 = h2[4 * r2 + 2], A2 = h2[4 * a2], E2 = h2[4 * a2 + 1], C2 = h2[4 * a2 + 2], S2 = h2[4 * o2], T2 = h2[4 * o2 + 1], _2 = h2[4 * o2 + 2], k2 = Math.round(g2), M2 = Math.round(y2);
-  let D2, P2, I2, O2, R2, B2, L2, N2;
-  for (let t3 = k2; t3 <= M2; t3++) {
+  const v2 = h2[4 * r2], w2 = h2[4 * r2 + 1], x2 = h2[4 * r2 + 2], A2 = h2[4 * a2], E2 = h2[4 * a2 + 1], C2 = h2[4 * a2 + 2], S2 = h2[4 * o2], T2 = h2[4 * o2 + 1], _2 = h2[4 * o2 + 2], k2 = Math.round(g2), D2 = Math.round(y2);
+  let M2, P2, I2, O2, R2, B2, L2, N2;
+  for (let t3 = k2; t3 <= D2; t3++) {
     if (t3 < f2) {
       const e4 = t3 < g2 ? 0 : (g2 - t3) / (g2 - f2);
-      D2 = p2 - (p2 - m2) * e4;
+      M2 = p2 - (p2 - m2) * e4;
       P2 = v2 - (v2 - A2) * e4;
       I2 = w2 - (w2 - E2) * e4;
       O2 = x2 - (x2 - C2) * e4;
     } else {
       let e4;
       e4 = t3 > y2 ? 1 : f2 === y2 ? 0 : (f2 - t3) / (f2 - y2);
-      D2 = m2 - (m2 - b2) * e4;
+      M2 = m2 - (m2 - b2) * e4;
       P2 = A2 - (A2 - S2) * e4;
       I2 = E2 - (E2 - T2) * e4;
       O2 = C2 - (C2 - _2) * e4;
@@ -9509,10 +9556,10 @@ function drawTriangle(t2, e2, i2, n2, s2, r2, a2, o2) {
     B2 = v2 - (v2 - S2) * e3;
     L2 = w2 - (w2 - T2) * e3;
     N2 = x2 - (x2 - _2) * e3;
-    const i3 = Math.round(Math.min(D2, R2)), n3 = Math.round(Math.max(D2, R2));
+    const i3 = Math.round(Math.min(M2, R2)), n3 = Math.round(Math.max(M2, R2));
     let s3 = d2 * t3 + 4 * i3;
     for (let t4 = i3; t4 <= n3; t4++) {
-      e3 = (D2 - t4) / (D2 - R2);
+      e3 = (M2 - t4) / (M2 - R2);
       e3 < 0 ? e3 = 0 : e3 > 1 && (e3 = 1);
       c2[s3++] = P2 - (P2 - B2) * e3 | 0;
       c2[s3++] = I2 - (I2 - L2) * e3 | 0;
@@ -9530,17 +9577,16 @@ var MeshShadingPattern = class extends BaseShadingPattern {
     this._bounds = t2[5];
     this._bbox = t2[6];
     this._background = t2[7];
-    this.matrix = null;
     !(function loadMeshShader() {
-      Ct.loadMeshShader();
+      St.loadMeshShader();
     })();
   }
   _createMeshCanvas(t2, e2, i2) {
     const n2 = Math.floor(this._bounds[0]), s2 = Math.floor(this._bounds[1]), r2 = Math.ceil(this._bounds[2]) - n2, a2 = Math.ceil(this._bounds[3]) - s2, o2 = Math.min(Math.ceil(Math.abs(r2 * t2[0] * 1.1)), 3e3) || 1, l2 = Math.min(Math.ceil(Math.abs(a2 * t2[1] * 1.1)), 3e3) || 1, h2 = r2 ? r2 / o2 : 1, c2 = a2 ? a2 / l2 : 1, d2 = { coords: this._posData, colors: this._colData, offsetX: -n2, offsetY: -s2, scaleX: 1 / h2, scaleY: 1 / c2 }, u2 = o2 + 4, p2 = l2 + 4, g2 = i2.create(u2, p2);
     if ((function isGPUReady() {
-      return Ct.isReady;
+      return St.isReady;
     })() && this._vertexCount > 48) g2.context.drawImage((function drawMeshWithGPU(t3, e3, i3, n3, s3, r3, a3, o3) {
-      return Ct.draw(t3, e3, i3, n3, s3, r3, a3, o3);
+      return St.draw(t3, e3, i3, n3, s3, r3, a3, o3);
     })(this._posData, this._colData, this._vertexCount, d2, e2, u2, p2, 2), 0, 0);
     else {
       const t3 = g2.context.createImageData(o2, l2);
@@ -9564,7 +9610,7 @@ var MeshShadingPattern = class extends BaseShadingPattern {
   getPattern(t2, e2, i2, n2) {
     applyBoundingBox(t2, this._bbox);
     const s2 = new Float32Array(2);
-    if (n2 === _t) Util.singularValueDecompose2dScale(getCurrentTransform(t2), s2);
+    if (n2 === kt) Util.singularValueDecompose2dScale(getCurrentTransform(t2), s2);
     else if (this.matrix) {
       Util.singularValueDecompose2dScale(this.matrix, s2);
       const [t3, i3] = s2;
@@ -9572,8 +9618,8 @@ var MeshShadingPattern = class extends BaseShadingPattern {
       s2[0] *= t3;
       s2[1] *= i3;
     } else Util.singularValueDecompose2dScale(e2.baseTransform, s2);
-    const r2 = this._createMeshCanvas(s2, n2 === _t ? null : this._background, e2.canvasFactory);
-    if (n2 !== _t) {
+    const r2 = this._createMeshCanvas(s2, n2 === kt ? null : this._background, e2.canvasFactory);
+    if (n2 !== kt) {
       t2.setTransform(...e2.baseTransform);
       this.matrix && t2.transform(...this.matrix);
     }
@@ -9589,7 +9635,7 @@ var DummyShadingPattern = class extends BaseShadingPattern {
     return "hotpink";
   }
 };
-var kt = 1;
+var Dt = 1;
 var Mt = 2;
 var TilingPattern = class _TilingPattern {
   static MAX_PATTERN_SIZE = 3e3;
@@ -9707,7 +9753,7 @@ var TilingPattern = class _TilingPattern {
     const n2 = t2.ctx, s2 = t2.current;
     s2.patternFill = s2.patternStroke = false;
     switch (e2) {
-      case kt:
+      case Dt:
         const { fillStyle: t3, strokeStyle: r2 } = this.ctx;
         n2.fillStyle = s2.fillColor = t3;
         n2.strokeStyle = s2.strokeColor = r2;
@@ -9724,7 +9770,7 @@ var TilingPattern = class _TilingPattern {
     return false;
   }
   getPattern(t2, e2, i2, n2, s2) {
-    const r2 = n2 !== _t ? Util.transform(i2, this.patternBaseMatrix) : i2, a2 = this.createPatternCanvas(e2, s2);
+    const r2 = n2 !== kt ? Util.transform(i2, this.patternBaseMatrix) : i2, a2 = this.createPatternCanvas(e2, s2);
     let o2 = new DOMMatrix(r2);
     o2 = o2.translate(a2.offsetX, a2.offsetY);
     o2 = o2.scale(1 / a2.scaleX, 1 / a2.scaleY);
@@ -9734,9 +9780,9 @@ var TilingPattern = class _TilingPattern {
     return l2;
   }
 };
-var Dt = 16;
-var Pt = new DOMMatrix();
-var It = new Float32Array(2);
+var Pt = 16;
+var It = new DOMMatrix();
+var Ft = new Float32Array(2);
 function mirrorContextOperations(t2, e2) {
   if (t2._removeMirroring) throw new Error("Context is already forwarding operations.");
   const i2 = /* @__PURE__ */ new Map();
@@ -9789,7 +9835,7 @@ var CanvasExtraState = class {
   charSpacing = 0;
   wordSpacing = 0;
   textHScale = 1;
-  textRenderingMode = A;
+  textRenderingMode = x;
   textRise = 0;
   fillColor = "#000000";
   strokeColor = "#000000";
@@ -9812,12 +9858,12 @@ var CanvasExtraState = class {
     t2.tilingPatternDims = this.tilingPatternDims?.slice();
     return t2;
   }
-  getPathBoundingBox(t2 = St, e2 = null) {
+  getPathBoundingBox(t2 = Tt, e2 = null) {
     const i2 = this.minMax.slice();
-    if (t2 === Tt) {
+    if (t2 === _t) {
       e2 || unreachable("Stroke bounding box must include transform.");
-      Util.singularValueDecompose2dScale(e2, It);
-      const t3 = It[0] * this.lineWidth / 2, n2 = It[1] * this.lineWidth / 2;
+      Util.singularValueDecompose2dScale(e2, Ft);
+      const t3 = Ft[0] * this.lineWidth / 2, n2 = Ft[1] * this.lineWidth / 2;
       i2[0] -= t3;
       i2[1] -= n2;
       i2[2] += t3;
@@ -9836,26 +9882,26 @@ var CanvasExtraState = class {
     this.clipBox.set(t2, 0);
     this.minMax.set(s, 0);
   }
-  getClippedPathBoundingBox(t2 = St, e2 = null) {
+  getClippedPathBoundingBox(t2 = Tt, e2 = null) {
     return Util.intersect(this.clipBox, this.getPathBoundingBox(t2, e2));
   }
 };
 function putBinaryImageData(t2, e2) {
-  const { width: i2, height: n2, kind: s2 } = e2, r2 = n2 % Dt, a2 = (n2 - r2) / Dt, o2 = 0 === r2 ? a2 : a2 + 1, l2 = t2.createImageData(i2, Dt);
+  const { width: i2, height: n2, kind: s2 } = e2, r2 = n2 % Pt, a2 = (n2 - r2) / Pt, o2 = 0 === r2 ? a2 : a2 + 1, l2 = t2.createImageData(i2, Pt);
   let h2 = 0;
   const c2 = e2.data, d2 = l2.data;
   let u2;
-  if (s2 === k.GRAYSCALE_1BPP) for (u2 = 0; u2 < o2; u2++) {
-    ({ srcPos: h2 } = convertBlackAndWhiteToRGBA({ src: c2, srcPos: h2, dest: d2, width: i2, height: u2 < a2 ? Dt : r2 }));
-    t2.putImageData(l2, 0, u2 * Dt);
+  if (s2 === _.GRAYSCALE_1BPP) for (u2 = 0; u2 < o2; u2++) {
+    ({ srcPos: h2 } = convertBlackAndWhiteToRGBA({ src: c2, srcPos: h2, dest: d2, width: i2, height: u2 < a2 ? Pt : r2 }));
+    t2.putImageData(l2, 0, u2 * Pt);
   }
-  else if (s2 === k.RGBA_32BPP) {
-    let e3 = 0, n3 = i2 * Dt * 4;
+  else if (s2 === _.RGBA_32BPP) {
+    let e3 = 0, n3 = i2 * Pt * 4;
     for (u2 = 0; u2 < a2; u2++) {
       d2.set(c2.subarray(h2, h2 + n3));
       h2 += n3;
       t2.putImageData(l2, 0, e3);
-      e3 += Dt;
+      e3 += Pt;
     }
     if (u2 < o2) {
       n3 = i2 * r2 * 4;
@@ -9863,10 +9909,10 @@ function putBinaryImageData(t2, e2) {
       t2.putImageData(l2, 0, e3);
     }
   } else {
-    if (s2 !== k.RGB_24BPP) throw new Error(`bad image kind: ${s2}`);
+    if (s2 !== _.RGB_24BPP) throw new Error(`bad image kind: ${s2}`);
     for (u2 = 0; u2 < o2; u2++) {
-      ({ srcPos: h2 } = convertRGBToRGBA({ src: c2, srcPos: h2, dest: new Uint32Array(d2.buffer), width: i2, height: u2 < a2 ? Dt : r2 }));
-      t2.putImageData(l2, 0, u2 * Dt);
+      ({ srcPos: h2 } = convertRGBToRGBA({ src: c2, srcPos: h2, dest: new Uint32Array(d2.buffer), width: i2, height: u2 < a2 ? Pt : r2 }));
+      t2.putImageData(l2, 0, u2 * Pt);
     }
   }
 }
@@ -9875,12 +9921,12 @@ function putBinaryImageMask(t2, e2) {
     t2.drawImage(e2.bitmap, 0, 0);
     return;
   }
-  const { width: i2, height: n2 } = e2, s2 = n2 % Dt, r2 = (n2 - s2) / Dt, a2 = 0 === s2 ? r2 : r2 + 1, o2 = t2.createImageData(i2, Dt);
+  const { width: i2, height: n2 } = e2, s2 = n2 % Pt, r2 = (n2 - s2) / Pt, a2 = 0 === s2 ? r2 : r2 + 1, o2 = t2.createImageData(i2, Pt);
   let l2 = 0;
   const h2 = e2.data, c2 = o2.data;
   for (let e3 = 0; e3 < a2; e3++) {
-    ({ srcPos: l2 } = convertBlackAndWhiteToRGBA({ src: h2, srcPos: l2, dest: c2, width: i2, height: e3 < r2 ? Dt : s2, nonBlackColor: 0 }));
-    t2.putImageData(o2, 0, e3 * Dt);
+    ({ srcPos: l2 } = convertBlackAndWhiteToRGBA({ src: h2, srcPos: l2, dest: c2, width: i2, height: e3 < r2 ? Pt : s2, nonBlackColor: 0 }));
+    t2.putImageData(o2, 0, e3 * Pt);
   }
 }
 function copyCtxState(t2, e2) {
@@ -9910,25 +9956,25 @@ function resetCtxToDefault(t2) {
 }
 function getImageSmoothingEnabled(t2, e2) {
   if (e2) return true;
-  Util.singularValueDecompose2dScale(t2, It);
+  Util.singularValueDecompose2dScale(t2, Ft);
   const i2 = Math.fround(OutputScale.pixelRatio * PixelsPerInch.PDF_TO_CSS_UNITS);
-  return It[0] <= i2 && It[1] <= i2;
+  return Ft[0] <= i2 && Ft[1] <= i2;
 }
-var Ft = ["butt", "round", "square"];
-var Ot = ["miter", "round", "bevel"];
-var Rt = {};
+var Ot = ["butt", "round", "square"];
+var Rt = ["miter", "round", "bevel"];
 var Bt = {};
+var Lt = {};
 var CanvasGraphics = class _CanvasGraphics {
-  #$n = 0;
   #qn = 0;
-  #Kn = null;
+  #Kn = 0;
   #Xn = null;
   #Yn = null;
   #Jn = null;
-  #Qn = 1;
-  #Zn;
-  #ts = null;
-  #es = [];
+  #Qn = null;
+  #Zn = 1;
+  #ts;
+  #es = null;
+  #is = [];
   constructor(t2, e2, i2, n2, s2, { optionalContentConfig: r2, markedContentStack: a2 = null }, o2, l2, h2, c2) {
     this.ctx = t2;
     this.current = new CanvasExtraState(this.ctx.canvas.width, this.ctx.canvas.height);
@@ -10020,7 +10066,7 @@ var CanvasGraphics = class _CanvasGraphics {
       if (!s2 || s2(o2)) {
         g2 = a2[o2];
         m2 = r2[o2] ?? null;
-        if (g2 !== L.dependency) null === m2 ? this[g2](o2) : this[g2](o2, ...m2);
+        if (g2 !== B.dependency) null === m2 ? this[g2](o2) : this[g2](o2, ...m2);
         else for (const t3 of m2) {
           this.dependencyTracker?.recordNamedData(t3, o2);
           const e3 = t3.startsWith("g_") ? u2 : p2;
@@ -10041,7 +10087,7 @@ var CanvasGraphics = class _CanvasGraphics {
       }
     }
   }
-  #is() {
+  #ns() {
     for (; this.stateStack.length || this.inSMaskMode; ) this.restore();
     this.current.activeSMask = null;
     this.ctx.restore();
@@ -10057,31 +10103,31 @@ var CanvasGraphics = class _CanvasGraphics {
     }
   }
   endDrawing() {
-    this.#is();
+    this.#ns();
     for (const t2 of this.smaskGroupCanvases) this.canvasFactory.destroy(t2);
     this.smaskGroupCanvases.length = 0;
     this._clearPreparedSMask();
     this.tempSMask = null;
     this.smaskStack.length = 0;
-    for (const t2 of this.#es) this.#ns(t2);
-    this.#es.length = 0;
-    this.#Kn = null;
+    for (const t2 of this.#is) this.#ss(t2);
+    this.#is.length = 0;
     this.#Xn = null;
     this.#Yn = null;
     this.#Jn = null;
-    this.#Qn = 1;
-    this.#ts = null;
+    this.#Qn = null;
+    this.#Zn = 1;
+    this.#es = null;
+    this.#Kn = 0;
     this.#qn = 0;
-    this.#$n = 0;
     this.cachedPatterns.clear();
     for (const t2 of this._cachedBitmapsMap.values()) {
       for (const e2 of t2.values()) "undefined" != typeof HTMLCanvasElement && e2 instanceof HTMLCanvasElement && (e2.width = e2.height = 0);
       t2.clear();
     }
     this._cachedBitmapsMap.clear();
-    this.#ss();
+    this.#rs();
   }
-  #ss() {
+  #rs() {
     if (this.pageColors) {
       const t2 = this.filterFactory.addHCMFilter(this.pageColors.foreground, this.pageColors.background);
       if ("none" !== t2) {
@@ -10137,7 +10183,7 @@ var CanvasGraphics = class _CanvasGraphics {
       const n3 = h2.get(c2);
       if (n3 && !o2) {
         const e3 = Math.round(Math.min(l2[0], l2[2]) + l2[4]), i4 = Math.round(Math.min(l2[1], l2[3]) + l2[5]);
-        this.dependencyTracker?.recordDependencies(t2, ut);
+        this.dependencyTracker?.recordDependencies(t2, pt);
         return { canvas: n3, offsetX: e3, offsetY: i4 };
       }
       d2 = n3;
@@ -10174,10 +10220,10 @@ var CanvasGraphics = class _CanvasGraphics {
     u2 && this.canvasFactory.destroy(u2);
     A2.globalCompositeOperation = "source-in";
     const T2 = Util.transform(getCurrentTransformInverse(A2), [1, 0, 0, 1, -E2, -C2]);
-    A2.fillStyle = o2 ? a2.getPattern(i2, this, T2, St, t2) : a2;
+    A2.fillStyle = o2 ? a2.getPattern(i2, this, T2, Tt, t2) : a2;
     A2.fillRect(0, 0, n2, r2);
     h2 && !o2 && h2.set(c2, x2.canvas);
-    this.dependencyTracker?.recordDependencies(t2, ut);
+    this.dependencyTracker?.recordDependencies(t2, pt);
     return { canvas: x2.canvas, canvasEntry: h2 && !o2 ? null : x2, offsetX: Math.round(E2), offsetY: Math.round(C2) };
   }
   setLineWidth(t2, e2) {
@@ -10188,11 +10234,11 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   setLineCap(t2, e2) {
     this.dependencyTracker?.recordSimpleData("lineCap", t2);
-    this.ctx.lineCap = Ft[e2];
+    this.ctx.lineCap = Ot[e2];
   }
   setLineJoin(t2, e2) {
     this.dependencyTracker?.recordSimpleData("lineJoin", t2);
-    this.ctx.lineJoin = Ot[e2];
+    this.ctx.lineJoin = Rt[e2];
   }
   setMiterLimit(t2, e2) {
     this.dependencyTracker?.recordSimpleData("miterLimit", t2);
@@ -10361,11 +10407,11 @@ var CanvasGraphics = class _CanvasGraphics {
     this.smaskScratchCanvas = null;
     this._clearPreparedSMask();
   }
-  #rs(t2, e2 = null, i2 = 1) {
+  #as(t2, e2 = null, i2 = 1) {
     const { width: n2, height: s2 } = t2, r2 = e2 ?? this.canvasFactory.create(n2, s2), a2 = r2.context, o2 = (i2 = Math.round(255 * i2) / 255) < 1;
-    o2 && void 0 === this.#Zn && (this.#Zn = FeatureTest.isCanvasFilterSupported ? /* @__PURE__ */ new Map() : "none");
+    o2 && void 0 === this.#ts && (this.#ts = FeatureTest.isCanvasFilterSupported ? /* @__PURE__ */ new Map() : "none");
     let l2 = "none";
-    o2 && this.#Zn instanceof Map && (l2 = this.#Zn.getOrInsertComputed(i2, () => this.filterFactory.addKnockoutFilter(i2)));
+    o2 && this.#ts instanceof Map && (l2 = this.#ts.getOrInsertComputed(i2, () => this.filterFactory.addKnockoutFilter(i2)));
     if (!o2 || "none" !== l2) {
       if (e2) {
         a2.save();
@@ -10383,7 +10429,7 @@ var CanvasGraphics = class _CanvasGraphics {
     a2.putImageData(c2, 0, 0);
     return r2;
   }
-  #as(t2, e2, i2, n2) {
+  #os(t2, e2, i2, n2) {
     let s2 = t2?.[e2] ?? null;
     if (s2 && (s2.canvas.width !== i2 || s2.canvas.height !== n2)) {
       this.canvasFactory.destroy(s2);
@@ -10401,8 +10447,8 @@ var CanvasGraphics = class _CanvasGraphics {
     r2.restore();
     return s2;
   }
-  #os(t2, e2, i2 = {}) {
-    const { backdropCanvas: n2 = null, destTransform: s2 = [1, 0, 0, 1, 0, 0], backdropOffset: r2 = [0, 0], reuseMaskEntry: a2 = null, poolMeta: o2 = null, sourceAlpha: l2 = 1, sourceFilter: h2 = "none", knockoutAlpha: c2 = 1 } = i2, { width: d2, height: u2 } = e2, p2 = this.#rs(e2, a2, c2), g2 = t2.globalCompositeOperation;
+  #ls(t2, e2, i2 = {}) {
+    const { backdropCanvas: n2 = null, destTransform: s2 = [1, 0, 0, 1, 0, 0], backdropOffset: r2 = [0, 0], reuseMaskEntry: a2 = null, poolMeta: o2 = null, sourceAlpha: l2 = 1, sourceFilter: h2 = "none", knockoutAlpha: c2 = 1 } = i2, { width: d2, height: u2 } = e2, p2 = this.#as(e2, a2, c2), g2 = t2.globalCompositeOperation;
     t2.save();
     t2.setTransform(...s2);
     t2.globalAlpha = 1;
@@ -10410,7 +10456,7 @@ var CanvasGraphics = class _CanvasGraphics {
     t2.globalCompositeOperation = "destination-out";
     t2.drawImage(p2.canvas, 0, 0);
     if (n2) {
-      const [e3, i3] = r2, s3 = this.#as(o2, "knockoutBackdropEntry", d2, u2), a3 = s3.context;
+      const [e3, i3] = r2, s3 = this.#os(o2, "knockoutBackdropEntry", d2, u2), a3 = s3.context;
       a3.drawImage(n2, e3, i3, d2, u2, 0, 0, d2, u2);
       a3.globalCompositeOperation = "destination-in";
       a3.drawImage(p2.canvas, 0, 0);
@@ -10426,55 +10472,55 @@ var CanvasGraphics = class _CanvasGraphics {
     t2.restore();
     a2 || this.canvasFactory.destroy(p2);
   }
-  #ls(t2 = 1) {
-    if (0 === this.#$n || this.#qn > 0 || !this.contentVisible) return false;
-    this.#qn++;
-    this.#Qn = t2;
-    const e2 = this.#es.at(-1), { canvas: i2 } = this.ctx, n2 = this.#as(e2, "knockoutTempEntry", i2.width, i2.height);
-    this.#Kn = n2;
+  #hs(t2 = 1) {
+    if (0 === this.#qn || this.#Kn > 0 || !this.contentVisible) return false;
+    this.#Kn++;
+    this.#Zn = t2;
+    const e2 = this.#is.at(-1), { canvas: i2 } = this.ctx, n2 = this.#os(e2, "knockoutTempEntry", i2.width, i2.height);
+    this.#Xn = n2;
     const s2 = n2.context;
     s2.save();
     s2.setTransform(this.ctx.getTransform());
     copyCtxState(this.ctx, s2);
-    this.#Jn = s2.globalCompositeOperation;
+    this.#Qn = s2.globalCompositeOperation;
     s2.globalCompositeOperation = "source-over";
     mirrorContextOperations(s2, this.ctx);
-    this.#ts = e2;
-    this.#Xn = this.ctx;
-    this.#Yn = this.suspendedCtx;
+    this.#es = e2;
+    this.#Yn = this.ctx;
+    this.#Jn = this.suspendedCtx;
     this.ctx = s2;
     this.inSMaskMode && (this.suspendedCtx = s2);
     return true;
   }
-  #hs(t2) {
+  #cs(t2) {
     if (!t2) return;
-    const e2 = this.#Kn, i2 = this.#Xn, n2 = this.#Yn, s2 = e2.context;
-    this.#Kn = null;
+    const e2 = this.#Xn, i2 = this.#Yn, n2 = this.#Jn, s2 = e2.context;
     this.#Xn = null;
     this.#Yn = null;
+    this.#Jn = null;
     this.inSMaskMode && this.suspendedCtx === s2 && this.ctx !== s2 && this.endSMaskMode();
     this.inSMaskMode && (this.suspendedCtx = n2);
     this.ctx._removeMirroring();
-    this.ctx.globalCompositeOperation = this.#Jn;
-    this.#Jn = null;
+    this.ctx.globalCompositeOperation = this.#Qn;
+    this.#Qn = null;
     copyCtxState(this.ctx, i2);
     this.ctx = i2;
-    const r2 = this.#ts;
-    this.#ts = null;
-    const a2 = this.#Qn;
-    this.#Qn = 1;
+    const r2 = this.#es;
+    this.#es = null;
+    const a2 = this.#Zn;
+    this.#Zn = 1;
     try {
-      this.#os(n2 ?? i2, e2.canvas, { backdropCanvas: r2?.backdropCtx?.canvas ?? null, backdropOffset: r2?.backdropCtx ? [r2.offsetX, r2.offsetY] : [0, 0], reuseMaskEntry: r2?.knockoutMaskEntry ?? null, poolMeta: r2, knockoutAlpha: a2 });
+      this.#ls(n2 ?? i2, e2.canvas, { backdropCanvas: r2?.backdropCtx?.canvas ?? null, backdropOffset: r2?.backdropCtx ? [r2.offsetX, r2.offsetY] : [0, 0], reuseMaskEntry: r2?.knockoutMaskEntry ?? null, poolMeta: r2, knockoutAlpha: a2 });
     } finally {
       s2.restore();
-      this.#qn--;
+      this.#Kn--;
       r2 || this.canvasFactory.destroy(e2);
     }
   }
   compose(t2) {
     if (!this.current.activeSMask) return;
     t2 = t2 ? [Math.floor(t2[0]), Math.floor(t2[1]), Math.ceil(t2[2]), Math.ceil(t2[3])] : [0, 0, this.ctx.canvas.width, this.ctx.canvas.height];
-    const e2 = this.current.activeSMask, i2 = this.suspendedCtx, n2 = this.#qn > 0 && i2 === this.ctx;
+    const e2 = this.current.activeSMask, i2 = this.suspendedCtx, n2 = this.#Kn > 0 && i2 === this.ctx;
     this.composeSMask(n2 ? null : i2, e2, this.ctx, t2);
     if (!n2) {
       this.ctx.save();
@@ -10579,18 +10625,18 @@ var CanvasGraphics = class _CanvasGraphics {
     let [s2] = i2;
     if (!n2) {
       s2 ||= i2[0] = new Path2D();
-      e2 !== L.stroke && e2 !== L.closeStroke && (this.current.tilingPatternDims = null);
+      e2 !== B.stroke && e2 !== B.closeStroke && (this.current.tilingPatternDims = null);
       this[e2](t2, s2);
       return;
     }
     if (null !== this.dependencyTracker) {
-      const i3 = e2 === L.stroke ? this.current.lineWidth / 2 : 0;
+      const i3 = e2 === B.stroke ? this.current.lineWidth / 2 : 0;
       this.dependencyTracker.resetBBox(t2).recordBBox(t2, this.ctx, n2[0] - i3, n2[2] + i3, n2[1] - i3, n2[3] + i3).recordDependencies(t2, ["transform"]);
     }
     s2 instanceof Path2D || (s2 = i2[0] = makePathFromDrawOPS(s2));
     Util.axialAlignedBoundingBox(n2, getCurrentTransform(this.ctx), this.current.minMax);
     const r2 = this.current.tilingPatternDims;
-    if (r2 && e2 !== L.stroke && e2 !== L.closeStroke && this.current.fillColor instanceof TilingPattern) {
+    if (r2 && e2 !== B.stroke && e2 !== B.closeStroke && this.current.fillColor instanceof TilingPattern) {
       const t3 = Util.intersect(this.current.clipBox, this.current.minMax);
       t3 ? this.current.fillColor.updatePatternDims(t3, r2) : this.current.tilingPatternDims = null;
     }
@@ -10601,12 +10647,12 @@ var CanvasGraphics = class _CanvasGraphics {
     this.ctx.closePath();
   }
   stroke(t2, e2, i2 = true) {
-    const n2 = i2 && this.#ls(this.current.strokeAlpha), s2 = this.ctx, r2 = this.current.strokeColor;
+    const n2 = i2 && this.#hs(this.current.strokeAlpha), s2 = this.ctx, r2 = this.current.strokeColor;
     s2.globalAlpha = this.current.strokeAlpha;
     if (this.contentVisible) if ("object" == typeof r2 && r2?.getPattern) {
       const i3 = r2.isModifyingCurrentTransform() ? s2.getTransform() : null;
       s2.save();
-      s2.strokeStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), Tt, t2);
+      s2.strokeStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), _t, t2);
       if (i3) {
         const t3 = new Path2D();
         t3.addPath(e2, s2.getTransform().invertSelf().multiplySelf(i3));
@@ -10615,19 +10661,19 @@ var CanvasGraphics = class _CanvasGraphics {
       this.rescaleAndStroke(e2, false);
       s2.restore();
     } else this.rescaleAndStroke(e2, true);
-    this.dependencyTracker?.recordDependencies(t2, rt);
-    i2 && this.consumePath(t2, e2, this.current.getClippedPathBoundingBox(Tt, getCurrentTransform(this.ctx)));
+    this.dependencyTracker?.recordDependencies(t2, ot);
+    i2 && this.consumePath(t2, e2, this.current.getClippedPathBoundingBox(_t, getCurrentTransform(this.ctx)));
     s2.globalAlpha = this.current.fillAlpha;
-    this.#hs(n2);
+    this.#cs(n2);
   }
   closeStroke(t2, e2) {
     this.stroke(t2, e2);
   }
   fill(t2, e2, i2 = true) {
-    const n2 = i2 && this.#ls(this.current.fillAlpha), s2 = this.ctx, r2 = this.current.fillColor, a2 = this.current.patternFill;
+    const n2 = i2 && this.#hs(this.current.fillAlpha), s2 = this.ctx, r2 = this.current.fillColor, a2 = this.current.patternFill;
     let o2 = false;
     const l2 = this.current.getClippedPathBoundingBox();
-    this.dependencyTracker?.recordDependencies(t2, ot);
+    this.dependencyTracker?.recordDependencies(t2, lt);
     if (a2) {
       const a3 = this.current.tilingPatternDims, h2 = a3 && r2.canSkipPatternCanvas(a3);
       if (h2) {
@@ -10635,13 +10681,13 @@ var CanvasGraphics = class _CanvasGraphics {
         this.pendingEOFill = false;
         i2 && this.consumePath(t2, e2, l2);
         this.current.tilingPatternDims = null;
-        this.#hs(n2);
+        this.#cs(n2);
         return;
       }
       const c2 = r2.isModifyingCurrentTransform() ? s2.getTransform() : null;
       this.dependencyTracker?.save(t2);
       s2.save();
-      s2.fillStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), St, t2);
+      s2.fillStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), Tt, t2);
       if (c2) {
         const t3 = new Path2D();
         t3.addPath(e2, s2.getTransform().invertSelf().multiplySelf(c2));
@@ -10658,18 +10704,18 @@ var CanvasGraphics = class _CanvasGraphics {
       this.dependencyTracker?.restore(t2);
     }
     i2 && this.consumePath(t2, e2, l2);
-    this.#hs(n2);
+    this.#cs(n2);
   }
   eoFill(t2, e2) {
     this.pendingEOFill = true;
     this.fill(t2, e2);
   }
   fillStroke(t2, e2) {
-    const i2 = this.#ls(Math.min(this.current.fillAlpha, this.current.strokeAlpha));
+    const i2 = this.#hs(Math.min(this.current.fillAlpha, this.current.strokeAlpha));
     this.fill(t2, e2, false);
     this.stroke(t2, e2, false);
     this.consumePath(t2, e2);
-    this.#hs(i2);
+    this.#cs(i2);
   }
   eoFillStroke(t2, e2) {
     this.pendingEOFill = true;
@@ -10686,18 +10732,18 @@ var CanvasGraphics = class _CanvasGraphics {
     this.consumePath(t2, e2);
   }
   rawFillPath(t2, e2) {
-    const i2 = this.#ls(this.current.fillAlpha);
+    const i2 = this.#hs(this.current.fillAlpha);
     this.ctx.fill(e2);
-    this.dependencyTracker?.recordDependencies(t2, ht).recordOperation(t2);
-    this.#hs(i2);
+    this.dependencyTracker?.recordDependencies(t2, ct).recordOperation(t2);
+    this.#cs(i2);
   }
   clip(t2) {
     this.dependencyTracker?.recordFutureForcedDependency("clipMode", t2);
-    this.pendingClip = Rt;
+    this.pendingClip = Bt;
   }
   eoClip(t2) {
     this.dependencyTracker?.recordFutureForcedDependency("clipMode", t2);
-    this.pendingClip = Bt;
+    this.pendingClip = Lt;
   }
   beginText(t2) {
     this.current.textMatrix = null;
@@ -10785,13 +10831,13 @@ var CanvasGraphics = class _CanvasGraphics {
     this.moveText(t2, 0, this.current.leading);
     this.dependencyTracker?.recordIncrementalData("moveText", this.dependencyTracker.getSimpleIndex("leading") ?? t2);
   }
-  #cs(t2, e2, i2) {
+  #ds(t2, e2, i2) {
     const n2 = new Path2D();
     n2.addPath(t2, new DOMMatrix(i2).invertSelf().multiplySelf(e2));
     return n2;
   }
   paintChar(t2, e2, i2, n2, s2, r2) {
-    const a2 = this.ctx, o2 = this.current, l2 = o2.font, h2 = o2.textRenderingMode, c2 = o2.fontSize / o2.fontSizeScale, d2 = h2 & T, u2 = !!(h2 & _), p2 = o2.patternFill && !l2.missingFile, g2 = o2.patternStroke && !l2.missingFile;
+    const a2 = this.ctx, o2 = this.current, l2 = o2.font, h2 = o2.textRenderingMode, c2 = o2.fontSize / o2.fontSizeScale, d2 = h2 & S, u2 = !!(h2 & T), p2 = o2.patternFill && !l2.missingFile, g2 = o2.patternStroke && !l2.missingFile;
     let m2;
     (l2.disableFontFace || u2 || p2 || g2) && !l2.missingFile && (m2 = l2.getPathGenerator(this.commonObjs, e2));
     if (m2 && (l2.disableFontFace || p2 || g2)) {
@@ -10800,31 +10846,31 @@ var CanvasGraphics = class _CanvasGraphics {
       a2.scale(c2, -c2);
       this.dependencyTracker?.recordCharacterBBox(t2, a2, l2);
       let e3;
-      if (d2 === A || d2 === C) if (s2) {
+      if (d2 === x || d2 === E) if (s2) {
         e3 = a2.getTransform();
         a2.setTransform(...s2);
-        const t3 = this.#cs(m2, e3, s2);
+        const t3 = this.#ds(m2, e3, s2);
         a2.fill(t3);
       } else a2.fill(m2);
-      if (d2 === E || d2 === C) if (r2) {
+      if (d2 === A || d2 === E) if (r2) {
         e3 ||= a2.getTransform();
         a2.setTransform(...r2);
         const { a: t3, b: i3, c: n3, d: s3 } = e3, o3 = Util.inverseTransform(r2), l3 = Util.transform([t3, i3, n3, s3, 0, 0], o3);
-        Util.singularValueDecompose2dScale(l3, It);
-        a2.lineWidth *= Math.max(It[0], It[1]) / c2;
-        a2.stroke(this.#cs(m2, e3, r2));
+        Util.singularValueDecompose2dScale(l3, Ft);
+        a2.lineWidth *= Math.max(Ft[0], Ft[1]) / c2;
+        a2.stroke(this.#ds(m2, e3, r2));
       } else {
         a2.lineWidth /= c2;
         a2.stroke(m2);
       }
       a2.restore();
     } else {
-      if (d2 === A || d2 === C) {
+      if (d2 === x || d2 === E) {
         a2.fillText(e2, i2, n2);
         this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2, () => a2.measureText(e2));
       }
-      if (d2 === E || d2 === C) {
-        this.dependencyTracker && this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2, () => a2.measureText(e2)).recordDependencies(t2, rt);
+      if (d2 === A || d2 === E) {
+        this.dependencyTracker && this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2, () => a2.measureText(e2)).recordDependencies(t2, ot);
         a2.strokeText(e2, i2, n2);
       }
     }
@@ -10848,15 +10894,15 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   showText(t2, e2) {
     if (this.dependencyTracker) {
-      this.dependencyTracker.recordDependencies(t2, ct).resetBBox(t2);
-      this.current.textRenderingMode & _ && this.dependencyTracker.recordFutureForcedDependency("textClip", t2).inheritPendingDependenciesAsFutureForcedDependencies();
+      this.dependencyTracker.recordDependencies(t2, dt).resetBBox(t2);
+      this.current.textRenderingMode & T && this.dependencyTracker.recordFutureForcedDependency("textClip", t2).inheritPendingDependenciesAsFutureForcedDependencies();
     }
     const i2 = this.current, n2 = i2.font;
     if (n2.isType3Font) {
-      const n3 = this.#ls(i2.fillAlpha);
+      const n3 = this.#hs(i2.fillAlpha);
       this.showType3Text(t2, e2);
       this.dependencyTracker?.recordShowTextOperation(t2);
-      this.#hs(n3);
+      this.#cs(n3);
       return;
     }
     const s2 = i2.fontSize;
@@ -10864,31 +10910,31 @@ var CanvasGraphics = class _CanvasGraphics {
       this.dependencyTracker?.recordOperation(t2);
       return;
     }
-    const r2 = this.#ls(i2.fillAlpha), a2 = this.ctx, o2 = i2.fontSizeScale, l2 = i2.charSpacing, h2 = i2.wordSpacing, c2 = i2.fontDirection, d2 = i2.textHScale * c2, u2 = e2.length, p2 = n2.vertical, g2 = p2 ? 1 : -1, m2 = n2.defaultVMetrics, f2 = s2 * i2.fontMatrix[0], b2 = i2.textRenderingMode === A && !n2.disableFontFace && !i2.patternFill;
+    const r2 = this.#hs(i2.fillAlpha), a2 = this.ctx, o2 = i2.fontSizeScale, l2 = i2.charSpacing, h2 = i2.wordSpacing, c2 = i2.fontDirection, d2 = i2.textHScale * c2, u2 = e2.length, p2 = n2.vertical, g2 = p2 ? 1 : -1, m2 = n2.defaultVMetrics, f2 = s2 * i2.fontMatrix[0], b2 = i2.textRenderingMode === x && !n2.disableFontFace && !i2.patternFill;
     a2.save();
     i2.textMatrix && a2.transform(...i2.textMatrix);
     a2.translate(i2.x, i2.y + i2.textRise);
     c2 > 0 ? a2.scale(d2, -1) : a2.scale(d2, 1);
     let y2, v2;
-    const w2 = i2.textRenderingMode & T, x2 = w2 === A || w2 === C, S2 = w2 === E || w2 === C;
+    const w2 = i2.textRenderingMode & S, C2 = w2 === x || w2 === E, _2 = w2 === A || w2 === E;
     let k2 = i2.lineWidth;
-    const M2 = i2.textMatrixScale;
-    0 === M2 || 0 === k2 ? S2 && (k2 = this.getSinglePixelWidth()) : k2 /= M2;
+    const D2 = i2.textMatrixScale;
+    0 === D2 || 0 === k2 ? _2 && (k2 = this.getSinglePixelWidth()) : k2 /= D2;
     if (1 !== o2) {
       a2.scale(o2, o2);
       k2 /= o2;
     }
     a2.lineWidth = k2;
-    if (x2 && i2.patternFill) {
+    if (C2 && i2.patternFill) {
       a2.save();
-      const e3 = i2.fillColor.getPattern(a2, this, getCurrentTransformInverse(a2), St, t2);
+      const e3 = i2.fillColor.getPattern(a2, this, getCurrentTransformInverse(a2), Tt, t2);
       y2 = getCurrentTransform(a2);
       a2.restore();
       a2.fillStyle = e3;
     }
-    if (S2 && i2.patternStroke) {
+    if (_2 && i2.patternStroke) {
       a2.save();
-      const e3 = i2.strokeColor.getPattern(a2, this, getCurrentTransformInverse(a2), Tt, t2);
+      const e3 = i2.strokeColor.getPattern(a2, this, getCurrentTransformInverse(a2), _t, t2);
       v2 = getCurrentTransform(a2);
       a2.restore();
       a2.strokeStyle = e3;
@@ -10909,62 +10955,62 @@ var CanvasGraphics = class _CanvasGraphics {
       i2.x += s3 * f2 * d2;
       a2.restore();
       this.compose();
-      this.#hs(r2);
+      this.#cs(r2);
       return;
     }
-    let D2, P2 = 0;
-    for (D2 = 0; D2 < u2; ++D2) {
-      const i3 = e2[D2];
+    let M2, P2 = 0;
+    for (M2 = 0; M2 < u2; ++M2) {
+      const i3 = e2[M2];
       if ("number" == typeof i3) {
         P2 += g2 * i3 * s2 / 1e3;
         continue;
       }
       let r3 = false;
       const d3 = (i3.isSpace ? h2 : 0) + l2, u3 = i3.fontChar, w3 = i3.accent;
-      let x3, A2, E2, C2 = i3.width;
+      let x2, A2, E2, C3 = i3.width;
       if (p2) {
-        const t3 = i3.vmetric || m2, e3 = -(i3.vmetric ? t3[1] : 0.5 * C2) * f2, n3 = t3[2] * f2;
-        C2 = t3 ? -t3[0] : C2;
-        x3 = e3 / o2;
+        const t3 = i3.vmetric || m2, e3 = -(i3.vmetric ? t3[1] : 0.5 * C3) * f2, n3 = t3[2] * f2;
+        C3 = t3 ? -t3[0] : C3;
+        x2 = e3 / o2;
         A2 = (P2 + n3) / o2;
       } else {
-        x3 = P2 / o2;
+        x2 = P2 / o2;
         A2 = 0;
       }
-      if (n2.remeasure && C2 > 0) {
+      if (n2.remeasure && C3 > 0) {
         E2 = a2.measureText(u3);
         const t3 = 1e3 * E2.width / s2 * o2;
-        if (C2 < t3 && this.isFontSubpixelAAEnabled) {
-          const e3 = C2 / t3;
+        if (C3 < t3 && this.isFontSubpixelAAEnabled) {
+          const e3 = C3 / t3;
           r3 = true;
           a2.save();
           a2.scale(e3, 1);
-          x3 /= e3;
-        } else C2 !== t3 && (x3 += (C2 - t3) / 2e3 * s2 / o2);
+          x2 /= e3;
+        } else C3 !== t3 && (x2 += (C3 - t3) / 2e3 * s2 / o2);
       }
       if (this.contentVisible && (i3.isInFont || n2.missingFile)) if (b2 && !w3) {
-        a2.fillText(u3, x3, A2);
-        this.dependencyTracker?.recordCharacterBBox(t2, a2, E2 ? { bbox: null } : n2, s2 / o2, x3, A2, () => E2 ?? a2.measureText(u3));
+        a2.fillText(u3, x2, A2);
+        this.dependencyTracker?.recordCharacterBBox(t2, a2, E2 ? { bbox: null } : n2, s2 / o2, x2, A2, () => E2 ?? a2.measureText(u3));
       } else {
-        this.paintChar(t2, u3, x3, A2, y2, v2);
+        this.paintChar(t2, u3, x2, A2, y2, v2);
         if (w3) {
-          const e3 = x3 + s2 * w3.offset.x / o2, i4 = A2 - s2 * w3.offset.y / o2;
+          const e3 = x2 + s2 * w3.offset.x / o2, i4 = A2 - s2 * w3.offset.y / o2;
           this.paintChar(t2, w3.fontChar, e3, i4, y2, v2);
         }
       }
-      P2 += p2 ? C2 * f2 - d3 * c2 : C2 * f2 + d3 * c2;
+      P2 += p2 ? C3 * f2 - d3 * c2 : C3 * f2 + d3 * c2;
       r3 && a2.restore();
     }
     p2 ? i2.y -= P2 : i2.x += P2 * d2;
     a2.restore();
     this.compose();
     this.dependencyTracker?.recordShowTextOperation(t2);
-    this.#hs(r2);
+    this.#cs(r2);
   }
   showType3Text(t2, e2) {
     const i2 = this.ctx, n2 = this.current, s2 = n2.font, a2 = n2.fontSize, o2 = n2.fontDirection, l2 = s2.vertical ? 1 : -1, h2 = n2.charSpacing, c2 = n2.wordSpacing, d2 = n2.textHScale * o2, u2 = n2.fontMatrix || r, p2 = e2.length;
     let g2, m2, f2, b2;
-    if (n2.textRenderingMode === S || 0 === a2) return;
+    if (n2.textRenderingMode === C || 0 === a2) return;
     this._cachedScaleForStroking[0] = -1;
     this._cachedGetSinglePixelWidth = null;
     i2.save();
@@ -10985,7 +11031,7 @@ var CanvasGraphics = class _CanvasGraphics {
       if (r2) {
         if (this.contentVisible) {
           this.save();
-          if (r2.fnArray[0] === L.setCharWidth) {
+          if (r2.fnArray[0] === B.setCharWidth) {
             n2.fillAlpha = n2.strokeAlpha = 1;
             i2.globalAlpha = 1;
           }
@@ -11055,31 +11101,26 @@ var CanvasGraphics = class _CanvasGraphics {
     this.current.tilingPatternDims = null;
   }
   _getPattern(t2, e2, i2 = null) {
-    let n2;
-    if (this.cachedPatterns.has(e2)) n2 = this.cachedPatterns.get(e2);
-    else {
-      n2 = (function getShadingPattern(t3) {
-        switch (t3[0]) {
-          case "RadialAxial":
-            return new RadialAxialShadingPattern(t3);
-          case "Mesh":
-            return new MeshShadingPattern(t3);
-          case "Dummy":
-            return new DummyShadingPattern();
-        }
-        throw new Error(`Unknown IR type: ${t3[0]}`);
-      })(this.getObject(t2, e2));
-      this.cachedPatterns.set(e2, n2);
-    }
+    const n2 = this.cachedPatterns.getOrInsertComputed(e2, () => (function getShadingPattern(t3) {
+      switch (t3[0]) {
+        case "RadialAxial":
+          return new RadialAxialShadingPattern(t3);
+        case "Mesh":
+          return new MeshShadingPattern(t3);
+        case "Dummy":
+          return new DummyShadingPattern();
+      }
+      throw new Error(`Unknown IR type: ${t3[0]}`);
+    })(this.getObject(t2, e2)));
     i2 && (n2.matrix = i2);
     return n2;
   }
   shadingFill(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = this.#ls(this.current.fillAlpha), n2 = this.ctx;
+    const i2 = this.#hs(this.current.fillAlpha), n2 = this.ctx;
     this.save(t2);
     const r2 = this._getPattern(t2, e2);
-    n2.fillStyle = r2.getPattern(n2, this, getCurrentTransformInverse(n2), _t, t2);
+    n2.fillStyle = r2.getPattern(n2, this, getCurrentTransformInverse(n2), kt, t2);
     const a2 = getCurrentTransformInverse(n2);
     if (a2) {
       const { width: t3, height: e3 } = n2.canvas, i3 = s.slice();
@@ -11087,10 +11128,10 @@ var CanvasGraphics = class _CanvasGraphics {
       const [r3, o2, l2, h2] = i3;
       this.ctx.fillRect(r3, o2, l2 - r3, h2 - o2);
     } else this.ctx.fillRect(-1e10, -1e10, 2e10, 2e10);
-    this.dependencyTracker?.resetBBox(t2).recordFullPageBBox(t2).recordDependencies(t2, dt).recordDependencies(t2, ot).recordOperation(t2);
+    this.dependencyTracker?.resetBBox(t2).recordFullPageBBox(t2).recordDependencies(t2, ut).recordDependencies(t2, lt).recordOperation(t2);
     this.compose(this.current.getClippedPathBoundingBox());
     this.restore(t2);
-    this.#hs(i2);
+    this.#cs(i2);
   }
   beginInlineImage() {
     unreachable("Should not call beginInlineImage");
@@ -11129,7 +11170,7 @@ var CanvasGraphics = class _CanvasGraphics {
       this.current.activeSMask = null;
     }
     const n2 = this.ctx;
-    if (!(e2.needsIsolation && (e2.isolated || e2.hasSoftMask) || e2.knockout || e2.isGray || 0 !== this.#$n || 1 !== n2.globalAlpha || "source-over" !== n2.globalCompositeOperation || i2)) {
+    if (!(e2.needsIsolation && (e2.isolated || e2.hasSoftMask) || e2.knockout || e2.isGray || 0 !== this.#qn || 1 !== n2.globalAlpha || "source-over" !== n2.globalCompositeOperation || i2)) {
       if (e2.bbox) {
         let t3 = new Path2D();
         const [i3, s2, r3, a3] = e2.bbox;
@@ -11142,11 +11183,11 @@ var CanvasGraphics = class _CanvasGraphics {
         n2.clip(t3);
       }
       this.groupStack.push(null);
-      this.#es.push(null);
+      this.#is.push(null);
       this.groupLevel++;
       return;
     }
-    e2.isolated || e2.knockout || 0 !== this.#$n || info("TODO: Fully support non-isolated non-knockout groups.");
+    e2.isolated || e2.knockout || 0 !== this.#qn || info("TODO: Fully support non-isolated non-knockout groups.");
     const r2 = getCurrentTransform(n2);
     e2.matrix && n2.transform(...e2.matrix);
     const a2 = [0, 0, n2.canvas.width, n2.canvas.height];
@@ -11160,11 +11201,12 @@ var CanvasGraphics = class _CanvasGraphics {
     this.current.startNewPathAndClipBox([0, 0, c2, d2]);
     const u2 = this.canvasFactory.create(c2, d2);
     e2.smask && this.smaskGroupCanvases.push(u2);
-    const p2 = u2.context, g2 = e2.knockout && !e2.isolated ? n2 : null, m2 = !e2.isolated && !e2.knockout && !e2.smask && e2.needsIsolation && this.#$n > 0, f2 = e2.knockout ? this.canvasFactory.create(c2, d2) : null, b2 = this.#$n;
-    e2.knockout ? this.#$n++ : this.#$n = 0;
+    const p2 = u2.context, g2 = e2.knockout && !e2.isolated ? n2 : null, m2 = !e2.isolated && !e2.knockout && !e2.smask && e2.needsIsolation && this.#qn > 0, f2 = e2.knockout ? this.canvasFactory.create(c2, d2) : null, b2 = this.#qn;
+    e2.knockout ? this.#qn++ : this.#qn = 0;
     p2.translate(-l2, -h2);
     p2.transform(...r2);
-    if (!e2.isolated && !e2.smask && i2 && e2.needsIsolation) {
+    const y2 = !e2.isolated && !e2.smask && e2.needsIsolation, v2 = y2 && !i2 && 0 === b2 && !e2.knockout && !e2.isGray && e2.hasSoftMask && 1 === n2.globalAlpha && "source-over" === n2.globalCompositeOperation && "none" === this.current.transferMaps;
+    if (y2 && (i2 || v2)) {
       p2.save();
       p2.setTransform(1, 0, 0, 1, 0, 0);
       p2.drawImage(n2.canvas, -l2, -h2);
@@ -11192,16 +11234,16 @@ var CanvasGraphics = class _CanvasGraphics {
     this.dependencyTracker?.inheritSimpleDataAsFutureForcedDependencies(["fillAlpha", "strokeAlpha", "globalCompositeOperation"]).pushBaseTransform(n2);
     this.setGState(t2, [["BM", "source-over"], ["ca", 1], ["CA", 1], ["TR", null]]);
     this.groupStack.push(n2);
-    this.#es.push({ backdropCtx: g2, savedKnockoutLevel: b2, offsetX: l2, offsetY: h2, hasInnerBackdrop: m2, knockoutMaskEntry: f2, knockoutTempEntry: null, knockoutBackdropEntry: null });
+    this.#is.push({ backdropCtx: g2, savedKnockoutLevel: b2, offsetX: l2, offsetY: h2, hasInnerBackdrop: m2, replaceBackdrop: v2, knockoutMaskEntry: f2, knockoutTempEntry: null, knockoutBackdropEntry: null });
     this.groupLevel++;
   }
   endGroup(t2, e2) {
     if (!this.contentVisible) return;
     this.groupLevel--;
-    const i2 = this.ctx, n2 = this.groupStack.pop(), r2 = this.#es.pop();
-    r2 && (this.#$n = r2.savedKnockoutLevel);
+    const i2 = this.ctx, n2 = this.groupStack.pop(), r2 = this.#is.pop();
+    r2 && (this.#qn = r2.savedKnockoutLevel);
     if (null !== n2) {
-      e2.isGray && this.#ds(i2);
+      e2.isGray && this.#us(i2);
       this.ctx = n2;
       this.ctx.imageSmoothingEnabled = false;
       this.dependencyTracker?.popBaseTransform();
@@ -11212,7 +11254,7 @@ var CanvasGraphics = class _CanvasGraphics {
           this.ctx.restore();
           this.inSMaskMode && this.ctx.setTransform(this.suspendedCtx.getTransform());
         }
-        this.#ns(r2);
+        this.#ss(r2);
       } else {
         this.ctx.restore();
         const e3 = getCurrentTransform(this.ctx);
@@ -11221,13 +11263,13 @@ var CanvasGraphics = class _CanvasGraphics {
         this.ctx.setTransform(...e3);
         const a2 = s.slice();
         Util.axialAlignedBoundingBox([0, 0, i2.canvas.width, i2.canvas.height], e3, a2);
-        const o2 = this.#es.at(-1);
-        if (this.#$n > 0) if (r2.hasInnerBackdrop) {
+        const o2 = this.#is.at(-1);
+        if (this.#qn > 0) if (r2.hasInnerBackdrop) {
           const { width: t3, height: s2 } = i2.canvas, a3 = this.canvasFactory.create(t3, s2), o3 = a3.context;
           o3.drawImage(n2.canvas, r2.offsetX, r2.offsetY, t3, s2, 0, 0, t3, s2);
           o3.globalCompositeOperation = "source-over";
           o3.drawImage(i2.canvas, 0, 0);
-          const l2 = this.#rs(i2.canvas);
+          const l2 = this.#as(i2.canvas);
           o3.globalCompositeOperation = "destination-in";
           o3.drawImage(l2.canvas, 0, 0);
           const h2 = this.ctx.globalCompositeOperation, c2 = this.ctx.globalAlpha, d2 = this.ctx.filter;
@@ -11246,17 +11288,25 @@ var CanvasGraphics = class _CanvasGraphics {
           this.canvasFactory.destroy(a3);
         } else {
           const t3 = o2?.backdropCtx ?? null;
-          this.#os(this.ctx, i2.canvas, { backdropCanvas: t3?.canvas ?? null, destTransform: e3, backdropOffset: t3 ? [o2.offsetX + r2.offsetX, o2.offsetY + r2.offsetY] : [0, 0], sourceAlpha: this.ctx.globalAlpha, sourceFilter: this.ctx.filter });
+          this.#ls(this.ctx, i2.canvas, { backdropCanvas: t3?.canvas ?? null, destTransform: e3, backdropOffset: t3 ? [o2.offsetX + r2.offsetX, o2.offsetY + r2.offsetY] : [0, 0], sourceAlpha: this.ctx.globalAlpha, sourceFilter: this.ctx.filter });
         }
-        else this.ctx.drawImage(i2.canvas, 0, 0);
+        else {
+          if (r2.replaceBackdrop) {
+            const t3 = new Path2D();
+            t3.rect(0, 0, i2.canvas.width, i2.canvas.height);
+            this.ctx.clip(t3);
+            this.ctx.globalCompositeOperation = "copy";
+          }
+          this.ctx.drawImage(i2.canvas, 0, 0);
+        }
         this.ctx.restore();
         this.canvasFactory.destroy({ canvas: i2.canvas, context: i2 });
-        this.#ns(r2);
+        this.#ss(r2);
         this.compose(a2);
       }
     } else this.restore(t2);
   }
-  #ds(t2) {
+  #us(t2) {
     const { canvas: e2 } = t2, { width: i2, height: n2 } = e2;
     if (FeatureTest.isCanvasFilterSupported) {
       t2.save();
@@ -11275,7 +11325,7 @@ var CanvasGraphics = class _CanvasGraphics {
     }
     t2.putImageData(s2, 0, 0);
   }
-  #ns(t2) {
+  #ss(t2) {
     if (t2) {
       if (t2.knockoutMaskEntry) {
         this.canvasFactory.destroy(t2.knockoutMaskEntry);
@@ -11292,7 +11342,7 @@ var CanvasGraphics = class _CanvasGraphics {
     }
   }
   beginAnnotation(t2, e2, i2, n2, s2, r2, a2) {
-    this.#is();
+    this.#ns();
     resetCtxToDefault(this.ctx);
     this.ctx.save();
     this.save(t2);
@@ -11305,7 +11355,7 @@ var CanvasGraphics = class _CanvasGraphics {
         (i2 = i2.slice())[0] = i2[1] = 0;
         i2[2] = s3;
         i2[3] = o2;
-        Util.singularValueDecompose2dScale(getCurrentTransform(this.ctx), It);
+        Util.singularValueDecompose2dScale(getCurrentTransform(this.ctx), Ft);
         const { viewportScale: t3 } = this, r3 = Math.ceil(s3 * this.outputScaleX * t3), l2 = Math.ceil(o2 * this.outputScaleY * t3);
         this.annotationCanvas = this.canvasFactory.create(r3, l2);
         const { canvas: h2, context: c2 } = this.annotationCanvas;
@@ -11318,7 +11368,7 @@ var CanvasGraphics = class _CanvasGraphics {
         this.annotationCanvas.savedCtx = this.ctx;
         this.ctx = c2;
         this.ctx.save();
-        this.ctx.setTransform(It[0], 0, 0, -It[1], 0, o2 * It[1]);
+        this.ctx.setTransform(Ft[0], 0, 0, -Ft[1], 0, o2 * Ft[1]);
         resetCtxToDefault(this.ctx);
       } else {
         resetCtxToDefault(this.ctx);
@@ -11337,7 +11387,7 @@ var CanvasGraphics = class _CanvasGraphics {
   endAnnotation(t2) {
     if (this.annotationCanvas) {
       this.ctx.restore();
-      this.#ss();
+      this.#rs();
       this.ctx = this.annotationCanvas.savedCtx;
       delete this.annotationCanvas.savedCtx;
       delete this.annotationCanvas;
@@ -11348,7 +11398,7 @@ var CanvasGraphics = class _CanvasGraphics {
     if (!this.contentVisible) return;
     const i2 = e2.count;
     (e2 = this.getObject(t2, e2.data, e2)).count = i2;
-    const n2 = this.#ls(this.current.fillAlpha), s2 = this.ctx, r2 = this._createMaskCanvas(t2, e2), a2 = r2.canvas;
+    const n2 = this.#hs(this.current.fillAlpha), s2 = this.ctx, r2 = this._createMaskCanvas(t2, e2), a2 = r2.canvas;
     s2.save();
     s2.setTransform(1, 0, 0, 1, 0, 0);
     s2.drawImage(a2, r2.offsetX, r2.offsetY);
@@ -11356,12 +11406,12 @@ var CanvasGraphics = class _CanvasGraphics {
     s2.restore();
     r2.canvasEntry && this.canvasFactory.destroy(r2.canvasEntry);
     this.compose();
-    this.#hs(n2);
+    this.#cs(n2);
   }
   paintImageMaskXObjectRepeat(t2, e2, i2, n2 = 0, s2 = 0, r2, a2) {
     if (!this.contentVisible) return;
     e2 = this.getObject(t2, e2.data, e2);
-    const o2 = this.#ls(this.current.fillAlpha), l2 = this.ctx;
+    const o2 = this.#hs(this.current.fillAlpha), l2 = this.ctx;
     l2.save();
     const h2 = getCurrentTransform(l2);
     l2.transform(i2, n2, s2, r2, 0, 0);
@@ -11377,18 +11427,18 @@ var CanvasGraphics = class _CanvasGraphics {
     c2.canvasEntry && this.canvasFactory.destroy(c2.canvasEntry);
     this.compose();
     this.dependencyTracker?.recordOperation(t2);
-    this.#hs(o2);
+    this.#cs(o2);
   }
   paintImageMaskXObjectGroup(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = this.#ls(this.current.fillAlpha), n2 = this.ctx, s2 = this.current.fillColor, r2 = this.current.patternFill;
-    this.dependencyTracker?.resetBBox(t2).recordDependencies(t2, ut);
+    const i2 = this.#hs(this.current.fillAlpha), n2 = this.ctx, s2 = this.current.fillColor, r2 = this.current.patternFill;
+    this.dependencyTracker?.resetBBox(t2).recordDependencies(t2, pt);
     for (const i3 of e2) {
       const { data: e3, width: a2, height: o2, transform: l2 } = i3, h2 = this.canvasFactory.create(a2, o2), c2 = h2.context;
       c2.save();
       putBinaryImageMask(c2, this.getObject(t2, e3, i3));
       c2.globalCompositeOperation = "source-in";
-      c2.fillStyle = r2 ? s2.getPattern(c2, this, getCurrentTransformInverse(n2), St, t2) : s2;
+      c2.fillStyle = r2 ? s2.getPattern(c2, this, getCurrentTransformInverse(n2), Tt, t2) : s2;
       c2.fillRect(0, 0, a2, o2);
       c2.restore();
       n2.save();
@@ -11401,7 +11451,7 @@ var CanvasGraphics = class _CanvasGraphics {
     }
     this.compose();
     this.dependencyTracker?.recordOperation(t2);
-    this.#hs(i2);
+    this.#cs(i2);
   }
   paintImageXObject(t2, e2) {
     if (!this.contentVisible) return;
@@ -11437,7 +11487,7 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   paintInlineImageXObject(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = e2.width, n2 = e2.height, s2 = this.#ls(this.current.fillAlpha), r2 = this.ctx;
+    const i2 = e2.width, n2 = e2.height, s2 = this.#hs(this.current.fillAlpha), r2 = this.ctx;
     this.save(t2);
     const { filter: a2 } = r2;
     "none" !== a2 && "" !== a2 && (r2.filter = "none");
@@ -11456,7 +11506,7 @@ var CanvasGraphics = class _CanvasGraphics {
     const h2 = this._scaleImage(o2, getCurrentTransformInverse(r2));
     r2.imageSmoothingEnabled = getImageSmoothingEnabled(getCurrentTransform(r2), e2.interpolate);
     if (this.dependencyTracker) {
-      this.dependencyTracker.resetBBox(t2).recordBBox(t2, r2, 0, i2, -n2, 0).recordDependencies(t2, lt).recordOperation(t2);
+      this.dependencyTracker.resetBBox(t2).recordBBox(t2, r2, 0, i2, -n2, 0).recordDependencies(t2, ht).recordOperation(t2);
       this.imagesTracker?.record(r2, i2, n2, this.dependencyTracker.clipBox);
     }
     drawImageAtIntegerCoords(r2, h2.img, 0, 0, h2.paintWidth, h2.paintHeight, 0, -n2, i2, n2);
@@ -11464,11 +11514,11 @@ var CanvasGraphics = class _CanvasGraphics {
     l2 && this.canvasFactory.destroy(l2);
     this.compose();
     this.restore(t2);
-    this.#hs(s2);
+    this.#cs(s2);
   }
   paintInlineImageXObjectGroup(t2, e2, i2) {
     if (!this.contentVisible) return;
-    const n2 = this.#ls(this.current.fillAlpha), s2 = this.ctx;
+    const n2 = this.#hs(this.current.fillAlpha), s2 = this.ctx;
     let r2, a2 = null;
     if (e2.bitmap) r2 = e2.bitmap;
     else {
@@ -11489,15 +11539,15 @@ var CanvasGraphics = class _CanvasGraphics {
     a2 && this.canvasFactory.destroy(a2);
     this.dependencyTracker?.recordOperation(t2);
     this.compose();
-    this.#hs(n2);
+    this.#cs(n2);
   }
   paintSolidColorImageMask(t2) {
     if (!this.contentVisible) return;
-    const e2 = this.#ls(this.current.fillAlpha);
-    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, 0, 1, 0, 1).recordDependencies(t2, ot).recordOperation(t2);
+    const e2 = this.#hs(this.current.fillAlpha);
+    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, 0, 1, 0, 1).recordDependencies(t2, lt).recordOperation(t2);
     this.ctx.fillRect(0, 0, 1, 1);
     this.compose();
-    this.#hs(e2);
+    this.#cs(e2);
   }
   markPoint(t2, e2) {
   }
@@ -11527,7 +11577,7 @@ var CanvasGraphics = class _CanvasGraphics {
     this.pendingClip || this.compose(i2);
     const s2 = this.ctx;
     if (this.pendingClip) {
-      n2 || (this.pendingClip === Bt ? s2.clip(e2, "evenodd") : s2.clip(e2));
+      n2 || (this.pendingClip === Lt ? s2.clip(e2, "evenodd") : s2.clip(e2));
       this.pendingClip = null;
       this.dependencyTracker?.bboxToClipBoxDropOperation(t2).recordFutureForcedDependency("clipPath", t2);
     } else this.dependencyTracker?.recordOperation(t2);
@@ -11589,10 +11639,10 @@ var CanvasGraphics = class _CanvasGraphics {
     const a2 = i2.getLineDash();
     e2 && i2.save();
     i2.scale(s2, r2);
-    Pt.a = 1 / s2;
-    Pt.d = 1 / r2;
+    It.a = 1 / s2;
+    It.d = 1 / r2;
     const o2 = new Path2D();
-    o2.addPath(t2, Pt);
+    o2.addPath(t2, It);
     if (a2.length > 0) {
       const t3 = Math.max(s2, r2);
       i2.setLineDash(a2.map((e3) => e3 / t3));
@@ -11607,28 +11657,28 @@ var CanvasGraphics = class _CanvasGraphics {
     return true;
   }
 };
-for (const t2 in L) void 0 !== CanvasGraphics.prototype[t2] && (CanvasGraphics.prototype[L[t2]] = CanvasGraphics.prototype[t2]);
+for (const t2 in B) void 0 !== CanvasGraphics.prototype[t2] && (CanvasGraphics.prototype[B[t2]] = CanvasGraphics.prototype[t2]);
 var BasePDFStream = class {
-  #us = null;
   #ps = null;
+  #gs = null;
   _fullReader = null;
   _rangeReaders = /* @__PURE__ */ new Set();
   _source = null;
   constructor(t2, e2, i2) {
     this._source = t2;
-    this.#us = e2;
-    this.#ps = i2;
+    this.#ps = e2;
+    this.#gs = i2;
   }
   get _progressiveDataLength() {
     return this._fullReader?._loaded ?? 0;
   }
   getFullReader() {
     assert(!this._fullReader, "BasePDFStream.getFullReader can only be called once.");
-    return this._fullReader = new this.#us(this);
+    return this._fullReader = new this.#ps(this);
   }
   getRangeReader(t2, e2) {
     if (e2 <= this._progressiveDataLength) return null;
-    const i2 = new this.#ps(this, t2, e2);
+    const i2 = new this.#gs(this, t2, e2);
     this._rangeReaders.add(i2);
     return i2;
   }
@@ -11921,7 +11971,7 @@ var PDFDataTransportStream = class extends BasePDFStream {
       switch (t3.type) {
         case "range":
         case "progressiveRead":
-          this.#gs(t3.begin, t3.chunk);
+          this.#ms(t3.begin, t3.chunk);
           break;
         case "progressiveDone":
           this._fullReader?.progressiveDone();
@@ -11929,7 +11979,7 @@ var PDFDataTransportStream = class extends BasePDFStream {
       }
     });
   }
-  #gs(t2, e2) {
+  #ms(t2, e2) {
     const i2 = transport_stream_getArrayBuffer(e2);
     if (void 0 === t2) this._fullReader ? this._fullReader._enqueue(i2) : this._queuedChunks.push(i2);
     else {
@@ -11957,7 +12007,7 @@ var PDFDataTransportStream = class extends BasePDFStream {
   }
 };
 var PDFDataTransportStreamReader = class extends BasePDFStreamReader {
-  #ms = endRequests.bind(this);
+  #fs = endRequests.bind(this);
   _done = false;
   _queuedChunks = null;
   _requests = [];
@@ -11997,15 +12047,15 @@ var PDFDataTransportStreamReader = class extends BasePDFStreamReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#ms();
+    this.#fs();
   }
   progressiveDone() {
     this._done ||= true;
-    0 === this._queuedChunks.length && this.#ms();
+    0 === this._queuedChunks.length && this.#fs();
   }
 };
 var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
-  #ms = endRequests.bind(this);
+  #fs = endRequests.bind(this);
   onDone = null;
   _begin = -1;
   _done = false;
@@ -12020,7 +12070,7 @@ var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
       if (0 === this._requests.length) this._queuedChunk = t2;
       else {
         this._requests.shift().resolve({ value: t2, done: false });
-        this.#ms();
+        this.#fs();
       }
       this._done = true;
       this.onDone?.();
@@ -12039,12 +12089,12 @@ var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#ms();
+    this.#fs();
     this.onDone?.();
   }
 };
 var PDFNetworkStream = class extends BasePDFStream {
-  #fs = /* @__PURE__ */ new WeakMap();
+  #bs = /* @__PURE__ */ new WeakMap();
   _responseOrigin = null;
   constructor(t2) {
     super(t2, PDFNetworkStreamReader, PDFNetworkStreamRangeReader);
@@ -12055,7 +12105,7 @@ var PDFNetworkStream = class extends BasePDFStream {
   }
   _request(t2) {
     const e2 = new XMLHttpRequest(), i2 = { validateStatus: null, onHeadersReceived: t2.onHeadersReceived, onDone: t2.onDone, onError: t2.onError, onProgress: t2.onProgress };
-    this.#fs.set(e2, i2);
+    this.#bs.set(e2, i2);
     e2.open("GET", this.url);
     e2.withCredentials = this._source.withCredentials;
     for (const [t3, i3] of this.headers) e2.setRequestHeader(t3, i3);
@@ -12066,25 +12116,25 @@ var PDFNetworkStream = class extends BasePDFStream {
     e2.responseType = "arraybuffer";
     assert(t2.onError, "Expected `onError` callback to be provided.");
     e2.onerror = () => t2.onError(e2.status);
-    e2.onreadystatechange = this.#bs.bind(this, e2);
-    e2.onprogress = this.#ys.bind(this, e2);
+    e2.onreadystatechange = this.#ys.bind(this, e2);
+    e2.onprogress = this.#vs.bind(this, e2);
     e2.send(null);
     return e2;
   }
-  #ys(t2, e2) {
-    const i2 = this.#fs.get(t2);
+  #vs(t2, e2) {
+    const i2 = this.#bs.get(t2);
     i2?.onProgress?.(e2);
   }
-  #bs(t2, e2) {
-    const i2 = this.#fs.get(t2);
+  #ys(t2, e2) {
+    const i2 = this.#bs.get(t2);
     if (!i2) return;
     if (t2.readyState >= 2 && i2.onHeadersReceived) {
       i2.onHeadersReceived();
       delete i2.onHeadersReceived;
     }
     if (4 !== t2.readyState) return;
-    if (!this.#fs.has(t2)) return;
-    this.#fs.delete(t2);
+    if (!this.#bs.has(t2)) return;
+    this.#bs.delete(t2);
     if (0 === t2.status && this.isHttp) {
       i2.onError(t2.status);
       return;
@@ -12107,8 +12157,8 @@ var PDFNetworkStream = class extends BasePDFStream {
     } else s2 ? i2.onDone(s2) : i2.onError(t2.status);
   }
   _abortRequest(t2) {
-    if (this.#fs.has(t2)) {
-      this.#fs.delete(t2);
+    if (this.#bs.has(t2)) {
+      this.#bs.delete(t2);
       t2.abort();
     }
   }
@@ -12119,16 +12169,16 @@ var PDFNetworkStream = class extends BasePDFStream {
   }
 };
 var PDFNetworkStreamReader = class extends BasePDFStreamReader {
-  #ms = endRequests.bind(this);
+  #fs = endRequests.bind(this);
   _cachedChunks = [];
   _done = false;
   _requests = [];
   _storedError = null;
   constructor(t2) {
     super(t2);
-    this._fullRequestXhr = t2._request({ onHeadersReceived: this.#vs.bind(this), onDone: this.#ws.bind(this), onError: this.#xs.bind(this), onProgress: this.#ys.bind(this) });
+    this._fullRequestXhr = t2._request({ onHeadersReceived: this.#ws.bind(this), onDone: this.#xs.bind(this), onError: this.#As.bind(this), onProgress: this.#vs.bind(this) });
   }
-  #vs() {
+  #ws() {
     const t2 = this._stream, { disableRange: e2, rangeChunkSize: i2 } = t2._source, n2 = this._fullRequestXhr;
     t2._responseOrigin = getResponseOrigin(n2.responseURL);
     const s2 = n2.getAllResponseHeaders(), r2 = new Headers(s2 ? s2.trimStart().replace(/[^\S ]+$/, "").split(/[\r\n]+/).map((t3) => {
@@ -12141,21 +12191,21 @@ var PDFNetworkStreamReader = class extends BasePDFStreamReader {
     this._isRangeSupported && t2._abortRequest(n2);
     this._headersCapability.resolve();
   }
-  #ws(t2) {
+  #xs(t2) {
     if (this._requests.length > 0) {
       this._requests.shift().resolve({ value: t2, done: false });
     } else this._cachedChunks.push(t2);
     this._done = true;
-    0 === this._cachedChunks.length && this.#ms();
+    0 === this._cachedChunks.length && this.#fs();
   }
-  #xs(t2) {
+  #As(t2) {
     this._storedError = createResponseError(t2, this._stream.url);
     this._headersCapability.reject(this._storedError);
     for (const t3 of this._requests) t3.reject(this._storedError);
     this._requests.length = 0;
     this._cachedChunks.length = 0;
   }
-  #ys(t2) {
+  #vs(t2) {
     this.onProgress?.({ loaded: t2.loaded, total: t2.lengthComputable ? t2.total : this._contentLength });
   }
   async read() {
@@ -12172,13 +12222,13 @@ var PDFNetworkStreamReader = class extends BasePDFStreamReader {
   cancel(t2) {
     this._done = true;
     this._headersCapability.reject(t2);
-    this.#ms();
+    this.#fs();
     this._stream._abortRequest(this._fullRequestXhr);
     this._fullRequestXhr = null;
   }
 };
 var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
-  #ms = endRequests.bind(this);
+  #fs = endRequests.bind(this);
   onClosed = null;
   _done = false;
   _queuedChunk = null;
@@ -12186,26 +12236,26 @@ var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
   _storedError = null;
   constructor(t2, e2, i2) {
     super(t2, e2, i2);
-    this._requestXhr = t2._request({ begin: e2, end: i2, onHeadersReceived: this.#vs.bind(this), onDone: this.#ws.bind(this), onError: this.#xs.bind(this), onProgress: null });
+    this._requestXhr = t2._request({ begin: e2, end: i2, onHeadersReceived: this.#ws.bind(this), onDone: this.#xs.bind(this), onError: this.#As.bind(this), onProgress: null });
   }
-  #vs() {
+  #ws() {
     const t2 = getResponseOrigin(this._requestXhr?.responseURL);
     try {
       ensureResponseOrigin(t2, this._stream._responseOrigin);
     } catch (t3) {
       this._storedError = t3;
-      this.#xs(0);
+      this.#As(0);
     }
   }
-  #ws(t2) {
+  #xs(t2) {
     if (this._requests.length > 0) {
       this._requests.shift().resolve({ value: t2, done: false });
     } else this._queuedChunk = t2;
     this._done = true;
-    this.#ms();
+    this.#fs();
     this.onClosed?.();
   }
-  #xs(t2) {
+  #As(t2) {
     this._storedError ??= createResponseError(t2, this._stream.url);
     for (const t3 of this._requests) t3.reject(this._storedError);
     this._requests.length = 0;
@@ -12225,7 +12275,7 @@ var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#ms();
+    this.#fs();
     this._stream._abortRequest(this._requestXhr);
     this.onClosed?.();
   }
@@ -12296,110 +12346,110 @@ var PDFNodeStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
 };
 var GlobalWorkerOptions = class {
-  static #As = null;
-  static #Es = "";
+  static #Es = null;
+  static #Cs = "";
   static get workerPort() {
-    return this.#As;
+    return this.#Es;
   }
   static set workerPort(t2) {
     if (!("undefined" != typeof Worker && t2 instanceof Worker) && null !== t2) throw new Error("Invalid `workerPort` type.");
-    this.#As = t2;
+    this.#Es = t2;
   }
   static get workerSrc() {
-    return this.#Es;
+    return this.#Cs;
   }
   static set workerSrc(t2) {
     if ("string" != typeof t2) throw new Error("Invalid `workerSrc` type.");
-    this.#Es = t2;
+    this.#Cs = t2;
   }
 };
 var Metadata = class {
-  #Cs;
   #Ss;
+  #Ts;
   constructor({ parsedData: t2, rawData: e2 }) {
-    this.#Cs = t2;
-    this.#Ss = e2;
+    this.#Ss = t2;
+    this.#Ts = e2;
   }
   getRaw() {
-    return this.#Ss;
+    return this.#Ts;
   }
   get(t2) {
-    return this.#Cs.get(t2) ?? null;
+    return this.#Ss.get(t2) ?? null;
   }
   [Symbol.iterator]() {
-    return this.#Cs.entries();
+    return this.#Ss.entries();
   }
 };
-var Lt = /* @__PURE__ */ Symbol("INTERNAL");
+var Nt = /* @__PURE__ */ Symbol("INTERNAL");
 var OptionalContentGroup = class {
-  #Ts = false;
   #_s = false;
   #ks = false;
+  #Ds = false;
   #Ms = true;
   constructor(t2, { name: e2, intent: i2, usage: n2, rbGroups: s2 }) {
-    this.#Ts = !!(t2 & h);
-    this.#_s = !!(t2 & c);
+    this.#_s = !!(t2 & l);
+    this.#ks = !!(t2 & h);
     this.name = e2;
     this.intent = i2;
     this.usage = n2;
     this.rbGroups = s2;
   }
   get visible() {
-    if (this.#ks) return this.#Ms;
+    if (this.#Ds) return this.#Ms;
     if (!this.#Ms) return false;
     const { print: t2, view: e2 } = this.usage;
-    return this.#Ts ? "OFF" !== e2?.viewState : !this.#_s || "OFF" !== t2?.printState;
+    return this.#_s ? "OFF" !== e2?.viewState : !this.#ks || "OFF" !== t2?.printState;
   }
   _setVisible(t2, e2, i2 = false) {
-    t2 !== Lt && unreachable("Internal method `_setVisible` called.");
-    this.#ks = i2;
+    t2 !== Nt && unreachable("Internal method `_setVisible` called.");
+    this.#Ds = i2;
     this.#Ms = e2;
   }
   get serializable() {
-    return { userSet: this.#ks, visible: this.#Ms };
+    return { userSet: this.#Ds, visible: this.#Ms };
   }
 };
 var OptionalContentConfig = class _OptionalContentConfig {
-  #Ds = null;
-  #Ps = /* @__PURE__ */ new Map();
-  #Is = null;
+  #Ps = null;
+  #Is = /* @__PURE__ */ new Map();
   #Fs = null;
-  #Os;
+  #Os = null;
+  #Rs;
   creator = null;
   name = null;
-  constructor(t2, e2 = h, i2 = null) {
-    this.#Os = t2;
+  constructor(t2, e2 = l, i2 = null) {
+    this.#Rs = t2;
     this.renderingIntent = e2;
     if (null !== t2) {
       this.name = t2.name;
       this.creator = t2.creator;
-      this.#Fs = t2.order;
-      for (const i3 of t2.groups) this.#Ps.set(i3.id, new OptionalContentGroup(e2, i3));
+      this.#Os = t2.order;
+      for (const i3 of t2.groups) this.#Is.set(i3.id, new OptionalContentGroup(e2, i3));
       if (i2) {
-        i2.size !== this.#Ps.size && unreachable("Incorrect serialized groupState.");
-        for (const [t3, e3] of i2) this.#Ps.get(t3)._setVisible(Lt, e3.visible, e3.userSet);
+        i2.size !== this.#Is.size && unreachable("Incorrect serialized groupState.");
+        for (const [t3, e3] of i2) this.#Is.get(t3)._setVisible(Nt, e3.visible, e3.userSet);
       } else {
-        if ("OFF" === t2.baseState) for (const t3 of this.#Ps.values()) t3._setVisible(Lt, false);
-        for (const e3 of t2.on) this.#Ps.get(e3)._setVisible(Lt, true);
-        for (const e3 of t2.off) this.#Ps.get(e3)._setVisible(Lt, false);
+        if ("OFF" === t2.baseState) for (const t3 of this.#Is.values()) t3._setVisible(Nt, false);
+        for (const e3 of t2.on) this.#Is.get(e3)._setVisible(Nt, true);
+        for (const e3 of t2.off) this.#Is.get(e3)._setVisible(Nt, false);
       }
-      this.#Is = this.getHash();
+      this.#Fs = this.getHash();
     }
   }
-  #Rs(t2) {
+  #Bs(t2) {
     const e2 = t2.length;
     if (e2 < 2) return true;
     const i2 = t2[0];
     for (let n2 = 1; n2 < e2; n2++) {
       const e3 = t2[n2];
       let s2;
-      if (Array.isArray(e3)) s2 = this.#Rs(e3);
+      if (Array.isArray(e3)) s2 = this.#Bs(e3);
       else {
-        if (!this.#Ps.has(e3)) {
+        if (!this.#Is.has(e3)) {
           warn(`Optional content group not found: ${e3}`);
           return true;
         }
-        s2 = this.#Ps.get(e3).visible;
+        s2 = this.#Is.get(e3).visible;
       }
       switch (i2) {
         case "And":
@@ -12417,57 +12467,57 @@ var OptionalContentConfig = class _OptionalContentConfig {
     return "And" === i2;
   }
   isVisible(t2) {
-    if (0 === this.#Ps.size) return true;
+    if (0 === this.#Is.size) return true;
     if (!t2) {
       info("Optional content group not defined.");
       return true;
     }
     if ("OCG" === t2.type) {
-      if (!this.#Ps.has(t2.id)) {
+      if (!this.#Is.has(t2.id)) {
         warn(`Optional content group not found: ${t2.id}`);
         return true;
       }
-      return this.#Ps.get(t2.id).visible;
+      return this.#Is.get(t2.id).visible;
     }
     if ("OCMD" === t2.type) {
-      if (t2.expression) return this.#Rs(t2.expression);
+      if (t2.expression) return this.#Bs(t2.expression);
       if (!t2.policy || "AnyOn" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Ps.has(e2)) {
+          if (!this.#Is.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (this.#Ps.get(e2).visible) return true;
+          if (this.#Is.get(e2).visible) return true;
         }
         return false;
       }
       if ("AllOn" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Ps.has(e2)) {
+          if (!this.#Is.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (!this.#Ps.get(e2).visible) return false;
+          if (!this.#Is.get(e2).visible) return false;
         }
         return true;
       }
       if ("AnyOff" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Ps.has(e2)) {
+          if (!this.#Is.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (!this.#Ps.get(e2).visible) return true;
+          if (!this.#Is.get(e2).visible) return true;
         }
         return false;
       }
       if ("AllOff" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Ps.has(e2)) {
+          if (!this.#Is.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (this.#Ps.get(e2).visible) return false;
+          if (this.#Is.get(e2).visible) return false;
         }
         return true;
       }
@@ -12478,11 +12528,11 @@ var OptionalContentConfig = class _OptionalContentConfig {
     return true;
   }
   setVisibility(t2, e2 = true, i2 = true) {
-    const n2 = this.#Ps.get(t2);
+    const n2 = this.#Is.get(t2);
     if (n2) {
-      if (i2 && e2 && n2.rbGroups.length) for (const e3 of n2.rbGroups) for (const i3 of e3) i3 !== t2 && this.#Ps.get(i3)?._setVisible(Lt, false, true);
-      n2._setVisible(Lt, !!e2, true);
-      this.#Ds = null;
+      if (i2 && e2 && n2.rbGroups.length) for (const e3 of n2.rbGroups) for (const i3 of e3) i3 !== t2 && this.#Is.get(i3)?._setVisible(Nt, false, true);
+      n2._setVisible(Nt, !!e2, true);
+      this.#Ps = null;
     } else warn(`Optional content group not found: ${t2}`);
   }
   setOCGState({ state: t2, preserveRB: e2 }) {
@@ -12495,7 +12545,7 @@ var OptionalContentConfig = class _OptionalContentConfig {
           i2 = n2;
           continue;
       }
-      const t3 = this.#Ps.get(n2);
+      const t3 = this.#Is.get(n2);
       if (t3) switch (i2) {
         case "ON":
           this.setVisibility(n2, true, e2);
@@ -12507,89 +12557,89 @@ var OptionalContentConfig = class _OptionalContentConfig {
           this.setVisibility(n2, !t3.visible, e2);
       }
     }
-    this.#Ds = null;
+    this.#Ps = null;
   }
   get hasInitialVisibility() {
-    return null === this.#Is || this.getHash() === this.#Is;
+    return null === this.#Fs || this.getHash() === this.#Fs;
   }
   getOrder() {
-    return this.#Ps.size ? this.#Fs ? this.#Fs.slice() : [...this.#Ps.keys()] : null;
+    return this.#Is.size ? this.#Os ? this.#Os.slice() : [...this.#Is.keys()] : null;
   }
   getGroup(t2) {
-    return this.#Ps.get(t2) || null;
+    return this.#Is.get(t2) || null;
   }
   getHash() {
-    if (null !== this.#Ds) return this.#Ds;
+    if (null !== this.#Ps) return this.#Ps;
     const t2 = new MurmurHash3_64();
-    for (const [e2, i2] of this.#Ps) t2.update(`${e2}:${i2.visible}`);
-    return this.#Ds = t2.hexdigest();
+    for (const [e2, i2] of this.#Is) t2.update(`${e2}:${i2.visible}`);
+    return this.#Ps = t2.hexdigest();
   }
   [Symbol.iterator]() {
-    return this.#Ps.entries();
+    return this.#Is.entries();
   }
   get serializable() {
     const t2 = /* @__PURE__ */ new Map();
-    for (const [e2, i2] of this.#Ps) t2.set(e2, i2.serializable);
-    return { data: this.#Os, renderingIntent: this.renderingIntent, groupState: t2 };
+    for (const [e2, i2] of this.#Is) t2.set(e2, i2.serializable);
+    return { data: this.#Rs, renderingIntent: this.renderingIntent, groupState: t2 };
   }
   static fromSerializable({ data: t2, renderingIntent: e2, groupState: i2 }) {
     return new _OptionalContentConfig(t2, e2, i2);
   }
 };
 var PagesMapper = class {
-  #Bs = null;
   #Ls = null;
-  #Ns = 0;
-  #Us = null;
+  #Ns = null;
+  #Us = 0;
   #Hs = null;
+  #zs = null;
   get pagesNumber() {
-    return this.#Ns;
+    return this.#Us;
   }
   set pagesNumber(t2) {
-    if (this.#Ns !== t2) {
-      this.#Ns = t2;
-      this.#Bs = null;
+    if (this.#Us !== t2) {
+      this.#Us = t2;
       this.#Ls = null;
+      this.#Ns = null;
     }
   }
-  #zs() {
-    if (this.#Bs) return;
-    const t2 = this.#Ns, e2 = this.#Bs = new Uint32Array(t2);
-    for (let i2 = 0; i2 < t2; i2++) e2[i2] = i2 + 1;
-    this.#Ls = new Int32Array(e2);
-  }
   #Gs() {
-    const t2 = /* @__PURE__ */ new Map(), e2 = this.#Bs;
-    for (let i2 = 0, n2 = this.#Ns; i2 < n2; i2++) {
+    if (this.#Ls) return;
+    const t2 = this.#Us, e2 = this.#Ls = new Uint32Array(t2);
+    for (let i2 = 0; i2 < t2; i2++) e2[i2] = i2 + 1;
+    this.#Ns = new Int32Array(e2);
+  }
+  #js() {
+    const t2 = /* @__PURE__ */ new Map(), e2 = this.#Ls;
+    for (let i2 = 0, n2 = this.#Us; i2 < n2; i2++) {
       const n3 = e2[i2], s2 = t2.get(n3);
       s2 ? s2.push(i2 + 1) : t2.set(n3, [i2 + 1]);
     }
     return t2;
   }
   movePages(t2, e2, i2) {
-    this.#zs();
-    const n2 = this.#Bs, s2 = this.#Gs(), r2 = e2.length, a2 = new Uint32Array(r2);
+    this.#Gs();
+    const n2 = this.#Ls, s2 = this.#js(), r2 = e2.length, a2 = new Uint32Array(r2);
     let o2 = 0;
     for (let t3 = 0; t3 < r2; t3++) {
       const s3 = e2[t3] - 1;
       a2[t3] = n2[s3];
       s3 < i2 && o2++;
     }
-    const l2 = this.#Ns, h2 = l2 - r2, c2 = MathClamp(i2 - o2, 0, h2);
+    const l2 = this.#Us, h2 = l2 - r2, c2 = MathClamp(i2 - o2, 0, h2);
     for (let e3 = 0, i3 = 0; e3 < l2; e3++) t2.has(e3 + 1) || (n2[i3++] = n2[e3]);
     n2.copyWithin(c2 + r2, c2, h2);
     n2.set(a2, c2);
-    this.#js(s2);
-    n2.every((t3, e3) => t3 === e3 + 1) && (this.#Bs = null);
+    this.#Ws(s2);
+    n2.every((t3, e3) => t3 === e3 + 1) && (this.#Ls = null);
   }
   deletePages(t2) {
-    this.#zs();
-    const e2 = this.#Bs, i2 = this.#Gs();
-    this.#Hs = { pageNumberToId: e2.slice(), pagesNumber: this.#Ns, prevPageNumbers: this.#Ls.slice() };
-    const n2 = this.#Ns - t2.length;
-    this.#Ns = n2;
-    const s2 = this.#Bs = new Uint32Array(n2);
-    this.#Ls = new Int32Array(n2);
+    this.#Gs();
+    const e2 = this.#Ls, i2 = this.#js();
+    this.#zs = { pageNumberToId: e2.slice(), pagesNumber: this.#Us, prevPageNumbers: this.#Ns.slice() };
+    const n2 = this.#Us - t2.length;
+    this.#Us = n2;
+    const s2 = this.#Ls = new Uint32Array(n2);
+    this.#Ns = new Int32Array(n2);
     let r2 = 0, a2 = 0;
     for (const i3 of t2) {
       const t3 = i3 - 1;
@@ -12600,41 +12650,41 @@ var PagesMapper = class {
       r2 = t3 + 1;
     }
     r2 < e2.length && s2.set(e2.subarray(r2), a2);
-    this.#js(i2, new Set(t2));
+    this.#Ws(i2, new Set(t2));
   }
   cancelDelete() {
-    if (this.#Hs) {
-      this.#Bs = this.#Hs.pageNumberToId;
-      this.#Ns = this.#Hs.pagesNumber;
-      this.#Ls = this.#Hs.prevPageNumbers;
-      this.#Hs = null;
+    if (this.#zs) {
+      this.#Ls = this.#zs.pageNumberToId;
+      this.#Us = this.#zs.pagesNumber;
+      this.#Ns = this.#zs.prevPageNumbers;
+      this.#zs = null;
     }
   }
   cleanSavedData() {
-    this.#Hs = null;
+    this.#zs = null;
   }
   copyPages(t2) {
-    this.#zs();
-    this.#Us = { pageNumbers: t2, pageIds: t2.map((t3) => this.#Bs[t3 - 1]) };
+    this.#Gs();
+    this.#Hs = { pageNumbers: t2, pageIds: t2.map((t3) => this.#Ls[t3 - 1]) };
   }
   cancelCopy() {
-    this.#Us = null;
+    this.#Hs = null;
   }
   pastePages(t2) {
-    this.#zs();
-    const e2 = this.#Bs, i2 = this.#Gs(), { pageNumbers: n2, pageIds: s2 } = this.#Us, r2 = this.#Ns + n2.length;
-    this.#Ns = r2;
-    const a2 = this.#Bs = new Uint32Array(r2);
-    this.#Ls = new Int32Array(r2);
+    this.#Gs();
+    const e2 = this.#Ls, i2 = this.#js(), { pageNumbers: n2, pageIds: s2 } = this.#Hs, r2 = this.#Us + n2.length;
+    this.#Us = r2;
+    const a2 = this.#Ls = new Uint32Array(r2);
+    this.#Ns = new Int32Array(r2);
     a2.set(e2.subarray(0, t2), 0);
     a2.set(s2, t2);
     a2.set(e2.subarray(t2), t2 + n2.length);
-    this.#js(i2, null, t2, n2);
-    this.#Us = null;
+    this.#Ws(i2, null, t2, n2);
+    this.#Hs = null;
   }
-  #js(t2, e2 = null, i2 = -1, n2 = null) {
-    const s2 = this.#Ls, r2 = this.#Bs, a2 = i2 + (n2?.length ?? 0), o2 = /* @__PURE__ */ new Map();
-    for (let l2 = 0, h2 = this.#Ns; l2 < h2; l2++) {
+  #Ws(t2, e2 = null, i2 = -1, n2 = null) {
+    const s2 = this.#Ns, r2 = this.#Ls, a2 = i2 + (n2?.length ?? 0), o2 = /* @__PURE__ */ new Map();
+    for (let l2 = 0, h2 = this.#Us; l2 < h2; l2++) {
       if (l2 >= i2 && l2 < a2) {
         s2[l2] = -n2[l2 - i2];
         continue;
@@ -12647,10 +12697,10 @@ var PagesMapper = class {
     }
   }
   hasBeenAltered() {
-    return null !== this.#Bs;
+    return null !== this.#Ls;
   }
   getPageMappingForSaving(t2 = null) {
-    t2 ??= this.#Gs();
+    t2 ??= this.#js();
     let e2 = 0;
     for (const i3 of t2.values()) e2 = Math.max(e2, i3.length);
     const i2 = new Array(e2);
@@ -12675,109 +12725,109 @@ var PagesMapper = class {
     return this.getPageMappingForSaving(e2);
   }
   getPrevPageNumber(t2) {
-    return this.#Ls?.[t2 - 1] ?? 0;
+    return this.#Ns?.[t2 - 1] ?? 0;
   }
   getPageNumber(t2) {
-    if (!this.#Bs) return t2;
-    const e2 = this.#Bs;
-    for (let i2 = 0, n2 = this.#Ns; i2 < n2; i2++) if (e2[i2] === t2) return i2 + 1;
+    if (!this.#Ls) return t2;
+    const e2 = this.#Ls;
+    for (let i2 = 0, n2 = this.#Us; i2 < n2; i2++) if (e2[i2] === t2) return i2 + 1;
     return 0;
   }
   getPageId(t2) {
-    return this.#Bs?.[t2 - 1] ?? t2;
+    return this.#Ls?.[t2 - 1] ?? t2;
   }
   getMapping() {
-    return this.#Bs?.subarray(0, this.pagesNumber);
+    return this.#Ls?.subarray(0, this.pagesNumber);
   }
 };
-var Nt = /* @__PURE__ */ Symbol("INITIAL_DATA");
-var dataObj = () => ({ ...Promise.withResolvers(), data: Nt });
+var Ut = /* @__PURE__ */ Symbol("INITIAL_DATA");
+var dataObj = () => ({ ...Promise.withResolvers(), data: Ut });
 var PDFObjects = class {
-  #Ws = /* @__PURE__ */ new Map();
+  #Vs = /* @__PURE__ */ new Map();
   get(t2, e2 = null) {
     if (e2) {
-      const i3 = this.#Ws.getOrInsertComputed(t2, dataObj);
+      const i3 = this.#Vs.getOrInsertComputed(t2, dataObj);
       i3.promise.then(() => e2(i3.data));
       return null;
     }
-    const i2 = this.#Ws.get(t2);
-    if (!i2 || i2.data === Nt) throw new Error(`Requesting object that isn't resolved yet ${t2}.`);
+    const i2 = this.#Vs.get(t2);
+    if (!i2 || i2.data === Ut) throw new Error(`Requesting object that isn't resolved yet ${t2}.`);
     return i2.data;
   }
   has(t2) {
-    const e2 = this.#Ws.get(t2);
-    return !!e2 && e2.data !== Nt;
+    const e2 = this.#Vs.get(t2);
+    return !!e2 && e2.data !== Ut;
   }
   delete(t2) {
-    const e2 = this.#Ws.get(t2);
-    if (!e2 || e2.data === Nt) return false;
-    this.#Ws.delete(t2);
+    const e2 = this.#Vs.get(t2);
+    if (!e2 || e2.data === Ut) return false;
+    this.#Vs.delete(t2);
     return true;
   }
   resolve(t2, e2 = null) {
-    const i2 = this.#Ws.getOrInsertComputed(t2, dataObj);
-    if (i2.data !== Nt) throw new Error(`Object already resolved ${t2}.`);
+    const i2 = this.#Vs.getOrInsertComputed(t2, dataObj);
+    if (i2.data !== Ut) throw new Error(`Object already resolved ${t2}.`);
     i2.data = e2;
     i2.resolve();
   }
   clear() {
-    for (const { data: t2 } of this.#Ws.values()) t2?.bitmap?.close();
-    this.#Ws.clear();
+    for (const { data: t2 } of this.#Vs.values()) t2?.bitmap?.close();
+    this.#Vs.clear();
   }
   *[Symbol.iterator]() {
-    for (const [t2, { data: e2 }] of this.#Ws) e2 !== Nt && (yield [t2, e2]);
+    for (const [t2, { data: e2 }] of this.#Vs) e2 !== Ut && (yield [t2, e2]);
   }
 };
 var TextLayer = class _TextLayer {
-  #Vs = Promise.withResolvers();
-  #kt = null;
-  #$s = false;
-  #qs = !!globalThis.FontInspector?.enabled;
-  #Ks = null;
+  #$s = Promise.withResolvers();
+  #Dt = null;
+  #qs = false;
+  #Ks = !!globalThis.FontInspector?.enabled;
   #Xs = null;
   #Ys = null;
-  #Js = 0;
+  #Js = null;
   #Qs = 0;
-  #Zs = null;
+  #Zs = 0;
   #tr = null;
-  #er = 0;
+  #er = null;
   #ir = 0;
-  #nr = /* @__PURE__ */ Object.create(null);
-  #sr = [];
-  #rr = null;
-  #ar = [];
-  #or = /* @__PURE__ */ new WeakMap();
-  #lr = null;
-  static #hr = /* @__PURE__ */ new Map();
+  #nr = 0;
+  #sr = /* @__PURE__ */ Object.create(null);
+  #rr = [];
+  #ar = null;
+  #or = [];
+  #lr = /* @__PURE__ */ new WeakMap();
+  #hr = null;
   static #cr = /* @__PURE__ */ new Map();
-  static #dr = /* @__PURE__ */ new WeakMap();
-  static #ur = null;
-  static #pr = /* @__PURE__ */ new Set();
+  static #dr = /* @__PURE__ */ new Map();
+  static #ur = /* @__PURE__ */ new WeakMap();
+  static #pr = null;
+  static #gr = /* @__PURE__ */ new Set();
   constructor({ textContentSource: t2, images: e2, container: i2, viewport: n2 }) {
-    if (t2 instanceof ReadableStream) this.#rr = t2;
+    if (t2 instanceof ReadableStream) this.#ar = t2;
     else {
       if ("object" != typeof t2) throw new Error('No "textContentSource" parameter specified.');
-      this.#rr = new ReadableStream({ start(e3) {
+      this.#ar = new ReadableStream({ start(e3) {
         e3.enqueue(t2);
         e3.close();
       } });
     }
-    this.#kt = this.#tr = i2;
-    this.#Ks = e2;
-    this.#ir = n2.scale * OutputScale.pixelRatio;
-    this.#er = n2.rotation;
-    this.#Ys = { div: null, properties: null, ctx: null };
+    this.#Dt = this.#er = i2;
+    this.#Xs = e2;
+    this.#nr = n2.scale * OutputScale.pixelRatio;
+    this.#ir = n2.rotation;
+    this.#Js = { div: null, properties: null, ctx: null };
     const { pageWidth: s2, pageHeight: r2, pageX: a2, pageY: o2 } = n2.rawDims;
-    this.#lr = [1, 0, 0, -1, -a2, o2 + r2];
-    this.#Qs = s2;
-    this.#Js = r2;
-    _TextLayer.#gr();
-    i2.style.setProperty("--min-font-size", _TextLayer.#ur);
+    this.#hr = [1, 0, 0, -1, -a2, o2 + r2];
+    this.#Zs = s2;
+    this.#Qs = r2;
+    _TextLayer.#mr();
+    i2.style.setProperty("--min-font-size", _TextLayer.#pr);
     setLayerDimensions(i2, n2);
-    this.#Vs.promise.finally(() => {
-      _TextLayer.#pr.delete(this);
-      this.#Ys = null;
-      this.#nr = null;
+    this.#$s.promise.finally(() => {
+      _TextLayer.#gr.delete(this);
+      this.#Js = null;
+      this.#sr = null;
     }).catch(() => {
     });
   }
@@ -12786,87 +12836,87 @@ var TextLayer = class _TextLayer {
     return shadow(this, "fontFamilyMap", /* @__PURE__ */ new Map([["sans-serif", (t2 && e2 ? "Calibri, " : "") + "sans-serif"], ["monospace", (t2 && e2 ? "Lucida Console, " : "") + "monospace"]]));
   }
   render() {
-    this.#Ks && this.#kt.append(this.#Ks.render());
+    this.#Xs && this.#Dt.append(this.#Xs.render());
     const pump = () => {
-      this.#Zs.read().then(({ value: t2, done: e2 }) => {
-        if (e2) this.#Vs.resolve();
+      this.#tr.read().then(({ value: t2, done: e2 }) => {
+        if (e2) this.#$s.resolve();
         else {
-          this.#Xs ??= t2.lang;
-          Object.assign(this.#nr, t2.styles);
-          this.#mr(t2.items);
+          this.#Ys ??= t2.lang;
+          Object.assign(this.#sr, t2.styles);
+          this.#fr(t2.items);
           pump();
         }
-      }, this.#Vs.reject);
+      }, this.#$s.reject);
     };
-    this.#Zs = this.#rr.getReader();
-    _TextLayer.#pr.add(this);
+    this.#tr = this.#ar.getReader();
+    _TextLayer.#gr.add(this);
     pump();
-    return this.#Vs.promise;
+    return this.#$s.promise;
   }
   update({ viewport: t2, onBefore: e2 = null }) {
     const i2 = t2.scale * OutputScale.pixelRatio, n2 = t2.rotation;
-    if (n2 !== this.#er) {
+    if (n2 !== this.#ir) {
       e2?.();
-      this.#er = n2;
-      setLayerDimensions(this.#tr, { rotation: n2 });
+      this.#ir = n2;
+      setLayerDimensions(this.#er, { rotation: n2 });
     }
-    if (i2 !== this.#ir) {
+    if (i2 !== this.#nr) {
       e2?.();
-      this.#ir = i2;
-      const t3 = { div: null, properties: null, ctx: _TextLayer.#fr(this.#Xs) };
-      for (const e3 of this.#ar) {
-        t3.properties = this.#or.get(e3);
+      this.#nr = i2;
+      const t3 = { div: null, properties: null, ctx: _TextLayer.#br(this.#Ys) };
+      for (const e3 of this.#or) {
+        t3.properties = this.#lr.get(e3);
         t3.div = e3;
-        this.#br(t3);
+        this.#yr(t3);
       }
     }
   }
   cancel() {
     const t2 = new AbortException("TextLayer task cancelled.");
-    this.#Zs?.cancel(t2).catch(() => {
+    this.#tr?.cancel(t2).catch(() => {
     });
-    this.#Zs = null;
-    this.#Vs.reject(t2);
+    this.#tr = null;
+    this.#$s.reject(t2);
   }
   get textDivs() {
-    return this.#ar;
+    return this.#or;
   }
   get textContentItemsStr() {
-    return this.#sr;
+    return this.#rr;
   }
-  #mr(t2) {
-    if (this.#$s) return;
-    this.#Ys.ctx ??= _TextLayer.#fr(this.#Xs);
-    const e2 = this.#ar, i2 = this.#sr;
+  #fr(t2) {
+    if (this.#qs) return;
+    this.#Js.ctx ??= _TextLayer.#br(this.#Ys);
+    const e2 = this.#or, i2 = this.#rr;
     for (const n2 of t2) {
       if (e2.length > 1e5) {
         warn("Ignoring additional textDivs for performance reasons.");
-        this.#$s = true;
+        this.#qs = true;
         return;
       }
       if (void 0 !== n2.str) {
         i2.push(n2.str);
-        this.#yr(n2);
+        this.#vr(n2);
       } else if ("beginMarkedContentProps" === n2.type || "beginMarkedContent" === n2.type) {
-        const t3 = this.#kt;
-        this.#kt = document.createElement("span");
-        this.#kt.classList.add("markedContent");
-        n2.id && this.#kt.setAttribute("id", `${n2.id}`);
-        "Artifact" === n2.tag && (this.#kt.ariaHidden = true);
-        t3.append(this.#kt);
-      } else "endMarkedContent" === n2.type && (this.#kt = this.#kt.parentNode);
+        const t3 = this.#Dt;
+        this.#Dt = document.createElement("span");
+        this.#Dt.classList.add("markedContent");
+        n2.id && this.#Dt.setAttribute("id", n2.id);
+        "Artifact" === n2.tag && (this.#Dt.ariaHidden = true);
+        t3.append(this.#Dt);
+      } else "endMarkedContent" === n2.type && (this.#Dt = this.#Dt.parentNode);
     }
   }
-  #yr(t2) {
+  #vr(t2) {
     const e2 = document.createElement("span"), i2 = { angle: 0, canvasWidth: 0, hasText: "" !== t2.str, hasEOL: t2.hasEOL, fontSize: 0 };
-    this.#ar.push(e2);
-    const n2 = Util.transform(this.#lr, t2.transform);
+    this.#or.push(e2);
+    const n2 = Util.transform(this.#hr, t2.transform);
     let s2 = Math.atan2(n2[1], n2[0]);
-    const r2 = this.#nr[t2.fontName];
+    const r2 = this.#sr[t2.fontName];
     r2.vertical && (s2 += Math.PI / 2);
-    let a2 = this.#qs && r2.fontSubstitution || r2.fontFamily;
+    let a2 = this.#Ks && r2.fontSubstitution || r2.fontFamily;
     a2 = _TextLayer.fontFamilyMap.get(a2) || a2;
-    const o2 = Math.hypot(n2[2], n2[3]), l2 = o2 * _TextLayer.#vr(a2, r2, this.#Xs);
+    const o2 = Math.hypot(n2[2], n2[3]), l2 = o2 * _TextLayer.#wr(a2, r2, this.#Ys);
     let h2, c2;
     if (0 === s2) {
       h2 = n2[4];
@@ -12876,15 +12926,15 @@ var TextLayer = class _TextLayer {
       c2 = n2[5] - l2 * Math.cos(s2);
     }
     const d2 = e2.style;
-    d2.left = `${(100 * h2 / this.#Qs).toFixed(2)}%`;
-    d2.top = `${(100 * c2 / this.#Js).toFixed(2)}%`;
+    d2.left = `${(100 * h2 / this.#Zs).toFixed(2)}%`;
+    d2.top = `${(100 * c2 / this.#Qs).toFixed(2)}%`;
     d2.setProperty("--font-height", `${o2.toFixed(2)}px`);
     d2.fontFamily = a2;
     i2.fontSize = o2;
     e2.setAttribute("role", "presentation");
     e2.textContent = t2.str;
     e2.dir = t2.dir;
-    this.#qs && (e2.dataset.fontName = r2.fontSubstitutionLoadedName || t2.fontName);
+    this.#Ks && (e2.dataset.fontName = r2.fontSubstitutionLoadedName || t2.fontName);
     0 !== s2 && (i2.angle = s2 * (180 / Math.PI));
     let u2 = false;
     if (t2.str.length > 1) u2 = true;
@@ -12893,57 +12943,57 @@ var TextLayer = class _TextLayer {
       e3 !== i3 && Math.max(e3, i3) / Math.min(e3, i3) > 1.5 && (u2 = true);
     }
     u2 && (i2.canvasWidth = r2.vertical ? t2.height : t2.width);
-    this.#or.set(e2, i2);
-    this.#Ys.div = e2;
-    this.#Ys.properties = i2;
-    this.#br(this.#Ys);
-    i2.hasText && this.#kt.append(e2);
+    this.#lr.set(e2, i2);
+    this.#Js.div = e2;
+    this.#Js.properties = i2;
+    this.#yr(this.#Js);
+    i2.hasText && this.#Dt.append(e2);
     if (i2.hasEOL) {
       const t3 = document.createElement("br");
       t3.setAttribute("role", "presentation");
-      this.#kt.append(t3);
+      this.#Dt.append(t3);
     }
   }
-  #br(t2) {
+  #yr(t2) {
     const { div: e2, properties: i2, ctx: n2 } = t2, { style: s2 } = e2;
     if (0 !== i2.canvasWidth && i2.hasText) {
       const { fontFamily: t3 } = s2, { canvasWidth: r2, fontSize: a2 } = i2;
-      _TextLayer.#wr(n2, a2 * this.#ir, t3);
+      _TextLayer.#xr(n2, a2 * this.#nr, t3);
       const { width: o2 } = n2.measureText(e2.textContent);
-      o2 > 0 && s2.setProperty("--scale-x", r2 * this.#ir / o2);
+      o2 > 0 && s2.setProperty("--scale-x", r2 * this.#nr / o2);
     }
     0 !== i2.angle && s2.setProperty("--rotate", `${i2.angle}deg`);
   }
   static cleanup() {
-    if (!(this.#pr.size > 0)) {
-      this.#hr.clear();
-      for (const { canvas: t2 } of this.#cr.values()) t2.remove();
+    if (!(this.#gr.size > 0)) {
       this.#cr.clear();
+      for (const { canvas: t2 } of this.#dr.values()) t2.remove();
+      this.#dr.clear();
     }
   }
-  static #fr(t2 = null) {
-    let e2 = this.#cr.get(t2 ||= "");
+  static #br(t2 = null) {
+    let e2 = this.#dr.get(t2 ||= "");
     if (!e2) {
       const i2 = document.createElement("canvas");
       i2.style.cssText = "position:absolute;top:0;left:0;width:0;height:0;display:none;letter-spacing:normal;word-spacing:normal";
       i2.lang = t2;
       document.body.append(i2);
       e2 = i2.getContext("2d", { alpha: false, willReadFrequently: true });
-      this.#cr.set(t2, e2);
-      this.#dr.set(e2, { size: 0, family: "" });
+      this.#dr.set(t2, e2);
+      this.#ur.set(e2, { size: 0, family: "" });
     }
     return e2;
   }
-  static #wr(t2, e2, i2) {
-    const n2 = this.#dr.get(t2);
+  static #xr(t2, e2, i2) {
+    const n2 = this.#ur.get(t2);
     if (e2 !== n2.size || i2 !== n2.family) {
       t2.font = `${e2}px ${i2}`;
       n2.size = e2;
       n2.family = i2;
     }
   }
-  static #gr() {
-    if (null !== this.#ur) return;
+  static #mr() {
+    if (null !== this.#pr) return;
     const t2 = document.createElement("div");
     t2.style.opacity = 0;
     t2.style.lineHeight = 1;
@@ -12951,15 +13001,15 @@ var TextLayer = class _TextLayer {
     t2.style.position = "absolute";
     t2.textContent = "X";
     document.body.append(t2);
-    this.#ur = t2.getBoundingClientRect().height;
+    this.#pr = t2.getBoundingClientRect().height;
     t2.remove();
   }
-  static #vr(t2, e2, i2) {
-    const n2 = this.#hr.get(t2);
+  static #wr(t2, e2, i2) {
+    const n2 = this.#cr.get(t2);
     if (n2) return n2;
-    const s2 = this.#fr(i2);
+    const s2 = this.#br(i2);
     s2.canvas.width = s2.canvas.height = 30;
-    this.#wr(s2, 30, t2);
+    this.#xr(s2, 30, t2);
     const r2 = s2.measureText(""), a2 = r2.fontBoundingBoxAscent, o2 = Math.abs(r2.fontBoundingBoxDescent);
     s2.canvas.width = s2.canvas.height = 0;
     let l2 = 0.8;
@@ -12968,7 +13018,7 @@ var TextLayer = class _TextLayer {
       FeatureTest.platform.isFirefox && warn("Enable the `dom.textMetrics.fontBoundingBox.enabled` preference in `about:config` to improve TextLayer rendering.");
       e2.ascent ? l2 = e2.ascent : e2.descent && (l2 = 1 + e2.descent);
     }
-    this.#hr.set(t2, l2);
+    this.#cr.set(t2, l2);
     return l2;
   }
 };
@@ -12993,8 +13043,8 @@ function getDocument(t2 = {}) {
     throw new Error("Invalid PDF binary data: either TypedArray, string, or array-like object is expected in the data property.");
   })(t2.data) : null, a2 = t2.httpHeaders || null, o2 = true === t2.withCredentials, l2 = t2.password ?? null, h2 = t2.range instanceof PDFDataRangeTransport ? t2.range : null, c2 = Number.isInteger(t2.rangeChunkSize) && t2.rangeChunkSize > 0 ? t2.rangeChunkSize : 65536;
   let d2 = t2.worker instanceof PDFWorker ? t2.worker : null;
-  const u2 = t2.verbosity, p2 = "string" != typeof t2.docBaseUrl || isDataScheme(t2.docBaseUrl) ? null : t2.docBaseUrl, g2 = getFactoryUrlProp(t2.cMapUrl), m2 = false !== t2.cMapPacked, f2 = getFactoryUrlProp(t2.iccUrl), b2 = getFactoryUrlProp(t2.standardFontDataUrl), y2 = getFactoryUrlProp(t2.wasmUrl), v2 = true !== t2.stopAtErrors, w2 = Number.isInteger(t2.maxImageSize) && t2.maxImageSize > -1 ? t2.maxImageSize : -1, x2 = "boolean" == typeof t2.isOffscreenCanvasSupported ? t2.isOffscreenCanvasSupported : !i, A2 = "boolean" == typeof t2.isImageDecoderSupported ? t2.isImageDecoderSupported : !i, E2 = Number.isInteger(t2.canvasMaxAreaInBytes) ? t2.canvasMaxAreaInBytes : -1, C2 = "boolean" == typeof t2.disableFontFace ? t2.disableFontFace : i, S2 = true === t2.fontExtraProperties, T2 = true === t2.enableXfa, _2 = t2.ownerDocument || globalThis.document, k2 = true === t2.disableRange, M2 = true === t2.disableStream, D2 = true === t2.disableAutoFetch, P2 = true === t2.pdfBug, I2 = t2.CanvasFactory || (i ? NodeCanvasFactory : DOMCanvasFactory), O2 = t2.FilterFactory || (i ? NodeFilterFactory : DOMFilterFactory), R2 = t2.BinaryDataFactory || (i ? NodeBinaryDataFactory : DOMBinaryDataFactory), B2 = true === t2.enableHWA, L2 = true === t2.enableWebGPU ? (function initGPU() {
-    return Ct.init();
+  const u2 = t2.verbosity, p2 = "string" != typeof t2.docBaseUrl || isDataScheme(t2.docBaseUrl) ? null : t2.docBaseUrl, g2 = getFactoryUrlProp(t2.cMapUrl), m2 = false !== t2.cMapPacked, f2 = getFactoryUrlProp(t2.iccUrl), b2 = getFactoryUrlProp(t2.standardFontDataUrl), y2 = getFactoryUrlProp(t2.wasmUrl), v2 = true !== t2.stopAtErrors, w2 = Number.isInteger(t2.maxImageSize) && t2.maxImageSize > -1 ? t2.maxImageSize : -1, x2 = "boolean" == typeof t2.isOffscreenCanvasSupported ? t2.isOffscreenCanvasSupported : !i, A2 = "boolean" == typeof t2.isImageDecoderSupported ? t2.isImageDecoderSupported : !i, E2 = Number.isInteger(t2.canvasMaxAreaInBytes) ? t2.canvasMaxAreaInBytes : -1, C2 = "boolean" == typeof t2.disableFontFace ? t2.disableFontFace : i, S2 = true === t2.fontExtraProperties, T2 = true === t2.enableXfa, _2 = t2.ownerDocument || globalThis.document, k2 = true === t2.disableRange, D2 = true === t2.disableStream, M2 = true === t2.disableAutoFetch, P2 = true === t2.pdfBug, I2 = t2.CanvasFactory || (i ? NodeCanvasFactory : DOMCanvasFactory), O2 = t2.FilterFactory || (i ? NodeFilterFactory : DOMFilterFactory), R2 = t2.BinaryDataFactory || (i ? NodeBinaryDataFactory : DOMBinaryDataFactory), B2 = true === t2.enableHWA, L2 = true === t2.enableWebGPU ? (function initGPU() {
+    return St.init();
   })() : Promise.resolve(false), N2 = false !== t2.useWasm, U2 = t2.pagesMapper || new PagesMapper(), H2 = "boolean" == typeof t2.useSystemFonts ? t2.useSystemFonts : !i && !C2, z2 = "boolean" == typeof t2.useWorkerFetch ? t2.useWorkerFetch : !!(R2 === DOMBinaryDataFactory && g2 && m2 && b2 && y2 && isValidFetchUrl(g2, document.baseURI) && isValidFetchUrl(b2, document.baseURI) && isValidFetchUrl(y2, document.baseURI));
   setVerbosityLevel(u2);
   const G2 = { canvasFactory: new I2({ ownerDocument: _2, enableHWA: B2 }), filterFactory: new O2({ docId: n2, ownerDocument: _2 }), binaryDataFactory: z2 ? null : new R2({ cMapUrl: g2, standardFontDataUrl: b2, wasmUrl: y2 }) };
@@ -13002,21 +13052,21 @@ function getDocument(t2 = {}) {
     d2 = PDFWorker.create({ verbosity: u2, port: GlobalWorkerOptions.workerPort });
     e2._worker = d2;
   }
-  const j2 = { docId: n2, apiVersion: "6.1.200", data: r2, password: l2, disableAutoFetch: D2, rangeChunkSize: c2, docBaseUrl: p2, enableXfa: T2, evaluatorOptions: { maxImageSize: w2, disableFontFace: C2, ignoreErrors: v2, isOffscreenCanvasSupported: x2, isImageDecoderSupported: A2, canvasMaxAreaInBytes: E2, fontExtraProperties: S2, useSystemFonts: H2, useWasm: N2, useWorkerFetch: z2, cMapUrl: g2, cMapPacked: m2, iccUrl: f2, standardFontDataUrl: b2, wasmUrl: y2, hasGPU: false } }, W2 = { ownerDocument: _2, pdfBug: P2, styleElement: null, enableHWA: B2, loadingParams: { disableAutoFetch: D2, enableXfa: T2 } };
+  const j2 = { docId: n2, apiVersion: "6.2.108", data: r2, password: l2, disableAutoFetch: M2, rangeChunkSize: c2, docBaseUrl: p2, enableXfa: T2, evaluatorOptions: { maxImageSize: w2, disableFontFace: C2, ignoreErrors: v2, isOffscreenCanvasSupported: x2, isImageDecoderSupported: A2, canvasMaxAreaInBytes: E2, fontExtraProperties: S2, useSystemFonts: H2, useWasm: N2, useWorkerFetch: z2, cMapUrl: g2, cMapPacked: m2, iccUrl: f2, standardFontDataUrl: b2, wasmUrl: y2, hasGPU: false } }, W2 = { ownerDocument: _2, pdfBug: P2, styleElement: null, enableHWA: B2, loadingParams: { disableAutoFetch: M2, enableXfa: T2 } };
   Promise.all([d2.promise, L2]).then(function([, t3]) {
     if (d2.destroyed) throw new Error("Worker was destroyed");
     j2.evaluatorOptions.hasGPU = t3;
     const l3 = d2.messageHandler.sendWithPromise("GetDocRequest", j2, r2 ? [r2.buffer] : null);
     let u3;
     if (r2) ;
-    else if (h2) u3 = new PDFDataTransportStream({ pdfDataRangeTransport: h2, disableRange: k2, disableStream: M2 });
+    else if (h2) u3 = new PDFDataTransportStream({ pdfDataRangeTransport: h2, disableRange: k2, disableStream: D2 });
     else {
       if (!s2) throw new Error("getDocument - expected either `data`, `range`, or `url` parameter.");
       {
         const t4 = (function getNetworkStream(t5) {
           return isValidFetchUrl(t5) ? PDFFetchStream : i ? PDFNodeStream : PDFNetworkStream;
         })(s2);
-        u3 = new t4({ url: s2, httpHeaders: a2, withCredentials: o2, rangeChunkSize: c2, disableRange: k2, disableStream: M2 });
+        u3 = new t4({ url: s2, httpHeaders: a2, withCredentials: o2, rangeChunkSize: c2, disableRange: k2, disableStream: D2 });
       }
     }
     return l3.then((t4) => {
@@ -13063,8 +13113,8 @@ var PDFDocumentLoadingTask = class _PDFDocumentLoadingTask {
   }
 };
 var PDFDataRangeTransport = class {
-  #Vs = Promise.withResolvers();
-  #xr = null;
+  #$s = Promise.withResolvers();
+  #Ar = null;
   constructor(t2, e2, i2 = false, n2 = null) {
     this.length = t2;
     this.initialData = e2;
@@ -13072,21 +13122,21 @@ var PDFDataRangeTransport = class {
     this.contentDispositionFilename = n2;
   }
   onDataRange(t2, e2) {
-    this.#xr({ type: "range", begin: t2, chunk: e2 });
+    this.#Ar({ type: "range", begin: t2, chunk: e2 });
   }
   onDataProgressiveRead(t2) {
-    this.#Vs.promise.then(() => {
-      this.#xr({ type: "progressiveRead", chunk: t2 });
+    this.#$s.promise.then(() => {
+      this.#Ar({ type: "progressiveRead", chunk: t2 });
     });
   }
   onDataProgressiveDone() {
-    this.#Vs.promise.then(() => {
-      this.#xr({ type: "progressiveDone" });
+    this.#$s.promise.then(() => {
+      this.#Ar({ type: "progressiveDone" });
     });
   }
   transportReady(t2) {
-    this.#xr = t2;
-    this.#Vs.resolve();
+    this.#Ar = t2;
+    this.#$s.resolve();
   }
   requestDataRange(t2, e2) {
     unreachable("Abstract method PDFDataRangeTransport.requestDataRange");
@@ -13208,6 +13258,12 @@ var PDFDocumentProxy = class {
   getFieldObjects() {
     return this._transport.getFieldObjects();
   }
+  getSignatures() {
+    return this._transport.getSignatures();
+  }
+  getSignatureData(t2) {
+    return this._transport.getSignatureData(t2);
+  }
   hasJSActions() {
     return this._transport.hasJSActions();
   }
@@ -13216,8 +13272,8 @@ var PDFDocumentProxy = class {
   }
 };
 var PDFPageProxy = class _PDFPageProxy {
-  #Ar = false;
-  #Er = null;
+  #Er = false;
+  #Cr = null;
   constructor(t2, e2, i2, n2, s2 = false) {
     this._pageIndex = t2;
     this._pageInfo = e2;
@@ -13229,11 +13285,11 @@ var PDFPageProxy = class _PDFPageProxy {
     this._intentStates = /* @__PURE__ */ new Map();
     this.destroyed = false;
     this.recordedBBoxes = null;
-    this.#Er = n2;
+    this.#Cr = n2;
     this.imageCoordinates = null;
   }
   clone(t2) {
-    const e2 = new _PDFPageProxy(t2, this._pageInfo, this._transport, this.#Er, this._pdfBug);
+    const e2 = new _PDFPageProxy(t2, this._pageInfo, this._transport, this.#Cr, this._pdfBug);
     e2.clonedFromIndex = this.clonedFromIndex ?? this._pageIndex;
     this._transport.updatePage(e2);
     return e2;
@@ -13276,17 +13332,17 @@ var PDFPageProxy = class _PDFPageProxy {
   async getXfa() {
     return this._transport._htmlForXfa?.children[this._pageIndex] || null;
   }
-  render({ canvasContext: t2, canvas: e2 = t2.canvas, viewport: i2, intent: n2 = "display", annotationMode: s2 = f.ENABLE, transform: r2 = null, background: a2 = null, optionalContentConfigPromise: o2 = null, annotationCanvasMap: l2 = null, pageColors: h2 = null, printAnnotationStorage: d2 = null, isEditing: u2 = false, recordImages: p2 = false, recordOperations: g2 = false, operationsFilter: m2 = null }) {
+  render({ canvasContext: t2, canvas: e2 = t2.canvas, viewport: i2, intent: n2 = "display", annotationMode: s2 = m.ENABLE, transform: r2 = null, background: a2 = null, optionalContentConfigPromise: o2 = null, annotationCanvasMap: l2 = null, pageColors: c2 = null, printAnnotationStorage: d2 = null, isEditing: u2 = false, recordImages: p2 = false, recordOperations: g2 = false, operationsFilter: f2 = null }) {
     this._stats?.time("Overall");
     const b2 = this._transport.getRenderingIntent(n2, s2, d2, u2), { renderingIntent: y2, cacheKey: v2 } = b2;
-    this.#Ar = false;
+    this.#Er = false;
     o2 ||= this._transport.getOptionalContentConfig(y2);
     const w2 = this._intentStates.getOrInsertComputed(v2, makeObj);
     if (w2.streamReaderCancelTimeout) {
       clearTimeout(w2.streamReaderCancelTimeout);
       w2.streamReaderCancelTimeout = null;
     }
-    const x2 = !!(y2 & c);
+    const x2 = !!(y2 & h);
     if (!w2.displayReadyCapability) {
       w2.displayReadyCapability = Promise.withResolvers();
       w2.operatorList = { fnArray: [], argsArray: [], lastChunk: false, separateAnnots: null };
@@ -13303,8 +13359,8 @@ var PDFPageProxy = class _PDFPageProxy {
         }
       }
       C2 && !t3 && (this.imageCoordinates = _2.gfx?.imagesTracker.take());
-      x2 && (this.#Ar = true);
-      this.#Cr();
+      x2 && (this.#Er = true);
+      this.#Sr();
       if (t3) {
         _2.capability.reject(t3);
         this._abortOperatorList({ intentState: w2, reason: t3 instanceof Error ? t3 : new Error(t3) });
@@ -13318,7 +13374,7 @@ var PDFPageProxy = class _PDFPageProxy {
     let S2 = null, T2 = null;
     (E2 || C2) && (T2 = new CanvasBBoxTracker(e2, w2.operatorList.length));
     E2 && (S2 = new CanvasDependencyTracker(T2, A2));
-    const _2 = new InternalRenderTask({ callback: complete, params: { canvas: e2, canvasContext: t2, dependencyTracker: S2 ?? T2, imagesTracker: C2 ? new CanvasImagesTracker(e2) : null, viewport: i2, transform: r2, background: a2 }, objs: this.objs, commonObjs: this.commonObjs, annotationCanvasMap: l2, operatorList: w2.operatorList, pageIndex: this._pageIndex, canvasFactory: this._transport.canvasFactory, filterFactory: this._transport.filterFactory, useRequestAnimationFrame: !x2, pdfBug: this._pdfBug, pageColors: h2, enableHWA: this._transport.enableHWA, operationsFilter: m2 });
+    const _2 = new InternalRenderTask({ callback: complete, params: { canvas: e2, canvasContext: t2, dependencyTracker: S2 ?? T2, imagesTracker: C2 ? new CanvasImagesTracker(e2) : null, viewport: i2, transform: r2, background: a2 }, objs: this.objs, commonObjs: this.commonObjs, annotationCanvasMap: l2, operatorList: w2.operatorList, pageIndex: this._pageIndex, canvasFactory: this._transport.canvasFactory, filterFactory: this._transport.filterFactory, useRequestAnimationFrame: !x2, pdfBug: this._pdfBug, pageColors: c2, enableHWA: this._transport.enableHWA, operationsFilter: f2 });
     (w2.renderTasks ||= /* @__PURE__ */ new Set()).add(_2);
     const k2 = _2.task;
     Promise.all([w2.displayReadyCapability.promise, o2]).then(([t3, e3]) => {
@@ -13332,7 +13388,7 @@ var PDFPageProxy = class _PDFPageProxy {
     }).catch(complete);
     return k2;
   }
-  getOperatorList({ intent: t2 = "display", annotationMode: e2 = f.ENABLE, printAnnotationStorage: i2 = null, isEditing: n2 = false } = {}) {
+  getOperatorList({ intent: t2 = "display", annotationMode: e2 = m.ENABLE, printAnnotationStorage: i2 = null, isEditing: n2 = false } = {}) {
     const s2 = this._transport.getRenderingIntent(t2, e2, i2, n2, true), r2 = this._intentStates.getOrInsertComputed(s2.cacheKey, makeObj);
     let a2;
     if (!r2.opListReadCapability) {
@@ -13352,7 +13408,7 @@ var PDFPageProxy = class _PDFPageProxy {
     return r2.opListReadCapability.promise;
   }
   streamTextContent({ includeMarkedContent: t2 = false, disableNormalization: e2 = false } = {}) {
-    return this._transport.messageHandler.sendWithStream("GetTextContent", { pageId: this.#Er.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, includeMarkedContent: true === t2, disableNormalization: true === e2 }, { highWaterMark: 100, size: (t3) => t3.items.length });
+    return this._transport.messageHandler.sendWithStream("GetTextContent", { pageId: this.#Cr.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, includeMarkedContent: true === t2, disableNormalization: true === e2 }, { highWaterMark: 100, size: (t3) => t3.items.length });
   }
   async getTextContent(t2 = {}) {
     if (this._transport._htmlForXfa) return this.getXfa().then((t3) => XfaText.textContent(t3));
@@ -13378,21 +13434,21 @@ var PDFPageProxy = class _PDFPageProxy {
       }
     }
     this.objs.clear();
-    this.#Ar = false;
+    this.#Er = false;
     return Promise.all(t2);
   }
   cleanup(t2 = false) {
-    this.#Ar = true;
-    const e2 = this.#Cr();
+    this.#Er = true;
+    const e2 = this.#Sr();
     t2 && e2 && (this._stats &&= new StatTimer());
     return e2;
   }
-  #Cr() {
-    if (!this.#Ar || this.destroyed) return false;
+  #Sr() {
+    if (!this.#Er || this.destroyed) return false;
     for (const { renderTasks: t2, operatorList: e2 } of this._intentStates.values()) if (t2.size > 0 || !e2.lastChunk) return false;
     this._intentStates.clear();
     this.objs.clear();
-    this.#Ar = false;
+    this.#Er = false;
     return true;
   }
   _startRenderPage(t2, e2) {
@@ -13410,10 +13466,10 @@ var PDFPageProxy = class _PDFPageProxy {
     e2.operatorList.lastChunk = t2.lastChunk;
     e2.operatorList.separateAnnots = t2.separateAnnots;
     for (const t3 of e2.renderTasks) t3.operatorListChanged();
-    t2.lastChunk && this.#Cr();
+    t2.lastChunk && this.#Sr();
   }
   _pumpOperatorList({ renderingIntent: t2, cacheKey: e2, annotationStorageSerializable: i2, modifiedIds: n2 }) {
-    const { map: s2, transfer: r2 } = i2, a2 = this._transport.messageHandler.sendWithStream("GetOperatorList", { pageId: this.#Er.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, intent: t2, cacheKey: e2, annotationStorage: s2, modifiedIds: n2 }, void 0, r2).getReader(), o2 = this._intentStates.get(e2);
+    const { map: s2, transfer: r2 } = i2, a2 = this._transport.messageHandler.sendWithStream("GetOperatorList", { pageId: this.#Cr.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, intent: t2, cacheKey: e2, annotationStorage: s2, modifiedIds: n2 }, void 0, r2).getReader(), o2 = this._intentStates.get(e2);
     o2.streamReader = a2;
     const pump = () => {
       a2.read().then(({ value: t3, done: e3 }) => {
@@ -13428,7 +13484,7 @@ var PDFPageProxy = class _PDFPageProxy {
           if (o2.operatorList) {
             o2.operatorList.lastChunk = true;
             for (const t4 of o2.renderTasks) t4.operatorListChanged();
-            this.#Cr();
+            this.#Sr();
           }
           if (o2.displayReadyCapability) o2.displayReadyCapability.reject(t3);
           else {
@@ -13475,16 +13531,16 @@ var PDFPageProxy = class _PDFPageProxy {
   }
 };
 var PDFWorker = class _PDFWorker {
-  #Vs = Promise.withResolvers();
-  #Sr = null;
-  #As = null;
+  #$s = Promise.withResolvers();
   #Tr = null;
-  static #_r = 0;
-  static #kr = false;
+  #Es = null;
+  #_r = null;
+  static #kr = 0;
+  static #Dr = false;
   static #Mr = /* @__PURE__ */ new WeakMap();
   static {
     if (i) {
-      this.#kr = true;
+      this.#Dr = true;
       GlobalWorkerOptions.workerSrc ||= "./pdf.worker.mjs";
     }
     this._isSameOrigin = (t2, e2) => {
@@ -13505,32 +13561,32 @@ var PDFWorker = class _PDFWorker {
     if (e2) {
       if (_PDFWorker.#Mr.has(e2)) throw new Error("Cannot use more than one PDFWorker per port.");
       _PDFWorker.#Mr.set(e2, this);
-      this.#Dr(e2);
-    } else this.#Pr();
+      this.#Pr(e2);
+    } else this.#Ir();
   }
   get promise() {
-    return this.#Vs.promise;
+    return this.#$s.promise;
   }
-  #Ir() {
-    this.#Vs.resolve();
-    this.#Sr.send("configure", { verbosity: this.verbosity });
+  #Fr() {
+    this.#$s.resolve();
+    this.#Tr.send("configure", { verbosity: this.verbosity });
   }
   get port() {
-    return this.#As;
+    return this.#Es;
   }
   get messageHandler() {
-    return this.#Sr;
+    return this.#Tr;
   }
-  #Dr(t2) {
-    this.#As = t2;
-    this.#Sr = new MessageHandler("main", "worker", t2);
-    this.#Sr.on("ready", () => {
+  #Pr(t2) {
+    this.#Es = t2;
+    this.#Tr = new MessageHandler("main", "worker", t2);
+    this.#Tr.on("ready", () => {
     });
-    this.#Ir();
+    this.#Fr();
   }
-  #Pr() {
-    if (_PDFWorker.#kr || _PDFWorker.#Fr) {
-      this.#Or();
+  #Ir() {
+    if (_PDFWorker.#Dr || _PDFWorker.#Or) {
+      this.#Rr();
       return;
     }
     let { workerSrc: t2 } = _PDFWorker;
@@ -13540,18 +13596,18 @@ var PDFWorker = class _PDFWorker {
         n2.abort();
         i2.destroy();
         e2.terminate();
-        this.destroyed ? this.#Vs.reject(new Error("Worker was destroyed")) : this.#Or();
+        this.destroyed ? this.#$s.reject(new Error("Worker was destroyed")) : this.#Rr();
       }, n2 = new AbortController();
       e2.addEventListener("error", () => {
-        this.#Tr || terminateEarly();
+        this.#_r || terminateEarly();
       }, { signal: n2.signal });
       i2.on("test", (t3) => {
         n2.abort();
         if (!this.destroyed && t3) {
-          this.#Sr = i2;
-          this.#As = e2;
-          this.#Tr = e2;
-          this.#Ir();
+          this.#Tr = i2;
+          this.#Es = e2;
+          this.#_r = e2;
+          this.#Fr();
         } else terminateEarly();
       });
       i2.on("ready", (t3) => {
@@ -13560,7 +13616,7 @@ var PDFWorker = class _PDFWorker {
         else try {
           sendTest();
         } catch {
-          this.#Or();
+          this.#Rr();
         }
       });
       const sendTest = () => {
@@ -13572,36 +13628,36 @@ var PDFWorker = class _PDFWorker {
     } catch {
       info("The worker has been disabled.");
     }
-    this.#Or();
+    this.#Rr();
   }
-  #Or() {
-    if (!_PDFWorker.#kr) {
+  #Rr() {
+    if (!_PDFWorker.#Dr) {
       warn("Setting up fake worker.");
-      _PDFWorker.#kr = true;
+      _PDFWorker.#Dr = true;
     }
     _PDFWorker._setupFakeWorkerGlobal.then((t2) => {
       if (this.destroyed) {
-        this.#Vs.reject(new Error("Worker was destroyed"));
+        this.#$s.reject(new Error("Worker was destroyed"));
         return;
       }
       const e2 = new LoopbackPort();
-      this.#As = e2;
-      const i2 = "fake" + _PDFWorker.#_r++, n2 = new MessageHandler(i2 + "_worker", i2, e2);
+      this.#Es = e2;
+      const i2 = "fake" + _PDFWorker.#kr++, n2 = new MessageHandler(i2 + "_worker", i2, e2);
       t2.setup(n2, e2);
-      this.#Sr = new MessageHandler(i2, i2 + "_worker", e2);
-      this.#Ir();
+      this.#Tr = new MessageHandler(i2, i2 + "_worker", e2);
+      this.#Fr();
     }).catch((t2) => {
-      this.#Vs.reject(new Error(`Setting up fake worker failed: "${t2.message}".`));
+      this.#$s.reject(new Error(`Setting up fake worker failed: "${t2.message}".`));
     });
   }
   destroy() {
     this.destroyed = true;
-    this.#Tr?.terminate();
+    this.#_r?.terminate();
+    this.#_r = null;
+    _PDFWorker.#Mr.delete(this.#Es);
+    this.#Es = null;
+    this.#Tr?.destroy();
     this.#Tr = null;
-    _PDFWorker.#Mr.delete(this.#As);
-    this.#As = null;
-    this.#Sr?.destroy();
-    this.#Sr = null;
   }
   static create(t2) {
     const e2 = this.#Mr.get(t2?.port);
@@ -13615,7 +13671,7 @@ var PDFWorker = class _PDFWorker {
     if (GlobalWorkerOptions.workerSrc) return GlobalWorkerOptions.workerSrc;
     throw new Error('No "GlobalWorkerOptions.workerSrc" specified.');
   }
-  static get #Fr() {
+  static get #Or() {
     try {
       return globalThis.pdfjsWorker?.WorkerMessageHandler || null;
     } catch {
@@ -13624,7 +13680,7 @@ var PDFWorker = class _PDFWorker {
   }
   static get _setupFakeWorkerGlobal() {
     return shadow(this, "_setupFakeWorkerGlobal", (async () => {
-      if (this.#Fr) return this.#Fr;
+      if (this.#Or) return this.#Or;
       return (await import(
         /*webpackIgnore: true*/
         /*@vite-ignore*/
@@ -13635,17 +13691,17 @@ var PDFWorker = class _PDFWorker {
 };
 var WorkerTransport = class {
   downloadInfoCapability = Promise.withResolvers();
-  #Rr = null;
-  #Br = /* @__PURE__ */ new Map();
-  #Lr = null;
-  #Nr = /* @__PURE__ */ new Map();
+  #Br = null;
+  #Lr = /* @__PURE__ */ new Map();
+  #Nr = null;
   #Ur = /* @__PURE__ */ new Map();
   #Hr = /* @__PURE__ */ new Map();
-  #zr = null;
+  #zr = /* @__PURE__ */ new Map();
+  #Gr = null;
   constructor(t2, e2, i2, n2, s2, r2) {
     this.messageHandler = t2;
     this.loadingTask = e2;
-    this.#Lr = i2;
+    this.#Nr = i2;
     this.commonObjs = new PDFObjects();
     this.fontLoader = new FontLoader({ ownerDocument: n2.ownerDocument, styleElement: n2.styleElement });
     this.enableHWA = n2.enableHWA;
@@ -13661,74 +13717,74 @@ var WorkerTransport = class {
   }
   updatePage(t2) {
     const { _pageIndex: e2 } = t2;
-    this.#Nr.set(e2, t2);
-    this.#Ur.set(e2, Promise.resolve(t2));
+    this.#Ur.set(e2, t2);
+    this.#Hr.set(e2, Promise.resolve(t2));
   }
-  #Gr(t2, e2 = null) {
-    return this.#Br.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, e2));
+  #jr(t2, e2 = null) {
+    return this.#Lr.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, e2));
   }
-  #ys({ loaded: t2, total: e2 }) {
+  #vs({ loaded: t2, total: e2 }) {
     this.loadingTask.onProgress?.({ loaded: t2, total: e2, percent: e2 ? MathClamp(Math.round(t2 / e2 * 100), 0, 100) : NaN });
   }
   get annotationStorage() {
     return shadow(this, "annotationStorage", new AnnotationStorage());
   }
-  getRenderingIntent(t2, e2 = f.ENABLE, i2 = null, n2 = false, s2 = false) {
-    let r2 = h, a2 = tt;
+  getRenderingIntent(t2, e2 = m.ENABLE, i2 = null, n2 = false, s2 = false) {
+    let r2 = l, a2 = et;
     switch (t2) {
       case "any":
-        r2 = l;
+        r2 = o;
         break;
       case "display":
         break;
       case "print":
-        r2 = c;
+        r2 = h;
         break;
       default:
         warn(`getRenderingIntent - invalid intent: ${t2}`);
     }
-    const o2 = r2 & c && i2 instanceof PrintAnnotationStorage ? i2 : this.annotationStorage;
+    const f2 = r2 & h && i2 instanceof PrintAnnotationStorage ? i2 : this.annotationStorage;
     switch (e2) {
-      case f.DISABLE:
-        r2 += p;
-        break;
-      case f.ENABLE:
-        break;
-      case f.ENABLE_FORMS:
-        r2 += d;
-        break;
-      case f.ENABLE_STORAGE:
+      case m.DISABLE:
         r2 += u;
-        a2 = o2.serializable;
+        break;
+      case m.ENABLE:
+        break;
+      case m.ENABLE_FORMS:
+        r2 += c;
+        break;
+      case m.ENABLE_STORAGE:
+        r2 += d;
+        a2 = f2.serializable;
         break;
       default:
         warn(`getRenderingIntent - invalid annotationMode: ${e2}`);
     }
-    n2 && (r2 += g);
-    s2 && (r2 += m);
-    const { ids: b2, hash: y2 } = o2.modifiedIds;
+    n2 && (r2 += p);
+    s2 && (r2 += g);
+    const { ids: b2, hash: y2 } = f2.modifiedIds;
     return { renderingIntent: r2, cacheKey: [r2, a2.hash, y2].join("_"), annotationStorageSerializable: a2, modifiedIds: b2 };
   }
   destroy() {
     if (this.destroyCapability) return this.destroyCapability.promise;
     this.destroyed = true;
     this.destroyCapability = Promise.withResolvers();
-    this.#zr?.reject(new Error("Worker was destroyed during onPassword callback"));
+    this.#Gr?.reject(new Error("Worker was destroyed during onPassword callback"));
     const t2 = [];
-    for (const e3 of this.#Nr.values()) t2.push(e3._destroy());
-    this.#Nr.clear();
+    for (const e3 of this.#Ur.values()) t2.push(e3._destroy());
     this.#Ur.clear();
     this.#Hr.clear();
+    this.#zr.clear();
     Object.hasOwn(this, "annotationStorage") && this.annotationStorage.resetModified();
     const e2 = this.messageHandler.sendWithPromise("Terminate", null);
     t2.push(e2);
     Promise.all(t2).then(() => {
       this.commonObjs.clear();
       this.fontLoader.clear();
-      this.#Br.clear();
+      this.#Lr.clear();
       this.filterFactory.destroy();
       TextLayer.cleanup();
-      this.#Lr?.cancelAllRequests(new AbortException("Worker was terminated."));
+      this.#Nr?.cancelAllRequests(new AbortException("Worker was terminated."));
       this.messageHandler?.destroy();
       this.messageHandler = null;
       this.destroyCapability.resolve();
@@ -13738,11 +13794,11 @@ var WorkerTransport = class {
   setupMessageHandler() {
     const { messageHandler: t2, loadingTask: e2 } = this;
     t2.on("GetReader", (t3, e3) => {
-      assert(this.#Lr, "GetReader - no `BasePDFStream` instance available.");
-      this.#Rr = this.#Lr.getFullReader();
-      this.#Rr.onProgress = (t4) => this.#ys(t4);
+      assert(this.#Nr, "GetReader - no `BasePDFStream` instance available.");
+      this.#Br = this.#Nr.getFullReader();
+      this.#Br.onProgress = (t4) => this.#vs(t4);
       e3.onPull = () => {
-        this.#Rr.read().then(function({ value: t4, done: i2 }) {
+        this.#Br.read().then(function({ value: t4, done: i2 }) {
           if (i2) e3.close();
           else {
             assert(t4 instanceof ArrayBuffer, "GetReader - expected an ArrayBuffer.");
@@ -13753,21 +13809,21 @@ var WorkerTransport = class {
         });
       };
       e3.onCancel = (t4) => {
-        this.#Rr.cancel(t4);
+        this.#Br.cancel(t4);
         e3.ready.catch((t5) => {
           if (!this.destroyed) throw t5;
         });
       };
     });
     t2.on("ReaderHeadersReady", async (t3) => {
-      await this.#Rr.headersReady;
-      const { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 } = this.#Rr;
-      e3 && i2 && (this.#Rr.onProgress = null);
+      await this.#Br.headersReady;
+      const { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 } = this.#Br;
+      e3 && i2 && (this.#Br.onProgress = null);
       return { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 };
     });
     t2.on("GetRangeReader", (t3, e3) => {
-      assert(this.#Lr, "GetRangeReader - no `BasePDFStream` instance available.");
-      const i2 = this.#Lr.getRangeReader(t3.begin, t3.end);
+      assert(this.#Nr, "GetRangeReader - no `BasePDFStream` instance available.");
+      const i2 = this.#Nr.getRangeReader(t3.begin, t3.end);
       if (i2) {
         e3.onPull = () => {
           i2.read().then(function({ value: t4, done: i3 }) {
@@ -13799,25 +13855,25 @@ var WorkerTransport = class {
       e2._capability.reject(wrapReason(t3));
     });
     t2.on("PasswordRequest", (t3) => {
-      this.#zr = Promise.withResolvers();
+      this.#Gr = Promise.withResolvers();
       try {
         if (!e2.onPassword) throw wrapReason(t3);
         const updatePassword = (t4) => {
-          t4 instanceof Error ? this.#zr.reject(t4) : this.#zr.resolve({ password: t4 });
+          t4 instanceof Error ? this.#Gr.reject(t4) : this.#Gr.resolve({ password: t4 });
         };
         e2.onPassword(updatePassword, t3.code);
       } catch (t4) {
-        this.#zr.reject(t4);
+        this.#Gr.reject(t4);
       }
-      return this.#zr.promise;
+      return this.#Gr.promise;
     });
     t2.on("DataLoaded", (t3) => {
-      this.#ys({ loaded: t3.length, total: t3.length });
+      this.#vs({ loaded: t3.length, total: t3.length });
       this.downloadInfoCapability.resolve(t3);
     });
     t2.on("StartRenderPage", (t3) => {
       if (this.destroyed) return;
-      this.#Nr.get(t3.pageIndex)._startRenderPage(t3.transparency, t3.cacheKey);
+      this.#Ur.get(t3.pageIndex)._startRenderPage(t3.transparency, t3.cacheKey);
     });
     t2.on("commonobj", ([e3, i2, n2]) => {
       if (this.destroyed) return null;
@@ -13839,7 +13895,7 @@ var WorkerTransport = class {
         case "CopyLocalImage":
           const { imageRef: o2 } = n2;
           assert(o2, "The imageRef must be defined.");
-          for (const t3 of this.#Nr.values()) for (const [, i3] of t3.objs) {
+          for (const t3 of this.#Ur.values()) for (const [, i3] of t3.objs) {
             if (i3?.ref !== o2) continue;
             if (!i3.dataLen) return null;
             const t4 = structuredClone(i3);
@@ -13864,7 +13920,7 @@ var WorkerTransport = class {
     });
     t2.on("obj", ([t3, e3, i2, n2]) => {
       if (this.destroyed) return;
-      const s2 = this.#Nr.get(e3);
+      const s2 = this.#Ur.get(e3);
       if (!s2.objs.has(t3)) if (0 !== s2._intentStates.size) switch (i2) {
         case "Image":
         case "Pattern":
@@ -13876,7 +13932,7 @@ var WorkerTransport = class {
       else n2?.bitmap?.close();
     });
     t2.on("DocProgress", (t3) => {
-      this.destroyed || this.#ys(t3);
+      this.destroyed || this.#vs(t3);
     });
     t2.on("FetchBinaryData", async (t3) => {
       if (this.destroyed) throw new Error("Worker was destroyed.");
@@ -13890,7 +13946,7 @@ var WorkerTransport = class {
   saveDocument() {
     this.annotationStorage.size <= 0 && warn("saveDocument called while `annotationStorage` is empty, please use the getData-method instead.");
     const { map: t2, transfer: e2 } = this.annotationStorage.serializable;
-    return this.messageHandler.sendWithPromise("SaveDocument", { isPureXfa: !!this._htmlForXfa, numPages: this._numPages, annotationStorage: t2, filename: this.#Rr?.filename ?? null }, e2).finally(() => {
+    return this.messageHandler.sendWithPromise("SaveDocument", { isPureXfa: !!this._htmlForXfa, numPages: this._numPages, annotationStorage: t2, filename: this.#Br?.filename ?? null }, e2).finally(() => {
       this.annotationStorage.resetModified();
     });
   }
@@ -13929,16 +13985,16 @@ var WorkerTransport = class {
   }
   getPage(t2) {
     if (!Number.isInteger(t2) || t2 <= 0 || t2 > this.pagesMapper.pagesNumber) return Promise.reject(new Error("Invalid page request."));
-    const e2 = t2 - 1, i2 = this.pagesMapper.getPageId(t2) - 1, n2 = this.#Ur.get(e2);
+    const e2 = t2 - 1, i2 = this.pagesMapper.getPageId(t2) - 1, n2 = this.#Hr.get(e2);
     if (n2) return n2;
     const s2 = this.messageHandler.sendWithPromise("GetPage", { pageIndex: i2 }).then((t3) => {
       if (this.destroyed) throw new Error("Transport destroyed");
-      t3.refStr && this.#Hr.set(t3.refStr, i2);
+      t3.refStr && this.#zr.set(t3.refStr, i2);
       const n3 = new PDFPageProxy(e2, t3, this, this.pagesMapper, this._params.pdfBug);
-      this.#Nr.set(e2, n3);
+      this.#Ur.set(e2, n3);
       return n3;
     });
-    this.#Ur.set(e2, s2);
+    this.#Hr.set(e2, s2);
     return s2;
   }
   async getPageIndex(t2) {
@@ -13951,10 +14007,16 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetAnnotations", { pageIndex: this.pagesMapper.getPageId(t2 + 1) - 1, intent: e2 });
   }
   getFieldObjects() {
-    return this.#Gr("GetFieldObjects");
+    return this.#jr("GetFieldObjects");
+  }
+  getSignatures() {
+    return this.#jr("GetSignatures");
+  }
+  getSignatureData(t2) {
+    return this.messageHandler.sendWithPromise("GetSignatureData", t2);
   }
   hasJSActions() {
-    return this.#Gr("HasJSActions");
+    return this.#jr("HasJSActions");
   }
   getCalculationOrderIds() {
     return this.messageHandler.sendWithPromise("GetCalculationOrderIds", null);
@@ -13990,7 +14052,7 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetAnnotationsByType", { types: t2, pageIndexesToSkip: e2 });
   }
   getDocJSActions() {
-    return this.#Gr("GetDocJSActions");
+    return this.#jr("GetDocJSActions");
   }
   getPageJSActions(t2) {
     return this.messageHandler.sendWithPromise("GetPageJSActions", { pageIndex: this.pagesMapper.getPageId(t2 + 1) - 1 });
@@ -14002,14 +14064,14 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetOutline", null);
   }
   getOptionalContentConfig(t2) {
-    return this.#Gr("GetOptionalContentConfig").then((e2) => new OptionalContentConfig(e2, t2));
+    return this.#jr("GetOptionalContentConfig").then((e2) => new OptionalContentConfig(e2, t2));
   }
   getPermissions() {
     return this.messageHandler.sendWithPromise("GetPermissions", null);
   }
   getMetadata() {
     const t2 = "GetMetadata";
-    return this.#Br.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, null).then((t3) => ({ info: t3[0], metadata: t3[1] ? new Metadata(t3[1]) : null, contentDispositionFilename: this.#Rr?.filename ?? null, contentLength: this.#Rr?.contentLength ?? null, hasStructTree: t3[2] })));
+    return this.#Lr.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, null).then((t3) => ({ info: t3[0], metadata: t3[1] ? new Metadata(t3[1]) : null, contentDispositionFilename: this.#Br?.filename ?? null, contentLength: this.#Br?.contentLength ?? null, hasStructTree: t3[2] })));
   }
   getMarkInfo() {
     return this.messageHandler.sendWithPromise("GetMarkInfo", null);
@@ -14020,19 +14082,19 @@ var WorkerTransport = class {
   async startCleanup(t2 = false) {
     if (!this.destroyed) {
       await this.messageHandler.sendWithPromise("Cleanup", null);
-      for (const t3 of this.#Nr.values()) {
+      for (const t3 of this.#Ur.values()) {
         if (!t3.cleanup()) throw new Error(`startCleanup: Page ${t3.pageNumber} is currently rendering.`);
       }
       this.commonObjs.clear();
       t2 || this.fontLoader.clear();
-      this.#Br.clear();
+      this.#Lr.clear();
       this.filterFactory.destroy(true);
       TextLayer.cleanup();
     }
   }
   cachedPageNumber(t2) {
     if (!isRefProxy(t2)) return null;
-    const e2 = 0 === t2.gen ? `${t2.num}R` : `${t2.num}R${t2.gen}`, i2 = this.#Hr.get(e2);
+    const e2 = 0 === t2.gen ? `${t2.num}R` : `${t2.num}R${t2.gen}`, i2 = this.#zr.get(e2);
     if (i2 >= 0) {
       const t3 = this.pagesMapper.getPageNumber(i2 + 1);
       if (0 !== t3) return t3;
@@ -14064,8 +14126,8 @@ var RenderTask = class {
   }
 };
 var InternalRenderTask = class _InternalRenderTask {
-  #jr = null;
-  static #Wr = /* @__PURE__ */ new WeakSet();
+  #Wr = null;
+  static #Vr = /* @__PURE__ */ new WeakSet();
   constructor({ callback: t2, params: e2, objs: i2, commonObjs: n2, annotationCanvasMap: s2, operatorList: r2, pageIndex: a2, canvasFactory: o2, filterFactory: l2, useRequestAnimationFrame: h2 = false, pdfBug: c2 = false, pageColors: d2 = null, enableHWA: u2 = false, operationsFilter: p2 = null }) {
     this.callback = t2;
     this.params = e2;
@@ -14104,8 +14166,8 @@ var InternalRenderTask = class _InternalRenderTask {
   initializeGraphics({ transparency: t2 = false, optionalContentConfig: e2 }) {
     if (this.cancelled) return;
     if (this._canvas) {
-      if (_InternalRenderTask.#Wr.has(this._canvas)) throw new Error("Cannot use the same canvas during multiple render() operations. Use different canvas or ensure previous operations were cancelled or completed.");
-      _InternalRenderTask.#Wr.add(this._canvas);
+      if (_InternalRenderTask.#Vr.has(this._canvas)) throw new Error("Cannot use the same canvas during multiple render() operations. Use different canvas or ensure previous operations were cancelled or completed.");
+      _InternalRenderTask.#Vr.add(this._canvas);
     }
     if (this._pdfBug && globalThis.StepperManager?.enabled) {
       this.stepper = globalThis.StepperManager.create(this._pageIndex);
@@ -14123,11 +14185,11 @@ var InternalRenderTask = class _InternalRenderTask {
     this.running = false;
     this.cancelled = true;
     this.gfx?.endDrawing();
-    if (this.#jr) {
-      window.cancelAnimationFrame(this.#jr);
-      this.#jr = null;
+    if (this.#Wr) {
+      window.cancelAnimationFrame(this.#Wr);
+      this.#Wr = null;
     }
-    _InternalRenderTask.#Wr.delete(this._canvas);
+    _InternalRenderTask.#Vr.delete(this._canvas);
     t2 ||= new RenderingCancelledException(`Rendering cancelled, page ${this._pageIndex + 1}`, e2);
     this.callback(t2);
     this.task.onError?.(t2);
@@ -14144,8 +14206,8 @@ var InternalRenderTask = class _InternalRenderTask {
     this.cancelled || (this.task.onContinue ? this.task.onContinue(this._scheduleNextBound) : this._scheduleNext());
   }
   _scheduleNext() {
-    this._useRequestAnimationFrame ? this.#jr = window.requestAnimationFrame(() => {
-      this.#jr = null;
+    this._useRequestAnimationFrame ? this.#Wr = window.requestAnimationFrame(() => {
+      this.#Wr = null;
       this._nextBound().catch(this._cancelBound);
     }) : Promise.resolve().then(this._nextBound).catch(this._cancelBound);
   }
@@ -14156,186 +14218,186 @@ var InternalRenderTask = class _InternalRenderTask {
         this.running = false;
         if (this.operatorList.lastChunk) {
           this.gfx.endDrawing();
-          _InternalRenderTask.#Wr.delete(this._canvas);
+          _InternalRenderTask.#Vr.delete(this._canvas);
           this.callback();
         }
       }
     }
   }
 };
-var Ut = "6.1.200";
-var Ht = "6353acefe";
+var Ht = "6.2.108";
+var zt = "0365cbde0";
 __webpack_require__(3068);
 var ColorPicker = class _ColorPicker {
-  #Vr = null;
   #$r = null;
-  #qr;
-  #Kr = null;
-  #Xr = false;
+  #qr = null;
+  #Kr;
+  #Xr = null;
   #Yr = false;
-  #a = null;
-  #Jr;
-  #Qr = null;
-  #y = null;
-  static #Zr = null;
+  #Jr = false;
+  #o = null;
+  #Qr;
+  #Zr = null;
+  #v = null;
+  static #ta = null;
   static get _keyboardManager() {
     return shadow(this, "_keyboardManager", new KeyboardManager([[["Escape"], _ColorPicker.prototype._hideDropdownFromKeyboard], [["Space"], _ColorPicker.prototype._colorSelectFromKeyboard], [["ArrowDown", "ArrowRight"], _ColorPicker.prototype._moveToNext], [["ArrowUp", "ArrowLeft"], _ColorPicker.prototype._moveToPrevious], [["Home"], _ColorPicker.prototype._moveToBeginning], [["End"], _ColorPicker.prototype._moveToEnd]]));
   }
   constructor({ editor: t2 = null, uiManager: e2 = null }) {
     if (t2) {
-      this.#Yr = false;
-      this.#a = t2;
-    } else this.#Yr = true;
-    this.#y = t2?._uiManager || e2;
-    this.#Jr = this.#y._eventBus;
-    this.#qr = t2?.color?.toUpperCase() || this.#y?.highlightColors.values().next().value || "#FFFF98";
-    _ColorPicker.#Zr ||= Object.freeze({ blue: "pdfjs-editor-colorpicker-blue", green: "pdfjs-editor-colorpicker-green", pink: "pdfjs-editor-colorpicker-pink", red: "pdfjs-editor-colorpicker-red", yellow: "pdfjs-editor-colorpicker-yellow" });
+      this.#Jr = false;
+      this.#o = t2;
+    } else this.#Jr = true;
+    this.#v = t2?._uiManager || e2;
+    this.#Qr = this.#v._eventBus;
+    this.#Kr = t2?.color?.toUpperCase() || this.#v?.highlightColors.values().next().value || "#FFFF98";
+    _ColorPicker.#ta ||= Object.freeze({ blue: "pdfjs-editor-colorpicker-blue", green: "pdfjs-editor-colorpicker-green", pink: "pdfjs-editor-colorpicker-pink", red: "pdfjs-editor-colorpicker-red", yellow: "pdfjs-editor-colorpicker-yellow" });
   }
   renderButton() {
-    const t2 = this.#Vr = document.createElement("button");
+    const t2 = this.#$r = document.createElement("button");
     t2.className = "colorPicker";
     t2.tabIndex = "0";
     t2.setAttribute("data-l10n-id", "pdfjs-editor-colorpicker-button");
     t2.ariaHasPopup = "true";
-    this.#a && (t2.ariaControls = `${this.#a.id}_colorpicker_dropdown`);
-    const e2 = this.#y._signal;
-    t2.addEventListener("click", this.#ta.bind(this), { signal: e2 });
-    t2.addEventListener("keydown", this.#ea.bind(this), { signal: e2 });
-    const i2 = this.#$r = document.createElement("span");
+    this.#o && (t2.ariaControls = `${this.#o.id}_colorpicker_dropdown`);
+    const e2 = this.#v._signal;
+    t2.addEventListener("click", this.#ea.bind(this), { signal: e2 });
+    t2.addEventListener("keydown", this.#ia.bind(this), { signal: e2 });
+    const i2 = this.#qr = document.createElement("span");
     i2.className = "swatch";
     i2.ariaHidden = "true";
-    i2.style.backgroundColor = this.#qr;
+    i2.style.backgroundColor = this.#Kr;
     t2.append(i2);
     return t2;
   }
   renderMainDropdown() {
-    const t2 = this.#Kr = this.#ia();
+    const t2 = this.#Xr = this.#na();
     t2.ariaOrientation = "horizontal";
     t2.ariaLabelledBy = "highlightColorPickerLabel";
     return t2;
   }
-  #ia() {
-    const t2 = document.createElement("div"), e2 = this.#y._signal;
+  #na() {
+    const t2 = document.createElement("div"), e2 = this.#v._signal;
     t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
     t2.className = "dropdown";
     t2.role = "listbox";
     t2.ariaMultiSelectable = "false";
     t2.ariaOrientation = "vertical";
     t2.setAttribute("data-l10n-id", "pdfjs-editor-colorpicker-dropdown");
-    this.#a && (t2.id = `${this.#a.id}_colorpicker_dropdown`);
-    for (const [i2, n2] of this.#y.highlightColors) {
+    this.#o && (t2.id = `${this.#o.id}_colorpicker_dropdown`);
+    for (const [i2, n2] of this.#v.highlightColors) {
       const s2 = document.createElement("button");
       s2.tabIndex = "0";
       s2.role = "option";
       s2.setAttribute("data-color", n2);
       s2.title = i2;
-      s2.setAttribute("data-l10n-id", _ColorPicker.#Zr[i2]);
+      s2.setAttribute("data-l10n-id", _ColorPicker.#ta[i2]);
       const r2 = document.createElement("span");
       s2.append(r2);
       r2.className = "swatch";
       r2.style.backgroundColor = n2;
-      s2.ariaSelected = n2 === this.#qr;
-      s2.addEventListener("click", this.#na.bind(this, n2), { signal: e2 });
+      s2.ariaSelected = n2 === this.#Kr;
+      s2.addEventListener("click", this.#sa.bind(this, n2), { signal: e2 });
       t2.append(s2);
     }
-    t2.addEventListener("keydown", this.#ea.bind(this), { signal: e2 });
+    t2.addEventListener("keydown", this.#ia.bind(this), { signal: e2 });
     return t2;
   }
-  #na(t2, e2) {
+  #sa(t2, e2) {
     e2.stopPropagation();
-    this.#Jr.dispatch("switchannotationeditorparams", { source: this, type: w.HIGHLIGHT_COLOR, value: t2 });
+    this.#Qr.dispatch("switchannotationeditorparams", { source: this, type: v.HIGHLIGHT_COLOR, value: t2 });
     this.updateColor(t2);
   }
   _colorSelectFromKeyboard(t2) {
-    if (t2.target === this.#Vr) {
-      this.#ta(t2);
+    if (t2.target === this.#$r) {
+      this.#ea(t2);
       return;
     }
     const e2 = t2.target.getAttribute("data-color");
-    e2 && this.#na(e2, t2);
+    e2 && this.#sa(e2, t2);
   }
   _moveToNext(t2) {
-    this.#sa ? t2.target !== this.#Vr ? t2.target.nextSibling?.focus() : this.#Kr.firstElementChild?.focus() : this.#ta(t2);
+    this.#ra ? t2.target !== this.#$r ? t2.target.nextSibling?.focus() : this.#Xr.firstElementChild?.focus() : this.#ea(t2);
   }
   _moveToPrevious(t2) {
-    if (t2.target !== this.#Kr?.firstElementChild && t2.target !== this.#Vr) {
-      this.#sa || this.#ta(t2);
+    if (t2.target !== this.#Xr?.firstElementChild && t2.target !== this.#$r) {
+      this.#ra || this.#ea(t2);
       t2.target.previousSibling?.focus();
-    } else this.#sa && this._hideDropdownFromKeyboard();
+    } else this.#ra && this._hideDropdownFromKeyboard();
   }
   _moveToBeginning(t2) {
-    this.#sa ? this.#Kr.firstElementChild?.focus() : this.#ta(t2);
+    this.#ra ? this.#Xr.firstElementChild?.focus() : this.#ea(t2);
   }
   _moveToEnd(t2) {
-    this.#sa ? this.#Kr.lastElementChild?.focus() : this.#ta(t2);
+    this.#ra ? this.#Xr.lastElementChild?.focus() : this.#ea(t2);
   }
-  #ea(t2) {
+  #ia(t2) {
     _ColorPicker._keyboardManager.exec(this, t2);
   }
-  #ta(t2) {
-    if (this.#sa) {
+  #ea(t2) {
+    if (this.#ra) {
       this.hideDropdown();
       return;
     }
-    this.#Xr = 0 === t2.detail;
-    if (!this.#Qr) {
-      this.#Qr = new AbortController();
-      window.addEventListener("pointerdown", this.#p.bind(this), { signal: this.#y.combinedSignal(this.#Qr) });
+    this.#Yr = 0 === t2.detail;
+    if (!this.#Zr) {
+      this.#Zr = new AbortController();
+      window.addEventListener("pointerdown", this.#g.bind(this), { signal: this.#v.combinedSignal(this.#Zr) });
     }
-    this.#Vr.ariaExpanded = "true";
-    if (this.#Kr) {
-      this.#Kr.classList.remove("hidden");
+    this.#$r.ariaExpanded = "true";
+    if (this.#Xr) {
+      this.#Xr.classList.remove("hidden");
       return;
     }
-    const e2 = this.#Kr = this.#ia();
-    this.#Vr.append(e2);
+    const e2 = this.#Xr = this.#na();
+    this.#$r.append(e2);
   }
-  #p(t2) {
-    this.#Kr?.contains(t2.target) || this.hideDropdown();
+  #g(t2) {
+    this.#Xr?.contains(t2.target) || this.hideDropdown();
   }
   hideDropdown() {
-    this.#Kr?.classList.add("hidden");
-    this.#Vr.ariaExpanded = "false";
-    this.#Qr?.abort();
-    this.#Qr = null;
+    this.#Xr?.classList.add("hidden");
+    this.#$r.ariaExpanded = "false";
+    this.#Zr?.abort();
+    this.#Zr = null;
   }
-  get #sa() {
-    return this.#Kr && !this.#Kr.classList.contains("hidden");
+  get #ra() {
+    return this.#Xr && !this.#Xr.classList.contains("hidden");
   }
   _hideDropdownFromKeyboard() {
-    if (!this.#Yr) if (this.#sa) {
+    if (!this.#Jr) if (this.#ra) {
       this.hideDropdown();
-      this.#Vr.focus({ preventScroll: true, focusVisible: this.#Xr });
-    } else this.#a?.unselect();
+      this.#$r.focus({ preventScroll: true, focusVisible: this.#Yr });
+    } else this.#o?.unselect();
   }
   updateColor(t2) {
-    this.#$r && (this.#$r.style.backgroundColor = t2);
-    if (!this.#Kr) return;
-    const e2 = this.#y.highlightColors.values();
-    for (const i2 of this.#Kr.children) i2.ariaSelected = e2.next().value === t2.toUpperCase();
+    this.#qr && (this.#qr.style.backgroundColor = t2);
+    if (!this.#Xr) return;
+    const e2 = this.#v.highlightColors.values();
+    for (const i2 of this.#Xr.children) i2.ariaSelected = e2.next().value === t2.toUpperCase();
   }
   destroy() {
-    this.#Vr?.remove();
-    this.#Vr = null;
+    this.#$r?.remove();
     this.#$r = null;
-    this.#Kr?.remove();
-    this.#Kr = null;
+    this.#qr = null;
+    this.#Xr?.remove();
+    this.#Xr = null;
   }
 };
 var BasicColorPicker = class _BasicColorPicker {
-  #ra = null;
-  #aa = false;
-  #a = null;
-  #y = null;
-  static #Zr = null;
+  #aa = null;
+  #oa = false;
+  #o = null;
+  #v = null;
+  static #ta = null;
   constructor(t2) {
-    this.#a = t2;
-    this.#y = t2._uiManager;
-    _BasicColorPicker.#Zr ||= Object.freeze({ freetext: "pdfjs-editor-color-picker-free-text-input", ink: "pdfjs-editor-color-picker-ink-input" });
+    this.#o = t2;
+    this.#v = t2._uiManager;
+    _BasicColorPicker.#ta ||= Object.freeze({ freetext: "pdfjs-editor-color-picker-free-text-input", ink: "pdfjs-editor-color-picker-ink-input" });
   }
   renderButton() {
-    if (this.#ra) return this.#ra;
-    const { editorType: t2, colorType: e2, colorAndOpacityType: i2, opacityType: n2, color: s2, opacity: r2 } = this.#a, a2 = this.#aa = FeatureTest.isAlphaColorInputSupported && void 0 !== n2, o2 = this.#ra = document.createElement("input");
+    if (this.#aa) return this.#aa;
+    const { editorType: t2, colorType: e2, colorAndOpacityType: i2, opacityType: n2, color: s2, opacity: r2 } = this.#o, a2 = this.#oa = FeatureTest.isAlphaColorInputSupported && void 0 !== n2, o2 = this.#aa = document.createElement("input");
     o2.type = "color";
     if (a2) {
       o2.setAttribute("alpha", "");
@@ -14344,35 +14406,35 @@ var BasicColorPicker = class _BasicColorPicker {
     } else o2.value = s2 || "#000000";
     o2.className = "basicColorPicker";
     o2.tabIndex = 0;
-    o2.setAttribute("data-l10n-id", _BasicColorPicker.#Zr[t2]);
+    o2.setAttribute("data-l10n-id", _BasicColorPicker.#ta[t2]);
     o2.addEventListener("input", () => {
       if (a2) {
         const t3 = getRGBA(o2.value);
         if (!t3) return;
         const [s3, r3, a3, l2] = t3, h2 = Util.makeHexColor(s3, r3, a3);
-        if (void 0 !== i2) this.#y.updateParams(i2, { color: h2, opacity: l2 });
+        if (void 0 !== i2) this.#v.updateParams(i2, { color: h2, opacity: l2 });
         else {
-          this.#y.updateParams(e2, h2);
-          this.#y.updateParams(n2, l2);
+          this.#v.updateParams(e2, h2);
+          this.#v.updateParams(n2, l2);
         }
-      } else this.#y.updateParams(e2, o2.value);
-    }, { signal: this.#y._signal });
+      } else this.#v.updateParams(e2, o2.value);
+    }, { signal: this.#v._signal });
     return o2;
   }
   update(t2) {
-    if (this.#ra) if (this.#aa) {
-      const e2 = Util.hexNums[Math.round(255 * this.#a.opacity)];
-      this.#ra.value = t2 + e2;
-    } else this.#ra.value = t2;
+    if (this.#aa) if (this.#oa) {
+      const e2 = Util.hexNums[Math.round(255 * this.#o.opacity)];
+      this.#aa.value = t2 + e2;
+    } else this.#aa.value = t2;
   }
   updateOpacity(t2) {
-    if (!this.#ra || !this.#aa) return;
+    if (!this.#aa || !this.#oa) return;
     const e2 = Util.hexNums[Math.round(255 * t2)];
-    this.#ra.value = this.#a.color + e2;
+    this.#aa.value = this.#o.color + e2;
   }
   destroy() {
-    this.#ra?.remove();
-    this.#ra = null;
+    this.#aa?.remove();
+    this.#aa = null;
   }
   hideDropdown() {
   }
@@ -14454,19 +14516,19 @@ var BaseSVGFactory = class {
 };
 var DOMSVGFactory = class extends BaseSVGFactory {
   _createSVG(t2) {
-    return document.createElementNS(o, t2);
+    return document.createElementNS(a, t2);
   }
 };
-var zt = /* @__PURE__ */ new WeakSet();
-var Gt = 60 * (/* @__PURE__ */ new Date()).getTimezoneOffset() * 1e3;
+var Gt = /* @__PURE__ */ new WeakSet();
+var jt = 60 * (/* @__PURE__ */ new Date()).getTimezoneOffset() * 1e3;
 var AnnotationElementFactory = class {
   static create(t2) {
     switch (t2.data.annotationType) {
-      case M.LINK:
+      case k.LINK:
         return new LinkAnnotationElement(t2);
-      case M.TEXT:
+      case k.TEXT:
         return new TextAnnotationElement(t2);
-      case M.WIDGET:
+      case k.WIDGET:
         switch (t2.data.fieldType) {
           case "Tx":
             return new TextWidgetAnnotationElement(t2);
@@ -14478,38 +14540,39 @@ var AnnotationElementFactory = class {
             return new SignatureWidgetAnnotationElement(t2);
         }
         return new WidgetAnnotationElement(t2);
-      case M.POPUP:
+      case k.POPUP:
         return new PopupAnnotationElement(t2);
-      case M.FREETEXT:
+      case k.FREETEXT:
         return new FreeTextAnnotationElement(t2);
-      case M.LINE:
+      case k.LINE:
         return new LineAnnotationElement(t2);
-      case M.SQUARE:
+      case k.SQUARE:
         return new SquareAnnotationElement(t2);
-      case M.CIRCLE:
+      case k.CIRCLE:
         return new CircleAnnotationElement(t2);
-      case M.POLYLINE:
+      case k.POLYLINE:
         return new PolylineAnnotationElement(t2);
-      case M.CARET:
+      case k.CARET:
         return new CaretAnnotationElement(t2);
-      case M.INK:
+      case k.INK:
         return new InkAnnotationElement(t2);
-      case M.POLYGON:
+      case k.POLYGON:
         return new PolygonAnnotationElement(t2);
-      case M.HIGHLIGHT:
+      case k.HIGHLIGHT:
         return new HighlightAnnotationElement(t2);
-      case M.UNDERLINE:
+      case k.UNDERLINE:
         return new UnderlineAnnotationElement(t2);
-      case M.SQUIGGLY:
+      case k.SQUIGGLY:
         return new SquigglyAnnotationElement(t2);
-      case M.STRIKEOUT:
+      case k.STRIKEOUT:
         return new StrikeOutAnnotationElement(t2);
-      case M.STAMP:
+      case k.STAMP:
         return new StampAnnotationElement(t2);
-      case M.FILEATTACHMENT:
+      case k.FILEATTACHMENT:
         return new FileAttachmentAnnotationElement(t2);
-      case M.RICHMEDIA:
-      case M.SCREEN:
+      case k.RICHMEDIA:
+      case k.SCREEN:
+      case k.SOUND:
         return new MediaAnnotationElement(t2);
       default:
         return new AnnotationElement(t2);
@@ -14517,9 +14580,9 @@ var AnnotationElementFactory = class {
   }
 };
 var AnnotationElement = class _AnnotationElement {
-  #oa = null;
-  #la = false;
-  #ha = null;
+  #la = null;
+  #ha = false;
+  #ca = null;
   constructor(t2, { isRenderable: e2 = false, ignoreBorder: i2 = false, createQuadrilaterals: n2 = false } = {}) {
     this.isRenderable = e2;
     this.data = t2.data;
@@ -14585,44 +14648,44 @@ var AnnotationElement = class _AnnotationElement {
   }
   get commentText() {
     const { data: t2 } = this;
-    return this.annotationStorage.getRawValue(`${y}${t2.id}`)?.popup?.contents || t2.contentsObj?.str || "";
+    return this.annotationStorage.getRawValue(`${b}${t2.id}`)?.popup?.contents || t2.contentsObj?.str || "";
   }
   set commentText(t2) {
     const { data: e2 } = this, i2 = { deleted: !t2, contents: t2 || "" };
-    this.annotationStorage.updateEditor(e2.id, { popup: i2 }) || this.annotationStorage.setValue(`${y}${e2.id}`, { id: e2.id, annotationType: e2.annotationType, page: this.parent.page, popup: i2, popupRef: e2.popupRef, modificationDate: /* @__PURE__ */ new Date() });
+    this.annotationStorage.updateEditor(e2.id, { popup: i2 }) || this.annotationStorage.setValue(`${b}${e2.id}`, { id: e2.id, annotationType: e2.annotationType, page: this.parent.page, popup: i2, popupRef: e2.popupRef, modificationDate: /* @__PURE__ */ new Date() });
     t2 || this.removePopup();
   }
   removePopup() {
-    (this.#ha?.popup || this.popup)?.remove();
-    this.#ha = this.popup = null;
+    (this.#ca?.popup || this.popup)?.remove();
+    this.#ca = this.popup = null;
   }
   updateEdited(t2) {
     if (!this.container) return;
-    t2.rect && (this.#oa ||= { rect: this.data.rect.slice(0) });
+    t2.rect && (this.#la ||= { rect: this.data.rect.slice(0) });
     const { rect: e2, popup: i2 } = t2;
-    e2 && this.#ca(e2);
-    let n2 = this.#ha?.popup || this.popup;
+    e2 && this.#da(e2);
+    let n2 = this.#ca?.popup || this.popup;
     if (!n2 && i2?.text) {
       this._createPopup(i2);
-      n2 = this.#ha.popup;
+      n2 = this.#ca.popup;
     }
     if (n2) {
       n2.updateEdited(t2);
       if (i2?.deleted) {
         n2.remove();
-        this.#ha = null;
+        this.#ca = null;
         this.popup = null;
       }
     }
   }
   resetEdited() {
-    if (this.#oa) {
-      this.#ca(this.#oa.rect);
-      this.#ha?.popup.resetEdited();
-      this.#oa = null;
+    if (this.#la) {
+      this.#da(this.#la.rect);
+      this.#ca?.popup.resetEdited();
+      this.#la = null;
     }
   }
-  #ca(t2) {
+  #da(t2) {
     const { container: { style: e2 }, data: { rect: i2, rotation: n2 }, parent: { viewport: { rawDims: { pageWidth: s2, pageHeight: r2, pageX: a2, pageY: o2 } } } } = this;
     i2?.splice(0, 4, ...t2);
     e2.left = 100 * (t2[0] - a2) / s2 + "%";
@@ -14658,21 +14721,21 @@ var AnnotationElement = class _AnnotationElement {
         case D:
           r2.borderStyle = "solid";
           break;
-        case P:
+        case M:
           r2.borderStyle = "dashed";
           break;
-        case I:
+        case P:
           warn("Unimplemented border style: beveled");
           break;
-        case O:
+        case I:
           warn("Unimplemented border style: inset");
           break;
-        case R:
+        case O:
           r2.borderBottomStyle = "solid";
       }
       const n3 = e2.borderColor || null;
       if (n3) {
-        this.#la = true;
+        this.#ha = true;
         r2.borderColor = Util.makeHexColor(...n3);
       } else r2.borderWidth = 0;
     }
@@ -14763,15 +14826,15 @@ var AnnotationElement = class _AnnotationElement {
     if (!t2) return;
     const [e2, i2, n2, s2] = this.data.rect.map((t3) => Math.fround(t3));
     if (8 === t2.length) {
-      const [r3, a3, o2, l3] = t2.subarray(2, 6);
-      if (n2 === r3 && s2 === a3 && e2 === o2 && i2 === l3) return;
+      const [r3, a2, o3, l3] = t2.subarray(2, 6);
+      if (n2 === r3 && s2 === a2 && e2 === o3 && i2 === l3) return;
     }
     const { style: r2 } = this.container;
-    let a2;
-    if (this.#la) {
+    let o2;
+    if (this.#ha) {
       const { borderColor: t3, borderWidth: e3 } = r2;
       r2.borderWidth = 0;
-      a2 = ["url('data:image/svg+xml;utf8,", `<svg xmlns="${o}" preserveAspectRatio="none" viewBox="0 0 1 1">`, `<g fill="transparent" stroke="${t3}" stroke-width="${e3}">`];
+      o2 = ["url('data:image/svg+xml;utf8,", `<svg xmlns="${a}" preserveAspectRatio="none" viewBox="0 0 1 1">`, `<g fill="transparent" stroke="${t3}" stroke-width="${e3}">`];
       this.container.classList.add("hasBorder");
     }
     const l2 = n2 - e2, h2 = s2 - i2, { svgFactory: c2 } = this, d2 = c2.createElement("svg");
@@ -14786,17 +14849,17 @@ var AnnotationElement = class _AnnotationElement {
     p2.setAttribute("clipPathUnits", "objectBoundingBox");
     u2.append(p2);
     for (let i3 = 2, n3 = t2.length; i3 < n3; i3 += 8) {
-      const n4 = t2[i3], r3 = t2[i3 + 1], o2 = t2[i3 + 2], d3 = t2[i3 + 3], u3 = c2.createElement("rect"), g3 = (o2 - e2) / l2, m2 = (s2 - r3) / h2, f2 = (n4 - o2) / l2, b2 = (r3 - d3) / h2;
+      const n4 = t2[i3], r3 = t2[i3 + 1], a2 = t2[i3 + 2], d3 = t2[i3 + 3], u3 = c2.createElement("rect"), g3 = (a2 - e2) / l2, m2 = (s2 - r3) / h2, f2 = (n4 - a2) / l2, b2 = (r3 - d3) / h2;
       u3.setAttribute("x", g3);
       u3.setAttribute("y", m2);
       u3.setAttribute("width", f2);
       u3.setAttribute("height", b2);
       p2.append(u3);
-      a2?.push(`<rect vector-effect="non-scaling-stroke" x="${g3}" y="${m2}" width="${f2}" height="${b2}"/>`);
+      o2?.push(`<rect vector-effect="non-scaling-stroke" x="${g3}" y="${m2}" width="${f2}" height="${b2}"/>`);
     }
-    if (this.#la) {
-      a2.push("</g></svg>')");
-      r2.backgroundImage = a2.join("");
+    if (this.#ha) {
+      o2.push("</g></svg>')");
+      r2.backgroundImage = o2.join("");
     }
     this.container.append(d2);
     this.container.style.clipPath = `url(#${g2})`;
@@ -14811,13 +14874,13 @@ var AnnotationElement = class _AnnotationElement {
       i2 = e2.contentsObj;
       n2 = e2.modificationDate;
     }
-    this.#ha = new PopupAnnotationElement({ data: { color: e2.color, titleObj: e2.titleObj, modificationDate: n2, contentsObj: i2, richText: e2.richText, parentRect: e2.rect, borderStyle: 0, id: `popup_${e2.id}`, rotation: e2.rotation, noRotate: true }, linkService: this.linkService, parent: this.parent, elements: [this] });
+    this.#ca = new PopupAnnotationElement({ data: { color: e2.color, titleObj: e2.titleObj, modificationDate: n2, contentsObj: i2, richText: e2.richText, parentRect: e2.rect, borderStyle: 0, id: `popup_${e2.id}`, rotation: e2.rotation, noRotate: true }, linkService: this.linkService, parent: this.parent, elements: [this] });
   }
   get hasPopupElement() {
-    return !!(this.#ha || this.popup || this.data.popupRef);
+    return !!(this.#ca || this.popup || this.data.popupRef);
   }
   get extraPopupElement() {
-    return this.#ha;
+    return this.#ca;
   }
   render() {
     unreachable("Abstract method `AnnotationElement.render` called");
@@ -14825,18 +14888,18 @@ var AnnotationElement = class _AnnotationElement {
   _getElementsByName(t2, e2 = null) {
     const i2 = [];
     if (this._fieldObjects) {
-      const n2 = this._fieldObjects[t2];
-      if (n2) for (const { page: t3, id: s2, exportValues: r2 } of n2) {
+      const n2 = this._fieldObjects[t2] || [];
+      for (const { page: t3, id: s2, exportValues: r2 } of n2) {
         if (-1 === t3) continue;
         if (s2 === e2) continue;
         const n3 = "string" == typeof r2 ? r2 : null, a2 = document.querySelector(`[data-element-id="${s2}"]`);
-        !a2 || zt.has(a2) ? i2.push({ id: s2, exportValue: n3, domElement: a2 }) : warn(`_getElementsByName - element not allowed: ${s2}`);
+        !a2 || Gt.has(a2) ? i2.push({ id: s2, exportValue: n3, domElement: a2 }) : warn(`_getElementsByName - element not allowed: ${s2}`);
       }
       return i2;
     }
     for (const n2 of document.getElementsByName(t2)) {
       const { exportValue: t3 } = n2, s2 = n2.getAttribute("data-element-id");
-      s2 !== e2 && (zt.has(n2) && i2.push({ id: s2, exportValue: t3, domElement: n2 }));
+      s2 !== e2 && (Gt.has(n2) && i2.push({ id: s2, exportValue: t3, domElement: n2 }));
     }
     return i2;
   }
@@ -14930,10 +14993,10 @@ var LinkAnnotationElement = class extends AnnotationElement {
       this._bindNamedAction(i2, t2.action, t2.overlaidText);
       n2 = true;
     } else if (t2.attachment) {
-      this.#da(i2, t2.attachmentId, t2.attachment, t2.overlaidText, t2.attachmentDest);
+      this.#ua(i2, t2.attachmentId, t2.attachment, t2.overlaidText, t2.attachmentDest);
       n2 = true;
     } else if (t2.setOCGState) {
-      this.#ua(i2, t2.setOCGState, t2.overlaidText);
+      this.#pa(i2, t2.setOCGState, t2.overlaidText);
       n2 = true;
     } else if (t2.dest) {
       this._bindLink(i2, t2.dest, t2.overlaidText);
@@ -14958,7 +15021,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
     }
     return this.container;
   }
-  #pa() {
+  #ga() {
     this.container.setAttribute("data-internal-link", "");
   }
   _bindLink(t2, e2, i2 = "") {
@@ -14967,7 +15030,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
       e2 && this.linkService.goToDestination(e2);
       return false;
     };
-    (e2 || "" === e2) && this.#pa();
+    (e2 || "" === e2) && this.#ga();
     i2 && (t2.title = i2);
   }
   _bindNamedAction(t2, e2, i2 = "") {
@@ -14977,9 +15040,9 @@ var LinkAnnotationElement = class extends AnnotationElement {
       return false;
     };
     i2 && (t2.title = i2);
-    this.#pa();
+    this.#ga();
   }
-  #da(t2, e2, i2, n2 = "", s2 = null) {
+  #ua(t2, e2, i2, n2 = "", s2 = null) {
     t2.href = this.linkService.getAnchorUrl("");
     i2.description ? t2.title = i2.description : n2 && (t2.title = n2);
     const openAttachment = async () => {
@@ -14990,16 +15053,16 @@ var LinkAnnotationElement = class extends AnnotationElement {
       openAttachment();
       return false;
     };
-    this.#pa();
+    this.#ga();
   }
-  #ua(t2, e2, i2 = "") {
+  #pa(t2, e2, i2 = "") {
     t2.href = this.linkService.getAnchorUrl("");
     t2.onclick = () => {
       this.linkService.executeSetOCGState(e2);
       return false;
     };
     i2 && (t2.title = i2);
-    this.#pa();
+    this.#ga();
   }
   _bindJSAction(t2, e2) {
     t2.href = this.linkService.getAnchorUrl("");
@@ -15012,13 +15075,13 @@ var LinkAnnotationElement = class extends AnnotationElement {
       });
     }
     e2.overlaidText && (t2.title = e2.overlaidText);
-    t2.onclick || (t2.onclick = () => false);
-    this.#pa();
+    t2.onclick ||= () => false;
+    this.#ga();
   }
   _bindResetFormAction(t2, e2) {
     const i2 = t2.onclick;
     i2 || (t2.href = this.linkService.getAnchorUrl(""));
-    this.#pa();
+    this.#ga();
     if (this._fieldObjects) t2.onclick = () => {
       i2?.();
       const { fields: t3, refs: n2, include: s2 } = e2, r2 = [];
@@ -15056,7 +15119,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
             continue;
         }
         const i3 = document.querySelector(`[data-element-id="${e3}"]`);
-        i3 && (zt.has(i3) ? i3.dispatchEvent(new Event("resetform")) : warn(`_bindResetFormAction - element not allowed: ${e3}`));
+        i3 && (Gt.has(i3) ? i3.dispatchEvent(new Event("resetform")) : warn(`_bindResetFormAction - element not allowed: ${e3}`));
       }
       this.enableScripting && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: "app", ids: o2, name: "ResetForm" } });
       return false;
@@ -15118,11 +15181,11 @@ var WidgetAnnotationElement = class extends AnnotationElement {
     let r2;
     const roundToOneDecimal = (t3) => Math.round(10 * t3) / 10;
     if (this.data.multiLine) {
-      const t3 = Math.abs(this.data.rect[3] - this.data.rect[1] - 2), e3 = t3 / (Math.round(t3 / (a * n2)) || 1);
-      r2 = Math.min(n2, roundToOneDecimal(e3 / a));
+      const t3 = Math.abs(this.data.rect[3] - this.data.rect[1] - 2), e3 = t3 / (Math.round(t3 / (1.35 * n2)) || 1);
+      r2 = Math.min(n2, roundToOneDecimal(e3 / 1.35));
     } else {
       const t3 = Math.abs(this.data.rect[3] - this.data.rect[1] - 2);
-      r2 = Math.min(n2, roundToOneDecimal(t3 / a));
+      r2 = Math.min(n2, roundToOneDecimal(t3 / 1.35));
     }
     s2.fontSize = `calc(${r2}px * var(--total-scale-factor))`;
     s2.color = Util.makeHexColor(...i2);
@@ -15170,7 +15233,7 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
         this.container.classList.add("hasOwnCanvas");
         t2.has(e2) && this.container.classList.add("sandboxModified");
       }
-      zt.add(i2);
+      Gt.add(i2);
       this.contentElement = i2;
       i2.setAttribute("data-element-id", e2);
       i2.disabled = this.data.readOnly;
@@ -15208,7 +15271,7 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
             if (d2) if ("time" === h2) {
               const i3 = new Date(t4), n4 = [i3.getHours(), i3.getMinutes(), i3.getSeconds()];
               e3.value = n4.map((t5) => t5.toString().padStart(2, "0")).join(":");
-            } else e3.value = new Date(t4 - Gt).toISOString().split("date" === h2 ? "T" : ".", 1)[0];
+            } else e3.value = new Date(t4 - jt).toISOString().split("date" === h2 ? "T" : ".", 1)[0];
             else e3.value = t4;
           }
           o2.lastCommittedValue = e3.value;
@@ -15354,7 +15417,7 @@ var CheckboxWidgetAnnotationElement = class extends WidgetAnnotationElement {
     }
     this.container.classList.add("buttonWidgetAnnotation", "checkBox");
     const s2 = document.createElement("input");
-    zt.add(s2);
+    Gt.add(s2);
     s2.setAttribute("data-element-id", i2);
     s2.disabled = e2.readOnly;
     this._setRequired(s2, this.data.required);
@@ -15405,7 +15468,7 @@ var RadioButtonWidgetAnnotationElement = class extends WidgetAnnotationElement {
     }
     if (n2) for (const n3 of this._getElementsByName(e2.fieldName, i2)) t2.setValue(n3.id, { value: false });
     const s2 = document.createElement("input");
-    zt.add(s2);
+    Gt.add(s2);
     s2.setAttribute("data-element-id", i2);
     s2.disabled = e2.readOnly;
     this._setRequired(s2, this.data.required);
@@ -15466,7 +15529,7 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
   render() {
     this.container.classList.add("choiceWidgetAnnotation");
     const t2 = this.annotationStorage, e2 = this.data.id, i2 = t2.getValue(e2, { value: this.data.fieldValue }), n2 = document.createElement("select");
-    zt.add(n2);
+    Gt.add(n2);
     n2.setAttribute("data-element-id", e2);
     n2.disabled = this.data.readOnly;
     this._setRequired(n2, this.data.required);
@@ -15594,188 +15657,188 @@ var PopupAnnotationElement = class extends AnnotationElement {
     super(t2, { isRenderable: !s2 && AnnotationElement._hasPopupData(e2) });
     this.elements = i2;
     if (s2 && AnnotationElement._hasPopupData(e2)) {
-      const t3 = this.popup = this.#ga();
+      const t3 = this.popup = this.#ma();
       for (const e3 of i2) e3.popup = t3;
     } else this.popup = null;
   }
-  #ga() {
+  #ma() {
     return new PopupElement({ container: this.container, color: this.data.color, titleObj: this.data.titleObj, modificationDate: this.data.modificationDate || this.data.creationDate, contentsObj: this.data.contentsObj, richText: this.data.richText, rect: this.data.rect, parentRect: this.data.parentRect || null, parent: this.parent, elements: this.elements, open: this.data.open, commentManager: this.parent._commentManager });
   }
   render() {
     const { container: t2 } = this;
     t2.classList.add("popupAnnotation");
     t2.role = "comment";
-    const e2 = this.popup = this.#ga(), i2 = [];
+    const e2 = this.popup = this.#ma(), i2 = [];
     for (const t3 of this.elements) {
       t3.popup = e2;
       t3.container.ariaHasPopup = "dialog";
       i2.push(t3.data.id);
       t3.addHighlightArea();
     }
-    this.container.setAttribute("aria-controls", i2.map((t3) => `${b}${t3}`).join(","));
+    this.container.setAttribute("aria-controls", i2.map((t3) => `${f}${t3}`).join(","));
     return this.container;
   }
 };
 var PopupElement = class {
-  #$ = null;
-  #ma = this.#ea.bind(this);
-  #fa = this.#ba.bind(this);
-  #ya = this.#va.bind(this);
-  #wa = this.#xa.bind(this);
-  #Aa = null;
-  #kt = null;
+  #q = null;
+  #fa = this.#ia.bind(this);
+  #ba = this.#ya.bind(this);
+  #va = this.#wa.bind(this);
+  #xa = this.#Aa.bind(this);
   #Ea = null;
+  #Dt = null;
   #Ca = null;
   #Sa = null;
   #Ta = null;
   #_a = null;
-  #ka = false;
+  #ka = null;
+  #Da = false;
   #Ma = null;
-  #Da = null;
-  #F = null;
   #Pa = null;
+  #O = null;
   #Ia = null;
-  #xe = null;
   #Fa = null;
-  #be = null;
+  #xe = null;
   #Oa = null;
-  #oa = null;
-  #Ra = false;
-  #Ba = null;
+  #be = null;
+  #Ra = null;
+  #la = null;
+  #Ba = false;
   #La = null;
+  #Na = null;
   constructor({ container: t2, color: e2, elements: i2, titleObj: n2, modificationDate: s2, contentsObj: r2, richText: a2, parent: o2, rect: l2, parentRect: h2, open: c2, commentManager: d2 = null }) {
-    this.#kt = t2;
-    this.#Oa = n2;
-    this.#Ea = r2;
+    this.#Dt = t2;
+    this.#Ra = n2;
+    this.#Ca = r2;
     this.#be = a2;
-    this.#Ta = o2;
-    this.#Aa = e2;
-    this.#Fa = l2;
-    this.#_a = h2;
-    this.#Sa = i2;
-    this.#$ = d2;
-    this.#Ba = i2[0];
-    this.#Ca = PDFDateString.toDateObject(s2);
+    this.#_a = o2;
+    this.#Ea = e2;
+    this.#Oa = l2;
+    this.#ka = h2;
+    this.#Ta = i2;
+    this.#q = d2;
+    this.#La = i2[0];
+    this.#Sa = PDFDateString.toDateObject(s2);
     this.trigger = i2.flatMap((t3) => t3.getElementsToTriggerPopup());
     if (!d2) {
-      this.#Na();
-      this.#kt.hidden = true;
-      c2 && this.#xa();
+      this.#Ua();
+      this.#Dt.hidden = true;
+      c2 && this.#Aa();
     }
-  }
-  #Na() {
-    if (this.#Da) return;
-    this.#Da = new AbortController();
-    const { signal: t2 } = this.#Da;
-    for (const e2 of this.trigger) {
-      e2.addEventListener("click", this.#wa, { signal: t2 });
-      e2.addEventListener("pointerenter", this.#ya, { signal: t2 });
-      e2.addEventListener("pointerleave", this.#fa, { signal: t2 });
-      e2.classList.add("popupTriggerArea");
-    }
-    for (const e2 of this.#Sa) e2.container?.addEventListener("keydown", this.#ma, { signal: t2 });
   }
   #Ua() {
-    const t2 = this.#Sa.find((t3) => t3.hasCommentButton);
-    t2 && (this.#Ia = t2._normalizePoint(t2.commentButtonPosition));
+    if (this.#Pa) return;
+    this.#Pa = new AbortController();
+    const { signal: t2 } = this.#Pa;
+    for (const e2 of this.trigger) {
+      e2.addEventListener("click", this.#xa, { signal: t2 });
+      e2.addEventListener("pointerenter", this.#va, { signal: t2 });
+      e2.addEventListener("pointerleave", this.#ba, { signal: t2 });
+      e2.classList.add("popupTriggerArea");
+    }
+    for (const e2 of this.#Ta) e2.container?.addEventListener("keydown", this.#fa, { signal: t2 });
+  }
+  #Ha() {
+    const t2 = this.#Ta.find((t3) => t3.hasCommentButton);
+    t2 && (this.#Fa = t2._normalizePoint(t2.commentButtonPosition));
   }
   renderCommentButton() {
-    if (this.#Pa) {
-      this.#Pa.parentNode || this.#Ba.container.after(this.#Pa);
+    if (this.#Ia) {
+      this.#Ia.parentNode || this.#La.container.after(this.#Ia);
       return;
     }
-    this.#Ia || this.#Ua();
-    if (!this.#Ia) return;
-    const { signal: t2 } = this.#Da = new AbortController(), e2 = this.#Ba.hasOwnCommentButton, togglePopup = () => {
-      this.#$.toggleCommentPopup(this, true, void 0, !e2);
+    this.#Fa || this.#Ha();
+    if (!this.#Fa) return;
+    const { signal: t2 } = this.#Pa = new AbortController(), e2 = this.#La.hasOwnCommentButton, togglePopup = () => {
+      this.#q.toggleCommentPopup(this, true, void 0, !e2);
     }, showPopup = () => {
-      this.#$.toggleCommentPopup(this, false, true, !e2);
+      this.#q.toggleCommentPopup(this, false, true, !e2);
     }, hidePopup = () => {
-      this.#$.toggleCommentPopup(this, false, false);
+      this.#q.toggleCommentPopup(this, false, false);
     };
     if (e2) {
-      this.#Pa = this.#Ba.container;
+      this.#Ia = this.#La.container;
       for (const e3 of this.trigger) {
         e3.ariaHasPopup = "dialog";
         e3.ariaControls = "commentPopup";
-        e3.addEventListener("keydown", this.#ma, { signal: t2 });
+        e3.addEventListener("keydown", this.#fa, { signal: t2 });
         e3.addEventListener("click", togglePopup, { signal: t2 });
         e3.addEventListener("pointerenter", showPopup, { signal: t2 });
         e3.addEventListener("pointerleave", hidePopup, { signal: t2 });
         e3.classList.add("popupTriggerArea");
       }
     } else {
-      const e3 = this.#Pa = document.createElement("button");
+      const e3 = this.#Ia = document.createElement("button");
       e3.className = "annotationCommentButton";
-      const i2 = this.#Ba.container;
+      const i2 = this.#La.container;
       e3.style.zIndex = parseInt(i2.style.zIndex, 10) + 1;
       e3.tabIndex = 0;
       e3.ariaHasPopup = "dialog";
       e3.ariaControls = "commentPopup";
       e3.setAttribute("data-l10n-id", "pdfjs-show-comment-button");
-      this.#Ha();
       this.#za();
-      e3.addEventListener("keydown", this.#ma, { signal: t2 });
+      this.#Ga();
+      e3.addEventListener("keydown", this.#fa, { signal: t2 });
       e3.addEventListener("click", togglePopup, { signal: t2 });
       e3.addEventListener("pointerenter", showPopup, { signal: t2 });
       e3.addEventListener("pointerleave", hidePopup, { signal: t2 });
       i2.after(e3);
     }
   }
-  #za() {
-    if (this.#Ba.extraPopupElement && !this.#Ba.editor) return;
-    this.#Pa || this.renderCommentButton();
-    const [t2, e2] = this.#Ia, { style: i2 } = this.#Pa;
+  #Ga() {
+    if (this.#La.extraPopupElement && !this.#La.editor) return;
+    this.#Ia || this.renderCommentButton();
+    const [t2, e2] = this.#Fa, { style: i2 } = this.#Ia;
     i2.left = `calc(${t2}%)`;
     i2.top = `calc(${e2}% - var(--comment-button-dim))`;
   }
-  #Ha() {
-    if (!this.#Ba.extraPopupElement) {
-      this.#Pa || this.renderCommentButton();
-      this.#Pa.style.backgroundColor = this.commentButtonColor || "";
+  #za() {
+    if (!this.#La.extraPopupElement) {
+      this.#Ia || this.renderCommentButton();
+      this.#Ia.style.backgroundColor = this.commentButtonColor || "";
     }
   }
   get commentButtonColor() {
-    const { color: t2, opacity: e2 } = this.#Ba.commentData;
-    return t2 ? this.#Ta._commentManager.makeCommentColor(t2, e2) : null;
+    const { color: t2, opacity: e2 } = this.#La.commentData;
+    return t2 ? this.#_a._commentManager.makeCommentColor(t2, e2) : null;
   }
   focusCommentButton() {
     setTimeout(() => {
-      this.#Pa?.focus();
+      this.#Ia?.focus();
     }, 0);
   }
   getData() {
-    const { richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: s2 } = this.#Ba.commentData;
+    const { richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: s2 } = this.#La.commentData;
     return { contentsObj: { str: this.comment }, richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: s2 };
   }
   get elementBeforePopup() {
-    return this.#Pa;
+    return this.#Ia;
   }
   get comment() {
-    this.#La ||= this.#Ba.commentText;
-    return this.#La;
+    this.#Na ||= this.#La.commentText;
+    return this.#Na;
   }
   set comment(t2) {
-    t2 !== this.comment && (this.#Ba.commentText = this.#La = t2);
+    t2 !== this.comment && (this.#La.commentText = this.#Na = t2);
   }
   focus() {
-    this.#Ba.container?.focus();
+    this.#La.container?.focus();
   }
   get parentBoundingClientRect() {
-    return this.#Ba.layer.getBoundingClientRect();
+    return this.#La.layer.getBoundingClientRect();
   }
   setCommentButtonStates({ selected: t2, hasPopup: e2 }) {
-    if (this.#Pa) {
-      this.#Pa.classList.toggle("selected", t2);
-      this.#Pa.ariaExpanded = e2;
+    if (this.#Ia) {
+      this.#Ia.classList.toggle("selected", t2);
+      this.#Ia.ariaExpanded = e2;
     }
   }
   setSelectedCommentButton(t2) {
-    this.#Pa.classList.toggle("selected", t2);
+    this.#Ia.classList.toggle("selected", t2);
   }
   get commentPopupPosition() {
     if (this.#xe) return this.#xe;
-    const { x: t2, y: e2, height: i2 } = this.#Pa.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#Ba.layer.getBoundingClientRect();
+    const { x: t2, y: e2, height: i2 } = this.#Ia.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#La.layer.getBoundingClientRect();
     return [(t2 - n2) / r2, (e2 + i2 - s2) / a2];
   }
   set commentPopupPosition(t2) {
@@ -15785,172 +15848,172 @@ var PopupElement = class {
     return null === this.#xe;
   }
   get commentButtonPosition() {
-    return this.#Ia;
+    return this.#Fa;
   }
   get commentButtonWidth() {
-    return this.#Pa.getBoundingClientRect().width / this.parentBoundingClientRect.width;
+    return this.#Ia.getBoundingClientRect().width / this.parentBoundingClientRect.width;
   }
   editComment(t2) {
     const [e2, i2] = this.#xe || this.commentButtonPosition.map((t3) => t3 / 100), n2 = this.parentBoundingClientRect, { x: s2, y: r2, width: a2, height: o2 } = n2;
-    this.#$.showDialog(null, this, s2 + e2 * a2, r2 + i2 * o2, { ...t2, parentDimensions: n2 });
+    this.#q.showDialog(null, this, s2 + e2 * a2, r2 + i2 * o2, { ...t2, parentDimensions: n2 });
   }
   render() {
     if (this.#Ma) return;
     const t2 = this.#Ma = document.createElement("div");
     t2.className = "popup";
-    if (this.#Aa) {
-      const e3 = t2.style.outlineColor = Util.makeHexColor(...this.#Aa);
+    if (this.#Ea) {
+      const e3 = t2.style.outlineColor = Util.makeHexColor(...this.#Ea);
       t2.style.backgroundColor = `color-mix(in srgb, ${e3} 30%, white)`;
     }
     const e2 = document.createElement("span");
     e2.className = "header";
-    if (this.#Oa?.str) {
+    if (this.#Ra?.str) {
       const t3 = document.createElement("span");
       t3.className = "title";
       e2.append(t3);
-      ({ dir: t3.dir, str: t3.textContent } = this.#Oa);
+      ({ dir: t3.dir, str: t3.textContent } = this.#Ra);
     }
     t2.append(e2);
-    if (this.#Ca) {
+    if (this.#Sa) {
       const t3 = document.createElement("time");
       t3.className = "popupDate";
       t3.setAttribute("data-l10n-id", "pdfjs-annotation-date-time-string");
-      t3.setAttribute("data-l10n-args", JSON.stringify({ dateObj: this.#Ca.valueOf() }));
-      t3.dateTime = this.#Ca.toISOString();
+      t3.setAttribute("data-l10n-args", JSON.stringify({ dateObj: this.#Sa.valueOf() }));
+      t3.dateTime = this.#Sa.toISOString();
       e2.append(t3);
     }
-    renderRichText({ html: this.#Ga || this.#Ea.str, dir: this.#Ea?.dir, className: "popupContent" }, t2);
-    this.#kt.append(t2);
-  }
-  get #Ga() {
-    const t2 = this.#be, e2 = this.#Ea;
-    return !t2?.str || e2?.str && e2.str !== t2.str ? null : this.#be.html || null;
+    renderRichText({ html: this.#ja || this.#Ca.str, dir: this.#Ca?.dir, className: "popupContent" }, t2);
+    this.#Dt.append(t2);
   }
   get #ja() {
-    return this.#Ga?.attributes?.style?.fontSize || 0;
+    const t2 = this.#be, e2 = this.#Ca;
+    return !t2?.str || e2?.str && e2.str !== t2.str ? null : this.#be.html || null;
   }
   get #Wa() {
-    return this.#Ga?.attributes?.style?.color || null;
+    return this.#ja?.attributes?.style?.fontSize || 0;
   }
-  #Va(t2) {
-    const e2 = [], i2 = { str: t2, html: { name: "div", attributes: { dir: "auto" }, children: [{ name: "p", children: e2 }] } }, n2 = { style: { color: this.#Wa, fontSize: this.#ja ? `calc(${this.#ja}px * var(--total-scale-factor))` : "" } };
+  get #Va() {
+    return this.#ja?.attributes?.style?.color || null;
+  }
+  #$a(t2) {
+    const e2 = [], i2 = { str: t2, html: { name: "div", attributes: { dir: "auto" }, children: [{ name: "p", children: e2 }] } }, n2 = { style: { color: this.#Va, fontSize: this.#Wa ? `calc(${this.#Wa}px * var(--total-scale-factor))` : "" } };
     for (const i3 of t2.split("\n")) e2.push({ name: "span", value: i3, attributes: n2 });
     return i2;
   }
-  #ea(t2) {
-    t2.altKey || t2.shiftKey || t2.ctrlKey || t2.metaKey || ("Enter" === t2.key || "Escape" === t2.key && this.#ka) && this.#xa();
+  #ia(t2) {
+    t2.altKey || t2.shiftKey || t2.ctrlKey || t2.metaKey || ("Enter" === t2.key || "Escape" === t2.key && this.#Da) && this.#Aa();
   }
   updateEdited({ rect: t2, popup: e2, deleted: i2 }) {
-    if (this.#$) {
+    if (this.#q) {
       if (i2) {
         this.remove();
-        this.#La = null;
+        this.#Na = null;
       } else if (e2) if (e2.deleted) this.remove();
       else {
-        this.#Ha();
-        this.#La = e2.text;
+        this.#za();
+        this.#Na = e2.text;
       }
       if (t2) {
-        this.#Ia = null;
-        this.#Ua();
-        this.#za();
+        this.#Fa = null;
+        this.#Ha();
+        this.#Ga();
       }
     } else if (i2 || e2?.deleted) this.remove();
     else {
-      this.#Na();
-      this.#oa ||= { contentsObj: this.#Ea, richText: this.#be };
-      t2 && (this.#F = null);
+      this.#Ua();
+      this.#la ||= { contentsObj: this.#Ca, richText: this.#be };
+      t2 && (this.#O = null);
       if (e2 && e2.text) {
-        this.#be = this.#Va(e2.text);
-        this.#Ca = PDFDateString.toDateObject(e2.date);
-        this.#Ea = null;
+        this.#be = this.#$a(e2.text);
+        this.#Sa = PDFDateString.toDateObject(e2.date);
+        this.#Ca = null;
       }
       this.#Ma?.remove();
       this.#Ma = null;
     }
   }
   resetEdited() {
-    if (this.#oa) {
-      ({ contentsObj: this.#Ea, richText: this.#be } = this.#oa);
-      this.#oa = null;
+    if (this.#la) {
+      ({ contentsObj: this.#Ca, richText: this.#be } = this.#la);
+      this.#la = null;
       this.#Ma?.remove();
       this.#Ma = null;
-      this.#F = null;
+      this.#O = null;
     }
   }
   remove() {
-    this.#Da?.abort();
-    this.#Da = null;
+    this.#Pa?.abort();
+    this.#Pa = null;
     this.#Ma?.remove();
     this.#Ma = null;
-    this.#Ra = false;
-    this.#ka = false;
-    this.#Pa?.remove();
-    this.#Pa = null;
+    this.#Ba = false;
+    this.#Da = false;
+    this.#Ia?.remove();
+    this.#Ia = null;
     if (this.trigger) for (const t2 of this.trigger) t2.classList.remove("popupTriggerArea");
   }
-  #$a() {
-    if (null !== this.#F) return;
-    const { page: { view: t2 }, viewport: { rawDims: { pageWidth: e2, pageHeight: i2, pageX: n2, pageY: s2 } } } = this.#Ta;
-    let r2 = !!this.#_a, a2 = r2 ? this.#_a : this.#Fa;
-    for (const t3 of this.#Sa) if (!a2 || null !== Util.intersect(t3.data.rect, a2)) {
+  #qa() {
+    if (null !== this.#O) return;
+    const { page: { view: t2 }, viewport: { rawDims: { pageWidth: e2, pageHeight: i2, pageX: n2, pageY: s2 } } } = this.#_a;
+    let r2 = !!this.#ka, a2 = r2 ? this.#ka : this.#Oa;
+    for (const t3 of this.#Ta) if (!a2 || null !== Util.intersect(t3.data.rect, a2)) {
       a2 = t3.data.rect;
       r2 = true;
       break;
     }
     const o2 = Util.normalizeRect([a2[0], t2[3] - a2[1] + t2[1], a2[2], t2[3] - a2[3] + t2[1]]), l2 = r2 ? a2[2] - a2[0] + 5 : 0, h2 = o2[0] + l2, c2 = o2[1];
-    this.#F = [100 * (h2 - n2) / e2, 100 * (c2 - s2) / i2];
-    const { style: d2 } = this.#kt;
-    d2.left = `${this.#F[0]}%`;
-    d2.top = `${this.#F[1]}%`;
+    this.#O = [100 * (h2 - n2) / e2, 100 * (c2 - s2) / i2];
+    const { style: d2 } = this.#Dt;
+    d2.left = `${this.#O[0]}%`;
+    d2.top = `${this.#O[1]}%`;
   }
-  #xa() {
-    if (this.#$) this.#$.toggleCommentPopup(this, false);
+  #Aa() {
+    if (this.#q) this.#q.toggleCommentPopup(this, false);
     else {
-      this.#ka = !this.#ka;
-      if (this.#ka) {
-        this.#va();
-        this.#kt.addEventListener("click", this.#wa);
-        this.#kt.addEventListener("keydown", this.#ma);
+      this.#Da = !this.#Da;
+      if (this.#Da) {
+        this.#wa();
+        this.#Dt.addEventListener("click", this.#xa);
+        this.#Dt.addEventListener("keydown", this.#fa);
       } else {
-        this.#ba();
-        this.#kt.removeEventListener("click", this.#wa);
-        this.#kt.removeEventListener("keydown", this.#ma);
+        this.#ya();
+        this.#Dt.removeEventListener("click", this.#xa);
+        this.#Dt.removeEventListener("keydown", this.#fa);
       }
     }
   }
-  #va() {
+  #wa() {
     this.#Ma || this.render();
-    if (this.isVisible) this.#ka && this.#kt.classList.add("focused");
+    if (this.isVisible) this.#Da && this.#Dt.classList.add("focused");
     else {
-      this.#$a();
-      this.#kt.hidden = false;
-      this.#kt.style.zIndex = parseInt(this.#kt.style.zIndex, 10) + 1e3;
+      this.#qa();
+      this.#Dt.hidden = false;
+      this.#Dt.style.zIndex = parseInt(this.#Dt.style.zIndex, 10) + 1e3;
     }
   }
-  #ba() {
-    this.#kt.classList.remove("focused");
-    if (!this.#ka && this.isVisible) {
-      this.#kt.hidden = true;
-      this.#kt.style.zIndex = parseInt(this.#kt.style.zIndex, 10) - 1e3;
+  #ya() {
+    this.#Dt.classList.remove("focused");
+    if (!this.#Da && this.isVisible) {
+      this.#Dt.hidden = true;
+      this.#Dt.style.zIndex = parseInt(this.#Dt.style.zIndex, 10) - 1e3;
     }
   }
   forceHide() {
-    this.#Ra = this.isVisible;
-    this.#Ra && (this.#kt.hidden = true);
+    this.#Ba = this.isVisible;
+    this.#Ba && (this.#Dt.hidden = true);
   }
   maybeShow() {
-    if (!this.#$) {
-      this.#Na();
-      if (this.#Ra) {
-        this.#Ma || this.#va();
-        this.#Ra = false;
-        this.#kt.hidden = false;
+    if (!this.#q) {
+      this.#Ua();
+      if (this.#Ba) {
+        this.#Ma || this.#wa();
+        this.#Ba = false;
+        this.#Dt.hidden = false;
       }
     }
   }
   get isVisible() {
-    return !this.#$ && false === this.#kt.hidden;
+    return !this.#q && false === this.#Dt.hidden;
   }
 };
 var FreeTextAnnotationElement = class extends AnnotationElement {
@@ -15958,7 +16021,7 @@ var FreeTextAnnotationElement = class extends AnnotationElement {
     super(t2, { isRenderable: true, ignoreBorder: true });
     this.textContent = t2.data.textContent;
     this.textPosition = t2.data.textPosition;
-    this.annotationEditorType = v.FREETEXT;
+    this.annotationEditorType = y.FREETEXT;
   }
   render() {
     this.container.classList.add("freeTextAnnotation");
@@ -15982,13 +16045,13 @@ var FreeTextAnnotationElement = class extends AnnotationElement {
   }
 };
 var LineAnnotationElement = class extends AnnotationElement {
-  #qa = null;
+  #Ka = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
   }
   render() {
     this.container.classList.add("lineAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = this.#qa = this.svgFactory.createElement("svg:line");
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = this.#Ka = this.svgFactory.createElement("svg:line");
     s2.setAttribute("x1", t2.rect[2] - t2.lineCoordinates[0]);
     s2.setAttribute("y1", t2.rect[3] - t2.lineCoordinates[1]);
     s2.setAttribute("x2", t2.rect[2] - t2.lineCoordinates[2]);
@@ -16005,54 +16068,24 @@ var LineAnnotationElement = class extends AnnotationElement {
     return this.container;
   }
   getElementsToTriggerPopup() {
-    return this.#qa;
-  }
-  addHighlightArea() {
-    this.container.classList.add("highlightArea");
-  }
-};
-var SquareAnnotationElement = class extends AnnotationElement {
-  #Ka = null;
-  constructor(t2) {
-    super(t2, { isRenderable: true, ignoreBorder: true });
-  }
-  render() {
-    this.container.classList.add("squareAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Ka = this.svgFactory.createElement("svg:rect");
-    r2.setAttribute("x", s2 / 2);
-    r2.setAttribute("y", s2 / 2);
-    r2.setAttribute("width", e2 - s2);
-    r2.setAttribute("height", i2 - s2);
-    r2.setAttribute("stroke-width", s2 || 1);
-    r2.setAttribute("stroke", "transparent");
-    r2.setAttribute("fill", "transparent");
-    n2.append(r2);
-    this.container.append(n2);
-    if (!t2.popupRef && this.hasPopupData) {
-      this.hasOwnCommentButton = true;
-      this._createPopup();
-    }
-    return this.container;
-  }
-  getElementsToTriggerPopup() {
     return this.#Ka;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
   }
 };
-var CircleAnnotationElement = class extends AnnotationElement {
+var SquareAnnotationElement = class extends AnnotationElement {
   #Xa = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
   }
   render() {
-    this.container.classList.add("circleAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Xa = this.svgFactory.createElement("svg:ellipse");
-    r2.setAttribute("cx", e2 / 2);
-    r2.setAttribute("cy", i2 / 2);
-    r2.setAttribute("rx", e2 / 2 - s2 / 2);
-    r2.setAttribute("ry", i2 / 2 - s2 / 2);
+    this.container.classList.add("squareAnnotation");
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Xa = this.svgFactory.createElement("svg:rect");
+    r2.setAttribute("x", s2 / 2);
+    r2.setAttribute("y", s2 / 2);
+    r2.setAttribute("width", e2 - s2);
+    r2.setAttribute("height", i2 - s2);
     r2.setAttribute("stroke-width", s2 || 1);
     r2.setAttribute("stroke", "transparent");
     r2.setAttribute("fill", "transparent");
@@ -16071,8 +16104,38 @@ var CircleAnnotationElement = class extends AnnotationElement {
     this.container.classList.add("highlightArea");
   }
 };
-var PolylineAnnotationElement = class extends AnnotationElement {
+var CircleAnnotationElement = class extends AnnotationElement {
   #Ya = null;
+  constructor(t2) {
+    super(t2, { isRenderable: true, ignoreBorder: true });
+  }
+  render() {
+    this.container.classList.add("circleAnnotation");
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Ya = this.svgFactory.createElement("svg:ellipse");
+    r2.setAttribute("cx", e2 / 2);
+    r2.setAttribute("cy", i2 / 2);
+    r2.setAttribute("rx", e2 / 2 - s2 / 2);
+    r2.setAttribute("ry", i2 / 2 - s2 / 2);
+    r2.setAttribute("stroke-width", s2 || 1);
+    r2.setAttribute("stroke", "transparent");
+    r2.setAttribute("fill", "transparent");
+    n2.append(r2);
+    this.container.append(n2);
+    if (!t2.popupRef && this.hasPopupData) {
+      this.hasOwnCommentButton = true;
+      this._createPopup();
+    }
+    return this.container;
+  }
+  getElementsToTriggerPopup() {
+    return this.#Ya;
+  }
+  addHighlightArea() {
+    this.container.classList.add("highlightArea");
+  }
+};
+var PolylineAnnotationElement = class extends AnnotationElement {
+  #Ja = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
     this.containerClassName = "polylineAnnotation";
@@ -16089,7 +16152,7 @@ var PolylineAnnotationElement = class extends AnnotationElement {
       o2.push(`${n4},${s3}`);
     }
     o2 = o2.join(" ");
-    const l2 = this.#Ya = this.svgFactory.createElement(this.svgElementName);
+    const l2 = this.#Ja = this.svgFactory.createElement(this.svgElementName);
     l2.setAttribute("points", o2);
     l2.setAttribute("stroke-width", i2.width || 1);
     l2.setAttribute("stroke", "transparent");
@@ -16103,7 +16166,7 @@ var PolylineAnnotationElement = class extends AnnotationElement {
     return this.container;
   }
   getElementsToTriggerPopup() {
-    return this.#Ya;
+    return this.#Ja;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
@@ -16130,15 +16193,15 @@ var CaretAnnotationElement = class extends AnnotationElement {
   }
 };
 var InkAnnotationElement = class extends AnnotationElement {
-  #Ja = null;
-  #Qa = [];
+  #Qa = null;
+  #Za = [];
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
     this.containerClassName = "inkAnnotation";
     this.svgElementName = "svg:polyline";
-    this.annotationEditorType = "InkHighlight" === this.data.it ? v.HIGHLIGHT : v.INK;
+    this.annotationEditorType = "InkHighlight" === this.data.it ? y.HIGHLIGHT : y.INK;
   }
-  #Za(t2, e2) {
+  #to(t2, e2) {
     switch (t2) {
       case 90:
         return { transform: `rotate(90) translate(${-e2[0]},${e2[1]}) scale(1,-1)`, width: e2[3] - e2[1], height: e2[2] - e2[0] };
@@ -16152,7 +16215,7 @@ var InkAnnotationElement = class extends AnnotationElement {
   }
   render() {
     this.container.classList.add(this.containerClassName);
-    const { data: { rect: t2, rotation: e2, inkLists: i2, borderStyle: n2, popupRef: s2 } } = this, { transform: r2, width: a2, height: o2 } = this.#Za(e2, t2), l2 = this.svgFactory.create(a2, o2, true), h2 = this.#Ja = this.svgFactory.createElement("svg:g");
+    const { data: { rect: t2, rotation: e2, inkLists: i2, borderStyle: n2, popupRef: s2 } } = this, { transform: r2, width: a2, height: o2 } = this.#to(e2, t2), l2 = this.svgFactory.create(a2, o2, true), h2 = this.#Qa = this.svgFactory.createElement("svg:g");
     l2.append(h2);
     h2.setAttribute("stroke-width", n2.width || 1);
     h2.setAttribute("stroke-linecap", "round");
@@ -16161,11 +16224,11 @@ var InkAnnotationElement = class extends AnnotationElement {
     h2.setAttribute("stroke", "transparent");
     h2.setAttribute("fill", "transparent");
     h2.setAttribute("transform", r2);
-    for (let t3 = 0, e3 = i2.length; t3 < e3; t3++) {
-      const e4 = this.svgFactory.createElement(this.svgElementName);
-      this.#Qa.push(e4);
-      e4.setAttribute("points", i2[t3].join(","));
-      h2.append(e4);
+    for (const t3 of i2) {
+      const e3 = this.svgFactory.createElement(this.svgElementName);
+      this.#Za.push(e3);
+      e3.setAttribute("points", t3.join(","));
+      h2.append(e3);
     }
     if (!s2 && this.hasPopupData) {
       this.hasOwnCommentButton = true;
@@ -16177,17 +16240,17 @@ var InkAnnotationElement = class extends AnnotationElement {
   }
   updateEdited(t2) {
     super.updateEdited(t2);
-    const { thickness: e2, points: i2, rect: n2 } = t2, s2 = this.#Ja;
+    const { thickness: e2, points: i2, rect: n2 } = t2, s2 = this.#Qa;
     e2 >= 0 && s2.setAttribute("stroke-width", e2 || 1);
-    if (i2) for (let t3 = 0, e3 = this.#Qa.length; t3 < e3; t3++) this.#Qa[t3].setAttribute("points", i2[t3].join(","));
+    if (i2) for (let t3 = 0, e3 = this.#Za.length; t3 < e3; t3++) this.#Za[t3].setAttribute("points", i2[t3].join(","));
     if (n2) {
-      const { transform: t3, width: e3, height: i3 } = this.#Za(this.data.rotation, n2);
+      const { transform: t3, width: e3, height: i3 } = this.#to(this.data.rotation, n2);
       s2.parentElement.setAttribute("viewBox", `0 0 ${e3} ${i3}`);
       s2.setAttribute("transform", t3);
     }
   }
   getElementsToTriggerPopup() {
-    return this.#Qa;
+    return this.#Za;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
@@ -16196,7 +16259,7 @@ var InkAnnotationElement = class extends AnnotationElement {
 var HighlightAnnotationElement = class extends AnnotationElement {
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true, createQuadrilaterals: true });
-    this.annotationEditorType = v.HIGHLIGHT;
+    this.annotationEditorType = y.HIGHLIGHT;
   }
   render() {
     const { data: { overlaidText: t2, popupRef: e2 } } = this;
@@ -16278,7 +16341,7 @@ var StrikeOutAnnotationElement = class extends AnnotationElement {
 var StampAnnotationElement = class extends AnnotationElement {
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
-    this.annotationEditorType = v.STAMP;
+    this.annotationEditorType = y.STAMP;
   }
   render() {
     this.container.classList.add("stampAnnotation");
@@ -16292,7 +16355,7 @@ var StampAnnotationElement = class extends AnnotationElement {
   }
 };
 var FileAttachmentAnnotationElement = class extends AnnotationElement {
-  #to = null;
+  #eo = null;
   constructor(t2) {
     super(t2, { isRenderable: true });
     const { fileId: e2, file: i2 } = this.data;
@@ -16311,11 +16374,11 @@ var FileAttachmentAnnotationElement = class extends AnnotationElement {
       i2.src = `${this.imageResourcesPath}annotation-${/paperclip/i.test(e2.name) ? "paperclip" : "pushpin"}.svg`;
       e2.fillAlpha && e2.fillAlpha < 1 && (i2.style = `filter: opacity(${Math.round(100 * e2.fillAlpha)}%);`);
     }
-    i2.addEventListener("dblclick", this.#eo.bind(this));
-    this.#to = i2;
+    i2.addEventListener("dblclick", this.#io.bind(this));
+    this.#eo = i2;
     const { isMac: n2 } = FeatureTest.platform;
     t2.addEventListener("keydown", (t3) => {
-      "Enter" === t3.key && (n2 ? t3.metaKey : t3.ctrlKey) && this.#eo();
+      "Enter" === t3.key && (n2 ? t3.metaKey : t3.ctrlKey) && this.#io();
     });
     if (!e2.popupRef && this.hasPopupData) {
       this.hasOwnCommentButton = true;
@@ -16325,20 +16388,20 @@ var FileAttachmentAnnotationElement = class extends AnnotationElement {
     return t2;
   }
   getElementsToTriggerPopup() {
-    return this.#to;
+    return this.#eo;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
   }
-  async #eo() {
+  async #io() {
     const { fileId: t2, filename: e2, content: i2 } = this, n2 = await this.linkService.getAttachmentContent(t2) || i2;
     n2 && this.downloadManager?.openOrDownloadData(n2, e2);
   }
 };
 var MediaAnnotationElement = class extends AnnotationElement {
-  #B = new AbortController();
-  #io = null;
+  #L = new AbortController();
   #no = null;
+  #so = null;
   constructor(t2) {
     super(t2, { isRenderable: !!t2.data.richMedia });
   }
@@ -16348,11 +16411,11 @@ var MediaAnnotationElement = class extends AnnotationElement {
     e2.className = "mediaPlayButton";
     e2.type = "button";
     e2.title = e2.ariaLabel = t2;
-    e2.addEventListener("click", () => this.#so(e2), { signal: this.#B.signal });
+    e2.addEventListener("click", () => this.#ro(e2), { signal: this.#L.signal });
     this.container.append(e2);
     return this.container;
   }
-  async #so(t2) {
+  async #ro(t2) {
     const { fileId: e2, filename: i2, contentType: n2 } = this.data.richMedia;
     t2.disabled = true;
     let s2;
@@ -16364,10 +16427,10 @@ var MediaAnnotationElement = class extends AnnotationElement {
       t2.disabled = false;
     }
     if (!s2 || !t2.isConnected) return;
-    const { signal: r2 } = this.#B, a2 = URL.createObjectURL(new Blob([s2], { type: n2 }));
-    this.#io = a2;
+    const { signal: r2 } = this.#L, a2 = URL.createObjectURL(new Blob([s2], { type: n2 }));
+    this.#no = a2;
     const o2 = n2.startsWith("audio/"), l2 = document.createElement(o2 ? "audio" : "video");
-    this.#no = l2;
+    this.#so = l2;
     l2.className = "mediaContent";
     this._setBackgroundColor(l2);
     l2.src = a2;
@@ -16397,60 +16460,60 @@ var MediaAnnotationElement = class extends AnnotationElement {
         updateControls();
       }, { signal: r2 });
     }
-    l2.addEventListener("emptied", () => this.#ro(a2), { once: true, signal: r2 });
+    l2.addEventListener("emptied", () => this.#ao(a2), { once: true, signal: r2 });
     t2.replaceWith(l2);
     l2.play().catch(() => {
     });
   }
-  #ro(t2 = this.#io) {
-    if (t2 && t2 === this.#io) {
+  #ao(t2 = this.#no) {
+    if (t2 && t2 === this.#no) {
       URL.revokeObjectURL(t2);
-      this.#io = null;
+      this.#no = null;
     }
   }
   destroy() {
-    this.#B.abort();
-    if (this.#no) {
-      this.#no.pause();
-      this.#no.removeAttribute("src");
-      this.#no.load();
-      this.#no = null;
+    this.#L.abort();
+    if (this.#so) {
+      this.#so.pause();
+      this.#so.removeAttribute("src");
+      this.#so.load();
+      this.#so = null;
     }
-    this.#ro();
+    this.#ao();
   }
 };
 var AnnotationLayer = class _AnnotationLayer {
-  #ao = null;
   #oo = null;
-  #j = null;
-  #lo = /* @__PURE__ */ new Map();
-  #ho = null;
+  #lo = null;
+  #W = null;
+  #ho = /* @__PURE__ */ new Map();
   #co = null;
-  #Sa = [];
-  #do = false;
+  #do = null;
+  #Ta = [];
+  #uo = false;
   zIndex = 0;
   constructor({ div: t2, accessibilityManager: e2, annotationCanvasMap: i2, annotationEditorUIManager: n2, page: s2, viewport: r2, structTreeLayer: a2, commentManager: o2, linkService: l2, annotationStorage: h2 }) {
     this.div = t2;
-    this.#ao = e2;
-    this.#oo = i2;
-    this.#ho = a2 || null;
-    this.#co = l2 || null;
-    this.#j = h2 || new AnnotationStorage();
+    this.#oo = e2;
+    this.#lo = i2;
+    this.#co = a2 || null;
+    this.#do = l2 || null;
+    this.#W = h2 || new AnnotationStorage();
     this.page = s2;
     this.viewport = r2;
     this._annotationEditorUIManager = n2;
     this._commentManager = o2 || null;
   }
   hasEditableAnnotations() {
-    return this.#lo.size > 0;
+    return this.#ho.size > 0;
   }
   async render(t2) {
     const { annotations: e2, optionalContentConfig: i2 } = t2, n2 = this.div;
     setLayerDimensions(n2, this.viewport);
-    const s2 = /* @__PURE__ */ new Map(), r2 = [], a2 = { data: null, layer: n2, linkService: this.#co, downloadManager: t2.downloadManager, imageResourcesPath: t2.imageResourcesPath || "", renderForms: false !== t2.renderForms, svgFactory: new DOMSVGFactory(), annotationStorage: this.#j, enableComment: true === t2.enableComment, enableScripting: true === t2.enableScripting, hasJSActions: t2.hasJSActions, fieldObjects: t2.fieldObjects, parent: this, elements: null };
+    const s2 = /* @__PURE__ */ new Map(), r2 = [], a2 = { data: null, layer: n2, linkService: this.#do, downloadManager: t2.downloadManager, imageResourcesPath: t2.imageResourcesPath || "", renderForms: false !== t2.renderForms, svgFactory: new DOMSVGFactory(), annotationStorage: this.#W, enableComment: true === t2.enableComment, enableScripting: true === t2.enableScripting, hasJSActions: t2.hasJSActions, fieldObjects: t2.fieldObjects, parent: this, elements: null };
     for (const t3 of e2) {
       if (t3.noHTML) continue;
-      const e3 = t3.annotationType === M.POPUP;
+      const e3 = t3.annotationType === k.POPUP;
       if (e3) {
         const e4 = s2.get(t3.id);
         if (!e4) continue;
@@ -16464,44 +16527,44 @@ var AnnotationLayer = class _AnnotationLayer {
       const n3 = AnnotationElementFactory.create(a2);
       if (!n3.isRenderable) continue;
       if (!e3) {
-        this.#Sa.push(n3);
+        this.#Ta.push(n3);
         t3.popupRef && s2.getOrInsertComputed(t3.popupRef, makeArr).push(n3);
       }
       const o2 = n3.render();
       t3.hidden && (o2.style.visibility = "hidden");
       n3.updateOC(i2);
       if (n3._isEditable) {
-        this.#lo.set(n3.data.id, n3);
+        this.#ho.set(n3.data.id, n3);
         this._annotationEditorUIManager?.renderAnnotationElement(n3);
       }
     }
-    await this.#uo();
+    await this.#po();
     for (const t3 of r2) {
       const e3 = a2.elements = s2.get(t3.id);
       a2.data = t3;
       const i3 = AnnotationElementFactory.create(a2);
       if (!i3.isRenderable) continue;
       const n3 = i3.render();
-      i3.contentElement.id = `${b}${t3.id}`;
+      i3.contentElement.id = `${f}${t3.id}`;
       t3.hidden && (n3.style.visibility = "hidden");
       e3.at(-1).container.after(n3);
     }
-    this.#po();
+    this.#go();
   }
-  async #uo() {
-    if (0 === this.#Sa.length) return;
+  async #po() {
+    if (0 === this.#Ta.length) return;
     this.div.replaceChildren();
     const t2 = [];
-    if (!this.#do) {
-      this.#do = true;
-      for (const { contentElement: e3, data: { id: i2 } } of this.#Sa) {
-        const n2 = e3.id = `${b}${i2}`;
-        t2.push(this.#ho?.getAriaAttributes(n2).then((t3) => {
+    if (!this.#uo) {
+      this.#uo = true;
+      for (const { contentElement: e3, data: { id: i2 } } of this.#Ta) {
+        const n2 = e3.id = `${f}${i2}`;
+        t2.push(this.#co?.getAriaAttributes(n2).then((t3) => {
           if (t3) for (const [i3, n3] of t3) e3.setAttribute(i3, n3);
         }));
       }
     }
-    this.#Sa.sort(({ data: { rect: [t3, e3, i2, n2] } }, { data: { rect: [s2, r2, a2, o2] } }) => {
+    this.#Ta.sort(({ data: { rect: [t3, e3, i2, n2] } }, { data: { rect: [s2, r2, a2, o2] } }) => {
       if (t3 === i2 && e3 === n2) return 1;
       if (s2 === a2 && r2 === o2) return -1;
       const l2 = (e3 + n2) / 2, h2 = (r2 + o2) / 2;
@@ -16510,49 +16573,49 @@ var AnnotationLayer = class _AnnotationLayer {
       return (t3 + i2) / 2 - (s2 + a2) / 2;
     });
     const e2 = document.createDocumentFragment();
-    for (const t3 of this.#Sa) {
+    for (const t3 of this.#Ta) {
       e2.append(t3.container);
       this._commentManager ? (t3.extraPopupElement?.popup || t3.popup)?.renderCommentButton() : t3.extraPopupElement && e2.append(t3.extraPopupElement.render());
     }
     this.div.append(e2);
     await Promise.all(t2);
-    if (this.#ao) for (const t3 of this.#Sa) this.#ao.addPointerInTextLayer(t3.contentElement, false);
+    if (this.#oo) for (const t3 of this.#Ta) this.#oo.addPointerInTextLayer(t3.contentElement, false);
   }
   async addLinkAnnotations(t2) {
-    const e2 = { data: null, layer: this.div, linkService: this.#co, svgFactory: new DOMSVGFactory(), parent: this };
+    const e2 = { data: null, layer: this.div, linkService: this.#do, svgFactory: new DOMSVGFactory(), parent: this };
     for (const i2 of t2) {
       i2.borderStyle ||= _AnnotationLayer._defaultBorderStyle;
       e2.data = i2;
       const t3 = AnnotationElementFactory.create(e2);
       if (t3.isRenderable) {
         t3.render();
-        t3.contentElement.id = `${b}${i2.id}`;
-        this.#Sa.push(t3);
+        t3.contentElement.id = `${f}${i2.id}`;
+        this.#Ta.push(t3);
       }
     }
-    await this.#uo();
+    await this.#po();
   }
   update({ viewport: t2, optionalContentConfig: e2 }) {
     const i2 = this.div;
     this.viewport = t2;
     setLayerDimensions(i2, { rotation: t2.rotation });
-    for (const t3 of this.#Sa) t3.updateOC(e2);
-    this.#po();
+    for (const t3 of this.#Ta) t3.updateOC(e2);
+    this.#go();
     i2.hidden = false;
   }
   destroy() {
-    for (const t2 of this.#Sa) {
+    for (const t2 of this.#Ta) {
       t2.destroy?.();
-      this.#ao?.removePointerInTextLayer(t2.contentElement);
+      this.#oo?.removePointerInTextLayer(t2.contentElement);
     }
-    this.#Sa.length = 0;
-    this.#lo.clear();
+    this.#Ta.length = 0;
+    this.#ho.clear();
     this.div.replaceChildren();
   }
-  #po() {
-    if (!this.#oo) return;
+  #go() {
+    if (!this.#lo) return;
     const t2 = this.div;
-    for (const [e2, i2] of this.#oo) {
+    for (const [e2, i2] of this.#lo) {
       const n2 = t2.querySelector(`[data-annotation-id="${e2}"]`);
       if (!n2) continue;
       if (Array.isArray(i2)) for (const t3 of i2) {
@@ -16575,8 +16638,8 @@ var AnnotationLayer = class _AnnotationLayer {
           t3 = i2[e3];
         }
       }
-      this.#oo.delete(e2);
-      const o2 = this.#lo.get(e2);
+      this.#lo.delete(e2);
+      const o2 = this.#ho.get(e2);
       if (o2) if (o2._hasNoCanvas) {
         this._annotationEditorUIManager?.setMissingCanvas(e2, n2.id, i2);
         o2._hasNoCanvas = false;
@@ -16584,32 +16647,32 @@ var AnnotationLayer = class _AnnotationLayer {
     }
   }
   refreshCanvases() {
-    this.#po();
+    this.#go();
   }
   getEditableAnnotations() {
-    return this.#lo.values();
+    return this.#ho.values();
   }
   getEditableAnnotation(t2) {
-    return this.#lo.get(t2);
+    return this.#ho.get(t2);
   }
   addFakeAnnotation(t2) {
-    const { div: e2 } = this, { id: i2, rotation: n2 } = t2, s2 = new EditorAnnotationElement({ data: { id: i2, rect: t2.getPDFRect(), rotation: n2 }, editor: t2, layer: e2, parent: this, enableComment: !!this._commentManager, linkService: this.#co, annotationStorage: this.#j });
+    const { div: e2 } = this, { id: i2, rotation: n2 } = t2, s2 = new EditorAnnotationElement({ data: { id: i2, rect: t2.getPDFRect(), rotation: n2 }, editor: t2, layer: e2, parent: this, enableComment: !!this._commentManager, linkService: this.#do, annotationStorage: this.#W });
     s2.render();
-    s2.contentElement.id = `${b}${i2}`;
+    s2.contentElement.id = `${f}${i2}`;
     s2.createOrUpdatePopup();
-    this.#Sa.push(s2);
+    this.#Ta.push(s2);
     return s2;
   }
   removeAnnotation(t2) {
-    const e2 = this.#Sa.findIndex((e3) => e3.data.id === t2);
+    const e2 = this.#Ta.findIndex((e3) => e3.data.id === t2);
     if (e2 < 0) return;
-    const [i2] = this.#Sa.splice(e2, 1);
-    this.#ao?.removePointerInTextLayer(i2.contentElement);
+    const [i2] = this.#Ta.splice(e2, 1);
+    this.#oo?.removePointerInTextLayer(i2.contentElement);
   }
   updateFakeAnnotations(t2) {
     if (0 !== t2.length) {
       for (const e2 of t2) e2.updateFakeAnnotationElement(this);
-      this.#uo();
+      this.#po();
     }
   }
   togglePointerEvents(t2 = false) {
@@ -16619,12 +16682,12 @@ var AnnotationLayer = class _AnnotationLayer {
     return shadow(this, "_defaultBorderStyle", Object.freeze({ width: 1, rawWidth: 1, style: D, dashArray: [3], horizontalCornerRadius: 0, verticalCornerRadius: 0 }));
   }
 };
-var jt = /\r\n?|\n/g;
+var Wt = /\r\n?|\n/g;
 var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
-  #go = "";
-  #mo = `${this.id}-editor`;
-  #fo = null;
-  #ja;
+  #mo = "";
+  #fo = `${this.id}-editor`;
+  #bo = null;
+  #Wa;
   _colorPicker = null;
   static _freeTextDefaultContent = "";
   static _internalPadding = 0;
@@ -16635,11 +16698,11 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     return shadow(this, "_keyboardManager", new KeyboardManager([[["ctrl+s", "mac+meta+s", "ctrl+p", "mac+meta+p"], t2.commitOrRemove, { bubbles: true }], [["ctrl+Enter", "mac+meta+Enter"], t2.commitOrRemove], [["Escape"], t2.commitOrRemove], [["ArrowLeft"], t2._translateEmpty, { args: [-e2, 0], checker: arrowChecker }], [["ctrl+ArrowLeft", "mac+shift+ArrowLeft"], t2._translateEmpty, { args: [-i2, 0], checker: arrowChecker }], [["ArrowRight"], t2._translateEmpty, { args: [e2, 0], checker: arrowChecker }], [["ctrl+ArrowRight", "mac+shift+ArrowRight"], t2._translateEmpty, { args: [i2, 0], checker: arrowChecker }], [["ArrowUp"], t2._translateEmpty, { args: [0, -e2], checker: arrowChecker }], [["ctrl+ArrowUp", "mac+shift+ArrowUp"], t2._translateEmpty, { args: [0, -i2], checker: arrowChecker }], [["ArrowDown"], t2._translateEmpty, { args: [0, e2], checker: arrowChecker }], [["ctrl+ArrowDown", "mac+shift+ArrowDown"], t2._translateEmpty, { args: [0, i2], checker: arrowChecker }]]));
   }
   static _type = "freetext";
-  static _editorType = v.FREETEXT;
+  static _editorType = y.FREETEXT;
   constructor(t2) {
     super({ ...t2, name: "freeTextEditor" });
     this.color = t2.color || _FreeTextEditor._defaultColor || AnnotationEditor._defaultLineColor;
-    this.#ja = t2.fontSize || _FreeTextEditor._defaultFontSize;
+    this.#Wa = t2.fontSize || _FreeTextEditor._defaultFontSize;
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.freetext);
     this.canAddComment = false;
   }
@@ -16650,62 +16713,62 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   }
   static updateDefaultParams(t2, e2) {
     switch (t2) {
-      case w.FREETEXT_SIZE:
+      case v.FREETEXT_SIZE:
         _FreeTextEditor._defaultFontSize = e2;
         break;
-      case w.FREETEXT_COLOR:
+      case v.FREETEXT_COLOR:
         _FreeTextEditor._defaultColor = e2;
     }
   }
   updateParams(t2, e2) {
     switch (t2) {
-      case w.FREETEXT_SIZE:
-        this.#bo(e2);
+      case v.FREETEXT_SIZE:
+        this.#yo(e2);
         break;
-      case w.FREETEXT_COLOR:
-        this.#Ha(e2);
+      case v.FREETEXT_COLOR:
+        this.#za(e2);
     }
   }
   static get defaultPropertiesToUpdate() {
-    return [[w.FREETEXT_SIZE, _FreeTextEditor._defaultFontSize], [w.FREETEXT_COLOR, _FreeTextEditor._defaultColor || AnnotationEditor._defaultLineColor]];
+    return [[v.FREETEXT_SIZE, _FreeTextEditor._defaultFontSize], [v.FREETEXT_COLOR, _FreeTextEditor._defaultColor || AnnotationEditor._defaultLineColor]];
   }
   get propertiesToUpdate() {
-    return [[w.FREETEXT_SIZE, this.#ja], [w.FREETEXT_COLOR, this.color]];
+    return [[v.FREETEXT_SIZE, this.#Wa], [v.FREETEXT_COLOR, this.color]];
   }
   get toolbarButtons() {
     this._colorPicker ||= new BasicColorPicker(this);
     return [["colorPicker", this._colorPicker]];
   }
   get colorType() {
-    return w.FREETEXT_COLOR;
+    return v.FREETEXT_COLOR;
   }
-  #bo(t2) {
+  #yo(t2) {
     const setFontsize = (t3) => {
       this.editorDiv.style.fontSize = `calc(${t3}px * var(--total-scale-factor))`;
-      this.translate(0, -(t3 - this.#ja) * this.parentScale);
-      this.#ja = t3;
-      this.#yo();
-    }, e2 = this.#ja;
-    this.addCommands({ cmd: setFontsize.bind(this, t2), undo: setFontsize.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: w.FREETEXT_SIZE, overwriteIfSameType: true, keepUndo: true });
+      this.translate(0, -(t3 - this.#Wa) * this.parentScale);
+      this.#Wa = t3;
+      this.#vo();
+    }, e2 = this.#Wa;
+    this.addCommands({ cmd: setFontsize.bind(this, t2), undo: setFontsize.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.FREETEXT_SIZE, overwriteIfSameType: true, keepUndo: true });
   }
   onUpdatedColor() {
     this.editorDiv.style.color = this.color;
     this._colorPicker?.update(this.color);
     super.onUpdatedColor();
   }
-  #Ha(t2) {
+  #za(t2) {
     const setColor = (t3) => {
       this.color = t3;
       this.onUpdatedColor();
     }, e2 = this.color;
-    this.addCommands({ cmd: setColor.bind(this, t2), undo: setColor.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: w.FREETEXT_COLOR, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setColor.bind(this, t2), undo: setColor.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.FREETEXT_COLOR, overwriteIfSameType: true, keepUndo: true });
   }
   _translateEmpty(t2, e2) {
     this._uiManager.translateSelectedEditors(t2, e2, true);
   }
   getInitialTranslation() {
     const t2 = this.parentScale;
-    return [-_FreeTextEditor._internalPadding * t2, -(_FreeTextEditor._internalPadding + this.#ja) * t2];
+    return [-_FreeTextEditor._internalPadding * t2, -(_FreeTextEditor._internalPadding + this.#Wa) * t2];
   }
   rebuild() {
     if (this.parent) {
@@ -16719,8 +16782,8 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     this.editorDiv.contentEditable = true;
     this._isDraggable = false;
     this.div.removeAttribute("aria-activedescendant");
-    this.#fo = new AbortController();
-    const t2 = this._uiManager.combinedSignal(this.#fo);
+    this.#bo = new AbortController();
+    const t2 = this._uiManager.combinedSignal(this.#bo);
     this.editorDiv.addEventListener("keydown", this.editorDivKeydown.bind(this), { signal: t2 });
     this.editorDiv.addEventListener("focus", this.editorDivFocus.bind(this), { signal: t2 });
     this.editorDiv.addEventListener("blur", this.editorDivBlur.bind(this), { signal: t2 });
@@ -16732,10 +16795,10 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (!super.disableEditMode()) return false;
     this.overlayDiv.classList.add("enabled");
     this.editorDiv.contentEditable = false;
-    this.div.setAttribute("aria-activedescendant", this.#mo);
+    this.div.setAttribute("aria-activedescendant", this.#fo);
     this._isDraggable = true;
-    this.#fo?.abort();
-    this.#fo = null;
+    this.#bo?.abort();
+    this.#bo = null;
     this.div.focus({ preventScroll: true });
     this.isEditing = false;
     this.parent.div.classList.add("freetextEditing");
@@ -16766,17 +16829,17 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }
     super.remove();
   }
-  #vo() {
+  #wo() {
     const t2 = [];
     this.editorDiv.normalize();
     let e2 = null;
     for (const i2 of this.editorDiv.childNodes) if (e2?.nodeType !== Node.TEXT_NODE || "BR" !== i2.nodeName) {
-      t2.push(_FreeTextEditor.#wo(i2));
+      t2.push(_FreeTextEditor.#xo(i2));
       e2 = i2;
     }
     return t2.join("\n");
   }
-  #yo() {
+  #vo() {
     const [t2, e2] = this.parentDimensions;
     let i2;
     if (this.isAttachedToDOM) i2 = this.div.getBoundingClientRect();
@@ -16803,14 +16866,14 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (!this.isInEditMode()) return;
     super.commit();
     this.disableEditMode();
-    const t2 = this.#go, e2 = this.#go = this.#vo().trimEnd();
+    const t2 = this.#mo, e2 = this.#mo = this.#wo().trimEnd();
     if (t2 === e2) return;
     const setText = (t3) => {
-      this.#go = t3;
+      this.#mo = t3;
       if (t3) {
-        this.#xo();
+        this.#Ao();
         this._uiManager.rebuild(this);
-        this.#yo();
+        this.#vo();
       } else this.remove();
     };
     this.addCommands({ cmd: () => {
@@ -16818,7 +16881,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }, undo: () => {
       setText(t2);
     }, mustExec: false });
-    this.#yo();
+    this.#vo();
   }
   shouldGetKeyboardEvents() {
     return this.isInEditMode();
@@ -16866,13 +16929,13 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     super.render();
     this.editorDiv = document.createElement("div");
     this.editorDiv.className = "internal";
-    this.editorDiv.setAttribute("id", this.#mo);
+    this.editorDiv.setAttribute("id", this.#fo);
     this.editorDiv.setAttribute("data-l10n-id", "pdfjs-free-text2");
     this.editorDiv.setAttribute("data-l10n-attrs", "default-content");
     this.enableEditing();
     this.editorDiv.contentEditable = true;
     const { style: i2 } = this.editorDiv;
-    i2.fontSize = `calc(${this.#ja}px * var(--total-scale-factor))`;
+    i2.fontSize = `calc(${this.#Wa}px * var(--total-scale-factor))`;
     i2.color = this.color;
     this.div.append(this.editorDiv);
     this.overlayDiv = document.createElement("div");
@@ -16908,7 +16971,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
         }
         this.setAt(d2 * i3, u2 * n2, r2, a2);
       } else this._moveAfterPaste(t2, e2);
-      this.#xo();
+      this.#Ao();
       this._isDraggable = true;
       this.editorDiv.contentEditable = false;
     } else {
@@ -16917,14 +16980,14 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }
     return this.div;
   }
-  static #wo(t2) {
-    return (t2.nodeType === Node.TEXT_NODE ? t2.nodeValue : t2.innerText).replaceAll(jt, "");
+  static #xo(t2) {
+    return (t2.nodeType === Node.TEXT_NODE ? t2.nodeValue : t2.innerText).replaceAll(Wt, "");
   }
   editorDivPaste(t2) {
     const e2 = t2.clipboardData || window.clipboardData, { types: i2 } = e2;
     if (1 === i2.length && "text/plain" === i2[0]) return;
     t2.preventDefault();
-    const n2 = _FreeTextEditor.#Ao(e2.getData("text") || "").replaceAll(jt, "\n");
+    const n2 = _FreeTextEditor.#Eo(e2.getData("text") || "").replaceAll(Wt, "\n");
     if (!n2) return;
     const s2 = window.getSelection();
     if (!s2.rangeCount) return;
@@ -16940,21 +17003,21 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     const { startContainer: a2, startOffset: o2 } = r2, l2 = [], h2 = [];
     if (a2.nodeType === Node.TEXT_NODE) {
       const t3 = a2.parentElement;
-      h2.push(a2.nodeValue.slice(o2).replaceAll(jt, ""));
+      h2.push(a2.nodeValue.slice(o2).replaceAll(Wt, ""));
       if (t3 !== this.editorDiv) {
         let e3 = l2;
-        for (const i3 of this.editorDiv.childNodes) i3 !== t3 ? e3.push(_FreeTextEditor.#wo(i3)) : e3 = h2;
+        for (const i3 of this.editorDiv.childNodes) i3 !== t3 ? e3.push(_FreeTextEditor.#xo(i3)) : e3 = h2;
       }
-      l2.push(a2.nodeValue.slice(0, o2).replaceAll(jt, ""));
+      l2.push(a2.nodeValue.slice(0, o2).replaceAll(Wt, ""));
     } else if (a2 === this.editorDiv) {
       let t3 = l2, e3 = 0;
       for (const i3 of this.editorDiv.childNodes) {
         e3++ === o2 && (t3 = h2);
-        t3.push(_FreeTextEditor.#wo(i3));
+        t3.push(_FreeTextEditor.#xo(i3));
       }
     }
-    this.#go = `${l2.join("\n")}${n2}${h2.join("\n")}`;
-    this.#xo();
+    this.#mo = `${l2.join("\n")}${n2}${h2.join("\n")}`;
+    this.#Ao();
     const c2 = new Range();
     let d2 = Math.sumPrecise(l2.map((t3) => t3.length));
     for (const { firstChild: t3 } of this.editorDiv.childNodes) if (t3.nodeType === Node.TEXT_NODE) {
@@ -16969,18 +17032,18 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     s2.removeAllRanges();
     s2.addRange(c2);
   }
-  #xo() {
+  #Ao() {
     this.editorDiv.replaceChildren();
-    if (this.#go) for (const t2 of this.#go.split("\n")) {
+    if (this.#mo) for (const t2 of this.#mo.split("\n")) {
       const e2 = document.createElement("div");
       e2.append(t2 ? document.createTextNode(t2) : document.createElement("br"));
       this.editorDiv.append(e2);
     }
   }
-  #Eo() {
-    return this.#go.replaceAll(" ", " ");
+  #Co() {
+    return this.#mo.replaceAll(" ", " ");
   }
-  static #Ao(t2) {
+  static #Eo(t2) {
     return t2.replaceAll(" ", " ");
   }
   get contentDiv() {
@@ -16995,12 +17058,12 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (t2 instanceof FreeTextAnnotationElement) {
       const { data: { defaultAppearanceData: { fontSize: e3, fontColor: i3 }, rect: s3, rotation: r2, id: a2, popupRef: o2, richText: l2, contentsObj: h2, creationDate: c2, modificationDate: d2 }, textContent: u2, textPosition: p2, parent: { page: { pageNumber: g2 } } } = t2;
       if (!u2?.length) return null;
-      n2 = t2 = { annotationType: v.FREETEXT, color: Array.from(i3), fontSize: e3, value: u2.join("\n"), position: p2, pageIndex: g2 - 1, rect: s3.slice(0), rotation: r2, annotationElementId: a2, id: a2, deleted: false, popupRef: o2, comment: h2?.str || null, richText: l2, creationDate: c2, modificationDate: d2 };
+      n2 = t2 = { annotationType: y.FREETEXT, color: Array.from(i3), fontSize: e3, value: u2.join("\n"), position: p2, pageIndex: g2 - 1, rect: s3.slice(0), rotation: r2, annotationElementId: a2, id: a2, deleted: false, popupRef: o2, comment: h2?.str || null, richText: l2, creationDate: c2, modificationDate: d2 };
     }
     const s2 = await super.deserialize(t2, e2, i2);
-    s2.#ja = t2.fontSize;
+    s2.#Wa = t2.fontSize;
     s2.color = Util.makeHexColor(...t2.color);
-    s2.#go = _FreeTextEditor.#Ao(t2.value);
+    s2.#mo = _FreeTextEditor.#Eo(t2.value);
     s2._initialData = n2;
     t2.comment && s2.setCommentData(t2);
     return s2;
@@ -17008,17 +17071,17 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   serialize(t2 = false) {
     if (this.isEmpty()) return null;
     if (this.deleted) return this.serializeDeleted();
-    const e2 = AnnotationEditor._colorManager.convert(this.isAttachedToDOM ? getComputedStyle(this.editorDiv).color : this.color), i2 = Object.assign(super.serialize(t2), { color: e2, fontSize: this.#ja, value: this.#Eo() });
+    const e2 = AnnotationEditor._colorManager.convert(this.isAttachedToDOM ? getComputedStyle(this.editorDiv).color : this.color), i2 = Object.assign(super.serialize(t2), { color: e2, fontSize: this.#Wa, value: this.#Co() });
     this.addComment(i2);
     if (t2) {
       i2.isCopy = true;
       return i2;
     }
-    if (this.annotationElementId && !this.#Co(i2)) return null;
+    if (this.annotationElementId && !this.#So(i2)) return null;
     i2.id = this.annotationElementId;
     return i2;
   }
-  #Co(t2) {
+  #So(t2) {
     const { value: e2, fontSize: i2, color: n2, pageIndex: s2 } = this._initialData;
     return this.hasEditedComment || this._hasBeenMoved || t2.value !== e2 || t2.fontSize !== i2 || t2.color.some((t3, e3) => t3 !== n2[e3]) || t2.pageIndex !== s2;
   }
@@ -17026,15 +17089,15 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     const e2 = super.renderAnnotationElement(t2);
     if (!e2) return null;
     const { style: i2 } = e2;
-    i2.fontSize = `calc(${this.#ja}px * var(--total-scale-factor))`;
+    i2.fontSize = `calc(${this.#Wa}px * var(--total-scale-factor))`;
     i2.color = this.color;
     e2.replaceChildren();
-    for (const t3 of this.#go.split("\n")) {
+    for (const t3 of this.#mo.split("\n")) {
       const i3 = document.createElement("div");
       i3.append(t3 ? document.createTextNode(t3) : document.createElement("br"));
       e2.append(i3);
     }
-    t2.updateEdited({ rect: this.getPDFRect(), popup: this._uiManager.hasCommentManager() || this.hasEditedComment ? this.comment : { text: this.#go } });
+    t2.updateEdited({ rect: this.getPDFRect(), popup: this._uiManager.hasCommentManager() || this.hasEditedComment ? this.comment : { text: this.#mo } });
     return e2;
   }
   resetAnnotationElement(t2) {
@@ -17097,127 +17160,127 @@ var Outline = class {
   }
 };
 var FreeDrawOutliner = class _FreeDrawOutliner {
-  #So;
-  #To = [];
-  #_o;
+  #To;
+  #_o = [];
   #ko;
+  #Do;
   #Mo = [];
-  #Do = new Float32Array(18);
-  #Po;
+  #Po = new Float32Array(18);
   #Io;
   #Fo;
   #Oo;
   #Ro;
   #Bo;
-  #Lo = [];
-  static #No = 8;
-  static #Uo = 2;
-  static #Ho = _FreeDrawOutliner.#No + _FreeDrawOutliner.#Uo;
+  #Lo;
+  #No = [];
+  static #Uo = 8;
+  static #Ho = 2;
+  static #zo = _FreeDrawOutliner.#Uo + _FreeDrawOutliner.#Ho;
   constructor({ x: t2, y: e2 }, i2, n2, s2, r2, a2 = 0) {
-    this.#So = i2;
-    this.#Bo = s2 * n2;
-    this.#ko = r2;
-    this.#Do.set([NaN, NaN, NaN, NaN, t2, e2], 6);
-    this.#_o = a2;
-    this.#Oo = _FreeDrawOutliner.#No * n2;
-    this.#Fo = _FreeDrawOutliner.#Ho * n2;
-    this.#Ro = n2;
-    this.#Lo.push(t2, e2);
+    this.#To = i2;
+    this.#Lo = s2 * n2;
+    this.#Do = r2;
+    this.#Po.set([NaN, NaN, NaN, NaN, t2, e2], 6);
+    this.#ko = a2;
+    this.#Ro = _FreeDrawOutliner.#Uo * n2;
+    this.#Oo = _FreeDrawOutliner.#zo * n2;
+    this.#Bo = n2;
+    this.#No.push(t2, e2);
   }
   isEmpty() {
-    return isNaN(this.#Do[8]);
+    return isNaN(this.#Po[8]);
   }
-  #zo() {
-    const t2 = this.#Do.subarray(4, 6), e2 = this.#Do.subarray(16, 18), [i2, n2, s2, r2] = this.#So;
-    return [(this.#Po + (t2[0] - e2[0]) / 2 - i2) / s2, (this.#Io + (t2[1] - e2[1]) / 2 - n2) / r2, (this.#Po + (e2[0] - t2[0]) / 2 - i2) / s2, (this.#Io + (e2[1] - t2[1]) / 2 - n2) / r2];
+  #Go() {
+    const t2 = this.#Po.subarray(4, 6), e2 = this.#Po.subarray(16, 18), [i2, n2, s2, r2] = this.#To;
+    return [(this.#Io + (t2[0] - e2[0]) / 2 - i2) / s2, (this.#Fo + (t2[1] - e2[1]) / 2 - n2) / r2, (this.#Io + (e2[0] - t2[0]) / 2 - i2) / s2, (this.#Fo + (e2[1] - t2[1]) / 2 - n2) / r2];
   }
   add({ x: t2, y: e2 }) {
-    this.#Po = t2;
-    this.#Io = e2;
-    const [i2, n2, s2, r2] = this.#So;
-    let [a2, o2, l2, h2] = this.#Do.subarray(8, 12);
+    this.#Io = t2;
+    this.#Fo = e2;
+    const [i2, n2, s2, r2] = this.#To;
+    let [a2, o2, l2, h2] = this.#Po.subarray(8, 12);
     const c2 = t2 - l2, d2 = e2 - h2, u2 = Math.hypot(c2, d2);
-    if (u2 < this.#Fo) return false;
-    const p2 = u2 - this.#Oo, g2 = p2 / u2, m2 = g2 * c2, f2 = g2 * d2;
+    if (u2 < this.#Oo) return false;
+    const p2 = u2 - this.#Ro, g2 = p2 / u2, m2 = g2 * c2, f2 = g2 * d2;
     let b2 = a2, y2 = o2;
     a2 = l2;
     o2 = h2;
     l2 += m2;
     h2 += f2;
-    this.#Lo?.push(t2, e2);
-    const v2 = m2 / p2, w2 = -f2 / p2 * this.#Bo, x2 = v2 * this.#Bo;
-    this.#Do.set(this.#Do.subarray(2, 8), 0);
-    this.#Do.set([l2 + w2, h2 + x2], 4);
-    this.#Do.set(this.#Do.subarray(14, 18), 12);
-    this.#Do.set([l2 - w2, h2 - x2], 16);
-    if (isNaN(this.#Do[6])) {
+    this.#No?.push(t2, e2);
+    const v2 = m2 / p2, w2 = -f2 / p2 * this.#Lo, x2 = v2 * this.#Lo;
+    this.#Po.set(this.#Po.subarray(2, 8), 0);
+    this.#Po.set([l2 + w2, h2 + x2], 4);
+    this.#Po.set(this.#Po.subarray(14, 18), 12);
+    this.#Po.set([l2 - w2, h2 - x2], 16);
+    if (isNaN(this.#Po[6])) {
       if (0 === this.#Mo.length) {
-        this.#Do.set([a2 + w2, o2 + x2], 2);
+        this.#Po.set([a2 + w2, o2 + x2], 2);
         this.#Mo.push(NaN, NaN, NaN, NaN, (a2 + w2 - i2) / s2, (o2 + x2 - n2) / r2);
-        this.#Do.set([a2 - w2, o2 - x2], 14);
-        this.#To.push(NaN, NaN, NaN, NaN, (a2 - w2 - i2) / s2, (o2 - x2 - n2) / r2);
+        this.#Po.set([a2 - w2, o2 - x2], 14);
+        this.#_o.push(NaN, NaN, NaN, NaN, (a2 - w2 - i2) / s2, (o2 - x2 - n2) / r2);
       }
-      this.#Do.set([b2, y2, a2, o2, l2, h2], 6);
+      this.#Po.set([b2, y2, a2, o2, l2, h2], 6);
       return !this.isEmpty();
     }
-    this.#Do.set([b2, y2, a2, o2, l2, h2], 6);
+    this.#Po.set([b2, y2, a2, o2, l2, h2], 6);
     if (Math.abs(Math.atan2(y2 - o2, b2 - a2) - Math.atan2(f2, m2)) < Math.PI / 2) {
-      [a2, o2, l2, h2] = this.#Do.subarray(2, 6);
+      [a2, o2, l2, h2] = this.#Po.subarray(2, 6);
       this.#Mo.push(NaN, NaN, NaN, NaN, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
-      [a2, o2, b2, y2] = this.#Do.subarray(14, 18);
-      this.#To.push(NaN, NaN, NaN, NaN, ((b2 + a2) / 2 - i2) / s2, ((y2 + o2) / 2 - n2) / r2);
+      [a2, o2, b2, y2] = this.#Po.subarray(14, 18);
+      this.#_o.push(NaN, NaN, NaN, NaN, ((b2 + a2) / 2 - i2) / s2, ((y2 + o2) / 2 - n2) / r2);
       return true;
     }
-    [b2, y2, a2, o2, l2, h2] = this.#Do.subarray(0, 6);
+    [b2, y2, a2, o2, l2, h2] = this.#Po.subarray(0, 6);
     this.#Mo.push(((b2 + 5 * a2) / 6 - i2) / s2, ((y2 + 5 * o2) / 6 - n2) / r2, ((5 * a2 + l2) / 6 - i2) / s2, ((5 * o2 + h2) / 6 - n2) / r2, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
-    [l2, h2, a2, o2, b2, y2] = this.#Do.subarray(12, 18);
-    this.#To.push(((b2 + 5 * a2) / 6 - i2) / s2, ((y2 + 5 * o2) / 6 - n2) / r2, ((5 * a2 + l2) / 6 - i2) / s2, ((5 * o2 + h2) / 6 - n2) / r2, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
+    [l2, h2, a2, o2, b2, y2] = this.#Po.subarray(12, 18);
+    this.#_o.push(((b2 + 5 * a2) / 6 - i2) / s2, ((y2 + 5 * o2) / 6 - n2) / r2, ((5 * a2 + l2) / 6 - i2) / s2, ((5 * o2 + h2) / 6 - n2) / r2, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
     return true;
   }
   toSVGPath() {
     if (this.isEmpty()) return "";
-    const t2 = this.#Mo, e2 = this.#To;
-    if (isNaN(this.#Do[6]) && !this.isEmpty()) return this.#Go();
+    const t2 = this.#Mo, e2 = this.#_o;
+    if (isNaN(this.#Po[6]) && !this.isEmpty()) return this.#jo();
     const i2 = [];
     i2.push(`M${t2[4]} ${t2[5]}`);
     for (let e3 = 6; e3 < t2.length; e3 += 6) isNaN(t2[e3]) ? i2.push(`L${t2[e3 + 4]} ${t2[e3 + 5]}`) : i2.push(`C${t2[e3]} ${t2[e3 + 1]} ${t2[e3 + 2]} ${t2[e3 + 3]} ${t2[e3 + 4]} ${t2[e3 + 5]}`);
-    this.#jo(i2);
-    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) isNaN(e2[t3]) ? i2.push(`L${e2[t3 + 4]} ${e2[t3 + 5]}`) : i2.push(`C${e2[t3]} ${e2[t3 + 1]} ${e2[t3 + 2]} ${e2[t3 + 3]} ${e2[t3 + 4]} ${e2[t3 + 5]}`);
     this.#Wo(i2);
+    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) isNaN(e2[t3]) ? i2.push(`L${e2[t3 + 4]} ${e2[t3 + 5]}`) : i2.push(`C${e2[t3]} ${e2[t3 + 1]} ${e2[t3 + 2]} ${e2[t3 + 3]} ${e2[t3 + 4]} ${e2[t3 + 5]}`);
+    this.#Vo(i2);
     return i2.join(" ");
   }
-  #Go() {
-    const [t2, e2, i2, n2] = this.#So, [s2, r2, a2, o2] = this.#zo();
-    return `M${(this.#Do[2] - t2) / i2} ${(this.#Do[3] - e2) / n2} L${(this.#Do[4] - t2) / i2} ${(this.#Do[5] - e2) / n2} L${s2} ${r2} L${a2} ${o2} L${(this.#Do[16] - t2) / i2} ${(this.#Do[17] - e2) / n2} L${(this.#Do[14] - t2) / i2} ${(this.#Do[15] - e2) / n2} Z`;
+  #jo() {
+    const [t2, e2, i2, n2] = this.#To, [s2, r2, a2, o2] = this.#Go();
+    return `M${(this.#Po[2] - t2) / i2} ${(this.#Po[3] - e2) / n2} L${(this.#Po[4] - t2) / i2} ${(this.#Po[5] - e2) / n2} L${s2} ${r2} L${a2} ${o2} L${(this.#Po[16] - t2) / i2} ${(this.#Po[17] - e2) / n2} L${(this.#Po[14] - t2) / i2} ${(this.#Po[15] - e2) / n2} Z`;
   }
-  #Wo(t2) {
-    const e2 = this.#To;
+  #Vo(t2) {
+    const e2 = this.#_o;
     t2.push(`L${e2[4]} ${e2[5]} Z`);
   }
-  #jo(t2) {
-    const [e2, i2, n2, s2] = this.#So, r2 = this.#Do.subarray(4, 6), a2 = this.#Do.subarray(16, 18), [o2, l2, h2, c2] = this.#zo();
+  #Wo(t2) {
+    const [e2, i2, n2, s2] = this.#To, r2 = this.#Po.subarray(4, 6), a2 = this.#Po.subarray(16, 18), [o2, l2, h2, c2] = this.#Go();
     t2.push(`L${(r2[0] - e2) / n2} ${(r2[1] - i2) / s2} L${o2} ${l2} L${h2} ${c2} L${(a2[0] - e2) / n2} ${(a2[1] - i2) / s2}`);
   }
   newFreeDrawOutline(t2, e2, i2, n2, s2, r2) {
     return new FreeDrawOutline(t2, e2, i2, n2, s2, r2);
   }
   getOutlines() {
-    const t2 = this.#Mo, e2 = this.#To, i2 = this.#Do, [n2, s2, r2, a2] = this.#So, o2 = new Float32Array((this.#Lo?.length ?? 0) + 2);
+    const t2 = this.#Mo, e2 = this.#_o, i2 = this.#Po, [n2, s2, r2, a2] = this.#To, o2 = new Float32Array((this.#No?.length ?? 0) + 2);
     for (let t3 = 0, e3 = o2.length - 2; t3 < e3; t3 += 2) {
-      o2[t3] = (this.#Lo[t3] - n2) / r2;
-      o2[t3 + 1] = (this.#Lo[t3 + 1] - s2) / a2;
+      o2[t3] = (this.#No[t3] - n2) / r2;
+      o2[t3 + 1] = (this.#No[t3 + 1] - s2) / a2;
     }
-    o2[o2.length - 2] = (this.#Po - n2) / r2;
-    o2[o2.length - 1] = (this.#Io - s2) / a2;
-    if (isNaN(i2[6]) && !this.isEmpty()) return this.#Vo(o2);
-    const l2 = new Float32Array(this.#Mo.length + 24 + this.#To.length);
+    o2[o2.length - 2] = (this.#Io - n2) / r2;
+    o2[o2.length - 1] = (this.#Fo - s2) / a2;
+    if (isNaN(i2[6]) && !this.isEmpty()) return this.#$o(o2);
+    const l2 = new Float32Array(this.#Mo.length + 24 + this.#_o.length);
     let h2 = t2.length;
     for (let e3 = 0; e3 < h2; e3 += 2) if (isNaN(t2[e3])) l2[e3] = l2[e3 + 1] = NaN;
     else {
       l2[e3] = t2[e3];
       l2[e3 + 1] = t2[e3 + 1];
     }
-    h2 = this.#$o(l2, h2);
+    h2 = this.#qo(l2, h2);
     for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) for (let i3 = 0; i3 < 6; i3 += 2) if (isNaN(e2[t3 + i3])) {
       l2[h2] = l2[h2 + 1] = NaN;
       h2 += 2;
@@ -17226,45 +17289,45 @@ var FreeDrawOutliner = class _FreeDrawOutliner {
       l2[h2 + 1] = e2[t3 + i3 + 1];
       h2 += 2;
     }
-    this.#qo(l2, h2);
-    return this.newFreeDrawOutline(l2, o2, this.#So, this.#Ro, this.#_o, this.#ko);
+    this.#Ko(l2, h2);
+    return this.newFreeDrawOutline(l2, o2, this.#To, this.#Bo, this.#ko, this.#Do);
   }
-  #Vo(t2) {
-    const e2 = this.#Do, [i2, n2, s2, r2] = this.#So, [a2, o2, l2, h2] = this.#zo(), c2 = new Float32Array(36);
+  #$o(t2) {
+    const e2 = this.#Po, [i2, n2, s2, r2] = this.#To, [a2, o2, l2, h2] = this.#Go(), c2 = new Float32Array(36);
     c2.set([NaN, NaN, NaN, NaN, (e2[2] - i2) / s2, (e2[3] - n2) / r2, NaN, NaN, NaN, NaN, (e2[4] - i2) / s2, (e2[5] - n2) / r2, NaN, NaN, NaN, NaN, a2, o2, NaN, NaN, NaN, NaN, l2, h2, NaN, NaN, NaN, NaN, (e2[16] - i2) / s2, (e2[17] - n2) / r2, NaN, NaN, NaN, NaN, (e2[14] - i2) / s2, (e2[15] - n2) / r2], 0);
-    return this.newFreeDrawOutline(c2, t2, this.#So, this.#Ro, this.#_o, this.#ko);
+    return this.newFreeDrawOutline(c2, t2, this.#To, this.#Bo, this.#ko, this.#Do);
   }
-  #qo(t2, e2) {
-    const i2 = this.#To;
+  #Ko(t2, e2) {
+    const i2 = this.#_o;
     t2.set([NaN, NaN, NaN, NaN, i2[4], i2[5]], e2);
     return e2 + 6;
   }
-  #$o(t2, e2) {
-    const i2 = this.#Do.subarray(4, 6), n2 = this.#Do.subarray(16, 18), [s2, r2, a2, o2] = this.#So, [l2, h2, c2, d2] = this.#zo();
+  #qo(t2, e2) {
+    const i2 = this.#Po.subarray(4, 6), n2 = this.#Po.subarray(16, 18), [s2, r2, a2, o2] = this.#To, [l2, h2, c2, d2] = this.#Go();
     t2.set([NaN, NaN, NaN, NaN, (i2[0] - s2) / a2, (i2[1] - r2) / o2, NaN, NaN, NaN, NaN, l2, h2, NaN, NaN, NaN, NaN, c2, d2, NaN, NaN, NaN, NaN, (n2[0] - s2) / a2, (n2[1] - r2) / o2], e2);
     return e2 + 24;
   }
 };
 var FreeDrawOutline = class extends Outline {
-  #So;
-  #Ko = new Float32Array(4);
-  #_o;
+  #To;
+  #Xo = new Float32Array(4);
   #ko;
-  #Lo;
-  #Ro;
-  #Xo;
+  #Do;
+  #No;
+  #Bo;
+  #Yo;
   constructor(t2, e2, i2, n2, s2, r2) {
     super();
-    this.#Xo = t2;
-    this.#Lo = e2;
-    this.#So = i2;
-    this.#Ro = n2;
-    this.#_o = s2;
-    this.#ko = r2;
+    this.#Yo = t2;
+    this.#No = e2;
+    this.#To = i2;
+    this.#Bo = n2;
+    this.#ko = s2;
+    this.#Do = r2;
     this.firstPoint = [NaN, NaN];
     this.lastPoint = [NaN, NaN];
-    this.#Yo(r2);
-    const [a2, o2, l2, h2] = this.#Ko;
+    this.#Jo(r2);
+    const [a2, o2, l2, h2] = this.#Xo;
     for (let e3 = 0, i3 = t2.length; e3 < i3; e3 += 2) {
       t2[e3] = (t2[e3] - a2) / l2;
       t2[e3 + 1] = (t2[e3 + 1] - o2) / h2;
@@ -17275,8 +17338,8 @@ var FreeDrawOutline = class extends Outline {
     }
   }
   toSVGPath() {
-    const t2 = [`M${this.#Xo[4]} ${this.#Xo[5]}`];
-    for (let e2 = 6, i2 = this.#Xo.length; e2 < i2; e2 += 6) isNaN(this.#Xo[e2]) ? t2.push(`L${this.#Xo[e2 + 4]} ${this.#Xo[e2 + 5]}`) : t2.push(`C${this.#Xo[e2]} ${this.#Xo[e2 + 1]} ${this.#Xo[e2 + 2]} ${this.#Xo[e2 + 3]} ${this.#Xo[e2 + 4]} ${this.#Xo[e2 + 5]}`);
+    const t2 = [`M${this.#Yo[4]} ${this.#Yo[5]}`];
+    for (let e2 = 6, i2 = this.#Yo.length; e2 < i2; e2 += 6) isNaN(this.#Yo[e2]) ? t2.push(`L${this.#Yo[e2 + 4]} ${this.#Yo[e2 + 5]}`) : t2.push(`C${this.#Yo[e2]} ${this.#Yo[e2 + 1]} ${this.#Yo[e2 + 2]} ${this.#Yo[e2 + 3]} ${this.#Yo[e2 + 4]} ${this.#Yo[e2 + 5]}`);
     t2.push("Z");
     return t2.join(" ");
   }
@@ -17285,25 +17348,25 @@ var FreeDrawOutline = class extends Outline {
     let o2, l2;
     switch (s2) {
       case 0:
-        o2 = Outline._rescale(this.#Xo, t2, n2, r2, -a2);
-        l2 = Outline._rescale(this.#Lo, t2, n2, r2, -a2);
+        o2 = Outline._rescale(this.#Yo, t2, n2, r2, -a2);
+        l2 = Outline._rescale(this.#No, t2, n2, r2, -a2);
         break;
       case 90:
-        o2 = Outline._rescaleAndSwap(this.#Xo, t2, e2, r2, a2);
-        l2 = Outline._rescaleAndSwap(this.#Lo, t2, e2, r2, a2);
+        o2 = Outline._rescaleAndSwap(this.#Yo, t2, e2, r2, a2);
+        l2 = Outline._rescaleAndSwap(this.#No, t2, e2, r2, a2);
         break;
       case 180:
-        o2 = Outline._rescale(this.#Xo, i2, e2, -r2, a2);
-        l2 = Outline._rescale(this.#Lo, i2, e2, -r2, a2);
+        o2 = Outline._rescale(this.#Yo, i2, e2, -r2, a2);
+        l2 = Outline._rescale(this.#No, i2, e2, -r2, a2);
         break;
       case 270:
-        o2 = Outline._rescaleAndSwap(this.#Xo, i2, n2, -r2, -a2);
-        l2 = Outline._rescaleAndSwap(this.#Lo, i2, n2, -r2, -a2);
+        o2 = Outline._rescaleAndSwap(this.#Yo, i2, n2, -r2, -a2);
+        l2 = Outline._rescaleAndSwap(this.#No, i2, n2, -r2, -a2);
     }
     return { outline: Array.from(o2), points: [Array.from(l2)] };
   }
-  #Yo(t2) {
-    const e2 = this.#Xo;
+  #Jo(t2) {
+    const e2 = this.#Yo;
     let i2 = e2[4], s2 = e2[5];
     const r2 = [i2, s2, i2, s2];
     let a2 = i2, o2 = s2, l2 = i2, h2 = s2;
@@ -17336,43 +17399,43 @@ var FreeDrawOutline = class extends Outline {
       i2 = u4;
       s2 = p2;
     }
-    const u2 = this.#Ko;
-    u2[0] = r2[0] - this.#_o;
-    u2[1] = r2[1] - this.#_o;
-    u2[2] = r2[2] - r2[0] + 2 * this.#_o;
-    u2[3] = r2[3] - r2[1] + 2 * this.#_o;
+    const u2 = this.#Xo;
+    u2[0] = r2[0] - this.#ko;
+    u2[1] = r2[1] - this.#ko;
+    u2[2] = r2[2] - r2[0] + 2 * this.#ko;
+    u2[3] = r2[3] - r2[1] + 2 * this.#ko;
     this.firstPoint = [a2, o2];
     this.lastPoint = [l2, h2];
   }
   get box() {
-    return this.#Ko;
+    return this.#Xo;
   }
   newOutliner(t2, e2, i2, n2, s2, r2 = 0) {
     return new FreeDrawOutliner(t2, e2, i2, n2, s2, r2);
   }
   getNewOutline(t2, e2) {
-    const [i2, n2, s2, r2] = this.#Ko, [a2, o2, l2, h2] = this.#So, c2 = s2 * l2, d2 = r2 * h2, u2 = i2 * l2 + a2, p2 = n2 * h2 + o2, g2 = this.newOutliner({ x: this.#Lo[0] * c2 + u2, y: this.#Lo[1] * d2 + p2 }, this.#So, this.#Ro, t2, this.#ko, e2 ?? this.#_o);
-    for (let t3 = 2; t3 < this.#Lo.length; t3 += 2) g2.add({ x: this.#Lo[t3] * c2 + u2, y: this.#Lo[t3 + 1] * d2 + p2 });
+    const [i2, n2, s2, r2] = this.#Xo, [a2, o2, l2, h2] = this.#To, c2 = s2 * l2, d2 = r2 * h2, u2 = i2 * l2 + a2, p2 = n2 * h2 + o2, g2 = this.newOutliner({ x: this.#No[0] * c2 + u2, y: this.#No[1] * d2 + p2 }, this.#To, this.#Bo, t2, this.#Do, e2 ?? this.#ko);
+    for (let t3 = 2; t3 < this.#No.length; t3 += 2) g2.add({ x: this.#No[t3] * c2 + u2, y: this.#No[t3 + 1] * d2 + p2 });
     return g2.getOutlines();
   }
 };
 var HighlightOutliner = class {
-  #So;
-  #Jo;
+  #To;
   #Qo;
-  #Zo = [];
+  #Zo;
   #tl = [];
+  #el = [];
   constructor(t2, e2 = 0, i2 = 0, s2 = true) {
     const r2 = n.slice(), a2 = 1e-4;
     for (const { x: i3, y: n2, width: s3, height: o3 } of t2) {
       const t3 = Math.floor((i3 - e2) / a2) * a2, l3 = Math.ceil((i3 + s3 + e2) / a2) * a2, h3 = Math.floor((n2 - e2) / a2) * a2, c3 = Math.ceil((n2 + o3 + e2) / a2) * a2, d3 = [t3, h3, c3, true], u3 = [l3, h3, c3, false];
-      this.#Zo.push(d3, u3);
+      this.#tl.push(d3, u3);
       Util.rectBoundingBox(t3, h3, l3, c3, r2);
     }
     const o2 = r2[2] - r2[0] + 2 * i2, l2 = r2[3] - r2[1] + 2 * i2, h2 = r2[0] - i2, c2 = r2[1] - i2;
     let d2 = s2 ? -1 / 0 : 1 / 0, u2 = 1 / 0;
-    const p2 = this.#Zo.at(s2 ? -1 : -2), g2 = [p2[0], p2[2]];
-    for (const t3 of this.#Zo) {
+    const p2 = this.#tl.at(s2 ? -1 : -2), g2 = [p2[0], p2[2]];
+    for (const t3 of this.#tl) {
       const [e3, i3, n2, r3] = t3;
       if (!r3 && s2) if (i3 < u2) {
         u2 = i3;
@@ -17386,23 +17449,23 @@ var HighlightOutliner = class {
       t3[1] = (i3 - c2) / l2;
       t3[2] = (n2 - c2) / l2;
     }
-    this.#So = new Float32Array([h2, c2, o2, l2]);
-    this.#Jo = [d2, u2];
-    this.#Qo = g2;
+    this.#To = new Float32Array([h2, c2, o2, l2]);
+    this.#Qo = [d2, u2];
+    this.#Zo = g2;
   }
   getOutlines() {
-    this.#Zo.sort((t3, e2) => t3[0] - e2[0] || t3[1] - e2[1] || t3[2] - e2[2]);
+    this.#tl.sort((t3, e2) => t3[0] - e2[0] || t3[1] - e2[1] || t3[2] - e2[2]);
     const t2 = [];
-    for (const e2 of this.#Zo) if (e2[3]) {
-      t2.push(...this.#el(e2));
-      this.#il(e2);
-    } else {
+    for (const e2 of this.#tl) if (e2[3]) {
+      t2.push(...this.#il(e2));
       this.#nl(e2);
-      t2.push(...this.#el(e2));
+    } else {
+      this.#sl(e2);
+      t2.push(...this.#il(e2));
     }
-    return this.#sl(t2);
+    return this.#rl(t2);
   }
-  #sl(t2) {
+  #rl(t2) {
     const e2 = [], i2 = /* @__PURE__ */ new Set();
     for (const i3 of t2) {
       const [t3, n3, s3] = i3;
@@ -17442,10 +17505,10 @@ var HighlightOutliner = class {
       }
       s2.push(h2, c2);
     }
-    return new HighlightOutline(n2, this.#So, this.#Jo, this.#Qo);
+    return new HighlightOutline(n2, this.#To, this.#Qo, this.#Zo);
   }
-  #rl(t2) {
-    const e2 = this.#tl;
+  #al(t2) {
+    const e2 = this.#el;
     let i2 = 0, n2 = e2.length - 1;
     for (; i2 <= n2; ) {
       const s2 = i2 + n2 >> 1, r2 = e2[s2][0];
@@ -17454,33 +17517,33 @@ var HighlightOutliner = class {
     }
     return n2 + 1;
   }
-  #il([, t2, e2]) {
-    const i2 = this.#rl(t2);
-    this.#tl.splice(i2, 0, [t2, e2]);
-  }
   #nl([, t2, e2]) {
-    const i2 = this.#rl(t2);
-    for (let n2 = i2; n2 < this.#tl.length; n2++) {
-      const [i3, s2] = this.#tl[n2];
+    const i2 = this.#al(t2);
+    this.#el.splice(i2, 0, [t2, e2]);
+  }
+  #sl([, t2, e2]) {
+    const i2 = this.#al(t2);
+    for (let n2 = i2; n2 < this.#el.length; n2++) {
+      const [i3, s2] = this.#el[n2];
       if (i3 !== t2) break;
       if (i3 === t2 && s2 === e2) {
-        this.#tl.splice(n2, 1);
+        this.#el.splice(n2, 1);
         return;
       }
     }
     for (let n2 = i2 - 1; n2 >= 0; n2--) {
-      const [i3, s2] = this.#tl[n2];
+      const [i3, s2] = this.#el[n2];
       if (i3 !== t2) break;
       if (i3 === t2 && s2 === e2) {
-        this.#tl.splice(n2, 1);
+        this.#el.splice(n2, 1);
         return;
       }
     }
   }
-  #el(t2) {
-    const [e2, i2, n2] = t2, s2 = [[e2, i2, n2]], r2 = this.#rl(n2);
+  #il(t2) {
+    const [e2, i2, n2] = t2, s2 = [[e2, i2, n2]], r2 = this.#al(n2);
     for (let t3 = 0; t3 < r2; t3++) {
-      const [i3, n3] = this.#tl[t3];
+      const [i3, n3] = this.#el[t3];
       for (let t4 = 0, r3 = s2.length; t4 < r3; t4++) {
         const [, a2, o2] = s2[t4];
         if (!(n3 <= a2 || o2 <= i3)) if (a2 >= i3) if (o2 > n3) s2[t4][1] = n3;
@@ -17500,18 +17563,18 @@ var HighlightOutliner = class {
   }
 };
 var HighlightOutline = class extends Outline {
-  #So;
-  #al;
+  #To;
+  #ol;
   constructor(t2, e2, i2, n2) {
     super();
-    this.#al = t2;
-    this.#So = e2;
+    this.#ol = t2;
+    this.#To = e2;
     this.firstPoint = i2;
     this.lastPoint = n2;
   }
   toSVGPath() {
     const t2 = [];
-    for (const e2 of this.#al) {
+    for (const e2 of this.#ol) {
       let [i2, n2] = e2;
       t2.push(`M${i2} ${n2}`);
       for (let s2 = 2; s2 < e2.length; s2 += 2) {
@@ -17530,7 +17593,7 @@ var HighlightOutline = class extends Outline {
   }
   serialize([t2, e2, i2, n2], s2) {
     const r2 = [], a2 = i2 - t2, o2 = n2 - e2;
-    for (const e3 of this.#al) {
+    for (const e3 of this.#ol) {
       const i3 = new Array(e3.length);
       for (let s3 = 0; s3 < e3.length; s3 += 2) {
         i3[s3] = t2 + e3[s3] * a2;
@@ -17541,7 +17604,7 @@ var HighlightOutline = class extends Outline {
     return r2;
   }
   get box() {
-    return this.#So;
+    return this.#To;
   }
 };
 var FreeHighlightOutliner = class extends FreeDrawOutliner {
@@ -17555,29 +17618,29 @@ var FreeHighlightOutline = class extends FreeDrawOutline {
   }
 };
 var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
-  #ol = null;
-  #ll = 0;
-  #hl;
-  #cl = null;
-  #r = null;
+  #ll = null;
+  #hl = 0;
+  #cl;
   #dl = null;
+  #a = null;
   #ul = null;
-  #pl = 0;
-  #gl = null;
+  #pl = null;
+  #gl = 0;
   #ml = null;
-  #T = null;
-  #fl = false;
-  #Jo = null;
+  #fl = null;
+  #_ = null;
+  #bl = false;
   #Qo = null;
-  #bl = null;
+  #Zo = null;
+  #yl = null;
   #ye = "";
-  #Bo;
-  #yl = "";
+  #Lo;
+  #vl = "";
   static _defaultColor = null;
   static _defaultOpacity = 1;
   static _defaultThickness = 12;
   static _type = "highlight";
-  static _editorType = v.HIGHLIGHT;
+  static _editorType = y.HIGHLIGHT;
   static _freeHighlightId = -1;
   static _freeHighlight = null;
   static _freeHighlightClipId = "";
@@ -17588,30 +17651,30 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
   constructor(t2) {
     super({ ...t2, name: "highlightEditor" });
     this.color = t2.color || _HighlightEditor._defaultColor;
-    this.#Bo = t2.thickness || _HighlightEditor._defaultThickness;
+    this.#Lo = t2.thickness || _HighlightEditor._defaultThickness;
     this.opacity = t2.opacity || _HighlightEditor._defaultOpacity;
-    this.#hl = t2.boxes || null;
-    this.#yl = t2.methodOfCreation || "";
+    this.#cl = t2.boxes || null;
+    this.#vl = t2.methodOfCreation || "";
     this.#ye = t2.text || "";
     this._isDraggable = false;
     this.defaultL10nId = "pdfjs-editor-highlight-editor";
     if (t2.highlightId > -1) {
-      this.#fl = true;
-      this.#vl(t2);
-      this.#wl();
-    } else if (this.#hl) {
-      this.#ol = t2.anchorNode;
-      this.#ll = t2.anchorOffset;
-      this.#ul = t2.focusNode;
-      this.#pl = t2.focusOffset;
+      this.#bl = true;
+      this.#wl(t2);
       this.#xl();
-      this.#wl();
+    } else if (this.#cl) {
+      this.#ll = t2.anchorNode;
+      this.#hl = t2.anchorOffset;
+      this.#pl = t2.focusNode;
+      this.#gl = t2.focusOffset;
+      this.#Al();
+      this.#xl();
       this.rotate(this.rotation);
     }
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.highlight);
   }
   get telemetryInitialData() {
-    return { action: "added", type: this.#fl ? "free_highlight" : "highlight", color: this._uiManager.getNonHCMColorName(this.color), thickness: this.#Bo, methodOfCreation: this.#yl };
+    return { action: "added", type: this.#bl ? "free_highlight" : "highlight", color: this._uiManager.getNonHCMColorName(this.color), thickness: this.#Lo, methodOfCreation: this.#vl };
   }
   get telemetryFinalData() {
     return { type: "highlight", color: this._uiManager.getNonHCMColorName(this.color) };
@@ -17619,29 +17682,29 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
   static computeTelemetryFinalData(t2) {
     return { numberOfColors: t2.get("color").size };
   }
-  #xl() {
-    const t2 = new HighlightOutliner(this.#hl, 1e-3);
-    this.#ml = t2.getOutlines();
-    [this.x, this.y, this.width, this.height] = this.#ml.box;
-    const e2 = new HighlightOutliner(this.#hl, 25e-4, 1e-3, "ltr" === this._uiManager.direction);
-    this.#dl = e2.getOutlines();
-    const { firstPoint: i2 } = this.#ml;
-    this.#Jo = [(i2[0] - this.x) / this.width, (i2[1] - this.y) / this.height];
-    const { lastPoint: n2 } = this.#dl;
-    this.#Qo = [(n2[0] - this.x) / this.width, (n2[1] - this.y) / this.height];
+  #Al() {
+    const t2 = new HighlightOutliner(this.#cl, 1e-3);
+    this.#fl = t2.getOutlines();
+    [this.x, this.y, this.width, this.height] = this.#fl.box;
+    const e2 = new HighlightOutliner(this.#cl, 25e-4, 1e-3, "ltr" === this._uiManager.direction);
+    this.#ul = e2.getOutlines();
+    const { firstPoint: i2 } = this.#fl;
+    this.#Qo = [(i2[0] - this.x) / this.width, (i2[1] - this.y) / this.height];
+    const { lastPoint: n2 } = this.#ul;
+    this.#Zo = [(n2[0] - this.x) / this.width, (n2[1] - this.y) / this.height];
   }
-  #vl({ highlightOutlines: t2, highlightId: e2, clipPathId: i2 }) {
-    this.#ml = t2;
-    this.#dl = t2.getNewOutline(this.#Bo / 2 + 1.5, 25e-4);
+  #wl({ highlightOutlines: t2, highlightId: e2, clipPathId: i2 }) {
+    this.#fl = t2;
+    this.#ul = t2.getNewOutline(this.#Lo / 2 + 1.5, 25e-4);
     if (e2 >= 0) {
-      this.#T = e2;
-      this.#cl = i2;
+      this.#_ = e2;
+      this.#dl = i2;
       this.parent.drawLayer.finalizeDraw(e2, { bbox: t2.box, path: { d: t2.toSVGPath() } });
-      this.#bl = this.parent.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: true }, bbox: this.#dl.box, path: { d: this.#dl.toSVGPath() } }, true);
+      this.#yl = this.parent.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: true }, bbox: this.#ul.box, path: { d: this.#ul.toSVGPath() } }, true);
     } else if (this.parent) {
       const e3 = this.parent.viewport.rotation;
-      this.parent.drawLayer.updateProperties(this.#T, { bbox: _HighlightEditor.#Al(this.#ml.box, (e3 - this.rotation + 360) % 360), path: { d: t2.toSVGPath() } });
-      this.parent.drawLayer.updateProperties(this.#bl, { bbox: _HighlightEditor.#Al(this.#dl.box, e3), path: { d: this.#dl.toSVGPath() } });
+      this.parent.drawLayer.updateProperties(this.#_, { bbox: _HighlightEditor.#El(this.#fl.box, (e3 - this.rotation + 360) % 360), path: { d: t2.toSVGPath() } });
+      this.parent.drawLayer.updateProperties(this.#yl, { bbox: _HighlightEditor.#El(this.#ul.box, e3), path: { d: this.#ul.toSVGPath() } });
     }
     const [n2, s2, r2, a2] = t2.box;
     switch (this.rotation) {
@@ -17675,9 +17738,9 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
       }
     }
     const { firstPoint: o2 } = t2;
-    this.#Jo = [(o2[0] - n2) / r2, (o2[1] - s2) / a2];
-    const { lastPoint: l2 } = this.#dl;
-    this.#Qo = [(l2[0] - n2) / r2, (l2[1] - s2) / a2];
+    this.#Qo = [(o2[0] - n2) / r2, (o2[1] - s2) / a2];
+    const { lastPoint: l2 } = this.#ul;
+    this.#Zo = [(l2[0] - n2) / r2, (l2[1] - s2) / a2];
   }
   static initialize(t2, e2) {
     AnnotationEditor.initialize(t2, e2);
@@ -17685,61 +17748,61 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
   }
   static updateDefaultParams(t2, e2) {
     switch (t2) {
-      case w.HIGHLIGHT_COLOR:
+      case v.HIGHLIGHT_COLOR:
         _HighlightEditor._defaultColor = e2;
         break;
-      case w.HIGHLIGHT_THICKNESS:
+      case v.HIGHLIGHT_THICKNESS:
         _HighlightEditor._defaultThickness = e2;
     }
   }
   translateInPage(t2, e2) {
   }
   get toolbarPosition() {
-    return this.#Qo;
+    return this.#Zo;
   }
   get commentButtonPosition() {
-    return this.#Jo;
+    return this.#Qo;
   }
   updateParams(t2, e2) {
     switch (t2) {
-      case w.HIGHLIGHT_COLOR:
-        this.#Ha(e2);
+      case v.HIGHLIGHT_COLOR:
+        this.#za(e2);
         break;
-      case w.HIGHLIGHT_THICKNESS:
-        this.#El(e2);
+      case v.HIGHLIGHT_THICKNESS:
+        this.#Cl(e2);
     }
   }
   static get defaultPropertiesToUpdate() {
-    return [[w.HIGHLIGHT_COLOR, _HighlightEditor._defaultColor], [w.HIGHLIGHT_THICKNESS, _HighlightEditor._defaultThickness]];
+    return [[v.HIGHLIGHT_COLOR, _HighlightEditor._defaultColor], [v.HIGHLIGHT_THICKNESS, _HighlightEditor._defaultThickness]];
   }
   get propertiesToUpdate() {
-    return [[w.HIGHLIGHT_COLOR, this.color || _HighlightEditor._defaultColor], [w.HIGHLIGHT_THICKNESS, this.#Bo || _HighlightEditor._defaultThickness], [w.HIGHLIGHT_FREE, this.#fl]];
+    return [[v.HIGHLIGHT_COLOR, this.color || _HighlightEditor._defaultColor], [v.HIGHLIGHT_THICKNESS, this.#Lo || _HighlightEditor._defaultThickness], [v.HIGHLIGHT_FREE, this.#bl]];
   }
   onUpdatedColor() {
-    this.parent?.drawLayer.updateProperties(this.#T, { root: { fill: this.color, "fill-opacity": this.opacity } });
-    this.#r?.updateColor(this.color);
+    this.parent?.drawLayer.updateProperties(this.#_, { root: { fill: this.color, "fill-opacity": this.opacity } });
+    this.#a?.updateColor(this.color);
     super.onUpdatedColor();
   }
-  #Ha(t2) {
+  #za(t2) {
     const setColorAndOpacity = (t3, e3) => {
       this.color = t3;
       this.opacity = e3;
       this.onUpdatedColor();
     }, e2 = this.color, i2 = this.opacity;
-    this.addCommands({ cmd: setColorAndOpacity.bind(this, t2, _HighlightEditor._defaultOpacity), undo: setColorAndOpacity.bind(this, e2, i2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: w.HIGHLIGHT_COLOR, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setColorAndOpacity.bind(this, t2, _HighlightEditor._defaultOpacity), undo: setColorAndOpacity.bind(this, e2, i2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.HIGHLIGHT_COLOR, overwriteIfSameType: true, keepUndo: true });
     this._reportTelemetry({ action: "color_changed", color: this._uiManager.getNonHCMColorName(t2) }, true);
   }
-  #El(t2) {
-    const e2 = this.#Bo, setThickness = (t3) => {
-      this.#Bo = t3;
-      this.#Cl(t3);
+  #Cl(t2) {
+    const e2 = this.#Lo, setThickness = (t3) => {
+      this.#Lo = t3;
+      this.#Sl(t3);
     };
-    this.addCommands({ cmd: setThickness.bind(this, t2), undo: setThickness.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: w.INK_THICKNESS, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setThickness.bind(this, t2), undo: setThickness.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.INK_THICKNESS, overwriteIfSameType: true, keepUndo: true });
     this._reportTelemetry({ action: "thickness_changed", thickness: t2 }, true);
   }
   get toolbarButtons() {
     if (this._uiManager.highlightColors) {
-      return [["colorPicker", this.#r = new ColorPicker({ editor: this })]];
+      return [["colorPicker", this.#a = new ColorPicker({ editor: this })]];
     }
     return super.toolbarButtons;
   }
@@ -17752,20 +17815,20 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     this.div.classList.toggle("disabled", false);
   }
   fixAndSetPosition() {
-    return super.fixAndSetPosition(this.#Sl());
+    return super.fixAndSetPosition(this.#Tl());
   }
   getBaseTranslation() {
     return [0, 0];
   }
   getRect(t2, e2) {
-    return super.getRect(t2, e2, this.#Sl());
+    return super.getRect(t2, e2, this.#Tl());
   }
   onceAdded(t2) {
     this.annotationElementId || this.parent.addUndoableEditor(this);
     t2 && this.div.focus();
   }
   remove() {
-    this.#Tl();
+    this.#_l();
     this._reportTelemetry({ action: "deleted" });
     super.remove();
   }
@@ -17773,45 +17836,45 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     if (this.parent) {
       super.rebuild();
       if (null !== this.div) {
-        this.#wl();
+        this.#xl();
         this.isAttachedToDOM || this.parent.add(this);
       }
     }
   }
   setParent(t2) {
     let e2 = false;
-    if (this.parent && !t2) this.#Tl();
+    if (this.parent && !t2) this.#_l();
     else if (t2) {
-      this.#wl(t2);
+      this.#xl(t2);
       e2 = !this.parent && this.div?.classList.contains("selectedEditor");
     }
     super.setParent(t2);
     this.show(this._isVisible);
     e2 && this.select();
   }
-  #Cl(t2) {
-    if (this.#fl) {
-      this.#vl({ highlightOutlines: this.#ml.getNewOutline(t2 / 2) });
+  #Sl(t2) {
+    if (this.#bl) {
+      this.#wl({ highlightOutlines: this.#fl.getNewOutline(t2 / 2) });
       this.fixAndSetPosition();
       this.setDims();
     }
   }
-  #Tl() {
-    if (null !== this.#T && this.parent) {
-      this.parent.drawLayer.remove(this.#T);
-      this.#T = null;
-      this.parent.drawLayer.remove(this.#bl);
-      this.#bl = null;
+  #_l() {
+    if (null !== this.#_ && this.parent) {
+      this.parent.drawLayer.remove(this.#_);
+      this.#_ = null;
+      this.parent.drawLayer.remove(this.#yl);
+      this.#yl = null;
     }
   }
-  #wl(t2 = this.parent) {
-    if (null === this.#T) {
-      ({ id: this.#T, clipPathId: this.#cl } = t2.drawLayer.draw({ bbox: this.#ml.box, root: { viewBox: "0 0 1 1", fill: this.color, "fill-opacity": this.opacity }, rootClass: { highlight: true, free: this.#fl }, path: { d: this.#ml.toSVGPath() } }, false, true));
-      this.#bl = t2.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: this.#fl }, bbox: this.#dl.box, path: { d: this.#dl.toSVGPath() } }, this.#fl);
-      this.#gl && (this.#gl.style.clipPath = this.#cl);
+  #xl(t2 = this.parent) {
+    if (null === this.#_) {
+      ({ id: this.#_, clipPathId: this.#dl } = t2.drawLayer.draw({ bbox: this.#fl.box, root: { viewBox: "0 0 1 1", fill: this.color, "fill-opacity": this.opacity }, rootClass: { highlight: true, free: this.#bl }, path: { d: this.#fl.toSVGPath() } }, false, true));
+      this.#yl = t2.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: this.#bl }, bbox: this.#ul.box, path: { d: this.#ul.toSVGPath() } }, this.#bl);
+      this.#ml && (this.#ml.style.clipPath = this.#dl);
     }
   }
-  static #Al([t2, e2, i2, n2], s2) {
+  static #El([t2, e2, i2, n2], s2) {
     switch (s2) {
       case 90:
         return [1 - e2 - n2, t2, n2, i2];
@@ -17825,12 +17888,12 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
   rotate(t2) {
     const { drawLayer: e2 } = this.parent;
     let i2;
-    if (this.#fl) {
+    if (this.#bl) {
       t2 = (t2 - this.rotation + 360) % 360;
-      i2 = _HighlightEditor.#Al(this.#ml.box, t2);
-    } else i2 = _HighlightEditor.#Al([this.x, this.y, this.width, this.height], t2);
-    e2.updateProperties(this.#T, { bbox: i2, root: { "data-main-rotation": t2 } });
-    e2.updateProperties(this.#bl, { bbox: _HighlightEditor.#Al(this.#dl.box, t2), root: { "data-main-rotation": t2 } });
+      i2 = _HighlightEditor.#El(this.#fl.box, t2);
+    } else i2 = _HighlightEditor.#El([this.x, this.y, this.width, this.height], t2);
+    e2.updateProperties(this.#_, { bbox: i2, root: { "data-main-rotation": t2 } });
+    e2.updateProperties(this.#yl, { bbox: _HighlightEditor.#El(this.#ul.box, t2), root: { "data-main-rotation": t2 } });
   }
   render() {
     if (this.div) return this.div;
@@ -17839,24 +17902,24 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
       t2.setAttribute("aria-label", this.#ye);
       t2.setAttribute("role", "mark");
     }
-    this.#fl ? t2.classList.add("free") : this.div.addEventListener("keydown", this.#_l.bind(this), { signal: this._uiManager._signal });
-    const e2 = this.#gl = document.createElement("div");
+    this.#bl ? t2.classList.add("free") : this.div.addEventListener("keydown", this.#kl.bind(this), { signal: this._uiManager._signal });
+    const e2 = this.#ml = document.createElement("div");
     t2.append(e2);
     e2.setAttribute("aria-hidden", "true");
     e2.className = "internal";
-    e2.style.clipPath = this.#cl;
+    e2.style.clipPath = this.#dl;
     this.setDims();
-    bindEvents(this, this.#gl, ["pointerover", "pointerleave"]);
+    bindEvents(this, this.#ml, ["pointerover", "pointerleave"]);
     this.enableEditing();
     return t2;
   }
   pointerover() {
-    this.isSelected || this.parent?.drawLayer.updateProperties(this.#bl, { rootClass: { hovered: true } });
+    this.isSelected || this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: true } });
   }
   pointerleave() {
-    this.isSelected || this.parent?.drawLayer.updateProperties(this.#bl, { rootClass: { hovered: false } });
+    this.isSelected || this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: false } });
   }
-  #_l(t2) {
+  #kl(t2) {
     _HighlightEditor._keyboardManager.exec(this, t2);
   }
   _moveCaret(t2) {
@@ -17864,45 +17927,45 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     switch (t2) {
       case 0:
       case 2:
-        this.#kl(true);
+        this.#Dl(true);
         break;
       case 1:
       case 3:
-        this.#kl(false);
+        this.#Dl(false);
     }
   }
-  #kl(t2) {
-    if (!this.#ol) return;
+  #Dl(t2) {
+    if (!this.#ll) return;
     const e2 = window.getSelection();
-    t2 ? e2.setPosition(this.#ol, this.#ll) : e2.setPosition(this.#ul, this.#pl);
+    t2 ? e2.setPosition(this.#ll, this.#hl) : e2.setPosition(this.#pl, this.#gl);
   }
   select() {
     super.select();
-    this.#bl && this.parent?.drawLayer.updateProperties(this.#bl, { rootClass: { hovered: false, selected: true } });
+    this.#yl && this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: false, selected: true } });
   }
   unselect() {
     super.unselect();
-    if (this.#bl) {
-      this.parent?.drawLayer.updateProperties(this.#bl, { rootClass: { selected: false } });
-      this.#fl || this.#kl(false);
+    if (this.#yl) {
+      this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { selected: false } });
+      this.#bl || this.#Dl(false);
     }
   }
   get _mustFixPosition() {
-    return !this.#fl;
+    return !this.#bl;
   }
   show(t2 = this._isVisible) {
     super.show(t2);
     if (this.parent) {
-      this.parent.drawLayer.updateProperties(this.#T, { rootClass: { hidden: !t2 } });
-      this.parent.drawLayer.updateProperties(this.#bl, { rootClass: { hidden: !t2 } });
+      this.parent.drawLayer.updateProperties(this.#_, { rootClass: { hidden: !t2 } });
+      this.parent.drawLayer.updateProperties(this.#yl, { rootClass: { hidden: !t2 } });
     }
   }
-  #Sl() {
-    return this.#fl ? this.rotation : 0;
+  #Tl() {
+    return this.#bl ? this.rotation : 0;
   }
   #Ml() {
-    if (this.#fl) return null;
-    const [t2, e2] = this.pageDimensions, [i2, n2] = this.pageTranslation, s2 = this.#hl, r2 = new Float32Array(8 * s2.length);
+    if (this.#bl) return null;
+    const [t2, e2] = this.pageDimensions, [i2, n2] = this.pageTranslation, s2 = this.#cl, r2 = new Float32Array(8 * s2.length);
     let a2 = 0;
     for (const { x: o2, y: l2, width: h2, height: c2 } of s2) {
       const s3 = o2 * t2 + i2, d2 = (1 - l2) * e2 + n2;
@@ -17914,26 +17977,26 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     }
     return r2;
   }
-  #Dl(t2) {
-    return this.#ml.serialize(t2, this.#Sl());
+  #Pl(t2) {
+    return this.#fl.serialize(t2, this.#Tl());
   }
   static startHighlighting(t2, e2, { target: i2, x: n2, y: s2 }) {
     const { x: r2, y: a2, width: o2, height: l2 } = i2.getBoundingClientRect(), h2 = new AbortController(), c2 = t2.combinedSignal(h2), pointerUpCallback = (e3) => {
       h2.abort();
-      this.#Pl(t2, e3);
+      this.#Il(t2, e3);
     };
     window.addEventListener("blur", pointerUpCallback, { signal: c2 });
     window.addEventListener("pointerup", pointerUpCallback, { signal: c2 });
     window.addEventListener("pointerdown", stopEvent, { capture: true, passive: false, signal: c2 });
     window.addEventListener("contextmenu", noContextMenu, { signal: c2 });
-    i2.addEventListener("pointermove", this.#Il.bind(this, t2), { signal: c2 });
+    i2.addEventListener("pointermove", this.#Fl.bind(this, t2), { signal: c2 });
     this._freeHighlight = new FreeHighlightOutliner({ x: n2, y: s2 }, [r2, a2, o2, l2], t2.scale, this._defaultThickness / 2, e2, 1e-3);
     ({ id: this._freeHighlightId, clipPathId: this._freeHighlightClipId } = t2.drawLayer.draw({ bbox: [0, 0, 1, 1], root: { viewBox: "0 0 1 1", fill: this._defaultColor, "fill-opacity": this._defaultOpacity }, rootClass: { highlight: true, free: true }, path: { d: this._freeHighlight.toSVGPath() } }, true, true));
   }
-  static #Il(t2, e2) {
+  static #Fl(t2, e2) {
     this._freeHighlight.add(e2) && t2.drawLayer.updateProperties(this._freeHighlightId, { path: { d: this._freeHighlight.toSVGPath() } });
   }
-  static #Pl(t2, e2) {
+  static #Il(t2, e2) {
     this._freeHighlight.isEmpty() ? t2.drawLayer.remove(this._freeHighlightId) : t2.createAndAddNewEditor(e2, false, { highlightId: this._freeHighlightId, highlightOutlines: this._freeHighlight.getOutlines(), clipPathId: this._freeHighlightClipId, methodOfCreation: "main_toolbar" });
     this._freeHighlightId = -1;
     this._freeHighlight = null;
@@ -17943,35 +18006,35 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     let n2 = null;
     if (t2 instanceof HighlightAnnotationElement) {
       const { data: { quadPoints: e3, rect: i3, rotation: s3, id: r3, color: a3, opacity: o3, popupRef: l3, richText: h3, contentsObj: c3, creationDate: d3, modificationDate: u3 }, parent: { page: { pageNumber: p3 } } } = t2;
-      n2 = t2 = { annotationType: v.HIGHLIGHT, color: Array.from(a3), opacity: o3, quadPoints: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
+      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a3), opacity: o3, quadPoints: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
     } else if (t2 instanceof InkAnnotationElement) {
       const { data: { inkLists: e3, rect: i3, rotation: s3, id: r3, color: a3, borderStyle: { rawWidth: o3 }, popupRef: l3, richText: h3, contentsObj: c3, creationDate: d3, modificationDate: u3 }, parent: { page: { pageNumber: p3 } } } = t2;
-      n2 = t2 = { annotationType: v.HIGHLIGHT, color: Array.from(a3), thickness: o3, inkLists: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
+      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a3), thickness: o3, inkLists: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
     }
     const { color: s2, quadPoints: r2, inkLists: a2, outlines: o2, opacity: l2 } = t2, h2 = await super.deserialize(t2, e2, i2);
     h2.color = Util.makeHexColor(...s2);
     h2.opacity = l2 || 1;
-    a2 && (h2.#Bo = t2.thickness);
+    a2 && (h2.#Lo = t2.thickness);
     h2._initialData = n2;
     t2.comment && h2.setCommentData(t2);
     const [c2, d2] = h2.pageDimensions, [u2, p2] = h2.pageTranslation;
     if (r2) {
-      const t3 = h2.#hl = [];
+      const t3 = h2.#cl = [];
       for (let e3 = 0; e3 < r2.length; e3 += 8) t3.push({ x: (r2[e3] - u2) / c2, y: 1 - (r2[e3 + 1] - p2) / d2, width: (r2[e3 + 2] - r2[e3]) / c2, height: (r2[e3 + 1] - r2[e3 + 5]) / d2 });
+      h2.#Al();
       h2.#xl();
-      h2.#wl();
       h2.rotate(h2.rotation);
     } else if (a2 || o2) {
-      h2.#fl = true;
-      const t3 = (a2 || o2.points)[0], i3 = { x: t3[0] - u2, y: d2 - (t3[1] - p2) }, n3 = new FreeHighlightOutliner(i3, [0, 0, c2, d2], 1, h2.#Bo / 2, true, 1e-3);
+      h2.#bl = true;
+      const t3 = (a2 || o2.points)[0], i3 = { x: t3[0] - u2, y: d2 - (t3[1] - p2) }, n3 = new FreeHighlightOutliner(i3, [0, 0, c2, d2], 1, h2.#Lo / 2, true, 1e-3);
       for (let e3 = 0, s4 = t3.length; e3 < s4; e3 += 2) {
         i3.x = t3[e3] - u2;
         i3.y = d2 - (t3[e3 + 1] - p2);
         n3.add(i3);
       }
       const { id: s3, clipPathId: r3 } = e2.drawLayer.draw({ bbox: [0, 0, 1, 1], root: { viewBox: "0 0 1 1", fill: h2.color, "fill-opacity": h2._defaultOpacity }, rootClass: { highlight: true, free: true }, path: { d: n3.toSVGPath() } }, true, true);
-      h2.#vl({ highlightOutlines: n3.getOutlines(), highlightId: s3, clipPathId: r3 });
-      h2.#wl();
+      h2.#wl({ highlightOutlines: n3.getOutlines(), highlightId: s3, clipPathId: r3 });
+      h2.#xl();
       h2.rotate(h2.parentRotation);
     }
     return h2;
@@ -17980,13 +18043,13 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
     if (this.isEmpty() || t2) return null;
     if (this.deleted) return this.serializeDeleted();
     const e2 = AnnotationEditor._colorManager.convert(this._uiManager.getNonHCMColor(this.color)), i2 = super.serialize(t2);
-    Object.assign(i2, { color: e2, opacity: this.opacity, thickness: this.#Bo, quadPoints: this.#Ml(), outlines: this.#Dl(i2.rect) });
+    Object.assign(i2, { color: e2, opacity: this.opacity, thickness: this.#Lo, quadPoints: this.#Ml(), outlines: this.#Pl(i2.rect) });
     this.addComment(i2);
-    if (this.annotationElementId && !this.#Co(i2)) return null;
+    if (this.annotationElementId && !this.#So(i2)) return null;
     i2.id = this.annotationElementId;
     return i2;
   }
-  #Co(t2) {
+  #So(t2) {
     const { color: e2 } = this._initialData;
     return this.hasEditedComment || t2.color.some((t3, i2) => t3 !== e2[i2]);
   }
@@ -18003,7 +18066,7 @@ var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
   }
 };
 var DrawingOptions = class {
-  #Fl = /* @__PURE__ */ Object.create(null);
+  #Ol = /* @__PURE__ */ Object.create(null);
   updateProperty(t2, e2) {
     this[t2] = e2;
     this.updateSVGProperty(t2, e2);
@@ -18012,15 +18075,15 @@ var DrawingOptions = class {
     if (t2) for (const [e2, i2] of Object.entries(t2)) e2.startsWith("_") || this.updateProperty(e2, i2);
   }
   updateSVGProperty(t2, e2) {
-    this.#Fl[t2] = e2;
+    this.#Ol[t2] = e2;
   }
   toSVGProperties() {
-    const t2 = this.#Fl;
-    this.#Fl = /* @__PURE__ */ Object.create(null);
+    const t2 = this.#Ol;
+    this.#Ol = /* @__PURE__ */ Object.create(null);
     return { root: t2 };
   }
   reset() {
-    this.#Fl = /* @__PURE__ */ Object.create(null);
+    this.#Ol = /* @__PURE__ */ Object.create(null);
   }
   updateAll(t2 = this) {
     this.updateProperties(t2);
@@ -18030,19 +18093,19 @@ var DrawingOptions = class {
   }
 };
 var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
-  #Ol = null;
-  #Rl;
+  #Rl = null;
+  #Bl;
   _colorPicker = null;
   _drawId = null;
   static _currentDrawId = -1;
   static _currentParent = null;
-  static #Bl = null;
   static #Ll = null;
   static #Nl = null;
+  static #Ul = null;
   static _INNER_MARGIN = 3;
   constructor(t2) {
     super(t2);
-    this.#Rl = t2.mustBeCommitted || false;
+    this.#Bl = t2.mustBeCommitted || false;
     this._addOutlines(t2);
   }
   onUpdatedColor() {
@@ -18054,21 +18117,21 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   }
   _addOutlines(t2) {
     if (t2.drawOutlines) {
-      this.#Ul(t2);
-      this.#wl();
+      this.#Hl(t2);
+      this.#xl();
     }
   }
-  #Ul({ drawOutlines: t2, drawId: e2, drawingOptions: i2 }) {
-    this.#Ol = t2;
+  #Hl({ drawOutlines: t2, drawId: e2, drawingOptions: i2 }) {
+    this.#Rl = t2;
     this._drawingOptions ||= i2;
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert[this.editorType]);
     if (e2 >= 0) {
       this._drawId = e2;
       this.parent.drawLayer.finalizeDraw(e2, t2.defaultProperties);
-    } else this._drawId = this.#Hl(t2, this.parent);
-    this.#zl(t2.box);
+    } else this._drawId = this.#zl(t2, this.parent);
+    this.#Gl(t2.box);
   }
-  #Hl(t2, e2) {
+  #zl(t2, e2) {
     const { id: i2 } = e2.drawLayer.draw(_DrawingEditor._mergeSVGProperties(this._drawingOptions.toSVGProperties(), t2.defaultSVGProperties), false, false);
     return i2;
   }
@@ -18093,7 +18156,7 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     const i2 = this.typesMap.get(t2);
     i2 && this._defaultDrawingOptions.updateProperty(i2, e2);
     if (this._currentParent) {
-      _DrawingEditor.#Bl.updateProperty(i2, e2);
+      _DrawingEditor.#Ll.updateProperty(i2, e2);
       this._currentParent.drawLayer.updateProperties(this._currentDrawId, this._defaultDrawingOptions.toSVGProperties());
     }
   }
@@ -18114,8 +18177,8 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   _updateProperty(t2, e2, i2) {
     const n2 = this._drawingOptions, s2 = n2[e2], setter = (i3) => {
       n2.updateProperty(e2, i3);
-      const s3 = this.#Ol.updateProperty(e2, i3);
-      s3 && this.#zl(s3);
+      const s3 = this.#Rl.updateProperty(e2, i3);
+      s3 && this.#Gl(s3);
       this.parent?.drawLayer.updateProperties(this._drawId, n2.toSVGProperties());
       t2 === this.colorType ? this.onUpdatedColor() : t2 === this.opacityType && this.onUpdatedOpacity();
     };
@@ -18125,25 +18188,25 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     const i2 = this.constructor.typesMap.get(this.colorType), n2 = this.constructor.typesMap.get(this.opacityType), s2 = this._drawingOptions, r2 = s2[i2], a2 = s2[n2], setter = (t3, e3) => {
       s2.updateProperty(i2, t3);
       s2.updateProperty(n2, e3);
-      this.#Ol.updateProperty(i2, t3);
-      this.#Ol.updateProperty(n2, e3);
+      this.#Rl.updateProperty(i2, t3);
+      this.#Rl.updateProperty(n2, e3);
       this.parent?.drawLayer.updateProperties(this._drawId, s2.toSVGProperties());
       this.onUpdatedColor();
       this.onUpdatedOpacity();
     };
-    this.addCommands({ cmd: setter.bind(this, t2, e2), undo: setter.bind(this, r2, a2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: w.INK_COLOR_AND_OPACITY, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setter.bind(this, t2, e2), undo: setter.bind(this, r2, a2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.INK_COLOR_AND_OPACITY, overwriteIfSameType: true, keepUndo: true });
   }
   _onResizing() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Ol.getPathResizingSVGProperties(this.#Gl()), { bbox: this.#jl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathResizingSVGProperties(this.#jl()), { bbox: this.#Wl() }));
   }
   _onResized() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Ol.getPathResizedSVGProperties(this.#Gl()), { bbox: this.#jl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathResizedSVGProperties(this.#jl()), { bbox: this.#Wl() }));
   }
   _onTranslating(t2, e2) {
-    this.parent?.drawLayer.updateProperties(this._drawId, { bbox: this.#jl() });
+    this.parent?.drawLayer.updateProperties(this._drawId, { bbox: this.#Wl() });
   }
   _onTranslated() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Ol.getPathTranslatedSVGProperties(this.#Gl(), this.parentDimensions), { bbox: this.#jl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathTranslatedSVGProperties(this.#jl(), this.parentDimensions), { bbox: this.#Wl() }));
   }
   _onStartDragging() {
     this.parent?.drawLayer.updateProperties(this._drawId, { rootClass: { moving: true } });
@@ -18173,23 +18236,23 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   onceAdded(t2) {
     this.annotationElementId || this.parent.addUndoableEditor(this);
     this._isDraggable = true;
-    if (this.#Rl) {
-      this.#Rl = false;
+    if (this.#Bl) {
+      this.#Bl = false;
       this.commit();
       this.parent.setSelected(this);
       t2 && this.isOnScreen && this.div.focus();
     }
   }
   remove() {
-    this.#Tl();
+    this.#_l();
     super.remove();
   }
   rebuild() {
     if (this.parent) {
       super.rebuild();
       if (null !== this.div) {
-        this.#wl();
-        this.#zl(this.#Ol.box);
+        this.#xl();
+        this.#Gl(this.#Rl.box);
         this.isAttachedToDOM || this.parent.add(this);
       }
     }
@@ -18198,29 +18261,29 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     let e2 = false;
     if (this.parent && !t2) {
       this._uiManager.removeShouldRescale(this);
-      this.#Tl();
+      this.#_l();
     } else if (t2) {
       this._uiManager.addShouldRescale(this);
-      this.#wl(t2);
+      this.#xl(t2);
       e2 = !this.parent && this.div?.classList.contains("selectedEditor");
     }
     super.setParent(t2);
     e2 && this.select();
   }
-  #Tl() {
+  #_l() {
     if (null !== this._drawId && this.parent) {
       this.parent.drawLayer.remove(this._drawId);
       this._drawId = null;
       this._drawingOptions.reset();
     }
   }
-  #wl(t2 = this.parent) {
+  #xl(t2 = this.parent) {
     if (null === this._drawId || this.parent !== t2) if (null === this._drawId) {
       this._drawingOptions.updateAll();
-      this._drawId = this.#Hl(this.#Ol, t2);
+      this._drawId = this.#zl(this.#Rl, t2);
     } else this.parent.drawLayer.updateParent(this._drawId, t2.drawLayer);
   }
-  #Wl([t2, e2, i2, n2]) {
+  #Vl([t2, e2, i2, n2]) {
     const { parentDimensions: [s2, r2], rotation: a2 } = this;
     switch (a2) {
       case 90:
@@ -18233,7 +18296,7 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
         return [t2, e2, i2, n2];
     }
   }
-  #Gl() {
+  #jl() {
     const { x: t2, y: e2, width: i2, height: n2, parentDimensions: [s2, r2], rotation: a2 } = this;
     switch (a2) {
       case 90:
@@ -18246,15 +18309,15 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
         return [t2, e2, i2, n2];
     }
   }
-  #zl(t2) {
-    [this.x, this.y, this.width, this.height] = this.#Wl(t2);
+  #Gl(t2) {
+    [this.x, this.y, this.width, this.height] = this.#Vl(t2);
     if (this.div) {
       this.fixAndSetPosition();
       this.setDims();
     }
     this._onResized();
   }
-  #jl() {
+  #Wl() {
     const { x: t2, y: e2, width: i2, height: n2, rotation: s2, parentRotation: r2, parentDimensions: [a2, o2] } = this;
     switch ((4 * s2 + r2) / 90) {
       case 1:
@@ -18292,10 +18355,10 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     }
   }
   rotate() {
-    this.parent && this.parent.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties({ bbox: this.#jl() }, this.#Ol.updateRotation((this.parentRotation - this.rotation + 360) % 360)));
+    this.parent && this.parent.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties({ bbox: this.#Wl() }, this.#Rl.updateRotation((this.parentRotation - this.rotation + 360) % 360)));
   }
   onScaleChanging() {
-    this.parent && this.#zl(this.#Ol.updateParentDimensions(this.parentDimensions, this.parent.scale));
+    this.parent && this.#Gl(this.#Rl.updateParentDimensions(this.parentDimensions, this.parent.scale));
   }
   static onScaleChangingWhenDrawing() {
   }
@@ -18324,7 +18387,7 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   static startDrawing(t2, e2, i2, n2) {
     const { target: s2, offsetX: r2, offsetY: a2, pointerId: o2, pointerType: l2 } = n2;
     if (CurrentPointers.isInitializedAndDifferentPointerType(l2)) return;
-    const { viewport: { rotation: h2 } } = t2, { width: c2, height: d2 } = s2.getBoundingClientRect(), u2 = _DrawingEditor.#Ll = new AbortController(), p2 = t2.combinedSignal(u2);
+    const { viewport: { rotation: h2 } } = t2, { width: c2, height: d2 } = s2.getBoundingClientRect(), u2 = _DrawingEditor.#Nl = new AbortController(), p2 = t2.combinedSignal(u2);
     CurrentPointers.setPointer(l2, o2);
     window.addEventListener("pointerup", (t3) => {
       CurrentPointers.isSamePointerIdOrRemove(t3.pointerId) && this._endDraw(t3);
@@ -18335,9 +18398,9 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     window.addEventListener("pointerdown", (t3) => {
       if (CurrentPointers.isSamePointerType(t3.pointerType)) {
         CurrentPointers.initializeAndAddPointerId(t3.pointerId);
-        if (_DrawingEditor.#Bl.isCancellable()) {
-          _DrawingEditor.#Bl.removeLastElement();
-          _DrawingEditor.#Bl.isEmpty() ? this._currentParent.endDrawingSession(true) : this._endDraw(null);
+        if (_DrawingEditor.#Ll.isCancellable()) {
+          _DrawingEditor.#Ll.removeLastElement();
+          _DrawingEditor.#Ll.isEmpty() ? this._currentParent.endDrawingSession(true) : this._endDraw(null);
         }
       }
     }, { capture: true, passive: false, signal: p2 });
@@ -18348,22 +18411,22 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     }, { signal: p2 });
     t2.toggleDrawing();
     e2._editorUndoBar?.hide();
-    if (_DrawingEditor.#Bl) t2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Bl.startNew(r2, a2, c2, d2, h2));
+    if (_DrawingEditor.#Ll) t2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.startNew(r2, a2, c2, d2, h2));
     else {
       e2.updateUIForDefaultProperties(this);
-      _DrawingEditor.#Bl = this.createDrawerInstance(r2, a2, c2, d2, h2);
-      _DrawingEditor.#Nl = this.getDefaultDrawingOptions();
+      _DrawingEditor.#Ll = this.createDrawerInstance(r2, a2, c2, d2, h2);
+      _DrawingEditor.#Ul = this.getDefaultDrawingOptions();
       this._currentParent = t2;
-      ({ id: this._currentDrawId } = t2.drawLayer.draw(this._mergeSVGProperties(_DrawingEditor.#Nl.toSVGProperties(), _DrawingEditor.#Bl.defaultSVGProperties), true, false));
+      ({ id: this._currentDrawId } = t2.drawLayer.draw(this._mergeSVGProperties(_DrawingEditor.#Ul.toSVGProperties(), _DrawingEditor.#Ll.defaultSVGProperties), true, false));
     }
   }
   static _drawMove(t2) {
     CurrentPointers.isSameTimeStamp(t2.timeStamp);
-    if (!_DrawingEditor.#Bl) return;
+    if (!_DrawingEditor.#Ll) return;
     const { offsetX: e2, offsetY: i2, pointerId: n2 } = t2;
     if (CurrentPointers.isSamePointerId(n2)) if (CurrentPointers.isUsingMultiplePointers()) this._endDraw(t2);
     else {
-      this._currentParent.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Bl.add(e2, i2));
+      this._currentParent.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.add(e2, i2));
       CurrentPointers.setTimeStamp(t2.timeStamp);
       stopEvent(t2);
     }
@@ -18372,13 +18435,13 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     if (t2) {
       this._currentDrawId = -1;
       this._currentParent = null;
-      _DrawingEditor.#Bl = null;
-      _DrawingEditor.#Nl = null;
+      _DrawingEditor.#Ll = null;
+      _DrawingEditor.#Ul = null;
       CurrentPointers.clearTimeStamp();
     }
-    if (_DrawingEditor.#Ll) {
-      _DrawingEditor.#Ll.abort();
-      _DrawingEditor.#Ll = null;
+    if (_DrawingEditor.#Nl) {
+      _DrawingEditor.#Nl.abort();
+      _DrawingEditor.#Nl = null;
       CurrentPointers.clearPointerIds();
     }
   }
@@ -18387,14 +18450,14 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     if (e2) {
       e2.toggleDrawing(true);
       this._cleanup(false);
-      t2?.target === e2.div && e2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Bl.end(t2.offsetX, t2.offsetY));
+      t2?.target === e2.div && e2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.end(t2.offsetX, t2.offsetY));
       if (this.supportMultipleDrawings) {
-        const t3 = _DrawingEditor.#Bl, i2 = this._currentDrawId, n2 = t3.getLastElement();
+        const t3 = _DrawingEditor.#Ll, i2 = this._currentDrawId, n2 = t3.getLastElement();
         e2.addCommands({ cmd: () => {
           e2.drawLayer.updateProperties(i2, t3.setLastElement(n2));
         }, undo: () => {
           e2.drawLayer.updateProperties(i2, t3.removeLastElement());
-        }, mustExec: false, type: w.DRAW_STEP });
+        }, mustExec: false, type: v.DRAW_STEP });
         return;
       }
       this.endDrawing(false);
@@ -18404,9 +18467,9 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     const e2 = this._currentParent;
     if (!e2) return null;
     e2.toggleDrawing(true);
-    e2.cleanUndoStack(w.DRAW_STEP);
-    if (!_DrawingEditor.#Bl.isEmpty()) {
-      const { pageDimensions: [i2, n2], scale: s2 } = e2, r2 = e2.createAndAddNewEditor({ offsetX: 0, offsetY: 0 }, false, { drawId: this._currentDrawId, drawOutlines: _DrawingEditor.#Bl.getOutlines(i2 * s2, n2 * s2, s2, this._INNER_MARGIN), drawingOptions: _DrawingEditor.#Nl, mustBeCommitted: !t2 });
+    e2.cleanUndoStack(v.DRAW_STEP);
+    if (!_DrawingEditor.#Ll.isEmpty()) {
+      const { pageDimensions: [i2, n2], scale: s2 } = e2, r2 = e2.createAndAddNewEditor({ offsetX: 0, offsetY: 0 }, false, { drawId: this._currentDrawId, drawOutlines: _DrawingEditor.#Ll.getOutlines(i2 * s2, n2 * s2, s2, this._INNER_MARGIN), drawingOptions: _DrawingEditor.#Ul, mustBeCommitted: !t2 });
       this._cleanup(true);
       return r2;
     }
@@ -18422,15 +18485,15 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   static async deserialize(t2, e2, i2) {
     const { rawDims: { pageWidth: n2, pageHeight: s2, pageX: r2, pageY: a2 } } = e2.viewport, o2 = this.deserializeDraw(r2, a2, n2, s2, this._INNER_MARGIN, t2), l2 = await super.deserialize(t2, e2, i2);
     l2.createDrawingOptions(t2);
-    l2.#Ul({ drawOutlines: o2 });
-    l2.#wl();
+    l2.#Hl({ drawOutlines: o2 });
+    l2.#xl();
     l2.onScaleChanging();
     l2.rotate();
     return l2;
   }
   serializeDraw(t2) {
     const [e2, i2] = this.pageTranslation, [n2, s2] = this.pageDimensions;
-    return this.#Ol.serialize([e2, i2, n2, s2], t2);
+    return this.#Rl.serialize([e2, i2, n2, s2], t2);
   }
   renderAnnotationElement(t2) {
     t2.updateEdited({ rect: this.getPDFRect() });
@@ -18441,180 +18504,180 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   }
 };
 var InkDrawOutliner = class {
-  #Do = new Float64Array(6);
-  #qa;
-  #Vl;
-  #er;
-  #Bo;
+  #Po = new Float64Array(6);
+  #Ka;
+  #$l;
+  #ir;
   #Lo;
-  #$l = "";
-  #ql = 0;
-  #al = new InkDrawOutline();
-  #Kl;
+  #No;
+  #ql = "";
+  #Kl = 0;
+  #ol = new InkDrawOutline();
   #Xl;
+  #Yl;
   constructor(t2, e2, i2, n2, s2, r2) {
-    this.#Kl = i2;
-    this.#Xl = n2;
-    this.#er = s2;
-    this.#Bo = r2;
-    [t2, e2] = this.#Yl(t2, e2);
-    const a2 = this.#qa = [NaN, NaN, NaN, NaN, t2, e2];
-    this.#Lo = [t2, e2];
-    this.#Vl = [{ line: a2, points: this.#Lo }];
-    this.#Do.set(a2, 0);
+    this.#Xl = i2;
+    this.#Yl = n2;
+    this.#ir = s2;
+    this.#Lo = r2;
+    [t2, e2] = this.#Jl(t2, e2);
+    const a2 = this.#Ka = [NaN, NaN, NaN, NaN, t2, e2];
+    this.#No = [t2, e2];
+    this.#$l = [{ line: a2, points: this.#No }];
+    this.#Po.set(a2, 0);
   }
   updateProperty(t2, e2) {
-    "stroke-width" === t2 && (this.#Bo = e2);
+    "stroke-width" === t2 && (this.#Lo = e2);
   }
-  #Yl(t2, e2) {
-    return Outline._normalizePoint(t2, e2, this.#Kl, this.#Xl, this.#er);
+  #Jl(t2, e2) {
+    return Outline._normalizePoint(t2, e2, this.#Xl, this.#Yl, this.#ir);
   }
   isEmpty() {
-    return !this.#Vl?.length;
+    return !this.#$l?.length;
   }
   isCancellable() {
-    return this.#Lo.length <= 10;
+    return this.#No.length <= 10;
   }
   add(t2, e2) {
-    [t2, e2] = this.#Yl(t2, e2);
-    const [i2, n2, s2, r2] = this.#Do.subarray(2, 6), a2 = t2 - s2, o2 = e2 - r2;
-    if (Math.hypot(this.#Kl * a2, this.#Xl * o2) <= 2) return null;
-    this.#Lo.push(t2, e2);
+    [t2, e2] = this.#Jl(t2, e2);
+    const [i2, n2, s2, r2] = this.#Po.subarray(2, 6), a2 = t2 - s2, o2 = e2 - r2;
+    if (Math.hypot(this.#Xl * a2, this.#Yl * o2) <= 2) return null;
+    this.#No.push(t2, e2);
     if (isNaN(i2)) {
-      this.#Do.set([s2, r2, t2, e2], 2);
-      this.#qa.push(NaN, NaN, NaN, NaN, t2, e2);
+      this.#Po.set([s2, r2, t2, e2], 2);
+      this.#Ka.push(NaN, NaN, NaN, NaN, t2, e2);
       return { path: { d: this.toSVGPath() } };
     }
-    isNaN(this.#Do[0]) && this.#qa.splice(6, 6);
-    this.#Do.set([i2, n2, s2, r2, t2, e2], 0);
-    this.#qa.push(...Outline.createBezierPoints(i2, n2, s2, r2, t2, e2));
+    isNaN(this.#Po[0]) && this.#Ka.splice(6, 6);
+    this.#Po.set([i2, n2, s2, r2, t2, e2], 0);
+    this.#Ka.push(...Outline.createBezierPoints(i2, n2, s2, r2, t2, e2));
     return { path: { d: this.toSVGPath() } };
   }
   end(t2, e2) {
     const i2 = this.add(t2, e2);
-    return i2 || (2 === this.#Lo.length ? { path: { d: this.toSVGPath() } } : null);
+    return i2 || (2 === this.#No.length ? { path: { d: this.toSVGPath() } } : null);
   }
   startNew(t2, e2, i2, n2, s2) {
-    this.#Kl = i2;
-    this.#Xl = n2;
-    this.#er = s2;
-    [t2, e2] = this.#Yl(t2, e2);
-    const r2 = this.#qa = [NaN, NaN, NaN, NaN, t2, e2];
-    this.#Lo = [t2, e2];
-    const a2 = this.#Vl.at(-1);
+    this.#Xl = i2;
+    this.#Yl = n2;
+    this.#ir = s2;
+    [t2, e2] = this.#Jl(t2, e2);
+    const r2 = this.#Ka = [NaN, NaN, NaN, NaN, t2, e2];
+    this.#No = [t2, e2];
+    const a2 = this.#$l.at(-1);
     if (a2) {
       a2.line = new Float32Array(a2.line);
       a2.points = new Float32Array(a2.points);
     }
-    this.#Vl.push({ line: r2, points: this.#Lo });
-    this.#Do.set(r2, 0);
-    this.#ql = 0;
+    this.#$l.push({ line: r2, points: this.#No });
+    this.#Po.set(r2, 0);
+    this.#Kl = 0;
     this.toSVGPath();
     return null;
   }
   getLastElement() {
-    return this.#Vl.at(-1);
+    return this.#$l.at(-1);
   }
   setLastElement(t2) {
-    if (!this.#Vl) return this.#al.setLastElement(t2);
-    this.#Vl.push(t2);
-    this.#qa = t2.line;
-    this.#Lo = t2.points;
-    this.#ql = 0;
+    if (!this.#$l) return this.#ol.setLastElement(t2);
+    this.#$l.push(t2);
+    this.#Ka = t2.line;
+    this.#No = t2.points;
+    this.#Kl = 0;
     return { path: { d: this.toSVGPath() } };
   }
   removeLastElement() {
-    if (!this.#Vl) return this.#al.removeLastElement();
-    this.#Vl.pop();
-    this.#$l = "";
-    for (let t2 = 0, e2 = this.#Vl.length; t2 < e2; t2++) {
-      const { line: e3, points: i2 } = this.#Vl[t2];
-      this.#qa = e3;
-      this.#Lo = i2;
-      this.#ql = 0;
+    if (!this.#$l) return this.#ol.removeLastElement();
+    this.#$l.pop();
+    this.#ql = "";
+    for (let t2 = 0, e2 = this.#$l.length; t2 < e2; t2++) {
+      const { line: e3, points: i2 } = this.#$l[t2];
+      this.#Ka = e3;
+      this.#No = i2;
+      this.#Kl = 0;
       this.toSVGPath();
     }
-    return { path: { d: this.#$l } };
+    return { path: { d: this.#ql } };
   }
   toSVGPath() {
-    const t2 = Outline.svgRound(this.#qa[4]), e2 = Outline.svgRound(this.#qa[5]);
-    if (2 === this.#Lo.length) {
-      this.#$l = `${this.#$l} M ${t2} ${e2} Z`;
-      return this.#$l;
+    const t2 = Outline.svgRound(this.#Ka[4]), e2 = Outline.svgRound(this.#Ka[5]);
+    if (2 === this.#No.length) {
+      this.#ql = `${this.#ql} M ${t2} ${e2} Z`;
+      return this.#ql;
     }
-    if (this.#Lo.length <= 6) {
-      const i3 = this.#$l.lastIndexOf("M");
-      this.#$l = `${this.#$l.slice(0, i3)} M ${t2} ${e2}`;
-      this.#ql = 6;
+    if (this.#No.length <= 6) {
+      const i3 = this.#ql.lastIndexOf("M");
+      this.#ql = `${this.#ql.slice(0, i3)} M ${t2} ${e2}`;
+      this.#Kl = 6;
     }
-    if (4 === this.#Lo.length) {
-      const t3 = Outline.svgRound(this.#qa[10]), e3 = Outline.svgRound(this.#qa[11]);
-      this.#$l = `${this.#$l} L ${t3} ${e3}`;
-      this.#ql = 12;
-      return this.#$l;
+    if (4 === this.#No.length) {
+      const t3 = Outline.svgRound(this.#Ka[10]), e3 = Outline.svgRound(this.#Ka[11]);
+      this.#ql = `${this.#ql} L ${t3} ${e3}`;
+      this.#Kl = 12;
+      return this.#ql;
     }
     const i2 = [];
-    if (0 === this.#ql) {
+    if (0 === this.#Kl) {
       i2.push(`M ${t2} ${e2}`);
-      this.#ql = 6;
+      this.#Kl = 6;
     }
-    for (let t3 = this.#ql, e3 = this.#qa.length; t3 < e3; t3 += 6) {
-      const [e4, n2, s2, r2, a2, o2] = this.#qa.slice(t3, t3 + 6).map(Outline.svgRound);
+    for (let t3 = this.#Kl, e3 = this.#Ka.length; t3 < e3; t3 += 6) {
+      const [e4, n2, s2, r2, a2, o2] = this.#Ka.slice(t3, t3 + 6).map(Outline.svgRound);
       i2.push(`C${e4} ${n2} ${s2} ${r2} ${a2} ${o2}`);
     }
-    this.#$l += i2.join(" ");
-    this.#ql = this.#qa.length;
-    return this.#$l;
+    this.#ql += i2.join(" ");
+    this.#Kl = this.#Ka.length;
+    return this.#ql;
   }
   getOutlines(t2, e2, i2, n2) {
-    const s2 = this.#Vl.at(-1);
+    const s2 = this.#$l.at(-1);
     s2.line = new Float32Array(s2.line);
     s2.points = new Float32Array(s2.points);
-    this.#al.build(this.#Vl, t2, e2, i2, this.#er, this.#Bo, n2);
-    this.#Do = null;
-    this.#qa = null;
-    this.#Vl = null;
+    this.#ol.build(this.#$l, t2, e2, i2, this.#ir, this.#Lo, n2);
+    this.#Po = null;
+    this.#Ka = null;
     this.#$l = null;
-    return this.#al;
+    this.#ql = null;
+    return this.#ol;
   }
   get defaultSVGProperties() {
     return { root: { viewBox: "0 0 10000 10000" }, rootClass: { draw: true }, bbox: [0, 0, 1, 1] };
   }
 };
 var InkDrawOutline = class extends Outline {
-  #Ko;
-  #Jl = 0;
-  #_o;
-  #Vl;
-  #Kl;
+  #Xo;
+  #Ql = 0;
+  #ko;
+  #$l;
   #Xl;
-  #Ql;
-  #er;
-  #Bo;
+  #Yl;
+  #Zl;
+  #ir;
+  #Lo;
   build(t2, e2, i2, n2, s2, r2, a2) {
-    this.#Kl = e2;
-    this.#Xl = i2;
-    this.#Ql = n2;
-    this.#er = s2;
-    this.#Bo = r2;
-    this.#_o = a2 ?? 0;
-    this.#Vl = t2;
-    this.#Zl();
+    this.#Xl = e2;
+    this.#Yl = i2;
+    this.#Zl = n2;
+    this.#ir = s2;
+    this.#Lo = r2;
+    this.#ko = a2 ?? 0;
+    this.#$l = t2;
+    this.#th();
   }
   get thickness() {
-    return this.#Bo;
+    return this.#Lo;
   }
   setLastElement(t2) {
-    this.#Vl.push(t2);
+    this.#$l.push(t2);
     return { path: { d: this.toSVGPath() } };
   }
   removeLastElement() {
-    this.#Vl.pop();
+    this.#$l.pop();
     return { path: { d: this.toSVGPath() } };
   }
   toSVGPath() {
     const t2 = [];
-    for (const { line: e2 } of this.#Vl) {
+    for (const { line: e2 } of this.#$l) {
       t2.push(`M${Outline.svgRound(e2[4])} ${Outline.svgRound(e2[5])}`);
       if (6 !== e2.length) if (12 === e2.length && isNaN(e2[6])) t2.push(`L${Outline.svgRound(e2[10])} ${Outline.svgRound(e2[11])}`);
       else for (let i2 = 6, n2 = e2.length; i2 < n2; i2 += 6) {
@@ -18626,9 +18689,9 @@ var InkDrawOutline = class extends Outline {
     return t2.join("");
   }
   serialize([t2, e2, i2, n2], s2) {
-    const r2 = [], a2 = [], [o2, l2, h2, c2] = this.#th();
+    const r2 = [], a2 = [], [o2, l2, h2, c2] = this.#eh();
     let d2, u2, p2, g2, m2, f2, b2, y2, v2;
-    switch (this.#er) {
+    switch (this.#ir) {
       case 0:
         v2 = Outline._rescale;
         d2 = t2;
@@ -18673,7 +18736,7 @@ var InkDrawOutline = class extends Outline {
         b2 = t2 + (1 - l2) * i2;
         y2 = e2 + (1 - o2) * n2;
     }
-    for (const { line: t3, points: e3 } of this.#Vl) {
+    for (const { line: t3, points: e3 } of this.#$l) {
       r2.push(v2(t3, d2, u2, p2, g2, s2 ? new Array(t3.length) : null));
       a2.push(v2(e3, d2, u2, p2, g2, s2 ? new Array(e3.length) : null));
     }
@@ -18739,17 +18802,17 @@ var InkDrawOutline = class extends Outline {
     m2.build(h2, i2, n2, 1, o2, l2, s2);
     return m2;
   }
-  #eh(t2 = this.#Bo) {
-    const e2 = this.#_o + t2 / 2 * this.#Ql;
-    return this.#er % 180 == 0 ? [e2 / this.#Kl, e2 / this.#Xl] : [e2 / this.#Xl, e2 / this.#Kl];
+  #ih(t2 = this.#Lo) {
+    const e2 = this.#ko + t2 / 2 * this.#Zl;
+    return this.#ir % 180 == 0 ? [e2 / this.#Xl, e2 / this.#Yl] : [e2 / this.#Yl, e2 / this.#Xl];
   }
-  #th() {
-    const [t2, e2, i2, n2] = this.#Ko, [s2, r2] = this.#eh(0);
+  #eh() {
+    const [t2, e2, i2, n2] = this.#Xo, [s2, r2] = this.#ih(0);
     return [t2 + s2, e2 + r2, i2 - 2 * s2, n2 - 2 * r2];
   }
-  #Zl() {
-    const t2 = this.#Ko = s.slice();
-    for (const { line: e3 } of this.#Vl) {
+  #th() {
+    const t2 = this.#Xo = s.slice();
+    for (const { line: e3 } of this.#$l) {
       if (e3.length <= 12) {
         for (let i4 = 4, n3 = e3.length; i4 < n3; i4 += 6) Util.pointBoundingBox(e3[i4], e3[i4 + 1], t2);
         continue;
@@ -18762,7 +18825,7 @@ var InkDrawOutline = class extends Outline {
         n2 = c2;
       }
     }
-    const [e2, i2] = this.#eh();
+    const [e2, i2] = this.#ih();
     t2[0] = MathClamp(t2[0] - e2, 0, 1);
     t2[1] = MathClamp(t2[1] - i2, 0, 1);
     t2[2] = MathClamp(t2[2] + e2, 0, 1);
@@ -18771,15 +18834,15 @@ var InkDrawOutline = class extends Outline {
     t2[3] -= t2[1];
   }
   get box() {
-    return this.#Ko;
+    return this.#Xo;
   }
   updateProperty(t2, e2) {
-    return "stroke-width" === t2 ? this.#El(e2) : null;
+    return "stroke-width" === t2 ? this.#Cl(e2) : null;
   }
-  #El(t2) {
-    const [e2, i2] = this.#eh();
-    this.#Bo = t2;
-    const [n2, s2] = this.#eh(), [r2, a2] = [n2 - e2, s2 - i2], o2 = this.#Ko;
+  #Cl(t2) {
+    const [e2, i2] = this.#ih();
+    this.#Lo = t2;
+    const [n2, s2] = this.#ih(), [r2, a2] = [n2 - e2, s2 - i2], o2 = this.#Xo;
     o2[0] -= r2;
     o2[1] -= a2;
     o2[2] += 2 * r2;
@@ -18787,11 +18850,11 @@ var InkDrawOutline = class extends Outline {
     return o2;
   }
   updateParentDimensions([t2, e2], i2) {
-    const [n2, s2] = this.#eh();
-    this.#Kl = t2;
-    this.#Xl = e2;
-    this.#Ql = i2;
-    const [r2, a2] = this.#eh(), o2 = r2 - n2, l2 = a2 - s2, h2 = this.#Ko;
+    const [n2, s2] = this.#ih();
+    this.#Xl = t2;
+    this.#Yl = e2;
+    this.#Zl = i2;
+    const [r2, a2] = this.#ih(), o2 = r2 - n2, l2 = a2 - s2, h2 = this.#Xo;
     h2[0] -= o2;
     h2[1] -= l2;
     h2[2] += 2 * o2;
@@ -18799,20 +18862,20 @@ var InkDrawOutline = class extends Outline {
     return h2;
   }
   updateRotation(t2) {
-    this.#Jl = t2;
+    this.#Ql = t2;
     return { path: { transform: this.rotationTransform } };
   }
   get viewBox() {
-    return this.#Ko.map(Outline.svgRound).join(" ");
+    return this.#Xo.map(Outline.svgRound).join(" ");
   }
   get defaultProperties() {
-    const [t2, e2] = this.#Ko;
+    const [t2, e2] = this.#Xo;
     return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}` } };
   }
   get rotationTransform() {
-    const [, , t2, e2] = this.#Ko;
+    const [, , t2, e2] = this.#Xo;
     let i2 = 0, n2 = 0, s2 = 0, r2 = 0, a2 = 0, o2 = 0;
-    switch (this.#Jl) {
+    switch (this.#Ql) {
       case 90:
         n2 = e2 / t2;
         s2 = -t2 / e2;
@@ -18835,7 +18898,7 @@ var InkDrawOutline = class extends Outline {
     return `matrix(${i2} ${n2} ${s2} ${r2} ${Outline.svgRound(a2)} ${Outline.svgRound(o2)})`;
   }
   getPathResizingSVGProperties([t2, e2, i2, n2]) {
-    const [s2, r2] = this.#eh(), [a2, o2, l2, h2] = this.#Ko;
+    const [s2, r2] = this.#ih(), [a2, o2, l2, h2] = this.#Xo;
     if (Math.abs(l2 - s2) <= Outline.PRECISION || Math.abs(h2 - r2) <= Outline.PRECISION) {
       const s3 = t2 + i2 / 2 - (a2 + l2 / 2), r3 = e2 + n2 / 2 - (o2 + h2 / 2);
       return { path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: `${this.rotationTransform} translate(${s3} ${r3})` } };
@@ -18844,37 +18907,37 @@ var InkDrawOutline = class extends Outline {
     return { path: { "transform-origin": `${Outline.svgRound(a2)} ${Outline.svgRound(o2)}`, transform: `${this.rotationTransform} scale(${u2} ${p2}) translate(${Outline.svgRound(s2)} ${Outline.svgRound(r2)}) scale(${c2} ${d2}) translate(${Outline.svgRound(-s2)} ${Outline.svgRound(-r2)})` } };
   }
   getPathResizedSVGProperties([t2, e2, i2, n2]) {
-    const [s2, r2] = this.#eh(), a2 = this.#Ko, [o2, l2, h2, c2] = a2;
+    const [s2, r2] = this.#ih(), a2 = this.#Xo, [o2, l2, h2, c2] = a2;
     a2[0] = t2;
     a2[1] = e2;
     a2[2] = i2;
     a2[3] = n2;
     if (Math.abs(h2 - s2) <= Outline.PRECISION || Math.abs(c2 - r2) <= Outline.PRECISION) {
       const s3 = t2 + i2 / 2 - (o2 + h2 / 2), r3 = e2 + n2 / 2 - (l2 + c2 / 2);
-      for (const { line: t3, points: e3 } of this.#Vl) {
+      for (const { line: t3, points: e3 } of this.#$l) {
         Outline._translate(t3, s3, r3, t3);
         Outline._translate(e3, s3, r3, e3);
       }
       return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: this.rotationTransform || null, d: this.toSVGPath() } };
     }
     const d2 = (i2 - 2 * s2) / (h2 - 2 * s2), u2 = (n2 - 2 * r2) / (c2 - 2 * r2), p2 = -d2 * (o2 + s2) + t2 + s2, g2 = -u2 * (l2 + r2) + e2 + r2;
-    if (1 !== d2 || 1 !== u2 || 0 !== p2 || 0 !== g2) for (const { line: t3, points: e3 } of this.#Vl) {
+    if (1 !== d2 || 1 !== u2 || 0 !== p2 || 0 !== g2) for (const { line: t3, points: e3 } of this.#$l) {
       Outline._rescale(t3, p2, g2, d2, u2, t3);
       Outline._rescale(e3, p2, g2, d2, u2, e3);
     }
     return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: this.rotationTransform || null, d: this.toSVGPath() } };
   }
   getPathTranslatedSVGProperties([t2, e2], i2) {
-    const [n2, s2] = i2, r2 = this.#Ko, a2 = t2 - r2[0], o2 = e2 - r2[1];
-    if (this.#Kl === n2 && this.#Xl === s2) for (const { line: t3, points: e3 } of this.#Vl) {
+    const [n2, s2] = i2, r2 = this.#Xo, a2 = t2 - r2[0], o2 = e2 - r2[1];
+    if (this.#Xl === n2 && this.#Yl === s2) for (const { line: t3, points: e3 } of this.#$l) {
       Outline._translate(t3, a2, o2, t3);
       Outline._translate(e3, a2, o2, e3);
     }
     else {
-      const t3 = this.#Kl / n2, e3 = this.#Xl / s2;
-      this.#Kl = n2;
-      this.#Xl = s2;
-      for (const { line: i3, points: n3 } of this.#Vl) {
+      const t3 = this.#Xl / n2, e3 = this.#Yl / s2;
+      this.#Xl = n2;
+      this.#Yl = s2;
+      for (const { line: i3, points: n3 } of this.#$l) {
         Outline._rescale(i3, a2, o2, t3, e3, i3);
         Outline._rescale(n3, a2, o2, t3, e3, n3);
       }
@@ -18886,7 +18949,7 @@ var InkDrawOutline = class extends Outline {
     return { root: { viewBox: this.viewBox }, path: { d: this.toSVGPath(), "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}` } };
   }
   get defaultSVGProperties() {
-    const t2 = this.#Ko;
+    const t2 = this.#Xo;
     return { root: { viewBox: this.viewBox }, rootClass: { draw: true }, path: { d: this.toSVGPath(), "transform-origin": `${Outline.svgRound(t2[0])} ${Outline.svgRound(t2[1])}`, transform: this.rotationTransform || null }, bbox: t2 };
   }
 };
@@ -18911,7 +18974,7 @@ var InkDrawingOptions = class _InkDrawingOptions extends DrawingOptions {
 };
 var InkEditor = class _InkEditor extends DrawingEditor {
   static _type = "ink";
-  static _editorType = v.INK;
+  static _editorType = y.INK;
   static _defaultDrawingOptions = null;
   constructor(t2) {
     super({ ...t2, name: "inkEditor" });
@@ -18931,7 +18994,7 @@ var InkEditor = class _InkEditor extends DrawingEditor {
     return true;
   }
   static get typesMap() {
-    return shadow(this, "typesMap", /* @__PURE__ */ new Map([[w.INK_THICKNESS, "stroke-width"], [w.INK_COLOR, "stroke"], [w.INK_OPACITY, "stroke-opacity"]]));
+    return shadow(this, "typesMap", /* @__PURE__ */ new Map([[v.INK_THICKNESS, "stroke-width"], [v.INK_COLOR, "stroke"], [v.INK_OPACITY, "stroke-opacity"]]));
   }
   static createDrawerInstance(t2, e2, i2, n2, s2) {
     return new InkDrawOutliner(t2, e2, i2, n2, s2, this._defaultDrawingOptions["stroke-width"]);
@@ -18943,7 +19006,7 @@ var InkEditor = class _InkEditor extends DrawingEditor {
     let n2 = null;
     if (t2 instanceof InkAnnotationElement) {
       const { data: { inkLists: e3, rect: i3, rotation: s3, id: r2, color: a2, opacity: o2, borderStyle: { rawWidth: l2 }, popupRef: h2, richText: c2, contentsObj: d2, creationDate: u2, modificationDate: p2 }, parent: { page: { pageNumber: g2 } } } = t2;
-      n2 = t2 = { annotationType: v.INK, color: Array.from(a2), thickness: l2, opacity: o2, paths: { points: e3 }, boxes: null, pageIndex: g2 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r2, id: r2, deleted: false, popupRef: h2, richText: c2, comment: d2?.str || null, creationDate: u2, modificationDate: p2 };
+      n2 = t2 = { annotationType: y.INK, color: Array.from(a2), thickness: l2, opacity: o2, paths: { points: e3 }, boxes: null, pageIndex: g2 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r2, id: r2, deleted: false, popupRef: h2, richText: c2, comment: d2?.str || null, creationDate: u2, modificationDate: p2 };
     }
     const s2 = await super.deserialize(t2, e2, i2);
     s2._initialData = n2;
@@ -18955,22 +19018,22 @@ var InkEditor = class _InkEditor extends DrawingEditor {
     return [["colorPicker", this._colorPicker]];
   }
   get colorType() {
-    return w.INK_COLOR;
+    return v.INK_COLOR;
   }
   get colorAndOpacityType() {
-    return w.INK_COLOR_AND_OPACITY;
+    return v.INK_COLOR_AND_OPACITY;
   }
   get opacityType() {
-    return w.INK_OPACITY;
+    return v.INK_OPACITY;
   }
   updateParams(t2, e2) {
-    t2 !== w.INK_COLOR_AND_OPACITY ? super.updateParams(t2, e2) : this._updateColorAndOpacity(e2.color, e2.opacity);
+    t2 !== v.INK_COLOR_AND_OPACITY ? super.updateParams(t2, e2) : this._updateColorAndOpacity(e2.color, e2.opacity);
   }
   static updateDefaultParams(t2, e2) {
-    if (t2 !== w.INK_COLOR_AND_OPACITY) super.updateDefaultParams(t2, e2);
+    if (t2 !== v.INK_COLOR_AND_OPACITY) super.updateDefaultParams(t2, e2);
     else {
-      super.updateDefaultParams(w.INK_COLOR, e2.color);
-      super.updateDefaultParams(w.INK_OPACITY, e2.opacity);
+      super.updateDefaultParams(v.INK_COLOR, e2.color);
+      super.updateDefaultParams(v.INK_OPACITY, e2.opacity);
     }
   }
   get color() {
@@ -19006,11 +19069,11 @@ var InkEditor = class _InkEditor extends DrawingEditor {
       a2.isCopy = true;
       return a2;
     }
-    if (this.annotationElementId && !this.#Co(a2)) return null;
+    if (this.annotationElementId && !this.#So(a2)) return null;
     a2.id = this.annotationElementId;
     return a2;
   }
-  #Co(t2) {
+  #So(t2) {
     const { color: e2, thickness: i2, opacity: n2, pageIndex: s2 } = this._initialData;
     return this.hasEditedComment || this._hasBeenMoved || this._hasBeenResized || t2.color.some((t3, i3) => t3 !== e2[i3]) || t2.thickness !== i2 || t2.opacity !== n2 || t2.pageIndex !== s2;
   }
@@ -19033,29 +19096,29 @@ var ContourDrawOutline = class extends InkDrawOutline {
 };
 __webpack_require__(5213);
 var SignatureExtractor = class {
-  static #ih = { maxDim: 512, sigmaSFactor: 0.02, sigmaR: 25, kernelSize: 16 };
-  static #nh(t2, e2, i2, n2) {
+  static #nh = { maxDim: 512, sigmaSFactor: 0.02, sigmaR: 25, kernelSize: 16 };
+  static #sh(t2, e2, i2, n2) {
     n2 -= e2;
     return 0 === (i2 -= t2) ? n2 > 0 ? 0 : 4 : 1 === i2 ? n2 + 6 : 2 - n2;
   }
-  static #sh = new Int32Array([0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1, 1, 0, 1, 1]);
-  static #rh(t2, e2, i2, n2, s2, r2, a2) {
-    const o2 = this.#nh(i2, n2, s2, r2);
+  static #rh = new Int32Array([0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1, 1, 0, 1, 1]);
+  static #ah(t2, e2, i2, n2, s2, r2, a2) {
+    const o2 = this.#sh(i2, n2, s2, r2);
     for (let s3 = 0; s3 < 8; s3++) {
       const r3 = (-s3 + o2 - a2 + 16) % 8;
-      if (0 !== t2[(i2 + this.#sh[2 * r3]) * e2 + (n2 + this.#sh[2 * r3 + 1])]) return r3;
+      if (0 !== t2[(i2 + this.#rh[2 * r3]) * e2 + (n2 + this.#rh[2 * r3 + 1])]) return r3;
     }
     return -1;
   }
-  static #ah(t2, e2, i2, n2, s2, r2, a2) {
-    const o2 = this.#nh(i2, n2, s2, r2);
+  static #oh(t2, e2, i2, n2, s2, r2, a2) {
+    const o2 = this.#sh(i2, n2, s2, r2);
     for (let s3 = 0; s3 < 8; s3++) {
       const r3 = (s3 + o2 + a2 + 16) % 8;
-      if (0 !== t2[(i2 + this.#sh[2 * r3]) * e2 + (n2 + this.#sh[2 * r3 + 1])]) return r3;
+      if (0 !== t2[(i2 + this.#rh[2 * r3]) * e2 + (n2 + this.#rh[2 * r3 + 1])]) return r3;
     }
     return -1;
   }
-  static #oh(t2, e2, i2, n2) {
+  static #lh(t2, e2, i2, n2) {
     const s2 = t2.length, r2 = new Int32Array(s2);
     for (let e3 = 0; e3 < s2; e3++) r2[e3] = t2[e3] <= n2 ? 1 : 0;
     for (let t3 = 1; t3 < i2 - 1; t3++) r2[t3 * e2] = r2[t3 * e2 + e2 - 1] = 0;
@@ -19088,21 +19151,21 @@ var SignatureExtractor = class {
           break;
         }
         g2 ? g2.isHole ? p2.parent = u2 ? g2.parent : a2 : p2.parent = u2 ? a2 : g2.parent : p2.parent = u2 ? a2 : 0;
-        const m2 = this.#rh(r2, e2, t3, i3, h2, c2, 0);
+        const m2 = this.#ah(r2, e2, t3, i3, h2, c2, 0);
         if (-1 === m2) {
           r2[n3] = -o2;
           1 !== r2[n3] && (a2 = Math.abs(r2[n3]));
           continue;
         }
-        let f2 = this.#sh[2 * m2], b2 = this.#sh[2 * m2 + 1];
+        let f2 = this.#rh[2 * m2], b2 = this.#rh[2 * m2 + 1];
         const y2 = t3 + f2, v2 = i3 + b2;
         h2 = y2;
         c2 = v2;
         let w2 = t3, x2 = i3;
         for (; ; ) {
-          const s4 = this.#ah(r2, e2, w2, x2, h2, c2, 1);
-          f2 = this.#sh[2 * s4];
-          b2 = this.#sh[2 * s4 + 1];
+          const s4 = this.#oh(r2, e2, w2, x2, h2, c2, 1);
+          f2 = this.#rh[2 * s4];
+          b2 = this.#rh[2 * s4 + 1];
           const l3 = w2 + f2, u3 = x2 + b2;
           d2.push(u3, l3);
           const p3 = w2 * e2 + x2;
@@ -19120,7 +19183,7 @@ var SignatureExtractor = class {
     }
     return l2;
   }
-  static #lh(t2, e2, i2, n2) {
+  static #hh(t2, e2, i2, n2) {
     if (i2 - e2 <= 4) {
       for (let s3 = e2; s3 < i2 - 2; s3 += 2) n2.push(t2[s3], t2[s3 + 1]);
       return;
@@ -19135,17 +19198,17 @@ var SignatureExtractor = class {
       }
     }
     if (w2 > (l2 * v2) ** 2) {
-      this.#lh(t2, e2, x2 + 2, n2);
-      this.#lh(t2, x2, i2, n2);
+      this.#hh(t2, e2, x2 + 2, n2);
+      this.#hh(t2, x2, i2, n2);
     } else n2.push(s2, r2);
   }
-  static #hh(t2) {
+  static #ch(t2) {
     const e2 = [], i2 = t2.length;
-    this.#lh(t2, 0, i2, e2);
+    this.#hh(t2, 0, i2, e2);
     e2.push(t2[i2 - 2], t2[i2 - 1]);
     return e2.length <= 4 ? null : e2;
   }
-  static #ch(t2, e2, i2, n2, s2, r2) {
+  static #dh(t2, e2, i2, n2, s2, r2) {
     const a2 = new Float32Array(r2 ** 2), o2 = -2 * n2 ** 2, l2 = r2 >> 1;
     for (let t3 = 0; t3 < r2; t3++) {
       const e3 = (t3 - l2) ** 2;
@@ -19171,12 +19234,12 @@ var SignatureExtractor = class {
     }
     return [u2, p2];
   }
-  static #dh(t2) {
+  static #uh(t2) {
     const e2 = new Uint32Array(256);
     for (const i2 of t2) e2[i2]++;
     return e2;
   }
-  static #uh(t2) {
+  static #ph(t2) {
     const e2 = t2.length, i2 = new Uint8ClampedArray(e2 >> 2);
     let n2 = -1 / 0, s2 = 1 / 0;
     for (let e3 = 0, r3 = i2.length; e3 < r3; e3++) {
@@ -19188,7 +19251,7 @@ var SignatureExtractor = class {
     for (let t3 = 0, e3 = i2.length; t3 < e3; t3++) i2[t3] = (i2[t3] - s2) * r2;
     return i2;
   }
-  static #ph(t2) {
+  static #gh(t2) {
     let e2, i2 = -1 / 0, n2 = -1 / 0;
     const s2 = t2.findIndex((t3) => 0 !== t3);
     let r2 = s2, a2 = s2;
@@ -19206,8 +19269,8 @@ var SignatureExtractor = class {
     for (e2 = a2 - 1; e2 >= 0 && !(t2[e2] > t2[e2 + 1]); e2--) ;
     return e2;
   }
-  static #gh(t2) {
-    const e2 = t2, { width: i2, height: n2 } = t2, { maxDim: s2 } = this.#ih;
+  static #mh(t2) {
+    const e2 = t2, { width: i2, height: n2 } = t2, { maxDim: s2 } = this.#nh;
     let r2 = i2, a2 = n2;
     if (i2 > s2 || n2 > s2) {
       let o3 = i2, l3 = n2, h2 = Math.log2(Math.max(i2, n2) / s2);
@@ -19233,7 +19296,7 @@ var SignatureExtractor = class {
     o2.filter = "grayscale(1)";
     o2.drawImage(t2, 0, 0, t2.width, t2.height, 0, 0, r2, a2);
     const l2 = o2.getImageData(0, 0, r2, a2).data;
-    return [this.#uh(l2), r2, a2];
+    return [this.#ph(l2), r2, a2];
   }
   static extractContoursFromText(t2, { fontFamily: e2, fontStyle: i2, fontWeight: n2 }, s2, r2, a2, o2) {
     let l2 = new OffscreenCanvas(1, 1), h2 = l2.getContext("2d", { alpha: false });
@@ -19246,18 +19309,18 @@ var SignatureExtractor = class {
     h2.fillRect(0, 0, v2, w2);
     h2.fillStyle = "black";
     h2.fillText(t2, 0.5 * v2 / 2, 1.5 * w2 / 2);
-    const x2 = this.#uh(h2.getImageData(0, 0, v2, w2).data), A2 = this.#dh(x2), E2 = this.#ph(A2), C2 = this.#oh(x2, v2, w2, E2);
+    const x2 = this.#ph(h2.getImageData(0, 0, v2, w2).data), A2 = this.#uh(x2), E2 = this.#gh(A2), C2 = this.#lh(x2, v2, w2, E2);
     return this.processDrawnLines({ lines: { curves: C2, width: v2, height: w2 }, pageWidth: s2, pageHeight: r2, rotation: a2, innerMargin: o2, mustSmooth: true, areContours: true });
   }
   static process(t2, e2, i2, n2, s2) {
-    const [r2, a2, o2] = this.#gh(t2), [l2, h2] = this.#ch(r2, a2, o2, Math.hypot(a2, o2) * this.#ih.sigmaSFactor, this.#ih.sigmaR, this.#ih.kernelSize), c2 = this.#ph(h2), d2 = this.#oh(l2, a2, o2, c2);
+    const [r2, a2, o2] = this.#mh(t2), [l2, h2] = this.#dh(r2, a2, o2, Math.hypot(a2, o2) * this.#nh.sigmaSFactor, this.#nh.sigmaR, this.#nh.kernelSize), c2 = this.#gh(h2), d2 = this.#lh(l2, a2, o2, c2);
     return this.processDrawnLines({ lines: { curves: d2, width: a2, height: o2 }, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: s2, mustSmooth: true, areContours: true });
   }
   static processDrawnLines({ lines: t2, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: s2, mustSmooth: r2, areContours: a2 }) {
     n2 % 180 != 0 && ([e2, i2] = [i2, e2]);
     const { curves: o2, width: l2, height: h2 } = t2, c2 = t2.thickness ?? 0, d2 = [], u2 = Math.min(e2 / l2, i2 / h2), p2 = u2 / e2, g2 = u2 / i2, m2 = [];
     for (const { points: t3 } of o2) {
-      const e3 = r2 ? this.#hh(t3) : t3;
+      const e3 = r2 ? this.#ch(t3) : t3;
       if (!e3) continue;
       m2.push(e3);
       const i3 = e3.length, n3 = new Float32Array(i3), s3 = new Float32Array(3 * (2 === i3 ? 2 : i3 - 2));
@@ -19390,18 +19453,18 @@ var DrawnSignatureOptions = class _DrawnSignatureOptions extends InkDrawingOptio
   }
 };
 var SignatureEditor = class _SignatureEditor extends DrawingEditor {
-  #mh = false;
-  #fh = null;
+  #fh = false;
   #bh = null;
   #yh = null;
+  #vh = null;
   static _type = "signature";
-  static _editorType = v.SIGNATURE;
+  static _editorType = y.SIGNATURE;
   static _defaultDrawingOptions = null;
   constructor(t2) {
     super({ ...t2, mustBeCommitted: true, name: "signatureEditor" });
     this._willKeepAspectRatio = true;
-    this.#bh = t2.signatureData || null;
-    this.#fh = null;
+    this.#yh = t2.signatureData || null;
+    this.#bh = null;
     this.defaultL10nId = "pdfjs-editor-signature-editor1";
   }
   static initialize(t2, e2) {
@@ -19424,7 +19487,7 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     return false;
   }
   get telemetryFinalData() {
-    return { type: "signature", hasDescription: !!this.#fh };
+    return { type: "signature", hasDescription: !!this.#bh };
   }
   static computeTelemetryFinalData(t2) {
     const e2 = t2.get("hasDescription");
@@ -19446,15 +19509,15 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
       e2 = this.y;
     }
     super.render();
-    if (null === this._drawId) if (this.#bh) {
-      const { lines: t3, mustSmooth: e3, areContours: i3, description: n2, uuid: s2, heightInPage: r2 } = this.#bh, { rawDims: { pageWidth: a2, pageHeight: o2 }, rotation: l2 } = this.parent.viewport, h2 = SignatureExtractor.processDrawnLines({ lines: t3, pageWidth: a2, pageHeight: o2, rotation: l2, innerMargin: _SignatureEditor._INNER_MARGIN, mustSmooth: e3, areContours: i3 });
+    if (null === this._drawId) if (this.#yh) {
+      const { lines: t3, mustSmooth: e3, areContours: i3, description: n2, uuid: s2, heightInPage: r2 } = this.#yh, { rawDims: { pageWidth: a2, pageHeight: o2 }, rotation: l2 } = this.parent.viewport, h2 = SignatureExtractor.processDrawnLines({ lines: t3, pageWidth: a2, pageHeight: o2, rotation: l2, innerMargin: _SignatureEditor._INNER_MARGIN, mustSmooth: e3, areContours: i3 });
       this.addSignature(h2, r2, n2, s2);
     } else {
       this.div.setAttribute("data-l10n-args", JSON.stringify({ description: "" }));
       this.div.hidden = true;
       this._uiManager.getSignature(this);
     }
-    else this.div.setAttribute("data-l10n-args", JSON.stringify({ description: this.#fh || "" }));
+    else this.div.setAttribute("data-l10n-args", JSON.stringify({ description: this.#bh || "" }));
     if (i2) {
       this._isCopy = true;
       this._moveAfterPaste(t2, e2);
@@ -19462,17 +19525,17 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     return this.div;
   }
   setUuid(t2) {
-    this.#yh = t2;
+    this.#vh = t2;
     this.addEditToolbar();
   }
   getUuid() {
-    return this.#yh;
+    return this.#vh;
   }
   get description() {
-    return this.#fh;
+    return this.#bh;
   }
   set description(t2) {
-    this.#fh = t2;
+    this.#bh = t2;
     if (this.div) {
       this.div.setAttribute("data-l10n-args", JSON.stringify({ description: t2 }));
       super.addEditToolbar().then((e2) => {
@@ -19481,18 +19544,18 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     }
   }
   getSignaturePreview() {
-    const { newCurves: t2, areContours: e2, thickness: i2, width: n2, height: s2 } = this.#bh, r2 = Math.max(n2, s2);
+    const { newCurves: t2, areContours: e2, thickness: i2, width: n2, height: s2 } = this.#yh, r2 = Math.max(n2, s2);
     return { areContours: e2, outline: SignatureExtractor.processDrawnLines({ lines: { curves: t2.map((t3) => ({ points: t3 })), thickness: i2, width: n2, height: s2 }, pageWidth: r2, pageHeight: r2, rotation: 0, innerMargin: 0, mustSmooth: false, areContours: e2 }).outline };
   }
   get toolbarButtons() {
     return this._uiManager.signatureManager ? [["editSignature", this._uiManager.signatureManager]] : super.toolbarButtons;
   }
   addSignature(t2, e2, i2, n2) {
-    const { x: s2, y: r2 } = this, { outline: a2 } = this.#bh = t2;
-    this.#mh = a2 instanceof ContourDrawOutline;
+    const { x: s2, y: r2 } = this, { outline: a2 } = this.#yh = t2;
+    this.#fh = a2 instanceof ContourDrawOutline;
     this.description = i2;
     let o2;
-    if (this.#mh) o2 = _SignatureEditor.getDefaultDrawingOptions();
+    if (this.#fh) o2 = _SignatureEditor.getDefaultDrawingOptions();
     else {
       o2 = _SignatureEditor._defaultDrawnSignatureOptions.clone();
       o2.updateProperties({ "stroke-width": a2.thickness });
@@ -19540,14 +19603,14 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
   }
   serialize(t2 = false) {
     if (this.isEmpty()) return null;
-    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { "stroke-width": n2 } } = this, s2 = Object.assign(super.serialize(t2), { isSignature: true, areContours: this.#mh, color: [0, 0, 0], thickness: this.#mh ? 0 : n2 });
+    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { "stroke-width": n2 } } = this, s2 = Object.assign(super.serialize(t2), { isSignature: true, areContours: this.#fh, color: [0, 0, 0], thickness: this.#fh ? 0 : n2 });
     this.addComment(s2);
     if (t2) {
       s2.paths = { lines: e2, points: i2 };
-      s2.uuid = this.#yh;
+      s2.uuid = this.#vh;
       s2.isCopy = true;
     } else s2.lines = e2;
-    this.#fh && (s2.accessibilityData = { type: "Figure", alt: this.#fh });
+    this.#bh && (s2.accessibilityData = { type: "Figure", alt: this.#bh });
     return s2;
   }
   static deserializeDraw(t2, e2, i2, n2, s2, r2) {
@@ -19555,40 +19618,40 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
   }
   static async deserialize(t2, e2, i2) {
     const n2 = await super.deserialize(t2, e2, i2);
-    n2.#mh = t2.areContours;
+    n2.#fh = t2.areContours;
     n2.description = t2.accessibilityData?.alt || "";
-    n2.#yh = t2.uuid;
+    n2.#vh = t2.uuid;
     return n2;
   }
 };
 var StampEditor = class extends AnnotationEditor {
-  #vh = null;
   #wh = null;
   #xh = null;
   #Ah = null;
   #Eh = null;
-  #Ch = "";
-  #Sh = null;
-  #Th = false;
-  #_h = null;
-  #kh = false;
+  #Ch = null;
+  #Sh = "";
+  #Th = null;
+  #_h = false;
+  #kh = null;
+  #Dh = false;
   #Mh = false;
   static _type = "stamp";
-  static _editorType = v.STAMP;
+  static _editorType = y.STAMP;
   constructor(t2) {
     super({ ...t2, name: "stampEditor" });
-    this.#Ah = t2.bitmapUrl;
-    this.#Eh = t2.bitmapFile;
+    this.#Eh = t2.bitmapUrl;
+    this.#Ch = t2.bitmapFile;
     this.defaultL10nId = "pdfjs-editor-stamp-editor";
   }
   static initialize(t2, e2) {
     AnnotationEditor.initialize(t2, e2);
   }
   static isHandlingMimeForPasting(t2) {
-    return K.includes(t2);
+    return X.includes(t2);
   }
   static paste(t2, e2) {
-    e2.pasteEditor({ mode: v.STAMP }, { bitmapFile: t2.getAsFile() });
+    e2.pasteEditor({ mode: y.STAMP }, { bitmapFile: t2.getAsFile() });
   }
   altTextFinish() {
     this._uiManager.useNewAltTextFlow && (this.div.hidden = false);
@@ -19601,26 +19664,26 @@ var StampEditor = class extends AnnotationEditor {
     const e2 = t2.get("hasAltText");
     return { hasAltText: e2.get(true) ?? 0, hasNoAltText: e2.get(false) ?? 0 };
   }
-  #Dh(t2, e2 = false) {
+  #Ph(t2, e2 = false) {
     if (t2) {
-      this.#vh = t2.bitmap;
+      this.#wh = t2.bitmap;
       if (!e2) {
-        this.#wh = t2.id;
-        this.#kh = t2.isSvg;
+        this.#xh = t2.id;
+        this.#Dh = t2.isSvg;
       }
-      t2.file && (this.#Ch = t2.file.name);
-      this.#Ph();
+      t2.file && (this.#Sh = t2.file.name);
+      this.#Ih();
     } else this.remove();
   }
-  #Ih() {
-    this.#xh = null;
+  #Fh() {
+    this.#Ah = null;
     this._uiManager.enableWaiting(false);
-    if (this.#Sh) if (this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#vh) this.addEditToolbar().then(() => {
+    if (this.#Th) if (this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#wh) this.addEditToolbar().then(() => {
       this._editToolbar.hide();
       this._uiManager.editAltText(this, true);
     });
     else {
-      if (!this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#vh) {
+      if (!this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#wh) {
         this._reportTelemetry({ action: "pdfjs.image.image_added", data: { alt_text_modal: false, alt_text_type: "empty" } });
         try {
           this.mlGuessAltText();
@@ -19645,37 +19708,37 @@ var StampEditor = class extends AnnotationEditor {
     e2 && !this.hasAltTextData() && (this.altTextData = { alt: o2, decorative: false });
     return o2;
   }
-  #Fh() {
-    if (this.#wh) {
+  #Oh() {
+    if (this.#xh) {
       this._uiManager.enableWaiting(true);
-      this._uiManager.imageManager.getFromId(this.#wh).then((t3) => this.#Dh(t3, true)).finally(() => this.#Ih());
-      return;
-    }
-    if (this.#Ah) {
-      const t3 = this.#Ah;
-      this.#Ah = null;
-      this._uiManager.enableWaiting(true);
-      this.#xh = this._uiManager.imageManager.getFromUrl(t3).then((t4) => this.#Dh(t4)).finally(() => this.#Ih());
+      this._uiManager.imageManager.getFromId(this.#xh).then((t3) => this.#Ph(t3, true)).finally(() => this.#Fh());
       return;
     }
     if (this.#Eh) {
       const t3 = this.#Eh;
       this.#Eh = null;
       this._uiManager.enableWaiting(true);
-      this.#xh = this._uiManager.imageManager.getFromFile(t3).then((t4) => this.#Dh(t4)).finally(() => this.#Ih());
+      this.#Ah = this._uiManager.imageManager.getFromUrl(t3).then((t4) => this.#Ph(t4)).finally(() => this.#Fh());
+      return;
+    }
+    if (this.#Ch) {
+      const t3 = this.#Ch;
+      this.#Ch = null;
+      this._uiManager.enableWaiting(true);
+      this.#Ah = this._uiManager.imageManager.getFromFile(t3).then((t4) => this.#Ph(t4)).finally(() => this.#Fh());
       return;
     }
     const t2 = document.createElement("input");
     t2.type = "file";
-    t2.accept = K.join(",");
+    t2.accept = X.join(",");
     const e2 = this._uiManager._signal;
-    this.#xh = new Promise((i2) => {
+    this.#Ah = new Promise((i2) => {
       t2.addEventListener("change", async () => {
         if (t2.files && 0 !== t2.files.length) {
           this._uiManager.enableWaiting(true);
           const e3 = await this._uiManager.imageManager.getFromFile(t2.files[0]);
           this._reportTelemetry({ action: "pdfjs.image.image_selected", data: { alt_text_modal: this._uiManager.useNewAltTextFlow } });
-          this.#Dh(e3);
+          this.#Ph(e3);
         } else this.remove();
         i2();
       }, { signal: e2 });
@@ -19683,18 +19746,18 @@ var StampEditor = class extends AnnotationEditor {
         this.remove();
         i2();
       }, { signal: e2 });
-    }).finally(() => this.#Ih());
+    }).finally(() => this.#Fh());
     t2.click();
   }
   remove() {
-    if (this.#wh) {
-      this.#vh = null;
-      this._uiManager.imageManager.deleteId(this.#wh);
-      this.#Sh?.remove();
-      this.#Sh = null;
-      if (this.#_h) {
-        clearTimeout(this.#_h);
-        this.#_h = null;
+    if (this.#xh) {
+      this.#wh = null;
+      this._uiManager.imageManager.deleteId(this.#xh);
+      this.#Th?.remove();
+      this.#Th = null;
+      if (this.#kh) {
+        clearTimeout(this.#kh);
+        this.#kh = null;
       }
     }
     super.remove();
@@ -19703,17 +19766,17 @@ var StampEditor = class extends AnnotationEditor {
     if (this.parent) {
       super.rebuild();
       if (null !== this.div) {
-        this.#wh && null === this.#Sh && this.#Fh();
+        this.#xh && null === this.#Th && this.#Oh();
         this.isAttachedToDOM || this.parent.add(this);
       }
-    } else this.#wh && this.#Fh();
+    } else this.#xh && this.#Oh();
   }
   onceAdded(t2) {
     this._isDraggable = true;
     t2 && this.div.focus();
   }
   isEmpty() {
-    return !(this.#xh || this.#vh || this.#Ah || this.#Eh || this.#wh || this.#Th);
+    return !(this.#Ah || this.#wh || this.#Eh || this.#Ch || this.#xh || this.#_h);
   }
   get toolbarButtons() {
     return [["altText", this.createAltText()]];
@@ -19731,7 +19794,7 @@ var StampEditor = class extends AnnotationEditor {
     super.render();
     this.div.hidden = true;
     this.createAltText();
-    this.#Th || (this.#vh ? this.#Ph() : this.#Fh());
+    this.#_h || (this.#wh ? this.#Ih() : this.#Oh());
     this._isCopy && this._moveAfterPaste(t2, e2);
     this._uiManager.addShouldRescale(this);
     return this.div;
@@ -19740,10 +19803,10 @@ var StampEditor = class extends AnnotationEditor {
     const { id: i2, bitmap: n2 } = this._uiManager.imageManager.getFromCanvas(t2, e2);
     e2.remove();
     if (i2 && this._uiManager.imageManager.isValidId(i2)) {
-      this.#wh = i2;
-      n2 && (this.#vh = n2);
-      this.#Th = false;
-      this.#Ph();
+      this.#xh = i2;
+      n2 && (this.#wh = n2);
+      this.#_h = false;
+      this.#Ih();
     }
   }
   _onResized() {
@@ -19751,15 +19814,15 @@ var StampEditor = class extends AnnotationEditor {
   }
   onScaleChanging() {
     if (!this.parent) return;
-    null !== this.#_h && clearTimeout(this.#_h);
-    this.#_h = setTimeout(() => {
-      this.#_h = null;
-      this.#Oh();
+    null !== this.#kh && clearTimeout(this.#kh);
+    this.#kh = setTimeout(() => {
+      this.#kh = null;
+      this.#Rh();
     }, 200);
   }
-  #Ph() {
+  #Ih() {
     const { div: t2 } = this;
-    let { width: e2, height: i2 } = this.#vh;
+    let { width: e2, height: i2 } = this.#wh;
     const [n2, s2] = this.pageDimensions, r2 = 0.75;
     if (this.width) {
       e2 = this.width * n2;
@@ -19770,7 +19833,7 @@ var StampEditor = class extends AnnotationEditor {
       i2 *= t3;
     }
     this._uiManager.enableWaiting(false);
-    const a2 = this.#Sh = document.createElement("canvas");
+    const a2 = this.#Th = document.createElement("canvas");
     a2.setAttribute("role", "img");
     this.addContainer(a2);
     this.width = e2 / n2;
@@ -19779,19 +19842,19 @@ var StampEditor = class extends AnnotationEditor {
     this._initialOptions?.isCentered ? this.center() : this.fixAndSetPosition();
     this._initialOptions = null;
     this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && !this.annotationElementId || (t2.hidden = false);
-    this.#Oh();
+    this.#Rh();
     if (!this.#Mh) {
       this.parent.addUndoableEditor(this);
       this.#Mh = true;
     }
     this._reportTelemetry({ action: "inserted_image" });
-    this.#Ch && this.div.setAttribute("aria-description", this.#Ch);
+    this.#Sh && this.div.setAttribute("aria-description", this.#Sh);
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.stamp);
   }
   copyCanvas(t2, e2, i2 = false) {
-    t2 || (t2 = 224);
-    const { width: n2, height: s2 } = this.#vh, r2 = new OutputScale();
-    let a2 = this.#vh, o2 = n2, l2 = s2, h2 = null;
+    t2 ||= 224;
+    const { width: n2, height: s2 } = this.#wh, r2 = new OutputScale();
+    let a2 = this.#wh, o2 = n2, l2 = s2, h2 = null;
     if (e2) {
       if (n2 > e2 || s2 > e2) {
         const t4 = Math.min(e2 / n2, e2 / s2);
@@ -19800,7 +19863,7 @@ var StampEditor = class extends AnnotationEditor {
       }
       h2 = document.createElement("canvas");
       const t3 = h2.width = Math.ceil(o2 * r2.sx), i3 = h2.height = Math.ceil(l2 * r2.sy);
-      this.#kh || (a2 = this.#Rh(t3, i3));
+      this.#Dh || (a2 = this.#Bh(t3, i3));
       const c3 = h2.getContext("2d");
       c3.filter = this._uiManager.hcmFilter;
       let d2 = "white", u2 = "#cfcfd8";
@@ -19826,12 +19889,12 @@ var StampEditor = class extends AnnotationEditor {
         e3 = a2.width;
         i3 = a2.height;
       } else {
-        a2 = this.#vh;
+        a2 = this.#wh;
         if (n2 > t2 || s2 > t2) {
           const r3 = Math.min(t2 / n2, t2 / s2);
           e3 = Math.floor(n2 * r3);
           i3 = Math.floor(s2 * r3);
-          this.#kh || (a2 = this.#Rh(e3, i3));
+          this.#Dh || (a2 = this.#Bh(e3, i3));
         }
       }
       const o3 = new OffscreenCanvas(e3, i3).getContext("2d", { willReadFrequently: true });
@@ -19840,9 +19903,9 @@ var StampEditor = class extends AnnotationEditor {
     }
     return { canvas: h2, width: o2, height: l2, imageData: c2 };
   }
-  #Rh(t2, e2) {
-    const { width: i2, height: n2 } = this.#vh;
-    let s2 = i2, r2 = n2, a2 = this.#vh;
+  #Bh(t2, e2) {
+    const { width: i2, height: n2 } = this.#wh;
+    let s2 = i2, r2 = n2, a2 = this.#wh;
     for (; s2 > 2 * t2 || r2 > 2 * e2; ) {
       const i3 = s2, n3 = r2;
       s2 > 2 * t2 && (s2 = Math.ceil(s2 / 2));
@@ -19853,58 +19916,58 @@ var StampEditor = class extends AnnotationEditor {
     }
     return a2;
   }
-  #Oh() {
-    const [t2, e2] = this.parentDimensions, { width: i2, height: n2 } = this, s2 = new OutputScale(), r2 = Math.ceil(i2 * t2 * s2.sx), a2 = Math.ceil(n2 * e2 * s2.sy), o2 = this.#Sh;
+  #Rh() {
+    const [t2, e2] = this.parentDimensions, { width: i2, height: n2 } = this, s2 = new OutputScale(), r2 = Math.ceil(i2 * t2 * s2.sx), a2 = Math.ceil(n2 * e2 * s2.sy), o2 = this.#Th;
     if (!o2 || o2.width === r2 && o2.height === a2) return;
     o2.width = r2;
     o2.height = a2;
-    const l2 = this.#kh ? this.#vh : this.#Rh(r2, a2), h2 = o2.getContext("2d");
+    const l2 = this.#Dh ? this.#wh : this.#Bh(r2, a2), h2 = o2.getContext("2d");
     h2.filter = this._uiManager.hcmFilter;
     h2.drawImage(l2, 0, 0, l2.width, l2.height, 0, 0, r2, a2);
   }
-  #Bh(t2) {
+  #Lh(t2) {
     if (t2) {
-      if (this.#kh) {
-        const t4 = this._uiManager.imageManager.getSvgUrl(this.#wh);
+      if (this.#Dh) {
+        const t4 = this._uiManager.imageManager.getSvgUrl(this.#xh);
         if (t4) return t4;
       }
       const t3 = document.createElement("canvas");
-      ({ width: t3.width, height: t3.height } = this.#vh);
-      t3.getContext("2d").drawImage(this.#vh, 0, 0);
+      ({ width: t3.width, height: t3.height } = this.#wh);
+      t3.getContext("2d").drawImage(this.#wh, 0, 0);
       return t3.toDataURL();
     }
-    if (this.#kh) {
+    if (this.#Dh) {
       const [t3, e2] = this.pageDimensions, i2 = Math.round(this.width * t3 * PixelsPerInch.PDF_TO_CSS_UNITS), n2 = Math.round(this.height * e2 * PixelsPerInch.PDF_TO_CSS_UNITS), s2 = new OffscreenCanvas(i2, n2);
-      s2.getContext("2d").drawImage(this.#vh, 0, 0, this.#vh.width, this.#vh.height, 0, 0, i2, n2);
+      s2.getContext("2d").drawImage(this.#wh, 0, 0, this.#wh.width, this.#wh.height, 0, 0, i2, n2);
       return s2.transferToImageBitmap();
     }
-    return structuredClone(this.#vh);
+    return structuredClone(this.#wh);
   }
   static async deserialize(t2, e2, i2) {
     let n2 = null, s2 = false;
     if (t2 instanceof StampAnnotationElement) {
-      const { data: { rect: r3, rotation: a3, id: o3, structParent: l3, popupRef: h3, richText: c3, contentsObj: d3, creationDate: u3, modificationDate: p3 }, container: g2, parent: { page: { pageNumber: m2 } }, canvas: f2 } = t2;
-      let y2, w2;
-      if (f2) {
+      const { data: { rect: r3, rotation: a3, id: o3, structParent: l3, popupRef: h3, richText: c3, contentsObj: d3, creationDate: u3, modificationDate: p3 }, container: g2, parent: { page: { pageNumber: m2 } }, canvas: b2 } = t2;
+      let v2, w2;
+      if (b2) {
         delete t2.canvas;
-        ({ id: y2, bitmap: w2 } = i2.imageManager.getFromCanvas(g2.id, f2));
-        f2.remove();
+        ({ id: v2, bitmap: w2 } = i2.imageManager.getFromCanvas(g2.id, b2));
+        b2.remove();
       } else {
         s2 = true;
         t2._hasNoCanvas = true;
       }
-      const x2 = (await e2._structTree.getAriaAttributes(`${b}${o3}`))?.get("aria-label") || "";
-      n2 = t2 = { annotationType: v.STAMP, bitmapId: y2, bitmap: w2, pageIndex: m2 - 1, rect: r3.slice(0), rotation: a3, annotationElementId: o3, id: o3, deleted: false, accessibilityData: { decorative: false, altText: x2 }, isSvg: false, structParent: l3, popupRef: h3, richText: c3, comment: d3?.str || null, creationDate: u3, modificationDate: p3 };
+      const x2 = (await e2._structTree.getAriaAttributes(`${f}${o3}`))?.get("aria-label") || "";
+      n2 = t2 = { annotationType: y.STAMP, bitmapId: v2, bitmap: w2, pageIndex: m2 - 1, rect: r3.slice(0), rotation: a3, annotationElementId: o3, id: o3, deleted: false, accessibilityData: { decorative: false, altText: x2 }, isSvg: false, structParent: l3, popupRef: h3, richText: c3, comment: d3?.str || null, creationDate: u3, modificationDate: p3 };
     }
     const r2 = await super.deserialize(t2, e2, i2), { rect: a2, bitmap: o2, bitmapUrl: l2, bitmapId: h2, isSvg: c2, accessibilityData: d2 } = t2;
     if (s2) {
       i2.addMissingCanvas(t2.id, r2);
-      r2.#Th = true;
+      r2.#_h = true;
     } else if (h2 && i2.imageManager.isValidId(h2)) {
-      r2.#wh = h2;
-      o2 && (r2.#vh = o2);
-    } else r2.#Ah = l2;
-    r2.#kh = c2;
+      r2.#xh = h2;
+      o2 && (r2.#wh = o2);
+    } else r2.#Eh = l2;
+    r2.#Dh = c2;
     const [u2, p2] = r2.pageDimensions;
     r2.width = (a2[2] - a2[0]) / u2;
     r2.height = (a2[3] - a2[1]) / p2;
@@ -19917,10 +19980,10 @@ var StampEditor = class extends AnnotationEditor {
   serialize(t2 = false, e2 = null) {
     if (this.isEmpty()) return null;
     if (this.deleted) return this.serializeDeleted();
-    const i2 = Object.assign(super.serialize(t2), { bitmapId: this.#wh, isSvg: this.#kh });
+    const i2 = Object.assign(super.serialize(t2), { bitmapId: this.#xh, isSvg: this.#Dh });
     this.addComment(i2);
     if (t2) {
-      i2.bitmapUrl = this.#Bh(true);
+      i2.bitmapUrl = this.#Lh(true);
       i2.accessibilityData = this.serializeAltText(true);
       i2.isCopy = true;
       return i2;
@@ -19928,7 +19991,7 @@ var StampEditor = class extends AnnotationEditor {
     const { decorative: n2, altText: s2 } = this.serializeAltText(false);
     !n2 && s2 && (i2.accessibilityData = { type: "Figure", alt: s2 });
     if (this.annotationElementId) {
-      const t3 = this.#Co(i2);
+      const t3 = this.#So(i2);
       if (t3.isSame) return null;
       t3.isSameAltText ? delete i2.accessibilityData : i2.accessibilityData.structParent = this._initialData.structParent ?? -1;
       i2.id = this.annotationElementId;
@@ -19937,23 +20000,23 @@ var StampEditor = class extends AnnotationEditor {
     }
     if (null === e2) return i2;
     e2.stamps ||= /* @__PURE__ */ new Map();
-    const r2 = this.#kh ? (i2.rect[2] - i2.rect[0]) * (i2.rect[3] - i2.rect[1]) : null;
-    if (e2.stamps.has(this.#wh)) {
-      if (this.#kh) {
-        const t3 = e2.stamps.get(this.#wh);
+    const r2 = this.#Dh ? (i2.rect[2] - i2.rect[0]) * (i2.rect[3] - i2.rect[1]) : null;
+    if (e2.stamps.has(this.#xh)) {
+      if (this.#Dh) {
+        const t3 = e2.stamps.get(this.#xh);
         if (r2 > t3.area) {
           t3.area = r2;
           t3.serialized.bitmap.close();
-          t3.serialized.bitmap = this.#Bh(false);
+          t3.serialized.bitmap = this.#Lh(false);
         }
       }
     } else {
-      e2.stamps.set(this.#wh, { area: r2, serialized: i2 });
-      i2.bitmap = this.#Bh(false);
+      e2.stamps.set(this.#xh, { area: r2, serialized: i2 });
+      i2.bitmap = this.#Lh(false);
     }
     return i2;
   }
-  #Co(t2) {
+  #So(t2) {
     const { pageIndex: e2, accessibilityData: { altText: i2 } } = this._initialData, n2 = t2.pageIndex === e2, s2 = (t2.accessibilityData?.alt || "") === i2;
     return { isSame: !this.hasEditedComment && !this._hasBeenMoved && !this._hasBeenResized && n2 && s2, isSameAltText: s2 };
   }
@@ -19967,67 +20030,67 @@ var StampEditor = class extends AnnotationEditor {
   }
 };
 var AnnotationEditorLayer = class _AnnotationEditorLayer {
-  #ao;
-  #Lh = false;
-  #Nh = null;
+  #oo;
+  #Nh = false;
   #Uh = null;
   #Hh = null;
-  #zh = /* @__PURE__ */ new Map();
-  #Gh = false;
+  #zh = null;
+  #Gh = /* @__PURE__ */ new Map();
   #jh = false;
   #Wh = false;
-  #Vh = null;
+  #Vh = false;
   #$h = null;
   #qh = null;
   #Kh = null;
   #Xh = null;
-  #Yh = -1;
-  #y;
+  #Yh = null;
+  #Jh = -1;
+  #v;
   static _initialized = false;
-  static #Q = new Map([FreeTextEditor, InkEditor, StampEditor, HighlightEditor, SignatureEditor].map((t2) => [t2._editorType, t2]));
+  static #Z = new Map([FreeTextEditor, InkEditor, StampEditor, HighlightEditor, SignatureEditor].map((t2) => [t2._editorType, t2]));
   constructor({ uiManager: t2, pageIndex: e2, div: i2, structTreeLayer: n2, accessibilityManager: s2, annotationLayer: r2, drawLayer: a2, textLayer: o2, viewport: l2, l10n: h2 }) {
-    const c2 = [..._AnnotationEditorLayer.#Q.values()];
+    const c2 = [..._AnnotationEditorLayer.#Z.values()];
     if (!_AnnotationEditorLayer._initialized) {
       _AnnotationEditorLayer._initialized = true;
       for (const e3 of c2) e3.initialize(h2, t2);
     }
     t2.registerEditorTypes(c2);
-    this.#y = t2;
+    this.#v = t2;
     this.pageIndex = e2;
     this.div = i2;
-    this.#ao = s2;
-    this.#Nh = r2;
+    this.#oo = s2;
+    this.#Uh = r2;
     this.viewport = l2;
-    this.#qh = o2;
+    this.#Kh = o2;
     this.drawLayer = a2;
     this._structTree = n2;
-    this.#y.addLayer(this);
+    this.#v.addLayer(this);
   }
   get isEmpty() {
-    return 0 === this.#zh.size;
+    return 0 === this.#Gh.size;
   }
   get isInvisible() {
-    return this.isEmpty && this.#y.getMode() === v.NONE;
+    return this.isEmpty && this.#v.getMode() === y.NONE;
   }
   updateToolbar(t2) {
-    this.#y.updateToolbar(t2);
+    this.#v.updateToolbar(t2);
   }
-  updateMode(t2 = this.#y.getMode()) {
-    this.#Jh();
+  updateMode(t2 = this.#v.getMode()) {
+    this.#Qh();
     switch (t2) {
-      case v.NONE:
+      case y.NONE:
         this.div.classList.toggle("nonEditing", true);
         this.disableTextSelection();
         this.togglePointerEvents(false);
         this.toggleAnnotationLayerPointerEvents(true);
         this.disableClick();
         return;
-      case v.INK:
+      case y.INK:
         this.disableTextSelection();
         this.togglePointerEvents(true);
         this.enableClick();
         break;
-      case v.HIGHLIGHT:
+      case y.HIGHLIGHT:
         this.enableTextSelection();
         this.togglePointerEvents(false);
         this.disableClick();
@@ -20040,24 +20103,24 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     this.toggleAnnotationLayerPointerEvents(false);
     const { classList: e2 } = this.div;
     e2.toggle("nonEditing", false);
-    if (t2 === v.POPUP) e2.toggle("commentEditing", true);
+    if (t2 === y.POPUP) e2.toggle("commentEditing", true);
     else {
       e2.toggle("commentEditing", false);
-      for (const i2 of _AnnotationEditorLayer.#Q.values()) e2.toggle(`${i2._type}Editing`, t2 === i2._editorType);
+      for (const i2 of _AnnotationEditorLayer.#Z.values()) e2.toggle(`${i2._type}Editing`, t2 === i2._editorType);
     }
     this.div.hidden = false;
   }
   hasTextLayer(t2) {
-    return t2 === this.#qh?.div;
+    return t2 === this.#Kh?.div;
   }
   setEditingState(t2) {
-    this.#y.setEditingState(t2);
+    this.#v.setEditingState(t2);
   }
   addCommands(t2) {
-    this.#y.addCommands(t2);
+    this.#v.addCommands(t2);
   }
   cleanUndoStack(t2) {
-    this.#y.cleanUndoStack(t2);
+    this.#v.cleanUndoStack(t2);
   }
   toggleDrawing(t2 = false) {
     this.div.classList.toggle("drawing", !t2);
@@ -20066,31 +20129,31 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     this.div.classList.toggle("disabled", !t2);
   }
   toggleAnnotationLayerPointerEvents(t2 = false) {
-    this.#Nh?.togglePointerEvents(t2);
+    this.#Uh?.togglePointerEvents(t2);
   }
-  get #Qh() {
-    return 0 !== this.#zh.size ? this.#zh.values() : this.#y.getEditors(this.pageIndex);
+  get #Zh() {
+    return 0 !== this.#Gh.size ? this.#Gh.values() : this.#v.getEditors(this.pageIndex);
   }
   async enable() {
-    this.#Wh = true;
+    this.#Vh = true;
     this.div.tabIndex = 0;
     this.togglePointerEvents(true);
     this.div.classList.toggle("nonEditing", false);
-    this.#Xh?.abort();
-    this.#Xh = null;
+    this.#Yh?.abort();
+    this.#Yh = null;
     const t2 = /* @__PURE__ */ new Set();
-    for (const e3 of this.#Qh) {
+    for (const e3 of this.#Zh) {
       e3.enableEditing();
       e3.show(true);
       if (e3.annotationElementId) {
-        this.#y.removeChangedExistingAnnotation(e3);
+        this.#v.removeChangedExistingAnnotation(e3);
         t2.add(e3.annotationElementId);
       }
     }
-    const e2 = this.#Nh;
+    const e2 = this.#Uh;
     if (e2) for (const i2 of e2.getEditableAnnotations()) {
       i2.hide();
-      if (this.#y.isDeletedAnnotationElement(i2.data.id)) continue;
+      if (this.#v.isDeletedAnnotationElement(i2.data.id)) continue;
       if (t2.has(i2.data.id)) continue;
       const e3 = await this.deserialize(i2);
       if (e3) {
@@ -20098,47 +20161,47 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         e3.enableEditing();
       }
     }
-    this.#Wh = false;
-    this.#y._eventBus.dispatch("editorsrendered", { source: this, pageNumber: this.pageIndex + 1 });
+    this.#Vh = false;
+    this.#v._eventBus.dispatch("editorsrendered", { source: this, pageNumber: this.pageIndex + 1 });
   }
   disable() {
-    this.#jh = true;
+    this.#Wh = true;
     this.div.tabIndex = -1;
     this.togglePointerEvents(false);
     this.div.classList.toggle("nonEditing", true);
-    if (this.#qh && !this.#Xh) {
-      this.#Xh = new AbortController();
-      const t3 = this.#y.combinedSignal(this.#Xh);
-      this.#qh.div.addEventListener("pointerdown", (t4) => {
+    if (this.#Kh && !this.#Yh) {
+      this.#Yh = new AbortController();
+      const t3 = this.#v.combinedSignal(this.#Yh);
+      this.#Kh.div.addEventListener("pointerdown", (t4) => {
         const { clientX: e3, clientY: i3, timeStamp: n2 } = t4;
-        if (n2 - this.#Yh > 500) {
-          this.#Yh = n2;
+        if (n2 - this.#Jh > 500) {
+          this.#Jh = n2;
           return;
         }
-        this.#Yh = -1;
+        this.#Jh = -1;
         const { classList: s2 } = this.div;
         s2.toggle("getElements", true);
         const r2 = document.elementsFromPoint(e3, i3);
         s2.toggle("getElements", false);
         if (!this.div.contains(r2[0])) return;
         let a2;
-        const o2 = new RegExp(`^${y}[0-9]+$`);
+        const o2 = new RegExp(`^${b}[0-9]+$`);
         for (const t5 of r2) if (o2.test(t5.id)) {
           a2 = t5.id;
           break;
         }
         if (!a2) return;
-        const l2 = this.#zh.get(a2);
+        const l2 = this.#Gh.get(a2);
         if (null === l2?.annotationElementId) {
           stopEvent(t4);
           l2.dblclick(t4);
         }
       }, { signal: t3, capture: true });
     }
-    const t2 = this.#Nh, e2 = [];
+    const t2 = this.#Uh, e2 = [];
     if (t2) {
       const i3 = /* @__PURE__ */ new Map(), n2 = /* @__PURE__ */ new Map();
-      for (const t3 of this.#Qh) {
+      for (const t3 of this.#Zh) {
         t3.disableEditing();
         if (t3.annotationElementId) if (null === t3.serialize()) {
           n2.set(t3.annotationElementId, t3);
@@ -20149,7 +20212,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
       }
       for (const e3 of t2.getEditableAnnotations()) {
         const { id: t3 } = e3.data;
-        if (this.#y.isDeletedAnnotationElement(t3)) {
+        if (this.#v.isDeletedAnnotationElement(t3)) {
           e3.updateEdited({ deleted: true });
           continue;
         }
@@ -20161,95 +20224,95 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         } else {
           s2 = i3.get(t3);
           if (s2) {
-            this.#y.addChangedExistingAnnotation(s2);
+            this.#v.addChangedExistingAnnotation(s2);
             s2.renderAnnotationElement(e3) && s2.show(false);
           }
           e3.show();
         }
       }
     }
-    this.#Jh();
+    this.#Qh();
     this.isEmpty && (this.div.hidden = true);
     const { classList: i2 } = this.div;
-    for (const t3 of _AnnotationEditorLayer.#Q.values()) i2.remove(`${t3._type}Editing`);
+    for (const t3 of _AnnotationEditorLayer.#Z.values()) i2.remove(`${t3._type}Editing`);
     this.disableTextSelection();
     this.toggleAnnotationLayerPointerEvents(true);
     t2?.updateFakeAnnotations(e2);
-    this.#jh = false;
+    this.#Wh = false;
   }
   getEditableAnnotation(t2) {
-    return this.#Nh?.getEditableAnnotation(t2) || null;
+    return this.#Uh?.getEditableAnnotation(t2) || null;
   }
   setActiveEditor(t2) {
-    this.#y.getActive() !== t2 && this.#y.setActiveEditor(t2);
+    this.#v.getActive() !== t2 && this.#v.setActiveEditor(t2);
   }
   enableTextSelection() {
     this.div.tabIndex = -1;
-    if (this.#qh?.div && !this.#Kh) {
-      this.#Kh = new AbortController();
-      const t2 = this.#y.combinedSignal(this.#Kh);
-      this.#qh.div.addEventListener("pointerdown", this.#Zh.bind(this), { signal: t2 });
-      this.#qh.div.classList.add("highlighting");
+    if (this.#Kh?.div && !this.#Xh) {
+      this.#Xh = new AbortController();
+      const t2 = this.#v.combinedSignal(this.#Xh);
+      this.#Kh.div.addEventListener("pointerdown", this.#tc.bind(this), { signal: t2 });
+      this.#Kh.div.classList.add("highlighting");
     }
   }
   disableTextSelection() {
     this.div.tabIndex = 0;
-    if (this.#qh?.div && this.#Kh) {
-      this.#Kh.abort();
-      this.#Kh = null;
-      this.#qh.div.classList.remove("highlighting");
+    if (this.#Kh?.div && this.#Xh) {
+      this.#Xh.abort();
+      this.#Xh = null;
+      this.#Kh.div.classList.remove("highlighting");
     }
   }
-  #Zh(t2) {
-    this.#y.unselectAll();
+  #tc(t2) {
+    this.#v.unselectAll();
     const { target: e2 } = t2;
-    if (e2 === this.#qh.div || ("img" === e2.getAttribute("role") || e2.classList.contains("endOfContent") || e2.classList.contains("textLayerImages") || e2.classList.contains("textLayerImagePlaceholder")) && this.#qh.div.contains(e2)) {
+    if (e2 === this.#Kh.div || ("img" === e2.getAttribute("role") || e2.classList.contains("endOfContent") || e2.classList.contains("textLayerImages") || e2.classList.contains("textLayerImagePlaceholder")) && this.#Kh.div.contains(e2)) {
       const { isMac: e3 } = FeatureTest.platform;
       if (0 !== t2.button || t2.ctrlKey && e3) return;
-      this.#y.showAllEditors("highlight", true, true);
-      this.#qh.div.classList.add("free");
+      this.#v.showAllEditors("highlight", true, true);
+      this.#Kh.div.classList.add("free");
       this.toggleDrawing();
-      HighlightEditor.startHighlighting(this, "ltr" === this.#y.direction, { target: this.#qh.div, x: t2.x, y: t2.y });
-      this.#qh.div.addEventListener("pointerup", () => {
-        this.#qh.div.classList.remove("free");
+      HighlightEditor.startHighlighting(this, "ltr" === this.#v.direction, { target: this.#Kh.div, x: t2.x, y: t2.y });
+      this.#Kh.div.addEventListener("pointerup", () => {
+        this.#Kh.div.classList.remove("free");
         this.toggleDrawing(true);
-      }, { once: true, signal: this.#y._signal });
+      }, { once: true, signal: this.#v._signal });
       t2.preventDefault();
     }
   }
   enableClick() {
-    if (this.#Uh) return;
-    this.#Uh = new AbortController();
-    const t2 = this.#y.combinedSignal(this.#Uh);
+    if (this.#Hh) return;
+    this.#Hh = new AbortController();
+    const t2 = this.#v.combinedSignal(this.#Hh);
     this.div.addEventListener("pointerdown", this.pointerdown.bind(this), { signal: t2 });
     const e2 = this.pointerup.bind(this);
     this.div.addEventListener("pointerup", e2, { signal: t2 });
     this.div.addEventListener("pointercancel", e2, { signal: t2 });
   }
   disableClick() {
-    this.#Uh?.abort();
-    this.#Uh = null;
+    this.#Hh?.abort();
+    this.#Hh = null;
   }
   attach(t2) {
-    this.#zh.set(t2.id, t2);
+    this.#Gh.set(t2.id, t2);
     const { annotationElementId: e2 } = t2;
-    e2 && this.#y.isDeletedAnnotationElement(e2) && this.#y.removeDeletedAnnotationElement(t2);
+    e2 && this.#v.isDeletedAnnotationElement(e2) && this.#v.removeDeletedAnnotationElement(t2);
   }
   detach(t2) {
-    this.#zh.delete(t2.id);
-    this.#ao?.removePointerInTextLayer(t2.contentDiv);
-    !this.#jh && t2.annotationElementId && this.#y.addDeletedAnnotationElement(t2);
+    this.#Gh.delete(t2.id);
+    this.#oo?.removePointerInTextLayer(t2.contentDiv);
+    !this.#Wh && t2.annotationElementId && this.#v.addDeletedAnnotationElement(t2);
   }
   remove(t2) {
     this.detach(t2);
-    this.#y.removeEditor(t2);
+    this.#v.removeEditor(t2);
     t2.div.remove();
     t2.isAttachedToDOM = false;
   }
   changeParent(t2) {
     if (t2.parent !== this) {
       if (t2.parent && t2.annotationElementId) {
-        this.#y.addDeletedAnnotationElement(t2);
+        this.#v.addDeletedAnnotationElement(t2);
         AnnotationEditor.deleteAnnotationElement(t2);
         t2.annotationElementId = null;
       }
@@ -20265,7 +20328,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
   add(t2) {
     if (t2.parent !== this || !t2.isAttachedToDOM) {
       this.changeParent(t2);
-      this.#y.addEditor(t2);
+      this.#v.addEditor(t2);
       this.attach(t2);
       if (!t2.isAttachedToDOM) {
         const e2 = t2.render();
@@ -20273,28 +20336,28 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         t2.isAttachedToDOM = true;
       }
       t2.fixAndSetPosition();
-      t2.onceAdded(!this.#Wh);
-      this.#y.addToAnnotationStorage(t2);
+      t2.onceAdded(!this.#Vh);
+      this.#v.addToAnnotationStorage(t2);
       t2._reportTelemetry(t2.telemetryInitialData);
     }
   }
   moveEditorInDOM(t2) {
     if (!t2.isAttachedToDOM) return;
     const { activeElement: e2 } = document;
-    if (t2.div.contains(e2) && !this.#Hh) {
+    if (t2.div.contains(e2) && !this.#zh) {
       t2._focusEventsAllowed = false;
-      this.#Hh = setTimeout(() => {
-        this.#Hh = null;
+      this.#zh = setTimeout(() => {
+        this.#zh = null;
         if (t2.div.contains(document.activeElement)) t2._focusEventsAllowed = true;
         else {
           t2.div.addEventListener("focusin", () => {
             t2._focusEventsAllowed = true;
-          }, { once: true, signal: this.#y._signal });
+          }, { once: true, signal: this.#v._signal });
           e2.focus();
         }
       }, 0);
     }
-    t2._structTreeParentId = this.#ao?.moveElementInDOM(this.div, t2.div, t2.contentDiv, true);
+    t2._structTreeParentId = this.#oo?.moveElementInDOM(this.div, t2.div, t2.contentDiv, true);
   }
   addOrRebuild(t2) {
     if (t2.needsToBeRebuilt()) {
@@ -20309,188 +20372,189 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     }, mustExec: false });
   }
   getEditorByUID(t2) {
-    for (const e2 of this.#zh.values()) if (e2.uid === t2) return e2;
+    for (const e2 of this.#Gh.values()) if (e2.uid === t2) return e2;
     return null;
   }
-  get #tc() {
-    return _AnnotationEditorLayer.#Q.get(this.#y.getMode());
+  get #ec() {
+    return _AnnotationEditorLayer.#Z.get(this.#v.getMode());
   }
   combinedSignal(t2) {
-    return this.#y.combinedSignal(t2);
+    return this.#v.combinedSignal(t2);
   }
-  #ec(t2) {
-    const e2 = this.#tc;
+  #ic(t2) {
+    const e2 = this.#ec;
     return e2 ? new e2.prototype.constructor(t2) : null;
   }
   canCreateNewEmptyEditor() {
-    return this.#tc?.canCreateNewEmptyEditor();
+    return this.#ec?.canCreateNewEmptyEditor();
   }
   async pasteEditor(t2, e2) {
     this.updateToolbar(t2);
-    await this.#y.updateMode(t2.mode);
-    const { offsetX: i2, offsetY: n2 } = this.#ic(), s2 = this.#y.getId(), r2 = this.#ec({ parent: this, id: s2, x: i2, y: n2, uiManager: this.#y, isCentered: true, ...e2 });
+    await this.#v.updateMode(t2.mode);
+    const { offsetX: i2, offsetY: n2 } = this.#nc(), s2 = this.#v.getId(), r2 = this.#ic({ parent: this, id: s2, x: i2, y: n2, uiManager: this.#v, isCentered: true, ...e2 });
     r2 && this.add(r2);
   }
   async deserialize(t2) {
-    return await _AnnotationEditorLayer.#Q.get(t2.annotationType ?? t2.annotationEditorType)?.deserialize(t2, this, this.#y) || null;
+    return await _AnnotationEditorLayer.#Z.get(t2.annotationType ?? t2.annotationEditorType)?.deserialize(t2, this, this.#v) || null;
   }
   createAndAddNewEditor(t2, e2, i2 = {}) {
-    const n2 = this.#y.getId(), s2 = this.#ec({ parent: this, id: n2, x: t2.offsetX, y: t2.offsetY, uiManager: this.#y, isCentered: e2, ...i2 });
+    const n2 = this.#v.getId(), s2 = this.#ic({ parent: this, id: n2, x: t2.offsetX, y: t2.offsetY, uiManager: this.#v, isCentered: e2, ...i2 });
     s2 && this.add(s2);
     return s2;
   }
   get boundingClientRect() {
     return this.div.getBoundingClientRect();
   }
-  #ic() {
+  #nc() {
     const { x: t2, y: e2, width: i2, height: n2 } = this.boundingClientRect, s2 = Math.max(0, t2), r2 = Math.max(0, e2), a2 = (s2 + Math.min(window.innerWidth, t2 + i2)) / 2 - t2, o2 = (r2 + Math.min(window.innerHeight, e2 + n2)) / 2 - e2, [l2, h2] = this.viewport.rotation % 180 == 0 ? [a2, o2] : [o2, a2];
     return { offsetX: l2, offsetY: h2 };
   }
   addNewEditor(t2 = {}) {
-    this.createAndAddNewEditor(this.#ic(), true, t2);
+    this.createAndAddNewEditor(this.#nc(), true, t2);
   }
   setSelected(t2) {
-    this.#y.setSelected(t2);
+    this.#v.setSelected(t2);
   }
   toggleSelected(t2) {
-    this.#y.toggleSelected(t2);
+    this.#v.toggleSelected(t2);
   }
   unselect(t2) {
-    this.#y.unselect(t2);
+    this.#v.unselect(t2);
   }
   pointerup(t2) {
     const { isMac: e2 } = FeatureTest.platform;
     if (0 !== t2.button || t2.ctrlKey && e2) return;
     if (t2.target !== this.div) return;
-    if (!this.#Gh) return;
-    this.#Gh = false;
-    if (this.#tc?.isDrawer && this.#tc.supportMultipleDrawings) return;
-    if (!this.#Lh) {
-      this.#Lh = true;
+    if (!this.#jh) return;
+    this.#jh = false;
+    if (this.#ec?.isDrawer && this.#ec.supportMultipleDrawings) return;
+    if (!this.#Nh) {
+      this.#Nh = true;
       return;
     }
-    const i2 = this.#y.getMode();
-    i2 !== v.STAMP && i2 !== v.POPUP && i2 !== v.SIGNATURE ? this.createAndAddNewEditor(t2, false) : this.#y.unselectAll();
+    const i2 = this.#v.getMode();
+    i2 !== y.STAMP && i2 !== y.POPUP && i2 !== y.SIGNATURE ? this.createAndAddNewEditor(t2, false) : this.#v.unselectAll();
   }
   pointerdown(t2) {
-    this.#y.getMode() === v.HIGHLIGHT && this.enableTextSelection();
-    if (this.#Gh) {
-      this.#Gh = false;
+    this.#v.getMode() === y.HIGHLIGHT && this.enableTextSelection();
+    if (this.#jh) {
+      this.#jh = false;
       return;
     }
     const { isMac: e2 } = FeatureTest.platform;
     if (0 !== t2.button || t2.ctrlKey && e2) return;
     if (t2.target !== this.div) return;
-    this.#Gh = true;
-    if (this.#tc?.isDrawer) {
+    this.#jh = true;
+    if (this.#ec?.isDrawer) {
       this.startDrawingSession(t2);
       return;
     }
-    const i2 = this.#y.getActive();
-    this.#Lh = !i2 || i2.isEmpty();
+    const i2 = this.#v.getActive();
+    this.#Nh = !i2 || i2.isEmpty();
   }
   startDrawingSession(t2) {
     this.div.focus({ preventScroll: true });
-    if (this.#Vh) {
-      this.#tc.startDrawing(this, this.#y, false, t2);
+    if (this.#$h) {
+      this.#ec.startDrawing(this, this.#v, false, t2);
       return;
     }
-    this.#y.setCurrentDrawingSession(this);
-    this.#Vh = new AbortController();
-    const e2 = this.#y.combinedSignal(this.#Vh);
+    this.#v.setCurrentDrawingSession(this);
+    this.#$h = new AbortController();
+    const e2 = this.#v.combinedSignal(this.#$h);
     this.div.addEventListener("blur", ({ relatedTarget: t3 }) => {
       if (t3 && !this.div.contains(t3)) {
-        this.#$h = null;
+        this.#qh = null;
         this.commitOrRemove();
       }
     }, { signal: e2 });
-    this.#tc.startDrawing(this, this.#y, false, t2);
+    this.#ec.startDrawing(this, this.#v, false, t2);
   }
   pause(t2) {
     if (t2) {
       const { activeElement: t3 } = document;
-      this.div.contains(t3) && (this.#$h = t3);
+      this.div.contains(t3) && (this.#qh = t3);
       return;
     }
-    this.#$h && setTimeout(() => {
-      this.#$h?.focus();
-      this.#$h = null;
+    this.#qh && setTimeout(() => {
+      this.#qh?.focus();
+      this.#qh = null;
     }, 0);
   }
   endDrawingSession(t2 = false) {
-    if (!this.#Vh) return null;
-    this.#y.setCurrentDrawingSession(null);
-    this.#Vh.abort();
-    this.#Vh = null;
+    if (!this.#$h) return null;
+    this.#v.setCurrentDrawingSession(null);
+    this.#$h.abort();
     this.#$h = null;
-    return this.#tc.endDrawing(t2);
+    this.#qh = null;
+    return this.#ec.endDrawing(t2);
   }
   findNewParent(t2, e2, i2) {
-    const n2 = this.#y.findParent(e2, i2);
+    const n2 = this.#v.findParent(e2, i2);
     if (null === n2 || n2 === this) return false;
     n2.changeParent(t2);
     return true;
   }
   commitOrRemove() {
-    if (this.#Vh) {
+    if (this.#$h) {
       this.endDrawingSession();
       return true;
     }
     return false;
   }
   onScaleChanging() {
-    this.#Vh && this.#tc.onScaleChangingWhenDrawing(this);
+    this.#$h && this.#ec.onScaleChangingWhenDrawing(this);
   }
   destroy() {
     this.commitOrRemove();
-    if (this.#y.getActive()?.parent === this) {
-      this.#y.commitOrRemove();
-      this.#y.setActiveEditor(null);
+    if (this.#v.getActive()?.parent === this) {
+      this.#v.commitOrRemove();
+      this.#v.setActiveEditor(null);
     }
-    if (this.#Hh) {
-      clearTimeout(this.#Hh);
-      this.#Hh = null;
+    if (this.#zh) {
+      clearTimeout(this.#zh);
+      this.#zh = null;
     }
-    for (const t2 of this.#zh.values()) {
-      this.#ao?.removePointerInTextLayer(t2.contentDiv);
+    for (const t2 of this.#Gh.values()) {
+      this.#oo?.removePointerInTextLayer(t2.contentDiv);
       t2.setParent(null);
       t2.isAttachedToDOM = false;
       t2.div.remove();
     }
     this.div = null;
-    this.#zh.clear();
-    this.#y.removeLayer(this);
+    this.#Gh.clear();
+    this.#v.removeLayer(this);
   }
-  #Jh() {
-    for (const t2 of this.#zh.values()) t2.isEmpty() && t2.remove();
+  #Qh() {
+    for (const t2 of this.#Gh.values()) t2.isEmpty() && t2.remove();
   }
   async render({ viewport: t2 }) {
     this.viewport = t2;
     setLayerDimensions(this.div, t2);
-    for (const t3 of this.#y.getEditors(this.pageIndex)) {
+    for (const t3 of this.#v.getEditors(this.pageIndex)) {
       this.add(t3);
       t3.rebuild();
     }
-    await this.#y.findClonesForPage(this);
+    await this.#v.findClonesForPage(this);
     this.div.hidden = this.isEmpty;
     this.updateMode();
   }
   update({ viewport: t2 }) {
-    this.#y.commitOrRemove();
-    this.#Jh();
+    this.#v.commitOrRemove();
+    this.#Qh();
     const e2 = this.viewport.rotation, i2 = t2.rotation;
     this.viewport = t2;
     setLayerDimensions(this.div, { rotation: i2 });
-    if (e2 !== i2) for (const t3 of this.#zh.values()) t3.rotate(i2);
+    if (e2 !== i2) for (const t3 of this.#Gh.values()) t3.rotate(i2);
   }
   get pageDimensions() {
     const { pageWidth: t2, pageHeight: e2 } = this.viewport.rawDims;
     return [t2, e2];
   }
   get scale() {
-    return this.#y.viewParameters.realScale;
+    return this.#v.viewParameters.realScale;
   }
 };
+__webpack_require__(1806);
 function compareTextLayers(t2, e2) {
   return t2 === e2 ? 0 : t2.compareDocumentPosition(e2) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
 }
@@ -20509,102 +20573,102 @@ function normalizeEdgeBoundary(t2, e2, i2) {
   return n2 && i2.contains(n2) ? n2.nodeType === Node.TEXT_NODE ? { container: n2, offset: n2.textContent.length } : { container: n2, offset: n2.childNodes.length } : null;
 }
 var DrawLayer = class _DrawLayer {
-  #Ta = null;
-  #nc = /* @__PURE__ */ new Map();
-  #qh = null;
-  #nt = null;
-  #At = null;
-  #sc = null;
-  #rc = /* @__PURE__ */ new Map();
-  static #T = 0;
-  static #ac = 0;
-  static #oc = null;
-  static #lc = /* @__PURE__ */ new Set();
-  static #hc = false;
-  static #cc = /* @__PURE__ */ new Set();
-  static #dc = /* @__PURE__ */ new WeakMap();
+  #_a = null;
+  #sc = /* @__PURE__ */ new Map();
+  #Kh = null;
+  #st = null;
+  #Et = null;
+  #rc = null;
+  #ac = /* @__PURE__ */ new Map();
+  static #_ = 0;
+  static #oc = 0;
+  static #lc = null;
+  static #hc = /* @__PURE__ */ new Set();
+  static #cc = false;
+  static #dc = /* @__PURE__ */ new Set();
+  static #uc = /* @__PURE__ */ new WeakMap();
   constructor({ filterFactory: t2 = null, pageColors: e2 = null, pageIndex: i2, textLayer: n2 = null }) {
     this.pageIndex = i2;
-    this.#nt = t2;
-    this.#At = e2;
+    this.#st = t2;
+    this.#Et = e2;
     if (n2) {
-      const t3 = _DrawLayer.#dc.get(n2);
+      const t3 = _DrawLayer.#uc.get(n2);
       if (t3?.selectionDiv) {
         t3.selectionDiv.remove();
-        _DrawLayer.#lc.delete(t3.selectionDiv);
+        _DrawLayer.#hc.delete(t3.selectionDiv);
       }
-      _DrawLayer.#dc.set(n2, { drawLayer: this });
-      _DrawLayer.#cc.add(n2);
-      this.#qh = n2;
-      this.#sc = new MutationObserver((t4) => {
-        if (this.#Ta && this.#qh?.isConnected && _DrawLayer.#uc()) {
+      _DrawLayer.#uc.set(n2, { drawLayer: this });
+      _DrawLayer.#dc.add(n2);
+      this.#Kh = n2;
+      this.#rc = new MutationObserver((t4) => {
+        if (this.#_a && this.#Kh?.isConnected && _DrawLayer.#pc()) {
           for (const { addedNodes: e3 } of t4) for (const t5 of e3) if (t5.nodeType === Node.ELEMENT_NODE && t5.classList.contains("endOfContent")) {
             _DrawLayer.#Ut();
             return;
           }
         }
       });
-      this.#sc.observe(n2, { childList: true });
-      if (null === _DrawLayer.#oc) {
-        _DrawLayer.#oc = new AbortController();
-        const { signal: t4 } = _DrawLayer.#oc;
+      this.#rc.observe(n2, { childList: true });
+      if (null === _DrawLayer.#lc) {
+        _DrawLayer.#lc = new AbortController();
+        const { signal: t4 } = _DrawLayer.#lc;
         document.addEventListener("selectionchange", _DrawLayer.#Ut.bind(_DrawLayer), { signal: t4 });
         document.addEventListener("pointerdown", () => {
-          _DrawLayer.#hc = true;
+          _DrawLayer.#cc = true;
         }, { signal: t4 });
         document.addEventListener("pointerup", () => {
-          _DrawLayer.#hc = false;
+          _DrawLayer.#cc = false;
         }, { signal: t4 });
         window.addEventListener("blur", () => {
-          _DrawLayer.#hc = false;
+          _DrawLayer.#cc = false;
         }, { signal: t4 });
       }
     }
   }
   setParent(t2) {
-    if (this.#Ta) {
-      if (this.#Ta !== t2) {
-        if (this.#nc.size > 0) for (const e2 of this.#nc.values()) {
+    if (this.#_a) {
+      if (this.#_a !== t2) {
+        if (this.#sc.size > 0) for (const e2 of this.#sc.values()) {
           e2.remove();
           t2.append(e2);
         }
-        this.#Ta = t2;
+        this.#_a = t2;
       }
     } else {
-      this.#Ta = t2;
-      this.#qh?.isConnected && _DrawLayer.#uc() && _DrawLayer.#Ut();
+      this.#_a = t2;
+      this.#Kh?.isConnected && _DrawLayer.#pc() && _DrawLayer.#Ut();
     }
   }
-  static #pc(t2) {
-    const e2 = this.#dc.get(t2);
+  static #gc(t2) {
+    const e2 = this.#uc.get(t2);
     if (e2?.selectionDiv) {
       e2.selectionDiv.remove();
-      this.#lc.delete(e2.selectionDiv);
+      this.#hc.delete(e2.selectionDiv);
       e2.selectionDiv = null;
       e2.path = null;
     }
   }
-  static #uc() {
+  static #pc() {
     const t2 = document.getSelection();
     return !!t2 && !t2.isCollapsed;
   }
-  static #gc() {
-    return [...this.#cc].filter((t2) => t2.isConnected).sort(compareTextLayers);
+  static #mc() {
+    return this.#dc.keys().filter((t2) => t2.isConnected).toArray().sort(compareTextLayers);
   }
   static #Ut() {
     const t2 = document.getSelection();
     if (!t2 || t2.isCollapsed) {
-      for (const t3 of this.#lc) t3.remove();
-      this.#lc.clear();
+      for (const t3 of this.#hc) t3.remove();
+      this.#hc.clear();
       return;
     }
-    const e2 = /* @__PURE__ */ new WeakMap(), i2 = this.#gc(), n2 = [];
+    const e2 = /* @__PURE__ */ new WeakMap(), i2 = this.#mc(), n2 = [];
     for (let e3 = 0, s3 = t2.rangeCount; e3 < s3; e3++) {
       const s4 = t2.getRangeAt(e3);
       if (s4.collapsed) continue;
       let { startContainer: r2, startOffset: a2, endContainer: o2, endOffset: l2 } = s4, h2 = getTextLayer(r2), c2 = getTextLayer(o2);
       const d2 = null === h2, u2 = null === c2;
-      if (this.#hc && d2 !== u2) return;
+      if (this.#cc && d2 !== u2) return;
       if (1 === t2.rangeCount) {
         const { anchorNode: e4, anchorOffset: i3, focusNode: n3, focusOffset: s5 } = t2, d3 = getTextLayer(e4), u3 = getTextLayer(n3), p3 = isPointBefore(e4, i3, n3, s5);
         if (d3 && u3 && null !== p3) if (p3) {
@@ -20677,9 +20741,9 @@ var DrawLayer = class _DrawLayer {
       else n2.push([s4, h2]);
     }
     const s2 = new Set(n2.map((t3) => t3[1]));
-    for (const t3 of this.#cc) s2.has(t3) || this.#pc(t3);
+    for (const t3 of this.#dc) s2.has(t3) || this.#gc(t3);
     for (const [t3, i3] of n2) {
-      const n3 = _DrawLayer.#dc.get(i3);
+      const n3 = _DrawLayer.#uc.get(i3);
       if (!n3) continue;
       let s3 = e2.get(i3);
       if (!s3) {
@@ -20696,11 +20760,11 @@ var DrawLayer = class _DrawLayer {
       const a2 = n3.drawLayer;
       let o2 = n3.selectionDiv, l2 = n3.path;
       if (!o2) {
-        const t4 = "clip_selection_" + _DrawLayer.#ac++;
+        const t4 = "clip_selection_" + _DrawLayer.#oc++;
         o2 = document.createElement("div");
         o2.className = "selection";
         o2.style.clipPath = `url(#${t4})`;
-        const e3 = a2.#nt?.createSelectionStyle(a2.#At);
+        const e3 = a2.#st?.createSelectionStyle(a2.#Et);
         if (e3) for (const [t5, i5] of Object.entries(e3)) o2.style.setProperty(t5, i5);
         const i4 = _DrawLayer._svgFactory.create(1, 1, true);
         i4.setAttribute("aria-hidden", "true");
@@ -20716,9 +20780,9 @@ var DrawLayer = class _DrawLayer {
         n3.path = l2;
         n3.selectionDiv = o2;
       }
-      if (!o2.parentNode && a2.#Ta) {
-        a2.#Ta.append(o2);
-        this.#lc.add(o2);
+      if (!o2.parentNode && a2.#_a) {
+        a2.#_a.append(o2);
+        this.#hc.add(o2);
       }
       l2.setAttribute("d", r2.join(" "));
     }
@@ -20726,20 +20790,20 @@ var DrawLayer = class _DrawLayer {
   static get _svgFactory() {
     return shadow(this, "_svgFactory", new DOMSVGFactory());
   }
-  static #mc(t2, [e2, i2, n2, s2]) {
+  static #fc(t2, [e2, i2, n2, s2]) {
     const { style: r2 } = t2;
     r2.top = 100 * i2 + "%";
     r2.left = 100 * e2 + "%";
     r2.width = 100 * n2 + "%";
     r2.height = 100 * s2 + "%";
   }
-  #fc() {
+  #bc() {
     const t2 = _DrawLayer._svgFactory.create(1, 1, true);
-    this.#Ta.append(t2);
+    this.#_a.append(t2);
     t2.setAttribute("aria-hidden", "true");
     return t2;
   }
-  #bc(t2, e2) {
+  #yc(t2, e2) {
     const i2 = _DrawLayer._svgFactory.createElement("clipPath");
     t2.append(i2);
     const n2 = `clip_${e2}`;
@@ -20751,27 +20815,27 @@ var DrawLayer = class _DrawLayer {
     s2.classList.add("clip");
     return n2;
   }
-  #yc(t2, e2) {
+  #vc(t2, e2) {
     for (const [i2, n2] of Object.entries(e2)) null === n2 ? t2.removeAttribute(i2) : t2.setAttribute(i2, n2);
   }
   draw(t2, e2 = false, i2 = false) {
-    const n2 = _DrawLayer.#T++, s2 = this.#fc(), r2 = _DrawLayer._svgFactory.createElement("defs");
+    const n2 = _DrawLayer.#_++, s2 = this.#bc(), r2 = _DrawLayer._svgFactory.createElement("defs");
     s2.append(r2);
     const a2 = _DrawLayer._svgFactory.createElement("path");
     r2.append(a2);
     const o2 = `path_${n2}`;
     a2.setAttribute("id", o2);
     a2.setAttribute("vector-effect", "non-scaling-stroke");
-    e2 && this.#rc.set(n2, a2);
-    const l2 = i2 ? this.#bc(r2, o2) : null, h2 = _DrawLayer._svgFactory.createElement("use");
+    e2 && this.#ac.set(n2, a2);
+    const l2 = i2 ? this.#yc(r2, o2) : null, h2 = _DrawLayer._svgFactory.createElement("use");
     s2.append(h2);
     h2.setAttribute("href", `#${o2}`);
     this.updateProperties(s2, t2);
-    this.#nc.set(n2, s2);
+    this.#sc.set(n2, s2);
     return { id: n2, clipPathId: `url(#${l2})` };
   }
   drawOutline(t2, e2) {
-    const i2 = _DrawLayer.#T++, n2 = this.#fc(), s2 = _DrawLayer._svgFactory.createElement("defs");
+    const i2 = _DrawLayer.#_++, n2 = this.#bc(), s2 = _DrawLayer._svgFactory.createElement("defs");
     n2.append(s2);
     const r2 = _DrawLayer._svgFactory.createElement("path");
     s2.append(r2);
@@ -20807,65 +20871,65 @@ var DrawLayer = class _DrawLayer {
     l2.classList.add("mainOutline");
     h2.classList.add("secondaryOutline");
     this.updateProperties(n2, t2);
-    this.#nc.set(i2, n2);
+    this.#sc.set(i2, n2);
     return i2;
   }
   finalizeDraw(t2, e2) {
-    this.#rc.delete(t2);
+    this.#ac.delete(t2);
     this.updateProperties(t2, e2);
   }
   updateProperties(t2, e2) {
     if (!e2) return;
-    const { root: i2, bbox: n2, rootClass: s2, path: r2 } = e2, a2 = "number" == typeof t2 ? this.#nc.get(t2) : t2;
+    const { root: i2, bbox: n2, rootClass: s2, path: r2 } = e2, a2 = "number" == typeof t2 ? this.#sc.get(t2) : t2;
     if (a2) {
-      i2 && this.#yc(a2, i2);
-      n2 && _DrawLayer.#mc(a2, n2);
+      i2 && this.#vc(a2, i2);
+      n2 && _DrawLayer.#fc(a2, n2);
       if (s2) {
         const { classList: t3 } = a2;
         for (const [e3, i3] of Object.entries(s2)) t3.toggle(e3, i3);
       }
       if (r2) {
         const t3 = a2.firstElementChild.firstElementChild;
-        this.#yc(t3, r2);
+        this.#vc(t3, r2);
       }
     }
   }
   updateParent(t2, e2) {
     if (e2 === this) return;
-    const i2 = this.#nc.get(t2);
+    const i2 = this.#sc.get(t2);
     if (i2) {
-      e2.#Ta.append(i2);
-      this.#nc.delete(t2);
-      e2.#nc.set(t2, i2);
+      e2.#_a.append(i2);
+      this.#sc.delete(t2);
+      e2.#sc.set(t2, i2);
     }
   }
   remove(t2) {
-    this.#rc.delete(t2);
-    if (null !== this.#Ta) {
-      this.#nc.get(t2).remove();
-      this.#nc.delete(t2);
+    this.#ac.delete(t2);
+    if (null !== this.#_a) {
+      this.#sc.get(t2).remove();
+      this.#sc.delete(t2);
     }
   }
   destroy() {
-    this.#Ta = null;
-    for (const t2 of this.#nc.values()) t2.remove();
-    this.#nc.clear();
-    this.#rc.clear();
-    this.#sc?.disconnect();
-    this.#sc = null;
-    if (this.#qh) {
-      const t2 = _DrawLayer.#dc.get(this.#qh);
+    this.#_a = null;
+    for (const t2 of this.#sc.values()) t2.remove();
+    this.#sc.clear();
+    this.#ac.clear();
+    this.#rc?.disconnect();
+    this.#rc = null;
+    if (this.#Kh) {
+      const t2 = _DrawLayer.#uc.get(this.#Kh);
       if (t2?.drawLayer === this) {
-        _DrawLayer.#pc(this.#qh);
-        _DrawLayer.#dc.delete(this.#qh);
-        _DrawLayer.#cc.delete(this.#qh);
-        if (0 === _DrawLayer.#cc.size) {
-          _DrawLayer.#oc?.abort();
-          _DrawLayer.#oc = null;
-          _DrawLayer.#hc = false;
+        _DrawLayer.#gc(this.#Kh);
+        _DrawLayer.#uc.delete(this.#Kh);
+        _DrawLayer.#dc.delete(this.#Kh);
+        if (0 === _DrawLayer.#dc.size) {
+          _DrawLayer.#lc?.abort();
+          _DrawLayer.#lc = null;
+          _DrawLayer.#cc = false;
         }
       }
-      this.#qh = null;
+      this.#Kh = null;
     }
   }
 };
@@ -20873,39 +20937,39 @@ function percentage(t2) {
   return `${(100 * t2).toFixed(2)}%`;
 }
 var TextLayerImages = class _TextLayerImages {
-  #vc = [];
-  #wc = /* @__PURE__ */ new Map();
-  #xc = null;
-  #Ac = 0;
+  #wc = [];
+  #xc = /* @__PURE__ */ new Map();
+  #Ac = null;
+  #Ec = 0;
+  #Zs = 0;
   #Qs = 0;
-  #Js = 0;
-  static #Ec = null;
+  static #Cc = null;
   constructor(t2, e2, i2, n2) {
-    this.#Ac = t2;
-    this.#vc = e2;
-    this.#Qs = i2.rawDims.pageWidth;
-    this.#Js = i2.rawDims.pageHeight;
-    this.#xc = n2;
+    this.#Ec = t2;
+    this.#wc = e2;
+    this.#Zs = i2.rawDims.pageWidth;
+    this.#Qs = i2.rawDims.pageHeight;
+    this.#Ac = n2;
   }
   render() {
     const t2 = document.createElement("div");
     t2.className = "textLayerImages";
-    for (let e2 = 0; e2 < this.#vc.length; e2 += 6) {
-      const i2 = this.#Cc(this.#vc.subarray(e2, e2 + 6));
+    for (let e2 = 0; e2 < this.#wc.length; e2 += 6) {
+      const i2 = this.#Sc(this.#wc.subarray(e2, e2 + 6));
       i2 && t2.append(i2);
     }
     t2.addEventListener("contextmenu", (t3) => {
       if (!(t3.target instanceof HTMLCanvasElement)) return;
-      const e2 = t3.target, i2 = this.#wc.get(e2);
+      const e2 = t3.target, i2 = this.#xc.get(e2);
       if (!i2) return;
-      const n2 = _TextLayerImages.#Ec?.deref();
+      const n2 = _TextLayerImages.#Cc?.deref();
       if (n2 === e2) return;
       if (n2) {
         n2.width = 0;
         n2.height = 0;
       }
-      _TextLayerImages.#Ec = new WeakRef(e2);
-      const { inverseTransform: s2, x1: r2, y1: a2, width: o2, height: l2 } = i2, h2 = this.#xc(), c2 = Math.ceil(r2 * h2.width), d2 = Math.ceil(a2 * h2.height), u2 = Math.floor((r2 + o2 / this.#Qs) * h2.width), p2 = Math.floor((a2 + l2 / this.#Js) * h2.height);
+      _TextLayerImages.#Cc = new WeakRef(e2);
+      const { inverseTransform: s2, x1: r2, y1: a2, width: o2, height: l2 } = i2, h2 = this.#Ac(), c2 = Math.ceil(r2 * h2.width), d2 = Math.ceil(a2 * h2.height), u2 = Math.floor((r2 + o2 / this.#Zs) * h2.width), p2 = Math.floor((a2 + l2 / this.#Qs) * h2.height);
       e2.width = u2 - c2;
       e2.height = p2 - d2;
       const g2 = e2.getContext("2d");
@@ -20915,20 +20979,20 @@ var TextLayerImages = class _TextLayerImages {
     });
     return t2;
   }
-  #Cc([t2, e2, i2, n2, s2, r2]) {
-    const a2 = Math.hypot((s2 - t2) * this.#Qs, (r2 - e2) * this.#Js), o2 = Math.hypot((i2 - t2) * this.#Qs, (n2 - e2) * this.#Js);
-    if (a2 < this.#Ac || o2 < this.#Ac) return null;
-    const l2 = [(s2 - t2) * this.#Qs / a2, (r2 - e2) * this.#Js / a2, (i2 - t2) * this.#Qs / o2, (n2 - e2) * this.#Js / o2, 0, 0], h2 = Util.inverseTransform(l2), c2 = document.createElement("canvas");
+  #Sc([t2, e2, i2, n2, s2, r2]) {
+    const a2 = Math.hypot((s2 - t2) * this.#Zs, (r2 - e2) * this.#Qs), o2 = Math.hypot((i2 - t2) * this.#Zs, (n2 - e2) * this.#Qs);
+    if (a2 < this.#Ec || o2 < this.#Ec) return null;
+    const l2 = [(s2 - t2) * this.#Zs / a2, (r2 - e2) * this.#Qs / a2, (i2 - t2) * this.#Zs / o2, (n2 - e2) * this.#Qs / o2, 0, 0], h2 = Util.inverseTransform(l2), c2 = document.createElement("canvas");
     c2.className = "textLayerImagePlaceholder";
     c2.width = 0;
     c2.height = 0;
-    Object.assign(c2.style, { opacity: 0, position: "absolute", left: percentage(t2), top: percentage(e2), width: percentage(a2 / this.#Qs), height: percentage(o2 / this.#Js), transformOrigin: "0% 0%", transform: `matrix(${l2.join(",")})` });
-    this.#wc.set(c2, { inverseTransform: h2, width: a2, height: o2, x1: t2, y1: e2 });
+    Object.assign(c2.style, { opacity: 0, position: "absolute", left: percentage(t2), top: percentage(e2), width: percentage(a2 / this.#Zs), height: percentage(o2 / this.#Qs), transformOrigin: "0% 0%", transform: `matrix(${l2.join(",")})` });
+    this.#xc.set(c2, { inverseTransform: h2, width: a2, height: o2, x1: t2, y1: e2 });
     return c2;
   }
 };
 globalThis._pdfjsTestingUtils = { HighlightOutliner };
-globalThis.pdfjsLib = { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType: w, AnnotationEditorType: v, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode: f, AnnotationType: M, applyOpacity, build: Ht, ColorPicker, createValidAbsoluteUrl, CSSConstants, DOMSVGFactory, DrawLayer, FeatureTest, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, GlobalWorkerOptions, ImageKind: k, InvalidPDFException, isDataScheme, isPdfFile, isValidExplicitDest: pt, makeArr, makeMap, makeObj, MathClamp, noContextMenu, normalizeUnicode, OPS: L, OutputScale, PasswordException, PasswordResponses: j, PDFDataRangeTransport, PDFDateString, PDFWorker, PermissionFlag: x, PixelsPerInch, RenderingCancelledException, renderRichText, ResponseException, setLayerDimensions, shadow, SignatureExtractor, stopEvent, SupportedImageMimeTypes: K, TextLayer, TextLayerImages, TouchManager, updateUrlHash, Util, VerbosityLevel: B, version: Ut, XfaLayer };
+globalThis.pdfjsLib = { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType: v, AnnotationEditorType: y, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode: m, AnnotationType: k, applyOpacity, build: zt, ColorPicker, createValidAbsoluteUrl, CSSConstants, DOMSVGFactory, DrawLayer, FeatureTest, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, GlobalWorkerOptions, ImageKind: _, InvalidPDFException, isDataScheme, isPdfFile, isValidExplicitDest: gt, makeArr, makeMap, makeObj, makeSet, MathClamp, noContextMenu, normalizeUnicode, OPS: B, OutputScale, PasswordException, PasswordResponses: G, PDFDataRangeTransport, PDFDateString, PDFWorker, PermissionFlag: w, PixelsPerInch, RenderingCancelledException, renderRichText, ResponseException, setLayerDimensions, shadow, SignatureExtractor, stopEvent, SupportedImageMimeTypes: X, TextLayer, TextLayerImages, TouchManager, updateUrlHash, Util, VerbosityLevel: R, version: Ht, XfaLayer };
 
 // frontend/src/pdf-preview.js
 var PDF_PREVIEW_MAX_PAGES = 1e3;
@@ -20937,7 +21001,9 @@ var PDF_PREVIEW_MAX_DECODED_IMAGE_PIXELS = 12e6;
 var PDF_PREVIEW_MAX_DECODED_CANVAS_BYTES = PDF_PREVIEW_MAX_DECODED_IMAGE_PIXELS * 4;
 var PDF_PREVIEW_MIN_SCALE = 0.35;
 var PDF_PREVIEW_MAX_SCALE = 3;
-GlobalWorkerOptions.workerSrc = new URL("./codex-bridge-pdf-worker.js?v=6.1.200", import.meta.url).href;
+var pdfWorkerUrl = new URL("./codex-bridge-pdf-worker.js", import.meta.url);
+pdfWorkerUrl.searchParams.set("v", Ht);
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl.href;
 function boundedScale(value) {
   return Math.min(PDF_PREVIEW_MAX_SCALE, Math.max(PDF_PREVIEW_MIN_SCALE, value));
 }
