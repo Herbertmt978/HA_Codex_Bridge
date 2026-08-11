@@ -8,7 +8,7 @@ All notable App changes are recorded here.
   restored App-owned Bridge, Codex-home, workspace, and token ownership before
   the service drops privileges, while retaining descriptor-relative no-follow
   checks and fixed private modes.
-- Refreshes the exact Alpine Chromium package to `150.0.7871.181-r0` so the
+- Refreshes the exact Alpine Chromium package to `151.0.7922.108-r0` so the
   reproducible `amd64` App image remains buildable. The browser capability
   remains disabled pending its separate isolation and egress proof.
 - Keeps full target cold-restore and retained-image recovery acceptance as

@@ -21,8 +21,8 @@ RUN set -eux; \
     # connection-time-egress proof exists, but the worker image itself must
     # use one reproducible Chromium package rather than a moving repository
     # default.  The exact Alpine 3.24 package is amd64-only by App contract.
-    apk add --no-cache chromium=150.0.7871.181-r0; \
-    test "$(/usr/bin/chromium-browser --product-version)" = "150.0.7871.181"; \
+    apk add --no-cache chromium=151.0.7922.108-r0; \
+    test "$(/usr/bin/chromium-browser --product-version)" = "151.0.7922.108"; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
     python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \

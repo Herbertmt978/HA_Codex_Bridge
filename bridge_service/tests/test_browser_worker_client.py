@@ -200,7 +200,7 @@ def test_attestation_shape_is_exact_and_not_created_by_the_client(tmp_path: Path
             {
                 "schema_version": 1,
                 "worker_protocol": BROWSER_WORKER_PROTOCOL,
-                "chromium_version": "150.0.7871.181",
+                "chromium_version": "151.0.7922.108",
                 "chromium_sandbox": "ready",
                 "egress_boundary": "ready",
             }
