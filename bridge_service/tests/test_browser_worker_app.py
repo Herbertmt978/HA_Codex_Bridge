@@ -77,5 +77,5 @@ def test_app_startup_keeps_the_browser_worker_inert_without_a_separate_proof() -
 def test_dockerfile_pins_the_alpine_chromium_package_and_verifies_its_version() -> None:
     dockerfile = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "apk add --no-cache chromium=150.0.7871.181-r0" in dockerfile
-    assert 'test "$(/usr/bin/chromium-browser --product-version)" = "150.0.7871.181"' in dockerfile
+    assert "apk add --no-cache chromium=151.0.7922.108-r0" in dockerfile
+    assert 'test "$(/usr/bin/chromium-browser --product-version)" = "151.0.7922.108"' in dockerfile
