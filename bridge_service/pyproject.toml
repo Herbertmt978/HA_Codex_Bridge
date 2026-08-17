@@ -4,9 +4,9 @@ version = "0.7.6"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.141.1",
-  "uvicorn>=0.52.0",
+  "uvicorn>=0.52.3",
   "pydantic>=2.13.4",
-  "pydantic-settings>=2.14.2",
+  "pydantic-settings>=2.15.0",
   "httpx>=0.28.1",
   "jsonschema>=4.26.0,<5",
   "python-multipart>=0.0.32",
@@ -25,7 +25,7 @@ test = [
 ]
 
 [build-system]
-requires = ["setuptools>=83.0.0"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
