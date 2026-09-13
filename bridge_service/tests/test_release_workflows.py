@@ -602,12 +602,8 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         "versions": [">=9.1.0"],
     }
     assert root_pip.get("ignore") == [
-        {
-            "dependency-name": "pytest-homeassistant-custom-component",
-            "versions": [">=0.13.358"],
-        },
         expected_pytest_ignore,
-    ], "the Home Assistant test fixture must remain compatible with 2026.8.3"
+    ], "Home Assistant and its test fixture must be allowed to update together"
 
     assert not any(
         isinstance(item, dict)

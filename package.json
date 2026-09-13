@@ -6,7 +6,7 @@
   "description": "Build and security checks for the Home Assistant Codex Bridge panel.",
   "license": "MIT",
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "build": "npm run build:panel && npm run build:pdf-worker",

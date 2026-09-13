@@ -51,6 +51,11 @@ checkout, local image, or unit test is not release evidence.
 
 ## Local checks
 
+Use Node.js 24 for panel development, matching CI. The supported development
+versions are Node.js 22.x from 22.13, 24.x, and 26+ as declared in `package.json`;
+Node.js 20 and 25 are not supported by the current Vitest 5 toolchain.
+This tooling requirement does not change the installed Home Assistant runtime.
+
 ```powershell
 # Home Assistant Integration (run in Linux, matching CI)
 python -m pytest -q

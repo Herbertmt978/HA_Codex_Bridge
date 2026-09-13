@@ -628,16 +628,16 @@ function getInfoCenterViewModel({
 
 // node_modules/pdfjs-dist/legacy/build/pdf.min.mjs
 var t = { 9306(t2, e2, i2) {
-  var n2 = i2(4901), s2 = i2(6823), r2 = TypeError;
+  var n2 = i2(4901), r2 = i2(6823), s2 = TypeError;
   t2.exports = function(t3) {
     if (n2(t3)) return t3;
-    throw new r2(s2(t3) + " is not a function");
+    throw new s2(r2(t3) + " is not a function");
   };
 }, 3506(t2, e2, i2) {
-  var n2 = i2(3925), s2 = String, r2 = TypeError;
+  var n2 = i2(3925), r2 = String, s2 = TypeError;
   t2.exports = function(t3) {
     if (n2(t3)) return t3;
-    throw new r2("Can't set " + s2(t3) + " as a prototype");
+    throw new s2("Can't set " + r2(t3) + " as a prototype");
   };
 }, 7080(t2, e2, i2) {
   var n2 = i2(4402).has;
@@ -652,10 +652,10 @@ var t = { 9306(t2, e2, i2) {
     throw new e2("Argument is not a string");
   };
 }, 4328(t2, e2, i2) {
-  var n2 = i2(4995), s2 = new n2.WeakMap(), r2 = n2.set, a2 = n2.remove;
+  var n2 = i2(4995), r2 = new n2.WeakMap(), s2 = n2.set, a2 = n2.remove;
   t2.exports = function(t3) {
-    r2(s2, t3, 1);
-    a2(s2, t3);
+    s2(r2, t3, 1);
+    a2(r2, t3);
     return t3;
   };
 }, 6557(t2, e2, i2) {
@@ -665,47 +665,47 @@ var t = { 9306(t2, e2, i2) {
     return t3;
   };
 }, 6469(t2, e2, i2) {
-  var n2 = i2(8227), s2 = i2(2360), r2 = i2(4913).f, a2 = n2("unscopables"), o2 = Array.prototype;
-  void 0 === o2[a2] && r2(o2, a2, { configurable: true, value: s2(null) });
+  var n2 = i2(8227), r2 = i2(2360), s2 = i2(4913).f, a2 = n2("unscopables"), o2 = Array.prototype;
+  void 0 === o2[a2] && s2(o2, a2, { configurable: true, value: r2(null) });
   t2.exports = function(t3) {
     o2[a2][t3] = true;
   };
 }, 679(t2, e2, i2) {
-  var n2 = i2(1625), s2 = TypeError;
+  var n2 = i2(1625), r2 = TypeError;
   t2.exports = function(t3, e3) {
     if (n2(e3, t3)) return t3;
-    throw new s2("Incorrect invocation");
+    throw new r2("Incorrect invocation");
   };
 }, 3972(t2, e2, i2) {
-  var n2 = i2(34), s2 = String, r2 = TypeError;
+  var n2 = i2(34), r2 = String, s2 = TypeError;
   t2.exports = function(t3) {
     if (void 0 === t3 || n2(t3)) return t3;
-    throw new r2(s2(t3) + " is not an object or undefined");
+    throw new s2(r2(t3) + " is not an object or undefined");
   };
 }, 8551(t2, e2, i2) {
-  var n2 = i2(34), s2 = String, r2 = TypeError;
+  var n2 = i2(34), r2 = String, s2 = TypeError;
   t2.exports = function(t3) {
     if (n2(t3)) return t3;
-    throw new r2(s2(t3) + " is not an object");
+    throw new s2(r2(t3) + " is not an object");
   };
 }, 4154(t2, e2, i2) {
-  var n2 = i2(6955), s2 = TypeError;
+  var n2 = i2(6955), r2 = TypeError;
   t2.exports = function(t3) {
     if ("Uint8Array" === n2(t3)) return t3;
-    throw new s2("Argument is not an Uint8Array");
+    throw new r2("Argument is not an Uint8Array");
   };
 }, 7811(t2) {
   t2.exports = "undefined" != typeof ArrayBuffer && "undefined" != typeof DataView;
 }, 7394(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(6706), r2 = i2(2195), a2 = n2.ArrayBuffer, o2 = n2.TypeError;
-  t2.exports = a2 && s2(a2.prototype, "byteLength", "get") || function(t3) {
-    if ("ArrayBuffer" !== r2(t3)) throw new o2("ArrayBuffer expected");
+  var n2 = i2(4576), r2 = i2(6706), s2 = i2(2195), a2 = n2.ArrayBuffer, o2 = n2.TypeError;
+  t2.exports = a2 && r2(a2.prototype, "byteLength", "get") || function(t3) {
+    if ("ArrayBuffer" !== s2(t3)) throw new o2("ArrayBuffer expected");
     return t3.byteLength;
   };
 }, 3238(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(7811), r2 = i2(7394), a2 = n2.DataView;
+  var n2 = i2(4576), r2 = i2(7811), s2 = i2(7394), a2 = n2.DataView;
   t2.exports = function(t3) {
-    if (!s2 || 0 !== r2(t3)) return false;
+    if (!r2 || 0 !== s2(t3)) return false;
     try {
       new a2(t3);
       return false;
@@ -714,40 +714,40 @@ var t = { 9306(t2, e2, i2) {
     }
   };
 }, 5169(t2, e2, i2) {
-  var n2 = i2(3238), s2 = TypeError;
+  var n2 = i2(3238), r2 = TypeError;
   t2.exports = function(t3) {
-    if (n2(t3)) throw new s2("ArrayBuffer is detached");
+    if (n2(t3)) throw new r2("ArrayBuffer is detached");
     return t3;
   };
 }, 4644(t2, e2, i2) {
-  var n2, s2, r2, a2 = i2(7811), o2 = i2(3724), l2 = i2(4576), h2 = i2(4901), c2 = i2(34), d2 = i2(9297), u2 = i2(6955), p2 = i2(6823), g2 = i2(6699), m2 = i2(6840), f2 = i2(2106), b2 = i2(1625), y2 = i2(2787), v2 = i2(2967), w2 = i2(8227), x2 = i2(3392), A2 = i2(1181), E2 = A2.enforce, C2 = A2.get, S2 = l2.Int8Array, T2 = S2 && S2.prototype, _2 = l2.Uint8ClampedArray, k2 = _2 && _2.prototype, D2 = S2 && y2(S2), M2 = T2 && y2(T2), P2 = Object.prototype, I2 = l2.TypeError, O2 = w2("toStringTag"), R2 = x2("TYPED_ARRAY_TAG"), B2 = "TypedArrayConstructor", L2 = a2 && !!v2 && "Opera" !== u2(l2.opera), N2 = false, U2 = { Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1, Int16Array: 2, Uint16Array: 2, Int32Array: 4, Uint32Array: 4, Float32Array: 4, Float64Array: 8 }, H2 = { BigInt64Array: 8, BigUint64Array: 8 }, getTypedArrayConstructor = function(t3) {
+  var n2, r2, s2, a2 = i2(7811), o2 = i2(3724), l2 = i2(4576), c2 = i2(4901), h2 = i2(34), d2 = i2(9297), u2 = i2(6955), p2 = i2(6823), g2 = i2(6699), m2 = i2(6840), f2 = i2(2106), b2 = i2(1625), y2 = i2(2787), v2 = i2(2967), w2 = i2(8227), A2 = i2(3392), x2 = i2(1181), E2 = x2.enforce, C2 = x2.get, S2 = l2.Int8Array, T2 = S2 && S2.prototype, _2 = l2.Uint8ClampedArray, k2 = _2 && _2.prototype, D2 = S2 && y2(S2), P2 = T2 && y2(T2), M2 = Object.prototype, I2 = l2.TypeError, O2 = w2("toStringTag"), R2 = A2("TYPED_ARRAY_TAG"), B2 = "TypedArrayConstructor", L2 = a2 && !!v2 && "Opera" !== u2(l2.opera), N2 = false, U2 = { Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1, Int16Array: 2, Uint16Array: 2, Int32Array: 4, Uint32Array: 4, Float32Array: 4, Float64Array: 8 }, H2 = { BigInt64Array: 8, BigUint64Array: 8 }, getTypedArrayConstructor = function(t3) {
     var e3 = y2(t3);
-    if (c2(e3)) {
+    if (h2(e3)) {
       var i3 = C2(e3);
       return i3 && d2(i3, B2) ? i3[B2] : getTypedArrayConstructor(e3);
     }
   }, isTypedArray = function(t3) {
-    if (!c2(t3)) return false;
+    if (!h2(t3)) return false;
     var e3 = u2(t3);
     return d2(U2, e3) || d2(H2, e3);
   };
-  for (n2 in U2) (r2 = (s2 = l2[n2]) && s2.prototype) ? E2(r2)[B2] = s2 : L2 = false;
-  for (n2 in H2) (r2 = (s2 = l2[n2]) && s2.prototype) && (E2(r2)[B2] = s2);
-  if (!L2 || !h2(D2) || D2 === Function.prototype) {
+  for (n2 in U2) (s2 = (r2 = l2[n2]) && r2.prototype) ? E2(s2)[B2] = r2 : L2 = false;
+  for (n2 in H2) (s2 = (r2 = l2[n2]) && r2.prototype) && (E2(s2)[B2] = r2);
+  if (!L2 || !c2(D2) || D2 === Function.prototype) {
     D2 = function TypedArray() {
       throw new I2("Incorrect invocation");
     };
     if (L2) for (n2 in U2) l2[n2] && v2(l2[n2], D2);
   }
-  if (!L2 || !M2 || M2 === P2) {
-    M2 = D2.prototype;
-    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2].prototype, M2);
+  if (!L2 || !P2 || P2 === M2) {
+    P2 = D2.prototype;
+    if (L2) for (n2 in U2) l2[n2] && v2(l2[n2].prototype, P2);
   }
-  L2 && y2(k2) !== M2 && v2(k2, M2);
-  if (o2 && !d2(M2, O2)) {
+  L2 && y2(k2) !== P2 && v2(k2, P2);
+  if (o2 && !d2(P2, O2)) {
     N2 = true;
-    f2(M2, O2, { configurable: true, get: function() {
-      return c2(this) ? this[R2] : void 0;
+    f2(P2, O2, { configurable: true, get: function() {
+      return h2(this) ? this[R2] : void 0;
     } });
     for (n2 in U2) l2[n2] && g2(l2[n2].prototype, R2, n2);
   }
@@ -755,30 +755,30 @@ var t = { 9306(t2, e2, i2) {
     if (isTypedArray(t3)) return t3;
     throw new I2("Target is not a typed array");
   }, aTypedArrayConstructor: function(t3) {
-    if (h2(t3) && (!v2 || b2(D2, t3))) return t3;
+    if (c2(t3) && (!v2 || b2(D2, t3))) return t3;
     throw new I2(p2(t3) + " is not a typed array constructor");
   }, exportTypedArrayMethod: function(t3, e3, i3, n3) {
     if (o2) {
-      if (i3) for (var s3 in U2) {
-        var r3 = l2[s3];
-        if (r3 && d2(r3.prototype, t3)) try {
-          delete r3.prototype[t3];
+      if (i3) for (var r3 in U2) {
+        var s3 = l2[r3];
+        if (s3 && d2(s3.prototype, t3)) try {
+          delete s3.prototype[t3];
         } catch (i4) {
           try {
-            r3.prototype[t3] = e3;
+            s3.prototype[t3] = e3;
           } catch (t4) {
           }
         }
       }
-      M2[t3] && !i3 || m2(M2, t3, i3 ? e3 : L2 && T2[t3] || e3, n3);
+      P2[t3] && !i3 || m2(P2, t3, i3 ? e3 : L2 && T2[t3] || e3, n3);
     }
   }, exportTypedArrayStaticMethod: function(t3, e3, i3) {
-    var n3, s3;
+    var n3, r3;
     if (o2) {
       if (v2) {
         if (i3) {
-          for (n3 in U2) if ((s3 = l2[n3]) && d2(s3, t3)) try {
-            delete s3[t3];
+          for (n3 in U2) if ((r3 = l2[n3]) && d2(r3, t3)) try {
+            delete r3[t3];
           } catch (t4) {
           }
         }
@@ -788,34 +788,34 @@ var t = { 9306(t2, e2, i2) {
         } catch (t4) {
         }
       }
-      for (n3 in U2) !(s3 = l2[n3]) || s3[t3] && !i3 || m2(s3, t3, e3);
+      for (n3 in U2) !(r3 = l2[n3]) || r3[t3] && !i3 || m2(r3, t3, e3);
     }
   }, getTypedArrayConstructor, isView: function isView(t3) {
-    if (!c2(t3)) return false;
+    if (!h2(t3)) return false;
     var e3 = u2(t3);
     return "DataView" === e3 || d2(U2, e3) || d2(H2, e3);
-  }, isTypedArray, TypedArray: D2, TypedArrayPrototype: M2 };
+  }, isTypedArray, TypedArray: D2, TypedArrayPrototype: P2 };
 }, 5370(t2, e2, i2) {
   var n2 = i2(6198);
   t2.exports = function(t3, e3, i3) {
-    for (var s2 = 0, r2 = arguments.length > 2 ? i3 : n2(e3), a2 = new t3(r2); r2 > s2; ) a2[s2] = e3[s2++];
+    for (var r2 = 0, s2 = arguments.length > 2 ? i3 : n2(e3), a2 = new t3(s2); s2 > r2; ) a2[r2] = e3[r2++];
     return a2;
   };
 }, 9617(t2, e2, i2) {
-  var n2 = i2(5397), s2 = i2(5610), r2 = i2(6198), createMethod = function(t3) {
+  var n2 = i2(5397), r2 = i2(5610), s2 = i2(6198), createMethod = function(t3) {
     return function(e3, i3, a2) {
-      var o2 = n2(e3), l2 = r2(o2);
+      var o2 = n2(e3), l2 = s2(o2);
       if (0 === l2) return !t3 && -1;
-      var h2, c2 = s2(a2, l2);
+      var c2, h2 = r2(a2, l2);
       if (t3 && i3 != i3) {
-        for (; l2 > c2; ) if ((h2 = o2[c2++]) != h2) return true;
-      } else for (; l2 > c2; c2++) if ((t3 || c2 in o2) && o2[c2] === i3) return t3 || c2 || 0;
+        for (; l2 > h2; ) if ((c2 = o2[h2++]) != c2) return true;
+      } else for (; l2 > h2; h2++) if ((t3 || h2 in o2) && o2[h2] === i3) return t3 || h2 || 0;
       return !t3 && -1;
     };
   };
   t2.exports = { includes: createMethod(true), indexOf: createMethod(false) };
 }, 4527(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(4376), r2 = TypeError, a2 = Object.getOwnPropertyDescriptor, o2 = n2 && !(function() {
+  var n2 = i2(3724), r2 = i2(4376), s2 = TypeError, a2 = Object.getOwnPropertyDescriptor, o2 = n2 && !(function() {
     if (void 0 !== this) return true;
     try {
       Object.defineProperty([], "length", { writable: false }).length = 1;
@@ -824,7 +824,7 @@ var t = { 9306(t2, e2, i2) {
     }
   })();
   t2.exports = o2 ? function(t3, e3) {
-    if (s2(t3) && !a2(t3, "length").writable) throw new r2("Cannot set read only .length");
+    if (r2(t3) && !a2(t3, "length").writable) throw new s2("Cannot set read only .length");
     return t3.length = e3;
   } : function(t3, e3) {
     return t3.length = e3;
@@ -839,38 +839,38 @@ var t = { 9306(t2, e2, i2) {
   };
   t2.exports = { i2c: i2, c2i: inverse(i2), i2cUrl: n2, c2iUrl: inverse(n2) };
 }, 6319(t2, e2, i2) {
-  var n2 = i2(8551), s2 = i2(9539);
-  t2.exports = function(t3, e3, i3, r2) {
+  var n2 = i2(8551), r2 = i2(9539);
+  t2.exports = function(t3, e3, i3, s2) {
     try {
-      return r2 ? e3(n2(i3)[0], i3[1]) : e3(i3);
+      return s2 ? e3(n2(i3)[0], i3[1]) : e3(i3);
     } catch (e4) {
-      s2(t3, "throw", e4);
+      r2(t3, "throw", e4);
     }
   };
 }, 2195(t2, e2, i2) {
-  var n2 = i2(9504), s2 = n2({}.toString), r2 = n2("".slice);
+  var n2 = i2(9504), r2 = n2({}.toString), s2 = n2("".slice);
   t2.exports = function(t3) {
-    return r2(s2(t3), 8, -1);
+    return s2(r2(t3), 8, -1);
   };
 }, 6955(t2, e2, i2) {
-  var n2 = i2(2140), s2 = i2(4901), r2 = i2(2195), a2 = i2(8227)("toStringTag"), o2 = Object, l2 = "Arguments" === r2(/* @__PURE__ */ (function() {
+  var n2 = i2(2140), r2 = i2(4901), s2 = i2(2195), a2 = i2(8227)("toStringTag"), o2 = Object, l2 = "Arguments" === s2(/* @__PURE__ */ (function() {
     return arguments;
   })());
-  t2.exports = n2 ? r2 : function(t3) {
+  t2.exports = n2 ? s2 : function(t3) {
     var e3, i3, n3;
     return void 0 === t3 ? "Undefined" : null === t3 ? "Null" : "string" == typeof (i3 = (function(t4, e4) {
       try {
         return t4[e4];
       } catch (t5) {
       }
-    })(e3 = o2(t3), a2)) ? i3 : l2 ? r2(e3) : "Object" === (n3 = r2(e3)) && s2(e3.callee) ? "Arguments" : n3;
+    })(e3 = o2(t3), a2)) ? i3 : l2 ? s2(e3) : "Object" === (n3 = s2(e3)) && r2(e3.callee) ? "Arguments" : n3;
   };
 }, 7740(t2, e2, i2) {
-  var n2 = i2(9297), s2 = i2(5031), r2 = i2(7347), a2 = i2(4913);
+  var n2 = i2(9297), r2 = i2(5031), s2 = i2(7347), a2 = i2(4913);
   t2.exports = function(t3, e3, i3) {
-    for (var o2 = s2(e3), l2 = a2.f, h2 = r2.f, c2 = 0; c2 < o2.length; c2++) {
-      var d2 = o2[c2];
-      n2(t3, d2) || i3 && n2(i3, d2) || l2(t3, d2, h2(e3, d2));
+    for (var o2 = r2(e3), l2 = a2.f, c2 = s2.f, h2 = 0; h2 < o2.length; h2++) {
+      var d2 = o2[h2];
+      n2(t3, d2) || i3 && n2(i3, d2) || l2(t3, d2, c2(e3, d2));
     }
   };
 }, 2211(t2, e2, i2) {
@@ -886,9 +886,9 @@ var t = { 9306(t2, e2, i2) {
     return { value: t3, done: e2 };
   };
 }, 6699(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(4913), r2 = i2(6980);
+  var n2 = i2(3724), r2 = i2(4913), s2 = i2(6980);
   t2.exports = n2 ? function(t3, e3, i3) {
-    return s2.f(t3, e3, r2(1, i3));
+    return r2.f(t3, e3, s2(1, i3));
   } : function(t3, e3, i3) {
     t3[e3] = i3;
     return t3;
@@ -898,44 +898,44 @@ var t = { 9306(t2, e2, i2) {
     return { enumerable: !(1 & t3), configurable: !(2 & t3), writable: !(4 & t3), value: e2 };
   };
 }, 4659(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(4913), r2 = i2(6980);
+  var n2 = i2(3724), r2 = i2(4913), s2 = i2(6980);
   t2.exports = function(t3, e3, i3) {
-    n2 ? s2.f(t3, e3, r2(0, i3)) : t3[e3] = i3;
+    n2 ? r2.f(t3, e3, s2(0, i3)) : t3[e3] = i3;
   };
 }, 2106(t2, e2, i2) {
-  var n2 = i2(283), s2 = i2(4913);
+  var n2 = i2(283), r2 = i2(4913);
   t2.exports = function(t3, e3, i3) {
     i3.get && n2(i3.get, e3, { getter: true });
     i3.set && n2(i3.set, e3, { setter: true });
-    return s2.f(t3, e3, i3);
+    return r2.f(t3, e3, i3);
   };
 }, 6840(t2, e2, i2) {
-  var n2 = i2(4901), s2 = i2(4913), r2 = i2(283), a2 = i2(9433);
+  var n2 = i2(4901), r2 = i2(4913), s2 = i2(283), a2 = i2(9433);
   t2.exports = function(t3, e3, i3, o2) {
     o2 || (o2 = {});
-    var l2 = o2.enumerable, h2 = void 0 !== o2.name ? o2.name : e3;
-    n2(i3) && r2(i3, h2, o2);
+    var l2 = o2.enumerable, c2 = void 0 !== o2.name ? o2.name : e3;
+    n2(i3) && s2(i3, c2, o2);
     if (o2.global) l2 ? t3[e3] = i3 : a2(e3, i3);
     else {
       try {
         o2.unsafe ? t3[e3] && (l2 = true) : delete t3[e3];
       } catch (t4) {
       }
-      l2 ? t3[e3] = i3 : s2.f(t3, e3, { value: i3, enumerable: false, configurable: !o2.nonConfigurable, writable: !o2.nonWritable });
+      l2 ? t3[e3] = i3 : r2.f(t3, e3, { value: i3, enumerable: false, configurable: !o2.nonConfigurable, writable: !o2.nonWritable });
     }
     return t3;
   };
 }, 6279(t2, e2, i2) {
   var n2 = i2(6840);
   t2.exports = function(t3, e3, i3) {
-    for (var s2 in e3) n2(t3, s2, e3[s2], i3);
+    for (var r2 in e3) n2(t3, r2, e3[r2], i3);
     return t3;
   };
 }, 9433(t2, e2, i2) {
-  var n2 = i2(4576), s2 = Object.defineProperty;
+  var n2 = i2(4576), r2 = Object.defineProperty;
   t2.exports = function(t3, e3) {
     try {
-      s2(n2, t3, { value: e3, configurable: true, writable: true });
+      r2(n2, t3, { value: e3, configurable: true, writable: true });
     } catch (i3) {
       n2[t3] = e3;
     }
@@ -949,9 +949,9 @@ var t = { 9306(t2, e2, i2) {
     } })[1];
   });
 }, 4055(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(34), r2 = n2.document, a2 = s2(r2) && s2(r2.createElement);
+  var n2 = i2(4576), r2 = i2(34), s2 = n2.document, a2 = r2(s2) && r2(s2.createElement);
   t2.exports = function(t3) {
-    return a2 ? r2.createElement(t3) : {};
+    return a2 ? s2.createElement(t3) : {};
   };
 }, 6837(t2) {
   var e2 = TypeError;
@@ -964,32 +964,32 @@ var t = { 9306(t2, e2, i2) {
 }, 8727(t2) {
   t2.exports = ["constructor", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "toLocaleString", "toString", "valueOf"];
 }, 2839(t2, e2, i2) {
-  var n2 = i2(4576).navigator, s2 = n2 && n2.userAgent;
-  t2.exports = s2 ? String(s2) : "";
+  var n2 = i2(4576).navigator, r2 = n2 && n2.userAgent;
+  t2.exports = r2 ? String(r2) : "";
 }, 9519(t2, e2, i2) {
-  var n2, s2, r2 = i2(4576), a2 = i2(2839), o2 = r2.process, l2 = r2.Deno, h2 = o2 && o2.versions || l2 && l2.version, c2 = h2 && h2.v8;
-  c2 && (s2 = (n2 = c2.split("."))[0] > 0 && n2[0] < 4 ? 1 : +(n2[0] + n2[1]));
-  !s2 && a2 && (!(n2 = a2.match(/Edge\/(\d+)/)) || n2[1] >= 74) && (n2 = a2.match(/Chrome\/(\d+)/)) && (s2 = +n2[1]);
-  t2.exports = s2;
+  var n2, r2, s2 = i2(4576), a2 = i2(2839), o2 = s2.process, l2 = s2.Deno, c2 = o2 && o2.versions || l2 && l2.version, h2 = c2 && c2.v8;
+  h2 && (r2 = (n2 = h2.split("."))[0] > 0 && n2[0] < 4 ? 1 : +(n2[0] + n2[1]));
+  !r2 && a2 && (!(n2 = a2.match(/Edge\/(\d+)/)) || n2[1] >= 74) && (n2 = a2.match(/Chrome\/(\d+)/)) && (r2 = +n2[1]);
+  t2.exports = r2;
 }, 6193(t2, e2, i2) {
-  var n2 = i2(9504), s2 = Error, r2 = n2("".replace), a2 = String(new s2("zxcasd").stack), o2 = /\n\s*at [^:]*:[^\n]*/, l2 = o2.test(a2);
+  var n2 = i2(9504), r2 = Error, s2 = n2("".replace), a2 = String(new r2("zxcasd").stack), o2 = /\n\s*at [^:]*:[^\n]*/, l2 = o2.test(a2);
   t2.exports = function(t3, e3) {
-    if (l2 && "string" == typeof t3 && !s2.prepareStackTrace) for (; e3--; ) t3 = r2(t3, o2, "");
+    if (l2 && "string" == typeof t3 && !r2.prepareStackTrace) for (; e3--; ) t3 = s2(t3, o2, "");
     return t3;
   };
 }, 6518(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(7347).f, r2 = i2(6699), a2 = i2(6840), o2 = i2(9433), l2 = i2(7740), h2 = i2(2796);
+  var n2 = i2(4576), r2 = i2(7347).f, s2 = i2(6699), a2 = i2(6840), o2 = i2(9433), l2 = i2(7740), c2 = i2(2796);
   t2.exports = function(t3, e3) {
-    var i3, c2, d2, u2, p2, g2 = t3.target, m2 = t3.global, f2 = t3.stat;
-    if (i3 = m2 ? n2 : f2 ? n2[g2] || o2(g2, {}) : n2[g2] && n2[g2].prototype) for (c2 in e3) {
-      u2 = e3[c2];
-      d2 = t3.dontCallGetSet ? (p2 = s2(i3, c2)) && p2.value : i3[c2];
-      if (!h2(m2 ? c2 : g2 + (f2 ? "." : "#") + c2, t3.forced) && void 0 !== d2) {
+    var i3, h2, d2, u2, p2, g2 = t3.target, m2 = t3.global, f2 = t3.stat;
+    if (i3 = m2 ? n2 : f2 ? n2[g2] || o2(g2, {}) : n2[g2] && n2[g2].prototype) for (h2 in e3) {
+      u2 = e3[h2];
+      d2 = t3.dontCallGetSet ? (p2 = r2(i3, h2)) && p2.value : i3[h2];
+      if (!c2(m2 ? h2 : g2 + (f2 ? "." : "#") + h2, t3.forced) && void 0 !== d2) {
         if (typeof u2 == typeof d2) continue;
         l2(u2, d2);
       }
-      (t3.sham || d2 && d2.sham) && r2(u2, "sham", true);
-      a2(i3, c2, u2, t3);
+      (t3.sham || d2 && d2.sham) && s2(u2, "sham", true);
+      a2(i3, h2, u2, t3);
     }
   };
 }, 9039(t2) {
@@ -1001,15 +1001,15 @@ var t = { 9306(t2, e2, i2) {
     }
   };
 }, 8745(t2, e2, i2) {
-  var n2 = i2(616), s2 = Function.prototype, r2 = s2.apply, a2 = s2.call;
-  t2.exports = "object" == typeof Reflect && Reflect.apply || (n2 ? a2.bind(r2) : function() {
-    return a2.apply(r2, arguments);
+  var n2 = i2(616), r2 = Function.prototype, s2 = r2.apply, a2 = r2.call;
+  t2.exports = "object" == typeof Reflect && Reflect.apply || (n2 ? a2.bind(s2) : function() {
+    return a2.apply(s2, arguments);
   });
 }, 6080(t2, e2, i2) {
-  var n2 = i2(7476), s2 = i2(9306), r2 = i2(616), a2 = n2(n2.bind);
+  var n2 = i2(7476), r2 = i2(9306), s2 = i2(616), a2 = n2(n2.bind);
   t2.exports = function(t3, e3) {
-    s2(t3);
-    return void 0 === e3 ? t3 : r2 ? a2(t3, e3) : function() {
+    r2(t3);
+    return void 0 === e3 ? t3 : s2 ? a2(t3, e3) : function() {
       return t3.apply(e3, arguments);
     };
   };
@@ -1021,32 +1021,32 @@ var t = { 9306(t2, e2, i2) {
     return "function" != typeof t3 || t3.hasOwnProperty("prototype");
   });
 }, 9565(t2, e2, i2) {
-  var n2 = i2(616), s2 = Function.prototype.call;
-  t2.exports = n2 ? s2.bind(s2) : function() {
-    return s2.apply(s2, arguments);
+  var n2 = i2(616), r2 = Function.prototype.call;
+  t2.exports = n2 ? r2.bind(r2) : function() {
+    return r2.apply(r2, arguments);
   };
 }, 350(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(9297), r2 = Function.prototype, a2 = n2 && Object.getOwnPropertyDescriptor, o2 = s2(r2, "name"), l2 = o2 && "something" === function something() {
-  }.name, h2 = o2 && (!n2 || n2 && a2(r2, "name").configurable);
-  t2.exports = { EXISTS: o2, PROPER: l2, CONFIGURABLE: h2 };
+  var n2 = i2(3724), r2 = i2(9297), s2 = Function.prototype, a2 = n2 && Object.getOwnPropertyDescriptor, o2 = r2(s2, "name"), l2 = o2 && "something" === function something() {
+  }.name, c2 = o2 && (!n2 || n2 && a2(s2, "name").configurable);
+  t2.exports = { EXISTS: o2, PROPER: l2, CONFIGURABLE: c2 };
 }, 6706(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(9306);
+  var n2 = i2(9504), r2 = i2(9306);
   t2.exports = function(t3, e3, i3) {
     try {
-      return n2(s2(Object.getOwnPropertyDescriptor(t3, e3)[i3]));
+      return n2(r2(Object.getOwnPropertyDescriptor(t3, e3)[i3]));
     } catch (t4) {
     }
   };
 }, 7476(t2, e2, i2) {
-  var n2 = i2(2195), s2 = i2(9504);
+  var n2 = i2(2195), r2 = i2(9504);
   t2.exports = function(t3) {
-    if ("Function" === n2(t3)) return s2(t3);
+    if ("Function" === n2(t3)) return r2(t3);
   };
 }, 9504(t2, e2, i2) {
-  var n2 = i2(616), s2 = Function.prototype, r2 = s2.call, a2 = n2 && s2.bind.bind(r2, r2);
+  var n2 = i2(616), r2 = Function.prototype, s2 = r2.call, a2 = n2 && r2.bind.bind(s2, s2);
   t2.exports = n2 ? a2 : function(t3) {
     return function() {
-      return r2.apply(t3, arguments);
+      return s2.apply(t3, arguments);
     };
   };
 }, 944(t2) {
@@ -1057,9 +1057,9 @@ var t = { 9306(t2, e2, i2) {
     throw new e2("Incorrect `alphabet` option");
   };
 }, 7751(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(4901);
+  var n2 = i2(4576), r2 = i2(4901);
   t2.exports = function(t3, e3) {
-    return arguments.length < 2 ? (i3 = n2[t3], s2(i3) ? i3 : void 0) : n2[t3] && n2[t3][e3];
+    return arguments.length < 2 ? (i3 = n2[t3], r2(i3) ? i3 : void 0) : n2[t3] && n2[t3][e3];
     var i3;
   };
 }, 1767(t2) {
@@ -1067,48 +1067,48 @@ var t = { 9306(t2, e2, i2) {
     return { iterator: t3, next: t3.next, done: false };
   };
 }, 8646(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(8551), r2 = i2(1767), a2 = i2(851);
+  var n2 = i2(9565), r2 = i2(8551), s2 = i2(1767), a2 = i2(3085);
   t2.exports = function(t3, e3) {
-    e3 && "string" == typeof t3 || s2(t3);
+    e3 && "string" == typeof t3 || r2(t3);
     var i3 = a2(t3);
-    return r2(s2(void 0 !== i3 ? n2(i3, t3) : t3));
+    return s2(r2(void 0 !== i3 ? n2(i3, t3) : t3));
   };
-}, 851(t2, e2, i2) {
-  var n2 = i2(6955), s2 = i2(5966), r2 = i2(4117), a2 = i2(6269), o2 = i2(8227)("iterator");
-  t2.exports = function(t3) {
-    if (!r2(t3)) return s2(t3, o2) || s2(t3, "@@iterator") || a2[n2(t3)];
-  };
-}, 81(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(9306), r2 = i2(8551), a2 = i2(6823), o2 = i2(851), l2 = TypeError;
+}, 8563(t2, e2, i2) {
+  var n2 = i2(9565), r2 = i2(4901), s2 = i2(8551), a2 = i2(6823), o2 = i2(3085), l2 = TypeError;
   t2.exports = function(t3, e3) {
     var i3 = arguments.length < 2 ? o2(t3) : e3;
-    if (s2(i3)) return r2(n2(i3, t3));
+    if (r2(i3)) return s2(n2(i3, t3));
     throw new l2(a2(t3) + " is not iterable");
   };
+}, 3085(t2, e2, i2) {
+  var n2 = i2(2195), r2 = i2(4117), s2 = i2(5966), a2 = i2(8227)("iterator"), o2 = Array.prototype;
+  t2.exports = function(t3) {
+    if (!r2(t3)) return s2(t3, a2) || s2(t3, "@@iterator") || ("Arguments" === n2(t3) ? o2[a2] : void 0);
+  };
 }, 5966(t2, e2, i2) {
-  var n2 = i2(9306), s2 = i2(4117);
+  var n2 = i2(9306), r2 = i2(4117);
   t2.exports = function(t3, e3) {
     var i3 = t3[e3];
-    return s2(i3) ? void 0 : n2(i3);
+    return r2(i3) ? void 0 : n2(i3);
   };
 }, 3789(t2, e2, i2) {
-  var n2 = i2(9306), s2 = i2(8551), r2 = i2(9565), a2 = i2(1291), o2 = i2(1767), l2 = "Invalid size", h2 = RangeError, c2 = TypeError, d2 = Math.max, SetRecord = function(t3, e3) {
+  var n2 = i2(9306), r2 = i2(8551), s2 = i2(9565), a2 = i2(1291), o2 = i2(1767), l2 = "Invalid size", c2 = RangeError, h2 = TypeError, d2 = Math.max, SetRecord = function(t3, e3) {
     this.set = t3;
     this.size = d2(e3, 0);
     this.has = n2(t3.has);
     this.keys = n2(t3.keys);
   };
   SetRecord.prototype = { getIterator: function() {
-    return o2(s2(r2(this.keys, this.set)));
+    return o2(r2(s2(this.keys, this.set)));
   }, includes: function(t3) {
-    return r2(this.has, this.set, t3);
+    return s2(this.has, this.set, t3);
   } };
   t2.exports = function(t3) {
-    s2(t3);
+    r2(t3);
     var e3 = +t3.size;
-    if (e3 != e3) throw new c2(l2);
+    if (e3 != e3) throw new h2(l2);
     var i3 = a2(e3);
-    if (i3 < 0) throw new h2(l2);
+    if (i3 < 0) throw new c2(l2);
     return new SetRecord(t3, i3);
   };
 }, 4576(t2) {
@@ -1119,9 +1119,9 @@ var t = { 9306(t2, e2, i2) {
     return this;
   })() || Function("return this")();
 }, 9297(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(8981), r2 = n2({}.hasOwnProperty);
+  var n2 = i2(9504), r2 = i2(8981), s2 = n2({}.hasOwnProperty);
   t2.exports = Object.hasOwn || function hasOwn(t3, e3) {
-    return r2(s2(t3), e3);
+    return s2(r2(t3), e3);
   };
 }, 421(t2) {
   t2.exports = {};
@@ -1129,34 +1129,34 @@ var t = { 9306(t2, e2, i2) {
   var n2 = i2(7751);
   t2.exports = n2("document", "documentElement");
 }, 5917(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(9039), r2 = i2(4055);
-  t2.exports = !n2 && !s2(function() {
-    return 7 !== Object.defineProperty(r2("div"), "a", { get: function() {
+  var n2 = i2(3724), r2 = i2(9039), s2 = i2(4055);
+  t2.exports = !n2 && !r2(function() {
+    return 7 !== Object.defineProperty(s2("div"), "a", { get: function() {
       return 7;
     } }).a;
   });
 }, 7055(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(9039), r2 = i2(2195), a2 = Object, o2 = n2("".split);
-  t2.exports = s2(function() {
+  var n2 = i2(9504), r2 = i2(9039), s2 = i2(2195), a2 = Object, o2 = n2("".split);
+  t2.exports = r2(function() {
     return !a2("z").propertyIsEnumerable(0);
   }) ? function(t3) {
-    return "String" === r2(t3) ? o2(t3, "") : a2(t3);
+    return "String" === s2(t3) ? o2(t3, "") : a2(t3);
   } : a2;
 }, 3167(t2, e2, i2) {
-  var n2 = i2(4901), s2 = i2(34), r2 = i2(2967);
+  var n2 = i2(4901), r2 = i2(34), s2 = i2(2967);
   t2.exports = function(t3, e3, i3) {
     var a2, o2;
-    r2 && n2(a2 = e3.constructor) && a2 !== i3 && s2(o2 = a2.prototype) && o2 !== i3.prototype && r2(t3, o2);
+    s2 && n2(a2 = e3.constructor) && a2 !== i3 && r2(o2 = a2.prototype) && o2 !== i3.prototype && s2(t3, o2);
     return t3;
   };
 }, 3706(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(4901), r2 = i2(7629), a2 = n2(Function.toString);
-  s2(r2.inspectSource) || (r2.inspectSource = function(t3) {
+  var n2 = i2(9504), r2 = i2(4901), s2 = i2(7629), a2 = n2(Function.toString);
+  r2(s2.inspectSource) || (s2.inspectSource = function(t3) {
     return a2(t3);
   });
-  t2.exports = r2.inspectSource;
+  t2.exports = s2.inspectSource;
 }, 1181(t2, e2, i2) {
-  var n2, s2, r2, a2 = i2(8622), o2 = i2(4576), l2 = i2(34), h2 = i2(6699), c2 = i2(9297), d2 = i2(7629), u2 = i2(6119), p2 = i2(421), g2 = "Object already initialized", m2 = o2.TypeError, f2 = o2.WeakMap;
+  var n2, r2, s2, a2 = i2(8622), o2 = i2(4576), l2 = i2(34), c2 = i2(6699), h2 = i2(9297), d2 = i2(7629), u2 = i2(6119), p2 = i2(421), g2 = "Object already initialized", m2 = o2.TypeError, f2 = o2.WeakMap;
   if (a2 || d2.state) {
     var b2 = d2.state || (d2.state = new f2());
     b2.get = b2.get;
@@ -1168,41 +1168,41 @@ var t = { 9306(t2, e2, i2) {
       b2.set(t3, e3);
       return e3;
     };
-    s2 = function(t3) {
+    r2 = function(t3) {
       return b2.get(t3) || {};
     };
-    r2 = function(t3) {
+    s2 = function(t3) {
       return b2.has(t3);
     };
   } else {
     var y2 = u2("state");
     p2[y2] = true;
     n2 = function(t3, e3) {
-      if (c2(t3, y2)) throw new m2(g2);
+      if (h2(t3, y2)) throw new m2(g2);
       e3.facade = t3;
-      h2(t3, y2, e3);
+      c2(t3, y2, e3);
       return e3;
     };
-    s2 = function(t3) {
-      return c2(t3, y2) ? t3[y2] : {};
-    };
     r2 = function(t3) {
-      return c2(t3, y2);
+      return h2(t3, y2) ? t3[y2] : {};
+    };
+    s2 = function(t3) {
+      return h2(t3, y2);
     };
   }
-  t2.exports = { set: n2, get: s2, has: r2, enforce: function(t3) {
-    return r2(t3) ? s2(t3) : n2(t3, {});
+  t2.exports = { set: n2, get: r2, has: s2, enforce: function(t3) {
+    return s2(t3) ? r2(t3) : n2(t3, {});
   }, getterFor: function(t3) {
     return function(e3) {
       var i3;
-      if (!l2(e3) || (i3 = s2(e3)).type !== t3) throw new m2("Incompatible receiver, " + t3 + " required");
+      if (!l2(e3) || (i3 = r2(e3)).type !== t3) throw new m2("Incompatible receiver, " + t3 + " required");
       return i3;
     };
   } };
 }, 4209(t2, e2, i2) {
-  var n2 = i2(8227), s2 = i2(6269), r2 = n2("iterator"), a2 = Array.prototype;
+  var n2 = i2(8227), r2 = i2(6269), s2 = n2("iterator"), a2 = Array.prototype;
   t2.exports = function(t3) {
-    return void 0 !== t3 && (s2.Array === t3 || a2[r2] === t3);
+    return void 0 !== t3 && (r2.Array === t3 || a2[s2] === t3);
   };
 }, 4376(t2, e2, i2) {
   var n2 = i2(2195);
@@ -1223,12 +1223,12 @@ var t = { 9306(t2, e2, i2) {
     return "function" == typeof t3;
   };
 }, 2796(t2, e2, i2) {
-  var n2 = i2(9039), s2 = i2(4901), r2 = /#|\.prototype\./, isForced = function(t3, e3) {
+  var n2 = i2(9039), r2 = i2(4901), s2 = /#|\.prototype\./, isForced = function(t3, e3) {
     var i3 = o2[a2(t3)];
-    return i3 === h2 || i3 !== l2 && (s2(e3) ? n2(e3) : !!e3);
+    return i3 === c2 || i3 !== l2 && (r2(e3) ? n2(e3) : !!e3);
   }, a2 = isForced.normalize = function(t3) {
-    return String(t3).replace(r2, ".").toLowerCase();
-  }, o2 = isForced.data = {}, l2 = isForced.NATIVE = "N", h2 = isForced.POLYFILL = "P";
+    return String(t3).replace(s2, ".").toLowerCase();
+  }, o2 = isForced.data = {}, l2 = isForced.NATIVE = "N", c2 = isForced.POLYFILL = "P";
   t2.exports = isForced;
 }, 4117(t2) {
   t2.exports = function(t3) {
@@ -1247,39 +1247,39 @@ var t = { 9306(t2, e2, i2) {
 }, 6395(t2) {
   t2.exports = false;
 }, 5810(t2, e2, i2) {
-  var n2 = i2(34), s2 = i2(1181).get;
+  var n2 = i2(34), r2 = i2(1181).get;
   t2.exports = function isRawJSON(t3) {
     if (!n2(t3)) return false;
-    var e3 = s2(t3);
+    var e3 = r2(t3);
     return !!e3 && "RawJSON" === e3.type;
   };
 }, 757(t2, e2, i2) {
-  var n2 = i2(7751), s2 = i2(4901), r2 = i2(1625), a2 = i2(7040), o2 = Object;
+  var n2 = i2(7751), r2 = i2(4901), s2 = i2(1625), a2 = i2(7040), o2 = Object;
   t2.exports = a2 ? function(t3) {
     return "symbol" == typeof t3;
   } : function(t3) {
     var e3 = n2("Symbol");
-    return s2(e3) && r2(e3.prototype, o2(t3));
+    return r2(e3) && s2(e3.prototype, o2(t3));
   };
 }, 507(t2, e2, i2) {
   var n2 = i2(9565);
   t2.exports = function(t3, e3, i3) {
-    for (var s2, r2, a2 = i3 ? t3 : t3.iterator, o2 = t3.next; !(s2 = n2(o2, a2)).done; ) if (void 0 !== (r2 = e3(s2.value))) return r2;
+    for (var r2, s2, a2 = i3 ? t3 : t3.iterator, o2 = t3.next; !(r2 = n2(o2, a2)).done; ) if (void 0 !== (s2 = e3(r2.value))) return s2;
   };
 }, 2652(t2, e2, i2) {
-  var n2 = i2(6080), s2 = i2(9565), r2 = i2(8551), a2 = i2(6823), o2 = i2(4209), l2 = i2(6198), h2 = i2(1625), c2 = i2(81), d2 = i2(851), u2 = i2(9539), p2 = TypeError, Result = function(t3, e3) {
+  var n2 = i2(6080), r2 = i2(9565), s2 = i2(8551), a2 = i2(6823), o2 = i2(4209), l2 = i2(6198), c2 = i2(1625), h2 = i2(8563), d2 = i2(3085), u2 = i2(9539), p2 = TypeError, Result = function(t3, e3) {
     this.stopped = t3;
     this.result = e3;
   }, g2 = Result.prototype;
   t2.exports = function(t3, e3, i3) {
-    var m2, f2, b2, y2, v2, w2, x2, A2 = i3 && i3.that, E2 = !(!i3 || !i3.AS_ENTRIES), C2 = !(!i3 || !i3.IS_RECORD), S2 = !(!i3 || !i3.IS_ITERATOR), T2 = !(!i3 || !i3.INTERRUPTED), _2 = n2(e3, A2), stop = function(t4) {
+    var m2, f2, b2, y2, v2, w2, A2, x2 = i3 && i3.that, E2 = !(!i3 || !i3.AS_ENTRIES), C2 = !(!i3 || !i3.IS_RECORD), S2 = !(!i3 || !i3.IS_ITERATOR), T2 = !(!i3 || !i3.INTERRUPTED), _2 = n2(e3, x2), stop = function(t4) {
       var e4 = m2;
       m2 = void 0;
       e4 && u2(e4, "normal");
       return new Result(true, t4);
     }, callFn = function(t4) {
       if (E2) {
-        r2(t4);
+        s2(t4);
         return T2 ? _2(t4[0], t4[1], stop) : _2(t4[0], t4[1]);
       }
       return T2 ? _2(t4, stop) : _2(t4);
@@ -1289,29 +1289,33 @@ var t = { 9306(t2, e2, i2) {
     else {
       if (!(f2 = d2(t3))) throw new p2(a2(t3) + " is not iterable");
       if (o2(f2)) {
-        for (b2 = 0, y2 = l2(t3); y2 > b2; b2++) if ((v2 = callFn(t3[b2])) && h2(g2, v2)) return v2;
+        for (b2 = 0, y2 = l2(t3); y2 > b2; b2++) if ((v2 = callFn(t3[b2])) && c2(g2, v2)) return v2;
         return new Result(false);
       }
-      m2 = c2(t3, f2);
+      m2 = h2(t3, f2);
     }
     w2 = C2 ? t3.next : m2.next;
-    for (; !(x2 = s2(w2, m2)).done; ) {
-      var k2 = x2.value;
+    for (; !(A2 = r2(w2, m2)).done; ) {
+      var k2 = A2.value;
       try {
         v2 = callFn(k2);
       } catch (t4) {
         if (!m2) throw t4;
         u2(m2, "throw", t4);
       }
-      if ("object" == typeof v2 && v2 && h2(g2, v2)) return v2;
+      if ("object" == typeof v2 && v2 && c2(g2, v2)) return v2;
     }
     return new Result(false);
+  };
+}, 6859(t2) {
+  t2.exports = function(t3) {
+    t3.iterator = t3.next = t3.nextHandler = t3.mapper = t3.predicate = t3.inner = t3.iterables = t3.iters = t3.openIters = t3.padding = t3.finishResults = t3.buffer = null;
   };
 }, 1385(t2, e2, i2) {
   var n2 = i2(9539);
   t2.exports = function(t3, e3, i3) {
-    for (var s2 = t3.length - 1; s2 >= 0; s2--) if (void 0 !== t3[s2]) try {
-      i3 = n2(t3[s2].iterator, e3, i3);
+    for (var r2 = t3.length - 1; r2 >= 0; r2--) if (void 0 !== t3[r2]) try {
+      i3 = n2(t3[r2].iterator, e3, i3);
     } catch (t4) {
       e3 = "throw";
       i3 = t4;
@@ -1320,12 +1324,12 @@ var t = { 9306(t2, e2, i2) {
     return i3;
   };
 }, 9539(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(8551), r2 = i2(5966);
+  var n2 = i2(9565), r2 = i2(8551), s2 = i2(5966);
   t2.exports = function(t3, e3, i3) {
     var a2, o2;
-    s2(t3);
+    r2(t3);
     try {
-      if (!(a2 = r2(t3, "return"))) {
+      if (!(a2 = s2(t3, "return"))) {
         if ("throw" === e3) throw i3;
         return i3;
       }
@@ -1336,61 +1340,64 @@ var t = { 9306(t2, e2, i2) {
     }
     if ("throw" === e3) throw i3;
     if (o2) throw a2;
-    s2(a2);
+    r2(a2);
     return i3;
   };
 }, 9462(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(2360), r2 = i2(6699), a2 = i2(6279), o2 = i2(8227), l2 = i2(1181), h2 = i2(5966), c2 = i2(7657).IteratorPrototype, d2 = i2(2529), u2 = i2(9539), p2 = i2(1385), g2 = o2("toStringTag"), m2 = "IteratorHelper", f2 = "WrapForValidIterator", b2 = "normal", y2 = "throw", v2 = l2.set, createIteratorProxyPrototype = function(t3) {
-    var e3 = l2.getterFor(t3 ? f2 : m2);
-    return a2(s2(c2), { next: function next() {
+  var n2 = i2(9565), r2 = i2(2360), s2 = i2(6699), a2 = i2(6279), o2 = i2(8227), l2 = i2(1181), c2 = i2(5966), h2 = i2(7657).IteratorPrototype, d2 = i2(2529), u2 = i2(9539), p2 = i2(1385), g2 = i2(6859), m2 = o2("toStringTag"), f2 = "IteratorHelper", b2 = "WrapForValidIterator", y2 = "normal", v2 = "throw", w2 = l2.set, createIteratorProxyPrototype = function(t3) {
+    var e3 = l2.getterFor(t3 ? b2 : f2);
+    return a2(r2(h2), { next: function next() {
       var i3 = e3(this);
       if (t3) return i3.nextHandler();
       if (i3.done) return d2(void 0, true);
       try {
         var n3 = i3.nextHandler();
+        i3.done && g2(i3);
         return i3.returnHandlerResult ? n3 : d2(n3, i3.done);
       } catch (t4) {
         i3.done = true;
+        g2(i3);
         throw t4;
       }
     }, return: function() {
-      var i3 = e3(this), s3 = i3.iterator, r3 = i3.done;
+      var i3 = e3(this), r3 = i3.iterator, s3 = i3.inner, a3 = i3.openIters, o3 = i3.done;
       i3.done = true;
       if (t3) {
-        var a3 = h2(s3, "return");
-        return a3 ? n2(a3, s3) : d2(void 0, true);
+        var l3 = c2(r3, "return");
+        return l3 ? n2(l3, r3) : d2(void 0, true);
       }
-      if (r3) return d2(void 0, true);
-      if (i3.inner) try {
-        u2(i3.inner.iterator, b2);
+      g2(i3);
+      if (o3) return d2(void 0, true);
+      if (s3) try {
+        u2(s3.iterator, y2);
       } catch (t4) {
-        return u2(s3, y2, t4);
+        return u2(r3, v2, t4);
       }
-      if (i3.openIters) try {
-        p2(i3.openIters, b2);
+      if (a3) try {
+        p2(a3, y2);
       } catch (t4) {
-        if (s3) return u2(s3, y2, t4);
+        if (r3) return u2(r3, v2, t4);
         throw t4;
       }
-      s3 && u2(s3, b2);
+      r3 && u2(r3, y2);
       return d2(void 0, true);
     } });
-  }, w2 = createIteratorProxyPrototype(true), x2 = createIteratorProxyPrototype(false);
-  r2(x2, g2, "Iterator Helper");
+  }, A2 = createIteratorProxyPrototype(true), x2 = createIteratorProxyPrototype(false);
+  s2(x2, m2, "Iterator Helper");
   t2.exports = function(t3, e3, i3) {
-    var n3 = function Iterator2(n4, s3) {
-      if (s3) {
-        s3.iterator = n4.iterator;
-        s3.next = n4.next;
-      } else s3 = n4;
-      s3.type = e3 ? f2 : m2;
-      s3.returnHandlerResult = !!i3;
-      s3.nextHandler = t3;
-      s3.counter = 0;
-      s3.done = false;
-      v2(this, s3);
+    var n3 = function Iterator2(n4, r3) {
+      if (r3) {
+        r3.iterator = n4.iterator;
+        r3.next = n4.next;
+      } else r3 = n4;
+      r3.type = e3 ? b2 : f2;
+      r3.returnHandlerResult = !!i3;
+      r3.nextHandler = t3;
+      r3.counter = 0;
+      r3.done = false;
+      w2(this, r3);
     };
-    n3.prototype = e3 ? w2 : x2;
+    n3.prototype = e3 ? A2 : x2;
     return n3;
   };
 }, 684(t2) {
@@ -1405,9 +1412,9 @@ var t = { 9306(t2, e2, i2) {
 }, 4549(t2, e2, i2) {
   var n2 = i2(4576);
   t2.exports = function(t3, e3) {
-    var i3 = n2.Iterator, s2 = i3 && i3.prototype, r2 = s2 && s2[t3], a2 = false;
-    if (r2) try {
-      r2.call({ next: function() {
+    var i3 = n2.Iterator, r2 = i3 && i3.prototype, s2 = r2 && r2[t3], a2 = false;
+    if (s2) try {
+      s2.call({ next: function() {
         return { done: true };
       }, return: function() {
         a2 = true;
@@ -1415,28 +1422,28 @@ var t = { 9306(t2, e2, i2) {
     } catch (t4) {
       t4 instanceof e3 || (a2 = false);
     }
-    if (!a2) return r2;
+    if (!a2) return s2;
   };
 }, 7657(t2, e2, i2) {
-  var n2, s2, r2, a2 = i2(9039), o2 = i2(4901), l2 = i2(34), h2 = i2(2360), c2 = i2(2787), d2 = i2(6840), u2 = i2(8227), p2 = i2(6395), g2 = u2("iterator"), m2 = false;
-  [].keys && ("next" in (r2 = [].keys()) ? (s2 = c2(c2(r2))) !== Object.prototype && (n2 = s2) : m2 = true);
+  var n2, r2, s2, a2 = i2(9039), o2 = i2(4901), l2 = i2(34), c2 = i2(2360), h2 = i2(2787), d2 = i2(6840), u2 = i2(8227), p2 = i2(6395), g2 = u2("iterator"), m2 = false;
+  [].keys && ("next" in (s2 = [].keys()) ? (r2 = h2(h2(s2))) !== Object.prototype && (n2 = r2) : m2 = true);
   !l2(n2) || a2(function() {
     var t3 = {};
     return n2[g2].call(t3) !== t3;
-  }) ? n2 = {} : p2 && (n2 = h2(n2));
+  }) ? n2 = {} : p2 && (n2 = c2(n2));
   o2(n2[g2]) || d2(n2, g2, function() {
     return this;
   });
   t2.exports = { IteratorPrototype: n2, BUGGY_SAFARI_ITERATORS: m2 };
 }, 6269(t2) {
-  t2.exports = {};
+  t2.exports = Object.create ? /* @__PURE__ */ Object.create(null) : {};
 }, 6198(t2, e2, i2) {
   var n2 = i2(8014);
   t2.exports = function(t3) {
     return n2(t3.length);
   };
 }, 283(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(9039), r2 = i2(4901), a2 = i2(9297), o2 = i2(3724), l2 = i2(350).CONFIGURABLE, h2 = i2(3706), c2 = i2(1181), d2 = c2.enforce, u2 = c2.get, p2 = String, g2 = Object.defineProperty, m2 = n2("".slice), f2 = n2("".replace), b2 = n2([].join), y2 = o2 && !s2(function() {
+  var n2 = i2(9504), r2 = i2(9039), s2 = i2(4901), a2 = i2(9297), o2 = i2(3724), l2 = i2(350).CONFIGURABLE, c2 = i2(3706), h2 = i2(1181), d2 = h2.enforce, u2 = h2.get, p2 = String, g2 = Object.defineProperty, m2 = n2("".slice), f2 = n2("".replace), b2 = n2([].join), y2 = o2 && !r2(function() {
     return 8 !== g2(function() {
     }, "length", { value: 8 }).length;
   }), v2 = String(String).split("String"), w2 = t2.exports = function(t3, e3, i3) {
@@ -1454,11 +1461,11 @@ var t = { 9306(t2, e2, i2) {
     return t3;
   };
   Function.prototype.toString = w2(function toString() {
-    return r2(this) && u2(this).source || h2(this);
+    return s2(this) && u2(this).source || c2(this);
   }, "toString");
 }, 2248(t2, e2, i2) {
-  var n2 = i2(9504), s2 = Map.prototype;
-  t2.exports = { Map, set: n2(s2.set), get: n2(s2.get), has: n2(s2.has), remove: n2(s2.delete), proto: s2 };
+  var n2 = i2(9504), r2 = Map.prototype;
+  t2.exports = { Map, set: n2(r2.set), get: n2(r2.get), has: n2(r2.has), remove: n2(r2.delete), proto: r2 };
 }, 741(t2) {
   var e2 = Math.ceil, i2 = Math.floor;
   t2.exports = Math.trunc || function trunc(t3) {
@@ -1472,10 +1479,10 @@ var t = { 9306(t2, e2, i2) {
     return !JSON.isRawJSON(e3) || JSON.stringify(e3) !== t3;
   });
 }, 6043(t2, e2, i2) {
-  var n2 = i2(9306), s2 = TypeError, PromiseCapability = function(t3) {
+  var n2 = i2(9306), r2 = TypeError, PromiseCapability = function(t3) {
     var e3, i3;
     this.promise = new t3(function(t4, n3) {
-      if (void 0 !== e3 || void 0 !== i3) throw new s2("Bad Promise constructor");
+      if (void 0 !== e3 || void 0 !== i3) throw new r2("Bad Promise constructor");
       e3 = t4;
       i3 = n3;
     });
@@ -1497,7 +1504,7 @@ var t = { 9306(t2, e2, i2) {
     throw new e2("NaN is not allowed");
   };
 }, 2360(t2, e2, i2) {
-  var n2, s2 = i2(8551), r2 = i2(6801), a2 = i2(8727), o2 = i2(421), l2 = i2(397), h2 = i2(4055), c2 = i2(6119), d2 = "prototype", u2 = "script", p2 = c2("IE_PROTO"), EmptyConstructor = function() {
+  var n2, r2 = i2(8551), s2 = i2(6801), a2 = i2(8727), o2 = i2(421), l2 = i2(397), c2 = i2(4055), h2 = i2(6119), d2 = "prototype", u2 = "script", p2 = h2("IE_PROTO"), EmptyConstructor = function() {
   }, scriptTag = function(t3) {
     return "<" + u2 + ">" + t3 + "</" + u2 + ">";
   }, NullProtoObjectViaActiveX = function(t3) {
@@ -1512,7 +1519,7 @@ var t = { 9306(t2, e2, i2) {
     } catch (t4) {
     }
     NullProtoObject = "undefined" != typeof document ? document.domain && n2 ? NullProtoObjectViaActiveX(n2) : (function() {
-      var t4, e3 = h2("iframe"), i3 = "java" + u2 + ":";
+      var t4, e3 = c2("iframe"), i3 = "java" + u2 + ":";
       e3.style.display = "none";
       l2.appendChild(e3);
       e3.src = String(i3);
@@ -1528,40 +1535,40 @@ var t = { 9306(t2, e2, i2) {
   t2.exports = Object.create || function create(t3, e3) {
     var i3;
     if (null !== t3) {
-      EmptyConstructor[d2] = s2(t3);
+      EmptyConstructor[d2] = r2(t3);
       i3 = new EmptyConstructor();
       EmptyConstructor[d2] = null;
       i3[p2] = t3;
     } else i3 = NullProtoObject();
-    return void 0 === e3 ? i3 : r2.f(i3, e3);
+    return void 0 === e3 ? i3 : s2.f(i3, e3);
   };
 }, 6801(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(8686), r2 = i2(4913), a2 = i2(8551), o2 = i2(5397), l2 = i2(1072);
-  e2.f = n2 && !s2 ? Object.defineProperties : function defineProperties(t3, e3) {
+  var n2 = i2(3724), r2 = i2(8686), s2 = i2(4913), a2 = i2(8551), o2 = i2(5397), l2 = i2(1072);
+  e2.f = n2 && !r2 ? Object.defineProperties : function defineProperties(t3, e3) {
     a2(t3);
-    for (var i3, n3 = o2(e3), s3 = l2(e3), h2 = s3.length, c2 = 0; h2 > c2; ) r2.f(t3, i3 = s3[c2++], n3[i3]);
+    for (var i3, n3 = o2(e3), r3 = l2(e3), c2 = r3.length, h2 = 0; c2 > h2; ) s2.f(t3, i3 = r3[h2++], n3[i3]);
     return t3;
   };
 }, 4913(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(5917), r2 = i2(8686), a2 = i2(8551), o2 = i2(6969), l2 = TypeError, h2 = Object.defineProperty, c2 = Object.getOwnPropertyDescriptor, d2 = "enumerable", u2 = "configurable", p2 = "writable";
-  e2.f = n2 ? r2 ? function defineProperty(t3, e3, i3) {
+  var n2 = i2(3724), r2 = i2(5917), s2 = i2(8686), a2 = i2(8551), o2 = i2(6969), l2 = TypeError, c2 = Object.defineProperty, h2 = Object.getOwnPropertyDescriptor, d2 = "enumerable", u2 = "configurable", p2 = "writable";
+  e2.f = n2 ? s2 ? function defineProperty(t3, e3, i3) {
     a2(t3);
     e3 = o2(e3);
     a2(i3);
     if ("function" == typeof t3 && "prototype" === e3 && "value" in i3 && p2 in i3 && !i3[p2]) {
-      var n3 = c2(t3, e3);
+      var n3 = h2(t3, e3);
       if (n3 && n3[p2]) {
         t3[e3] = i3.value;
         i3 = { configurable: u2 in i3 ? i3[u2] : n3[u2], enumerable: d2 in i3 ? i3[d2] : n3[d2], writable: false };
       }
     }
-    return h2(t3, e3, i3);
-  } : h2 : function defineProperty(t3, e3, i3) {
+    return c2(t3, e3, i3);
+  } : c2 : function defineProperty(t3, e3, i3) {
     a2(t3);
     e3 = o2(e3);
     a2(i3);
-    if (s2) try {
-      return h2(t3, e3, i3);
+    if (r2) try {
+      return c2(t3, e3, i3);
     } catch (t4) {
     }
     if ("get" in i3 || "set" in i3) throw new l2("Accessors not supported");
@@ -1569,55 +1576,55 @@ var t = { 9306(t2, e2, i2) {
     return t3;
   };
 }, 7347(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(9565), r2 = i2(8773), a2 = i2(6980), o2 = i2(5397), l2 = i2(6969), h2 = i2(9297), c2 = i2(5917), d2 = Object.getOwnPropertyDescriptor;
+  var n2 = i2(3724), r2 = i2(9565), s2 = i2(8773), a2 = i2(6980), o2 = i2(5397), l2 = i2(6969), c2 = i2(9297), h2 = i2(5917), d2 = Object.getOwnPropertyDescriptor;
   e2.f = n2 ? d2 : function getOwnPropertyDescriptor(t3, e3) {
     t3 = o2(t3);
     e3 = l2(e3);
-    if (c2) try {
+    if (h2) try {
       return d2(t3, e3);
     } catch (t4) {
     }
-    if (h2(t3, e3)) return a2(!s2(r2.f, t3, e3), t3[e3]);
+    if (c2(t3, e3)) return a2(!r2(s2.f, t3, e3), t3[e3]);
   };
 }, 8480(t2, e2, i2) {
-  var n2 = i2(1828), s2 = i2(8727).concat("length", "prototype");
+  var n2 = i2(1828), r2 = i2(8727).concat("length", "prototype");
   e2.f = Object.getOwnPropertyNames || function getOwnPropertyNames(t3) {
-    return n2(t3, s2);
+    return n2(t3, r2);
   };
 }, 3717(t2, e2) {
   e2.f = Object.getOwnPropertySymbols;
 }, 2787(t2, e2, i2) {
-  var n2 = i2(9297), s2 = i2(4901), r2 = i2(8981), a2 = i2(6119), o2 = i2(2211), l2 = a2("IE_PROTO"), h2 = Object, c2 = h2.prototype;
-  t2.exports = o2 ? h2.getPrototypeOf : function(t3) {
-    var e3 = r2(t3);
+  var n2 = i2(9297), r2 = i2(4901), s2 = i2(8981), a2 = i2(6119), o2 = i2(2211), l2 = a2("IE_PROTO"), c2 = Object, h2 = c2.prototype;
+  t2.exports = o2 ? c2.getPrototypeOf : function(t3) {
+    var e3 = s2(t3);
     if (n2(e3, l2)) return e3[l2];
     var i3 = e3.constructor;
-    return s2(i3) && e3 instanceof i3 ? i3.prototype : e3 instanceof h2 ? c2 : null;
+    return r2(i3) && e3 instanceof i3 ? i3.prototype : e3 instanceof c2 ? h2 : null;
   };
 }, 1625(t2, e2, i2) {
   var n2 = i2(9504);
   t2.exports = n2({}.isPrototypeOf);
 }, 1828(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(9297), r2 = i2(5397), a2 = i2(9617).indexOf, o2 = i2(421), l2 = n2([].push);
+  var n2 = i2(9504), r2 = i2(9297), s2 = i2(5397), a2 = i2(9617).indexOf, o2 = i2(421), l2 = n2([].push);
   t2.exports = function(t3, e3) {
-    var i3, n3 = r2(t3), h2 = 0, c2 = [];
-    for (i3 in n3) !s2(o2, i3) && s2(n3, i3) && l2(c2, i3);
-    for (; e3.length > h2; ) s2(n3, i3 = e3[h2++]) && (~a2(c2, i3) || l2(c2, i3));
-    return c2;
+    var i3, n3 = s2(t3), c2 = 0, h2 = [];
+    for (i3 in n3) !r2(o2, i3) && r2(n3, i3) && l2(h2, i3);
+    for (; e3.length > c2; ) r2(n3, i3 = e3[c2++]) && (~a2(h2, i3) || l2(h2, i3));
+    return h2;
   };
 }, 1072(t2, e2, i2) {
-  var n2 = i2(1828), s2 = i2(8727);
+  var n2 = i2(1828), r2 = i2(8727);
   t2.exports = Object.keys || function keys(t3) {
-    return n2(t3, s2);
+    return n2(t3, r2);
   };
 }, 8773(t2, e2) {
-  var i2 = {}.propertyIsEnumerable, n2 = Object.getOwnPropertyDescriptor, s2 = n2 && !i2.call({ 1: 2 }, 1);
-  e2.f = s2 ? function propertyIsEnumerable(t3) {
+  var i2 = {}.propertyIsEnumerable, n2 = Object.getOwnPropertyDescriptor, r2 = n2 && !i2.call({ 1: 2 }, 1);
+  e2.f = r2 ? function propertyIsEnumerable(t3) {
     var e3 = n2(this, t3);
     return !!e3 && e3.enumerable;
   } : i2;
 }, 2967(t2, e2, i2) {
-  var n2 = i2(6706), s2 = i2(34), r2 = i2(7750), a2 = i2(3506);
+  var n2 = i2(6706), r2 = i2(34), s2 = i2(7750), a2 = i2(3506);
   t2.exports = Object.setPrototypeOf || ("__proto__" in {} ? (function() {
     var t3, e3 = false, i3 = {};
     try {
@@ -1626,42 +1633,42 @@ var t = { 9306(t2, e2, i2) {
     } catch (t4) {
     }
     return function setPrototypeOf(i4, n3) {
-      r2(i4);
+      s2(i4);
       a2(n3);
-      if (!s2(i4)) return i4;
+      if (!r2(i4)) return i4;
       e3 ? t3(i4, n3) : i4.__proto__ = n3;
       return i4;
     };
   })() : void 0);
 }, 4270(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(4901), r2 = i2(34), a2 = TypeError;
+  var n2 = i2(9565), r2 = i2(4901), s2 = i2(34), a2 = TypeError;
   t2.exports = function(t3, e3) {
     var i3, o2;
-    if ("string" === e3 && s2(i3 = t3.toString) && !r2(o2 = n2(i3, t3))) return o2;
-    if (s2(i3 = t3.valueOf) && !r2(o2 = n2(i3, t3))) return o2;
-    if ("string" !== e3 && s2(i3 = t3.toString) && !r2(o2 = n2(i3, t3))) return o2;
+    if ("string" === e3 && r2(i3 = t3.toString) && !s2(o2 = n2(i3, t3))) return o2;
+    if (r2(i3 = t3.valueOf) && !s2(o2 = n2(i3, t3))) return o2;
+    if ("string" !== e3 && r2(i3 = t3.toString) && !s2(o2 = n2(i3, t3))) return o2;
     throw new a2("Can't convert object to primitive value");
   };
 }, 5031(t2, e2, i2) {
-  var n2 = i2(7751), s2 = i2(9504), r2 = i2(8480), a2 = i2(3717), o2 = i2(8551), l2 = s2([].concat);
+  var n2 = i2(7751), r2 = i2(9504), s2 = i2(8480), a2 = i2(3717), o2 = i2(8551), l2 = r2([].concat);
   t2.exports = n2("Reflect", "ownKeys") || function ownKeys(t3) {
-    var e3 = r2.f(o2(t3)), i3 = a2.f;
+    var e3 = s2.f(o2(t3)), i3 = a2.f;
     return i3 ? l2(e3, i3(t3)) : e3;
   };
 }, 8235(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(9297), r2 = SyntaxError, a2 = parseInt, o2 = String.fromCharCode, l2 = n2("".charAt), h2 = n2("".slice), c2 = n2(/./.exec), d2 = { '\\"': '"', "\\\\": "\\", "\\/": "/", "\\b": "\b", "\\f": "\f", "\\n": "\n", "\\r": "\r", "\\t": "	" }, u2 = /^[\da-f]{4}$/i, p2 = /^[\u0000-\u001F]$/;
+  var n2 = i2(9504), r2 = i2(9297), s2 = SyntaxError, a2 = parseInt, o2 = String.fromCharCode, l2 = n2("".charAt), c2 = n2("".slice), h2 = n2(/./.exec), d2 = { '\\"': '"', "\\\\": "\\", "\\/": "/", "\\b": "\b", "\\f": "\f", "\\n": "\n", "\\r": "\r", "\\t": "	" }, u2 = /^[\da-f]{4}$/i, p2 = /^[\u0000-\u001F]$/;
   t2.exports = function(t3, e3) {
     for (var i3 = true, n3 = ""; e3 < t3.length; ) {
       var g2 = l2(t3, e3);
       if ("\\" === g2) {
-        var m2 = h2(t3, e3, e3 + 2);
-        if (s2(d2, m2)) {
+        var m2 = c2(t3, e3, e3 + 2);
+        if (r2(d2, m2)) {
           n3 += d2[m2];
           e3 += 2;
         } else {
-          if ("\\u" !== m2) throw new r2('Unknown escape sequence: "' + m2 + '"');
-          var f2 = h2(t3, e3 += 2, e3 + 4);
-          if (!c2(u2, f2)) throw new r2("Bad Unicode escape at: " + e3);
+          if ("\\u" !== m2) throw new s2('Unknown escape sequence: "' + m2 + '"');
+          var f2 = c2(t3, e3 += 2, e3 + 4);
+          if (!h2(u2, f2)) throw new s2("Bad Unicode escape at: " + e3);
           n3 += o2(a2(f2, 16));
           e3 += 4;
         }
@@ -1671,12 +1678,12 @@ var t = { 9306(t2, e2, i2) {
           e3++;
           break;
         }
-        if (c2(p2, g2)) throw new r2("Bad control character in string literal at: " + e3);
+        if (h2(p2, g2)) throw new s2("Bad control character in string literal at: " + e3);
         n3 += g2;
         e3++;
       }
     }
-    if (i3) throw new r2("Unterminated string at: " + e3);
+    if (i3) throw new s2("Unterminated string at: " + e3);
     return { value: n3, end: e3 };
   };
 }, 1103(t2) {
@@ -1687,80 +1694,89 @@ var t = { 9306(t2, e2, i2) {
       return { error: true, value: t4 };
     }
   };
+}, 3438(t2, e2, i2) {
+  var n2 = i2(8551), r2 = i2(34), s2 = i2(6043);
+  t2.exports = function(t3, e3) {
+    n2(t3);
+    if (r2(e3) && e3.constructor === t3) return e3;
+    var i3 = s2.f(t3);
+    (0, i3.resolve)(e3);
+    return i3.promise;
+  };
 }, 7750(t2, e2, i2) {
-  var n2 = i2(4117), s2 = TypeError;
+  var n2 = i2(4117), r2 = TypeError;
   t2.exports = function(t3) {
-    if (n2(t3)) throw new s2("Can't call method on " + t3);
+    if (n2(t3)) throw new r2("Can't call method on " + t3);
     return t3;
   };
 }, 9286(t2, e2, i2) {
-  var n2 = i2(4402), s2 = i2(8469), r2 = n2.Set, a2 = n2.add;
+  var n2 = i2(4402), r2 = i2(8469), s2 = n2.Set, a2 = n2.add;
   t2.exports = function(t3) {
-    var e3 = new r2();
-    s2(t3, function(t4) {
+    var e3 = new s2();
+    r2(t3, function(t4) {
       a2(e3, t4);
     });
     return e3;
   };
 }, 3440(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402), r2 = i2(9286), a2 = i2(5170), o2 = i2(3789), l2 = i2(8469), h2 = i2(507), c2 = s2.has, d2 = s2.remove;
+  var n2 = i2(7080), r2 = i2(4402), s2 = i2(9286), a2 = i2(5170), o2 = i2(3789), l2 = i2(8469), c2 = i2(507), h2 = r2.has, d2 = r2.remove;
   t2.exports = function difference(t3) {
-    var e3 = n2(this), i3 = o2(t3), s3 = r2(e3);
-    a2(s3) <= i3.size ? l2(s3, function(t4) {
-      i3.includes(t4) && d2(s3, t4);
-    }) : h2(i3.getIterator(), function(t4) {
-      c2(s3, t4) && d2(s3, t4);
+    var e3 = n2(this), i3 = o2(t3), r3 = s2(e3);
+    a2(r3) <= i3.size ? l2(r3, function(t4) {
+      i3.includes(t4) && d2(r3, t4);
+    }) : c2(i3.getIterator(), function(t4) {
+      h2(r3, t4) && d2(r3, t4);
     });
-    return s3;
+    return r3;
   };
 }, 4402(t2, e2, i2) {
-  var n2 = i2(9504), s2 = Set.prototype;
-  t2.exports = { Set, add: n2(s2.add), has: n2(s2.has), remove: n2(s2.delete), proto: s2 };
+  var n2 = i2(9504), r2 = Set.prototype;
+  t2.exports = { Set, add: n2(r2.add), has: n2(r2.has), remove: n2(r2.delete), proto: r2 };
 }, 8750(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402), r2 = i2(5170), a2 = i2(3789), o2 = i2(8469), l2 = i2(507), h2 = s2.Set, c2 = s2.add, d2 = s2.has;
+  var n2 = i2(7080), r2 = i2(4402), s2 = i2(5170), a2 = i2(3789), o2 = i2(8469), l2 = i2(507), c2 = r2.Set, h2 = r2.add, d2 = r2.has;
   t2.exports = function intersection(t3) {
-    var e3 = n2(this), i3 = a2(t3), s3 = new h2();
-    r2(e3) > i3.size ? l2(i3.getIterator(), function(t4) {
-      d2(e3, t4) && c2(s3, t4);
+    var e3 = n2(this), i3 = a2(t3), r3 = new c2();
+    s2(e3) > i3.size ? l2(i3.getIterator(), function(t4) {
+      d2(e3, t4) && h2(r3, t4);
     }) : o2(e3, function(t4) {
-      i3.includes(t4) && c2(s3, t4);
+      i3.includes(t4) && h2(r3, t4);
     });
-    return s3;
+    return r3;
   };
 }, 4449(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402).has, r2 = i2(5170), a2 = i2(3789), o2 = i2(8469), l2 = i2(507), h2 = i2(9539);
+  var n2 = i2(7080), r2 = i2(4402).has, s2 = i2(5170), a2 = i2(3789), o2 = i2(8469), l2 = i2(507), c2 = i2(9539);
   t2.exports = function isDisjointFrom(t3) {
     var e3 = n2(this), i3 = a2(t3);
-    if (r2(e3) <= i3.size) return false !== o2(e3, function(t4) {
+    if (s2(e3) <= i3.size) return false !== o2(e3, function(t4) {
       if (i3.includes(t4)) return false;
     }, true);
-    var c2 = i3.getIterator();
-    return false !== l2(c2, function(t4) {
-      if (s2(e3, t4)) return h2(c2.iterator, "normal", false);
+    var h2 = i3.getIterator();
+    return false !== l2(h2, function(t4) {
+      if (r2(e3, t4)) return c2(h2.iterator, "normal", false);
     });
   };
 }, 3838(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(5170), r2 = i2(8469), a2 = i2(3789);
+  var n2 = i2(7080), r2 = i2(5170), s2 = i2(8469), a2 = i2(3789);
   t2.exports = function isSubsetOf(t3) {
     var e3 = n2(this), i3 = a2(t3);
-    return !(s2(e3) > i3.size) && false !== r2(e3, function(t4) {
+    return !(r2(e3) > i3.size) && false !== s2(e3, function(t4) {
       if (!i3.includes(t4)) return false;
     }, true);
   };
 }, 8527(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402).has, r2 = i2(5170), a2 = i2(3789), o2 = i2(507), l2 = i2(9539);
+  var n2 = i2(7080), r2 = i2(4402).has, s2 = i2(5170), a2 = i2(3789), o2 = i2(507), l2 = i2(9539);
   t2.exports = function isSupersetOf(t3) {
     var e3 = n2(this), i3 = a2(t3);
-    if (r2(e3) < i3.size) return false;
-    var h2 = i3.getIterator();
-    return false !== o2(h2, function(t4) {
-      if (!s2(e3, t4)) return l2(h2.iterator, "normal", false);
+    if (s2(e3) < i3.size) return false;
+    var c2 = i3.getIterator();
+    return false !== o2(c2, function(t4) {
+      if (!r2(e3, t4)) return l2(c2.iterator, "normal", false);
     });
   };
 }, 8469(t2, e2, i2) {
-  var n2 = i2(9504), s2 = i2(507), r2 = i2(4402), a2 = r2.Set, o2 = r2.proto, l2 = n2(o2.forEach), h2 = n2(o2.keys), c2 = h2(new a2()).next;
+  var n2 = i2(9504), r2 = i2(507), s2 = i2(4402), a2 = s2.Set, o2 = s2.proto, l2 = n2(o2.forEach), c2 = n2(o2.keys), h2 = c2(new a2()).next;
   t2.exports = function(t3, e3, i3) {
-    return i3 ? s2({ iterator: h2(t3), next: c2 }, e3) : l2(t3, e3);
+    return i3 ? r2({ iterator: c2(t3), next: h2 }, e3) : l2(t3, e3);
   };
 }, 4916(t2, e2, i2) {
   var n2 = i2(7751), createSetLike = function(t3) {
@@ -1818,64 +1834,67 @@ var t = { 9306(t2, e2, i2) {
     }
   };
 }, 5170(t2, e2, i2) {
-  var n2 = i2(6706), s2 = i2(4402);
-  t2.exports = n2(s2.proto, "size", "get") || function(t3) {
+  var n2 = i2(6706), r2 = i2(4402);
+  t2.exports = n2(r2.proto, "size", "get") || function(t3) {
     return t3.size;
   };
 }, 3650(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402), r2 = i2(9286), a2 = i2(3789), o2 = i2(507), l2 = s2.add, h2 = s2.has, c2 = s2.remove;
+  var n2 = i2(7080), r2 = i2(4402), s2 = i2(9286), a2 = i2(3789), o2 = i2(507), l2 = r2.add, c2 = r2.has, h2 = r2.remove;
   t2.exports = function symmetricDifference(t3) {
-    var e3 = n2(this), i3 = a2(t3).getIterator(), s3 = r2(e3);
+    var e3 = n2(this), i3 = a2(t3).getIterator(), r3 = s2(e3);
     o2(i3, function(t4) {
-      h2(e3, t4) ? c2(s3, t4) : l2(s3, t4);
+      c2(e3, t4) ? h2(r3, t4) : l2(r3, t4);
     });
-    return s3;
+    return r3;
   };
 }, 4204(t2, e2, i2) {
-  var n2 = i2(7080), s2 = i2(4402).add, r2 = i2(9286), a2 = i2(3789), o2 = i2(507);
+  var n2 = i2(7080), r2 = i2(4402).add, s2 = i2(9286), a2 = i2(3789), o2 = i2(507);
   t2.exports = function union(t3) {
-    var e3 = n2(this), i3 = a2(t3).getIterator(), l2 = r2(e3);
+    var e3 = n2(this), i3 = a2(t3).getIterator(), l2 = s2(e3);
     o2(i3, function(t4) {
-      s2(l2, t4);
+      r2(l2, t4);
     });
     return l2;
   };
 }, 6119(t2, e2, i2) {
-  var n2 = i2(5745), s2 = i2(3392), r2 = n2("keys");
+  var n2 = i2(5745), r2 = i2(3392), s2 = n2("keys");
   t2.exports = function(t3) {
-    return r2[t3] || (r2[t3] = s2(t3));
+    return s2[t3] || (s2[t3] = r2(t3));
   };
 }, 7629(t2, e2, i2) {
-  var n2 = i2(6395), s2 = i2(4576), r2 = i2(9433), a2 = "__core-js_shared__", o2 = t2.exports = s2[a2] || r2(a2, {});
-  (o2.versions || (o2.versions = [])).push({ version: "3.49.0", mode: n2 ? "pure" : "global", copyright: "© 2013–2025 Denis Pushkarev (zloirock.ru), 2025–2026 CoreJS Company (core-js.io). All rights reserved.", license: "https://github.com/zloirock/core-js/blob/v3.49.0/LICENSE", source: "https://github.com/zloirock/core-js" });
+  var n2 = i2(6395), r2 = i2(4576), s2 = i2(9433), a2 = "__core-js_shared__", o2 = t2.exports = r2[a2] || s2(a2, {});
+  (o2.versions || (o2.versions = [])).push({ version: "3.50.0", mode: n2 ? "pure" : "global", copyright: "© 2013–2025 Denis Pushkarev (zloirock.ru), 2025–2026 CoreJS Company (core-js.io). All rights reserved.", license: "https://github.com/zloirock/core-js/blob/v3.50.0/LICENSE", source: "https://github.com/zloirock/core-js" });
 }, 5745(t2, e2, i2) {
-  var n2 = i2(7629);
+  var n2 = i2(7629), r2 = Object.create || Object;
   t2.exports = function(t3, e3) {
-    return n2[t3] || (n2[t3] = e3 || {});
+    return n2[t3] || (n2[t3] = e3 || r2(null));
   };
 }, 4495(t2, e2, i2) {
-  var n2 = i2(9519), s2 = i2(9039), r2 = i2(4576).String;
-  t2.exports = !!Object.getOwnPropertySymbols && !s2(function() {
+  var n2 = i2(9519), r2 = i2(9039), s2 = i2(4576).String;
+  t2.exports = !!Object.getOwnPropertySymbols && !r2(function() {
     var t3 = /* @__PURE__ */ Symbol("symbol detection");
-    return !r2(t3) || !(Object(t3) instanceof Symbol) || !Symbol.sham && n2 && n2 < 41;
+    return !s2(t3) || !(Object(t3) instanceof Symbol) || !Symbol.sham && n2 && n2 < 41;
   });
+}, 1240(t2, e2, i2) {
+  var n2 = i2(9504);
+  t2.exports = n2(1.1.valueOf);
 }, 5610(t2, e2, i2) {
-  var n2 = i2(1291), s2 = Math.max, r2 = Math.min;
+  var n2 = i2(1291), r2 = Math.max, s2 = Math.min;
   t2.exports = function(t3, e3) {
     var i3 = n2(t3);
-    return i3 < 0 ? s2(i3 + e3, 0) : r2(i3, e3);
+    return i3 < 0 ? r2(i3 + e3, 0) : s2(i3, e3);
   };
 }, 5854(t2, e2, i2) {
-  var n2 = i2(2777), s2 = TypeError;
+  var n2 = i2(2777), r2 = TypeError;
   t2.exports = function(t3) {
     var e3 = n2(t3, "number");
-    if ("number" == typeof e3) throw new s2("Can't convert number to bigint");
+    if ("number" == typeof e3) throw new r2("Can't convert number to bigint");
     return BigInt(e3);
   };
 }, 5397(t2, e2, i2) {
-  var n2 = i2(7055), s2 = i2(7750);
+  var n2 = i2(7055), r2 = i2(7750);
   t2.exports = function(t3) {
-    return n2(s2(t3));
+    return n2(r2(t3));
   };
 }, 1291(t2, e2, i2) {
   var n2 = i2(741);
@@ -1884,52 +1903,52 @@ var t = { 9306(t2, e2, i2) {
     return e3 != e3 || 0 === e3 ? 0 : n2(e3);
   };
 }, 8014(t2, e2, i2) {
-  var n2 = i2(1291), s2 = Math.min;
+  var n2 = i2(1291), r2 = Math.min;
   t2.exports = function(t3) {
     var e3 = n2(t3);
-    return e3 > 0 ? s2(e3, 9007199254740991) : 0;
+    return e3 > 0 ? r2(e3, 9007199254740991) : 0;
   };
 }, 8981(t2, e2, i2) {
-  var n2 = i2(7750), s2 = Object;
+  var n2 = i2(7750), r2 = Object;
   t2.exports = function(t3) {
-    return s2(n2(t3));
+    return r2(n2(t3));
   };
 }, 9590(t2, e2, i2) {
-  var n2 = i2(1291), s2 = RangeError;
+  var n2 = i2(1291), r2 = RangeError;
   t2.exports = function(t3) {
     var e3 = n2(t3);
-    if (e3 < 0) throw new s2("The argument can't be less than 0");
+    if (e3 < 0) throw new r2("The argument can't be less than 0");
     return e3;
   };
 }, 2777(t2, e2, i2) {
-  var n2 = i2(9565), s2 = i2(34), r2 = i2(757), a2 = i2(5966), o2 = i2(4270), l2 = i2(8227), h2 = TypeError, c2 = l2("toPrimitive");
+  var n2 = i2(9565), r2 = i2(34), s2 = i2(757), a2 = i2(5966), o2 = i2(4270), l2 = i2(8227), c2 = TypeError, h2 = l2("toPrimitive");
   t2.exports = function(t3, e3) {
-    if (!s2(t3) || r2(t3)) return t3;
-    var i3, l3 = a2(t3, c2);
+    if (!r2(t3) || s2(t3)) return t3;
+    var i3, l3 = a2(t3, h2);
     if (l3) {
       void 0 === e3 && (e3 = "default");
       i3 = n2(l3, t3, e3);
-      if (!s2(i3) || r2(i3)) return i3;
-      throw new h2("Can't convert object to primitive value");
+      if (!r2(i3) || s2(i3)) return i3;
+      throw new c2("Can't convert object to primitive value");
     }
     void 0 === e3 && (e3 = "number");
     return o2(t3, e3);
   };
 }, 6969(t2, e2, i2) {
-  var n2 = i2(2777), s2 = i2(757);
+  var n2 = i2(2777), r2 = i2(757);
   t2.exports = function(t3) {
     var e3 = n2(t3, "string");
-    return s2(e3) ? e3 : e3 + "";
+    return r2(e3) ? e3 : e3 + "";
   };
 }, 2140(t2, e2, i2) {
   var n2 = {};
   n2[i2(8227)("toStringTag")] = "z";
   t2.exports = "[object z]" === String(n2);
 }, 655(t2, e2, i2) {
-  var n2 = i2(6955), s2 = String;
+  var n2 = i2(6955), r2 = String;
   t2.exports = function(t3) {
     if ("Symbol" === n2(t3)) throw new TypeError("Cannot convert a Symbol value to a string");
-    return s2(t3);
+    return r2(t3);
   };
 }, 6823(t2) {
   var e2 = String;
@@ -1941,99 +1960,100 @@ var t = { 9306(t2, e2, i2) {
     }
   };
 }, 3392(t2, e2, i2) {
-  var n2 = i2(9504), s2 = 0, r2 = Math.random(), a2 = n2(1.1.toString);
+  var n2 = i2(9504), r2 = 0, s2 = Math.random(), a2 = n2(1.1.toString);
   t2.exports = function(t3) {
-    return "Symbol(" + (void 0 === t3 ? "" : t3) + ")_" + a2(++s2 + r2, 36);
+    return "Symbol(" + (void 0 === t3 ? "" : t3) + ")_" + a2(++r2 + s2, 36);
   };
 }, 9143(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(9504), r2 = i2(3972), a2 = i2(3463), o2 = i2(9297), l2 = i2(2804), h2 = i2(944), c2 = i2(5169), d2 = l2.c2i, u2 = l2.c2iUrl, p2 = n2.SyntaxError, g2 = n2.TypeError, m2 = s2("".charAt), skipAsciiWhitespace = function(t3, e3) {
+  var n2 = i2(4576), r2 = i2(9504), s2 = i2(3972), a2 = i2(3463), o2 = i2(9297), l2 = i2(2804), c2 = i2(944), h2 = i2(5169), d2 = l2.c2i, u2 = l2.c2iUrl, p2 = n2.SyntaxError, g2 = n2.TypeError, m2 = n2.Array, f2 = r2("".charAt), b2 = Math.floor, skipAsciiWhitespace = function(t3, e3) {
     for (var i3 = t3.length; e3 < i3; e3++) {
-      var n3 = m2(t3, e3);
+      var n3 = f2(t3, e3);
       if (" " !== n3 && "	" !== n3 && "\n" !== n3 && "\f" !== n3 && "\r" !== n3) break;
     }
     return e3;
   }, decodeBase64Chunk = function(t3, e3, i3) {
     var n3 = t3.length;
     n3 < 4 && (t3 += 2 === n3 ? "AA" : "A");
-    var s3 = (e3[m2(t3, 0)] << 18) + (e3[m2(t3, 1)] << 12) + (e3[m2(t3, 2)] << 6) + e3[m2(t3, 3)], r3 = [s3 >> 16 & 255, s3 >> 8 & 255, 255 & s3];
+    var r3 = (e3[f2(t3, 0)] << 18) + (e3[f2(t3, 1)] << 12) + (e3[f2(t3, 2)] << 6) + e3[f2(t3, 3)], s3 = [r3 >> 16 & 255, r3 >> 8 & 255, 255 & r3];
     if (2 === n3) {
-      if (i3 && 0 !== r3[1]) throw new p2("Extra bits");
-      return [r3[0]];
+      if (i3 && 0 !== s3[1]) throw new p2("Extra bits");
+      return [s3[0]];
     }
     if (3 === n3) {
-      if (i3 && 0 !== r3[2]) throw new p2("Extra bits");
-      return [r3[0], r3[1]];
+      if (i3 && 0 !== s3[2]) throw new p2("Extra bits");
+      return [s3[0], s3[1]];
     }
-    return r3;
+    return s3;
   }, writeBytes = function(t3, e3, i3) {
-    for (var n3 = e3.length, s3 = 0; s3 < n3; s3++) t3[i3 + s3] = e3[s3];
+    for (var n3 = e3.length, r3 = 0; r3 < n3; r3++) t3[i3 + r3] = e3[r3];
     return i3 + n3;
   };
   t2.exports = function(t3, e3, i3, n3) {
     a2(t3);
-    r2(e3);
-    var s3 = "base64" === h2(e3) ? d2 : u2, l3 = e3 ? e3.lastChunkHandling : void 0;
+    s2(e3);
+    var r3 = "base64" === c2(e3) ? d2 : u2, l3 = e3 ? e3.lastChunkHandling : void 0;
     void 0 === l3 && (l3 = "loose");
     if ("loose" !== l3 && "strict" !== l3 && "stop-before-partial" !== l3) throw new g2("Incorrect `lastChunkHandling` option");
-    i3 && c2(i3.buffer);
-    var f2 = t3.length, b2 = i3 || [], y2 = 0, v2 = 0, w2 = "", x2 = 0;
+    i3 && h2(i3.buffer);
+    var y2 = t3.length, v2 = i3 || m2(b2(3 * y2 / 4)), w2 = 0, A2 = 0, x2 = "", E2 = 0;
     if (n3) for (; ; ) {
-      if ((x2 = skipAsciiWhitespace(t3, x2)) === f2) {
-        if (w2.length > 0) {
+      if ((E2 = skipAsciiWhitespace(t3, E2)) === y2) {
+        if (x2.length > 0) {
           if ("stop-before-partial" === l3) break;
           if ("loose" !== l3) throw new p2("Missing padding");
-          if (1 === w2.length) throw new p2("Malformed padding: exactly one additional character");
-          y2 = writeBytes(b2, decodeBase64Chunk(w2, s3, false), y2);
+          if (1 === x2.length) throw new p2("Malformed padding: exactly one additional character");
+          w2 = writeBytes(v2, decodeBase64Chunk(x2, r3, false), w2);
         }
-        v2 = f2;
+        A2 = y2;
         break;
       }
-      var A2 = m2(t3, x2);
-      ++x2;
-      if ("=" === A2) {
-        if (w2.length < 2) throw new p2("Padding is too early");
-        x2 = skipAsciiWhitespace(t3, x2);
-        if (2 === w2.length) {
-          if (x2 === f2) {
+      var C2 = f2(t3, E2);
+      ++E2;
+      if ("=" === C2) {
+        if (x2.length < 2) throw new p2("Padding is too early");
+        E2 = skipAsciiWhitespace(t3, E2);
+        if (2 === x2.length) {
+          if (E2 === y2) {
             if ("stop-before-partial" === l3) break;
             throw new p2("Malformed padding: only one =");
           }
-          if ("=" === m2(t3, x2)) {
-            ++x2;
-            x2 = skipAsciiWhitespace(t3, x2);
+          if ("=" === f2(t3, E2)) {
+            ++E2;
+            E2 = skipAsciiWhitespace(t3, E2);
           }
         }
-        if (x2 < f2) throw new p2("Unexpected character after padding");
-        y2 = writeBytes(b2, decodeBase64Chunk(w2, s3, "strict" === l3), y2);
-        v2 = f2;
+        if (E2 < y2) throw new p2("Unexpected character after padding");
+        w2 = writeBytes(v2, decodeBase64Chunk(x2, r3, "strict" === l3), w2);
+        A2 = y2;
         break;
       }
-      if (!o2(s3, A2)) throw new p2("Unexpected character");
-      var E2 = n3 - y2;
-      if (1 === E2 && 2 === w2.length || 2 === E2 && 3 === w2.length) break;
-      if (4 === (w2 += A2).length) {
-        y2 = writeBytes(b2, decodeBase64Chunk(w2, s3, false), y2);
-        w2 = "";
-        v2 = x2;
-        if (y2 === n3) break;
+      if (!o2(r3, C2)) throw new p2("Unexpected character");
+      var S2 = n3 - w2;
+      if (1 === S2 && 2 === x2.length || 2 === S2 && 3 === x2.length) break;
+      if (4 === (x2 += C2).length) {
+        w2 = writeBytes(v2, decodeBase64Chunk(x2, r3, false), w2);
+        x2 = "";
+        A2 = E2;
+        if (w2 === n3) break;
       }
     }
-    return { bytes: b2, read: v2, written: y2 };
+    i3 || (v2.length = w2);
+    return { bytes: v2, read: A2, written: w2 };
   };
 }, 2303(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(9504), r2 = n2.Uint8Array, a2 = n2.SyntaxError, o2 = Math.min, l2 = s2("".match);
+  var n2 = i2(4576), r2 = i2(9504), s2 = n2.Uint8Array, a2 = n2.SyntaxError, o2 = Math.min, l2 = r2("".match);
   t2.exports = function(t3, e3) {
     var i3 = t3.length;
     if (i3 % 2 != 0) throw new a2("String should be an even number of characters");
-    for (var n3 = e3 ? o2(e3.length, i3 / 2) : i3 / 2, s3 = e3 || new r2(n3), h2 = l2(t3, /.{2}/g), c2 = 0; c2 < n3; c2++) {
-      var d2 = +("0x" + h2[c2] + "0");
+    for (var n3 = e3 ? o2(e3.length, i3 / 2) : i3 / 2, r3 = e3 || new s2(n3), c2 = l2(t3, /[\S\s]{2}/g), h2 = 0; h2 < n3; h2++) {
+      var d2 = +("0x" + c2[h2] + "0");
       if (d2 != d2) throw new a2("String should only contain hex characters");
-      s3[c2] = d2 >> 4;
+      r3[h2] = d2 >> 4;
     }
-    return { bytes: s3, read: c2 << 1 };
+    return { bytes: r3, read: h2 << 1 };
   };
 }, 7416(t2, e2, i2) {
-  var n2 = i2(9039), s2 = i2(8227), r2 = i2(3724), a2 = i2(6395), o2 = s2("iterator");
+  var n2 = i2(9039), r2 = i2(8227), s2 = i2(3724), a2 = i2(6395), o2 = r2("iterator");
   t2.exports = !n2(function() {
     var t3 = new URL("b?a=1&b=2&c=3", "https://a"), e3 = t3.searchParams, i3 = new URLSearchParams("a=1&a=2&b=3"), n3 = "";
     t3.pathname = "c%20d";
@@ -2043,14 +2063,14 @@ var t = { 9306(t2, e2, i2) {
     });
     i3.delete("a", 2);
     i3.delete("b", void 0);
-    return a2 && (!t3.toJSON || !i3.has("a", 1) || i3.has("a", 2) || !i3.has("a", void 0) || i3.has("b")) || !e3.size && (a2 || !r2) || !e3.sort || "https://a/c%20d?a=1&c=3" !== t3.href || "3" !== e3.get("c") || "a=1" !== String(new URLSearchParams("?a=1")) || !e3[o2] || "a" !== new URL("https://a@b").username || "b" !== new URLSearchParams(new URLSearchParams("a=b")).get("a") || "xn--e1aybc" !== new URL("https://тест").host || "#%D0%B1" !== new URL("https://a#б").hash || "a1c3" !== n3 || "x" !== new URL("https://x", void 0).host;
+    return a2 && (!t3.toJSON || !i3.has("a", 1) || i3.has("a", 2) || !i3.has("a", void 0) || i3.has("b")) || !e3.size && (a2 || !s2) || !e3.sort || "https://a/c%20d?a=1&c=3" !== t3.href || "3" !== e3.get("c") || "a=1" !== String(new URLSearchParams("?a=1")) || !e3[o2] || "a" !== new URL("https://a@b").username || "b" !== new URLSearchParams(new URLSearchParams("a=b")).get("a") || "xn--e1aybc" !== new URL("https://тест").host || "#%D0%B1" !== new URL("https://a#б").hash || "a1c3" !== n3 || "x" !== new URL("https://x", void 0).host;
   });
 }, 7040(t2, e2, i2) {
   var n2 = i2(4495);
   t2.exports = n2 && !Symbol.sham && "symbol" == typeof Symbol.iterator;
 }, 8686(t2, e2, i2) {
-  var n2 = i2(3724), s2 = i2(9039);
-  t2.exports = n2 && s2(function() {
+  var n2 = i2(3724), r2 = i2(9039);
+  t2.exports = n2 && r2(function() {
     return 42 !== Object.defineProperty(function() {
     }, "prototype", { value: 42, writable: false }).prototype;
   });
@@ -2061,29 +2081,29 @@ var t = { 9306(t2, e2, i2) {
     return t3;
   };
 }, 8622(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(4901), r2 = n2.WeakMap;
-  t2.exports = s2(r2) && /native code/.test(String(r2));
+  var n2 = i2(4576), r2 = i2(4901), s2 = n2.WeakMap;
+  t2.exports = r2(s2) && /native code/.test(String(s2));
 }, 4995(t2, e2, i2) {
-  var n2 = i2(9504), s2 = WeakMap.prototype;
-  t2.exports = { WeakMap, set: n2(s2.set), get: n2(s2.get), has: n2(s2.has), remove: n2(s2.delete) };
+  var n2 = i2(9504), r2 = WeakMap.prototype;
+  t2.exports = { WeakMap, set: n2(r2.set), get: n2(r2.get), has: n2(r2.has), remove: n2(r2.delete) };
 }, 8227(t2, e2, i2) {
-  var n2 = i2(4576), s2 = i2(5745), r2 = i2(9297), a2 = i2(3392), o2 = i2(4495), l2 = i2(7040), h2 = n2.Symbol, c2 = s2("wks"), d2 = l2 ? h2.for || h2 : h2 && h2.withoutSetter || a2;
+  var n2 = i2(4576), r2 = i2(5745), s2 = i2(9297), a2 = i2(3392), o2 = i2(4495), l2 = i2(7040), c2 = n2.Symbol, h2 = r2("wks"), d2 = l2 ? c2.for || c2 : c2 && c2.withoutSetter || a2;
   t2.exports = function(t3) {
-    r2(c2, t3) || (c2[t3] = o2 && r2(h2, t3) ? h2[t3] : d2("Symbol." + t3));
-    return c2[t3];
+    s2(h2, t3) || (h2[t3] = o2 && s2(c2, t3) ? c2[t3] : d2("Symbol." + t3));
+    return h2[t3];
   };
 }, 4423(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9617).includes, r2 = i2(9039), a2 = i2(6469), o2 = r2(function() {
+  var n2 = i2(6518), r2 = i2(9617).includes, s2 = i2(9039), a2 = i2(6469), o2 = s2(function() {
     return !Array(1).includes();
-  }), l2 = r2(function() {
+  }), l2 = s2(function() {
     return [, 1].includes(void 0, 1);
   });
   n2({ target: "Array", proto: true, forced: o2 || l2 }, { includes: function includes(t3) {
-    return s2(this, t3, arguments.length > 1 ? arguments[1] : void 0);
+    return r2(this, t3, arguments.length > 1 ? arguments[1] : void 0);
   } });
   a2("includes");
 }, 4114(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(8981), r2 = i2(6198), a2 = i2(4527), o2 = i2(6837);
+  var n2 = i2(6518), r2 = i2(8981), s2 = i2(6198), a2 = i2(4527), o2 = i2(6837);
   n2({ target: "Array", proto: true, arity: 1, forced: i2(9039)(function() {
     return 4294967297 !== [].push.call({ length: 4294967296 }, 1);
   }) || !(function() {
@@ -2093,7 +2113,7 @@ var t = { 9306(t2, e2, i2) {
       return t3 instanceof TypeError;
     }
   })() }, { push: function push(t3) {
-    var e3 = s2(this), i3 = r2(e3), n3 = arguments.length;
+    var e3 = r2(this), i3 = s2(e3), n3 = arguments.length;
     o2(i3 + n3);
     for (var l2 = 0; l2 < n3; l2++) {
       e3[i3] = arguments[l2];
@@ -2103,227 +2123,238 @@ var t = { 9306(t2, e2, i2) {
     return i3;
   } });
 }, 8111(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(679), a2 = i2(8551), o2 = i2(4901), l2 = i2(2787), h2 = i2(2106), c2 = i2(4659), d2 = i2(9039), u2 = i2(9297), p2 = i2(8227), g2 = i2(7657).IteratorPrototype, m2 = i2(3724), f2 = i2(6395), b2 = "constructor", y2 = "Iterator", v2 = p2("toStringTag"), w2 = TypeError, x2 = s2[y2], A2 = f2 || !o2(x2) || x2.prototype !== g2 || !d2(function() {
-    x2({});
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(679), a2 = i2(8551), o2 = i2(4901), l2 = i2(2787), c2 = i2(2106), h2 = i2(4659), d2 = i2(9039), u2 = i2(9297), p2 = i2(8227), g2 = i2(7657).IteratorPrototype, m2 = i2(3724), f2 = i2(6395), b2 = "constructor", y2 = "Iterator", v2 = p2("toStringTag"), w2 = TypeError, A2 = r2[y2], x2 = f2 || !o2(A2) || A2.prototype !== g2 || !d2(function() {
+    A2({});
   }), E2 = function Iterator2() {
-    r2(this, g2);
+    s2(this, g2);
     if (l2(this) === g2) throw new w2("Abstract class Iterator not directly constructable");
   }, defineIteratorPrototypeAccessor = function(t3, e3) {
-    m2 ? h2(g2, t3, { configurable: true, get: function() {
+    m2 ? c2(g2, t3, { configurable: true, get: function() {
       return e3;
     }, set: function(e4) {
       a2(this);
       if (this === g2) throw new w2("You can't redefine this property");
-      u2(this, t3) ? this[t3] = e4 : c2(this, t3, e4);
+      u2(this, t3) ? this[t3] = e4 : h2(this, t3, e4);
     } }) : g2[t3] = e3;
   };
   u2(g2, v2) || defineIteratorPrototypeAccessor(v2, y2);
-  !A2 && u2(g2, b2) && g2[b2] !== Object || defineIteratorPrototypeAccessor(b2, E2);
+  !x2 && u2(g2, b2) && g2[b2] !== Object || defineIteratorPrototypeAccessor(b2, E2);
   E2.prototype = g2;
-  n2({ global: true, constructor: true, forced: A2 }, { Iterator: E2 });
+  n2({ global: true, constructor: true, forced: x2 }, { Iterator: E2 });
 }, 9314(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(8551), a2 = i2(1767), o2 = i2(4149), l2 = i2(9590), h2 = i2(9539), c2 = i2(9462), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = !p2 && !d2("drop", 0), m2 = !p2 && !g2 && u2("drop", RangeError), f2 = p2 || g2 || m2, b2 = c2(function() {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(8551), a2 = i2(1767), o2 = i2(4149), l2 = i2(9590), c2 = i2(9539), h2 = i2(9462), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = RangeError, m2 = 1 / 0, f2 = !p2 && !d2("drop", 0), b2 = !p2 && !f2 && u2("drop", RangeError), y2 = p2 || f2 || b2 || !(function() {
+    try {
+      Iterator.prototype.drop.call({ next: function() {
+        return { done: true };
+      } }, 9007199254740992);
+    } catch (t3) {
+      return t3 instanceof g2;
+    }
+  })(), v2 = h2(function() {
     for (var t3, e3 = this.iterator, i3 = this.next; this.remaining; ) {
       this.remaining--;
-      t3 = r2(s2(i3, e3));
+      t3 = s2(r2(i3, e3));
       if (this.done = !!t3.done) return;
     }
-    t3 = r2(s2(i3, e3));
+    t3 = s2(r2(i3, e3));
     if (!(this.done = !!t3.done)) return t3.value;
   });
-  n2({ target: "Iterator", proto: true, real: true, forced: f2 }, { drop: function drop(t3) {
-    r2(this);
+  n2({ target: "Iterator", proto: true, real: true, forced: y2 }, { drop: function drop(t3) {
+    s2(this);
     var e3;
     try {
-      e3 = l2(o2(+t3));
+      if ((e3 = l2(o2(+t3))) > 9007199254740991 && e3 !== m2) throw new g2("The argument should be a safe integer");
     } catch (t4) {
-      h2(this, "throw", t4);
+      c2(this, "throw", t4);
     }
-    return m2 ? s2(m2, this, e3) : new b2(a2(this), { remaining: e3 });
+    return b2 ? r2(b2, this, e3) : new v2(a2(this), { remaining: e3 });
   } });
 }, 1148(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), h2 = i2(9539), c2 = i2(4549)("every", TypeError);
-  n2({ target: "Iterator", proto: true, real: true, forced: c2 }, { every: function every(t3) {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), c2 = i2(9539), h2 = i2(4549)("every", TypeError);
+  n2({ target: "Iterator", proto: true, real: true, forced: h2 }, { every: function every(t3) {
     o2(this);
     try {
       a2(t3);
     } catch (t4) {
-      h2(this, "throw", t4);
+      c2(this, "throw", t4);
     }
-    if (c2) return s2(c2, this, t3);
+    if (h2) return r2(h2, this, t3);
     var e3 = l2(this), i3 = 0;
-    return !r2(e3, function(e4, n3) {
+    return !s2(e3, function(e4, n3) {
       if (!t3(e4, i3++)) return n3();
     }, { IS_RECORD: true, INTERRUPTED: true }).stopped;
   } });
 }, 2489(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(9462), h2 = i2(6319), c2 = i2(6395), d2 = i2(9539), u2 = i2(684), p2 = i2(4549), g2 = !c2 && !u2("filter", function() {
-  }), m2 = !c2 && !g2 && p2("filter", TypeError), f2 = c2 || g2 || m2, b2 = l2(function() {
-    for (var t3, e3, i3 = this.iterator, n3 = this.predicate, r3 = this.next; ; ) {
-      t3 = a2(s2(r3, i3));
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(9462), c2 = i2(6319), h2 = i2(6395), d2 = i2(9539), u2 = i2(684), p2 = i2(4549), g2 = !h2 && !u2("filter", function() {
+  }), m2 = !h2 && !g2 && p2("filter", TypeError), f2 = h2 || g2 || m2, b2 = l2(function() {
+    for (var t3, e3, i3 = this.iterator, n3 = this.predicate, s3 = this.next; ; ) {
+      t3 = a2(r2(s3, i3));
       if (this.done = !!t3.done) return;
       e3 = t3.value;
-      if (h2(i3, n3, [e3, this.counter++], true)) return e3;
+      if (c2(i3, n3, [e3, this.counter++], true)) return e3;
     }
   });
   n2({ target: "Iterator", proto: true, real: true, forced: f2 }, { filter: function filter(t3) {
     a2(this);
     try {
-      r2(t3);
+      s2(t3);
     } catch (t4) {
       d2(this, "throw", t4);
     }
-    return m2 ? s2(m2, this, t3) : new b2(o2(this), { predicate: t3 });
+    return m2 ? r2(m2, this, t3) : new b2(o2(this), { predicate: t3 });
   } });
 }, 116(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), h2 = i2(9539), c2 = i2(4549)("find", TypeError);
-  n2({ target: "Iterator", proto: true, real: true, forced: c2 }, { find: function find(t3) {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), c2 = i2(9539), h2 = i2(4549)("find", TypeError);
+  n2({ target: "Iterator", proto: true, real: true, forced: h2 }, { find: function find(t3) {
     o2(this);
     try {
       a2(t3);
     } catch (t4) {
-      h2(this, "throw", t4);
+      c2(this, "throw", t4);
     }
-    if (c2) return s2(c2, this, t3);
+    if (h2) return r2(h2, this, t3);
     var e3 = l2(this), i3 = 0;
-    return r2(e3, function(e4, n3) {
+    return s2(e3, function(e4, n3) {
       if (t3(e4, i3++)) return n3(e4);
     }, { IS_RECORD: true, INTERRUPTED: true }).result;
   } });
 }, 531(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(8646), h2 = i2(9462), c2 = i2(9539), d2 = i2(6395), u2 = i2(684), p2 = i2(4549);
-  var g2 = !d2 && !u2("flatMap", function() {
-  }), m2 = !d2 && !g2 && p2("flatMap", TypeError), f2 = d2 || g2 || m2 || (function throwsOnIteratorWithoutReturn() {
-    try {
-      var t3 = Iterator.prototype.flatMap.call((/* @__PURE__ */ new Map([[4, 5]])).entries(), function(t4) {
-        return t4;
-      });
-      t3.next();
-      t3.return();
-    } catch (t4) {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(8646), c2 = i2(9462), h2 = i2(9539), d2 = i2(9039), u2 = i2(6395), p2 = i2(684), g2 = i2(4549), m2 = !u2 && d2(function() {
+    return 1 !== [1].values().flatMap(function() {
+      return [1];
+    }).find(function() {
       return true;
-    }
-  })(), b2 = h2(function() {
+    });
+  }), f2 = !u2 && !m2 && !p2("flatMap", function() {
+  }), b2 = !u2 && !m2 && !f2 && g2("flatMap", TypeError), y2 = u2 || m2 || f2 || b2, v2 = c2(function() {
     for (var t3, e3, i3 = this.iterator, n3 = this.mapper; ; ) {
       if (e3 = this.inner) try {
-        if (!(t3 = a2(s2(e3.next, e3.iterator))).done) return t3.value;
+        if (!(t3 = a2(r2(e3.next, e3.iterator))).done) return t3.value;
         this.inner = null;
       } catch (t4) {
-        c2(i3, "throw", t4);
+        h2(i3, "throw", t4);
       }
-      t3 = a2(s2(this.next, i3));
+      t3 = a2(r2(this.next, i3));
       if (this.done = !!t3.done) return;
       try {
         this.inner = l2(n3(t3.value, this.counter++), false);
       } catch (t4) {
-        c2(i3, "throw", t4);
+        h2(i3, "throw", t4);
       }
     }
   });
-  n2({ target: "Iterator", proto: true, real: true, forced: f2 }, { flatMap: function flatMap(t3) {
+  n2({ target: "Iterator", proto: true, real: true, forced: y2 }, { flatMap: function flatMap(t3) {
     a2(this);
     try {
-      r2(t3);
+      s2(t3);
     } catch (t4) {
-      c2(this, "throw", t4);
+      h2(this, "throw", t4);
     }
-    return m2 ? s2(m2, this, t3) : new b2(o2(this), { mapper: t3, inner: null });
+    return b2 ? r2(b2, this, t3) : new v2(o2(this), { mapper: t3, inner: null });
   } });
 }, 7588(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), h2 = i2(9539), c2 = i2(4549)("forEach", TypeError);
-  n2({ target: "Iterator", proto: true, real: true, forced: c2 }, { forEach: function forEach(t3) {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), c2 = i2(9539), h2 = i2(4549)("forEach", TypeError);
+  n2({ target: "Iterator", proto: true, real: true, forced: h2 }, { forEach: function forEach(t3) {
     o2(this);
     try {
       a2(t3);
     } catch (t4) {
-      h2(this, "throw", t4);
+      c2(this, "throw", t4);
     }
-    if (c2) return s2(c2, this, t3);
+    if (h2) return r2(h2, this, t3);
     var e3 = l2(this), i3 = 0;
-    r2(e3, function(e4) {
+    s2(e3, function(e4) {
       t3(e4, i3++);
     }, { IS_RECORD: true });
   } });
 }, 1701(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(9462), h2 = i2(6319), c2 = i2(9539), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = !p2 && !d2("map", function() {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(9306), a2 = i2(8551), o2 = i2(1767), l2 = i2(9462), c2 = i2(6319), h2 = i2(9539), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = !p2 && !d2("map", function() {
   }), m2 = !p2 && !g2 && u2("map", TypeError), f2 = p2 || g2 || m2, b2 = l2(function() {
-    var t3 = this.iterator, e3 = a2(s2(this.next, t3));
-    if (!(this.done = !!e3.done)) return h2(t3, this.mapper, [e3.value, this.counter++], true);
+    var t3 = this.iterator, e3 = a2(r2(this.next, t3));
+    if (!(this.done = !!e3.done)) return c2(t3, this.mapper, [e3.value, this.counter++], true);
   });
   n2({ target: "Iterator", proto: true, real: true, forced: f2 }, { map: function map(t3) {
     a2(this);
     try {
-      r2(t3);
+      s2(t3);
     } catch (t4) {
-      c2(this, "throw", t4);
+      h2(this, "throw", t4);
     }
-    return m2 ? s2(m2, this, t3) : new b2(o2(this), { mapper: t3 });
+    return m2 ? r2(m2, this, t3) : new b2(o2(this), { mapper: t3 });
   } });
 }, 3579(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), h2 = i2(9539), c2 = i2(4549)("some", TypeError);
-  n2({ target: "Iterator", proto: true, real: true, forced: c2 }, { some: function some(t3) {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(2652), a2 = i2(9306), o2 = i2(8551), l2 = i2(1767), c2 = i2(9539), h2 = i2(4549)("some", TypeError);
+  n2({ target: "Iterator", proto: true, real: true, forced: h2 }, { some: function some(t3) {
     o2(this);
     try {
       a2(t3);
     } catch (t4) {
-      h2(this, "throw", t4);
+      c2(this, "throw", t4);
     }
-    if (c2) return s2(c2, this, t3);
+    if (h2) return r2(h2, this, t3);
     var e3 = l2(this), i3 = 0;
-    return r2(e3, function(e4, n3) {
+    return s2(e3, function(e4, n3) {
       if (t3(e4, i3++)) return n3();
     }, { IS_RECORD: true, INTERRUPTED: true }).stopped;
   } });
 }, 4972(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9565), r2 = i2(8551), a2 = i2(1767), o2 = i2(4149), l2 = i2(9590), h2 = i2(9462), c2 = i2(9539), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = !p2 && !d2("take", 1), m2 = !p2 && !g2 && u2("take", RangeError), f2 = p2 || g2 || m2, b2 = h2(function() {
+  var n2 = i2(6518), r2 = i2(9565), s2 = i2(8551), a2 = i2(1767), o2 = i2(4149), l2 = i2(9590), c2 = i2(9462), h2 = i2(9539), d2 = i2(684), u2 = i2(4549), p2 = i2(6395), g2 = RangeError, m2 = 1 / 0, f2 = !p2 && !d2("take", 1), b2 = !p2 && !f2 && u2("take", RangeError), y2 = p2 || f2 || b2 || !(function() {
+    try {
+      Iterator.prototype.take.call({ next: function() {
+        return { done: true };
+      } }, 9007199254740992);
+    } catch (t3) {
+      return t3 instanceof g2;
+    }
+  })(), v2 = c2(function() {
     var t3 = this.iterator;
     if (!this.remaining--) {
       this.done = true;
-      return c2(t3, "normal", void 0);
+      return h2(t3, "normal", void 0);
     }
-    var e3 = r2(s2(this.next, t3));
+    var e3 = s2(r2(this.next, t3));
     if (!(this.done = !!e3.done)) return e3.value;
   });
-  n2({ target: "Iterator", proto: true, real: true, forced: f2 }, { take: function take(t3) {
-    r2(this);
+  n2({ target: "Iterator", proto: true, real: true, forced: y2 }, { take: function take(t3) {
+    s2(this);
     var e3;
     try {
-      e3 = l2(o2(+t3));
+      if ((e3 = l2(o2(+t3))) > 9007199254740991 && e3 !== m2) throw new g2("The argument should be a safe integer");
     } catch (t4) {
-      c2(this, "throw", t4);
+      h2(this, "throw", t4);
     }
-    return m2 ? s2(m2, this, e3) : new b2(a2(this), { remaining: e3 });
+    return b2 ? r2(b2, this, e3) : new v2(a2(this), { remaining: e3 });
   } });
 }, 1806(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(8551), r2 = i2(4659), a2 = i2(2652), o2 = i2(1767);
+  var n2 = i2(6518), r2 = i2(8551), s2 = i2(4659), a2 = i2(2652), o2 = i2(1767);
   n2({ target: "Iterator", proto: true, real: true }, { toArray: function toArray() {
     var t3 = [], e3 = 0;
-    a2(o2(s2(this)), function(i3) {
-      r2(t3, e3++, i3);
+    a2(o2(r2(this)), function(i3) {
+      s2(t3, e3++, i3);
     }, { IS_RECORD: true });
     return t3;
   } });
 }, 9112(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(3724), r2 = i2(4576), a2 = i2(7751), o2 = i2(9504), l2 = i2(9565), h2 = i2(4901), c2 = i2(34), d2 = i2(4376), u2 = i2(9297), p2 = i2(655), g2 = i2(6198), m2 = i2(4659), f2 = i2(9039), b2 = i2(8235), y2 = i2(4495), v2 = r2.JSON, w2 = r2.Number, x2 = r2.SyntaxError, A2 = v2 && v2.parse, E2 = a2("Object", "keys"), C2 = Object.getOwnPropertyDescriptor, S2 = o2("".charAt), T2 = o2("".slice), _2 = o2(/./.exec), k2 = o2([].push), D2 = /^\d$/, M2 = /^[1-9]$/, P2 = /^[\d-]$/, I2 = /^[\t\n\r ]$/, internalize = function(t3, e3, i3, n3) {
-    var s3, r3, a3, o3, h3, p3 = t3[e3], m3 = n3 && p3 === n3.value, f3 = m3 && "string" == typeof n3.source ? { source: n3.source } : {};
-    if (c2(p3)) {
+  var n2 = i2(6518), r2 = i2(3724), s2 = i2(4576), a2 = i2(7751), o2 = i2(9504), l2 = i2(9565), c2 = i2(4901), h2 = i2(34), d2 = i2(4376), u2 = i2(9297), p2 = i2(655), g2 = i2(6198), m2 = i2(4659), f2 = i2(9039), b2 = i2(8235), y2 = i2(4495), v2 = s2.JSON, w2 = s2.Number, A2 = s2.SyntaxError, x2 = v2 && v2.parse, E2 = a2("Object", "keys"), C2 = Object.getOwnPropertyDescriptor, S2 = o2("".charAt), T2 = o2("".slice), _2 = o2(/./.exec), k2 = o2([].push), D2 = /^\d$/, P2 = /^[1-9]$/, M2 = /^[\d-]$/, I2 = /^[\t\n\r ]$/, internalize = function(t3, e3, i3, n3) {
+    var r3, s3, a3, o3, c3, p3 = t3[e3], m3 = n3 && p3 === n3.value, f3 = m3 && "string" == typeof n3.source ? { source: n3.source } : {};
+    if (h2(p3)) {
       var b3 = d2(p3), y3 = m3 ? n3.nodes : b3 ? [] : {};
       if (b3) {
-        s3 = y3.length;
+        r3 = y3.length;
         a3 = g2(p3);
-        for (o3 = 0; o3 < a3; o3++) internalizeProperty(p3, o3, internalize(p3, "" + o3, i3, o3 < s3 ? y3[o3] : void 0));
+        for (o3 = 0; o3 < a3; o3++) internalizeProperty(p3, o3, internalize(p3, "" + o3, i3, o3 < r3 ? y3[o3] : void 0));
       } else {
-        r3 = E2(p3);
-        a3 = g2(r3);
+        s3 = E2(p3);
+        a3 = g2(s3);
         for (o3 = 0; o3 < a3; o3++) {
-          h3 = r3[o3];
-          internalizeProperty(p3, h3, internalize(p3, h3, i3, u2(y3, h3) ? y3[h3] : void 0));
+          c3 = s3[o3];
+          internalizeProperty(p3, c3, internalize(p3, c3, i3, u2(y3, c3) ? y3[c3] : void 0));
         }
       }
     }
     return l2(i3, t3, e3, p3, f3);
   }, internalizeProperty = function(t3, e3, i3) {
-    if (s2) {
+    if (r2) {
       var n3 = C2(t3, e3);
       if (n3 && !n3.configurable) return;
     }
@@ -2341,7 +2372,7 @@ var t = { 9306(t2, e2, i2) {
     return new Context(this.source, t3);
   }, parse: function() {
     var t3 = this.source, e3 = this.skip(I2, this.index), i3 = this.fork(e3), n3 = S2(t3, e3);
-    if (_2(P2, n3)) return i3.number();
+    if (_2(M2, n3)) return i3.number();
     switch (n3) {
       case "{":
         return i3.object();
@@ -2356,15 +2387,15 @@ var t = { 9306(t2, e2, i2) {
       case "n":
         return i3.keyword(null);
     }
-    throw new x2('Unexpected character: "' + n3 + '" at: ' + e3);
-  }, node: function(t3, e3, i3, n3, s3) {
-    return new Node2(e3, n3, t3 ? null : T2(this.source, i3, n3), s3);
+    throw new A2('Unexpected character: "' + n3 + '" at: ' + e3);
+  }, node: function(t3, e3, i3, n3, r3) {
+    return new Node2(e3, n3, t3 ? null : T2(this.source, i3, n3), r3);
   }, object: function() {
-    for (var t3 = this.source, e3 = this.index + 1, i3 = false, n3 = {}, s3 = {}, r3 = false; e3 < t3.length; ) {
+    for (var t3 = this.source, e3 = this.index + 1, i3 = false, n3 = {}, r3 = {}, s3 = false; e3 < t3.length; ) {
       e3 = this.until(['"', "}"], e3);
       if ("}" === S2(t3, e3) && !i3) {
         e3++;
-        r3 = true;
+        s3 = true;
         break;
       }
       var a3 = this.fork(e3).string(), o3 = a3.value;
@@ -2372,7 +2403,7 @@ var t = { 9306(t2, e2, i2) {
       e3 = this.until([":"], e3) + 1;
       e3 = this.skip(I2, e3);
       a3 = this.fork(e3).parse();
-      m2(s3, o3, a3);
+      m2(r3, o3, a3);
       m2(n3, o3, a3.value);
       e3 = this.until([",", "}"], a3.end);
       var l3 = S2(t3, e3);
@@ -2381,22 +2412,22 @@ var t = { 9306(t2, e2, i2) {
         e3++;
       } else if ("}" === l3) {
         e3++;
-        r3 = true;
+        s3 = true;
         break;
       }
     }
-    if (!r3) throw new x2("Unterminated object at: " + e3);
-    return this.node(1, n3, this.index, e3, s3);
+    if (!s3) throw new A2("Unterminated object at: " + e3);
+    return this.node(1, n3, this.index, e3, r3);
   }, array: function() {
-    for (var t3 = this.source, e3 = this.index + 1, i3 = false, n3 = [], s3 = [], r3 = false; e3 < t3.length; ) {
+    for (var t3 = this.source, e3 = this.index + 1, i3 = false, n3 = [], r3 = [], s3 = false; e3 < t3.length; ) {
       e3 = this.skip(I2, e3);
       if ("]" === S2(t3, e3) && !i3) {
         e3++;
-        r3 = true;
+        s3 = true;
         break;
       }
       var a3 = this.fork(e3).parse();
-      k2(s3, a3);
+      k2(r3, a3);
       k2(n3, a3.value);
       e3 = this.until([",", "]"], a3.end);
       if ("," === S2(t3, e3)) {
@@ -2404,12 +2435,12 @@ var t = { 9306(t2, e2, i2) {
         e3++;
       } else if ("]" === S2(t3, e3)) {
         e3++;
-        r3 = true;
+        s3 = true;
         break;
       }
     }
-    if (!r3) throw new x2("Unterminated array at: " + e3);
-    return this.node(1, n3, this.index, e3, s3);
+    if (!s3) throw new A2("Unterminated array at: " + e3);
+    return this.node(1, n3, this.index, e3, r3);
   }, string: function() {
     var t3 = this.index, e3 = b2(this.source, this.index + 1);
     return this.node(0, e3.value, t3, e3.end);
@@ -2418,22 +2449,22 @@ var t = { 9306(t2, e2, i2) {
     "-" === S2(t3, i3) && i3++;
     if ("0" === S2(t3, i3)) i3++;
     else {
-      if (!_2(M2, S2(t3, i3))) throw new x2("Failed to parse number at: " + i3);
+      if (!_2(P2, S2(t3, i3))) throw new A2("Failed to parse number at: " + i3);
       i3 = this.skip(D2, i3 + 1);
     }
     if ("." === S2(t3, i3)) {
       var n3 = i3 + 1;
-      if (n3 === (i3 = this.skip(D2, n3))) throw new x2("Failed to parse number's fraction at: " + i3);
+      if (n3 === (i3 = this.skip(D2, n3))) throw new A2("Failed to parse number's fraction at: " + i3);
     }
     if ("e" === S2(t3, i3) || "E" === S2(t3, i3)) {
       i3++;
       "+" !== S2(t3, i3) && "-" !== S2(t3, i3) || i3++;
-      if (i3 === (i3 = this.skip(D2, i3))) throw new x2("Failed to parse number's exponent value at: " + i3);
+      if (i3 === (i3 = this.skip(D2, i3))) throw new A2("Failed to parse number's exponent value at: " + i3);
     }
     return this.node(0, w2(T2(t3, e3, i3)), e3, i3);
   }, keyword: function(t3) {
     var e3 = "" + t3, i3 = this.index, n3 = i3 + e3.length;
-    if (T2(this.source, i3, n3) !== e3) throw new x2("Failed to parse value at: " + i3);
+    if (T2(this.source, i3, n3) !== e3) throw new A2("Failed to parse value at: " + i3);
     return this.node(0, t3, i3, n3);
   }, skip: function(t3, e3) {
     for (var i3 = this.source; e3 < i3.length && _2(t3, S2(i3, e3)); e3++) ;
@@ -2441,105 +2472,159 @@ var t = { 9306(t2, e2, i2) {
   }, until: function(t3, e3) {
     e3 = this.skip(I2, e3);
     for (var i3 = S2(this.source, e3), n3 = 0; n3 < t3.length; n3++) if (t3[n3] === i3) return e3;
-    throw new x2('Unexpected character: "' + i3 + '" at: ' + e3);
+    throw new A2('Unexpected character: "' + i3 + '" at: ' + e3);
   } };
   var O2 = f2(function() {
     var t3, e3 = "9007199254740993";
-    A2(e3, function(e4, i3, n3) {
+    x2(e3, function(e4, i3, n3) {
       t3 = n3.source;
     });
     return t3 !== e3;
   }), R2 = y2 && !f2(function() {
-    return 1 / A2("-0 	") != -1 / 0;
+    return 1 / x2("-0 	") != -1 / 0;
   });
   n2({ target: "JSON", stat: true, forced: O2 }, { parse: function parse(t3, e3) {
-    return R2 && !h2(e3) ? A2(t3) : (function(t4, e4) {
+    return R2 && !c2(e3) ? x2(t3) : (function(t4, e4) {
       t4 = p2(t4);
-      var i3 = new Context(t4, 0, ""), n3 = i3.parse(), s3 = n3.value, r3 = i3.skip(I2, n3.end);
-      if (r3 < t4.length) throw new x2('Unexpected extra character: "' + S2(t4, r3) + '" after the parsed data at: ' + r3);
-      return h2(e4) ? internalize({ "": s3 }, "", e4, n3) : s3;
+      var i3 = new Context(t4, 0), n3 = i3.parse(), r3 = n3.value, s3 = i3.skip(I2, n3.end);
+      if (s3 < t4.length) throw new A2('Unexpected extra character: "' + S2(t4, s3) + '" after the parsed data at: ' + s3);
+      return c2(e4) ? internalize({ "": r3 }, "", e4, n3) : r3;
     })(t3, e3);
   } });
 }, 3110(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(7751), r2 = i2(8745), a2 = i2(9565), o2 = i2(9504), l2 = i2(9039), h2 = i2(4376), c2 = i2(4901), d2 = i2(5810), u2 = i2(757), p2 = i2(2195), g2 = i2(655), m2 = i2(7680), f2 = i2(8235), b2 = i2(3392), y2 = i2(4495), v2 = i2(7819), w2 = String, x2 = s2("JSON", "stringify"), A2 = o2(/./.exec), E2 = o2("".charAt), C2 = o2("".charCodeAt), S2 = o2("".replace), T2 = o2("".slice), _2 = o2([].push), k2 = o2(1.1.toString), D2 = /[\uD800-\uDFFF]/g, M2 = /^[\uD800-\uDBFF]$/, P2 = /^[\uDC00-\uDFFF]$/, I2 = b2(), O2 = I2.length, R2 = !y2 || l2(function() {
-    var t3 = s2("Symbol")("stringify detection");
-    return "[null]" !== x2([t3]) || "{}" !== x2({ a: t3 }) || "{}" !== x2(Object(t3));
-  }), B2 = l2(function() {
-    return '"\\udf06\\ud834"' !== x2("\uDF06\uD834") || '"\\udead"' !== x2("\uDEAD");
-  }), L2 = R2 ? function(t3, e3) {
-    var i3 = m2(arguments), n3 = getReplacerFunction(e3);
-    if (c2(n3) || void 0 !== t3 && !u2(t3)) {
-      i3[1] = function(t4, e4) {
-        c2(n3) && (e4 = a2(n3, this, w2(t4), e4));
-        if (!u2(e4)) return e4;
-      };
-      return r2(x2, null, i3);
-    }
-  } : x2, fixIllFormedJSON = function(t3, e3, i3) {
-    var n3 = E2(i3, e3 - 1), s3 = E2(i3, e3 + 1);
-    return A2(M2, t3) && !A2(P2, s3) || A2(P2, t3) && !A2(M2, n3) ? "\\u" + k2(C2(t3, 0), 16) : t3;
-  }, getReplacerFunction = function(t3) {
-    if (c2(t3)) return t3;
-    if (h2(t3)) {
-      for (var e3 = t3.length, i3 = [], n3 = 0; n3 < e3; n3++) {
-        var s3 = t3[n3];
-        "string" == typeof s3 ? _2(i3, s3) : "number" != typeof s3 && "Number" !== p2(s3) && "String" !== p2(s3) || _2(i3, g2(s3));
-      }
-      var r3 = i3.length, a3 = true;
-      return function(t4, e4) {
-        if (a3) {
-          a3 = false;
-          return e4;
-        }
-        if (h2(this)) return e4;
-        for (var n4 = 0; n4 < r3; n4++) if (i3[n4] === t4) return e4;
-      };
-    }
-  };
-  x2 && n2({ target: "JSON", stat: true, arity: 3, forced: R2 || B2 || !v2 }, { stringify: function stringify(t3, e3, i3) {
-    var n3 = getReplacerFunction(e3), s3 = [], r3 = L2(t3, function(t4, e4) {
-      var i4 = c2(n3) ? a2(n3, this, w2(t4), e4) : e4;
-      return !v2 && d2(i4) ? I2 + (_2(s3, i4.rawJSON) - 1) : i4;
+  var n2 = i2(6518), r2 = i2(7751), s2 = i2(9565), a2 = i2(9504), o2 = i2(9039), l2 = i2(4376), c2 = i2(4901), h2 = i2(34), d2 = i2(2360), u2 = i2(5810), p2 = i2(757), g2 = i2(2195), m2 = i2(1240), f2 = i2(9617).includes, b2 = i2(9297), y2 = i2(655), v2 = i2(8235), w2 = i2(3392), A2 = i2(4495), x2 = i2(7819), E2 = String, C2 = TypeError, S2 = r2("JSON", "stringify"), T2 = r2("BigInt"), _2 = a2("".valueOf), k2 = a2(true.valueOf), D2 = T2 && a2(T2.prototype.valueOf), P2 = a2(/./.exec), M2 = a2("".charAt), I2 = a2("".charCodeAt), O2 = a2("".replace), R2 = a2("".slice), B2 = a2([].push), L2 = a2([].pop), N2 = a2(1.1.toString), U2 = /[\uD800-\uDFFF]/g, H2 = /^[\uD800-\uDBFF]$/, z2 = /^[\uDC00-\uDFFF]$/, G2 = /^\d+$/, j2 = w2(), W2 = w2(), V2 = w2(), $2 = j2.length, q2 = W2.length, X2 = !A2 || o2(function() {
+    var t3 = r2("Symbol")("stringify detection");
+    return "[null]" !== S2([t3]) || "{}" !== S2({ a: t3 }) || "{}" !== S2(Object(t3));
+  }), K2 = o2(function() {
+    return '"\\udf06\\ud834"' !== S2("\uDF06\uD834") || '"\\udead"' !== S2("\uDEAD");
+  }), Y2 = x2 ? r2("JSON", "isRawJSON") : u2, J2 = X2 ? function(t3, e3, i3) {
+    return S2(t3, function(t4, i4) {
+      var n3 = s2(e3, this, t4, i4);
+      if (!p2(n3)) return n3;
     }, i3);
-    if ("string" != typeof r3) return r3;
-    B2 && (r3 = S2(r3, D2, fixIllFormedJSON));
-    if (v2) return r3;
-    for (var o3 = "", l3 = r3.length, h3 = 0; h3 < l3; h3++) {
-      var u3 = E2(r3, h3);
-      if ('"' === u3) {
-        var p3 = f2(r3, ++h3).end - 1, g3 = T2(r3, h3, p3);
-        o3 += T2(g3, 0, O2) === I2 ? s3[T2(g3, O2)] : '"' + g3 + '"';
-        h3 = p3;
-      } else o3 += u3;
+  } : S2, fixIllFormedJSON = function(t3, e3, i3) {
+    var n3 = M2(i3, e3 - 1), r3 = M2(i3, e3 + 1);
+    return P2(H2, t3) && !P2(z2, r3) || P2(z2, t3) && !P2(H2, n3) ? "\\u" + N2(I2(t3, 0), 16) : t3;
+  }, hasInternalSlot = function(t3, e3) {
+    try {
+      t3(e3);
+      return true;
+    } catch (t4) {
+      return false;
     }
-    return o3;
+  }, isSerializedAsObject = function(t3) {
+    if (!h2(t3) || c2(t3) || l2(t3)) return false;
+    try {
+      return !(function(t4) {
+        var e3 = g2(t4);
+        return "Number" === e3 && hasInternalSlot(m2, t4) || "String" === e3 && hasInternalSlot(_2, t4) || "Boolean" === e3 && hasInternalSlot(k2, t4) || !!D2 && "BigInt" === e3 && hasInternalSlot(D2, t4);
+      })(t3);
+    } catch (t4) {
+      return true;
+    }
+  }, createElementHolder = function(t3, e3) {
+    return { toJSON: function() {
+      var i3 = t3[e3];
+      if (h2(i3) || "bigint" == typeof i3) {
+        var n3 = i3.toJSON;
+        c2(n3) && (i3 = s2(n3, i3, e3));
+      }
+      return i3;
+    } };
+  };
+  S2 && n2({ target: "JSON", stat: true, arity: 3, forced: X2 || K2 || !x2 }, { stringify: function stringify(t3, e3, i3) {
+    var n3, r3 = c2(e3) ? e3 : void 0, a3 = r3 ? void 0 : (function(t4) {
+      if (l2(t4)) {
+        for (var e4 = t4.length, i4 = [], n4 = d2(null), r4 = 0; r4 < e4; r4++) {
+          var s3, a4 = t4[r4];
+          if ("string" == typeof a4) s3 = a4;
+          else {
+            if ("number" != typeof a4 && "Number" !== g2(a4) && "String" !== g2(a4)) continue;
+            s3 = y2(a4);
+          }
+          if (!b2(n4, s3)) {
+            n4[s3] = true;
+            B2(i4, s3);
+          }
+        }
+        return i4;
+      }
+    })(e3), o3 = a3 && (function(t4) {
+      for (var e4 = 0, i4 = t4.length; e4 < i4; e4++) if (P2(G2, t4[e4])) return W2;
+      return "";
+    })(a3), h3 = [], u3 = [], p3 = [], m3 = false, w3 = true, A3 = J2(t3, function(t4, e4) {
+      t4 = E2(t4);
+      if (a3) {
+        if (t4 === V2) {
+          L2(u3);
+          n3 = L2(p3);
+          return;
+        }
+        if (w3) w3 = false;
+        else if (this !== n3 && !l2(this) && !f2(a3, t4)) return;
+      } else r3 && (e4 = s2(r3, this, t4, e4));
+      if (Y2(e4)) {
+        if (x2) return e4;
+        m3 = true;
+        return j2 + (B2(h3, e4.rawJSON) - 1);
+      }
+      if (a3 && isSerializedAsObject(e4)) {
+        if (f2(u3, e4)) throw new C2("Converting circular structure to JSON");
+        var i4 = (function(t5, e5, i5) {
+          for (var n4 = d2(null), r4 = 0, s3 = e5.length; r4 < s3; r4++) {
+            var a4 = e5[r4];
+            n4[i5 + a4] = createElementHolder(t5, a4);
+          }
+          n4[V2] = null;
+          return n4;
+        })(e4, a3, o3);
+        B2(u3, e4);
+        B2(p3, n3);
+        n3 = i4;
+        o3 && (m3 = true);
+        return i4;
+      }
+      return e4;
+    }, i3);
+    if ("string" != typeof A3) return A3;
+    K2 && (A3 = O2(A3, U2, fixIllFormedJSON));
+    if (!m3) return A3;
+    for (var S3 = "", T3 = A3.length, _3 = 0; _3 < T3; _3++) {
+      var k3 = M2(A3, _3);
+      if ('"' === k3) {
+        var D3 = v2(A3, ++_3).end - 1, I3 = R2(A3, _3, D3);
+        R2(I3, 0, $2) === j2 ? S3 += h3[R2(I3, $2)] : R2(I3, 0, q2) === W2 ? S3 += '"' + R2(I3, q2) + '"' : S3 += '"' + I3 + '"';
+        _3 = D3;
+      } else S3 += k3;
+    }
+    return S3;
   } });
 }, 2731(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9306), r2 = i2(2248), a2 = i2(6395), o2 = r2.get, l2 = r2.has, h2 = r2.set;
+  var n2 = i2(6518), r2 = i2(9306), s2 = i2(2248), a2 = i2(6395), o2 = s2.get, l2 = s2.has, c2 = s2.set;
   n2({ target: "Map", proto: true, real: true, forced: a2 }, { getOrInsertComputed: function getOrInsertComputed(t3, e3) {
     var i3 = l2(this, t3);
-    s2(e3);
+    r2(e3);
     if (i3) return o2(this, t3);
     0 === t3 && 1 / t3 == -1 / 0 && (t3 = 0);
     var n3 = e3(t3);
-    h2(this, t3, n3);
+    c2(this, t3, n3);
     return n3;
   } });
 }, 5367(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(2248), r2 = i2(6395), a2 = s2.get, o2 = s2.has, l2 = s2.set;
-  n2({ target: "Map", proto: true, real: true, forced: r2 }, { getOrInsert: function getOrInsert(t3, e3) {
+  var n2 = i2(6518), r2 = i2(2248), s2 = i2(6395), a2 = r2.get, o2 = r2.has, l2 = r2.set;
+  n2({ target: "Map", proto: true, real: true, forced: s2 }, { getOrInsert: function getOrInsert(t3, e3) {
     if (o2(this, t3)) return a2(this, t3);
     l2(this, t3, e3);
     return e3;
   } });
 }, 3068(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9504), r2 = i2(2652), a2 = RangeError, o2 = TypeError, l2 = 1 / 0, h2 = Math.abs, c2 = Math.pow, d2 = s2([].push), u2 = c2(2, 1023), p2 = c2(2, 53) - 1, g2 = Number.MAX_VALUE, m2 = c2(2, 971), f2 = {}, b2 = {}, y2 = {}, v2 = {}, w2 = {}, twosum = function(t3, e3) {
+  var n2 = i2(6518), r2 = i2(9504), s2 = i2(2652), a2 = RangeError, o2 = TypeError, l2 = 1 / 0, c2 = Math.abs, h2 = Math.pow, d2 = r2([].push), u2 = h2(2, 1023), p2 = h2(2, 53) - 1, g2 = Number.MAX_VALUE, m2 = h2(2, 971), f2 = {}, b2 = {}, y2 = {}, v2 = {}, w2 = {}, twosum = function(t3, e3) {
     var i3 = t3 + e3;
     return { hi: i3, lo: e3 - (i3 - t3) };
   };
   n2({ target: "Math", stat: true }, { sumPrecise: function sumPrecise(t3) {
     var e3 = [], i3 = 0, n3 = v2;
-    r2(t3, function(t4) {
+    s2(t3, function(t4) {
       if (++i3 > p2) throw new a2("Maximum allowed index exceeded");
       if ("number" != typeof t4) throw new o2("Value is not a number");
       if (n3 !== f2) {
@@ -2562,82 +2647,80 @@ var t = { 9306(t2, e2, i2) {
       case v2:
         return -0;
     }
-    for (var s3, c3, x2, A2, E2, C2, S2 = [], T2 = 0, _2 = 0; _2 < e3.length; _2++) {
-      s3 = e3[_2];
+    for (var r3, h3, A2, x2, E2, C2, S2 = [], T2 = 0, _2 = 0; _2 < e3.length; _2++) {
+      r3 = e3[_2];
       for (var k2 = 0, D2 = 0; D2 < S2.length; D2++) {
-        c3 = S2[D2];
-        if (h2(s3) < h2(c3)) {
-          C2 = s3;
-          s3 = c3;
-          c3 = C2;
+        h3 = S2[D2];
+        if (c2(r3) < c2(h3)) {
+          C2 = r3;
+          r3 = h3;
+          h3 = C2;
         }
-        A2 = (x2 = twosum(s3, c3)).hi;
-        E2 = x2.lo;
-        if (h2(A2) === l2) {
-          var M2 = A2 === l2 ? 1 : -1;
-          T2 += M2;
-          if (h2(s3 = s3 - M2 * u2 - M2 * u2) < h2(c3)) {
-            C2 = s3;
-            s3 = c3;
-            c3 = C2;
+        x2 = (A2 = twosum(r3, h3)).hi;
+        E2 = A2.lo;
+        if (c2(x2) === l2) {
+          var P2 = x2 === l2 ? 1 : -1;
+          T2 += P2;
+          if (c2(r3 = r3 - P2 * u2 - P2 * u2) < c2(h3)) {
+            C2 = r3;
+            r3 = h3;
+            h3 = C2;
           }
-          A2 = (x2 = twosum(s3, c3)).hi;
-          E2 = x2.lo;
+          x2 = (A2 = twosum(r3, h3)).hi;
+          E2 = A2.lo;
         }
         0 !== E2 && (S2[k2++] = E2);
-        s3 = A2;
+        r3 = x2;
       }
       S2.length = k2;
-      0 !== s3 && d2(S2, s3);
+      0 !== r3 && d2(S2, r3);
     }
-    var P2 = S2.length - 1;
-    A2 = 0;
+    var M2 = S2.length - 1;
+    x2 = 0;
     E2 = 0;
     if (0 !== T2) {
-      var I2 = P2 >= 0 ? S2[P2] : 0;
-      P2--;
-      if (h2(T2) > 1 || T2 > 0 && I2 > 0 || T2 < 0 && I2 < 0) return T2 > 0 ? l2 : -1 / 0;
-      A2 = (x2 = twosum(T2 * u2, I2 / 2)).hi;
-      E2 = x2.lo;
+      var I2 = M2 >= 0 ? S2[M2] : 0;
+      M2--;
+      if (c2(T2) > 1 || T2 > 0 && I2 > 0 || T2 < 0 && I2 < 0) return T2 > 0 ? l2 : -1 / 0;
+      x2 = (A2 = twosum(T2 * u2, I2 / 2)).hi;
+      E2 = A2.lo;
       E2 *= 2;
-      if (h2(2 * A2) === l2) return A2 > 0 ? A2 === u2 && E2 === -m2 / 2 && P2 >= 0 && S2[P2] < 0 ? g2 : l2 : A2 === -u2 && E2 === m2 / 2 && P2 >= 0 && S2[P2] > 0 ? -g2 : -1 / 0;
+      if (c2(2 * x2) === l2) return x2 > 0 ? x2 === u2 && E2 === -m2 / 2 && M2 >= 0 && S2[M2] < 0 ? g2 : l2 : x2 === -u2 && E2 === m2 / 2 && M2 >= 0 && S2[M2] > 0 ? -g2 : -1 / 0;
       if (0 !== E2) {
-        S2[++P2] = E2;
+        S2[++M2] = E2;
         E2 = 0;
       }
-      A2 *= 2;
+      x2 *= 2;
     }
-    for (; P2 >= 0; ) {
-      A2 = (x2 = twosum(A2, S2[P2--])).hi;
-      if (0 !== (E2 = x2.lo)) break;
+    for (; M2 >= 0; ) {
+      x2 = (A2 = twosum(x2, S2[M2--])).hi;
+      if (0 !== (E2 = A2.lo)) break;
     }
-    P2 >= 0 && (E2 < 0 && S2[P2] < 0 || E2 > 0 && S2[P2] > 0) && (c3 = 2 * E2) === (s3 = A2 + c3) - A2 && (A2 = s3);
-    return A2;
+    M2 >= 0 && (E2 < 0 && S2[M2] < 0 || E2 > 0 && S2[M2] > 0) && (h3 = 2 * E2) === (r3 = x2 + h3) - x2 && (x2 = r3);
+    return x2;
   } });
 }, 1689(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(8745), a2 = i2(7680), o2 = i2(6043), l2 = i2(9306), h2 = i2(1103), c2 = s2.Promise, d2 = false;
-  n2({ target: "Promise", stat: true, forced: !c2 || !c2.try || h2(function() {
-    c2.try(function(t3) {
-      d2 = 8 === t3;
-    }, 8);
-  }).error || !d2 }, { try: function(t3) {
-    var e3 = arguments.length > 1 ? a2(arguments, 1) : [], i3 = o2.f(this), n3 = h2(function() {
-      return r2(l2(t3), void 0, e3);
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(8745), a2 = i2(7680), o2 = i2(3438), l2 = i2(6043), c2 = i2(9306), h2 = i2(1103), d2 = i2(9039), u2 = r2.Promise, p2 = false;
+  n2({ target: "Promise", stat: true, forced: !u2 || !u2.try || d2(function() {
+    var t3 = u2.resolve();
+    return u2.try(function(e3) {
+      p2 = 8 === e3;
+      return t3;
+    }, 8) !== t3;
+  }) || !p2 }, { try: function(t3) {
+    var e3 = arguments.length > 1 ? a2(arguments, 1) : [], i3 = h2(function() {
+      return s2(c2(t3), void 0, e3);
     });
-    (n3.error ? i3.reject : i3.resolve)(n3.value);
-    return i3.promise;
-  } });
-}, 4628(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(6043);
-  n2({ target: "Promise", stat: true }, { withResolvers: function withResolvers() {
-    var t3 = s2.f(this);
-    return { promise: t3.promise, resolve: t3.resolve, reject: t3.reject };
+    if (!i3.error) return o2(this, i3.value);
+    var n3 = l2.f(this);
+    (0, n3.reject)(i3.value);
+    return n3.promise;
   } });
 }, 7642(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(3440), r2 = i2(9039);
+  var n2 = i2(6518), r2 = i2(3440), s2 = i2(9039);
   n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("difference", function(t3) {
     return 0 === t3.size;
-  }) || r2(function() {
+  }) || s2(function() {
     var t3 = { size: 1, has: function() {
       return true;
     }, keys: function() {
@@ -2649,37 +2732,37 @@ var t = { 9306(t2, e2, i2) {
       } };
     } }, e3 = /* @__PURE__ */ new Set([1, 2, 3, 4]);
     return 3 !== e3.difference(t3).size;
-  }) }, { difference: s2 });
+  }) }, { difference: r2 });
 }, 8004(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9039), r2 = i2(8750);
+  var n2 = i2(6518), r2 = i2(9039), s2 = i2(8750);
   n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("intersection", function(t3) {
     return 2 === t3.size && t3.has(1) && t3.has(2);
-  }) || s2(function() {
+  }) || r2(function() {
     return "3,2" !== String(Array.from((/* @__PURE__ */ new Set([1, 2, 3])).intersection(/* @__PURE__ */ new Set([3, 2]))));
-  }) }, { intersection: r2 });
+  }) }, { intersection: s2 });
 }, 3853(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4449);
+  var n2 = i2(6518), r2 = i2(4449);
   n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("isDisjointFrom", function(t3) {
     return !t3;
-  }) }, { isDisjointFrom: s2 });
+  }) }, { isDisjointFrom: r2 });
 }, 5876(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(3838);
+  var n2 = i2(6518), r2 = i2(3838);
   n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("isSubsetOf", function(t3) {
     return t3;
-  }) }, { isSubsetOf: s2 });
+  }) }, { isSubsetOf: r2 });
 }, 2475(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(8527);
+  var n2 = i2(6518), r2 = i2(8527);
   n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("isSupersetOf", function(t3) {
     return !t3;
-  }) }, { isSupersetOf: s2 });
+  }) }, { isSupersetOf: r2 });
 }, 5024(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(3650), r2 = i2(9835);
-  n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("symmetricDifference") || !r2("symmetricDifference") }, { symmetricDifference: s2 });
+  var n2 = i2(6518), r2 = i2(3650), s2 = i2(9835);
+  n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("symmetricDifference") || !s2("symmetricDifference") }, { symmetricDifference: r2 });
 }, 1698(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4204), r2 = i2(9835);
-  n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("union") || !r2("union") }, { union: s2 });
+  var n2 = i2(6518), r2 = i2(4204), s2 = i2(9835);
+  n2({ target: "Set", proto: true, real: true, forced: !i2(4916)("union") || !s2("union") }, { union: r2 });
 }, 9577(t2, e2, i2) {
-  var n2 = i2(4644), s2 = i2(1108), r2 = i2(6198), a2 = i2(1291), o2 = i2(5854), l2 = n2.aTypedArray, h2 = n2.getTypedArrayConstructor, c2 = n2.exportTypedArrayMethod, d2 = RangeError, u2 = (function() {
+  var n2 = i2(4644), r2 = i2(1108), s2 = i2(6198), a2 = i2(1291), o2 = i2(5854), l2 = n2.aTypedArray, c2 = n2.getTypedArrayConstructor, h2 = n2.exportTypedArrayMethod, d2 = RangeError, u2 = (function() {
     try {
       new Int8Array(1).with(2, { valueOf: function() {
         throw 8;
@@ -2694,14 +2777,14 @@ var t = { 9306(t2, e2, i2) {
       return true;
     }
   })();
-  c2("with", { with: function(t3, e3) {
-    var i3 = l2(this), n3 = r2(i3), c3 = a2(t3), u3 = c3 < 0 ? n3 + c3 : c3, p3 = s2(i3) ? o2(e3) : +e3;
+  h2("with", { with: function(t3, e3) {
+    var i3 = l2(this), n3 = s2(i3), h3 = a2(t3), u3 = h3 < 0 ? n3 + h3 : h3, p3 = r2(i3) ? o2(e3) : +e3;
     if (u3 >= n3 || u3 < 0) throw new d2("Incorrect index");
-    for (var g2 = new (h2(i3))(n3), m2 = 0; m2 < n3; m2++) g2[m2] = m2 === u3 ? p3 : i3[m2];
+    for (var g2 = new (c2(i3))(n3), m2 = 0; m2 < n3; m2++) g2[m2] = m2 === u3 ? p3 : i3[m2];
     return g2;
   } }.with, !u2 || p2);
 }, 5213(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(5370), a2 = i2(9143), o2 = s2.Uint8Array, l2 = !o2 || !o2.fromBase64 || !(function() {
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(5370), a2 = i2(9143), o2 = r2.Uint8Array, l2 = !o2 || !o2.fromBase64 || !(function() {
     try {
       o2.fromBase64("a");
       return;
@@ -2715,10 +2798,10 @@ var t = { 9306(t2, e2, i2) {
   })();
   o2 && n2({ target: "Uint8Array", stat: true, forced: l2 }, { fromBase64: function fromBase64(t3) {
     var e3 = a2(t3, arguments.length > 1 ? arguments[1] : void 0, null, 9007199254740991);
-    return r2(o2, e3.bytes);
+    return s2(o2, e3.bytes);
   } });
 }, 6632(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(9143), a2 = i2(4154), o2 = s2.Uint8Array, l2 = !o2 || !o2.prototype.setFromBase64 || !(function() {
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(9143), a2 = i2(4154), o2 = r2.Uint8Array, l2 = !o2 || !o2.prototype.setFromBase64 || !(function() {
     var t3 = new o2([255, 255, 255, 255, 255]);
     try {
       t3.setFromBase64("", null);
@@ -2738,12 +2821,12 @@ var t = { 9306(t2, e2, i2) {
   })();
   o2 && n2({ target: "Uint8Array", proto: true, forced: l2 }, { setFromBase64: function setFromBase64(t3) {
     a2(this);
-    var e3 = r2(t3, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
+    var e3 = s2(t3, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
     return { read: e3.read, written: e3.written };
   } });
 }, 4226(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(3463), a2 = i2(4154), o2 = i2(5169), l2 = i2(2303);
-  s2.Uint8Array && n2({ target: "Uint8Array", proto: true, forced: (function throwsOnLengthTrackingView() {
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(3463), a2 = i2(4154), o2 = i2(5169), l2 = i2(2303);
+  r2.Uint8Array && n2({ target: "Uint8Array", proto: true, forced: (function throwsOnLengthTrackingView() {
     try {
       var t3 = new ArrayBuffer(16, { maxByteLength: 1024 });
       new Uint8Array(t3).setFromHex("cafed00d");
@@ -2752,39 +2835,50 @@ var t = { 9306(t2, e2, i2) {
     }
   })() }, { setFromHex: function setFromHex(t3) {
     a2(this);
-    r2(t3);
+    s2(t3);
     o2(this.buffer);
     var e3 = l2(t3, this).read;
     return { read: e3, written: e3 / 2 };
   } });
 }, 9486(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(9504), a2 = i2(3972), o2 = i2(4154), l2 = i2(5169), h2 = i2(2804), c2 = i2(944), d2 = h2.i2c, u2 = h2.i2cUrl, p2 = r2("".charAt), g2 = s2.Uint8Array, m2 = !g2 || !g2.prototype.toBase64 || !(function() {
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(9504), a2 = i2(3972), o2 = i2(4154), l2 = i2(5169), c2 = i2(2804), h2 = i2(944), d2 = c2.i2c, u2 = c2.i2cUrl, p2 = Math.floor, g2 = Math.ceil, m2 = s2("".charAt), f2 = r2.Uint8Array, b2 = r2.Array, y2 = s2([].join), v2 = !f2 || !f2.prototype.toBase64 || !(function() {
     try {
-      new g2().toBase64(null);
+      new f2().toBase64(null);
     } catch (t3) {
       return true;
     }
   })();
-  g2 && n2({ target: "Uint8Array", proto: true, forced: m2 }, { toBase64: function toBase64() {
-    var t3 = o2(this), e3 = arguments.length ? a2(arguments[0]) : void 0, i3 = "base64" === c2(e3) ? d2 : u2, n3 = !!e3 && !!e3.omitPadding;
+  f2 && n2({ target: "Uint8Array", proto: true, forced: v2 }, { toBase64: function toBase64() {
+    var t3 = o2(this), e3 = arguments.length ? a2(arguments[0]) : void 0, i3 = "base64" === h2(e3) ? d2 : u2, n3 = !!e3 && !!e3.omitPadding;
     l2(this.buffer);
-    for (var s3, r3 = "", h3 = 0, g3 = t3.length, at = function(t4) {
-      return p2(i3, s3 >> 6 * t4 & 63);
-    }; h3 + 2 < g3; h3 += 3) {
-      s3 = (t3[h3] << 16) + (t3[h3 + 1] << 8) + t3[h3 + 2];
-      r3 += at(3) + at(2) + at(1) + at(0);
+    for (var r3, s3 = 0, c3 = t3.length, f3 = b2(n3 ? 4 * p2(c3 / 3) + (c3 % 3 ? c3 % 3 + 1 : 0) : 4 * g2(c3 / 3)), v3 = 0, at = function(t4) {
+      return m2(i3, r3 >> 6 * t4 & 63);
+    }; s3 + 2 < c3; s3 += 3) {
+      r3 = (t3[s3] << 16) + (t3[s3 + 1] << 8) + t3[s3 + 2];
+      f3[v3++] = at(3);
+      f3[v3++] = at(2);
+      f3[v3++] = at(1);
+      f3[v3++] = at(0);
     }
-    if (h3 + 2 === g3) {
-      s3 = (t3[h3] << 16) + (t3[h3 + 1] << 8);
-      r3 += at(3) + at(2) + at(1) + (n3 ? "" : "=");
-    } else if (h3 + 1 === g3) {
-      s3 = t3[h3] << 16;
-      r3 += at(3) + at(2) + (n3 ? "" : "==");
+    if (s3 + 2 === c3) {
+      r3 = (t3[s3] << 16) + (t3[s3 + 1] << 8);
+      f3[v3++] = at(3);
+      f3[v3++] = at(2);
+      f3[v3++] = at(1);
+      n3 || (f3[v3++] = "=");
+    } else if (s3 + 1 === c3) {
+      r3 = t3[s3] << 16;
+      f3[v3++] = at(3);
+      f3[v3++] = at(2);
+      if (!n3) {
+        f3[v3++] = "=";
+        f3[v3++] = "=";
+      }
     }
-    return r3;
+    return y2(f3, "");
   } });
 }, 456(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(9504), a2 = i2(4154), o2 = i2(5169), l2 = r2(1.1.toString), h2 = r2([].join), c2 = Array, d2 = s2.Uint8Array, u2 = !d2 || !d2.prototype.toHex || !(function() {
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(9504), a2 = i2(4154), o2 = i2(5169), l2 = s2(1.1.toString), c2 = s2([].join), h2 = Array, d2 = r2.Uint8Array, u2 = !d2 || !d2.prototype.toHex || !(function() {
     try {
       return "ffffffffffffffff" === new d2([255, 255, 255, 255, 255, 255, 255, 255]).toHex();
     } catch (t3) {
@@ -2794,14 +2888,14 @@ var t = { 9306(t2, e2, i2) {
   d2 && n2({ target: "Uint8Array", proto: true, forced: u2 }, { toHex: function toHex() {
     a2(this);
     o2(this.buffer);
-    for (var t3 = c2(this.length), e3 = 0, i3 = this.length; e3 < i3; e3++) {
+    for (var t3 = h2(this.length), e3 = 0, i3 = this.length; e3 < i3; e3++) {
       var n3 = l2(this[e3], 16);
       t3[e3] = 1 === n3.length ? "0" + n3 : n3;
     }
-    return h2(t3, "");
+    return c2(t3, "");
   } });
 }, 9452(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(9306), r2 = i2(6557), a2 = i2(4328), o2 = i2(4995), l2 = i2(6395), h2 = o2.get, c2 = o2.has, d2 = o2.set;
+  var n2 = i2(6518), r2 = i2(9306), s2 = i2(6557), a2 = i2(4328), o2 = i2(4995), l2 = i2(6395), c2 = o2.get, h2 = o2.has, d2 = o2.set;
   n2({ target: "WeakMap", proto: true, real: true, forced: l2 || !(function() {
     try {
       WeakMap.prototype.getOrInsertComputed && (/* @__PURE__ */ new WeakMap()).getOrInsertComputed(1, function() {
@@ -2811,43 +2905,43 @@ var t = { 9306(t2, e2, i2) {
       return t3 instanceof TypeError;
     }
   })() }, { getOrInsertComputed: function getOrInsertComputed(t3, e3) {
-    l2 || r2(this);
+    l2 || s2(this);
     a2(t3);
-    s2(e3);
-    if (c2(this, t3)) return h2(this, t3);
+    r2(e3);
+    if (h2(this, t3)) return c2(this, t3);
     var i3 = e3(t3);
     d2(this, t3, i3);
     return i3;
   } });
 }, 8454(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4995), r2 = i2(6395), a2 = s2.get, o2 = s2.has, l2 = s2.set;
-  n2({ target: "WeakMap", proto: true, real: true, forced: r2 }, { getOrInsert: function getOrInsert(t3, e3) {
+  var n2 = i2(6518), r2 = i2(4995), s2 = i2(6395), a2 = r2.get, o2 = r2.has, l2 = r2.set;
+  n2({ target: "WeakMap", proto: true, real: true, forced: s2 }, { getOrInsert: function getOrInsert(t3, e3) {
     if (o2(this, t3)) return a2(this, t3);
     l2(this, t3, e3);
     return e3;
   } });
 }, 4979(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(4576), r2 = i2(7751), a2 = i2(6980), o2 = i2(4913).f, l2 = i2(9297), h2 = i2(679), c2 = i2(3167), d2 = i2(2603), u2 = i2(5002), p2 = i2(6193), g2 = i2(3724), m2 = i2(6395), f2 = "DOMException", b2 = r2("Error"), y2 = r2(f2), v2 = function DOMException2() {
-    h2(this, w2);
-    var t3 = arguments.length, e3 = d2(t3 < 1 ? void 0 : arguments[0]), i3 = d2(t3 < 2 ? void 0 : arguments[1], "Error"), n3 = new y2(e3, i3), s3 = new b2(e3);
-    s3.name = f2;
-    o2(n3, "stack", a2(1, p2(s3.stack, 1)));
-    c2(n3, this, v2);
+  var n2 = i2(6518), r2 = i2(4576), s2 = i2(7751), a2 = i2(6980), o2 = i2(4913).f, l2 = i2(9297), c2 = i2(679), h2 = i2(3167), d2 = i2(2603), u2 = i2(5002), p2 = i2(6193), g2 = i2(3724), m2 = i2(6395), f2 = "DOMException", b2 = s2("Error"), y2 = s2(f2), v2 = function DOMException2() {
+    c2(this, w2);
+    var t3 = arguments.length, e3 = d2(t3 < 1 ? void 0 : arguments[0]), i3 = d2(t3 < 2 ? void 0 : arguments[1], "Error"), n3 = new y2(e3, i3), r3 = new b2(e3);
+    r3.name = f2;
+    o2(n3, "stack", a2(1, p2(r3.stack, 1)));
+    h2(n3, this, v2);
     return n3;
-  }, w2 = v2.prototype = y2.prototype, x2 = "stack" in new b2(f2), A2 = "stack" in new y2(1, 2), E2 = y2 && g2 && Object.getOwnPropertyDescriptor(s2, f2), C2 = !(!E2 || E2.writable && E2.configurable), S2 = x2 && !C2 && !A2;
+  }, w2 = v2.prototype = y2.prototype, A2 = "stack" in new b2(f2), x2 = "stack" in new y2(1, 2), E2 = y2 && g2 && Object.getOwnPropertyDescriptor(r2, f2), C2 = !(!E2 || E2.writable && E2.configurable), S2 = A2 && !C2 && !x2;
   n2({ global: true, constructor: true, forced: m2 || S2 }, { DOMException: S2 ? v2 : y2 });
-  var T2 = r2(f2), _2 = T2.prototype;
+  var T2 = s2(f2), _2 = T2.prototype;
   if (_2.constructor !== T2) {
     m2 || o2(_2, "constructor", a2(1, T2));
     for (var k2 in u2) if (l2(u2, k2)) {
-      var D2 = u2[k2], M2 = D2.s;
-      l2(T2, M2) || o2(T2, M2, a2(6, D2.c));
+      var D2 = u2[k2], P2 = D2.s;
+      l2(T2, P2) || o2(T2, P2, a2(6, D2.c));
     }
   }
 }, 5781(t2, e2, i2) {
-  var n2 = i2(6518), s2 = i2(7751), r2 = i2(2812), a2 = i2(655), o2 = i2(7416), l2 = s2("URL");
+  var n2 = i2(6518), r2 = i2(7751), s2 = i2(2812), a2 = i2(655), o2 = i2(7416), l2 = r2("URL");
   n2({ target: "URL", stat: true, forced: !o2 }, { parse: function parse(t3) {
-    var e3 = r2(arguments.length, 1), i3 = a2(t3), n3 = e3 < 2 || void 0 === arguments[1] ? void 0 : a2(arguments[1]);
+    var e3 = s2(arguments.length, 1), i3 = a2(t3), n3 = e3 < 2 || void 0 === arguments[1] ? void 0 : a2(arguments[1]);
     try {
       return new l2(i3, n3);
     } catch (t4) {
@@ -2859,14 +2953,14 @@ var e = {};
 function __webpack_require__(i2) {
   const n2 = e[i2];
   if (void 0 !== n2) return n2.exports;
-  const s2 = e[i2] = { exports: {} };
-  t[i2].call(s2.exports, s2, s2.exports, __webpack_require__);
-  return s2.exports;
+  const r2 = e[i2] = { exports: {} };
+  t[i2].call(r2.exports, r2, r2.exports, __webpack_require__);
+  return r2.exports;
 }
 __webpack_require__.d = (t2, e2) => {
   if (Array.isArray(e2)) for (var i2 = 0; i2 < e2.length; ) {
-    var n2 = e2[i2++], s2 = e2[i2++];
-    __webpack_require__.o(t2, n2) ? 0 === s2 && i2++ : 0 === s2 ? Object.defineProperty(t2, n2, { enumerable: true, value: e2[i2++] }) : Object.defineProperty(t2, n2, { enumerable: true, get: s2 });
+    var n2 = e2[i2++], r2 = e2[i2++];
+    __webpack_require__.o(t2, n2) ? 0 === r2 && i2++ : 0 === r2 ? Object.defineProperty(t2, n2, { enumerable: true, value: e2[i2++] }) : Object.defineProperty(t2, n2, { enumerable: true, get: r2 });
   }
   else for (var n2 in e2) __webpack_require__.o(e2, n2) && !__webpack_require__.o(t2, n2) && Object.defineProperty(t2, n2, { enumerable: true, get: e2[n2] });
 };
@@ -2874,13 +2968,13 @@ __webpack_require__.o = (t2, e2) => Object.prototype.hasOwnProperty.call(t2, e2)
 __webpack_require__(4423), __webpack_require__(4114), __webpack_require__(8111), __webpack_require__(2489), __webpack_require__(5367), __webpack_require__(2731), __webpack_require__(7642), __webpack_require__(8004), __webpack_require__(3853), __webpack_require__(5876), __webpack_require__(2475), __webpack_require__(5024), __webpack_require__(1698), __webpack_require__(9577), __webpack_require__(6632), __webpack_require__(4226), __webpack_require__(9486), __webpack_require__(456), __webpack_require__(5781);
 var i = !("object" != typeof process || process + "" != "[object process]" || process.versions.nw || process.versions.electron && process.type && "browser" !== process.type);
 var n = [1 / 0, 1 / 0, -1 / 0, -1 / 0];
-var s = new Float32Array(n);
-var r = [1e-3, 0, 0, 1e-3, 0, 0];
+var r = new Float32Array(n);
+var s = [1e-3, 0, 0, 1e-3, 0, 0];
 var a = "http://www.w3.org/2000/svg";
 var o = 1;
 var l = 2;
-var h = 4;
-var c = 16;
+var c = 4;
+var h = 16;
 var d = 32;
 var u = 64;
 var p = 128;
@@ -2891,8 +2985,8 @@ var b = "pdfjs_internal_editor_";
 var y = { DISABLE: -1, NONE: 0, FREETEXT: 3, HIGHLIGHT: 9, STAMP: 13, INK: 15, POPUP: 16, SIGNATURE: 101, COMMENT: 102 };
 var v = { RESIZE: 1, CREATE: 2, FREETEXT_SIZE: 11, FREETEXT_COLOR: 12, FREETEXT_OPACITY: 13, INK_COLOR: 21, INK_THICKNESS: 22, INK_OPACITY: 23, INK_COLOR_AND_OPACITY: 24, HIGHLIGHT_COLOR: 31, HIGHLIGHT_THICKNESS: 32, HIGHLIGHT_FREE: 33, HIGHLIGHT_SHOW_ALL: 34, DRAW_STEP: 41 };
 var w = { PRINT: 4, MODIFY_CONTENTS: 8, COPY: 16, MODIFY_ANNOTATIONS: 32, FILL_INTERACTIVE_FORMS: 256, COPY_FOR_ACCESSIBILITY: 512, ASSEMBLE: 1024, PRINT_HIGH_QUALITY: 2048 };
-var x = 0;
-var A = 1;
+var A = 0;
+var x = 1;
 var E = 2;
 var C = 3;
 var S = 3;
@@ -2900,8 +2994,8 @@ var T = 4;
 var _ = { GRAYSCALE_1BPP: 1, RGB_24BPP: 2, RGBA_32BPP: 3 };
 var k = { TEXT: 1, LINK: 2, FREETEXT: 3, LINE: 4, SQUARE: 5, CIRCLE: 6, POLYGON: 7, POLYLINE: 8, HIGHLIGHT: 9, UNDERLINE: 10, SQUIGGLY: 11, STRIKEOUT: 12, STAMP: 13, CARET: 14, INK: 15, POPUP: 16, FILEATTACHMENT: 17, SOUND: 18, MOVIE: 19, WIDGET: 20, SCREEN: 21, PRINTERMARK: 22, TRAPNET: 23, WATERMARK: 24, THREED: 25, REDACT: 26, RICHMEDIA: 27 };
 var D = 1;
-var M = 2;
-var P = 3;
+var P = 2;
+var M = 3;
 var I = 4;
 var O = 5;
 var R = { ERRORS: 0, WARNINGS: 1, INFOS: 5 };
@@ -3064,7 +3158,7 @@ var FeatureTest = class {
 };
 var Util = class {
   static get hexNums() {
-    return shadow(this, "hexNums", Array.from(Array(256).keys(), (t2) => t2.toString(16).padStart(2, "0")));
+    return shadow(this, "hexNums", Array.from({ length: 256 }, (t2, e2) => e2.toString(16).padStart(2, "0")));
   }
   static makeHexColor(t2, e2, i2) {
     return `#${this.hexNums[t2]}${this.hexNums[e2]}${this.hexNums[i2]}`;
@@ -3076,28 +3170,28 @@ var Util = class {
     return [t2[0] * e2.a + t2[2] * e2.b, t2[1] * e2.a + t2[3] * e2.b, t2[0] * e2.c + t2[2] * e2.d, t2[1] * e2.c + t2[3] * e2.d, t2[0] * e2.e + t2[2] * e2.f + t2[4], t2[1] * e2.e + t2[3] * e2.f + t2[5]];
   }
   static applyTransform(t2, e2, i2 = 0) {
-    const n2 = t2[i2], s2 = t2[i2 + 1];
-    t2[i2] = n2 * e2[0] + s2 * e2[2] + e2[4];
-    t2[i2 + 1] = n2 * e2[1] + s2 * e2[3] + e2[5];
+    const n2 = t2[i2], r2 = t2[i2 + 1];
+    t2[i2] = n2 * e2[0] + r2 * e2[2] + e2[4];
+    t2[i2 + 1] = n2 * e2[1] + r2 * e2[3] + e2[5];
   }
   static applyTransformToBezier(t2, e2, i2 = 0) {
-    const n2 = e2[0], s2 = e2[1], r2 = e2[2], a2 = e2[3], o2 = e2[4], l2 = e2[5];
+    const n2 = e2[0], r2 = e2[1], s2 = e2[2], a2 = e2[3], o2 = e2[4], l2 = e2[5];
     for (let e3 = 0; e3 < 6; e3 += 2) {
-      const h2 = t2[i2 + e3], c2 = t2[i2 + e3 + 1];
-      t2[i2 + e3] = h2 * n2 + c2 * r2 + o2;
-      t2[i2 + e3 + 1] = h2 * s2 + c2 * a2 + l2;
+      const c2 = t2[i2 + e3], h2 = t2[i2 + e3 + 1];
+      t2[i2 + e3] = c2 * n2 + h2 * s2 + o2;
+      t2[i2 + e3 + 1] = c2 * r2 + h2 * a2 + l2;
     }
   }
   static applyInverseTransform(t2, e2) {
-    const i2 = t2[0], n2 = t2[1], s2 = e2[0] * e2[3] - e2[1] * e2[2];
-    t2[0] = (i2 * e2[3] - n2 * e2[2] + e2[2] * e2[5] - e2[4] * e2[3]) / s2;
-    t2[1] = (-i2 * e2[1] + n2 * e2[0] + e2[4] * e2[1] - e2[5] * e2[0]) / s2;
+    const i2 = t2[0], n2 = t2[1], r2 = e2[0] * e2[3] - e2[1] * e2[2];
+    t2[0] = (i2 * e2[3] - n2 * e2[2] + e2[2] * e2[5] - e2[4] * e2[3]) / r2;
+    t2[1] = (-i2 * e2[1] + n2 * e2[0] + e2[4] * e2[1] - e2[5] * e2[0]) / r2;
   }
   static axialAlignedBoundingBox(t2, e2, i2) {
-    const n2 = e2[0], s2 = e2[1], r2 = e2[2], a2 = e2[3], o2 = e2[4], l2 = e2[5], h2 = t2[0], c2 = t2[1], d2 = t2[2], u2 = t2[3];
-    let p2 = n2 * h2 + o2, g2 = p2, m2 = n2 * d2 + o2, f2 = m2, b2 = a2 * c2 + l2, y2 = b2, v2 = a2 * u2 + l2, w2 = v2;
-    if (0 !== s2 || 0 !== r2) {
-      const t3 = s2 * h2, e3 = s2 * d2, i3 = r2 * c2, n3 = r2 * u2;
+    const n2 = e2[0], r2 = e2[1], s2 = e2[2], a2 = e2[3], o2 = e2[4], l2 = e2[5], c2 = t2[0], h2 = t2[1], d2 = t2[2], u2 = t2[3];
+    let p2 = n2 * c2 + o2, g2 = p2, m2 = n2 * d2 + o2, f2 = m2, b2 = a2 * h2 + l2, y2 = b2, v2 = a2 * u2 + l2, w2 = v2;
+    if (0 !== r2 || 0 !== s2) {
+      const t3 = r2 * c2, e3 = r2 * d2, i3 = s2 * h2, n3 = s2 * u2;
       p2 += i3;
       f2 += i3;
       m2 += n3;
@@ -3117,9 +3211,9 @@ var Util = class {
     return [t2[3] / e2, -t2[1] / e2, -t2[2] / e2, t2[0] / e2, (t2[2] * t2[5] - t2[4] * t2[3]) / e2, (t2[4] * t2[1] - t2[5] * t2[0]) / e2];
   }
   static singularValueDecompose2dScale(t2, e2) {
-    const i2 = t2[0], n2 = t2[1], s2 = t2[2], r2 = t2[3], a2 = i2 ** 2 + n2 ** 2, o2 = i2 * s2 + n2 * r2, l2 = s2 ** 2 + r2 ** 2, h2 = (a2 + l2) / 2, c2 = Math.sqrt(h2 ** 2 - (a2 * l2 - o2 ** 2));
-    e2[0] = Math.sqrt(h2 + c2 || 1);
-    e2[1] = Math.sqrt(h2 - c2 || 1);
+    const i2 = t2[0], n2 = t2[1], r2 = t2[2], s2 = t2[3], a2 = i2 ** 2 + n2 ** 2, o2 = i2 * r2 + n2 * s2, l2 = r2 ** 2 + s2 ** 2, c2 = (a2 + l2) / 2, h2 = Math.sqrt(c2 ** 2 - (a2 * l2 - o2 ** 2));
+    e2[0] = Math.sqrt(c2 + h2 || 1);
+    e2[1] = Math.sqrt(c2 - h2 || 1);
   }
   static normalizeRect(t2) {
     const e2 = t2.slice(0);
@@ -3136,8 +3230,8 @@ var Util = class {
   static intersect(t2, e2) {
     const i2 = Math.max(Math.min(t2[0], t2[2]), Math.min(e2[0], e2[2])), n2 = Math.min(Math.max(t2[0], t2[2]), Math.max(e2[0], e2[2]));
     if (i2 > n2) return null;
-    const s2 = Math.max(Math.min(t2[1], t2[3]), Math.min(e2[1], e2[3])), r2 = Math.min(Math.max(t2[1], t2[3]), Math.max(e2[1], e2[3]));
-    return s2 > r2 ? null : [i2, s2, n2, r2];
+    const r2 = Math.max(Math.min(t2[1], t2[3]), Math.min(e2[1], e2[3])), s2 = Math.min(Math.max(t2[1], t2[3]), Math.max(e2[1], e2[3]));
+    return r2 > s2 ? null : [i2, r2, n2, s2];
   }
   static pointBoundingBox(t2, e2, i2) {
     i2[0] = Math.min(i2[0], t2);
@@ -3145,38 +3239,38 @@ var Util = class {
     i2[2] = Math.max(i2[2], t2);
     i2[3] = Math.max(i2[3], e2);
   }
-  static rectBoundingBox(t2, e2, i2, n2, s2) {
-    s2[0] = Math.min(s2[0], t2, i2);
-    s2[1] = Math.min(s2[1], e2, n2);
-    s2[2] = Math.max(s2[2], t2, i2);
-    s2[3] = Math.max(s2[3], e2, n2);
+  static rectBoundingBox(t2, e2, i2, n2, r2) {
+    r2[0] = Math.min(r2[0], t2, i2);
+    r2[1] = Math.min(r2[1], e2, n2);
+    r2[2] = Math.max(r2[2], t2, i2);
+    r2[3] = Math.max(r2[3], e2, n2);
   }
-  static #t(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2) {
+  static #t(t2, e2, i2, n2, r2, s2, a2, o2, l2, c2) {
     if (l2 <= 0 || l2 >= 1) return;
-    const c2 = 1 - l2, d2 = l2 * l2, u2 = d2 * l2, p2 = c2 * (c2 * (c2 * t2 + 3 * l2 * e2) + 3 * d2 * i2) + u2 * n2, g2 = c2 * (c2 * (c2 * s2 + 3 * l2 * r2) + 3 * d2 * a2) + u2 * o2;
-    h2[0] = Math.min(h2[0], p2);
-    h2[1] = Math.min(h2[1], g2);
-    h2[2] = Math.max(h2[2], p2);
-    h2[3] = Math.max(h2[3], g2);
+    const h2 = 1 - l2, d2 = l2 * l2, u2 = d2 * l2, p2 = h2 * (h2 * (h2 * t2 + 3 * l2 * e2) + 3 * d2 * i2) + u2 * n2, g2 = h2 * (h2 * (h2 * r2 + 3 * l2 * s2) + 3 * d2 * a2) + u2 * o2;
+    c2[0] = Math.min(c2[0], p2);
+    c2[1] = Math.min(c2[1], g2);
+    c2[2] = Math.max(c2[2], p2);
+    c2[3] = Math.max(c2[3], g2);
   }
-  static #e(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2, c2, d2) {
+  static #e(t2, e2, i2, n2, r2, s2, a2, o2, l2, c2, h2, d2) {
     if (Math.abs(l2) < 1e-12) {
-      Math.abs(h2) >= 1e-12 && this.#t(t2, e2, i2, n2, s2, r2, a2, o2, -c2 / h2, d2);
+      Math.abs(c2) >= 1e-12 && this.#t(t2, e2, i2, n2, r2, s2, a2, o2, -h2 / c2, d2);
       return;
     }
-    const u2 = h2 ** 2 - 4 * c2 * l2;
+    const u2 = c2 ** 2 - 4 * h2 * l2;
     if (u2 < 0) return;
     const p2 = Math.sqrt(u2), g2 = 2 * l2;
-    this.#t(t2, e2, i2, n2, s2, r2, a2, o2, (-h2 + p2) / g2, d2);
-    this.#t(t2, e2, i2, n2, s2, r2, a2, o2, (-h2 - p2) / g2, d2);
+    this.#t(t2, e2, i2, n2, r2, s2, a2, o2, (-c2 + p2) / g2, d2);
+    this.#t(t2, e2, i2, n2, r2, s2, a2, o2, (-c2 - p2) / g2, d2);
   }
-  static bezierBoundingBox(t2, e2, i2, n2, s2, r2, a2, o2, l2) {
+  static bezierBoundingBox(t2, e2, i2, n2, r2, s2, a2, o2, l2) {
     l2[0] = Math.min(l2[0], t2, a2);
     l2[1] = Math.min(l2[1], e2, o2);
     l2[2] = Math.max(l2[2], t2, a2);
     l2[3] = Math.max(l2[3], e2, o2);
-    this.#e(t2, i2, s2, a2, e2, n2, r2, o2, 3 * (3 * (i2 - s2) - t2 + a2), 6 * (t2 - 2 * i2 + s2), 3 * (i2 - t2), l2);
-    this.#e(t2, i2, s2, a2, e2, n2, r2, o2, 3 * (3 * (n2 - r2) - e2 + o2), 6 * (e2 - 2 * n2 + r2), 3 * (n2 - e2), l2);
+    this.#e(t2, i2, r2, a2, e2, n2, s2, o2, 3 * (3 * (i2 - r2) - t2 + a2), 6 * (t2 - 2 * i2 + r2), 3 * (i2 - t2), l2);
+    this.#e(t2, i2, r2, a2, e2, n2, s2, o2, 3 * (3 * (n2 - s2) - e2 + o2), 6 * (e2 - 2 * n2 + s2), 3 * (n2 - e2), l2);
   }
 };
 var V = null;
@@ -3197,8 +3291,8 @@ function getUuid() {
     const e2 = t3.length, i2 = 8192;
     if (e2 < i2) return String.fromCharCode.apply(null, t3);
     const n2 = [];
-    for (let s2 = 0; s2 < e2; s2 += i2) {
-      const r2 = Math.min(s2 + i2, e2), a2 = t3.subarray(s2, r2);
+    for (let r2 = 0; r2 < e2; r2 += i2) {
+      const s2 = Math.min(r2 + i2, e2), a2 = t3.subarray(r2, s2);
       n2.push(String.fromCharCode.apply(null, a2));
     }
     return n2.join("");
@@ -3222,39 +3316,39 @@ function MathClamp(t2, e2, i2) {
   return Math.min(Math.max(t2, e2), i2);
 }
 var PageViewport = class _PageViewport {
-  constructor({ viewBox: t2, userUnit: e2, scale: i2, rotation: n2, offsetX: s2 = 0, offsetY: r2 = 0, dontFlip: a2 = false }) {
+  constructor({ viewBox: t2, userUnit: e2, scale: i2, rotation: n2, offsetX: r2 = 0, offsetY: s2 = 0, dontFlip: a2 = false }) {
     this.viewBox = t2;
     this.userUnit = e2;
     this.scale = i2;
     this.rotation = n2;
-    this.offsetX = s2;
-    this.offsetY = r2;
+    this.offsetX = r2;
+    this.offsetY = s2;
     i2 *= e2;
     const o2 = (t2[2] + t2[0]) / 2, l2 = (t2[3] + t2[1]) / 2;
-    let h2, c2, d2, u2, p2, g2, m2, f2;
+    let c2, h2, d2, u2, p2, g2, m2, f2;
     (n2 %= 360) < 0 && (n2 += 360);
     switch (n2) {
       case 180:
-        h2 = -1;
-        c2 = 0;
+        c2 = -1;
+        h2 = 0;
         d2 = 0;
         u2 = 1;
         break;
       case 90:
-        h2 = 0;
-        c2 = 1;
+        c2 = 0;
+        h2 = 1;
         d2 = 1;
         u2 = 0;
         break;
       case 270:
-        h2 = 0;
-        c2 = -1;
+        c2 = 0;
+        h2 = -1;
         d2 = -1;
         u2 = 0;
         break;
       case 0:
-        h2 = 1;
-        c2 = 0;
+        c2 = 1;
+        h2 = 0;
         d2 = 0;
         u2 = -1;
         break;
@@ -3265,18 +3359,18 @@ var PageViewport = class _PageViewport {
       d2 = -d2;
       u2 = -u2;
     }
-    if (0 === h2) {
-      p2 = Math.abs(l2 - t2[1]) * i2 + s2;
-      g2 = Math.abs(o2 - t2[0]) * i2 + r2;
+    if (0 === c2) {
+      p2 = Math.abs(l2 - t2[1]) * i2 + r2;
+      g2 = Math.abs(o2 - t2[0]) * i2 + s2;
       m2 = (t2[3] - t2[1]) * i2;
       f2 = (t2[2] - t2[0]) * i2;
     } else {
-      p2 = Math.abs(o2 - t2[0]) * i2 + s2;
-      g2 = Math.abs(l2 - t2[1]) * i2 + r2;
+      p2 = Math.abs(o2 - t2[0]) * i2 + r2;
+      g2 = Math.abs(l2 - t2[1]) * i2 + s2;
       m2 = (t2[2] - t2[0]) * i2;
       f2 = (t2[3] - t2[1]) * i2;
     }
-    this.transform = [h2 * i2, c2 * i2, d2 * i2, u2 * i2, p2 - h2 * i2 * o2 - d2 * i2 * l2, g2 - c2 * i2 * o2 - u2 * i2 * l2];
+    this.transform = [c2 * i2, h2 * i2, d2 * i2, u2 * i2, p2 - c2 * i2 * o2 - d2 * i2 * l2, g2 - h2 * i2 * o2 - u2 * i2 * l2];
     this.width = m2;
     this.height = f2;
   }
@@ -3284,8 +3378,8 @@ var PageViewport = class _PageViewport {
     const t2 = this.viewBox;
     return shadow(this, "rawDims", { pageWidth: t2[2] - t2[0], pageHeight: t2[3] - t2[1], pageX: t2[0], pageY: t2[1] });
   }
-  clone({ scale: t2 = this.scale, rotation: e2 = this.rotation, offsetX: i2 = this.offsetX, offsetY: n2 = this.offsetY, dontFlip: s2 = false } = {}) {
-    return new _PageViewport({ viewBox: this.viewBox.slice(), userUnit: this.userUnit, scale: t2, rotation: e2, offsetX: i2, offsetY: n2, dontFlip: s2 });
+  clone({ scale: t2 = this.scale, rotation: e2 = this.rotation, offsetX: i2 = this.offsetX, offsetY: n2 = this.offsetY, dontFlip: r2 = false } = {}) {
+    return new _PageViewport({ viewBox: this.viewBox.slice(), userUnit: this.userUnit, scale: t2, rotation: e2, offsetX: i2, offsetY: n2, dontFlip: r2 });
   }
   convertToViewportPoint(t2, e2) {
     const i2 = [t2, e2];
@@ -3320,7 +3414,7 @@ var XfaText = class _XfaText {
   }
 };
 var q = /url\(|image-set\(/i;
-var K = /^on/i;
+var X = /^on/i;
 var XfaLayer = class {
   static get _allowedHtmlElements() {
     return shadow(this, "_allowedHtmlElements", /* @__PURE__ */ new Set(["a", "b", "br", "button", "div", "i", "img", "input", "label", "li", "ol", "option", "p", "select", "span", "sub", "sup", "textarea", "ul"]));
@@ -3337,46 +3431,46 @@ var XfaLayer = class {
   static get _allowedRichTextStyles() {
     return shadow(this, "_allowedRichTextStyles", /* @__PURE__ */ new Set(["color", "font", "fontFamily", "fontSize", "fontStretch", "fontStyle", "fontWeight", "kerningMode", "letterSpacing", "lineHeight", "margin", "marginBottom", "marginLeft", "marginRight", "marginTop", "orphans", "paddingLeft", "paddingRight", "breakAfter", "breakBefore", "breakInside", "tabInterval", "tabStop", "textAlign", "textDecoration", "textIndent", "transform", "verticalAlign", "widows"]));
   }
-  static setupStorage(t2, e2, i2, n2, s2) {
-    const r2 = n2.getValue(e2, { value: null });
+  static setupStorage(t2, e2, i2, n2, r2) {
+    const s2 = n2.getValue(e2, { value: null });
     switch (i2.name) {
       case "textarea":
-        null !== r2.value && (t2.textContent = r2.value);
-        if ("print" === s2) break;
+        null !== s2.value && (t2.textContent = s2.value);
+        if ("print" === r2) break;
         t2.addEventListener("input", (t3) => {
           n2.setValue(e2, { value: t3.target.value });
         });
         break;
       case "input":
         if ("radio" === i2.attributes.type || "checkbox" === i2.attributes.type) {
-          r2.value === i2.attributes.xfaOn ? t2.setAttribute("checked", true) : r2.value === i2.attributes.xfaOff && t2.removeAttribute("checked");
-          if ("print" === s2) break;
+          s2.value === i2.attributes.xfaOn ? t2.setAttribute("checked", true) : s2.value === i2.attributes.xfaOff && t2.removeAttribute("checked");
+          if ("print" === r2) break;
           t2.addEventListener("change", (t3) => {
             n2.setValue(e2, { value: t3.target.checked ? t3.target.getAttribute("xfaOn") : t3.target.getAttribute("xfaOff") });
           });
         } else {
-          null !== r2.value && t2.setAttribute("value", r2.value);
-          if ("print" === s2) break;
+          null !== s2.value && t2.setAttribute("value", s2.value);
+          if ("print" === r2) break;
           t2.addEventListener("input", (t3) => {
             n2.setValue(e2, { value: t3.target.value });
           });
         }
         break;
       case "select":
-        if (null !== r2.value) {
-          t2.setAttribute("value", r2.value);
-          for (const t3 of i2.children) t3.attributes.value === r2.value ? t3.attributes.selected = true : Object.hasOwn(t3.attributes, "selected") && delete t3.attributes.selected;
+        if (null !== s2.value) {
+          t2.setAttribute("value", s2.value);
+          for (const t3 of i2.children) t3.attributes.value === s2.value ? t3.attributes.selected = true : Object.hasOwn(t3.attributes, "selected") && delete t3.attributes.selected;
         }
         t2.addEventListener("input", (t3) => {
-          const i3 = t3.target.options, s3 = -1 === i3.selectedIndex ? "" : i3[i3.selectedIndex].value;
-          n2.setValue(e2, { value: s3 });
+          const i3 = t3.target.options, r3 = -1 === i3.selectedIndex ? "" : i3[i3.selectedIndex].value;
+          n2.setValue(e2, { value: r3 });
         });
     }
   }
-  static setAttributes({ html: t2, element: e2, storage: i2 = null, intent: n2, linkService: s2 }) {
-    const { attributes: r2 } = e2, a2 = t2 instanceof HTMLAnchorElement;
-    "radio" === r2.type && (r2.name = `${r2.name}-${n2}`);
-    for (const [e3, i3] of Object.entries(r2)) if (null != i3 && !K.test(e3) && ("richText" !== n2 || this._allowedRichTextAttributes.has(e3))) switch (e3) {
+  static setAttributes({ html: t2, element: e2, storage: i2 = null, intent: n2, linkService: r2 }) {
+    const { attributes: s2 } = e2, a2 = t2 instanceof HTMLAnchorElement;
+    "radio" === s2.type && (s2.name = `${s2.name}-${n2}`);
+    for (const [e3, i3] of Object.entries(s2)) if (null != i3 && !X.test(e3) && ("richText" !== n2 || this._allowedRichTextAttributes.has(e3))) switch (e3) {
       case "class":
         i3.length && t2.setAttribute(e3, i3.join(" "));
         break;
@@ -3388,7 +3482,7 @@ var XfaLayer = class {
       case "style":
         if ("richText" === n2) {
           const e4 = this._allowedRichTextStyles;
-          for (const [n3, s3] of Object.entries(i3)) e4.has(n3) && !q.test(s3) && (t2.style[n3] = s3);
+          for (const [n3, r3] of Object.entries(i3)) e4.has(n3) && !q.test(r3) && (t2.style[n3] = r3);
         } else Object.assign(t2.style, i3);
         break;
       case "textContent":
@@ -3397,17 +3491,17 @@ var XfaLayer = class {
       default:
         (!a2 || "href" !== e3 && "newWindow" !== e3) && t2.setAttribute(e3, i3);
     }
-    a2 && s2?.addLinkAttributes(t2, r2.href, r2.newWindow);
-    i2 && r2.dataId && this.setupStorage(t2, r2.dataId, e2, i2);
+    a2 && r2?.addLinkAttributes(t2, s2.href, s2.newWindow);
+    i2 && s2.dataId && this.setupStorage(t2, s2.dataId, e2, i2);
   }
   static #i(t2, e2, i2) {
     return "richText" === i2 ? !e2 && this._allowedRichTextElements.has(t2) ? document.createElement(t2) : null : e2 ? e2 === a && this._allowedSvgElements.has(t2) ? document.createElementNS(a, t2) : null : this._allowedHtmlElements.has(t2) ? document.createElement(t2) : null;
   }
   static render(t2) {
-    const e2 = t2.annotationStorage, i2 = t2.linkService, n2 = t2.xfaHtml, s2 = t2.intent || "display", r2 = this.#i(n2.name, n2.attributes?.xmlns, s2) ?? document.createElement("div");
-    n2.attributes && this.setAttributes({ html: r2, element: n2, intent: s2, linkService: i2 });
-    const a2 = "richText" !== s2, o2 = t2.div;
-    o2.append(r2);
+    const e2 = t2.annotationStorage, i2 = t2.linkService, n2 = t2.xfaHtml, r2 = t2.intent || "display", s2 = this.#i(n2.name, n2.attributes?.xmlns, r2) ?? document.createElement("div");
+    n2.attributes && this.setAttributes({ html: s2, element: n2, intent: r2, linkService: i2 });
+    const a2 = "richText" !== r2, o2 = t2.div;
+    o2.append(s2);
     if (t2.viewport) {
       const e3 = `matrix(${t2.viewport.transform.join(",")})`;
       o2.style.transform = e3;
@@ -3417,35 +3511,35 @@ var XfaLayer = class {
     if (0 === n2.children.length) {
       if (n2.value) {
         const t3 = document.createTextNode(n2.value);
-        r2.append(t3);
+        s2.append(t3);
         a2 && XfaText.shouldBuildText(n2.name) && l2.push(t3);
       }
       return { textDivs: l2 };
     }
-    const h2 = [[n2, -1, r2]];
-    for (; h2.length > 0; ) {
-      const [t3, n3, r3] = h2.at(-1);
+    const c2 = [[n2, -1, s2]];
+    for (; c2.length > 0; ) {
+      const [t3, n3, s3] = c2.at(-1);
       if (n3 + 1 === t3.children.length) {
-        h2.pop();
+        c2.pop();
         continue;
       }
-      const o3 = t3.children[++h2.at(-1)[1]];
+      const o3 = t3.children[++c2.at(-1)[1]];
       if (null === o3) continue;
-      const { name: c2 } = o3;
-      if ("#text" === c2) {
+      const { name: h2 } = o3;
+      if ("#text" === h2) {
         const t4 = document.createTextNode(o3.value);
         l2.push(t4);
-        r3.append(t4);
+        s3.append(t4);
         continue;
       }
-      const d2 = this.#i(c2, o3.attributes?.xmlns, s2);
+      const d2 = this.#i(h2, o3.attributes?.xmlns, r2);
       if (d2) {
-        r3.append(d2);
-        o3.attributes && this.setAttributes({ html: d2, element: o3, storage: e2, intent: s2, linkService: i2 });
-        if (o3.children?.length > 0) h2.push([o3, -1, d2]);
+        s3.append(d2);
+        o3.attributes && this.setAttributes({ html: d2, element: o3, storage: e2, intent: r2, linkService: i2 });
+        if (o3.children?.length > 0) c2.push([o3, -1, d2]);
         else if (o3.value) {
           const t4 = document.createTextNode(o3.value);
-          a2 && XfaText.shouldBuildText(c2) && l2.push(t4);
+          a2 && XfaText.shouldBuildText(h2) && l2.push(t4);
           d2.append(t4);
         }
       }
@@ -3459,8 +3553,8 @@ var XfaLayer = class {
     t2.div.hidden = false;
   }
   static getPageViewport(t2, { scale: e2 = 1, rotation: i2 = 0 }) {
-    const { width: n2, height: s2 } = t2.attributes.style;
-    return new PageViewport({ viewBox: [0, 0, parseInt(n2, 10), parseInt(s2, 10)], userUnit: 1, scale: e2, rotation: i2 });
+    const { width: n2, height: r2 } = t2.attributes.style;
+    return new PageViewport({ viewBox: [0, 0, parseInt(n2, 10), parseInt(r2, 10)], userUnit: 1, scale: e2, rotation: i2 });
   }
 };
 var PixelsPerInch = class {
@@ -3483,25 +3577,25 @@ async function fetchData(t2, e2 = "text") {
     return i2.text();
   }
   return new Promise((i2, n2) => {
-    const s2 = new XMLHttpRequest();
-    s2.open("GET", t2, true);
-    s2.responseType = "bytes" === e2 ? "arraybuffer" : e2;
-    s2.onreadystatechange = () => {
-      if (s2.readyState === XMLHttpRequest.DONE) if (200 !== s2.status && 0 !== s2.status) n2(new Error(s2.statusText));
+    const r2 = new XMLHttpRequest();
+    r2.open("GET", t2, true);
+    r2.responseType = "bytes" === e2 ? "arraybuffer" : e2;
+    r2.onreadystatechange = () => {
+      if (r2.readyState === XMLHttpRequest.DONE) if (200 !== r2.status && 0 !== r2.status) n2(new Error(r2.statusText));
       else {
         switch (e2) {
           case "bytes":
-            i2(new Uint8Array(s2.response));
+            i2(new Uint8Array(r2.response));
             return;
           case "blob":
           case "json":
-            i2(s2.response);
+            i2(r2.response);
             return;
         }
-        i2(s2.responseText);
+        i2(r2.responseText);
       }
     };
-    s2.send(null);
+    r2.send(null);
   });
 }
 var RenderingCancelledException = class extends W {
@@ -3560,15 +3654,21 @@ function getPdfFilenameFromUrl(t2, e2 = "document.pdf") {
     } catch {
       return t3;
     }
-  }, n2 = /\.pdf$/i, s2 = stripPath(i2.pathname);
-  if (n2.test(s2)) return decode(s2);
+  }, n2 = /\.pdf$/i, r2 = stripPath(i2.pathname);
+  if (n2.test(r2)) return decode(r2);
   if (i2.searchParams.size > 0) {
     const getLast = (t4) => [...t4].findLast((t5) => n2.test(t5)), t3 = getLast(i2.searchParams.values()) ?? getLast(i2.searchParams.keys());
     if (t3) return decode(t3);
   }
   if (i2.hash) {
-    const t3 = /[^/?#=]+\.pdf\b(?!.*\.pdf\b)/i.exec(i2.hash);
-    if (t3) return decode(t3[0]);
+    const { hash: t3 } = i2;
+    let e3 = -1;
+    for (const { index: i3 } of t3.matchAll(/\.pdf\b/gi)) e3 = i3;
+    if (e3 > 0) {
+      let i3 = e3;
+      for (; i3 > 0 && !"/?#=".includes(t3[i3 - 1]); ) i3--;
+      if (i3 < e3) return decode(t3.slice(i3, e3 + 4));
+    }
   }
   return e2;
 }
@@ -3602,37 +3702,37 @@ function stopEvent(t2) {
   t2.stopPropagation();
 }
 var PDFDateString = class {
-  static #s;
+  static #r;
   static toDateObject(t2) {
     if (t2 instanceof Date) return t2;
     if (!t2 || "string" != typeof t2) return null;
-    this.#s ||= new RegExp("^D:(\\d{4})(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?([Z|+\\-])?(\\d{2})?'?(\\d{2})?'?");
-    const e2 = this.#s.exec(t2);
+    this.#r ||= new RegExp("^D:(\\d{4})(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?(\\d{2})?([Z|+\\-])?(\\d{2})?'?(\\d{2})?'?");
+    const e2 = this.#r.exec(t2);
     if (!e2) return null;
     const i2 = parseInt(e2[1], 10);
     let n2 = parseInt(e2[2], 10);
     n2 = n2 >= 1 && n2 <= 12 ? n2 - 1 : 0;
-    let s2 = parseInt(e2[3], 10);
-    s2 = s2 >= 1 && s2 <= 31 ? s2 : 1;
-    let r2 = parseInt(e2[4], 10);
-    r2 = r2 >= 0 && r2 <= 23 ? r2 : 0;
+    let r2 = parseInt(e2[3], 10);
+    r2 = r2 >= 1 && r2 <= 31 ? r2 : 1;
+    let s2 = parseInt(e2[4], 10);
+    s2 = s2 >= 0 && s2 <= 23 ? s2 : 0;
     let a2 = parseInt(e2[5], 10);
     a2 = a2 >= 0 && a2 <= 59 ? a2 : 0;
     let o2 = parseInt(e2[6], 10);
     o2 = o2 >= 0 && o2 <= 59 ? o2 : 0;
     const l2 = e2[7] || "Z";
-    let h2 = parseInt(e2[8], 10);
-    h2 = h2 >= 0 && h2 <= 23 ? h2 : 0;
-    let c2 = parseInt(e2[9], 10) || 0;
-    c2 = c2 >= 0 && c2 <= 59 ? c2 : 0;
+    let c2 = parseInt(e2[8], 10);
+    c2 = c2 >= 0 && c2 <= 23 ? c2 : 0;
+    let h2 = parseInt(e2[9], 10) || 0;
+    h2 = h2 >= 0 && h2 <= 59 ? h2 : 0;
     if ("-" === l2) {
-      r2 += h2;
-      a2 += c2;
+      s2 += c2;
+      a2 += h2;
     } else if ("+" === l2) {
-      r2 -= h2;
-      a2 -= c2;
+      s2 -= c2;
+      a2 -= h2;
     }
-    return new Date(Date.UTC(i2, n2, s2, r2, a2, o2));
+    return new Date(Date.UTC(i2, n2, r2, s2, a2, o2));
   }
 };
 function getRGBA(t2) {
@@ -3660,22 +3760,22 @@ function getRGB(t2) {
   return e2.slice(0, 3);
 }
 function getCurrentTransform(t2) {
-  const { a: e2, b: i2, c: n2, d: s2, e: r2, f: a2 } = t2.getTransform();
-  return [e2, i2, n2, s2, r2, a2];
+  const { a: e2, b: i2, c: n2, d: r2, e: s2, f: a2 } = t2.getTransform();
+  return [e2, i2, n2, r2, s2, a2];
 }
 function getCurrentTransformInverse(t2) {
-  const { a: e2, b: i2, c: n2, d: s2, e: r2, f: a2 } = t2.getTransform().invertSelf();
-  return [e2, i2, n2, s2, r2, a2];
+  const { a: e2, b: i2, c: n2, d: r2, e: s2, f: a2 } = t2.getTransform().invertSelf();
+  return [e2, i2, n2, r2, s2, a2];
 }
 function setLayerDimensions(t2, e2, i2 = false, n2 = true) {
   if (e2 instanceof PageViewport) {
-    const { pageWidth: n3, pageHeight: s2 } = e2.rawDims, { style: r2 } = t2, a2 = `round(down, var(--total-scale-factor) * ${n3}px, var(--scale-round-x))`, o2 = `round(down, var(--total-scale-factor) * ${s2}px, var(--scale-round-y))`;
+    const { pageWidth: n3, pageHeight: r2 } = e2.rawDims, { style: s2 } = t2, a2 = `round(down, var(--total-scale-factor) * ${n3}px, var(--scale-round-x))`, o2 = `round(down, var(--total-scale-factor) * ${r2}px, var(--scale-round-y))`;
     if (i2 && e2.rotation % 180 != 0) {
-      r2.width = o2;
-      r2.height = a2;
+      s2.width = o2;
+      s2.height = a2;
     } else {
-      r2.width = a2;
-      r2.height = o2;
+      s2.width = a2;
+      s2.height = o2;
     }
   }
   n2 && t2.setAttribute("data-main-rotation", e2.rotation);
@@ -3692,14 +3792,14 @@ var OutputScale = class _OutputScale {
   get symmetric() {
     return this.sx === this.sy;
   }
-  limitCanvas(t2, e2, i2, n2, s2 = -1) {
-    let r2 = 1 / 0, a2 = 1 / 0, o2 = 1 / 0;
-    (i2 = _OutputScale.capPixels(i2, s2)) > 0 && (r2 = Math.sqrt(i2 / (t2 * e2)));
+  limitCanvas(t2, e2, i2, n2, r2 = -1) {
+    let s2 = 1 / 0, a2 = 1 / 0, o2 = 1 / 0;
+    (i2 = _OutputScale.capPixels(i2, r2)) > 0 && (s2 = Math.sqrt(i2 / (t2 * e2)));
     if (-1 !== n2) {
       a2 = n2 / t2;
       o2 = n2 / e2;
     }
-    const l2 = Math.min(r2, a2, o2);
+    const l2 = Math.min(s2, a2, o2);
     if (this.sx > l2 || this.sy > l2) {
       this.sx = l2;
       this.sy = l2;
@@ -3718,7 +3818,7 @@ var OutputScale = class _OutputScale {
     return t2;
   }
 };
-var X = ["image/apng", "image/avif", "image/bmp", "image/gif", "image/jpeg", "image/png", "image/svg+xml", "image/webp", "image/x-icon"];
+var K = ["image/apng", "image/avif", "image/bmp", "image/gif", "image/jpeg", "image/png", "image/svg+xml", "image/webp", "image/x-icon"];
 var ColorScheme = class {
   static get isDarkMode() {
     return shadow(this, "isDarkMode", !!window?.matchMedia?.("(prefers-color-scheme: dark)").matches);
@@ -3743,55 +3843,55 @@ function applyOpacity(t2, e2) {
   return t2.map((t3) => Math.round(t3 * e2 + i2));
 }
 function RGBToHSL(t2, e2) {
-  const i2 = t2[0] / 255, n2 = t2[1] / 255, s2 = t2[2] / 255, r2 = Math.max(i2, n2, s2), a2 = Math.min(i2, n2, s2), o2 = (r2 + a2) / 2;
-  if (r2 === a2) e2[0] = e2[1] = 0;
+  const i2 = t2[0] / 255, n2 = t2[1] / 255, r2 = t2[2] / 255, s2 = Math.max(i2, n2, r2), a2 = Math.min(i2, n2, r2), o2 = (s2 + a2) / 2;
+  if (s2 === a2) e2[0] = e2[1] = 0;
   else {
-    const t3 = r2 - a2;
-    e2[1] = o2 < 0.5 ? t3 / (r2 + a2) : t3 / (2 - r2 - a2);
-    switch (r2) {
+    const t3 = s2 - a2;
+    e2[1] = o2 < 0.5 ? t3 / (s2 + a2) : t3 / (2 - s2 - a2);
+    switch (s2) {
       case i2:
-        e2[0] = 60 * ((n2 - s2) / t3 + (n2 < s2 ? 6 : 0));
+        e2[0] = 60 * ((n2 - r2) / t3 + (n2 < r2 ? 6 : 0));
         break;
       case n2:
-        e2[0] = 60 * ((s2 - i2) / t3 + 2);
+        e2[0] = 60 * ((r2 - i2) / t3 + 2);
         break;
-      case s2:
+      case r2:
         e2[0] = 60 * ((i2 - n2) / t3 + 4);
     }
   }
   e2[2] = o2;
 }
 function HSLToRGB(t2, e2) {
-  const i2 = t2[0], n2 = t2[1], s2 = t2[2], r2 = (1 - Math.abs(2 * s2 - 1)) * n2, a2 = r2 * (1 - Math.abs(i2 / 60 % 2 - 1)), o2 = s2 - r2 / 2;
+  const i2 = t2[0], n2 = t2[1], r2 = t2[2], s2 = (1 - Math.abs(2 * r2 - 1)) * n2, a2 = s2 * (1 - Math.abs(i2 / 60 % 2 - 1)), o2 = r2 - s2 / 2;
   switch (Math.floor(i2 / 60)) {
     case 0:
-      e2[0] = r2 + o2;
+      e2[0] = s2 + o2;
       e2[1] = a2 + o2;
       e2[2] = o2;
       break;
     case 1:
       e2[0] = a2 + o2;
-      e2[1] = r2 + o2;
+      e2[1] = s2 + o2;
       e2[2] = o2;
       break;
     case 2:
       e2[0] = o2;
-      e2[1] = r2 + o2;
+      e2[1] = s2 + o2;
       e2[2] = a2 + o2;
       break;
     case 3:
       e2[0] = o2;
       e2[1] = a2 + o2;
-      e2[2] = r2 + o2;
+      e2[2] = s2 + o2;
       break;
     case 4:
       e2[0] = a2 + o2;
       e2[1] = o2;
-      e2[2] = r2 + o2;
+      e2[2] = s2 + o2;
       break;
     case 5:
     case 6:
-      e2[0] = r2 + o2;
+      e2[0] = s2 + o2;
       e2[1] = o2;
       e2[2] = a2 + o2;
   }
@@ -3805,21 +3905,21 @@ function contrastRatio(t2, e2, i2) {
   const n2 = 0.2126 * i2[0] + 0.7152 * i2[1] + 0.0722 * i2[2];
   HSLToRGB(e2, i2);
   i2.map(computeLuminance);
-  const s2 = 0.2126 * i2[0] + 0.7152 * i2[1] + 0.0722 * i2[2];
-  return n2 > s2 ? (n2 + 0.05) / (s2 + 0.05) : (s2 + 0.05) / (n2 + 0.05);
+  const r2 = 0.2126 * i2[0] + 0.7152 * i2[1] + 0.0722 * i2[2];
+  return n2 > r2 ? (n2 + 0.05) / (r2 + 0.05) : (r2 + 0.05) / (n2 + 0.05);
 }
 var Y = /* @__PURE__ */ new Map();
 function findContrastColor(t2, e2) {
   const i2 = t2[0] + 256 * t2[1] + 65536 * t2[2] + 16777216 * e2[0] + 4294967296 * e2[1] + 1099511627776 * e2[2];
   let n2 = Y.get(i2);
   if (n2) return n2;
-  const s2 = new Float32Array(9), r2 = s2.subarray(0, 3), a2 = s2.subarray(3, 6);
+  const r2 = new Float32Array(9), s2 = r2.subarray(0, 3), a2 = r2.subarray(3, 6);
   RGBToHSL(t2, a2);
-  const o2 = s2.subarray(6, 9);
+  const o2 = r2.subarray(6, 9);
   RGBToHSL(e2, o2);
-  const l2 = o2[2] < 0.5, h2 = l2 ? 12 : 4.5;
+  const l2 = o2[2] < 0.5, c2 = l2 ? 12 : 4.5;
   a2[2] = l2 ? Math.sqrt(a2[2]) : 1 - Math.sqrt(1 - a2[2]);
-  if (contrastRatio(a2, o2, r2) < h2) {
+  if (contrastRatio(a2, o2, s2) < c2) {
     let t3, e3;
     if (l2) {
       t3 = a2[2];
@@ -3831,30 +3931,30 @@ function findContrastColor(t2, e2) {
     const i3 = 5e-3;
     for (; e3 - t3 > i3; ) {
       const i4 = a2[2] = (t3 + e3) / 2;
-      l2 === contrastRatio(a2, o2, r2) < h2 ? t3 = i4 : e3 = i4;
+      l2 === contrastRatio(a2, o2, s2) < c2 ? t3 = i4 : e3 = i4;
     }
     a2[2] = l2 ? e3 : t3;
   }
-  HSLToRGB(a2, r2);
-  n2 = Util.makeHexColor(Math.round(255 * r2[0]), Math.round(255 * r2[1]), Math.round(255 * r2[2]));
+  HSLToRGB(a2, s2);
+  n2 = Util.makeHexColor(Math.round(255 * s2[0]), Math.round(255 * s2[1]), Math.round(255 * s2[2]));
   Y.set(i2, n2);
   return n2;
 }
 function renderRichText({ html: t2, dir: e2, className: i2 }, n2) {
-  const s2 = document.createDocumentFragment();
+  const r2 = document.createDocumentFragment();
   if ("string" == typeof t2) {
     const i3 = document.createElement("p");
     i3.dir = e2 || "auto";
     const n3 = t2.split(/\r\n?|\n/);
     for (let t3 = 0, e3 = n3.length; t3 < e3; ++t3) {
-      const s3 = n3[t3];
-      i3.append(document.createTextNode(s3));
+      const r3 = n3[t3];
+      i3.append(document.createTextNode(r3));
       t3 < e3 - 1 && i3.append(document.createElement("br"));
     }
-    s2.append(i3);
-  } else XfaLayer.render({ xfaHtml: t2, div: s2, intent: "richText" });
-  s2.firstElementChild.classList.add("richText", i2);
-  n2.append(s2);
+    r2.append(i3);
+  } else XfaLayer.render({ xfaHtml: t2, div: r2, intent: "richText" });
+  r2.firstElementChild.classList.add("richText", i2);
+  n2.append(r2);
 }
 function makePathFromDrawOPS(t2) {
   const e2 = new Path2D();
@@ -3880,14 +3980,14 @@ function makePathFromDrawOPS(t2) {
   }
   return e2;
 }
-__webpack_require__(4972), __webpack_require__(4628), __webpack_require__(8454), __webpack_require__(9452), __webpack_require__(4979), __webpack_require__(3579), __webpack_require__(3110), __webpack_require__(9314), __webpack_require__(1148), __webpack_require__(116), __webpack_require__(9112);
+__webpack_require__(4972), __webpack_require__(8454), __webpack_require__(9452), __webpack_require__(4979), __webpack_require__(3579), __webpack_require__(3110), __webpack_require__(9314), __webpack_require__(1148), __webpack_require__(116), __webpack_require__(9112);
 var EditorToolbar = class _EditorToolbar {
-  #r = null;
+  #s = null;
   #a = null;
   #o;
   #l = null;
-  #h = null;
   #c = null;
+  #h = null;
   #d = null;
   #u = null;
   static #p = null;
@@ -3896,7 +3996,7 @@ var EditorToolbar = class _EditorToolbar {
     _EditorToolbar.#p ||= Object.freeze({ freetext: "pdfjs-editor-remove-freetext-button", highlight: "pdfjs-editor-remove-highlight-button", ink: "pdfjs-editor-remove-ink-button", stamp: "pdfjs-editor-remove-stamp-button", signature: "pdfjs-editor-remove-signature-button" });
   }
   render() {
-    const t2 = this.#r = document.createElement("div");
+    const t2 = this.#s = document.createElement("div");
     t2.classList.add("editToolbar", "hidden");
     t2.setAttribute("role", "toolbar");
     const e2 = this.#o._uiManager._signal;
@@ -3916,7 +4016,7 @@ var EditorToolbar = class _EditorToolbar {
     return t2;
   }
   get div() {
-    return this.#r;
+    return this.#s;
   }
   static #g(t2) {
     t2.stopPropagation();
@@ -3938,13 +4038,13 @@ var EditorToolbar = class _EditorToolbar {
     return true;
   }
   hide() {
-    this.#r.classList.add("hidden");
+    this.#s.classList.add("hidden");
     this.#a?.hideDropdown();
   }
   show() {
-    this.#r.classList.remove("hidden");
-    this.#h?.shown();
+    this.#s.classList.remove("hidden");
     this.#c?.shown();
+    this.#h?.shown();
   }
   addDeleteButton() {
     const { editorType: t2, _uiManager: e2 } = this.#o, i2 = document.createElement("button");
@@ -3965,10 +4065,10 @@ var EditorToolbar = class _EditorToolbar {
     const e2 = await t2.render();
     this.#b(e2);
     this.#l.append(e2, this.#y);
-    this.#h = t2;
+    this.#c = t2;
   }
   addComment(t2, e2 = null) {
-    if (this.#c) return;
+    if (this.#h) return;
     const i2 = t2.renderForToolbar();
     if (!i2) return;
     this.#b(i2);
@@ -3977,7 +4077,7 @@ var EditorToolbar = class _EditorToolbar {
       this.#l.insertBefore(i2, e2);
       this.#l.insertBefore(n2, e2);
     } else this.#l.append(i2, n2);
-    this.#c = t2;
+    this.#h = t2;
     t2.toolbar = this;
   }
   addColorPicker(t2) {
@@ -3994,8 +4094,8 @@ var EditorToolbar = class _EditorToolbar {
   }
   removeButton(t2) {
     if ("comment" === t2) {
-      this.#c?.removeToolbarCommentButton();
-      this.#c = null;
+      this.#h?.removeToolbarCommentButton();
+      this.#h = null;
       this.#d?.remove();
       this.#d = null;
     }
@@ -4027,75 +4127,76 @@ var EditorToolbar = class _EditorToolbar {
     this.#u && (this.#u.title = t2);
   }
   remove() {
-    this.#r.remove();
+    this.#s.remove();
     this.#a?.destroy();
     this.#a = null;
   }
 };
 var FloatingToolbar = class {
   #l = null;
-  #r = null;
+  #s = null;
   #v;
   constructor(t2) {
     this.#v = t2;
   }
   #w() {
-    const t2 = this.#r = document.createElement("div");
+    const t2 = this.#s = document.createElement("div");
     t2.className = "editToolbar";
     t2.setAttribute("role", "toolbar");
+    t2.dir = this.#v.direction;
     const e2 = this.#v._signal;
     e2 instanceof AbortSignal && !e2.aborted && t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
     const i2 = this.#l = document.createElement("div");
     i2.className = "buttons";
     t2.append(i2);
-    this.#v.hasCommentManager() && this.#x("commentButton", "pdfjs-comment-floating-button", "pdfjs-comment-floating-button-label", () => {
+    this.#v.hasCommentManager() && this.#A("commentButton", "pdfjs-comment-floating-button", "pdfjs-comment-floating-button-label", () => {
       this.#v.commentSelection("floating_button");
     });
-    this.#x("highlightButton", "pdfjs-highlight-floating-button1", "pdfjs-highlight-floating-button-label", () => {
+    this.#A("highlightButton", "pdfjs-highlight-floating-button1", "pdfjs-highlight-floating-button-label", () => {
       this.#v.highlightSelection("floating_button");
     });
     return t2;
   }
-  #A(t2, e2) {
+  #x(t2, e2) {
     let i2 = 0, n2 = 0;
-    for (const s2 of t2) {
-      const t3 = s2.y + s2.height;
+    for (const r2 of t2) {
+      const t3 = r2.y + r2.height;
       if (t3 < i2) continue;
-      const r2 = s2.x + (e2 ? s2.width : 0);
+      const s2 = r2.x + (e2 ? r2.width : 0);
       if (t3 > i2) {
-        n2 = r2;
+        n2 = s2;
         i2 = t3;
-      } else e2 ? r2 > n2 && (n2 = r2) : r2 < n2 && (n2 = r2);
+      } else e2 ? s2 > n2 && (n2 = s2) : s2 < n2 && (n2 = s2);
     }
     return [e2 ? 1 - n2 : n2, i2];
   }
   show(t2, e2, i2) {
-    const [n2, s2] = this.#A(e2, i2), { style: r2 } = this.#r ||= this.#w();
-    t2.append(this.#r);
-    r2.insetInlineEnd = 100 * n2 + "%";
-    r2.top = `calc(${100 * s2}% + var(--editor-toolbar-vert-offset))`;
+    const [n2, r2] = this.#x(e2, i2), { style: s2 } = this.#s ||= this.#w();
+    t2.append(this.#s);
+    s2.insetInlineEnd = 100 * n2 + "%";
+    s2.top = `calc(${100 * r2}% + var(--editor-toolbar-vert-offset))`;
   }
   hide() {
-    this.#r.remove();
+    this.#s.remove();
   }
-  #x(t2, e2, i2, n2) {
-    const s2 = document.createElement("button");
-    s2.classList.add("basic", t2);
-    s2.tabIndex = 0;
-    s2.setAttribute("data-l10n-id", e2);
-    const r2 = document.createElement("span");
-    s2.append(r2);
-    r2.className = "visuallyHidden";
-    r2.setAttribute("data-l10n-id", i2);
+  #A(t2, e2, i2, n2) {
+    const r2 = document.createElement("button");
+    r2.classList.add("basic", t2);
+    r2.tabIndex = 0;
+    r2.setAttribute("data-l10n-id", e2);
+    const s2 = document.createElement("span");
+    r2.append(s2);
+    s2.className = "visuallyHidden";
+    s2.setAttribute("data-l10n-id", i2);
     const a2 = this.#v._signal;
     if (a2 instanceof AbortSignal && !a2.aborted) {
-      s2.addEventListener("contextmenu", noContextMenu, { signal: a2 });
-      s2.addEventListener("click", n2, { signal: a2 });
+      r2.addEventListener("contextmenu", noContextMenu, { signal: a2 });
+      r2.addEventListener("click", n2, { signal: a2 });
     }
-    this.#l.append(s2);
+    this.#l.append(r2);
   }
 };
-var J = Object.freeze({ internal: "f63eb798-ea37-4556-98de-f8303ee5a694" });
+var J = Object.freeze({ internal: "59968104-cc61-4cf9-b570-014b35b3709c" });
 function bindEvents(t2, e2, i2) {
   for (const n2 of i2) e2.addEventListener(n2, t2[n2].bind(t2));
 }
@@ -4163,7 +4264,7 @@ var ImageManager = class _ImageManager {
       return 0 === new Uint32Array(e2.getImageData(0, 0, 1, 1).data.buffer)[0];
     }));
   }
-  async #M(t2, e2) {
+  async #P(t2, e2) {
     this.#D ||= /* @__PURE__ */ new Map();
     let i2 = this.#D.get(t2);
     if (null === i2) return null;
@@ -4179,20 +4280,20 @@ var ImageManager = class _ImageManager {
         t3 = await fetchData(e2, "blob");
       } else e2 instanceof File ? t3 = i2.file = e2 : e2 instanceof Blob && (t3 = e2);
       if ("image/svg+xml" === t3.type) {
-        const e3 = _ImageManager._isSVGFittingCanvas, n2 = new FileReader(), s2 = new Image(), r2 = new Promise((t4, r3) => {
-          s2.onload = () => {
-            i2.bitmap = s2;
+        const e3 = _ImageManager._isSVGFittingCanvas, n2 = new FileReader(), r2 = new Image(), s2 = new Promise((t4, s3) => {
+          r2.onload = () => {
+            i2.bitmap = r2;
             i2.isSvg = true;
             t4();
           };
           n2.onload = async () => {
             const t5 = i2.svgUrl = n2.result;
-            s2.src = await e3 ? `${t5}#svgView(preserveAspectRatio(none))` : t5;
+            r2.src = await e3 ? `${t5}#svgView(preserveAspectRatio(none))` : t5;
           };
-          s2.onerror = n2.onerror = r3;
+          r2.onerror = n2.onerror = s3;
         });
         n2.readAsDataURL(t3);
-        await r2;
+        await s2;
       } else i2.bitmap = await createImageBitmap(t3);
       i2.refCounter = 1;
     } catch (t3) {
@@ -4204,15 +4305,15 @@ var ImageManager = class _ImageManager {
     return i2;
   }
   async getFromFile(t2) {
-    const { lastModified: e2, name: i2, size: n2, type: s2 } = t2;
-    return this.#M(`${e2}_${i2}_${n2}_${s2}`, t2);
+    const { lastModified: e2, name: i2, size: n2, type: r2 } = t2;
+    return this.#P(`${e2}_${i2}_${n2}_${r2}`, t2);
   }
   async getFromUrl(t2) {
-    return this.#M(t2, t2);
+    return this.#P(t2, t2);
   }
   async getFromBlob(t2, e2) {
     const i2 = await e2;
-    return this.#M(t2, i2);
+    return this.#P(t2, i2);
   }
   async getFromId(t2) {
     this.#D ||= /* @__PURE__ */ new Map();
@@ -4268,50 +4369,50 @@ var ImageManager = class _ImageManager {
   }
 };
 var CommandManager = class {
-  #P = [];
+  #M = [];
   #I = false;
   #F;
   #O = -1;
   constructor(t2 = 128) {
     this.#F = t2;
   }
-  add({ cmd: t2, undo: e2, post: i2, mustExec: n2, type: s2 = NaN, overwriteIfSameType: r2 = false, keepUndo: a2 = false }) {
+  add({ cmd: t2, undo: e2, post: i2, mustExec: n2, type: r2 = NaN, overwriteIfSameType: s2 = false, keepUndo: a2 = false }) {
     n2 && t2();
     if (this.#I) return;
-    const o2 = { cmd: t2, undo: e2, post: i2, type: s2 };
+    const o2 = { cmd: t2, undo: e2, post: i2, type: r2 };
     if (-1 === this.#O) {
-      this.#P.length > 0 && (this.#P.length = 0);
+      this.#M.length > 0 && (this.#M.length = 0);
       this.#O = 0;
-      this.#P.push(o2);
+      this.#M.push(o2);
       return;
     }
-    if (r2 && this.#P[this.#O].type === s2) {
-      a2 && (o2.undo = this.#P[this.#O].undo);
-      this.#P[this.#O] = o2;
+    if (s2 && this.#M[this.#O].type === r2) {
+      a2 && (o2.undo = this.#M[this.#O].undo);
+      this.#M[this.#O] = o2;
       return;
     }
     const l2 = this.#O + 1;
-    if (l2 === this.#F) this.#P.splice(0, 1);
+    if (l2 === this.#F) this.#M.splice(0, 1);
     else {
       this.#O = l2;
-      l2 < this.#P.length && this.#P.splice(l2);
+      l2 < this.#M.length && this.#M.splice(l2);
     }
-    this.#P.push(o2);
+    this.#M.push(o2);
   }
   undo() {
     if (-1 === this.#O) return;
     this.#I = true;
-    const { undo: t2, post: e2 } = this.#P[this.#O];
+    const { undo: t2, post: e2 } = this.#M[this.#O];
     t2();
     e2?.();
     this.#I = false;
     this.#O -= 1;
   }
   redo() {
-    if (this.#O < this.#P.length - 1) {
+    if (this.#O < this.#M.length - 1) {
       this.#O += 1;
       this.#I = true;
-      const { cmd: t2, post: e2 } = this.#P[this.#O];
+      const { cmd: t2, post: e2 } = this.#M[this.#O];
       t2();
       e2?.();
       this.#I = false;
@@ -4321,21 +4422,21 @@ var CommandManager = class {
     return -1 !== this.#O;
   }
   hasSomethingToRedo() {
-    return this.#O < this.#P.length - 1;
+    return this.#O < this.#M.length - 1;
   }
   cleanType(t2) {
     if (-1 !== this.#O) {
-      for (let e2 = this.#O; e2 >= 0; e2--) if (this.#P[e2].type !== t2) {
-        this.#P.splice(e2 + 1, this.#O - e2);
+      for (let e2 = this.#O; e2 >= 0; e2--) if (this.#M[e2].type !== t2) {
+        this.#M.splice(e2 + 1, this.#O - e2);
         this.#O = e2;
         return;
       }
-      this.#P.length = 0;
+      this.#M.length = 0;
       this.#O = -1;
     }
   }
   destroy() {
-    this.#P = null;
+    this.#M = null;
   }
 };
 var KeyboardManager = class _KeyboardManager {
@@ -4346,17 +4447,17 @@ var KeyboardManager = class _KeyboardManager {
   constructor(t2) {
     this.callbacks = /* @__PURE__ */ new Map();
     const { isMac: e2 } = FeatureTest.platform;
-    for (const [i2, n2, s2 = {}] of t2) {
+    for (const [i2, n2, r2 = {}] of t2) {
       const t3 = i2.some((t4) => t4.startsWith("mac+"));
-      for (const r2 of i2) {
-        let i3 = r2;
+      for (const s2 of i2) {
+        let i3 = s2;
         if (t3) {
-          const t4 = r2.startsWith("mac+");
+          const t4 = s2.startsWith("mac+");
           if (e2 !== t4) continue;
-          t4 && (i3 = r2.slice(4));
+          t4 && (i3 = s2.slice(4));
         }
         const [a2, o2] = _KeyboardManager.#R(i3);
-        null !== a2 && this.callbacks.getOrInsertComputed(a2, makeArr).push({ callback: n2, options: s2, modifiers: o2 });
+        null !== a2 && this.callbacks.getOrInsertComputed(a2, makeArr).push({ callback: n2, options: r2, modifiers: o2 });
       }
     }
   }
@@ -4365,14 +4466,14 @@ var KeyboardManager = class _KeyboardManager {
     for (let n2 of t2.split("+")) {
       n2 = n2.trim();
       if (!n2) continue;
-      const s2 = n2.toUpperCase(), r2 = _KeyboardManager[s2];
-      if (r2) i2 |= r2;
+      const r2 = n2.toUpperCase(), s2 = _KeyboardManager[r2];
+      if (s2) i2 |= s2;
       else {
         if (null !== e2) {
           warn(`KeyboardManager: multiple keys in shortcut "${t2}"`);
           break;
         }
-        e2 = "SPACE" === s2 ? " " : n2;
+        e2 = "SPACE" === r2 ? " " : n2;
       }
     }
     null === e2 && warn(`KeyboardManager: no key found in shortcut "${t2}"`);
@@ -4391,11 +4492,11 @@ var KeyboardManager = class _KeyboardManager {
       i2 = this.callbacks.get(t3);
       if (!i2) return;
     }
-    const n2 = (e2.altKey ? _KeyboardManager.ALT : 0) | (e2.ctrlKey ? _KeyboardManager.CTRL : 0) | (e2.metaKey ? _KeyboardManager.META : 0) | (e2.shiftKey ? _KeyboardManager.SHIFT : 0), s2 = i2.find((t3) => t3.modifiers === n2);
-    if (!s2) return;
-    const { callback: r2, options: { bubbles: a2 = false, args: o2 = [], checker: l2 = null } } = s2;
+    const n2 = (e2.altKey ? _KeyboardManager.ALT : 0) | (e2.ctrlKey ? _KeyboardManager.CTRL : 0) | (e2.metaKey ? _KeyboardManager.META : 0) | (e2.shiftKey ? _KeyboardManager.SHIFT : 0), r2 = i2.find((t3) => t3.modifiers === n2);
+    if (!r2) return;
+    const { callback: s2, options: { bubbles: a2 = false, args: o2 = [], checker: l2 = null } } = r2;
     if (!l2 || l2(t2, e2)) {
-      r2.bind(t2, ...o2, e2)();
+      s2.bind(t2, ...o2, e2)();
       a2 || stopEvent(e2);
     }
   }
@@ -4439,69 +4540,70 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   #j = null;
   #W = null;
   #V = null;
-  #$ = new CommandManager();
-  #q = null;
-  #K = null;
+  #$ = null;
+  #q = new CommandManager();
   #X = null;
-  #Y = 0;
-  #J = /* @__PURE__ */ new Set();
-  #Q = null;
+  #K = null;
+  #Y = null;
+  #J = 0;
+  #Q = /* @__PURE__ */ new Set();
   #Z = null;
-  #tt = /* @__PURE__ */ new Set();
+  #tt = null;
+  #et = /* @__PURE__ */ new Set();
   _editorUndoBar = null;
-  #et = false;
   #it = false;
   #nt = false;
+  #rt = false;
   #st = null;
-  #rt = null;
   #at = null;
   #ot = null;
-  #lt = false;
+  #lt = null;
+  #ct = false;
   #ht = null;
-  #ct = new IdManager();
-  #dt = false;
+  #dt = new IdManager();
   #ut = false;
   #pt = false;
-  #gt = null;
+  #gt = false;
   #mt = null;
   #ft = null;
   #bt = null;
   #yt = null;
-  #vt = y.NONE;
-  #wt = /* @__PURE__ */ new Set();
+  #vt = null;
+  #wt = y.NONE;
+  #At = /* @__PURE__ */ new Set();
   #xt = null;
-  #At = null;
   #Et = null;
   #Ct = null;
   #St = null;
-  #Tt = { isEditing: false, isEmpty: true, hasSomethingToUndo: false, hasSomethingToRedo: false, hasSelectedEditor: false, hasSelectedText: false };
-  #_t = [0, 0];
-  #kt = null;
+  #Tt = null;
+  #_t = { isEditing: false, isEmpty: true, hasSomethingToUndo: false, hasSomethingToRedo: false, hasSelectedEditor: false, hasSelectedText: false };
+  #kt = [0, 0];
   #Dt = null;
-  #Mt = null;
   #Pt = null;
+  #Mt = null;
   #It = null;
+  #Ft = null;
   static TRANSLATE_SMALL = 1;
   static TRANSLATE_BIG = 10;
   static get _keyboardManager() {
-    const t2 = _AnnotationEditorUIManager.prototype, arrowChecker = (t3) => t3.#Dt.contains(document.activeElement) && "BUTTON" !== document.activeElement.tagName && t3.hasSomethingToControl(), textInputChecker = (t3, { target: e3 }) => {
+    const t2 = _AnnotationEditorUIManager.prototype, arrowChecker = (t3) => t3.#Pt.contains(document.activeElement) && "BUTTON" !== document.activeElement.tagName && t3.hasSomethingToControl(), textInputChecker = (t3, { target: e3 }) => {
       if (e3 instanceof HTMLInputElement) {
         const { type: t4 } = e3;
         return "text" !== t4 && "number" !== t4;
       }
       return true;
     }, e2 = this.TRANSLATE_SMALL, i2 = this.TRANSLATE_BIG;
-    return shadow(this, "_keyboardManager", new KeyboardManager([[["ctrl+a", "mac+meta+a"], t2.selectAll, { checker: textInputChecker }], [["ctrl+z", "mac+meta+z"], t2.undo, { checker: textInputChecker }], [["ctrl+y", "ctrl+shift+z", "mac+meta+shift+z", "ctrl+shift+Z", "mac+meta+shift+Z"], t2.redo, { checker: textInputChecker }], [["Backspace", "alt+Backspace", "ctrl+Backspace", "shift+Backspace", "mac+Backspace", "mac+alt+Backspace", "mac+ctrl+Backspace", "Delete", "ctrl+Delete", "shift+Delete", "mac+Delete"], t2.delete, { checker: textInputChecker }], [["Enter"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Dt.contains(e3) && !t3.isEnterHandled }], [["Space"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Dt.contains(document.activeElement) }], [["Escape"], t2.unselectAll], [["ArrowLeft"], t2.translateSelectedEditors, { args: [-e2, 0], checker: arrowChecker }], [["ctrl+ArrowLeft", "mac+shift+ArrowLeft"], t2.translateSelectedEditors, { args: [-i2, 0], checker: arrowChecker }], [["ArrowRight"], t2.translateSelectedEditors, { args: [e2, 0], checker: arrowChecker }], [["ctrl+ArrowRight", "mac+shift+ArrowRight"], t2.translateSelectedEditors, { args: [i2, 0], checker: arrowChecker }], [["ArrowUp"], t2.translateSelectedEditors, { args: [0, -e2], checker: arrowChecker }], [["ctrl+ArrowUp", "mac+shift+ArrowUp"], t2.translateSelectedEditors, { args: [0, -i2], checker: arrowChecker }], [["ArrowDown"], t2.translateSelectedEditors, { args: [0, e2], checker: arrowChecker }], [["ctrl+ArrowDown", "mac+shift+ArrowDown"], t2.translateSelectedEditors, { args: [0, i2], checker: arrowChecker }]]));
+    return shadow(this, "_keyboardManager", new KeyboardManager([[["ctrl+a", "mac+meta+a"], t2.selectAll, { checker: textInputChecker }], [["ctrl+z", "mac+meta+z"], t2.undo, { checker: textInputChecker }], [["ctrl+y", "ctrl+shift+z", "mac+meta+shift+z", "ctrl+shift+Z", "mac+meta+shift+Z"], t2.redo, { checker: textInputChecker }], [["Backspace", "alt+Backspace", "ctrl+Backspace", "shift+Backspace", "mac+Backspace", "mac+alt+Backspace", "mac+ctrl+Backspace", "Delete", "ctrl+Delete", "shift+Delete", "mac+Delete"], t2.delete, { checker: textInputChecker }], [["Enter"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Pt.contains(e3) && !t3.isEnterHandled }], [["Space"], t2.addNewEditorFromKeyboard, { checker: (t3, { target: e3 }) => !(e3 instanceof HTMLButtonElement) && t3.#Pt.contains(document.activeElement) }], [["Escape"], t2.unselectAll], [["ArrowLeft"], t2.translateSelectedEditors, { args: [-e2, 0], checker: arrowChecker }], [["ctrl+ArrowLeft", "mac+shift+ArrowLeft"], t2.translateSelectedEditors, { args: [-i2, 0], checker: arrowChecker }], [["ArrowRight"], t2.translateSelectedEditors, { args: [e2, 0], checker: arrowChecker }], [["ctrl+ArrowRight", "mac+shift+ArrowRight"], t2.translateSelectedEditors, { args: [i2, 0], checker: arrowChecker }], [["ArrowUp"], t2.translateSelectedEditors, { args: [0, -e2], checker: arrowChecker }], [["ctrl+ArrowUp", "mac+shift+ArrowUp"], t2.translateSelectedEditors, { args: [0, -i2], checker: arrowChecker }], [["ArrowDown"], t2.translateSelectedEditors, { args: [0, e2], checker: arrowChecker }], [["ctrl+ArrowDown", "mac+shift+ArrowDown"], t2.translateSelectedEditors, { args: [0, i2], checker: arrowChecker }]]));
   }
-  constructor(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2, c2, d2, u2, p2, g2, m2) {
+  constructor(t2, e2, i2, n2, r2, s2, a2, o2, l2, c2, h2, d2, u2, p2, g2, m2) {
     const f2 = this._signal = this.#L.signal;
-    this.#Dt = t2;
+    this.#Pt = t2;
     this.#Mt = e2;
-    this.#Pt = i2;
-    this.#j = n2;
-    this.#q = s2;
-    this.#At = r2;
-    this.#St = o2;
+    this.#It = i2;
+    this.#W = n2;
+    this.#X = r2;
+    this.#Et = s2;
+    this.#Tt = o2;
     this._eventBus = a2;
     const b2 = { signal: f2, ...J };
     a2.on("editingaction", this.onEditingAction.bind(this), b2);
@@ -4511,82 +4613,82 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     a2.on("setpreference", this.onSetPreference.bind(this), b2);
     a2.on("switchannotationeditorparams", (t3) => this.updateParams(t3.type, t3.value), b2);
     window.addEventListener("pointerdown", () => {
-      this.#ut = true;
+      this.#pt = true;
     }, { capture: true, signal: f2 });
     window.addEventListener("pointerup", () => {
-      this.#ut = false;
+      this.#pt = false;
     }, { capture: true, signal: f2 });
     window.addEventListener("beforeunload", this.endCurrentEditing.bind(this), { capture: true, signal: f2 });
-    this.#Ft();
     this.#Ot();
     this.#Rt();
-    this.#W = o2.annotationStorage;
+    this.#Bt();
+    this.#V = o2.annotationStorage;
     this.#st = o2.filterFactory;
-    this.#Et = l2;
-    this.#ot = h2 || null;
-    this.#et = c2;
-    this.#it = d2;
-    this.#nt = u2;
-    this.#yt = p2 || null;
+    this.#Ct = l2;
+    this.#lt = c2 || null;
+    this.#it = h2;
+    this.#nt = d2;
+    this.#rt = u2;
+    this.#vt = p2 || null;
     this.viewParameters = { realScale: PixelsPerInch.PDF_TO_CSS_UNITS, rotation: 0 };
     this.isShiftKeyDown = false;
     this._editorUndoBar = g2 || null;
     this._supportsPinchToZoom = false !== m2;
-    s2?.setSidebarUiManager(this);
+    r2?.setSidebarUiManager(this);
   }
   destroy() {
-    this.#It?.resolve();
-    this.#It = null;
+    this.#Ft?.resolve();
+    this.#Ft = null;
     this.#L?.abort();
     this.#L = null;
     this._signal = null;
     for (const t2 of this.#z.values()) t2.destroy();
     this.#z.clear();
     this.#H.clear();
-    this.#tt.clear();
-    this.#bt?.clear();
+    this.#et.clear();
+    this.#yt?.clear();
     this.#N = null;
-    this.#wt.clear();
-    this.#$.destroy();
-    this.#j?.destroy();
-    this.#q?.destroy();
-    this.#At?.destroy();
+    this.#At.clear();
+    this.#q.destroy();
+    this.#W?.destroy();
+    this.#X?.destroy();
+    this.#Et?.destroy();
     this.#ht?.hide();
     this.#ht = null;
-    this.#ft?.destroy();
-    this.#ft = null;
+    this.#bt?.destroy();
+    this.#bt = null;
     this.#U = null;
-    if (this.#rt) {
-      clearTimeout(this.#rt);
-      this.#rt = null;
+    if (this.#at) {
+      clearTimeout(this.#at);
+      this.#at = null;
     }
-    if (this.#kt) {
-      clearTimeout(this.#kt);
-      this.#kt = null;
+    if (this.#Dt) {
+      clearTimeout(this.#Dt);
+      this.#Dt = null;
     }
     this._editorUndoBar?.destroy();
-    this.#St = null;
+    this.#Tt = null;
   }
   combinedSignal(t2) {
     return AbortSignal.any([this._signal, t2.signal]);
   }
   get mlManager() {
-    return this.#yt;
+    return this.#vt;
   }
   get useNewAltTextFlow() {
-    return this.#it;
-  }
-  get useNewAltTextWhenAddingImage() {
     return this.#nt;
   }
+  get useNewAltTextWhenAddingImage() {
+    return this.#rt;
+  }
   get hcmFilter() {
-    return shadow(this, "hcmFilter", this.#Et ? this.#st.addHCMFilter(this.#Et.foreground, this.#Et.background) : "none");
+    return shadow(this, "hcmFilter", this.#Ct ? this.#st.addHCMFilter(this.#Ct.foreground, this.#Ct.background) : "none");
   }
   get direction() {
-    return shadow(this, "direction", getComputedStyle(this.#Dt).direction);
+    return shadow(this, "direction", getComputedStyle(this.#Pt).direction);
   }
   get _highlightColors() {
-    return shadow(this, "_highlightColors", this.#ot ? new Map(this.#ot.split(",").map((t2) => {
+    return shadow(this, "_highlightColors", this.#lt ? new Map(this.#lt.split(",").map((t2) => {
       (t2 = t2.split("=").map((t3) => t3.trim()))[1] = t2[1].toUpperCase();
       return t2;
     })) : null);
@@ -4594,10 +4696,10 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   get highlightColors() {
     const { _highlightColors: t2 } = this;
     if (!t2) return shadow(this, "highlightColors", null);
-    const e2 = /* @__PURE__ */ new Map(), i2 = !!this.#Et;
-    for (const [n2, s2] of t2) {
+    const e2 = /* @__PURE__ */ new Map(), i2 = !!this.#Ct;
+    for (const [n2, r2] of t2) {
       const t3 = n2.endsWith("_HCM");
-      i2 && t3 ? e2.set(n2.replace("_HCM", ""), s2) : i2 || t3 || e2.set(n2, s2);
+      i2 && t3 ? e2.set(n2.replace("_HCM", ""), r2) : i2 || t3 || e2.set(n2, r2);
     }
     return shadow(this, "highlightColors", e2);
   }
@@ -4617,32 +4719,32 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
       this.unselectAll();
       this.disableUserSelect(true);
     } else this.disableUserSelect(false);
-    this.#X = t2;
+    this.#Y = t2;
   }
   setMainHighlightColorPicker(t2) {
-    this.#ft = t2;
+    this.#bt = t2;
   }
   editAltText(t2, e2 = false) {
-    this.#j?.editAltText(this, t2, e2);
+    this.#W?.editAltText(this, t2, e2);
   }
   hasCommentManager() {
-    return !!this.#q;
+    return !!this.#X;
   }
   editComment(t2, e2, i2, n2) {
-    this.#q?.showDialog(this, t2, e2, i2, n2);
+    this.#X?.showDialog(this, t2, e2, i2, n2);
   }
   selectComment(t2, e2) {
     const i2 = this.#z.get(t2), n2 = i2?.getEditorByUID(e2);
     n2?.toggleComment(true, true);
   }
   updateComment(t2) {
-    this.#q?.updateComment(t2.getData());
+    this.#X?.updateComment(t2.getData());
   }
   updatePopupColor(t2) {
-    this.#q?.updatePopupColor(t2);
+    this.#X?.updatePopupColor(t2);
   }
   removeComment(t2) {
-    this.#q?.removeComments([t2.uid]);
+    this.#X?.removeComments([t2.uid]);
   }
   deleteComment(t2, e2) {
     const undo = () => {
@@ -4655,13 +4757,13 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }, undo, mustExec: true });
   }
   toggleComment(t2, e2, i2 = void 0) {
-    this.#q?.toggleCommentPopup(t2, e2, i2);
+    this.#X?.toggleCommentPopup(t2, e2, i2);
   }
   makeCommentColor(t2, e2) {
-    return t2 && this.#q?.makeCommentColor(t2, e2) || null;
+    return t2 && this.#X?.makeCommentColor(t2, e2) || null;
   }
   getCommentDialogElement() {
-    return this.#q?.dialogElement || null;
+    return this.#X?.dialogElement || null;
   }
   async waitForEditorsRendered(t2) {
     if (this.#z.has(t2 - 1)) return;
@@ -4675,10 +4777,10 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     await i2;
   }
   getSignature(t2) {
-    this.#At?.getSignature({ uiManager: this, editor: t2 });
+    this.#Et?.getSignature({ uiManager: this, editor: t2 });
   }
   get signatureManager() {
-    return this.#At;
+    return this.#Et;
   }
   switchToMode(t2, e2) {
     this._eventBus.on("annotationeditormodechanged", e2, { once: true, signal: this._signal, ...J });
@@ -4688,23 +4790,23 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this._eventBus.dispatch("setpreference", { source: this, name: t2, value: e2 });
   }
   onSetPreference({ name: t2, value: e2 }) {
-    if ("enableNewAltTextWhenAddingImage" === t2) this.#nt = e2;
+    if ("enableNewAltTextWhenAddingImage" === t2) this.#rt = e2;
   }
   onPageChanging({ pageNumber: t2 }) {
-    this.#Y = t2 - 1;
+    this.#J = t2 - 1;
   }
   deletePage(t2) {
     for (const e2 of this.getEditors(t2)) e2.remove();
     this.#z.delete(t2);
-    this.#Y === t2 && (this.#Y = 0);
+    this.#J === t2 && (this.#J = 0);
   }
   focusMainContainer() {
-    this.#Dt.focus();
+    this.#Pt.focus();
   }
   findParent(t2, e2) {
     for (const i2 of this.#z.values()) {
-      const { x: n2, y: s2, width: r2, height: a2 } = i2.div.getBoundingClientRect();
-      if (t2 >= n2 && t2 <= n2 + r2 && e2 >= s2 && e2 <= s2 + a2) return i2;
+      const { x: n2, y: r2, width: s2, height: a2 } = i2.div.getBoundingClientRect();
+      if (t2 >= n2 && t2 <= n2 + s2 && e2 >= r2 && e2 <= r2 + a2) return i2;
     }
     return null;
   }
@@ -4712,25 +4814,25 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.#Mt.classList.toggle("noUserSelect", t2);
   }
   addShouldRescale(t2) {
-    this.#tt.add(t2);
+    this.#et.add(t2);
   }
   removeShouldRescale(t2) {
-    this.#tt.delete(t2);
+    this.#et.delete(t2);
   }
   onScaleChanging({ scale: t2 }) {
     this.commitOrRemove();
     this.viewParameters.realScale = t2 * PixelsPerInch.PDF_TO_CSS_UNITS;
-    for (const t3 of this.#tt) t3.onScaleChanging();
-    this.#X?.onScaleChanging();
+    for (const t3 of this.#et) t3.onScaleChanging();
+    this.#Y?.onScaleChanging();
   }
   onRotationChanging({ pagesRotation: t2 }) {
     this.commitOrRemove();
     this.viewParameters.rotation = t2;
   }
-  #Bt({ anchorNode: t2 }) {
+  #Lt({ anchorNode: t2 }) {
     return t2.nodeType === Node.TEXT_NODE ? t2.parentElement : t2;
   }
-  #Lt(t2) {
+  #Nt(t2) {
     const { currentLayer: e2 } = this;
     if (e2.hasTextLayer(t2)) return e2;
     for (const e3 of this.#z.values()) if (e3.hasTextLayer(t2)) return e3;
@@ -4739,11 +4841,11 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   highlightSelection(t2 = "", e2 = false) {
     const i2 = document.getSelection();
     if (!i2 || i2.isCollapsed) return;
-    const { anchorNode: n2, anchorOffset: s2, focusNode: r2, focusOffset: a2 } = i2, o2 = i2.toString(), l2 = this.#Bt(i2).closest(".textLayer"), h2 = this.getSelectionBoxes(l2);
-    if (!h2) return;
+    const { anchorNode: n2, anchorOffset: r2, focusNode: s2, focusOffset: a2 } = i2, o2 = i2.toString(), l2 = this.#Lt(i2).closest(".textLayer"), c2 = this.getSelectionBoxes(l2);
+    if (!c2) return;
     i2.empty();
-    const c2 = this.#Lt(l2), d2 = this.#vt === y.NONE, callback = () => {
-      const i3 = c2?.createAndAddNewEditor({ x: 0, y: 0 }, false, { methodOfCreation: t2, boxes: h2, anchorNode: n2, anchorOffset: s2, focusNode: r2, focusOffset: a2, text: o2 });
+    const h2 = this.#Nt(l2), d2 = this.#wt === y.NONE, callback = () => {
+      const i3 = h2?.createAndAddNewEditor({ x: 0, y: 0 }, false, { methodOfCreation: t2, boxes: c2, anchorNode: n2, anchorOffset: r2, focusNode: s2, focusOffset: a2, text: o2 });
       d2 && this.showAllEditors("highlight", true, true);
       e2 && i3?.editComment();
     };
@@ -4756,128 +4858,128 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.commitOrRemove();
     this.currentLayer?.endDrawingSession(false);
   }
-  #Nt() {
+  #Ut() {
     const t2 = document.getSelection();
     if (!t2 || t2.isCollapsed) return;
-    const e2 = this.#Bt(t2).closest(".textLayer"), i2 = this.getSelectionBoxes(e2);
+    const e2 = this.#Lt(t2).closest(".textLayer"), i2 = this.getSelectionBoxes(e2);
     if (i2) {
       this.#ht ||= new FloatingToolbar(this);
       this.#ht.show(e2, i2, "ltr" === this.direction);
     }
   }
   getAndRemoveDataFromAnnotationStorage(t2) {
-    if (!this.#W) return null;
-    const e2 = `${b}${t2}`, i2 = this.#W.getRawValue(e2);
-    i2 && this.#W.remove(e2);
+    if (!this.#V) return null;
+    const e2 = `${b}${t2}`, i2 = this.#V.getRawValue(e2);
+    i2 && this.#V.remove(e2);
     return i2;
   }
   addToAnnotationStorage(t2) {
-    t2.isEmpty() || !this.#W || this.#W.has(t2.id) || this.#W.setValue(t2.id, t2);
+    t2.isEmpty() || !this.#V || this.#V.has(t2.id) || this.#V.setValue(t2.id, t2);
   }
   a11yAlert(t2, e2 = null) {
-    const i2 = this.#Pt;
+    const i2 = this.#It;
     if (i2) {
       i2.setAttribute("data-l10n-id", t2);
       e2 ? i2.setAttribute("data-l10n-args", JSON.stringify(e2)) : i2.removeAttribute("data-l10n-args");
     }
   }
-  #Ut() {
+  #Ht() {
     const t2 = document.getSelection();
     if (!t2 || t2.isCollapsed) {
       if (this.#xt) {
         this.#ht?.hide();
         this.#xt = null;
-        this.#Ht({ hasSelectedText: false });
+        this.#zt({ hasSelectedText: false });
       }
       return;
     }
     const { anchorNode: e2 } = t2;
     if (e2 === this.#xt) return;
-    const i2 = this.#Bt(t2).closest(".textLayer");
+    const i2 = this.#Lt(t2).closest(".textLayer");
     if (i2) {
       this.#ht?.hide();
       this.#xt = e2;
-      this.#Ht({ hasSelectedText: true });
-      if (this.#vt === y.HIGHLIGHT || this.#vt === y.NONE) {
-        this.#vt === y.HIGHLIGHT && this.showAllEditors("highlight", true, true);
-        this.#lt = this.isShiftKeyDown;
+      this.#zt({ hasSelectedText: true });
+      if (this.#wt === y.HIGHLIGHT || this.#wt === y.NONE) {
+        this.#wt === y.HIGHLIGHT && this.showAllEditors("highlight", true, true);
+        this.#ct = this.isShiftKeyDown;
         if (!this.isShiftKeyDown) {
-          const t3 = this.#vt === y.HIGHLIGHT ? this.#Lt(i2) : null;
+          const t3 = this.#wt === y.HIGHLIGHT ? this.#Nt(i2) : null;
           t3?.toggleDrawing();
-          if (this.#ut) {
+          if (this.#pt) {
             const e3 = new AbortController(), i3 = this.combinedSignal(e3), pointerup = (i4) => {
               if ("pointerup" !== i4.type || 0 === i4.button) {
                 e3.abort();
                 t3?.toggleDrawing(true);
-                "pointerup" === i4.type && this.#zt("main_toolbar");
+                "pointerup" === i4.type && this.#Gt("main_toolbar");
               }
             };
             window.addEventListener("pointerup", pointerup, { signal: i3 });
             window.addEventListener("blur", pointerup, { signal: i3 });
           } else {
             t3?.toggleDrawing(true);
-            this.#zt("main_toolbar");
+            this.#Gt("main_toolbar");
           }
         }
       }
     } else if (this.#xt) {
       this.#ht?.hide();
       this.#xt = null;
-      this.#Ht({ hasSelectedText: false });
+      this.#zt({ hasSelectedText: false });
     }
   }
-  #zt(t2 = "") {
-    this.#vt === y.HIGHLIGHT ? this.highlightSelection(t2) : this.#et && this.#Nt();
+  #Gt(t2 = "") {
+    this.#wt === y.HIGHLIGHT ? this.highlightSelection(t2) : this.#it && this.#Ut();
   }
-  #Ft() {
-    document.addEventListener("selectionchange", this.#Ut.bind(this), { signal: this._signal });
+  #Ot() {
+    document.addEventListener("selectionchange", this.#Ht.bind(this), { signal: this._signal });
   }
-  #Gt() {
-    if (this.#at) return;
-    this.#at = new AbortController();
-    const t2 = this.combinedSignal(this.#at);
+  #jt() {
+    if (this.#ot) return;
+    this.#ot = new AbortController();
+    const t2 = this.combinedSignal(this.#ot);
     window.addEventListener("focus", this.focus.bind(this), { signal: t2 });
     window.addEventListener("blur", this.blur.bind(this), { signal: t2 });
   }
-  #jt() {
-    this.#at?.abort();
-    this.#at = null;
+  #Wt() {
+    this.#ot?.abort();
+    this.#ot = null;
   }
   blur() {
     this.isShiftKeyDown = false;
-    if (this.#lt) {
-      this.#lt = false;
-      this.#zt("main_toolbar");
+    if (this.#ct) {
+      this.#ct = false;
+      this.#Gt("main_toolbar");
     }
     if (!this.hasSelection) return;
     const { activeElement: t2 } = document;
-    for (const e2 of this.#wt) if (e2.div.contains(t2)) {
-      this.#mt = [e2, t2];
+    for (const e2 of this.#At) if (e2.div.contains(t2)) {
+      this.#ft = [e2, t2];
       e2._focusEventsAllowed = false;
       break;
     }
   }
   focus() {
-    if (!this.#mt) return;
-    const [t2, e2] = this.#mt;
-    this.#mt = null;
+    if (!this.#ft) return;
+    const [t2, e2] = this.#ft;
+    this.#ft = null;
     e2.addEventListener("focusin", () => {
       t2._focusEventsAllowed = true;
     }, { once: true, signal: this._signal });
     e2.focus();
   }
-  #Rt() {
-    if (this.#gt) return;
-    this.#gt = new AbortController();
-    const t2 = this.combinedSignal(this.#gt);
+  #Bt() {
+    if (this.#mt) return;
+    this.#mt = new AbortController();
+    const t2 = this.combinedSignal(this.#mt);
     window.addEventListener("keydown", this.keydown.bind(this), { signal: t2 });
     window.addEventListener("keyup", this.keyup.bind(this), { signal: t2 });
   }
-  #Wt() {
-    this.#gt?.abort();
-    this.#gt = null;
-  }
   #Vt() {
+    this.#mt?.abort();
+    this.#mt = null;
+  }
+  #$t() {
     if (this.#K) return;
     this.#K = new AbortController();
     const t2 = this.combinedSignal(this.#K);
@@ -4885,32 +4987,32 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     document.addEventListener("cut", this.cut.bind(this), { signal: t2 });
     document.addEventListener("paste", this.paste.bind(this), { signal: t2 });
   }
-  #$t() {
+  #qt() {
     this.#K?.abort();
     this.#K = null;
   }
-  #Ot() {
+  #Rt() {
     const t2 = this._signal;
     document.addEventListener("dragover", this.dragOver.bind(this), { signal: t2 });
     document.addEventListener("drop", this.drop.bind(this), { signal: t2 });
   }
   addEditListeners() {
-    this.#Rt();
+    this.#Bt();
     this.setEditingState(true);
   }
   removeEditListeners() {
-    this.#Wt();
+    this.#Vt();
     this.setEditingState(false);
   }
   dragOver(t2) {
-    for (const { type: e2 } of t2.dataTransfer.items) for (const i2 of this.#Z) if (i2.isHandlingMimeForPasting(e2)) {
+    for (const { type: e2 } of t2.dataTransfer.items) for (const i2 of this.#tt) if (i2.isHandlingMimeForPasting(e2)) {
       t2.dataTransfer.dropEffect = "copy";
       t2.preventDefault();
       return;
     }
   }
   drop(t2) {
-    for (const e2 of t2.dataTransfer.items) for (const i2 of this.#Z) if (i2.isHandlingMimeForPasting(e2.type)) {
+    for (const e2 of t2.dataTransfer.items) for (const i2 of this.#tt) if (i2.isHandlingMimeForPasting(e2.type)) {
       i2.paste(e2, this.currentLayer);
       t2.preventDefault();
       return;
@@ -4921,7 +5023,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.#N?.commitOrRemove();
     if (!this.hasSelection) return;
     const e2 = [];
-    for (const t3 of this.#wt) {
+    for (const t3 of this.#At) {
       const i2 = t3.serialize(true);
       i2 && e2.push(i2);
     }
@@ -4934,7 +5036,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   async paste(t2) {
     t2.preventDefault();
     const { clipboardData: e2 } = t2;
-    for (const t3 of e2.items) for (const e3 of this.#Z) if (e3.isHandlingMimeForPasting(t3.type)) {
+    for (const t3 of e2.items) for (const e3 of this.#tt) if (e3.isHandlingMimeForPasting(t3.type)) {
       e3.paste(t3, this.currentLayer);
       return;
     }
@@ -4957,7 +5059,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
         t3.push(i3);
       }
       const cmd = () => {
-        for (const e3 of t3) this.#qt(e3);
+        for (const e3 of t3) this.#Xt(e3);
         this.#Kt(t3);
       }, undo = () => {
         for (const e3 of t3) e3.remove();
@@ -4969,14 +5071,14 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   keydown(t2) {
     this.isShiftKeyDown || "Shift" !== t2.key || (this.isShiftKeyDown = true);
-    this.#vt === y.NONE || this.isEditorHandlingKeyboard || _AnnotationEditorUIManager._keyboardManager.exec(this, t2);
+    this.#wt === y.NONE || this.isEditorHandlingKeyboard || _AnnotationEditorUIManager._keyboardManager.exec(this, t2);
   }
   keyup(t2) {
     if (this.isShiftKeyDown && "Shift" === t2.key) {
       this.isShiftKeyDown = false;
-      if (this.#lt) {
-        this.#lt = false;
-        this.#zt("main_toolbar");
+      if (this.#ct) {
+        this.#ct = false;
+        this.#Gt("main_toolbar");
       }
     }
   }
@@ -4996,20 +5098,26 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }
   }
   updatePageIndex(t2, e2) {
-    for (const i3 of this.getEditors(t2)) i3.pageIndex = e2;
+    for (const i3 of this.#j.get(t2) || []) i3.pageIndex = e2;
     const i2 = this.#G.get(t2);
     if (i2) {
       i2.pageIndex = e2;
       this.#z.set(e2, i2);
-      this.#dt ? i2.enable() : i2.disable();
+      this.#ut ? i2.enable() : i2.disable();
     }
   }
   startUpdatePages() {
     this.#G = new Map(this.#z);
     this.#z.clear();
+    const t2 = this.#j = /* @__PURE__ */ new Map(), saveEditor = (e2) => {
+      t2.getOrInsertComputed(e2.pageIndex, makeArr).push(e2);
+    };
+    for (const t3 of this.#H.values()) saveEditor(t3);
+    for (const [t3, e2] of this.#V) t3.startsWith(b) && !this.#H.has(t3) && Number.isInteger(e2?.pageIndex) && saveEditor(e2);
   }
   endUpdatePages() {
     this.#G = null;
+    this.#j = null;
   }
   clonePage(t2, e2) {
     for (const i2 of this.getEditors(t2)) {
@@ -5019,15 +5127,15 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
         t3.id = this.getId();
         t3.isClone = true;
         delete t3.popupRef;
-        this.#W.setValue(t3.id, t3);
+        this.#V.setValue(t3.id, t3);
       }
     }
   }
   findClonesForPage(t2) {
     const e2 = [], { pageIndex: i2 } = t2;
-    for (const [n2, s2] of this.#W) if (s2.pageIndex === i2 && s2.isClone) {
-      this.#W.remove(n2);
-      e2.push(t2.deserialize(s2).then((e3) => {
+    for (const [n2, r2] of this.#V) if (r2.pageIndex === i2 && r2.isClone) {
+      this.#V.remove(n2);
+      e2.push(t2.deserialize(r2).then((e3) => {
         if (e3) {
           e3.isClone = true;
           t2.addOrRebuild(e3);
@@ -5036,102 +5144,102 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     }
     return Promise.all(e2);
   }
-  #Ht(t2) {
-    if (Object.entries(t2).some(([t3, e2]) => this.#Tt[t3] !== e2)) {
-      this._eventBus.dispatch("editingstateschanged", { source: this, details: Object.assign(this.#Tt, t2) });
-      this.#vt === y.HIGHLIGHT && false === t2.hasSelectedEditor && this.#Xt([[v.HIGHLIGHT_FREE, true]]);
+  #zt(t2) {
+    if (Object.entries(t2).some(([t3, e2]) => this.#_t[t3] !== e2)) {
+      this._eventBus.dispatch("editingstateschanged", { source: this, details: Object.assign(this.#_t, t2) });
+      this.#wt === y.HIGHLIGHT && false === t2.hasSelectedEditor && this.#Yt([[v.HIGHLIGHT_FREE, true]]);
     }
   }
-  #Xt(t2) {
+  #Yt(t2) {
     this._eventBus.dispatch("annotationeditorparamschanged", { source: this, details: t2 });
   }
   setEditingState(t2) {
     if (t2) {
-      this.#Gt();
-      this.#Vt();
-      this.#Ht({ isEditing: this.#vt !== y.NONE, isEmpty: this.#Yt(), hasSomethingToUndo: this.#$.hasSomethingToUndo(), hasSomethingToRedo: this.#$.hasSomethingToRedo(), hasSelectedEditor: false });
-    } else {
       this.#jt();
       this.#$t();
-      this.#Ht({ isEditing: false });
+      this.#zt({ isEditing: this.#wt !== y.NONE, isEmpty: this.#Jt(), hasSomethingToUndo: this.#q.hasSomethingToUndo(), hasSomethingToRedo: this.#q.hasSomethingToRedo(), hasSelectedEditor: false });
+    } else {
+      this.#Wt();
+      this.#qt();
+      this.#zt({ isEditing: false });
       this.disableUserSelect(false);
     }
   }
   registerEditorTypes(t2) {
-    if (!this.#Z) {
-      this.#Z = t2;
-      for (const t3 of this.#Z) this.#Xt(t3.defaultPropertiesToUpdate);
+    if (!this.#tt) {
+      this.#tt = t2;
+      for (const t3 of this.#tt) this.#Yt(t3.defaultPropertiesToUpdate);
     }
   }
   getId() {
-    return this.#ct.id;
+    return this.#dt.id;
   }
   get currentLayer() {
-    return this.#z.get(this.#Y);
+    return this.#z.get(this.#J);
   }
   getLayer(t2) {
     return this.#z.get(t2);
   }
   get currentPageIndex() {
-    return this.#Y;
+    return this.#J;
   }
   addLayer(t2) {
     this.#z.set(t2.pageIndex, t2);
-    this.#dt ? t2.enable() : t2.disable();
+    this.#ut ? t2.enable() : t2.disable();
   }
   removeLayer(t2) {
     this.#z.delete(t2.pageIndex);
   }
-  async updateMode(t2, e2 = null, i2 = false, n2 = false, s2 = false, r2 = false) {
-    if (this.#vt !== t2) {
-      if (this.#It) {
-        await this.#It.promise;
-        if (!this.#It) return;
+  async updateMode(t2, e2 = null, i2 = false, n2 = false, r2 = false, s2 = false) {
+    if (this.#wt !== t2) {
+      if (this.#Ft) {
+        await this.#Ft.promise;
+        if (!this.#Ft) return;
       }
-      this.#It = Promise.withResolvers();
-      this.#X?.commitOrRemove();
-      this.#vt === y.POPUP && this.#q?.hideSidebar();
-      this.#q?.destroyPopup();
-      this.#vt = t2;
+      this.#Ft = Promise.withResolvers();
+      this.#Y?.commitOrRemove();
+      this.#wt === y.POPUP && this.#X?.hideSidebar();
+      this.#X?.destroyPopup();
+      this.#wt = t2;
       if (t2 !== y.NONE) {
         for (const t3 of this.#H.values()) t3.addStandaloneCommentButton();
-        t2 === y.SIGNATURE && await this.#At?.loadSignatures();
+        t2 === y.SIGNATURE && await this.#Et?.loadSignatures();
         i2 && CurrentPointers.clearPointerType();
         this.setEditingState(true);
-        await this.#Jt();
+        await this.#Qt();
         this.unselectAll();
         for (const e3 of this.#z.values()) e3.updateMode(t2);
         if (t2 === y.POPUP) {
-          this.#U ||= await this.#St.getAnnotationsByType(new Set(this.#Z.map((t4) => t4._editorType)));
+          this.#U ||= await this.#Tt.getAnnotationsByType(new Set(this.#tt.map((t4) => t4._editorType)));
           const t3 = /* @__PURE__ */ new Set(), e3 = [];
           for (const i3 of this.#H.values()) {
-            const { annotationElementId: n3, hasComment: s3, deleted: r3 } = i3;
+            const { annotationElementId: n3, hasComment: r3, deleted: s3 } = i3;
             n3 && t3.add(n3);
-            s3 && !r3 && e3.push(i3.getData());
+            r3 && !s3 && e3.push(i3.getData());
           }
           for (const i3 of this.#U) {
-            const { id: n3, popupRef: s3, contentsObj: r3 } = i3;
-            s3 && r3?.str && !t3.has(n3) && !this.#J.has(n3) && e3.push(i3);
+            const { id: n3, popupRef: r3, contentsObj: s3 } = i3;
+            r3 && s3?.str && !t3.has(n3) && !this.#Q.has(n3) && e3.push(i3);
           }
-          this.#q?.showSidebar(e3);
+          this.#X?.showSidebar(e3);
         }
         if (e2) {
           for (const t3 of this.#H.values()) if (t3.uid === e2) {
             this.setSelected(t3);
-            r2 ? t3.editComment() : s2 ? t3.enterInEditMode() : t3.focus();
+            s2 ? t3.editComment() : r2 ? t3.enterInEditMode() : t3.focus();
           } else t3.unselect();
-          this.#It.resolve();
+          this.#Ft.resolve();
         } else {
           n2 && this.addNewEditorFromKeyboard();
-          this.#It.resolve();
+          this.#Ft.resolve();
         }
       } else {
         this.setEditingState(false);
-        this.#Qt();
+        this.#Zt();
         for (const t3 of this.#H.values()) t3.hideStandaloneCommentButton();
         this._editorUndoBar?.hide();
         this.toggleComment(null);
-        this.#It.resolve();
+        this.#Ft.resolve();
       }
     }
   }
@@ -5139,49 +5247,49 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.currentLayer.canCreateNewEmptyEditor() && this.currentLayer.addNewEditor();
   }
   updateToolbar(t2) {
-    t2.mode !== this.#vt && this._eventBus.dispatch("switchannotationeditormode", { source: this, ...t2 });
+    t2.mode !== this.#wt && this._eventBus.dispatch("switchannotationeditormode", { source: this, ...t2 });
   }
   updateParams(t2, e2) {
-    if (this.#Z) {
+    if (this.#tt) {
       switch (t2) {
         case v.CREATE:
           this.currentLayer.addNewEditor(e2);
           return;
         case v.HIGHLIGHT_SHOW_ALL:
           this._eventBus.dispatch("reporttelemetry", { source: this, details: { type: "editing", data: { type: "highlight", action: "toggle_visibility" } } });
-          (this.#Ct ||= /* @__PURE__ */ new Map()).set(t2, e2);
+          (this.#St ||= /* @__PURE__ */ new Map()).set(t2, e2);
           this.showAllEditors("highlight", e2);
       }
-      if (this.hasSelection) for (const i2 of this.#wt) i2.updateParams(t2, e2);
-      else for (const i2 of this.#Z) i2.updateDefaultParams(t2, e2);
+      if (this.hasSelection) for (const i2 of this.#At) i2.updateParams(t2, e2);
+      else for (const i2 of this.#tt) i2.updateDefaultParams(t2, e2);
     }
   }
   showAllEditors(t2, e2, i2 = false) {
     for (const i3 of this.#H.values()) i3.editorType === t2 && i3.show(e2);
-    (this.#Ct?.get(v.HIGHLIGHT_SHOW_ALL) ?? true) !== e2 && this.#Xt([[v.HIGHLIGHT_SHOW_ALL, e2]]);
+    (this.#St?.get(v.HIGHLIGHT_SHOW_ALL) ?? true) !== e2 && this.#Yt([[v.HIGHLIGHT_SHOW_ALL, e2]]);
   }
   enableWaiting(t2 = false) {
-    if (this.#pt !== t2) {
-      this.#pt = t2;
+    if (this.#gt !== t2) {
+      this.#gt = t2;
       for (const e2 of this.#z.values()) {
         t2 ? e2.disableClick() : e2.enableClick();
         e2.div.classList.toggle("waiting", t2);
       }
     }
   }
-  async #Jt() {
-    if (!this.#dt) {
-      this.#dt = true;
+  async #Qt() {
+    if (!this.#ut) {
+      this.#ut = true;
       const t2 = [];
       for (const e2 of this.#z.values()) t2.push(e2.enable());
       await Promise.all(t2);
       for (const t3 of this.#H.values()) t3.enable();
     }
   }
-  #Qt() {
+  #Zt() {
     this.unselectAll();
-    if (this.#dt) {
-      this.#dt = false;
+    if (this.#ut) {
+      this.#ut = false;
       for (const t2 of this.#z.values()) t2.disable();
       for (const t2 of this.#H.values()) t2.disable();
     }
@@ -5197,31 +5305,31 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   }
   removeEditor(t2) {
     if (t2.div.contains(document.activeElement)) {
-      this.#rt && clearTimeout(this.#rt);
-      this.#rt = setTimeout(() => {
+      this.#at && clearTimeout(this.#at);
+      this.#at = setTimeout(() => {
         this.focusMainContainer();
-        this.#rt = null;
+        this.#at = null;
       }, 0);
     }
     this.#H.delete(t2.id);
-    t2.annotationElementId && this.#bt?.delete(t2.annotationElementId);
+    t2.annotationElementId && this.#yt?.delete(t2.annotationElementId);
     this.unselect(t2);
-    t2.annotationElementId && this.#J.has(t2.annotationElementId) || this.#W?.remove(t2.id);
+    t2.annotationElementId && this.#Q.has(t2.annotationElementId) || this.#V?.remove(t2.id);
   }
   addDeletedAnnotationElement(t2) {
-    this.#J.add(t2.annotationElementId);
+    this.#Q.add(t2.annotationElementId);
     this.addChangedExistingAnnotation(t2);
     t2.deleted = true;
   }
   isDeletedAnnotationElement(t2) {
-    return this.#J.has(t2);
+    return this.#Q.has(t2);
   }
   removeDeletedAnnotationElement(t2) {
-    this.#J.delete(t2.annotationElementId);
+    this.#Q.delete(t2.annotationElementId);
     this.removeChangedExistingAnnotation(t2);
     t2.deleted = false;
   }
-  #qt(t2) {
+  #Xt(t2) {
     const e2 = this.#z.get(t2.pageIndex);
     if (e2) e2.addOrRebuild(t2);
     else {
@@ -5232,74 +5340,74 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   setActiveEditor(t2) {
     if (this.#N !== t2) {
       this.#N = t2;
-      t2 && this.#Xt(t2.propertiesToUpdate);
+      t2 && this.#Yt(t2.propertiesToUpdate);
     }
   }
-  get #Zt() {
+  get #te() {
     let t2 = null;
-    for (t2 of this.#wt) ;
+    for (t2 of this.#At) ;
     return t2;
   }
   updateUI(t2) {
-    this.#Zt === t2 && this.#Xt(t2.propertiesToUpdate);
+    this.#te === t2 && this.#Yt(t2.propertiesToUpdate);
   }
   updateUIForDefaultProperties(t2) {
-    this.#Xt(t2.defaultPropertiesToUpdate);
+    this.#Yt(t2.defaultPropertiesToUpdate);
   }
   toggleSelected(t2) {
-    if (this.#wt.has(t2)) {
-      this.#wt.delete(t2);
+    if (this.#At.has(t2)) {
+      this.#At.delete(t2);
       t2.unselect();
-      this.#Ht({ hasSelectedEditor: this.hasSelection });
+      this.#zt({ hasSelectedEditor: this.hasSelection });
     } else {
-      this.#wt.add(t2);
+      this.#At.add(t2);
       t2.select();
-      this.#Xt(t2.propertiesToUpdate);
-      this.#Ht({ hasSelectedEditor: true });
+      this.#Yt(t2.propertiesToUpdate);
+      this.#zt({ hasSelectedEditor: true });
     }
   }
   setSelected(t2) {
     this.updateToolbar({ mode: t2.mode, editId: t2.uid });
-    this.#X?.commitOrRemove();
-    for (const e2 of this.#wt) e2 !== t2 && e2.unselect();
-    this.#q?.destroyPopup();
-    this.#wt.clear();
-    this.#wt.add(t2);
+    this.#Y?.commitOrRemove();
+    for (const e2 of this.#At) e2 !== t2 && e2.unselect();
+    this.#X?.destroyPopup();
+    this.#At.clear();
+    this.#At.add(t2);
     t2.select();
-    this.#Xt(t2.propertiesToUpdate);
-    this.#Ht({ hasSelectedEditor: true });
+    this.#Yt(t2.propertiesToUpdate);
+    this.#zt({ hasSelectedEditor: true });
   }
   get firstSelectedEditor() {
-    return this.#wt.values().next().value;
+    return this.#At.values().next().value;
   }
   unselect(t2) {
     t2.unselect();
-    this.#wt.delete(t2);
-    this.#Ht({ hasSelectedEditor: this.hasSelection });
+    this.#At.delete(t2);
+    this.#zt({ hasSelectedEditor: this.hasSelection });
   }
   get hasSelection() {
-    return 0 !== this.#wt.size;
+    return 0 !== this.#At.size;
   }
   get isEnterHandled() {
-    return 1 === this.#wt.size && this.firstSelectedEditor.isEnterHandled;
+    return 1 === this.#At.size && this.firstSelectedEditor.isEnterHandled;
   }
   undo() {
-    this.#$.undo();
-    this.#Ht({ hasSomethingToUndo: this.#$.hasSomethingToUndo(), hasSomethingToRedo: true, isEmpty: this.#Yt() });
+    this.#q.undo();
+    this.#zt({ hasSomethingToUndo: this.#q.hasSomethingToUndo(), hasSomethingToRedo: true, isEmpty: this.#Jt() });
     this._editorUndoBar?.hide();
   }
   redo() {
-    this.#$.redo();
-    this.#Ht({ hasSomethingToUndo: true, hasSomethingToRedo: this.#$.hasSomethingToRedo(), isEmpty: this.#Yt() });
+    this.#q.redo();
+    this.#zt({ hasSomethingToUndo: true, hasSomethingToRedo: this.#q.hasSomethingToRedo(), isEmpty: this.#Jt() });
   }
   addCommands(t2) {
-    this.#$.add(t2);
-    this.#Ht({ hasSomethingToUndo: true, hasSomethingToRedo: false, isEmpty: this.#Yt() });
+    this.#q.add(t2);
+    this.#zt({ hasSomethingToUndo: true, hasSomethingToRedo: false, isEmpty: this.#Jt() });
   }
   cleanUndoStack(t2) {
-    this.#$.cleanType(t2);
+    this.#q.cleanType(t2);
   }
-  #Yt() {
+  #Jt() {
     if (0 === this.#H.size) return true;
     if (1 === this.#H.size) for (const t2 of this.#H.values()) return t2.isEmpty();
     return false;
@@ -5308,8 +5416,8 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     this.commitOrRemove();
     const t2 = this.currentLayer?.endDrawingSession(true);
     if (!this.hasSelection && !t2) return;
-    const e2 = t2 ? [t2] : [...this.#wt], undo = () => {
-      for (const t3 of e2) this.#qt(t3);
+    const e2 = t2 ? [t2] : [...this.#At], undo = () => {
+      for (const t3 of e2) this.#Xt(t3);
     };
     this.addCommands({ cmd: () => {
       this._editorUndoBar?.show(undo, 1 === e2.length ? e2[0].editorType : e2.length);
@@ -5323,55 +5431,55 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     return this.#N || this.hasSelection;
   }
   #Kt(t2) {
-    for (const t3 of this.#wt) t3.unselect();
-    this.#wt.clear();
+    for (const t3 of this.#At) t3.unselect();
+    this.#At.clear();
     for (const e2 of t2) if (!e2.isEmpty()) {
-      this.#wt.add(e2);
+      this.#At.add(e2);
       e2.select();
     }
-    this.#Ht({ hasSelectedEditor: this.hasSelection });
+    this.#zt({ hasSelectedEditor: this.hasSelection });
   }
   selectAll() {
-    for (const t2 of this.#wt) t2.commit();
+    for (const t2 of this.#At) t2.commit();
     this.#Kt(this.#H.values());
   }
   unselectAll() {
     if (this.#N) {
       this.#N.commitOrRemove();
-      if (this.#vt !== y.NONE) return;
+      if (this.#wt !== y.NONE) return;
     }
-    if (!this.#X?.commitOrRemove()) {
-      this.#q?.destroyPopup();
+    if (!this.#Y?.commitOrRemove()) {
+      this.#X?.destroyPopup();
       if (this.hasSelection) {
-        for (const t2 of this.#wt) t2.unselect();
-        this.#wt.clear();
-        this.#Ht({ hasSelectedEditor: false });
+        for (const t2 of this.#At) t2.unselect();
+        this.#At.clear();
+        this.#zt({ hasSelectedEditor: false });
       }
     }
   }
   translateSelectedEditors(t2, e2, i2 = false) {
     i2 || this.commitOrRemove();
     if (!this.hasSelection) return;
-    this.#_t[0] += t2;
-    this.#_t[1] += e2;
-    const [n2, s2] = this.#_t, r2 = [...this.#wt];
-    this.#kt && clearTimeout(this.#kt);
-    this.#kt = setTimeout(() => {
-      this.#kt = null;
-      this.#_t[0] = this.#_t[1] = 0;
+    this.#kt[0] += t2;
+    this.#kt[1] += e2;
+    const [n2, r2] = this.#kt, s2 = [...this.#At];
+    this.#Dt && clearTimeout(this.#Dt);
+    this.#Dt = setTimeout(() => {
+      this.#Dt = null;
+      this.#kt[0] = this.#kt[1] = 0;
       this.addCommands({ cmd: () => {
-        for (const t3 of r2) if (this.#H.has(t3.id)) {
-          t3.translateInPage(n2, s2);
+        for (const t3 of s2) if (this.#H.has(t3.id)) {
+          t3.translateInPage(n2, r2);
           t3.translationDone();
         }
       }, undo: () => {
-        for (const t3 of r2) if (this.#H.has(t3.id)) {
-          t3.translateInPage(-n2, -s2);
+        for (const t3 of s2) if (this.#H.has(t3.id)) {
+          t3.translateInPage(-n2, -r2);
           t3.translationDone();
         }
       }, mustExec: false });
     }, 1e3);
-    for (const i3 of r2) {
+    for (const i3 of s2) {
       i3.translateInPage(t2, e2);
       i3.translationDone();
     }
@@ -5379,27 +5487,27 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
   setUpDragSession() {
     if (this.hasSelection) {
       this.disableUserSelect(true);
-      this.#Q = /* @__PURE__ */ new Map();
-      for (const t2 of this.#wt) this.#Q.set(t2, { savedX: t2.x, savedY: t2.y, savedPageIndex: t2.pageIndex, newX: 0, newY: 0, newPageIndex: -1 });
+      this.#Z = /* @__PURE__ */ new Map();
+      for (const t2 of this.#At) this.#Z.set(t2, { savedX: t2.x, savedY: t2.y, savedPageIndex: t2.pageIndex, newX: 0, newY: 0, newPageIndex: -1 });
     }
   }
   endDragSession() {
-    if (!this.#Q) return false;
+    if (!this.#Z) return false;
     this.disableUserSelect(false);
-    const t2 = this.#Q;
-    this.#Q = null;
+    const t2 = this.#Z;
+    this.#Z = null;
     let e2 = false;
-    for (const [{ x: i2, y: n2, pageIndex: s2 }, r2] of t2) {
-      r2.newX = i2;
-      r2.newY = n2;
-      r2.newPageIndex = s2;
-      e2 ||= i2 !== r2.savedX || n2 !== r2.savedY || s2 !== r2.savedPageIndex;
+    for (const [{ x: i2, y: n2, pageIndex: r2 }, s2] of t2) {
+      s2.newX = i2;
+      s2.newY = n2;
+      s2.newPageIndex = r2;
+      e2 ||= i2 !== s2.savedX || n2 !== s2.savedY || r2 !== s2.savedPageIndex;
     }
     if (!e2) return false;
     const move = (t3, e3, i2, n2) => {
       if (this.#H.has(t3.id)) {
-        const s2 = this.#z.get(n2);
-        if (s2) t3._setParentAndPosition(s2, e3, i2);
+        const r2 = this.#z.get(n2);
+        if (r2) t3._setParentAndPosition(r2, e3, i2);
         else {
           t3.pageIndex = n2;
           t3.x = e3;
@@ -5408,14 +5516,14 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
       }
     };
     this.addCommands({ cmd: () => {
-      for (const [e3, { newX: i2, newY: n2, newPageIndex: s2 }] of t2) move(e3, i2, n2, s2);
+      for (const [e3, { newX: i2, newY: n2, newPageIndex: r2 }] of t2) move(e3, i2, n2, r2);
     }, undo: () => {
-      for (const [e3, { savedX: i2, savedY: n2, savedPageIndex: s2 }] of t2) move(e3, i2, n2, s2);
+      for (const [e3, { savedX: i2, savedY: n2, savedPageIndex: r2 }] of t2) move(e3, i2, n2, r2);
     }, mustExec: true });
     return true;
   }
   dragSelectedEditors(t2, e2) {
-    if (this.#Q) for (const i2 of this.#Q.keys()) i2.drag(t2, e2);
+    if (this.#Z) for (const i2 of this.#Z.keys()) i2.drag(t2, e2);
   }
   rebuild(t2) {
     if (null === t2.parent) {
@@ -5431,7 +5539,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     } else t2.parent.addOrRebuild(t2);
   }
   get isEditorHandlingKeyboard() {
-    return this.getActive()?.shouldGetKeyboardEvents() || 1 === this.#wt.size && this.firstSelectedEditor.shouldGetKeyboardEvents();
+    return this.getActive()?.shouldGetKeyboardEvents() || 1 === this.#At.size && this.firstSelectedEditor.shouldGetKeyboardEvents();
   }
   isActive(t2) {
     return this.#N === t2;
@@ -5440,10 +5548,10 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     return this.#N;
   }
   getMode() {
-    return this.#vt;
+    return this.#wt;
   }
   isEditingMode() {
-    return this.#vt !== y.NONE;
+    return this.#wt !== y.NONE;
   }
   get imageManager() {
     return shadow(this, "imageManager", new ImageManager());
@@ -5452,84 +5560,84 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
     if (!t2) return null;
     const e2 = document.getSelection();
     for (let i3 = 0, n3 = e2.rangeCount; i3 < n3; i3++) if (!t2.contains(e2.getRangeAt(i3).commonAncestorContainer)) return null;
-    const { x: i2, y: n2, width: s2, height: r2 } = t2.getBoundingClientRect();
+    const { x: i2, y: n2, width: r2, height: s2 } = t2.getBoundingClientRect();
     let a2;
     switch (t2.getAttribute("data-main-rotation")) {
       case "90":
-        a2 = (t3, e3, a3, o3) => ({ x: (e3 - n2) / r2, y: 1 - (t3 + a3 - i2) / s2, width: o3 / r2, height: a3 / s2 });
+        a2 = (t3, e3, a3, o3) => ({ x: (e3 - n2) / s2, y: 1 - (t3 + a3 - i2) / r2, width: o3 / s2, height: a3 / r2 });
         break;
       case "180":
-        a2 = (t3, e3, a3, o3) => ({ x: 1 - (t3 + a3 - i2) / s2, y: 1 - (e3 + o3 - n2) / r2, width: a3 / s2, height: o3 / r2 });
+        a2 = (t3, e3, a3, o3) => ({ x: 1 - (t3 + a3 - i2) / r2, y: 1 - (e3 + o3 - n2) / s2, width: a3 / r2, height: o3 / s2 });
         break;
       case "270":
-        a2 = (t3, e3, a3, o3) => ({ x: 1 - (e3 + o3 - n2) / r2, y: (t3 - i2) / s2, width: o3 / r2, height: a3 / s2 });
+        a2 = (t3, e3, a3, o3) => ({ x: 1 - (e3 + o3 - n2) / s2, y: (t3 - i2) / r2, width: o3 / s2, height: a3 / r2 });
         break;
       default:
-        a2 = (t3, e3, a3, o3) => ({ x: (t3 - i2) / s2, y: (e3 - n2) / r2, width: a3 / s2, height: o3 / r2 });
+        a2 = (t3, e3, a3, o3) => ({ x: (t3 - i2) / r2, y: (e3 - n2) / s2, width: a3 / r2, height: o3 / s2 });
     }
     const o2 = [];
     for (let t3 = 0, i3 = e2.rangeCount; t3 < i3; t3++) {
       const i4 = e2.getRangeAt(t3);
-      if (!i4.collapsed) for (const { x: t4, y: e3, width: n3, height: s3 } of i4.getClientRects()) 0 !== n3 && 0 !== s3 && o2.push(a2(t4, e3, n3, s3));
+      if (!i4.collapsed) for (const { x: t4, y: e3, width: n3, height: r3 } of i4.getClientRects()) 0 !== n3 && 0 !== r3 && o2.push(a2(t4, e3, n3, r3));
     }
     return 0 === o2.length ? null : o2;
   }
   addChangedExistingAnnotation({ annotationElementId: t2, id: e2 }) {
-    (this.#V ||= /* @__PURE__ */ new Map()).set(t2, e2);
+    (this.#$ ||= /* @__PURE__ */ new Map()).set(t2, e2);
   }
   removeChangedExistingAnnotation({ annotationElementId: t2 }) {
-    this.#V?.delete(t2);
+    this.#$?.delete(t2);
   }
   renderAnnotationElement(t2) {
-    const e2 = this.#V?.get(t2.data.id);
+    const e2 = this.#$?.get(t2.data.id);
     if (!e2) return;
-    const i2 = this.#W.getRawValue(e2);
-    i2 && (this.#vt !== y.NONE || i2.hasBeenModified) && i2.renderAnnotationElement(t2);
+    const i2 = this.#V.getRawValue(e2);
+    i2 && (this.#wt !== y.NONE || i2.hasBeenModified) && i2.renderAnnotationElement(t2);
   }
   setMissingCanvas(t2, e2, i2) {
-    const n2 = this.#bt?.get(t2);
+    const n2 = this.#yt?.get(t2);
     if (n2) {
       n2.setCanvas(e2, i2);
-      this.#bt.delete(t2);
+      this.#yt.delete(t2);
     }
   }
   addMissingCanvas(t2, e2) {
-    (this.#bt ||= /* @__PURE__ */ new Map()).set(t2, e2);
+    (this.#yt ||= /* @__PURE__ */ new Map()).set(t2, e2);
   }
 };
 var AltText = class _AltText {
-  #h = null;
-  #te = false;
-  #ee = null;
+  #c = null;
+  #ee = false;
   #ie = null;
   #ne = null;
+  #re = null;
   #se = null;
-  #re = false;
-  #ae = null;
-  #o = null;
+  #ae = false;
   #oe = null;
+  #o = null;
   #le = null;
+  #ce = null;
   #he = false;
-  static #ce = null;
+  static #de = null;
   static _l10n = null;
   constructor(t2) {
     this.#o = t2;
     this.#he = t2._uiManager.useNewAltTextFlow;
-    _AltText.#ce ||= Object.freeze({ added: "pdfjs-editor-new-alt-text-added-button", "added-label": "pdfjs-editor-new-alt-text-added-button-label", missing: "pdfjs-editor-new-alt-text-missing-button", "missing-label": "pdfjs-editor-new-alt-text-missing-button-label", review: "pdfjs-editor-new-alt-text-to-review-button", "review-label": "pdfjs-editor-new-alt-text-to-review-button-label" });
+    _AltText.#de ||= Object.freeze({ added: "pdfjs-editor-new-alt-text-added-button", "added-label": "pdfjs-editor-new-alt-text-added-button-label", missing: "pdfjs-editor-new-alt-text-missing-button", "missing-label": "pdfjs-editor-new-alt-text-missing-button-label", review: "pdfjs-editor-new-alt-text-to-review-button", "review-label": "pdfjs-editor-new-alt-text-to-review-button-label" });
   }
   static initialize(t2) {
     _AltText._l10n ??= t2;
   }
   async render() {
-    const t2 = this.#ee = document.createElement("button");
+    const t2 = this.#ie = document.createElement("button");
     t2.className = "altText";
     t2.tabIndex = "0";
-    const e2 = this.#ie = document.createElement("span");
+    const e2 = this.#ne = document.createElement("span");
     t2.append(e2);
     if (this.#he) {
       t2.classList.add("new");
-      t2.setAttribute("data-l10n-id", _AltText.#ce.missing);
-      e2.setAttribute("data-l10n-id", _AltText.#ce["missing-label"]);
+      t2.setAttribute("data-l10n-id", _AltText.#de.missing);
+      e2.setAttribute("data-l10n-id", _AltText.#de["missing-label"]);
     } else {
       t2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-button");
       e2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-button-label");
@@ -5540,120 +5648,120 @@ var AltText = class _AltText {
     const onClick = (t3) => {
       t3.preventDefault();
       this.#o._uiManager.editAltText(this.#o);
-      this.#he && this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_clicked", data: { label: this.#de } });
+      this.#he && this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_clicked", data: { label: this.#ue } });
     };
     t2.addEventListener("click", onClick, { capture: true, signal: i2 });
     t2.addEventListener("keydown", (e3) => {
       if (e3.target === t2 && "Enter" === e3.key) {
-        this.#re = true;
+        this.#ae = true;
         onClick(e3);
       }
     }, { signal: i2 });
-    await this.#ue();
+    await this.#pe();
     return t2;
   }
-  get #de() {
-    return (this.#h ? "added" : null === this.#h && this.guessedText && "review") || "missing";
+  get #ue() {
+    return (this.#c ? "added" : null === this.#c && this.guessedText && "review") || "missing";
   }
   finish() {
-    if (this.#ee) {
-      this.#ee.focus({ focusVisible: this.#re });
-      this.#re = false;
+    if (this.#ie) {
+      this.#ie.focus({ focusVisible: this.#ae });
+      this.#ae = false;
     }
   }
   isEmpty() {
-    return this.#he ? null === this.#h : !this.#h && !this.#te;
+    return this.#he ? null === this.#c : !this.#c && !this.#ee;
   }
   hasData() {
-    return this.#he ? null !== this.#h || !!this.#oe : this.isEmpty();
+    return this.#he ? null !== this.#c || !!this.#le : this.isEmpty();
   }
   get guessedText() {
-    return this.#oe;
+    return this.#le;
   }
   async setGuessedText(t2) {
-    if (null === this.#h) {
-      this.#oe = t2;
-      this.#le = await _AltText._l10n.get("pdfjs-editor-new-alt-text-generated-alt-text-with-disclaimer", { generatedAltText: t2 });
-      this.#ue();
+    if (null === this.#c) {
+      this.#le = t2;
+      this.#ce = await _AltText._l10n.get("pdfjs-editor-new-alt-text-generated-alt-text-with-disclaimer", { generatedAltText: t2 });
+      this.#pe();
     }
   }
   toggleAltTextBadge(t2 = false) {
-    if (this.#he && !this.#h) {
-      if (!this.#ae) {
-        const t3 = this.#ae = document.createElement("div");
+    if (this.#he && !this.#c) {
+      if (!this.#oe) {
+        const t3 = this.#oe = document.createElement("div");
         t3.className = "noAltTextBadge";
         this.#o.div.append(t3);
       }
-      this.#ae.classList.toggle("hidden", !t2);
+      this.#oe.classList.toggle("hidden", !t2);
     } else {
-      this.#ae?.remove();
-      this.#ae = null;
+      this.#oe?.remove();
+      this.#oe = null;
     }
   }
   serialize(t2) {
-    let e2 = this.#h;
-    t2 || this.#oe !== e2 || (e2 = this.#le);
-    return { altText: e2, decorative: this.#te, guessedText: this.#oe, textWithDisclaimer: this.#le };
+    let e2 = this.#c;
+    t2 || this.#le !== e2 || (e2 = this.#ce);
+    return { altText: e2, decorative: this.#ee, guessedText: this.#le, textWithDisclaimer: this.#ce };
   }
   get data() {
-    return { altText: this.#h, decorative: this.#te };
+    return { altText: this.#c, decorative: this.#ee };
   }
-  set data({ altText: t2, decorative: e2, guessedText: i2, textWithDisclaimer: n2, cancel: s2 = false }) {
+  set data({ altText: t2, decorative: e2, guessedText: i2, textWithDisclaimer: n2, cancel: r2 = false }) {
     if (i2) {
-      this.#oe = i2;
-      this.#le = n2;
+      this.#le = i2;
+      this.#ce = n2;
     }
-    if (this.#h !== t2 || this.#te !== e2) {
-      if (!s2) {
-        this.#h = t2;
-        this.#te = e2;
+    if (this.#c !== t2 || this.#ee !== e2) {
+      if (!r2) {
+        this.#c = t2;
+        this.#ee = e2;
       }
-      this.#ue();
+      this.#pe();
     }
   }
   toggle(t2 = false) {
-    if (this.#ee) {
+    if (this.#ie) {
       if (!t2 && this.#se) {
         clearTimeout(this.#se);
         this.#se = null;
       }
-      this.#ee.disabled = !t2;
+      this.#ie.disabled = !t2;
     }
   }
   shown() {
-    this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_displayed", data: { label: this.#de } });
+    this.#o._reportTelemetry({ action: "pdfjs.image.alt_text.image_status_label_displayed", data: { label: this.#ue } });
   }
   destroy() {
-    this.#ee?.remove();
-    this.#ee = null;
+    this.#ie?.remove();
     this.#ie = null;
     this.#ne = null;
-    this.#ae?.remove();
-    this.#ae = null;
+    this.#re = null;
+    this.#oe?.remove();
+    this.#oe = null;
   }
-  async #ue() {
-    const t2 = this.#ee;
+  async #pe() {
+    const t2 = this.#ie;
     if (!t2) return;
     if (this.#he) {
-      t2.classList.toggle("done", !!this.#h);
-      t2.setAttribute("data-l10n-id", _AltText.#ce[this.#de]);
-      this.#ie?.setAttribute("data-l10n-id", _AltText.#ce[`${this.#de}-label`]);
-      if (!this.#h) {
-        this.#ne?.remove();
+      t2.classList.toggle("done", !!this.#c);
+      t2.setAttribute("data-l10n-id", _AltText.#de[this.#ue]);
+      this.#ne?.setAttribute("data-l10n-id", _AltText.#de[`${this.#ue}-label`]);
+      if (!this.#c) {
+        this.#re?.remove();
         return;
       }
     } else {
-      if (!this.#h && !this.#te) {
+      if (!this.#c && !this.#ee) {
         t2.classList.remove("done");
-        this.#ne?.remove();
+        this.#re?.remove();
         return;
       }
       t2.classList.add("done");
       t2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-edit-button");
     }
-    let e2 = this.#ne;
+    let e2 = this.#re;
     if (!e2) {
-      this.#ne = e2 = document.createElement("span");
+      this.#re = e2 = document.createElement("span");
       e2.className = "tooltip";
       e2.setAttribute("role", "tooltip");
       e2.id = `alt-text-tooltip-${this.#o.id}`;
@@ -5665,7 +5773,7 @@ var AltText = class _AltText {
       t2.addEventListener("mouseenter", () => {
         this.#se = setTimeout(() => {
           this.#se = null;
-          this.#ne.classList.add("show");
+          this.#re.classList.add("show");
           this.#o._reportTelemetry({ action: "alt_text_tooltip" });
         }, i3);
       }, { signal: n2 });
@@ -5674,13 +5782,13 @@ var AltText = class _AltText {
           clearTimeout(this.#se);
           this.#se = null;
         }
-        this.#ne?.classList.remove("show");
+        this.#re?.classList.remove("show");
       }, { signal: n2 });
     }
-    if (this.#te) e2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-decorative-tooltip");
+    if (this.#ee) e2.setAttribute("data-l10n-id", "pdfjs-editor-alt-text-decorative-tooltip");
     else {
       e2.removeAttribute("data-l10n-id");
-      e2.textContent = this.#h;
+      e2.textContent = this.#c;
     }
     e2.parentNode || t2.append(e2);
     const i2 = this.#o.getElementForAltText();
@@ -5688,26 +5796,26 @@ var AltText = class _AltText {
   }
 };
 var Comment = class {
-  #pe = null;
   #ge = null;
-  #me = false;
+  #me = null;
+  #fe = false;
   #o = null;
-  #fe = null;
   #be = null;
   #ye = null;
   #ve = null;
-  #we = false;
+  #we = null;
+  #Ae = false;
   #xe = null;
   constructor(t2) {
     this.#o = t2;
   }
   renderForToolbar() {
-    const t2 = this.#ge = document.createElement("button");
+    const t2 = this.#me = document.createElement("button");
     t2.className = "comment";
     return this.#w(t2, false);
   }
   renderForStandalone() {
-    const t2 = this.#pe = document.createElement("button");
+    const t2 = this.#ge = document.createElement("button");
     t2.className = "annotationCommentButton";
     const e2 = this.#o.commentButtonPosition;
     if (e2) {
@@ -5721,23 +5829,23 @@ var Comment = class {
   }
   focusButton() {
     setTimeout(() => {
-      (this.#pe ?? this.#ge)?.focus();
+      (this.#ge ?? this.#me)?.focus();
     }, 0);
   }
   onUpdatedColor() {
-    if (!this.#pe) return;
+    if (!this.#ge) return;
     const t2 = this.#o.commentButtonColor;
-    t2 && (this.#pe.style.backgroundColor = t2);
+    t2 && (this.#ge.style.backgroundColor = t2);
     this.#o._uiManager.updatePopupColor(this.#o);
   }
   get commentButtonWidth() {
-    return (this.#pe?.getBoundingClientRect().width ?? 0) / this.#o.parent.boundingClientRect.width;
+    return (this.#ge?.getBoundingClientRect().width ?? 0) / this.#o.parent.boundingClientRect.width;
   }
   get commentPopupPositionInLayer() {
     if (this.#xe) return this.#xe;
-    if (!this.#pe) return null;
-    const { x: t2, y: e2, height: i2 } = this.#pe.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#o.parent.boundingClientRect;
-    return [(t2 - n2) / r2, (e2 + i2 - s2) / a2];
+    if (!this.#ge) return null;
+    const { x: t2, y: e2, height: i2 } = this.#ge.getBoundingClientRect(), { x: n2, y: r2, width: s2, height: a2 } = this.#o.parent.boundingClientRect;
+    return [(t2 - n2) / s2, (e2 + i2 - r2) / a2];
   }
   set commentPopupPositionInLayer(t2) {
     this.#xe = t2;
@@ -5746,17 +5854,17 @@ var Comment = class {
     return null === this.#xe;
   }
   removeStandaloneCommentButton() {
-    this.#pe?.remove();
-    this.#pe = null;
-  }
-  removeToolbarCommentButton() {
     this.#ge?.remove();
     this.#ge = null;
   }
+  removeToolbarCommentButton() {
+    this.#me?.remove();
+    this.#me = null;
+  }
   setCommentButtonStates({ selected: t2, hasPopup: e2 }) {
-    if (this.#pe) {
-      this.#pe.classList.toggle("selected", t2);
-      this.#pe.ariaExpanded = e2;
+    if (this.#ge) {
+      this.#ge.classList.toggle("selected", t2);
+      this.#ge.ariaExpanded = e2;
     }
   }
   #w(t2, e2) {
@@ -5786,12 +5894,12 @@ var Comment = class {
     t2.addEventListener("pointerdown", (t3) => t3.stopPropagation(), { signal: i2 });
     const onClick = (e3) => {
       e3.preventDefault();
-      t2 === this.#ge ? this.edit() : this.#o.toggleComment(true);
+      t2 === this.#me ? this.edit() : this.#o.toggleComment(true);
     };
     t2.addEventListener("click", onClick, { capture: true, signal: i2 });
     t2.addEventListener("keydown", (e3) => {
       if (e3.target === t2 && "Enter" === e3.key) {
-        this.#me = true;
+        this.#fe = true;
         onClick(e3);
       }
     }, { signal: i2 });
@@ -5809,206 +5917,280 @@ var Comment = class {
     if (e2) [i2, n2] = e2;
     else {
       [i2, n2] = this.#o.commentButtonPosition;
-      const { width: t3, height: e3, x: s3, y: r3 } = this.#o;
-      i2 = s3 + i2 * t3;
-      n2 = r3 + n2 * e3;
+      const { width: t3, height: e3, x: r3, y: s3 } = this.#o;
+      i2 = r3 + i2 * t3;
+      n2 = s3 + n2 * e3;
     }
-    const s2 = this.#o.parent.boundingClientRect, { x: r2, y: a2, width: o2, height: l2 } = s2;
-    this.#o._uiManager.editComment(this.#o, r2 + i2 * o2, a2 + n2 * l2, { ...t2, parentDimensions: s2 });
+    const r2 = this.#o.parent.boundingClientRect, { x: s2, y: a2, width: o2, height: l2 } = r2;
+    this.#o._uiManager.editComment(this.#o, s2 + i2 * o2, a2 + n2 * l2, { ...t2, parentDimensions: r2 });
   }
   finish() {
-    if (this.#ge) {
-      this.#ge.focus({ focusVisible: this.#me });
-      this.#me = false;
+    if (this.#me) {
+      this.#me.focus({ focusVisible: this.#fe });
+      this.#fe = false;
     }
   }
   isDeleted() {
-    return this.#we || "" === this.#ye;
+    return this.#Ae || "" === this.#ve;
   }
   isEmpty() {
-    return null === this.#ye;
+    return null === this.#ve;
   }
   hasBeenEdited() {
-    return this.isDeleted() || this.#ye !== this.#fe;
+    return this.isDeleted() || this.#ve !== this.#be;
   }
   serialize() {
     return this.data;
   }
   get data() {
-    return { text: this.#ye, richText: this.#be, date: this.#ve, deleted: this.isDeleted() };
+    return { text: this.#ve, richText: this.#ye, date: this.#we, deleted: this.isDeleted() };
   }
   set data(t2) {
-    t2 !== this.#ye && (this.#be = null);
+    t2 !== this.#ve && (this.#ye = null);
     if (null !== t2) {
-      this.#ye = t2;
-      this.#ve = /* @__PURE__ */ new Date();
-      this.#we = false;
+      this.#ve = t2;
+      this.#we = /* @__PURE__ */ new Date();
+      this.#Ae = false;
     } else {
-      this.#ye = "";
-      this.#we = true;
+      this.#ve = "";
+      this.#Ae = true;
     }
   }
   restoreData({ text: t2, richText: e2, date: i2 }) {
-    this.#ye = t2;
-    this.#be = e2;
-    this.#ve = i2;
-    this.#we = false;
+    this.#ve = t2;
+    this.#ye = e2;
+    this.#we = i2;
+    this.#Ae = false;
   }
   setInitialText(t2, e2 = null) {
-    this.#fe = t2;
+    this.#be = t2;
     this.data = t2;
-    this.#ve = null;
-    this.#be = e2;
+    this.#we = null;
+    this.#ye = e2;
   }
   shown() {
   }
   destroy() {
+    this.#me?.remove();
+    this.#me = null;
     this.#ge?.remove();
     this.#ge = null;
-    this.#pe?.remove();
-    this.#pe = null;
-    this.#ye = "";
-    this.#be = null;
-    this.#ve = null;
+    this.#ve = "";
+    this.#ye = null;
+    this.#we = null;
     this.#o = null;
-    this.#me = false;
-    this.#we = false;
+    this.#fe = false;
+    this.#Ae = false;
   }
 };
-var TouchManager = class _TouchManager {
-  #Dt;
-  #Ae = false;
-  #Ee = null;
-  #Ce;
+function preventDefault(t2) {
+  t2.preventDefault();
+}
+var Q = 1e-4;
+function stopTouchEvent(t2) {
+  if (t2.cancelable) {
+    stopEvent(t2);
+    return true;
+  }
+  t2.stopPropagation();
+  return false;
+}
+var TouchManager = class {
+  #Pt;
+  #Ee = false;
+  #Ce = null;
   #Se;
   #Te;
   #_e;
-  #ke = null;
+  #ke;
   #De;
+  #Pe = false;
   #Me = null;
-  #Pe;
-  #Ie = null;
-  constructor({ container: t2, isPinchingDisabled: e2 = null, isPinchingStopped: i2 = null, onPinchStart: n2 = null, onPinching: s2 = null, onPinchEnd: r2 = null, signal: a2 }) {
-    this.#Dt = t2;
-    this.#Ee = i2;
-    this.#Ce = e2;
-    this.#Se = n2;
-    this.#Te = s2;
+  #Ie;
+  #Fe = /* @__PURE__ */ new Set();
+  #Oe = null;
+  #Re;
+  #Be = null;
+  #Le = 0;
+  constructor({ container: t2, isPinchingDisabled: e2 = null, isPinchingStopped: i2 = null, onPinchStart: n2 = null, onPinching: r2 = null, onPinchEnd: s2 = null, onPanning: a2 = null, signal: o2 }) {
+    this.#Pt = t2;
+    this.#Ce = i2;
+    this.#Se = e2;
+    this.#Te = n2;
     this.#_e = r2;
-    this.#Pe = new AbortController();
-    this.#De = AbortSignal.any([a2, this.#Pe.signal]);
-    t2.addEventListener("touchstart", this.#Fe.bind(this), { passive: false, signal: this.#De });
+    this.#ke = s2;
+    this.#De = a2;
+    this.#Re = new AbortController();
+    this.#Ie = AbortSignal.any([o2, this.#Re.signal]);
+    t2.addEventListener("touchstart", this.#Ne.bind(this), { passive: false, signal: this.#Ie });
   }
   get MIN_TOUCH_DISTANCE_TO_PINCH() {
     return 35 / OutputScale.pixelRatio;
   }
-  #Fe(t2) {
-    if (this.#Ce?.()) return;
-    if (1 === t2.touches.length) {
-      if (this.#ke) return;
-      const t3 = this.#ke = new AbortController(), e3 = AbortSignal.any([this.#De, t3.signal]), i3 = this.#Dt, n2 = { capture: true, signal: e3, passive: false }, cancelPointerDown = (t4) => {
-        if ("touch" === t4.pointerType) {
-          this.#ke?.abort();
-          this.#ke = null;
-        }
-      };
-      i3.addEventListener("pointerdown", (t4) => {
-        if ("touch" === t4.pointerType) {
-          stopEvent(t4);
-          cancelPointerDown(t4);
-        }
-      }, n2);
-      i3.addEventListener("pointerup", cancelPointerDown, n2);
-      i3.addEventListener("pointercancel", cancelPointerDown, n2);
-      return;
-    }
-    if (!this.#Ie) {
-      this.#Ie = new AbortController();
-      const t3 = AbortSignal.any([this.#De, this.#Ie.signal]), e3 = this.#Dt, i3 = { signal: t3, capture: false, passive: false };
-      e3.addEventListener("touchmove", this.#Oe.bind(this), i3);
-      const n2 = this.#Re.bind(this);
-      e3.addEventListener("touchend", n2, i3);
-      e3.addEventListener("touchcancel", n2, i3);
-      i3.capture = true;
-      e3.addEventListener("pointerdown", stopEvent, i3);
-      e3.addEventListener("pointermove", stopEvent, i3);
-      e3.addEventListener("pointercancel", stopEvent, i3);
-      e3.addEventListener("pointerup", stopEvent, i3);
-      this.#Se?.();
-    }
-    stopEvent(t2);
-    if (2 !== t2.touches.length || this.#Ee?.()) {
-      this.#Me = null;
-      return;
-    }
-    let [e2, i2] = t2.touches;
-    e2.identifier > i2.identifier && ([e2, i2] = [i2, e2]);
-    this.#Me = { touch0X: e2.screenX, touch0Y: e2.screenY, touch1X: i2.screenX, touch1Y: i2.screenY };
+  get MIN_TOUCH_DISTANCE_TO_SCALE() {
+    return 4 / OutputScale.pixelRatio;
   }
-  #Oe(t2) {
-    if (!this.#Me || 2 !== t2.touches.length) return;
-    stopEvent(t2);
-    let [e2, i2] = t2.touches;
-    e2.identifier > i2.identifier && ([e2, i2] = [i2, e2]);
-    const { screenX: n2, screenY: s2 } = e2, { screenX: r2, screenY: a2 } = i2, o2 = this.#Me, { touch0X: l2, touch0Y: h2, touch1X: c2, touch1Y: d2 } = o2, u2 = c2 - l2, p2 = d2 - h2, g2 = r2 - n2, m2 = a2 - s2, f2 = Math.hypot(g2, m2) || 1, b2 = Math.hypot(u2, p2) || 1;
-    if (!this.#Ae && Math.abs(b2 - f2) <= _TouchManager.MIN_TOUCH_DISTANCE_TO_PINCH) return;
-    o2.touch0X = n2;
-    o2.touch0Y = s2;
-    o2.touch1X = r2;
-    o2.touch1Y = a2;
-    if (!this.#Ae) {
-      this.#Ae = true;
-      return;
-    }
-    const y2 = [(n2 + r2) / 2, (s2 + a2) / 2];
-    this.#Te?.(y2, b2, f2);
-  }
-  #Re(t2) {
-    if (!(t2.touches.length >= 2)) {
-      if (this.#Ie) {
-        this.#Ie.abort();
-        this.#Ie = null;
-        this.#_e?.();
+  #Ne(t2) {
+    if (this.#Se?.()) return;
+    this.#Ue(t2);
+    const e2 = this.#Fe;
+    for (const { identifier: i2 } of t2.changedTouches) e2.add(i2);
+    if (1 !== e2.size) {
+      if (!this.#Be) {
+        this.#Be = new AbortController();
+        const t3 = AbortSignal.any([this.#Ie, this.#Be.signal]), e3 = this.#Pt, i2 = { signal: t3, capture: false, passive: false };
+        e3.addEventListener("touchmove", this.#He.bind(this), i2);
+        const n2 = this.#ze.bind(this);
+        e3.addEventListener("touchend", n2, i2);
+        e3.addEventListener("touchcancel", n2, i2);
+        i2.capture = true;
+        e3.addEventListener("pointerdown", stopEvent, i2);
+        e3.addEventListener("pointermove", stopEvent, i2);
+        e3.addEventListener("pointercancel", preventDefault, i2);
+        e3.addEventListener("pointerup", preventDefault, i2);
+        this.#Te?.();
       }
-      if (this.#Me) {
-        stopEvent(t2);
+      this.#Pe = stopTouchEvent(t2);
+      this.#Ge(t2);
+    } else this.#je();
+  }
+  #je() {
+    if (this.#Me) return;
+    const t2 = this.#Me = new AbortController(), e2 = AbortSignal.any([this.#Ie, t2.signal]), i2 = this.#Pt, n2 = { capture: true, signal: e2, passive: false }, cancelPointerDown = (t3) => {
+      if ("touch" === t3.pointerType) {
+        this.#Me?.abort();
         this.#Me = null;
-        this.#Ae = false;
       }
+    };
+    i2.addEventListener("pointerdown", (t3) => {
+      if ("touch" === t3.pointerType) {
+        stopEvent(t3);
+        cancelPointerDown(t3);
+      }
+    }, n2);
+    i2.addEventListener("pointerup", cancelPointerDown, n2);
+    i2.addEventListener("pointercancel", cancelPointerDown, n2);
+  }
+  #Ue(t2) {
+    const e2 = this.#Fe;
+    if (0 === e2.size) return;
+    const i2 = this.#Fe = /* @__PURE__ */ new Set();
+    for (const { identifier: n2 } of t2.touches) e2.has(n2) && i2.add(n2);
+  }
+  #We(t2) {
+    const e2 = this.#Fe, i2 = [];
+    for (const n2 of t2.touches) e2.has(n2.identifier) && i2.push(n2);
+    return i2;
+  }
+  #Ge(t2) {
+    const e2 = this.#We(t2);
+    if (2 !== e2.length || this.#Ce?.()) {
+      this.#Oe = null;
+      return;
+    }
+    const [i2, n2] = e2;
+    this.#Oe = { touch0X: i2.screenX, touch0Y: i2.screenY, touch1X: n2.screenX, touch1Y: n2.screenY, panX: (i2.clientX + n2.clientX) / 2, panY: (i2.clientY + n2.clientY) / 2, screenPanX: (i2.screenX + n2.screenX) / 2, screenPanY: (i2.screenY + n2.screenY) / 2 };
+  }
+  #He(t2) {
+    if (!this.#Oe) return;
+    const e2 = this.#We(t2);
+    if (2 !== e2.length) return;
+    const i2 = this.#Pe;
+    this.#Pe = stopTouchEvent(t2);
+    if (!this.#Pe) return;
+    if (!i2) {
+      this.#Ge(t2);
+      return;
+    }
+    const [n2, r2] = e2, { screenX: s2, screenY: a2 } = n2, { screenX: o2, screenY: l2 } = r2, c2 = this.#Oe, { touch0X: h2, touch0Y: d2, touch1X: u2, touch1Y: p2, panX: g2, panY: m2 } = c2, f2 = u2 - h2, b2 = p2 - d2, y2 = o2 - s2, v2 = l2 - a2, w2 = (n2.clientX + r2.clientX) / 2, A2 = (n2.clientY + r2.clientY) / 2;
+    c2.panX = w2;
+    c2.panY = A2;
+    const x2 = w2 - g2, E2 = A2 - m2, C2 = (s2 + o2) / 2, S2 = (a2 + l2) / 2, T2 = Math.hypot(C2 - c2.screenPanX, S2 - c2.screenPanY);
+    c2.screenPanX = C2;
+    c2.screenPanY = S2;
+    const _2 = Math.hypot(y2, v2), k2 = Math.hypot(f2, b2), D2 = this.#Ee ? this.MIN_TOUCH_DISTANCE_TO_SCALE : this.MIN_TOUCH_DISTANCE_TO_PINCH + 2 * T2;
+    if (_2 < Q || k2 < Q || Math.abs(k2 - _2) <= D2) {
+      (x2 || E2) && this.#De?.(x2, E2);
+      return;
+    }
+    c2.touch0X = s2;
+    c2.touch0Y = a2;
+    c2.touch1X = o2;
+    c2.touch1Y = l2;
+    const P2 = Math.sign(_2 - k2);
+    if (this.#Ee) {
+      if (this.#Le) {
+        const t3 = this.#Le;
+        this.#Le = 0;
+        if (P2 !== t3 && Math.abs(_2 - k2) <= 2 * T2) {
+          this.#Ee = false;
+          (x2 || E2) && this.#De?.(x2, E2);
+          return;
+        }
+      }
+      this.#_e?.([g2, m2], k2, _2, x2, E2);
+    } else {
+      this.#Ee = true;
+      this.#Le = P2;
+      (x2 || E2) && this.#De?.(x2, E2);
+    }
+  }
+  #ze(t2) {
+    this.#Ue(t2);
+    if (this.#Fe.size >= 2) {
+      this.#Ge(t2);
+      return;
+    }
+    const e2 = !!this.#Oe;
+    this.#Ve();
+    1 === this.#Fe.size && this.#je();
+    e2 && stopTouchEvent(t2);
+  }
+  #Ve() {
+    this.#Oe = null;
+    this.#Ee = false;
+    this.#Le = 0;
+    this.#Pe = false;
+    if (this.#Be) {
+      this.#Be.abort();
+      this.#Be = null;
+      this.#ke?.();
     }
   }
   destroy() {
-    this.#Pe?.abort();
-    this.#Pe = null;
-    this.#ke?.abort();
-    this.#ke = null;
+    this.#Ve();
+    this.#Fe.clear();
+    this.#Re?.abort();
+    this.#Re = null;
+    this.#Me?.abort();
+    this.#Me = null;
   }
 };
 var AnnotationEditor = class _AnnotationEditor {
-  #Be = null;
-  #Le = null;
-  #h = null;
+  #$e = null;
+  #qe = null;
   #c = null;
-  #pe = null;
-  #Ne = false;
-  #Ue = null;
-  #He = "";
-  #ze = null;
-  #Ge = null;
-  #je = null;
-  #We = null;
-  #Ve = null;
-  #$e = "";
-  #qe = false;
-  #Ke = null;
+  #h = null;
+  #ge = null;
   #Xe = false;
-  #Ye = false;
-  #Je = false;
+  #Ke = null;
+  #Ye = "";
+  #Je = null;
   #Qe = null;
-  #Ze = 0;
-  #ti = 0;
+  #Ze = null;
+  #ti = null;
   #ei = null;
-  #ii = null;
+  #ii = "";
+  #ni = false;
+  #ri = null;
+  #si = false;
+  #ai = false;
+  #oi = false;
+  #li = null;
+  #ci = 0;
+  #hi = 0;
+  #di = null;
+  #ui = null;
   isSelected = false;
   _isCopy = false;
   _editToolbar = null;
@@ -6020,8 +6202,8 @@ var AnnotationEditor = class _AnnotationEditor {
   static _l10n = null;
   static _l10nAlert = null;
   static _l10nResizer = null;
-  #ni = false;
-  #si = _AnnotationEditor._zIndex++;
+  #pi = false;
+  #gi = _AnnotationEditor._zIndex++;
   static _borderLineWidth = -1;
   static _colorManager = new ColorManager();
   static _zIndex = 1;
@@ -6046,11 +6228,11 @@ var AnnotationEditor = class _AnnotationEditor {
     this.creationDate = t2.creationDate || /* @__PURE__ */ new Date();
     this.modificationDate = t2.modificationDate || null;
     this.canAddComment = true;
-    const { rotation: e2, rawDims: { pageWidth: i2, pageHeight: n2, pageX: s2, pageY: r2 } } = this.parent.viewport;
+    const { rotation: e2, rawDims: { pageWidth: i2, pageHeight: n2, pageX: r2, pageY: s2 } } = this.parent.viewport;
     this.rotation = e2;
     this.pageRotation = (360 + e2 - this._uiManager.viewParameters.rotation) % 360;
     this.pageDimensions = [i2, n2];
-    this.pageTranslation = [s2, r2];
+    this.pageTranslation = [r2, s2];
     const [a2, o2] = this.parentDimensions;
     this.x = t2.x / a2;
     this.y = t2.y / o2;
@@ -6101,10 +6283,10 @@ var AnnotationEditor = class _AnnotationEditor {
     return [];
   }
   get _isDraggable() {
-    return this.#ni;
+    return this.#pi;
   }
   set _isDraggable(t2) {
-    this.#ni = t2;
+    this.#pi = t2;
     this.div?.classList.toggle("draggable", t2);
   }
   get uid() {
@@ -6144,21 +6326,21 @@ var AnnotationEditor = class _AnnotationEditor {
     this.div.style.zIndex = 0;
   }
   setInForeground() {
-    this.div.style.zIndex = this.#si;
+    this.div.style.zIndex = this.#gi;
   }
   setParent(t2) {
     if (null !== t2) {
       this.pageIndex = t2.pageIndex;
       this.pageDimensions = t2.pageDimensions;
     } else {
-      this.#ri();
-      this.#We?.remove();
-      this.#We = null;
+      this.#mi();
+      this.#ti?.remove();
+      this.#ti = null;
     }
     this.parent = t2;
   }
   focusin(t2) {
-    this._focusEventsAllowed && (this.#qe ? this.#qe = false : this.parent.setSelected(this));
+    this._focusEventsAllowed && (this.#ni ? this.#ni = false : this.parent.setSelected(this));
   }
   focusout(t2) {
     if (!this._focusEventsAllowed) return;
@@ -6179,10 +6361,10 @@ var AnnotationEditor = class _AnnotationEditor {
     this._uiManager.addToAnnotationStorage(this);
   }
   setAt(t2, e2, i2, n2) {
-    const [s2, r2] = this.parentDimensions;
+    const [r2, s2] = this.parentDimensions;
     [i2, n2] = this.screenToPageTranslation(i2, n2);
-    this.x = (t2 + i2) / s2;
-    this.y = (e2 + n2) / r2;
+    this.x = (t2 + i2) / r2;
+    this.y = (e2 + n2) / s2;
     this.fixAndSetPosition();
   }
   _moveAfterPaste(t2, e2) {
@@ -6194,7 +6376,7 @@ var AnnotationEditor = class _AnnotationEditor {
     this.setAt(t2 * i2, e2 * n2, this.width * i2, this.height * n2);
     this._onTranslated();
   }
-  #ai([t2, e2], i2, n2) {
+  #fi([t2, e2], i2, n2) {
     [i2, n2] = this.screenToPageTranslation(i2, n2);
     this.x += i2 / t2;
     this.y += n2 / e2;
@@ -6202,21 +6384,21 @@ var AnnotationEditor = class _AnnotationEditor {
     this.fixAndSetPosition();
   }
   translate(t2, e2) {
-    this.#ai(this.parentDimensions, t2, e2);
+    this.#fi(this.parentDimensions, t2, e2);
   }
   translateInPage(t2, e2) {
-    this.#Ke ||= [this.x, this.y, this.width, this.height];
-    this.#ai(this.pageDimensions, t2, e2);
+    this.#ri ||= [this.x, this.y, this.width, this.height];
+    this.#fi(this.pageDimensions, t2, e2);
     this.div.scrollIntoView({ block: "nearest" });
   }
   translationDone() {
     this._onTranslated(this.x, this.y);
   }
   drag(t2, e2) {
-    this.#Ke ||= [this.x, this.y, this.width, this.height];
-    const { div: i2, parentDimensions: [n2, s2] } = this;
+    this.#ri ||= [this.x, this.y, this.width, this.height];
+    const { div: i2, parentDimensions: [n2, r2] } = this;
     this.x += t2 / n2;
-    this.y += e2 / s2;
+    this.y += e2 / r2;
     if (this.parent && (this.x < 0 || this.x > 1 || this.y < 0 || this.y > 1)) {
       const { x: t3, y: e3 } = this.div.getBoundingClientRect();
       if (this.parent.findNewParent(this, t3, e3)) {
@@ -6224,37 +6406,36 @@ var AnnotationEditor = class _AnnotationEditor {
         this.y -= Math.floor(this.y);
       }
     }
-    let { x: r2, y: a2 } = this;
+    let { x: s2, y: a2 } = this;
     const [o2, l2] = this.getBaseTranslation();
-    r2 += o2;
+    s2 += o2;
     a2 += l2;
-    const { style: h2 } = i2;
-    h2.left = `${(100 * r2).toFixed(2)}%`;
-    h2.top = `${(100 * a2).toFixed(2)}%`;
-    this._onTranslating(r2, a2);
-    i2.scrollIntoView({ block: "nearest" });
+    const { style: c2 } = i2;
+    c2.left = `${(100 * s2).toFixed(2)}%`;
+    c2.top = `${(100 * a2).toFixed(2)}%`;
+    this._onTranslating(s2, a2);
   }
   _onTranslating(t2, e2) {
   }
   _onTranslated(t2, e2) {
   }
   get _hasBeenMoved() {
-    return !!this.#Ke && (this.#Ke[0] !== this.x || this.#Ke[1] !== this.y);
+    return !!this.#ri && (this.#ri[0] !== this.x || this.#ri[1] !== this.y);
   }
   get _hasBeenResized() {
-    return !!this.#Ke && (this.#Ke[2] !== this.width || this.#Ke[3] !== this.height);
+    return !!this.#ri && (this.#ri[2] !== this.width || this.#ri[3] !== this.height);
   }
   getBaseTranslation() {
-    const [t2, e2] = this.parentDimensions, { _borderLineWidth: i2 } = _AnnotationEditor, n2 = i2 / t2, s2 = i2 / e2;
+    const [t2, e2] = this.parentDimensions, { _borderLineWidth: i2 } = _AnnotationEditor, n2 = i2 / t2, r2 = i2 / e2;
     switch (this.rotation) {
       case 90:
-        return [-n2, s2];
+        return [-n2, r2];
       case 180:
-        return [n2, s2];
+        return [n2, r2];
       case 270:
-        return [n2, -s2];
+        return [n2, -r2];
       default:
-        return [-n2, -s2];
+        return [-n2, -r2];
     }
   }
   get _mustFixPosition() {
@@ -6262,38 +6443,38 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   fixAndSetPosition(t2 = this.rotation) {
     const { div: { style: e2 }, pageDimensions: [i2, n2] } = this;
-    let { x: s2, y: r2, width: a2, height: o2 } = this;
+    let { x: r2, y: s2, width: a2, height: o2 } = this;
     a2 *= i2;
     o2 *= n2;
-    s2 *= i2;
-    r2 *= n2;
+    r2 *= i2;
+    s2 *= n2;
     if (this._mustFixPosition) switch (t2) {
       case 0:
-        s2 = MathClamp(s2, 0, i2 - a2);
-        r2 = MathClamp(r2, 0, n2 - o2);
+        r2 = MathClamp(r2, 0, i2 - a2);
+        s2 = MathClamp(s2, 0, n2 - o2);
         break;
       case 90:
-        s2 = MathClamp(s2, 0, i2 - o2);
-        r2 = MathClamp(r2, a2, n2);
+        r2 = MathClamp(r2, 0, i2 - o2);
+        s2 = MathClamp(s2, a2, n2);
         break;
       case 180:
-        s2 = MathClamp(s2, a2, i2);
-        r2 = MathClamp(r2, o2, n2);
+        r2 = MathClamp(r2, a2, i2);
+        s2 = MathClamp(s2, o2, n2);
         break;
       case 270:
-        s2 = MathClamp(s2, o2, i2);
-        r2 = MathClamp(r2, 0, n2 - a2);
+        r2 = MathClamp(r2, o2, i2);
+        s2 = MathClamp(s2, 0, n2 - a2);
     }
-    this.x = s2 /= i2;
-    this.y = r2 /= n2;
-    const [l2, h2] = this.getBaseTranslation();
-    s2 += l2;
-    r2 += h2;
-    e2.left = `${(100 * s2).toFixed(2)}%`;
-    e2.top = `${(100 * r2).toFixed(2)}%`;
+    this.x = r2 /= i2;
+    this.y = s2 /= n2;
+    const [l2, c2] = this.getBaseTranslation();
+    r2 += l2;
+    s2 += c2;
+    e2.left = `${(100 * r2).toFixed(2)}%`;
+    e2.top = `${(100 * s2).toFixed(2)}%`;
     this.moveInDOM();
   }
-  static #oi(t2, e2, i2) {
+  static #bi(t2, e2, i2) {
     switch (i2) {
       case 90:
         return [e2, -t2];
@@ -6306,12 +6487,12 @@ var AnnotationEditor = class _AnnotationEditor {
     }
   }
   screenToPageTranslation(t2, e2) {
-    return _AnnotationEditor.#oi(t2, e2, this.parentRotation);
+    return _AnnotationEditor.#bi(t2, e2, this.parentRotation);
   }
   pageTranslationToScreen(t2, e2) {
-    return _AnnotationEditor.#oi(t2, e2, 360 - this.parentRotation);
+    return _AnnotationEditor.#bi(t2, e2, 360 - this.parentRotation);
   }
-  #li(t2) {
+  #yi(t2) {
     switch (t2) {
       case 90: {
         const [t3, e2] = this.pageDimensions;
@@ -6345,51 +6526,51 @@ var AnnotationEditor = class _AnnotationEditor {
   getInitialTranslation() {
     return [0, 0];
   }
-  #hi() {
-    if (this.#ze) return;
-    this.#ze = document.createElement("div");
-    this.#ze.classList.add("resizers");
+  #vi() {
+    if (this.#Je) return;
+    this.#Je = document.createElement("div");
+    this.#Je.classList.add("resizers");
     const t2 = this._willKeepAspectRatio ? ["topLeft", "topRight", "bottomRight", "bottomLeft"] : ["topLeft", "topMiddle", "topRight", "middleRight", "bottomRight", "bottomMiddle", "bottomLeft", "middleLeft"], e2 = this._uiManager._signal;
     for (const i2 of t2) {
       const t3 = document.createElement("div");
-      this.#ze.append(t3);
+      this.#Je.append(t3);
       t3.classList.add("resizer", i2);
       t3.setAttribute("data-resizer-name", i2);
-      t3.addEventListener("pointerdown", this.#ci.bind(this, i2), { signal: e2 });
+      t3.addEventListener("pointerdown", this.#wi.bind(this, i2), { signal: e2 });
       t3.addEventListener("contextmenu", noContextMenu, { signal: e2 });
       t3.tabIndex = -1;
     }
-    this.div.prepend(this.#ze);
+    this.div.prepend(this.#Je);
   }
-  #ci(t2, e2) {
+  #wi(t2, e2) {
     e2.preventDefault();
     const { isMac: i2 } = FeatureTest.platform;
     if (0 !== e2.button || e2.ctrlKey && i2) return;
-    this.#h?.toggle(false);
+    this.#c?.toggle(false);
     const n2 = this._isDraggable;
     this._isDraggable = false;
-    this.#Ge = [e2.screenX, e2.screenY];
-    const s2 = new AbortController(), r2 = this._uiManager.combinedSignal(s2);
+    this.#Qe = [e2.screenX, e2.screenY];
+    const r2 = new AbortController(), s2 = this._uiManager.combinedSignal(r2);
     this.parent.togglePointerEvents(false);
-    window.addEventListener("pointermove", this.#di.bind(this, t2), { passive: true, capture: true, signal: r2 });
-    window.addEventListener("touchmove", stopEvent, { passive: false, signal: r2 });
-    window.addEventListener("contextmenu", noContextMenu, { signal: r2 });
-    this.#je = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
+    window.addEventListener("pointermove", this.#Ai.bind(this, t2), { passive: true, capture: true, signal: s2 });
+    window.addEventListener("touchmove", stopEvent, { passive: false, signal: s2 });
+    window.addEventListener("contextmenu", noContextMenu, { signal: s2 });
+    this.#Ze = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
     const a2 = this.parent.div.style.cursor, o2 = this.div.style.cursor;
     this.div.style.cursor = this.parent.div.style.cursor = window.getComputedStyle(e2.target).cursor;
     const pointerUpCallback = () => {
-      s2.abort();
+      r2.abort();
       this.parent.togglePointerEvents(true);
-      this.#h?.toggle(true);
+      this.#c?.toggle(true);
       this._isDraggable = n2;
       this.parent.div.style.cursor = a2;
       this.div.style.cursor = o2;
-      this.#ui();
+      this.#xi();
     };
-    window.addEventListener("pointerup", pointerUpCallback, { signal: r2 });
-    window.addEventListener("blur", pointerUpCallback, { signal: r2 });
+    window.addEventListener("pointerup", pointerUpCallback, { signal: s2 });
+    window.addEventListener("blur", pointerUpCallback, { signal: s2 });
   }
-  #pi(t2, e2, i2, n2) {
+  #Ei(t2, e2, i2, n2) {
     this.width = i2;
     this.height = n2;
     this.x = t2;
@@ -6400,18 +6581,18 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   _onResized() {
   }
-  #ui() {
-    if (!this.#je) return;
-    const { savedX: t2, savedY: e2, savedWidth: i2, savedHeight: n2 } = this.#je;
-    this.#je = null;
-    const s2 = this.x, r2 = this.y, a2 = this.width, o2 = this.height;
-    s2 === t2 && r2 === e2 && a2 === i2 && o2 === n2 || this.addCommands({ cmd: this.#pi.bind(this, s2, r2, a2, o2), undo: this.#pi.bind(this, t2, e2, i2, n2), mustExec: true });
+  #xi() {
+    if (!this.#Ze) return;
+    const { savedX: t2, savedY: e2, savedWidth: i2, savedHeight: n2 } = this.#Ze;
+    this.#Ze = null;
+    const r2 = this.x, s2 = this.y, a2 = this.width, o2 = this.height;
+    r2 === t2 && s2 === e2 && a2 === i2 && o2 === n2 || this.addCommands({ cmd: this.#Ei.bind(this, r2, s2, a2, o2), undo: this.#Ei.bind(this, t2, e2, i2, n2), mustExec: true });
   }
   static _round(t2) {
     return Math.round(1e4 * t2) / 1e4;
   }
-  #di(t2, e2) {
-    const [i2, n2] = this.parentDimensions, s2 = this.x, r2 = this.y, a2 = this.width, o2 = this.height, l2 = _AnnotationEditor.MIN_SIZE / i2, h2 = _AnnotationEditor.MIN_SIZE / n2, c2 = this.#li(this.rotation), transf = (t3, e3) => [c2[0] * t3 + c2[2] * e3, c2[1] * t3 + c2[3] * e3], d2 = this.#li(360 - this.rotation);
+  #Ai(t2, e2) {
+    const [i2, n2] = this.parentDimensions, r2 = this.x, s2 = this.y, a2 = this.width, o2 = this.height, l2 = _AnnotationEditor.MIN_SIZE / i2, c2 = _AnnotationEditor.MIN_SIZE / n2, h2 = this.#yi(this.rotation), transf = (t3, e3) => [h2[0] * t3 + h2[2] * e3, h2[1] * t3 + h2[3] * e3], d2 = this.#yi(360 - this.rotation);
     let u2, p2, g2 = false, m2 = false;
     switch (t2) {
       case "topLeft":
@@ -6454,29 +6635,29 @@ var AnnotationEditor = class _AnnotationEditor {
     }
     const f2 = u2(a2, o2), b2 = p2(a2, o2);
     let y2 = transf(...b2);
-    const v2 = _AnnotationEditor._round(s2 + y2[0]), w2 = _AnnotationEditor._round(r2 + y2[1]);
-    let x2, A2, E2 = 1, C2 = 1;
-    if (e2.fromKeyboard) ({ deltaX: x2, deltaY: A2 } = e2);
+    const v2 = _AnnotationEditor._round(r2 + y2[0]), w2 = _AnnotationEditor._round(s2 + y2[1]);
+    let A2, x2, E2 = 1, C2 = 1;
+    if (e2.fromKeyboard) ({ deltaX: A2, deltaY: x2 } = e2);
     else {
-      const { screenX: t3, screenY: i3 } = e2, [n3, s3] = this.#Ge;
-      [x2, A2] = this.screenToPageTranslation(t3 - n3, i3 - s3);
-      this.#Ge[0] = t3;
-      this.#Ge[1] = i3;
+      const { screenX: t3, screenY: i3 } = e2, [n3, r3] = this.#Qe;
+      [A2, x2] = this.screenToPageTranslation(t3 - n3, i3 - r3);
+      this.#Qe[0] = t3;
+      this.#Qe[1] = i3;
     }
-    [x2, A2] = (S2 = x2 / i2, T2 = A2 / n2, [d2[0] * S2 + d2[2] * T2, d2[1] * S2 + d2[3] * T2]);
+    [A2, x2] = (S2 = A2 / i2, T2 = x2 / n2, [d2[0] * S2 + d2[2] * T2, d2[1] * S2 + d2[3] * T2]);
     var S2, T2;
     if (g2) {
       const t3 = Math.hypot(a2, o2);
-      E2 = C2 = Math.max(Math.min(Math.hypot(b2[0] - f2[0] - x2, b2[1] - f2[1] - A2) / t3, 1 / a2, 1 / o2), l2 / a2, h2 / o2);
-    } else m2 ? E2 = MathClamp(Math.abs(b2[0] - f2[0] - x2), l2, 1) / a2 : C2 = MathClamp(Math.abs(b2[1] - f2[1] - A2), h2, 1) / o2;
+      E2 = C2 = Math.max(Math.min(Math.hypot(b2[0] - f2[0] - A2, b2[1] - f2[1] - x2) / t3, 1 / a2, 1 / o2), l2 / a2, c2 / o2);
+    } else m2 ? E2 = MathClamp(Math.abs(b2[0] - f2[0] - A2), l2, 1) / a2 : C2 = MathClamp(Math.abs(b2[1] - f2[1] - x2), c2, 1) / o2;
     const _2 = _AnnotationEditor._round(a2 * E2), k2 = _AnnotationEditor._round(o2 * C2);
     y2 = transf(...p2(_2, k2));
-    const D2 = v2 - y2[0], M2 = w2 - y2[1];
-    this.#Ke ||= [this.x, this.y, this.width, this.height];
+    const D2 = v2 - y2[0], P2 = w2 - y2[1];
+    this.#ri ||= [this.x, this.y, this.width, this.height];
     this.width = _2;
     this.height = k2;
     this.x = D2;
-    this.y = M2;
+    this.y = P2;
     this.setDims();
     this.fixAndSetPosition();
     this._onResizing();
@@ -6484,13 +6665,13 @@ var AnnotationEditor = class _AnnotationEditor {
   _onResizing() {
   }
   altTextFinish() {
-    this.#h?.finish();
+    this.#c?.finish();
   }
   get toolbarButtons() {
     return null;
   }
   async addEditToolbar() {
-    if (this._editToolbar || this.#Ye) return this._editToolbar;
+    if (this._editToolbar || this.#ai) return this._editToolbar;
     this._editToolbar = new EditorToolbar(this);
     this.div.append(this._editToolbar.render());
     const { toolbarButtons: t2 } = this;
@@ -6508,7 +6689,7 @@ var AnnotationEditor = class _AnnotationEditor {
   removeEditToolbar() {
     this._editToolbar?.remove();
     this._editToolbar = null;
-    this.#h?.destroy();
+    this.#c?.destroy();
   }
   addContainer(t2) {
     const e2 = this._editToolbar?.div;
@@ -6518,67 +6699,67 @@ var AnnotationEditor = class _AnnotationEditor {
     return this.div.getBoundingClientRect();
   }
   createAltText() {
-    if (!this.#h) {
+    if (!this.#c) {
       AltText.initialize(_AnnotationEditor._l10n);
-      this.#h = new AltText(this);
-      if (this.#Be) {
-        this.#h.data = this.#Be;
-        this.#Be = null;
+      this.#c = new AltText(this);
+      if (this.#$e) {
+        this.#c.data = this.#$e;
+        this.#$e = null;
       }
     }
-    return this.#h;
+    return this.#c;
   }
   get altTextData() {
-    return this.#h?.data;
+    return this.#c?.data;
   }
   set altTextData(t2) {
-    this.#h && (this.#h.data = t2);
+    this.#c && (this.#c.data = t2);
   }
   get guessedAltText() {
-    return this.#h?.guessedText;
+    return this.#c?.guessedText;
   }
   async setGuessedAltText(t2) {
-    await this.#h?.setGuessedText(t2);
+    await this.#c?.setGuessedText(t2);
   }
   serializeAltText(t2) {
-    return this.#h?.serialize(t2);
+    return this.#c?.serialize(t2);
   }
   hasAltText() {
-    return !!this.#h && !this.#h.isEmpty();
+    return !!this.#c && !this.#c.isEmpty();
   }
   hasAltTextData() {
-    return this.#h?.hasData() ?? false;
+    return this.#c?.hasData() ?? false;
   }
   focusCommentButton() {
-    this.#c?.focusButton();
+    this.#h?.focusButton();
   }
   addCommentButton() {
-    return this.canAddComment ? this.#c ||= new Comment(this) : null;
+    return this.canAddComment ? this.#h ||= new Comment(this) : null;
   }
   addStandaloneCommentButton() {
     if (this._uiManager.hasCommentManager()) {
-      if (this.#pe) this._uiManager.isEditingMode() && this.#pe.classList.remove("hidden");
+      if (this.#ge) this._uiManager.isEditingMode() && this.#ge.classList.remove("hidden");
       else if (this.hasComment) {
-        this.#pe = this.#c.renderForStandalone();
-        this.div.append(this.#pe);
+        this.#ge = this.#h.renderForStandalone();
+        this.div.append(this.#ge);
       }
     }
   }
   removeStandaloneCommentButton() {
-    this.#c.removeStandaloneCommentButton();
-    this.#pe = null;
+    this.#h.removeStandaloneCommentButton();
+    this.#ge = null;
   }
   hideStandaloneCommentButton() {
-    this.#pe?.classList.add("hidden");
+    this.#ge?.classList.add("hidden");
   }
   get comment() {
-    if (!this.#c) return null;
-    const { data: { richText: t2, text: e2, date: i2, deleted: n2 } } = this.#c;
+    if (!this.#h) return null;
+    const { data: { richText: t2, text: e2, date: i2, deleted: n2 } } = this.#h;
     return { text: e2, richText: t2, date: i2, deleted: n2, color: this.getNonHCMColor(), opacity: this.opacity ?? 1 };
   }
   set comment(t2) {
-    this.#c ||= new Comment(this);
-    "object" == typeof t2 && null !== t2 ? this.#c.restoreData(t2) : this.#c.data = t2;
+    this.#h ||= new Comment(this);
+    "object" == typeof t2 && null !== t2 ? this.#h.restoreData(t2) : this.#h.data = t2;
     if (this.hasComment) {
       this.removeCommentButtonFromToolbar();
       this.addStandaloneCommentButton();
@@ -6591,39 +6772,39 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   setCommentData({ comment: t2, popupRef: e2, richText: i2 }) {
     if (!e2) return;
-    this.#c ||= new Comment(this);
-    this.#c.setInitialText(t2, i2);
+    this.#h ||= new Comment(this);
+    this.#h.setInitialText(t2, i2);
     if (!this.annotationElementId) return;
     const n2 = this._uiManager.getAndRemoveDataFromAnnotationStorage(this.annotationElementId);
     n2 && this.updateFromAnnotationLayer(n2);
   }
   get hasEditedComment() {
-    return this.#c?.hasBeenEdited();
+    return this.#h?.hasBeenEdited();
   }
   get hasDeletedComment() {
-    return this.#c?.isDeleted();
+    return this.#h?.isDeleted();
   }
   get hasComment() {
-    return !!this.#c && !this.#c.isEmpty() && !this.#c.isDeleted();
+    return !!this.#h && !this.#h.isEmpty() && !this.#h.isDeleted();
   }
   async editComment(t2) {
-    this.#c ||= new Comment(this);
-    this.#c.edit(t2);
+    this.#h ||= new Comment(this);
+    this.#h.edit(t2);
   }
   toggleComment(t2, e2 = void 0) {
     this.hasComment && this._uiManager.toggleComment(this, t2, e2);
   }
   setSelectedCommentButton(t2) {
-    this.#c.setSelectedButton(t2);
+    this.#h.setSelectedButton(t2);
   }
   addComment(t2) {
     if (this.hasEditedComment) {
-      const e2 = 180, i2 = 100, [, , , n2] = t2.rect, [s2] = this.pageDimensions, [r2] = this.pageTranslation, a2 = r2 + s2 + 1, o2 = n2 - i2, l2 = a2 + e2;
+      const e2 = 180, i2 = 100, [, , , n2] = t2.rect, [r2] = this.pageDimensions, [s2] = this.pageTranslation, a2 = s2 + r2 + 1, o2 = n2 - i2, l2 = a2 + e2;
       t2.popup = { contents: this.comment.text, deleted: this.comment.deleted, rect: [a2, o2, l2, n2] };
     }
   }
   updateFromAnnotationLayer({ popup: { contents: t2, deleted: e2 } }) {
-    this.#c.data = e2 ? null : t2;
+    this.#h.data = e2 ? null : t2;
   }
   get parentBoundingClientRect() {
     return this.parent.boundingClientRect;
@@ -6633,39 +6814,39 @@ var AnnotationEditor = class _AnnotationEditor {
     t2.setAttribute("data-editor-rotation", (360 - this.rotation) % 360);
     t2.className = this.name;
     t2.setAttribute("id", this.id);
-    t2.tabIndex = this.#Ne ? -1 : 0;
+    t2.tabIndex = this.#Xe ? -1 : 0;
     t2.setAttribute("role", "application");
     this.defaultL10nId && t2.setAttribute("data-l10n-id", this.defaultL10nId);
     this._isVisible || t2.classList.add("hidden");
     this.setInForeground();
-    this.#gi();
+    this.#Ci();
     const [e2, i2] = this.parentDimensions;
     if (this.parentRotation % 180 != 0) {
       t2.style.maxWidth = `${(100 * i2 / e2).toFixed(2)}%`;
       t2.style.maxHeight = `${(100 * e2 / i2).toFixed(2)}%`;
     }
-    const [n2, s2] = this.getInitialTranslation();
-    this.translate(n2, s2);
+    const [n2, r2] = this.getInitialTranslation();
+    this.translate(n2, r2);
     bindEvents(this, t2, ["keydown", "pointerdown", "dblclick"]);
-    this.isResizable && this._uiManager._supportsPinchToZoom && (this.#ii ||= new TouchManager({ container: t2, isPinchingDisabled: () => !this.isSelected, onPinchStart: this.#mi.bind(this), onPinching: this.#fi.bind(this), onPinchEnd: this.#bi.bind(this), signal: this._uiManager._signal }));
+    this.#Si();
     this.addStandaloneCommentButton();
     this._uiManager._editorUndoBar?.hide();
     return t2;
   }
-  #mi() {
-    this.#je = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
-    this.#h?.toggle(false);
+  #Ti() {
+    this.#Ze = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
+    this.#c?.toggle(false);
     this.parent.togglePointerEvents(false);
   }
-  #fi(t2, e2, i2) {
+  #_i(t2, e2, i2) {
     let n2 = i2 / e2 * 0.7 + 1 - 0.7;
     if (1 === n2) return;
-    const s2 = this.#li(this.rotation), transf = (t3, e3) => [s2[0] * t3 + s2[2] * e3, s2[1] * t3 + s2[3] * e3], [r2, a2] = this.parentDimensions, o2 = this.x, l2 = this.y, h2 = this.width, c2 = this.height, d2 = _AnnotationEditor.MIN_SIZE / r2, u2 = _AnnotationEditor.MIN_SIZE / a2;
-    n2 = Math.max(Math.min(n2, 1 / h2, 1 / c2), d2 / h2, u2 / c2);
-    const p2 = _AnnotationEditor._round(h2 * n2), g2 = _AnnotationEditor._round(c2 * n2);
-    if (p2 === h2 && g2 === c2) return;
-    this.#Ke ||= [o2, l2, h2, c2];
-    const m2 = transf(h2 / 2, c2 / 2), f2 = _AnnotationEditor._round(o2 + m2[0]), b2 = _AnnotationEditor._round(l2 + m2[1]), y2 = transf(p2 / 2, g2 / 2);
+    const r2 = this.#yi(this.rotation), transf = (t3, e3) => [r2[0] * t3 + r2[2] * e3, r2[1] * t3 + r2[3] * e3], [s2, a2] = this.parentDimensions, o2 = this.x, l2 = this.y, c2 = this.width, h2 = this.height, d2 = _AnnotationEditor.MIN_SIZE / s2, u2 = _AnnotationEditor.MIN_SIZE / a2;
+    n2 = Math.max(Math.min(n2, 1 / c2, 1 / h2), d2 / c2, u2 / h2);
+    const p2 = _AnnotationEditor._round(c2 * n2), g2 = _AnnotationEditor._round(h2 * n2);
+    if (p2 === c2 && g2 === h2) return;
+    this.#ri ||= [o2, l2, c2, h2];
+    const m2 = transf(c2 / 2, h2 / 2), f2 = _AnnotationEditor._round(o2 + m2[0]), b2 = _AnnotationEditor._round(l2 + m2[1]), y2 = transf(p2 / 2, g2 / 2);
     this.x = f2 - y2[0];
     this.y = b2 - y2[1];
     this.width = p2;
@@ -6674,75 +6855,76 @@ var AnnotationEditor = class _AnnotationEditor {
     this.fixAndSetPosition();
     this._onResizing();
   }
-  #bi() {
-    this.#h?.toggle(true);
+  #ki() {
+    this.#c?.toggle(true);
     this.parent.togglePointerEvents(true);
-    this.#ui();
+    this.#xi();
   }
   pointerdown(t2) {
     const { isMac: e2 } = FeatureTest.platform;
     if (0 !== t2.button || t2.ctrlKey && e2) t2.preventDefault();
     else {
-      this.#qe = true;
-      this._isDraggable ? this.#yi(t2) : this.#vi(t2);
+      this.#ni = true;
+      this._isDraggable ? this.#Di(t2) : this.#Pi(t2);
     }
   }
-  #vi(t2) {
+  #Pi(t2) {
     const { isMac: e2 } = FeatureTest.platform;
     t2.ctrlKey && !e2 || t2.shiftKey || t2.metaKey && e2 ? this.parent.toggleSelected(this) : this.parent.setSelected(this);
   }
-  #yi(t2) {
+  #Di(t2) {
     const { isSelected: e2 } = this;
     this._uiManager.setUpDragSession();
     let i2 = false;
-    const n2 = new AbortController(), s2 = this._uiManager.combinedSignal(n2), r2 = { capture: true, passive: false, signal: s2 }, cancelDrag = (t3) => {
+    const n2 = new AbortController(), r2 = this._uiManager.combinedSignal(n2), s2 = { capture: true, passive: false, signal: r2 }, cancelDrag = (t3) => {
       n2.abort();
-      this.#Ue = null;
-      this.#qe = false;
-      this._uiManager.endDragSession() || this.#vi(t3);
+      this.#Ke = null;
+      this.#ni = false;
+      this._uiManager.endDragSession() || this.#Pi(t3);
       i2 && this._onStopDragging();
     };
     if (e2) {
-      this.#Ze = t2.clientX;
-      this.#ti = t2.clientY;
-      this.#Ue = t2.pointerId;
-      this.#He = t2.pointerType;
+      this.#ci = t2.clientX;
+      this.#hi = t2.clientY;
+      this.#Ke = t2.pointerId;
+      this.#Ye = t2.pointerType;
       window.addEventListener("pointermove", (t3) => {
         if (!i2) {
           i2 = true;
           this._uiManager.toggleComment(this, true, false);
           this._onStartDragging();
         }
-        const { clientX: e3, clientY: n3, pointerId: s3 } = t3;
-        if (s3 !== this.#Ue) {
+        const { clientX: e3, clientY: n3, pointerId: r3 } = t3;
+        if (r3 !== this.#Ke) {
           stopEvent(t3);
           return;
         }
-        const [r3, a2] = this.screenToPageTranslation(e3 - this.#Ze, n3 - this.#ti);
-        this.#Ze = e3;
-        this.#ti = n3;
-        this._uiManager.dragSelectedEditors(r3, a2);
-      }, r2);
-      window.addEventListener("touchmove", stopEvent, r2);
+        const [s3, a2] = this.screenToPageTranslation(e3 - this.#ci, n3 - this.#hi);
+        this.#ci = e3;
+        this.#hi = n3;
+        this._uiManager.dragSelectedEditors(s3, a2);
+        this.div.scrollIntoView({ block: "nearest" });
+      }, s2);
+      window.addEventListener("touchmove", stopEvent, s2);
       window.addEventListener("pointerdown", (t3) => {
-        t3.pointerType === this.#He && (this.#ii || t3.isPrimary) && cancelDrag(t3);
+        t3.pointerType === this.#Ye && (this.#ui || t3.isPrimary) && cancelDrag(t3);
         stopEvent(t3);
-      }, r2);
+      }, s2);
     }
     const pointerUpCallback = (t3) => {
-      this.#Ue && this.#Ue !== t3.pointerId ? stopEvent(t3) : cancelDrag(t3);
+      this.#Ke && this.#Ke !== t3.pointerId ? stopEvent(t3) : cancelDrag(t3);
     };
-    window.addEventListener("pointerup", pointerUpCallback, { signal: s2 });
-    window.addEventListener("blur", pointerUpCallback, { signal: s2 });
+    window.addEventListener("pointerup", pointerUpCallback, { signal: r2 });
+    window.addEventListener("blur", pointerUpCallback, { signal: r2 });
   }
   _onStartDragging() {
   }
   _onStopDragging() {
   }
   moveInDOM() {
-    this.#Qe && clearTimeout(this.#Qe);
-    this.#Qe = setTimeout(() => {
-      this.#Qe = null;
+    this.#li && clearTimeout(this.#li);
+    this.#li = setTimeout(() => {
+      this.#li = null;
       this.parent?.moveEditorInDOM(this);
     }, 0);
   }
@@ -6754,31 +6936,31 @@ var AnnotationEditor = class _AnnotationEditor {
     this._onTranslated();
   }
   getRect(t2, e2, i2 = this.rotation) {
-    const n2 = this.parentScale, [s2, r2] = this.pageDimensions, [a2, o2] = this.pageTranslation, l2 = t2 / n2, h2 = e2 / n2, c2 = this.x * s2, d2 = this.y * r2, u2 = this.width * s2, p2 = this.height * r2;
+    const n2 = this.parentScale, [r2, s2] = this.pageDimensions, [a2, o2] = this.pageTranslation, l2 = t2 / n2, c2 = e2 / n2, h2 = this.x * r2, d2 = this.y * s2, u2 = this.width * r2, p2 = this.height * s2;
     switch (i2) {
       case 0:
-        return [c2 + l2 + a2, r2 - d2 - h2 - p2 + o2, c2 + l2 + u2 + a2, r2 - d2 - h2 + o2];
+        return [h2 + l2 + a2, s2 - d2 - c2 - p2 + o2, h2 + l2 + u2 + a2, s2 - d2 - c2 + o2];
       case 90:
-        return [c2 + h2 + a2, r2 - d2 + l2 + o2, c2 + h2 + p2 + a2, r2 - d2 + l2 + u2 + o2];
+        return [h2 + c2 + a2, s2 - d2 + l2 + o2, h2 + c2 + p2 + a2, s2 - d2 + l2 + u2 + o2];
       case 180:
-        return [c2 - l2 - u2 + a2, r2 - d2 + h2 + o2, c2 - l2 + a2, r2 - d2 + h2 + p2 + o2];
+        return [h2 - l2 - u2 + a2, s2 - d2 + c2 + o2, h2 - l2 + a2, s2 - d2 + c2 + p2 + o2];
       case 270:
-        return [c2 - h2 - p2 + a2, r2 - d2 - l2 - u2 + o2, c2 - h2 + a2, r2 - d2 - l2 + o2];
+        return [h2 - c2 - p2 + a2, s2 - d2 - l2 - u2 + o2, h2 - c2 + a2, s2 - d2 - l2 + o2];
       default:
         throw new Error("Invalid rotation");
     }
   }
   getRectInCurrentCoords(t2, e2) {
-    const [i2, n2, s2, r2] = t2, a2 = s2 - i2, o2 = r2 - n2;
+    const [i2, n2, r2, s2] = t2, a2 = r2 - i2, o2 = s2 - n2;
     switch (this.rotation) {
       case 0:
-        return [i2, e2 - r2, a2, o2];
+        return [i2, e2 - s2, a2, o2];
       case 90:
         return [i2, e2 - n2, o2, a2];
       case 180:
-        return [s2, e2 - n2, a2, o2];
+        return [r2, e2 - n2, a2, o2];
       case 270:
-        return [s2, e2 - r2, o2, a2];
+        return [r2, e2 - s2, o2, a2];
       default:
         throw new Error("Invalid rotation");
     }
@@ -6790,11 +6972,11 @@ var AnnotationEditor = class _AnnotationEditor {
     return this.color && _AnnotationEditor._colorManager.convert(this._uiManager.getNonHCMColor(this.color));
   }
   onUpdatedColor() {
-    this.#c?.onUpdatedColor();
+    this.#h?.onUpdatedColor();
   }
   getData() {
-    const { comment: { text: t2, color: e2, date: i2, opacity: n2, deleted: s2, richText: r2 }, uid: a2, pageIndex: o2, creationDate: l2, modificationDate: h2 } = this;
-    return { id: a2, pageIndex: o2, rect: this.getPDFRect(), richText: r2, contentsObj: { str: t2 }, creationDate: l2, modificationDate: i2 || h2, popupRef: !s2, color: e2, opacity: n2 };
+    const { comment: { text: t2, color: e2, date: i2, opacity: n2, deleted: r2, richText: s2 }, uid: a2, pageIndex: o2, creationDate: l2, modificationDate: c2 } = this;
+    return { id: a2, pageIndex: o2, rect: this.getPDFRect(), richText: s2, contentsObj: { str: t2 }, creationDate: l2, modificationDate: i2 || c2, popupRef: !r2, color: e2, opacity: n2 };
   }
   onceAdded(t2) {
   }
@@ -6804,37 +6986,41 @@ var AnnotationEditor = class _AnnotationEditor {
   enableEditMode() {
     if (this.isInEditMode()) return false;
     this.parent.setEditingState(false);
-    this.#Ye = true;
+    this.#ai = true;
     return true;
   }
   disableEditMode() {
     if (!this.isInEditMode()) return false;
     this.parent.setEditingState(true);
-    this.#Ye = false;
+    this.#ai = false;
     return true;
   }
   isInEditMode() {
-    return this.#Ye;
+    return this.#ai;
   }
   shouldGetKeyboardEvents() {
-    return this.#Je;
+    return this.#oi;
   }
   needsToBeRebuilt() {
     return this.div && !this.isAttachedToDOM;
   }
   get isOnScreen() {
-    const { top: t2, left: e2, bottom: i2, right: n2 } = this.getClientDimensions(), { innerHeight: s2, innerWidth: r2 } = window;
-    return e2 < r2 && n2 > 0 && t2 < s2 && i2 > 0;
+    const { top: t2, left: e2, bottom: i2, right: n2 } = this.getClientDimensions(), { innerHeight: r2, innerWidth: s2 } = window;
+    return e2 < s2 && n2 > 0 && t2 < r2 && i2 > 0;
   }
-  #gi() {
-    if (this.#Ve || !this.div) return;
-    this.#Ve = new AbortController();
-    const t2 = this._uiManager.combinedSignal(this.#Ve);
+  #Ci() {
+    if (this.#ei || !this.div) return;
+    this.#ei = new AbortController();
+    const t2 = this._uiManager.combinedSignal(this.#ei);
     this.div.addEventListener("focusin", this.focusin.bind(this), { signal: t2 });
     this.div.addEventListener("focusout", this.focusout.bind(this), { signal: t2 });
   }
+  #Si() {
+    !this.#ui && this.div && this.isResizable && this._uiManager._supportsPinchToZoom && (this.#ui = new TouchManager({ container: this.div, isPinchingDisabled: () => !this.isSelected, onPinchStart: this.#Ti.bind(this), onPinching: this.#_i.bind(this), onPinchEnd: this.#ki.bind(this), signal: this._uiManager._signal }));
+  }
   rebuild() {
-    this.#gi();
+    this.#Ci();
+    this.#Si();
   }
   rotate(t2) {
   }
@@ -6849,47 +7035,47 @@ var AnnotationEditor = class _AnnotationEditor {
   static async deserialize(t2, e2, i2) {
     const n2 = new this.prototype.constructor({ parent: e2, id: i2.getId(), uiManager: i2, annotationElementId: t2.annotationElementId, creationDate: t2.creationDate, modificationDate: t2.modificationDate });
     n2.rotation = t2.rotation;
-    n2.#Be = t2.accessibilityData;
+    n2.#$e = t2.accessibilityData;
     n2._isCopy = t2.isCopy || false;
-    const [s2, r2] = n2.pageDimensions, [a2, o2, l2, h2] = n2.getRectInCurrentCoords(t2.rect, r2);
-    n2.x = a2 / s2;
-    n2.y = o2 / r2;
-    n2.width = l2 / s2;
-    n2.height = h2 / r2;
+    const [r2, s2] = n2.pageDimensions, [a2, o2, l2, c2] = n2.getRectInCurrentCoords(t2.rect, s2);
+    n2.x = a2 / r2;
+    n2.y = o2 / s2;
+    n2.width = l2 / r2;
+    n2.height = c2 / s2;
     return n2;
   }
   get hasBeenModified() {
     return !!this.annotationElementId && (this.deleted || null !== this.serialize());
   }
   remove() {
-    this.#Ve?.abort();
-    this.#Ve = null;
+    this.#ei?.abort();
+    this.#ei = null;
     this.isEmpty() || this.commit();
+    this.#ui?.destroy();
+    this.#ui = null;
     this.parent ? this.parent.remove(this) : this._uiManager.removeEditor(this);
     this.hideCommentPopup();
-    if (this.#Qe) {
-      clearTimeout(this.#Qe);
-      this.#Qe = null;
+    if (this.#li) {
+      clearTimeout(this.#li);
+      this.#li = null;
     }
-    this.#ri();
+    this.#mi();
     this.removeEditToolbar();
-    if (this.#ei) {
-      for (const t2 of this.#ei.values()) clearTimeout(t2);
-      this.#ei = null;
+    if (this.#di) {
+      for (const t2 of this.#di.values()) clearTimeout(t2);
+      this.#di = null;
     }
     this.parent = null;
-    this.#ii?.destroy();
-    this.#ii = null;
-    this.#We?.remove();
-    this.#We = null;
+    this.#ti?.remove();
+    this.#ti = null;
   }
   get isResizable() {
     return false;
   }
   makeResizable() {
     if (this.isResizable) {
-      this.#hi();
-      this.#ze.classList.remove("hidden");
+      this.#vi();
+      this.#Je.classList.remove("hidden");
     }
   }
   get toolbarPosition() {
@@ -6899,91 +7085,91 @@ var AnnotationEditor = class _AnnotationEditor {
     return "ltr" === this._uiManager.direction ? [1, 0] : [0, 0];
   }
   get commentButtonPositionInPage() {
-    const { commentButtonPosition: [t2, e2] } = this, [i2, n2, s2, r2] = this.getPDFRect();
-    return [_AnnotationEditor._round(i2 + (s2 - i2) * t2), _AnnotationEditor._round(n2 + (r2 - n2) * (1 - e2))];
+    const { commentButtonPosition: [t2, e2] } = this, [i2, n2, r2, s2] = this.getPDFRect();
+    return [_AnnotationEditor._round(i2 + (r2 - i2) * t2), _AnnotationEditor._round(n2 + (s2 - n2) * (1 - e2))];
   }
   get commentButtonColor() {
     return this._uiManager.makeCommentColor(this.getNonHCMColor(), this.opacity);
   }
   get commentPopupPosition() {
-    return this.#c.commentPopupPositionInLayer;
+    return this.#h.commentPopupPositionInLayer;
   }
   set commentPopupPosition(t2) {
-    this.#c.commentPopupPositionInLayer = t2;
+    this.#h.commentPopupPositionInLayer = t2;
   }
   hasDefaultPopupPosition() {
-    return this.#c.hasDefaultPopupPosition();
+    return this.#h.hasDefaultPopupPosition();
   }
   get commentButtonWidth() {
-    return this.#c.commentButtonWidth;
+    return this.#h.commentButtonWidth;
   }
   get elementBeforePopup() {
     return this.div;
   }
   setCommentButtonStates(t2) {
-    this.#c?.setCommentButtonStates(t2);
+    this.#h?.setCommentButtonStates(t2);
   }
   keydown(t2) {
     if (!this.isResizable || t2.target !== this.div || "Enter" !== t2.key) return;
     this._uiManager.setSelected(this);
-    this.#je = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
-    const e2 = this.#ze.children;
-    if (!this.#Le) {
-      this.#Le = Array.from(e2);
-      const t3 = this.#wi.bind(this), i3 = this.#xi.bind(this), n3 = this._uiManager._signal;
-      for (const e3 of this.#Le) {
-        const s3 = e3.getAttribute("data-resizer-name");
+    this.#Ze = { savedX: this.x, savedY: this.y, savedWidth: this.width, savedHeight: this.height };
+    const e2 = this.#Je.children;
+    if (!this.#qe) {
+      this.#qe = Array.from(e2);
+      const t3 = this.#Mi.bind(this), i3 = this.#Ii.bind(this), n3 = this._uiManager._signal;
+      for (const e3 of this.#qe) {
+        const r3 = e3.getAttribute("data-resizer-name");
         e3.setAttribute("role", "spinbutton");
         e3.addEventListener("keydown", t3, { signal: n3 });
         e3.addEventListener("blur", i3, { signal: n3 });
-        e3.addEventListener("focus", this.#Ai.bind(this, s3), { signal: n3 });
-        e3.setAttribute("data-l10n-id", _AnnotationEditor._l10nResizer[s3]);
+        e3.addEventListener("focus", this.#Fi.bind(this, r3), { signal: n3 });
+        e3.setAttribute("data-l10n-id", _AnnotationEditor._l10nResizer[r3]);
       }
     }
-    const i2 = this.#Le[0];
+    const i2 = this.#qe[0];
     let n2 = 0;
     for (const t3 of e2) {
       if (t3 === i2) break;
       n2++;
     }
-    const s2 = (360 - this.rotation + this.parentRotation) % 360 / 90 * (this.#Le.length / 4);
-    if (s2 !== n2) {
-      if (s2 < n2) for (let t4 = 0; t4 < n2 - s2; t4++) this.#ze.append(this.#ze.firstElementChild);
-      else if (s2 > n2) for (let t4 = 0; t4 < s2 - n2; t4++) this.#ze.firstElementChild.before(this.#ze.lastElementChild);
+    const r2 = (360 - this.rotation + this.parentRotation) % 360 / 90 * (this.#qe.length / 4);
+    if (r2 !== n2) {
+      if (r2 < n2) for (let t4 = 0; t4 < n2 - r2; t4++) this.#Je.append(this.#Je.firstElementChild);
+      else if (r2 > n2) for (let t4 = 0; t4 < r2 - n2; t4++) this.#Je.firstElementChild.before(this.#Je.lastElementChild);
       let t3 = 0;
       for (const i3 of e2) {
-        const e3 = this.#Le[t3++].getAttribute("data-resizer-name");
+        const e3 = this.#qe[t3++].getAttribute("data-resizer-name");
         i3.setAttribute("data-l10n-id", _AnnotationEditor._l10nResizer[e3]);
       }
     }
-    this.#Ei(0);
-    this.#Je = true;
-    this.#ze.firstElementChild.focus({ focusVisible: true });
+    this.#Oi(0);
+    this.#oi = true;
+    this.#Je.firstElementChild.focus({ focusVisible: true });
     t2.preventDefault();
     t2.stopImmediatePropagation();
   }
-  #wi(t2) {
+  #Mi(t2) {
     _AnnotationEditor._resizerKeyboardManager.exec(this, t2);
   }
-  #xi(t2) {
-    this.#Je && t2.relatedTarget?.parentNode !== this.#ze && this.#ri();
+  #Ii(t2) {
+    this.#oi && t2.relatedTarget?.parentNode !== this.#Je && this.#mi();
   }
-  #Ai(t2) {
-    this.#$e = this.#Je ? t2 : "";
+  #Fi(t2) {
+    this.#ii = this.#oi ? t2 : "";
   }
-  #Ei(t2) {
-    if (this.#Le) for (const e2 of this.#Le) e2.tabIndex = t2;
+  #Oi(t2) {
+    if (this.#qe) for (const e2 of this.#qe) e2.tabIndex = t2;
   }
   _resizeWithKeyboard(t2, e2) {
-    this.#Je && this.#di(this.#$e, { deltaX: t2, deltaY: e2, fromKeyboard: true });
+    this.#oi && this.#Ai(this.#ii, { deltaX: t2, deltaY: e2, fromKeyboard: true });
   }
-  #ri() {
-    this.#Je = false;
-    this.#Ei(-1);
-    this.#ui();
+  #mi() {
+    this.#oi = false;
+    this.#Oi(-1);
+    this.#xi();
   }
   _stopResizingWithKeyboard() {
-    this.#ri();
+    this.#mi();
     this.div.focus();
   }
   select() {
@@ -6994,7 +7180,7 @@ var AnnotationEditor = class _AnnotationEditor {
       this.div?.classList.add("selectedEditor");
       if (this._editToolbar) {
         this._editToolbar?.show();
-        this.#h?.toggleAltTextBadge(false);
+        this.#c?.toggleAltTextBadge(false);
       } else this.addEditToolbar().then(() => {
         this.div?.classList.contains("selectedEditor") && this._editToolbar?.show();
       });
@@ -7006,11 +7192,11 @@ var AnnotationEditor = class _AnnotationEditor {
   unselect() {
     if (this.isSelected) {
       this.isSelected = false;
-      this.#ze?.classList.add("hidden");
+      this.#Je?.classList.add("hidden");
       this.div?.classList.remove("selectedEditor");
       this.div?.contains(document.activeElement) && this._uiManager.currentLayer.div.focus({ preventScroll: true });
       this._editToolbar?.hide();
-      this.#h?.toggleAltTextBadge(true);
+      this.#c?.toggleAltTextBadge(true);
       this.hideCommentPopup();
     }
   }
@@ -7045,10 +7231,10 @@ var AnnotationEditor = class _AnnotationEditor {
     return this.div;
   }
   get isEditing() {
-    return this.#Xe;
+    return this.#si;
   }
   set isEditing(t2) {
-    this.#Xe = t2;
+    this.#si = t2;
     if (this.parent) if (t2) {
       this.parent.setSelected(this);
       this.parent.setActiveEditor(this);
@@ -7068,16 +7254,16 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   _reportTelemetry(t2, e2 = false) {
     if (e2) {
-      this.#ei ||= /* @__PURE__ */ new Map();
+      this.#di ||= /* @__PURE__ */ new Map();
       const { action: e3 } = t2;
-      let i2 = this.#ei.get(e3);
+      let i2 = this.#di.get(e3);
       i2 && clearTimeout(i2);
       i2 = setTimeout(() => {
         this._reportTelemetry(t2);
-        this.#ei.delete(e3);
-        0 === this.#ei.size && (this.#ei = null);
+        this.#di.delete(e3);
+        0 === this.#di.size && (this.#di = null);
       }, _AnnotationEditor._telemetryTimeout);
-      this.#ei.set(e3, i2);
+      this.#di.set(e3, i2);
       return;
     }
     t2.type ||= this.editorType;
@@ -7089,18 +7275,18 @@ var AnnotationEditor = class _AnnotationEditor {
   }
   enable() {
     this.div && (this.div.tabIndex = 0);
-    this.#Ne = false;
+    this.#Xe = false;
   }
   disable() {
     this.div && (this.div.tabIndex = -1);
-    this.#Ne = true;
+    this.#Xe = true;
   }
   updateFakeAnnotationElement(t2) {
-    if (this.#We || this.deleted) if (this.deleted) {
-      this.#We.remove();
-      this.#We = null;
-    } else (this.hasEditedComment || this._hasBeenMoved || this._hasBeenResized) && this.#We.updateEdited({ rect: this.getPDFRect(), popup: this.comment });
-    else this.#We = t2.addFakeAnnotation(this);
+    if (this.#ti || this.deleted) if (this.deleted) {
+      this.#ti.remove();
+      this.#ti = null;
+    } else (this.hasEditedComment || this._hasBeenMoved || this._hasBeenResized) && this.#ti.updateEdited({ rect: this.getPDFRect(), popup: this.comment });
+    else this.#ti = t2.addFakeAnnotation(this);
   }
   renderAnnotationElement(t2) {
     if (this.deleted) {
@@ -7137,25 +7323,25 @@ var FakeEditor = class extends AnnotationEditor {
     return this.serializeDeleted();
   }
 };
-var Q = 3285377520;
-var Z = 4294901760;
-var tt = 65535;
+var Z = 3285377520;
+var tt = 4294901760;
+var et = 65535;
 var MurmurHash3_64 = class {
   constructor(t2) {
-    this.h1 = t2 ? 4294967295 & t2 : Q;
-    this.h2 = t2 ? 4294967295 & t2 : Q;
+    this.h1 = t2 ? 4294967295 & t2 : Z;
+    this.h2 = t2 ? 4294967295 & t2 : Z;
   }
   update(t2) {
     let e2, i2;
     if ("string" == typeof t2) {
       e2 = new Uint8Array(2 * t2.length);
       i2 = 0;
-      for (let n3 = 0, s3 = t2.length; n3 < s3; n3++) {
-        const s4 = t2.charCodeAt(n3);
-        if (s4 <= 255) e2[i2++] = s4;
+      for (let n3 = 0, r3 = t2.length; n3 < r3; n3++) {
+        const r4 = t2.charCodeAt(n3);
+        if (r4 <= 255) e2[i2++] = r4;
         else {
-          e2[i2++] = s4 >>> 8;
-          e2[i2++] = 255 & s4;
+          e2[i2++] = r4 >>> 8;
+          e2[i2++] = 255 & r4;
         }
       }
     } else {
@@ -7163,112 +7349,112 @@ var MurmurHash3_64 = class {
       e2 = t2.slice();
       i2 = e2.byteLength;
     }
-    const n2 = i2 >> 2, s2 = i2 - 4 * n2, r2 = new Uint32Array(e2.buffer, 0, n2);
-    let a2 = 0, o2 = 0, l2 = this.h1, h2 = this.h2;
-    const c2 = 3432918353, d2 = 461845907, u2 = 11601, p2 = 13715;
+    const n2 = i2 >> 2, r2 = i2 - 4 * n2, s2 = new Uint32Array(e2.buffer, 0, n2);
+    let a2 = 0, o2 = 0, l2 = this.h1, c2 = this.h2;
+    const h2 = 3432918353, d2 = 461845907, u2 = 11601, p2 = 13715;
     for (let t3 = 0; t3 < n2; t3++) if (1 & t3) {
-      a2 = r2[t3];
-      a2 = a2 * c2 & Z | a2 * u2 & tt;
+      a2 = s2[t3];
+      a2 = a2 * h2 & tt | a2 * u2 & et;
       a2 = a2 << 15 | a2 >>> 17;
-      a2 = a2 * d2 & Z | a2 * p2 & tt;
+      a2 = a2 * d2 & tt | a2 * p2 & et;
       l2 ^= a2;
       l2 = l2 << 13 | l2 >>> 19;
       l2 = 5 * l2 + 3864292196;
     } else {
-      o2 = r2[t3];
-      o2 = o2 * c2 & Z | o2 * u2 & tt;
+      o2 = s2[t3];
+      o2 = o2 * h2 & tt | o2 * u2 & et;
       o2 = o2 << 15 | o2 >>> 17;
-      o2 = o2 * d2 & Z | o2 * p2 & tt;
-      h2 ^= o2;
-      h2 = h2 << 13 | h2 >>> 19;
-      h2 = 5 * h2 + 3864292196;
+      o2 = o2 * d2 & tt | o2 * p2 & et;
+      c2 ^= o2;
+      c2 = c2 << 13 | c2 >>> 19;
+      c2 = 5 * c2 + 3864292196;
     }
     a2 = 0;
-    switch (s2) {
+    switch (r2) {
       case 3:
         a2 ^= e2[4 * n2 + 2] << 16;
       case 2:
         a2 ^= e2[4 * n2 + 1] << 8;
       case 1:
         a2 ^= e2[4 * n2];
-        a2 = a2 * c2 & Z | a2 * u2 & tt;
+        a2 = a2 * h2 & tt | a2 * u2 & et;
         a2 = a2 << 15 | a2 >>> 17;
-        a2 = a2 * d2 & Z | a2 * p2 & tt;
-        1 & n2 ? l2 ^= a2 : h2 ^= a2;
+        a2 = a2 * d2 & tt | a2 * p2 & et;
+        1 & n2 ? l2 ^= a2 : c2 ^= a2;
     }
     this.h1 = l2;
-    this.h2 = h2;
+    this.h2 = c2;
   }
   hexdigest() {
     let t2 = this.h1, e2 = this.h2;
     t2 ^= e2 >>> 1;
-    t2 = 3981806797 * t2 & Z | 36045 * t2 & tt;
-    e2 = 4283543511 * e2 & Z | (2950163797 * (e2 << 16 | t2 >>> 16) & Z) >>> 16;
+    t2 = 3981806797 * t2 & tt | 36045 * t2 & et;
+    e2 = 4283543511 * e2 & tt | (2950163797 * (e2 << 16 | t2 >>> 16) & tt) >>> 16;
     t2 ^= e2 >>> 1;
-    t2 = 444984403 * t2 & Z | 60499 * t2 & tt;
-    e2 = 3301882366 * e2 & Z | (3120437893 * (e2 << 16 | t2 >>> 16) & Z) >>> 16;
+    t2 = 444984403 * t2 & tt | 60499 * t2 & et;
+    e2 = 3301882366 * e2 & tt | (3120437893 * (e2 << 16 | t2 >>> 16) & tt) >>> 16;
     t2 ^= e2 >>> 1;
     return (t2 >>> 0).toString(16).padStart(8, "0") + (e2 >>> 0).toString(16).padStart(8, "0");
   }
 };
-var et = Object.freeze({ map: null, hash: "", transfer: void 0 });
+var it = Object.freeze({ map: null, hash: "", transfer: void 0 });
 var AnnotationStorage = class {
-  #Ci = false;
-  #Si = null;
-  #Ti = null;
-  #_i = /* @__PURE__ */ new Map();
+  #Ri = false;
+  #Bi = null;
+  #Li = null;
+  #Ni = /* @__PURE__ */ new Map();
   onSetModified = null;
   onResetModified = null;
   onAnnotationEditor = null;
   getValue(t2, e2) {
-    const i2 = this.#_i.get(t2);
+    const i2 = this.#Ni.get(t2);
     return void 0 === i2 ? e2 : Object.assign(e2, i2);
   }
   getRawValue(t2) {
-    return this.#_i.get(t2);
+    return this.#Ni.get(t2);
   }
   remove(t2) {
-    const e2 = this.#_i.get(t2);
+    const e2 = this.#Ni.get(t2);
     if (void 0 !== e2) {
-      e2 instanceof AnnotationEditor && this.#Ti.delete(e2.annotationElementId);
-      this.#_i.delete(t2);
-      0 === this.#_i.size && this.resetModified();
-      this.#_i.values().some((t3) => t3 instanceof AnnotationEditor) || this.onAnnotationEditor?.(null);
+      e2 instanceof AnnotationEditor && this.#Li.delete(e2.annotationElementId);
+      this.#Ni.delete(t2);
+      0 === this.#Ni.size && this.resetModified();
+      this.#Ni.values().some((t3) => t3 instanceof AnnotationEditor) || this.onAnnotationEditor?.(null);
     }
   }
   setValue(t2, e2) {
-    const i2 = this.#_i.get(t2);
+    const i2 = this.#Ni.get(t2);
     let n2 = false;
     if (void 0 !== i2) {
-      for (const [t3, s2] of Object.entries(e2)) if (i2[t3] !== s2) {
+      for (const [t3, r2] of Object.entries(e2)) if (i2[t3] !== r2) {
         n2 = true;
-        i2[t3] = s2;
+        i2[t3] = r2;
       }
     } else {
       n2 = true;
-      this.#_i.set(t2, e2);
+      this.#Ni.set(t2, e2);
     }
-    n2 && this.#ki();
+    n2 && this.#Ui();
     if (e2 instanceof AnnotationEditor) {
-      (this.#Ti ||= /* @__PURE__ */ new Map()).set(e2.annotationElementId, e2);
+      (this.#Li ||= /* @__PURE__ */ new Map()).set(e2.annotationElementId, e2);
       this.onAnnotationEditor?.(e2.constructor._type);
     }
   }
   has(t2) {
-    return this.#_i.has(t2);
+    return this.#Ni.has(t2);
   }
   get size() {
-    return this.#_i.size;
+    return this.#Ni.size;
   }
-  #ki() {
-    if (!this.#Ci) {
-      this.#Ci = true;
+  #Ui() {
+    if (!this.#Ri) {
+      this.#Ri = true;
       this.onSetModified?.();
     }
   }
   resetModified() {
-    if (this.#Ci) {
-      this.#Ci = false;
+    if (this.#Ri) {
+      this.#Ri = false;
       this.onResetModified?.();
     }
   }
@@ -7276,41 +7462,41 @@ var AnnotationStorage = class {
     return new PrintAnnotationStorage(this);
   }
   get serializable() {
-    if (0 === this.#_i.size) return et;
+    if (0 === this.#Ni.size) return it;
     const t2 = /* @__PURE__ */ new Map(), e2 = new MurmurHash3_64(), i2 = [], n2 = /* @__PURE__ */ Object.create(null);
-    let s2 = false;
-    for (const [i3, r2] of this.#_i) {
-      const a2 = r2 instanceof AnnotationEditor ? r2.serialize(false, n2) : r2;
-      if (r2.page) {
-        r2.pageIndex = r2.page._pageIndex;
-        delete r2.page;
+    let r2 = false;
+    for (const [i3, s2] of this.#Ni) {
+      const a2 = s2 instanceof AnnotationEditor ? s2.serialize(false, n2) : s2;
+      if (s2.page) {
+        s2.pageIndex = s2.page._pageIndex;
+        delete s2.page;
       }
       if (a2) {
         t2.set(i3, a2);
         e2.update(`${i3}:${JSON.stringify(a2)}`);
-        s2 ||= !!a2.bitmap;
+        r2 ||= !!a2.bitmap;
       }
     }
-    if (s2) for (const e3 of t2.values()) e3.bitmap && i2.push(e3.bitmap);
-    return t2.size > 0 ? { map: t2, hash: e2.hexdigest(), transfer: i2 } : et;
+    if (r2) for (const e3 of t2.values()) e3.bitmap && i2.push(e3.bitmap);
+    return t2.size > 0 ? { map: t2, hash: e2.hexdigest(), transfer: i2 } : it;
   }
   get editorStats() {
     let t2 = null;
     const e2 = /* @__PURE__ */ new Map();
     let i2 = 0, n2 = 0;
-    for (const s2 of this.#_i.values()) {
-      if (!(s2 instanceof AnnotationEditor)) {
-        s2.popup && (s2.popup.deleted ? n2 += 1 : i2 += 1);
+    for (const r2 of this.#Ni.values()) {
+      if (!(r2 instanceof AnnotationEditor)) {
+        r2.popup && (r2.popup.deleted ? n2 += 1 : i2 += 1);
         continue;
       }
-      s2.isCommentDeleted ? n2 += 1 : s2.hasEditedComment && (i2 += 1);
-      const r2 = s2.telemetryFinalData;
-      if (!r2) continue;
-      const { type: a2 } = r2;
-      e2.getOrInsertComputed(a2, () => Object.getPrototypeOf(s2).constructor);
+      r2.isCommentDeleted ? n2 += 1 : r2.hasEditedComment && (i2 += 1);
+      const s2 = r2.telemetryFinalData;
+      if (!s2) continue;
+      const { type: a2 } = s2;
+      e2.getOrInsertComputed(a2, () => Object.getPrototypeOf(r2).constructor);
       t2 ||= /* @__PURE__ */ Object.create(null);
       const o2 = t2[a2] ||= /* @__PURE__ */ new Map();
-      for (const [t3, e3] of Object.entries(r2)) {
+      for (const [t3, e3] of Object.entries(s2)) {
         if ("type" === t3) continue;
         const i3 = o2.getOrInsertComputed(t3, makeMap);
         i3.set(e3, (i3.get(e3) ?? 0) + 1);
@@ -7325,10 +7511,10 @@ var AnnotationStorage = class {
     return t2;
   }
   resetModifiedIds() {
-    this.#Si = null;
+    this.#Bi = null;
   }
   updateEditor(t2, e2) {
-    const i2 = this.#Ti?.get(t2);
+    const i2 = this.#Li?.get(t2);
     if (i2) {
       i2.updateFromAnnotationLayer(e2);
       return true;
@@ -7336,124 +7522,124 @@ var AnnotationStorage = class {
     return false;
   }
   getEditor(t2) {
-    return this.#Ti?.get(t2) || null;
+    return this.#Li?.get(t2) || null;
   }
   get modifiedIds() {
-    if (this.#Si) return this.#Si;
+    if (this.#Bi) return this.#Bi;
     const t2 = [];
-    if (this.#Ti) for (const e3 of this.#Ti.values()) e3.serialize() && t2.push(e3.annotationElementId);
+    if (this.#Li) for (const e3 of this.#Li.values()) e3.serialize() && t2.push(e3.annotationElementId);
     let e2 = "";
     if (t2.length) {
       const i2 = new MurmurHash3_64();
       i2.update(t2.join(","));
       e2 = i2.hexdigest();
     }
-    return this.#Si = { ids: new Set(t2), hash: e2 };
+    return this.#Bi = { ids: new Set(t2), hash: e2 };
   }
   [Symbol.iterator]() {
-    return this.#_i.entries();
+    return this.#Ni.entries();
   }
 };
 var PrintAnnotationStorage = class extends AnnotationStorage {
-  #Di = et;
+  #Hi = it;
   constructor(t2) {
     super();
     const { serializable: e2 } = t2;
-    if (e2 === et) return;
-    const { map: i2, hash: n2, transfer: s2 } = e2, r2 = structuredClone(i2, s2 ? { transfer: s2 } : null);
-    this.#Di = { map: r2, hash: n2, transfer: [] };
+    if (e2 === it) return;
+    const { map: i2, hash: n2, transfer: r2 } = e2, s2 = structuredClone(i2, r2 ? { transfer: r2 } : null);
+    this.#Hi = { map: s2, hash: n2, transfer: [] };
   }
   get print() {
     unreachable("Should not call PrintAnnotationStorage.print");
   }
   get serializable() {
-    return this.#Di;
+    return this.#Hi;
   }
   get modifiedIds() {
     return shadow(this, "modifiedIds", { ids: /* @__PURE__ */ new Set(), hash: "" });
   }
 };
 __webpack_require__(7588);
-var it = "__forcedDependency";
-var { floor: nt, ceil: st } = Math;
-function expandBBox(t2, e2, i2, n2, s2, r2) {
+var nt = "__forcedDependency";
+var { floor: rt, ceil: st } = Math;
+function expandBBox(t2, e2, i2, n2, r2, s2) {
   t2[4 * e2 + 0] = Math.min(t2[4 * e2 + 0], i2);
   t2[4 * e2 + 1] = Math.min(t2[4 * e2 + 1], n2);
-  t2[4 * e2 + 2] = Math.max(t2[4 * e2 + 2], s2);
-  t2[4 * e2 + 3] = Math.max(t2[4 * e2 + 3], r2);
+  t2[4 * e2 + 2] = Math.max(t2[4 * e2 + 2], r2);
+  t2[4 * e2 + 3] = Math.max(t2[4 * e2 + 3], s2);
 }
-var rt = new Uint32Array(new Uint8Array([255, 255, 0, 0]).buffer)[0];
+var ot = new Uint32Array(new Uint8Array([255, 255, 0, 0]).buffer)[0];
 var BBoxReader = class {
-  #Mi;
-  #Pi;
+  #zi;
+  #Gi;
   constructor(t2, e2) {
-    this.#Mi = t2;
-    this.#Pi = e2;
+    this.#zi = t2;
+    this.#Gi = e2;
   }
   get length() {
-    return this.#Mi.length;
+    return this.#zi.length;
   }
   isEmpty(t2) {
-    return this.#Mi[t2] === rt;
+    return this.#zi[t2] === ot;
   }
   minX(t2) {
-    return this.#Pi[4 * t2 + 0] / 256;
+    return this.#Gi[4 * t2 + 0] / 256;
   }
   minY(t2) {
-    return this.#Pi[4 * t2 + 1] / 256;
+    return this.#Gi[4 * t2 + 1] / 256;
   }
   maxX(t2) {
-    return (this.#Pi[4 * t2 + 2] + 1) / 256;
+    return (this.#Gi[4 * t2 + 2] + 1) / 256;
   }
   maxY(t2) {
-    return (this.#Pi[4 * t2 + 3] + 1) / 256;
+    return (this.#Gi[4 * t2 + 3] + 1) / 256;
   }
 };
 var ensureDebugMetadata = (t2, e2) => t2?.getOrInsertComputed(e2, () => ({ dependencies: /* @__PURE__ */ new Set(), isRenderingOperation: false }));
 var CanvasBBoxTracker = class {
-  #Ii = [[1, 0, 0, 1, 0, 0]];
-  #Fi = [-1 / 0, -1 / 0, 1 / 0, 1 / 0];
-  #Oi = new Float64Array(n);
+  #ji = [[1, 0, 0, 1, 0, 0]];
+  #Wi = [-1 / 0, -1 / 0, 1 / 0, 1 / 0];
+  #Vi = new Float64Array(n);
   _pendingBBoxIdx = -1;
-  #Ri;
-  #Bi;
-  #Li;
-  #Mi;
+  #$i;
+  #qi;
+  #Xi;
+  #zi;
   _savesStack = [];
   _markedContentStack = [];
   constructor(t2, e2) {
-    this.#Ri = t2.width;
-    this.#Bi = t2.height;
-    this.#Ni(e2);
+    this.#$i = t2.width;
+    this.#qi = t2.height;
+    this.#Ki(e2);
   }
   growOperationsCount(t2) {
-    t2 >= this.#Mi.length && this.#Ni(t2, this.#Mi);
+    t2 >= this.#zi.length && this.#Ki(t2, this.#zi);
   }
-  #Ni(t2, e2) {
+  #Ki(t2, e2) {
     const i2 = new ArrayBuffer(4 * t2);
-    this.#Li = new Uint8ClampedArray(i2);
-    this.#Mi = new Uint32Array(i2);
+    this.#Xi = new Uint8ClampedArray(i2);
+    this.#zi = new Uint32Array(i2);
     if (e2 && e2.length > 0) {
-      this.#Mi.set(e2);
-      this.#Mi.fill(rt, e2.length);
-    } else this.#Mi.fill(rt);
+      this.#zi.set(e2);
+      this.#zi.fill(ot, e2.length);
+    } else this.#zi.fill(ot);
   }
   get clipBox() {
-    return this.#Fi;
+    return this.#Wi;
   }
   save(t2) {
-    this.#Fi = { __proto__: this.#Fi };
+    this.#Wi = { __proto__: this.#Wi };
     this._savesStack.push(t2);
     return this;
   }
   restore(t2, e2) {
-    const i2 = Object.getPrototypeOf(this.#Fi);
+    const i2 = Object.getPrototypeOf(this.#Wi);
     if (null === i2) return this;
-    this.#Fi = i2;
+    this.#Wi = i2;
     const n2 = this._savesStack.pop();
     if (void 0 !== n2) {
       e2?.(n2, t2);
-      this.#Mi[t2] = this.#Mi[n2];
+      this.#zi[t2] = this.#zi[n2];
     }
     return this;
   }
@@ -7468,7 +7654,7 @@ var CanvasBBoxTracker = class {
     const i2 = this._savesStack.pop();
     if (void 0 !== i2) {
       e2?.(i2, t2);
-      this.#Mi[t2] = this.#Mi[i2];
+      this.#zi[t2] = this.#zi[i2];
     }
     return this;
   }
@@ -7480,83 +7666,83 @@ var CanvasBBoxTracker = class {
     const i2 = this._markedContentStack.pop();
     if (void 0 !== i2) {
       e2?.(i2, t2);
-      this.#Mi[t2] = this.#Mi[i2];
+      this.#zi[t2] = this.#zi[i2];
     }
     return this;
   }
   pushBaseTransform(t2) {
-    this.#Ii.push(Util.multiplyByDOMMatrix(this.#Ii.at(-1), t2.getTransform()));
+    this.#ji.push(Util.multiplyByDOMMatrix(this.#ji.at(-1), t2.getTransform()));
     return this;
   }
   popBaseTransform() {
-    this.#Ii.length > 1 && this.#Ii.pop();
+    this.#ji.length > 1 && this.#ji.pop();
     return this;
   }
   resetBBox(t2) {
     if (this._pendingBBoxIdx !== t2) {
       this._pendingBBoxIdx = t2;
-      this.#Oi.set(n, 0);
+      this.#Vi.set(n, 0);
     }
     return this;
   }
-  recordClipBox(t2, e2, i2, s2, r2, a2) {
-    const o2 = Util.multiplyByDOMMatrix(this.#Ii.at(-1), e2.getTransform()), l2 = n.slice();
-    Util.axialAlignedBoundingBox([i2, r2, s2, a2], o2, l2);
-    const h2 = Util.intersect(this.#Fi, l2);
-    if (h2) {
-      this.#Fi[0] = h2[0];
-      this.#Fi[1] = h2[1];
-      this.#Fi[2] = h2[2];
-      this.#Fi[3] = h2[3];
+  recordClipBox(t2, e2, i2, r2, s2, a2) {
+    const o2 = Util.multiplyByDOMMatrix(this.#ji.at(-1), e2.getTransform()), l2 = n.slice();
+    Util.axialAlignedBoundingBox([i2, s2, r2, a2], o2, l2);
+    const c2 = Util.intersect(this.#Wi, l2);
+    if (c2) {
+      this.#Wi[0] = c2[0];
+      this.#Wi[1] = c2[1];
+      this.#Wi[2] = c2[2];
+      this.#Wi[3] = c2[3];
     } else {
-      this.#Fi[0] = this.#Fi[1] = 1 / 0;
-      this.#Fi[2] = this.#Fi[3] = -1 / 0;
+      this.#Wi[0] = this.#Wi[1] = 1 / 0;
+      this.#Wi[2] = this.#Wi[3] = -1 / 0;
     }
     return this;
   }
-  recordBBox(t2, e2, i2, s2, r2, a2) {
-    const o2 = this.#Fi;
+  recordBBox(t2, e2, i2, r2, s2, a2) {
+    const o2 = this.#Wi;
     if (o2[0] === 1 / 0) return this;
-    const l2 = Util.multiplyByDOMMatrix(this.#Ii.at(-1), e2.getTransform());
+    const l2 = Util.multiplyByDOMMatrix(this.#ji.at(-1), e2.getTransform());
     if (o2[0] === -1 / 0) {
-      Util.axialAlignedBoundingBox([i2, r2, s2, a2], l2, this.#Oi);
+      Util.axialAlignedBoundingBox([i2, s2, r2, a2], l2, this.#Vi);
       return this;
     }
-    const h2 = n.slice();
-    Util.axialAlignedBoundingBox([i2, r2, s2, a2], l2, h2);
-    this.#Oi[0] = MathClamp(h2[0], o2[0], this.#Oi[0]);
-    this.#Oi[1] = MathClamp(h2[1], o2[1], this.#Oi[1]);
-    this.#Oi[2] = MathClamp(h2[2], this.#Oi[2], o2[2]);
-    this.#Oi[3] = MathClamp(h2[3], this.#Oi[3], o2[3]);
+    const c2 = n.slice();
+    Util.axialAlignedBoundingBox([i2, s2, r2, a2], l2, c2);
+    this.#Vi[0] = MathClamp(c2[0], o2[0], this.#Vi[0]);
+    this.#Vi[1] = MathClamp(c2[1], o2[1], this.#Vi[1]);
+    this.#Vi[2] = MathClamp(c2[2], this.#Vi[2], o2[2]);
+    this.#Vi[3] = MathClamp(c2[3], this.#Vi[3], o2[3]);
     return this;
   }
   recordFullPageBBox(t2) {
-    this.#Oi[0] = Math.max(0, this.#Fi[0]);
-    this.#Oi[1] = Math.max(0, this.#Fi[1]);
-    this.#Oi[2] = Math.min(this.#Ri, this.#Fi[2]);
-    this.#Oi[3] = Math.min(this.#Bi, this.#Fi[3]);
+    this.#Vi[0] = Math.max(0, this.#Wi[0]);
+    this.#Vi[1] = Math.max(0, this.#Wi[1]);
+    this.#Vi[2] = Math.min(this.#$i, this.#Wi[2]);
+    this.#Vi[3] = Math.min(this.#qi, this.#Wi[3]);
     return this;
   }
   recordOperation(t2, e2 = false, i2) {
     if (this._pendingBBoxIdx !== t2) return this;
-    const n2 = nt(256 * this.#Oi[0] / this.#Ri), s2 = nt(256 * this.#Oi[1] / this.#Bi), r2 = st(256 * this.#Oi[2] / this.#Ri), a2 = st(256 * this.#Oi[3] / this.#Bi);
-    expandBBox(this.#Li, t2, n2, s2, r2, a2);
-    if (i2) for (const e3 of i2) for (const i3 of e3) i3 !== t2 && expandBBox(this.#Li, i3, n2, s2, r2, a2);
+    const n2 = rt(256 * this.#Vi[0] / this.#$i), r2 = rt(256 * this.#Vi[1] / this.#qi), s2 = st(256 * this.#Vi[2] / this.#$i), a2 = st(256 * this.#Vi[3] / this.#qi);
+    expandBBox(this.#Xi, t2, n2, r2, s2, a2);
+    if (i2) for (const e3 of i2) for (const i3 of e3) i3 !== t2 && expandBBox(this.#Xi, i3, n2, r2, s2, a2);
     e2 || (this._pendingBBoxIdx = -1);
     return this;
   }
   bboxToClipBoxDropOperation(t2) {
     if (this._pendingBBoxIdx === t2) {
       this._pendingBBoxIdx = -1;
-      this.#Fi[0] = Math.max(this.#Fi[0], this.#Oi[0]);
-      this.#Fi[1] = Math.max(this.#Fi[1], this.#Oi[1]);
-      this.#Fi[2] = Math.min(this.#Fi[2], this.#Oi[2]);
-      this.#Fi[3] = Math.min(this.#Fi[3], this.#Oi[3]);
+      this.#Wi[0] = Math.max(this.#Wi[0], this.#Vi[0]);
+      this.#Wi[1] = Math.max(this.#Wi[1], this.#Vi[1]);
+      this.#Wi[2] = Math.min(this.#Wi[2], this.#Vi[2]);
+      this.#Wi[3] = Math.min(this.#Wi[3], this.#Vi[3]);
     }
     return this;
   }
   take() {
-    return new BBoxReader(this.#Mi, this.#Li);
+    return new BBoxReader(this.#zi, this.#Xi);
   }
   takeDebugMetadata() {
     throw new Error("Unreachable");
@@ -7585,7 +7771,7 @@ var CanvasBBoxTracker = class {
   inheritPendingDependenciesAsFutureForcedDependencies() {
     return this;
   }
-  recordCharacterBBox(t2, e2, i2, n2 = 1, s2 = 0, r2 = 0, a2) {
+  recordCharacterBBox(t2, e2, i2, n2 = 1, r2 = 0, s2 = 0, a2) {
     return this;
   }
   getSimpleIndex(t2) {
@@ -7601,247 +7787,247 @@ var CanvasBBoxTracker = class {
   }
 };
 var CanvasDependencyTracker = class {
-  #Ui = { __proto__: null };
-  #Hi = { __proto__: null, transform: [], moveText: [], sameLineText: [], [it]: [] };
-  #zi = /* @__PURE__ */ new Map();
-  #Gi = /* @__PURE__ */ new Set();
-  #ji = /* @__PURE__ */ new Map();
-  #Wi;
-  #Vi;
-  #$i;
+  #Yi = { __proto__: null };
+  #Ji = { __proto__: null, transform: [], moveText: [], sameLineText: [], [nt]: [] };
+  #Qi = /* @__PURE__ */ new Map();
+  #Zi = /* @__PURE__ */ new Set();
+  #tn = /* @__PURE__ */ new Map();
+  #en;
+  #in;
+  #nn;
   constructor(t2, e2 = false) {
-    this.#$i = t2;
+    this.#nn = t2;
     if (e2) {
-      this.#Wi = /* @__PURE__ */ new Map();
-      this.#Vi = (t3, e3) => {
-        ensureDebugMetadata(this.#Wi, e3).dependencies.add(t3);
+      this.#en = /* @__PURE__ */ new Map();
+      this.#in = (t3, e3) => {
+        ensureDebugMetadata(this.#en, e3).dependencies.add(t3);
       };
     }
   }
   get clipBox() {
-    return this.#$i.clipBox;
+    return this.#nn.clipBox;
   }
   growOperationsCount(t2) {
-    this.#$i.growOperationsCount(t2);
+    this.#nn.growOperationsCount(t2);
   }
   save(t2) {
-    this.#Ui = { __proto__: this.#Ui };
-    this.#Hi = { __proto__: this.#Hi, transform: { __proto__: this.#Hi.transform }, moveText: { __proto__: this.#Hi.moveText }, sameLineText: { __proto__: this.#Hi.sameLineText }, [it]: { __proto__: this.#Hi[it] } };
-    this.#$i.save(t2);
+    this.#Yi = { __proto__: this.#Yi };
+    this.#Ji = { __proto__: this.#Ji, transform: { __proto__: this.#Ji.transform }, moveText: { __proto__: this.#Ji.moveText }, sameLineText: { __proto__: this.#Ji.sameLineText }, [nt]: { __proto__: this.#Ji[nt] } };
+    this.#nn.save(t2);
     return this;
   }
   restore(t2) {
-    this.#$i.restore(t2, this.#Vi);
-    const e2 = Object.getPrototypeOf(this.#Ui);
+    this.#nn.restore(t2, this.#in);
+    const e2 = Object.getPrototypeOf(this.#Yi);
     if (null === e2) return this;
-    this.#Ui = e2;
-    this.#Hi = Object.getPrototypeOf(this.#Hi);
+    this.#Yi = e2;
+    this.#Ji = Object.getPrototypeOf(this.#Ji);
     return this;
   }
   recordOpenMarker(t2) {
-    this.#$i.recordOpenMarker(t2, this.#Vi);
+    this.#nn.recordOpenMarker(t2, this.#in);
     return this;
   }
   getOpenMarker() {
-    return this.#$i.getOpenMarker();
+    return this.#nn.getOpenMarker();
   }
   recordCloseMarker(t2) {
-    this.#$i.recordCloseMarker(t2, this.#Vi);
+    this.#nn.recordCloseMarker(t2, this.#in);
     return this;
   }
   beginMarkedContent(t2) {
-    this.#$i.beginMarkedContent(t2);
+    this.#nn.beginMarkedContent(t2);
     return this;
   }
   endMarkedContent(t2) {
-    this.#$i.endMarkedContent(t2, this.#Vi);
+    this.#nn.endMarkedContent(t2, this.#in);
     return this;
   }
   pushBaseTransform(t2) {
-    this.#$i.pushBaseTransform(t2);
+    this.#nn.pushBaseTransform(t2);
     return this;
   }
   popBaseTransform() {
-    this.#$i.popBaseTransform();
+    this.#nn.popBaseTransform();
     return this;
   }
   recordSimpleData(t2, e2) {
-    this.#Ui[t2] = e2;
+    this.#Yi[t2] = e2;
     return this;
   }
   recordIncrementalData(t2, e2) {
-    this.#Hi[t2].push(e2);
+    this.#Ji[t2].push(e2);
     return this;
   }
   resetIncrementalData(t2, e2) {
-    this.#Hi[t2].length = 0;
+    this.#Ji[t2].length = 0;
     return this;
   }
   recordNamedData(t2, e2) {
-    this.#zi.set(t2, e2);
+    this.#Qi.set(t2, e2);
     return this;
   }
   recordSimpleDataFromNamed(t2, e2, i2) {
-    this.#Ui[t2] = this.#zi.get(e2) ?? i2;
+    this.#Yi[t2] = this.#Qi.get(e2) ?? i2;
   }
   recordFutureForcedDependency(t2, e2) {
-    this.recordIncrementalData(it, e2);
+    this.recordIncrementalData(nt, e2);
     return this;
   }
   inheritSimpleDataAsFutureForcedDependencies(t2) {
-    for (const e2 of t2) e2 in this.#Ui && this.recordFutureForcedDependency(e2, this.#Ui[e2]);
+    for (const e2 of t2) e2 in this.#Yi && this.recordFutureForcedDependency(e2, this.#Yi[e2]);
     return this;
   }
   inheritPendingDependenciesAsFutureForcedDependencies() {
-    for (const t2 of this.#Gi) this.recordFutureForcedDependency(it, t2);
+    for (const t2 of this.#Zi) this.recordFutureForcedDependency(nt, t2);
     return this;
   }
   resetBBox(t2) {
-    this.#$i.resetBBox(t2);
+    this.#nn.resetBBox(t2);
     return this;
   }
-  recordClipBox(t2, e2, i2, n2, s2, r2) {
-    this.#$i.recordClipBox(t2, e2, i2, n2, s2, r2);
+  recordClipBox(t2, e2, i2, n2, r2, s2) {
+    this.#nn.recordClipBox(t2, e2, i2, n2, r2, s2);
     return this;
   }
-  recordBBox(t2, e2, i2, n2, s2, r2) {
-    this.#$i.recordBBox(t2, e2, i2, n2, s2, r2);
+  recordBBox(t2, e2, i2, n2, r2, s2) {
+    this.#nn.recordBBox(t2, e2, i2, n2, r2, s2);
     return this;
   }
-  recordCharacterBBox(t2, e2, i2, n2 = 1, s2 = 0, r2 = 0, a2) {
+  recordCharacterBBox(t2, e2, i2, n2 = 1, r2 = 0, s2 = 0, a2) {
     const o2 = i2.bbox;
-    let l2, h2;
+    let l2, c2;
     if (o2) {
-      l2 = o2[2] !== o2[0] && o2[3] !== o2[1] && this.#ji.get(i2);
+      l2 = o2[2] !== o2[0] && o2[3] !== o2[1] && this.#tn.get(i2);
       if (false !== l2) {
-        h2 = [0, 0, 0, 0];
-        Util.axialAlignedBoundingBox(o2, i2.fontMatrix, h2);
-        1 === n2 && 0 === s2 && 0 === r2 || (function scaleCharBBox(t3, e3, i3, n3, s3) {
-          let r3;
+        c2 = [0, 0, 0, 0];
+        Util.axialAlignedBoundingBox(o2, i2.fontMatrix, c2);
+        1 === n2 && 0 === r2 && 0 === s2 || (function scaleCharBBox(t3, e3, i3, n3, r3) {
+          let s3;
           if (t3) {
             if (t3 < 0) {
-              r3 = s3[0];
-              s3[0] = s3[2];
-              s3[2] = r3;
+              s3 = r3[0];
+              r3[0] = r3[2];
+              r3[2] = s3;
             }
-            s3[0] *= t3;
-            s3[2] *= t3;
+            r3[0] *= t3;
+            r3[2] *= t3;
             if (e3 < 0) {
-              r3 = s3[1];
-              s3[1] = s3[3];
-              s3[3] = r3;
+              s3 = r3[1];
+              r3[1] = r3[3];
+              r3[3] = s3;
             }
-            s3[1] *= e3;
-            s3[3] *= e3;
-          } else s3.fill(0);
-          s3[0] += i3;
-          s3[1] += n3;
-          s3[2] += i3;
-          s3[3] += n3;
-        })(n2, -n2, s2, r2, h2);
-        if (l2) return this.recordBBox(t2, e2, h2[0], h2[2], h2[1], h2[3]);
+            r3[1] *= e3;
+            r3[3] *= e3;
+          } else r3.fill(0);
+          r3[0] += i3;
+          r3[1] += n3;
+          r3[2] += i3;
+          r3[3] += n3;
+        })(n2, -n2, r2, s2, c2);
+        if (l2) return this.recordBBox(t2, e2, c2[0], c2[2], c2[1], c2[3]);
       }
     }
     if (!a2) return this.recordFullPageBBox(t2);
-    const c2 = a2();
-    if (o2 && h2 && void 0 === l2) {
-      l2 = h2[0] <= s2 - c2.actualBoundingBoxLeft && h2[2] >= s2 + c2.actualBoundingBoxRight && h2[1] <= r2 - c2.actualBoundingBoxAscent && h2[3] >= r2 + c2.actualBoundingBoxDescent;
-      this.#ji.set(i2, l2);
-      if (l2) return this.recordBBox(t2, e2, h2[0], h2[2], h2[1], h2[3]);
+    const h2 = a2();
+    if (o2 && c2 && void 0 === l2) {
+      l2 = c2[0] <= r2 - h2.actualBoundingBoxLeft && c2[2] >= r2 + h2.actualBoundingBoxRight && c2[1] <= s2 - h2.actualBoundingBoxAscent && c2[3] >= s2 + h2.actualBoundingBoxDescent;
+      this.#tn.set(i2, l2);
+      if (l2) return this.recordBBox(t2, e2, c2[0], c2[2], c2[1], c2[3]);
     }
-    return this.recordBBox(t2, e2, s2 - c2.actualBoundingBoxLeft, s2 + c2.actualBoundingBoxRight, r2 - c2.actualBoundingBoxAscent, r2 + c2.actualBoundingBoxDescent);
+    return this.recordBBox(t2, e2, r2 - h2.actualBoundingBoxLeft, r2 + h2.actualBoundingBoxRight, s2 - h2.actualBoundingBoxAscent, s2 + h2.actualBoundingBoxDescent);
   }
   recordFullPageBBox(t2) {
-    this.#$i.recordFullPageBBox(t2);
+    this.#nn.recordFullPageBBox(t2);
     return this;
   }
   getSimpleIndex(t2) {
-    return this.#Ui[t2];
+    return this.#Yi[t2];
   }
   recordDependencies(t2, e2) {
-    const i2 = this.#Gi, n2 = this.#Ui, s2 = this.#Hi;
-    for (const t3 of e2) t3 in this.#Ui ? i2.add(n2[t3]) : t3 in s2 && s2[t3].forEach(i2.add, i2);
+    const i2 = this.#Zi, n2 = this.#Yi, r2 = this.#Ji;
+    for (const t3 of e2) t3 in this.#Yi ? i2.add(n2[t3]) : t3 in r2 && r2[t3].forEach(i2.add, i2);
     return this;
   }
   recordNamedDependency(t2, e2) {
-    this.#zi.has(e2) && this.#Gi.add(this.#zi.get(e2));
+    this.#Qi.has(e2) && this.#Zi.add(this.#Qi.get(e2));
     return this;
   }
   recordOperation(t2, e2 = false) {
-    this.recordDependencies(t2, [it]);
-    if (this.#Wi) {
-      const e3 = ensureDebugMetadata(this.#Wi, t2), { dependencies: i3 } = e3;
-      this.#Gi.forEach(i3.add, i3);
-      this.#$i._savesStack.forEach(i3.add, i3);
-      this.#$i._markedContentStack.forEach(i3.add, i3);
+    this.recordDependencies(t2, [nt]);
+    if (this.#en) {
+      const e3 = ensureDebugMetadata(this.#en, t2), { dependencies: i3 } = e3;
+      this.#Zi.forEach(i3.add, i3);
+      this.#nn._savesStack.forEach(i3.add, i3);
+      this.#nn._markedContentStack.forEach(i3.add, i3);
       i3.delete(t2);
       e3.isRenderingOperation = true;
     }
-    const i2 = !e2 && t2 === this.#$i._pendingBBoxIdx;
-    this.#$i.recordOperation(t2, e2, [this.#Gi, this.#$i._savesStack, this.#$i._markedContentStack]);
-    i2 && this.#Gi.clear();
+    const i2 = !e2 && t2 === this.#nn._pendingBBoxIdx;
+    this.#nn.recordOperation(t2, e2, [this.#Zi, this.#nn._savesStack, this.#nn._markedContentStack]);
+    i2 && this.#Zi.clear();
     return this;
   }
   recordShowTextOperation(t2, e2 = false) {
-    const i2 = Array.from(this.#Gi);
+    const i2 = Array.from(this.#Zi);
     this.recordOperation(t2, e2);
     this.recordIncrementalData("sameLineText", t2);
     for (const t3 of i2) this.recordIncrementalData("sameLineText", t3);
     return this;
   }
   bboxToClipBoxDropOperation(t2, e2 = false) {
-    const i2 = !e2 && t2 === this.#$i._pendingBBoxIdx;
-    this.#$i.bboxToClipBoxDropOperation(t2);
-    i2 && this.#Gi.clear();
+    const i2 = !e2 && t2 === this.#nn._pendingBBoxIdx;
+    this.#nn.bboxToClipBoxDropOperation(t2);
+    i2 && this.#Zi.clear();
     return this;
   }
   take() {
-    this.#ji.clear();
-    return this.#$i.take();
+    this.#tn.clear();
+    return this.#nn.take();
   }
   takeDebugMetadata() {
-    return this.#Wi;
+    return this.#en;
   }
 };
 var CanvasNestedDependencyTracker = class _CanvasNestedDependencyTracker {
-  #qi;
-  #Ki;
-  #Xi;
-  #Yi = 0;
-  #Ji = 0;
+  #rn;
+  #sn;
+  #an;
+  #on = 0;
+  #ln = 0;
   constructor(t2, e2, i2) {
-    if (t2 instanceof _CanvasNestedDependencyTracker && t2.#Xi === !!i2) return t2;
-    this.#qi = t2;
-    this.#Ki = e2;
-    this.#Xi = !!i2;
+    if (t2 instanceof _CanvasNestedDependencyTracker && t2.#an === !!i2) return t2;
+    this.#rn = t2;
+    this.#sn = e2;
+    this.#an = !!i2;
   }
   get clipBox() {
-    return this.#qi.clipBox;
+    return this.#rn.clipBox;
   }
   growOperationsCount() {
     throw new Error("Unreachable");
   }
   save(t2) {
-    this.#Ji++;
-    this.#qi.save(this.#Ki);
+    this.#ln++;
+    this.#rn.save(this.#sn);
     return this;
   }
   restore(t2) {
-    if (this.#Ji > 0) {
-      this.#qi.restore(this.#Ki);
-      this.#Ji--;
+    if (this.#ln > 0) {
+      this.#rn.restore(this.#sn);
+      this.#ln--;
     }
     return this;
   }
   recordOpenMarker(t2) {
-    this.#Yi++;
+    this.#on++;
     return this;
   }
   getOpenMarker() {
-    return this.#Yi > 0 ? this.#Ki : this.#qi.getOpenMarker();
+    return this.#on > 0 ? this.#sn : this.#rn.getOpenMarker();
   }
   recordCloseMarker(t2) {
-    this.#Yi--;
+    this.#on--;
     return this;
   }
   beginMarkedContent(t2) {
@@ -7851,85 +8037,85 @@ var CanvasNestedDependencyTracker = class _CanvasNestedDependencyTracker {
     return this;
   }
   pushBaseTransform(t2) {
-    this.#qi.pushBaseTransform(t2);
+    this.#rn.pushBaseTransform(t2);
     return this;
   }
   popBaseTransform() {
-    this.#qi.popBaseTransform();
+    this.#rn.popBaseTransform();
     return this;
   }
   recordSimpleData(t2, e2) {
-    this.#qi.recordSimpleData(t2, this.#Ki);
+    this.#rn.recordSimpleData(t2, this.#sn);
     return this;
   }
   recordIncrementalData(t2, e2) {
-    this.#qi.recordIncrementalData(t2, this.#Ki);
+    this.#rn.recordIncrementalData(t2, this.#sn);
     return this;
   }
   resetIncrementalData(t2, e2) {
-    this.#qi.resetIncrementalData(t2, this.#Ki);
+    this.#rn.resetIncrementalData(t2, this.#sn);
     return this;
   }
   recordNamedData(t2, e2) {
     return this;
   }
   recordSimpleDataFromNamed(t2, e2, i2) {
-    this.#qi.recordSimpleDataFromNamed(t2, e2, this.#Ki);
+    this.#rn.recordSimpleDataFromNamed(t2, e2, this.#sn);
     return this;
   }
   recordFutureForcedDependency(t2, e2) {
-    this.#qi.recordFutureForcedDependency(t2, this.#Ki);
+    this.#rn.recordFutureForcedDependency(t2, this.#sn);
     return this;
   }
   inheritSimpleDataAsFutureForcedDependencies(t2) {
-    this.#qi.inheritSimpleDataAsFutureForcedDependencies(t2);
+    this.#rn.inheritSimpleDataAsFutureForcedDependencies(t2);
     return this;
   }
   inheritPendingDependenciesAsFutureForcedDependencies() {
-    this.#qi.inheritPendingDependenciesAsFutureForcedDependencies();
+    this.#rn.inheritPendingDependenciesAsFutureForcedDependencies();
     return this;
   }
   resetBBox(t2) {
-    this.#Xi || this.#qi.resetBBox(this.#Ki);
+    this.#an || this.#rn.resetBBox(this.#sn);
     return this;
   }
-  recordClipBox(t2, e2, i2, n2, s2, r2) {
-    this.#Xi || this.#qi.recordClipBox(this.#Ki, e2, i2, n2, s2, r2);
+  recordClipBox(t2, e2, i2, n2, r2, s2) {
+    this.#an || this.#rn.recordClipBox(this.#sn, e2, i2, n2, r2, s2);
     return this;
   }
-  recordBBox(t2, e2, i2, n2, s2, r2) {
-    this.#Xi || this.#qi.recordBBox(this.#Ki, e2, i2, n2, s2, r2);
+  recordBBox(t2, e2, i2, n2, r2, s2) {
+    this.#an || this.#rn.recordBBox(this.#sn, e2, i2, n2, r2, s2);
     return this;
   }
-  recordCharacterBBox(t2, e2, i2, n2, s2, r2, a2) {
-    this.#Xi || this.#qi.recordCharacterBBox(this.#Ki, e2, i2, n2, s2, r2, a2);
+  recordCharacterBBox(t2, e2, i2, n2, r2, s2, a2) {
+    this.#an || this.#rn.recordCharacterBBox(this.#sn, e2, i2, n2, r2, s2, a2);
     return this;
   }
   recordFullPageBBox(t2) {
-    this.#Xi || this.#qi.recordFullPageBBox(this.#Ki);
+    this.#an || this.#rn.recordFullPageBBox(this.#sn);
     return this;
   }
   getSimpleIndex(t2) {
-    return this.#qi.getSimpleIndex(t2);
+    return this.#rn.getSimpleIndex(t2);
   }
   recordDependencies(t2, e2) {
-    this.#qi.recordDependencies(this.#Ki, e2);
+    this.#rn.recordDependencies(this.#sn, e2);
     return this;
   }
   recordNamedDependency(t2, e2) {
-    this.#qi.recordNamedDependency(this.#Ki, e2);
+    this.#rn.recordNamedDependency(this.#sn, e2);
     return this;
   }
   recordOperation(t2) {
-    this.#qi.recordOperation(this.#Ki, true);
+    this.#rn.recordOperation(this.#sn, true);
     return this;
   }
   recordShowTextOperation(t2) {
-    this.#qi.recordShowTextOperation(this.#Ki, true);
+    this.#rn.recordShowTextOperation(this.#sn, true);
     return this;
   }
   bboxToClipBoxDropOperation(t2) {
-    this.#Xi || this.#qi.bboxToClipBoxDropOperation(this.#Ki, true);
+    this.#an || this.#rn.bboxToClipBoxDropOperation(this.#sn, true);
     return this;
   }
   take() {
@@ -7939,70 +8125,85 @@ var CanvasNestedDependencyTracker = class _CanvasNestedDependencyTracker {
     throw new Error("Unreachable");
   }
 };
-var ot = ["path", "transform", "filter", "strokeColor", "strokeAlpha", "lineWidth", "lineCap", "lineJoin", "miterLimit", "dash"];
-var lt = ["path", "transform", "filter", "fillColor", "fillAlpha", "globalCompositeOperation", "SMask"];
+var lt = ["path", "transform", "filter", "strokeColor", "strokeAlpha", "lineWidth", "lineCap", "lineJoin", "miterLimit", "dash"];
+var ct = ["path", "transform", "filter", "fillColor", "fillAlpha", "globalCompositeOperation", "SMask"];
 var ht = ["transform", "SMask", "filter", "fillAlpha", "strokeAlpha", "globalCompositeOperation"];
-var ct = ["filter", "fillColor", "fillAlpha"];
-var dt = ["transform", "leading", "charSpacing", "wordSpacing", "hScale", "textRise", "moveText", "textMatrix", "font", "fontObj", "filter", "fillColor", "textRenderingMode", "SMask", "fillAlpha", "strokeAlpha", "globalCompositeOperation", "sameLineText"];
-var ut = ["transform"];
-var pt = ["transform", "fillColor"];
+var dt = ["filter", "fillColor", "fillAlpha"];
+var ut = ["transform", "leading", "charSpacing", "wordSpacing", "hScale", "textRise", "moveText", "textMatrix", "font", "fontObj", "filter", "fillColor", "textRenderingMode", "SMask", "fillAlpha", "strokeAlpha", "globalCompositeOperation", "sameLineText"];
+var pt = ["transform"];
+var gt = ["transform", "fillColor"];
 var CanvasImagesTracker = class _CanvasImagesTracker {
-  #Ri;
-  #Bi;
-  #Qi = 4;
-  #Zi = 0;
-  #Pi = new _CanvasImagesTracker.#tn(6 * this.#Qi);
-  static #tn = FeatureTest.isFloat16ArraySupported ? Float16Array : Float32Array;
+  #$i;
+  #qi;
+  #cn = 4;
+  #hn = 0;
+  #Gi = new _CanvasImagesTracker.#dn(6 * this.#cn);
+  static #dn = FeatureTest.isFloat16ArraySupported ? Float16Array : Float32Array;
   constructor(t2) {
-    this.#Ri = t2.width;
-    this.#Bi = t2.height;
+    this.#$i = t2.width;
+    this.#qi = t2.height;
   }
-  record(t2, e2, i2, s2) {
-    if (this.#Zi === this.#Qi) {
-      this.#Qi *= 2;
-      const t3 = new _CanvasImagesTracker.#tn(6 * this.#Qi);
-      t3.set(this.#Pi);
-      this.#Pi = t3;
+  record(t2, e2, i2, r2) {
+    if (this.#hn === this.#cn) {
+      this.#cn *= 2;
+      const t3 = new _CanvasImagesTracker.#dn(6 * this.#cn);
+      t3.set(this.#Gi);
+      this.#Gi = t3;
     }
-    const r2 = getCurrentTransform(t2);
+    const s2 = getCurrentTransform(t2);
     let a2;
-    if (s2[0] !== 1 / 0) {
+    if (r2[0] !== 1 / 0) {
       const t3 = n.slice();
-      Util.axialAlignedBoundingBox([0, -i2, e2, 0], r2, t3);
-      const o2 = Util.intersect(s2, t3);
+      Util.axialAlignedBoundingBox([0, -i2, e2, 0], s2, t3);
+      const o2 = Util.intersect(r2, t3);
       if (!o2) return;
-      const [l2, h2, c2, d2] = o2;
-      if (l2 !== t3[0] || h2 !== t3[1] || c2 !== t3[2] || d2 !== t3[3]) {
-        const t4 = Math.atan2(r2[1], r2[0]), e3 = Math.abs(Math.sin(t4)), i3 = Math.abs(Math.cos(t4));
-        if (e3 < 1e-6 || i3 < 1e-6 || Math.abs(e3 - i3) < 1e-6) a2 = [l2, h2, l2, d2, c2, h2];
+      const [l2, c2, h2, d2] = o2;
+      if (l2 !== t3[0] || c2 !== t3[1] || h2 !== t3[2] || d2 !== t3[3]) {
+        const t4 = Math.atan2(s2[1], s2[0]), e3 = Math.abs(Math.sin(t4)), i3 = Math.abs(Math.cos(t4));
+        if (e3 < 1e-6 || i3 < 1e-6 || Math.abs(e3 - i3) < 1e-6) a2 = [l2, c2, l2, d2, h2, c2];
         else {
-          const t5 = c2 - l2, n2 = d2 - h2, s3 = e3 * e3, r3 = i3 * i3, o3 = i3 * e3, u2 = r3 - s3, p2 = (n2 * r3 - t5 * o3) / u2;
-          a2 = [l2 + (n2 * o3 - t5 * s3) / u2, h2, l2, h2 + p2, c2, d2 - p2];
+          const t5 = h2 - l2, n2 = d2 - c2, r3 = e3 * e3, s3 = i3 * i3, o3 = i3 * e3, u2 = s3 - r3, p2 = (n2 * s3 - t5 * o3) / u2;
+          a2 = [l2 + (n2 * o3 - t5 * r3) / u2, c2, l2, c2 + p2, h2, d2 - p2];
         }
       }
     }
     if (!a2) {
       a2 = [0, -i2, 0, 0, e2, -i2];
-      Util.applyTransform(a2, r2, 0);
-      Util.applyTransform(a2, r2, 2);
-      Util.applyTransform(a2, r2, 4);
+      Util.applyTransform(a2, s2, 0);
+      Util.applyTransform(a2, s2, 2);
+      Util.applyTransform(a2, s2, 4);
     }
-    a2[0] /= this.#Ri;
-    a2[1] /= this.#Bi;
-    a2[2] /= this.#Ri;
-    a2[3] /= this.#Bi;
-    a2[4] /= this.#Ri;
-    a2[5] /= this.#Bi;
-    this.#Pi.set(a2, 6 * this.#Zi);
-    this.#Zi++;
+    a2[0] /= this.#$i;
+    a2[1] /= this.#qi;
+    a2[2] /= this.#$i;
+    a2[3] /= this.#qi;
+    a2[4] /= this.#$i;
+    a2[5] /= this.#qi;
+    this.#Gi.set(a2, 6 * this.#hn);
+    this.#hn++;
   }
   take() {
-    return this.#Pi.subarray(0, 6 * this.#Zi);
+    return this.#Gi.subarray(0, 6 * this.#hn);
   }
 };
+var mt = /\p{Cc}/u;
+function serializeFontFamily(t2) {
+  if ((function isCSSString(t3) {
+    const e2 = t3[0];
+    if (t3.length < 2 || '"' !== e2 && "'" !== e2 || t3.at(-1) !== e2) return false;
+    const i2 = t3.length - 1;
+    for (let n2 = 1; n2 < i2; n2++) {
+      const r2 = t3[n2];
+      if (r2 === e2 || mt.test(r2)) return false;
+      if ("\\" === r2 && (++n2 >= i2 || mt.test(t3[n2]))) return false;
+    }
+    return true;
+  })(t2)) return t2;
+  return `"${t2.replaceAll(/["\\\p{Cc}]/gu, (t3) => '"' === t3 || "\\" === t3 ? `\\${t3}` : `\\${t3.codePointAt(0).toString(16)} `)}"`;
+}
 var FontLoader = class {
-  #en = /* @__PURE__ */ new Set();
-  #in = null;
+  #un = /* @__PURE__ */ new Set();
+  #pn = null;
   constructor({ ownerDocument: t2 = globalThis.document, styleElement: e2 = null }) {
     this._document = t2;
     this.nativeFontFaces = /* @__PURE__ */ new Set();
@@ -8019,34 +8220,34 @@ var FontLoader = class {
     this._document.fonts.delete(t2);
   }
   insertRule(t2) {
-    const e2 = this.#nn();
+    const e2 = this.#gn();
     e2.insertRule(t2, e2.cssRules.length);
   }
-  #nn() {
-    if (this.#in) return this.#in;
+  #gn() {
+    if (this.#pn) return this.#pn;
     const t2 = this._document.defaultView?.CSSStyleSheet || globalThis.CSSStyleSheet;
     if (!this.styleElement && t2) {
       const { adoptedStyleSheets: e2 } = this._document;
       if (e2) {
         const i2 = new t2();
         e2.push(i2);
-        return this.#in = i2;
+        return this.#pn = i2;
       }
     }
     if (!this.styleElement) {
       this.styleElement = this._document.createElement("style");
       this._document.documentElement.getElementsByTagName("head")[0].append(this.styleElement);
     }
-    return this.#in = this.styleElement.sheet;
+    return this.#pn = this.styleElement.sheet;
   }
   clear() {
     for (const t2 of this.nativeFontFaces) this._document.fonts.delete(t2);
     this.nativeFontFaces.clear();
-    this.#en.clear();
-    if (this.#in) {
+    this.#un.clear();
+    if (this.#pn) {
       const { adoptedStyleSheets: t2 } = this._document;
-      t2?.includes(this.#in) && (this._document.adoptedStyleSheets = t2.filter((t3) => t3 !== this.#in));
-      this.#in = null;
+      t2?.includes(this.#pn) && (this._document.adoptedStyleSheets = t2.filter((t3) => t3 !== this.#pn));
+      this.#pn = null;
     }
     if (this.styleElement) {
       this.styleElement.remove();
@@ -8054,18 +8255,18 @@ var FontLoader = class {
     }
   }
   async loadSystemFont({ systemFontInfo: t2, disableFontFace: e2, _inspectFont: i2 }) {
-    if (t2 && !this.#en.has(t2.loadedName)) {
+    if (t2 && !this.#un.has(t2.loadedName)) {
       assert(!e2, "loadSystemFont shouldn't be called when `disableFontFace` is set.");
       if (this.isFontLoadingAPISupported) {
-        const { loadedName: e3, src: n2, style: s2 } = t2, r2 = new FontFace(e3, n2, s2);
-        this.addNativeFontFace(r2);
+        const { loadedName: e3, src: n2, style: r2 } = t2, s2 = new FontFace(e3, n2, r2);
+        this.addNativeFontFace(s2);
         try {
-          await r2.load();
-          this.#en.add(e3);
+          await s2.load();
+          this.#un.add(e3);
           i2?.(t2);
         } catch {
           warn(`Cannot load system font: ${t2.baseFontName}, installing it could help to improve PDF rendering.`);
-          this.removeNativeFontFace(r2);
+          this.removeNativeFontFace(s2);
         }
         return;
       }
@@ -8132,21 +8333,21 @@ var FontLoader = class {
       return t3.substring(0, e3) + n3 + t3.substring(e3 + i3);
     }
     let i2, n2;
-    const s2 = this._document.createElement("canvas");
-    s2.width = 1;
-    s2.height = 1;
-    const r2 = s2.getContext("2d");
+    const r2 = this._document.createElement("canvas");
+    r2.width = 1;
+    r2.height = 1;
+    const s2 = r2.getContext("2d");
     let a2 = 0;
     const o2 = `lt${Date.now()}${this.loadTestFontId++}`;
     let l2 = this._loadTestFont;
     l2 = spliceString(l2, 976, o2.length, o2);
-    const h2 = 1482184792;
-    let c2 = int32(l2, 16);
-    for (i2 = 0, n2 = o2.length - 3; i2 < n2; i2 += 4) c2 = c2 - h2 + int32(o2, i2) | 0;
-    i2 < o2.length && (c2 = c2 - h2 + int32(o2 + "XXX", i2) | 0);
+    const c2 = 1482184792;
+    let h2 = int32(l2, 16);
+    for (i2 = 0, n2 = o2.length - 3; i2 < n2; i2 += 4) h2 = h2 - c2 + int32(o2, i2) | 0;
+    i2 < o2.length && (h2 = h2 - c2 + int32(o2 + "XXX", i2) | 0);
     l2 = spliceString(l2, 16, 4, (function string32(t3) {
       return String.fromCharCode(t3 >> 24 & 255, t3 >> 16 & 255, t3 >> 8 & 255, 255 & t3);
-    })(c2));
+    })(h2));
     const d2 = `@font-face {font-family:"${o2}";src:${`url(data:font/opentype;base64,${btoa(l2)});`}}`;
     this.insertRule(d2);
     const u2 = this._document.createElement("div");
@@ -8167,9 +8368,9 @@ var FontLoader = class {
         e3();
         return;
       }
-      r2.font = "30px " + t3;
-      r2.fillText(".", 0, 20);
-      r2.getImageData(0, 0, 1, 1).data[3] > 0 ? e3() : setTimeout(isFontReady.bind(null, t3, e3));
+      s2.font = "30px " + t3;
+      s2.fillText(".", 0, 20);
+      s2.getImageData(0, 0, 1, 1).data[3] > 0 ? e3() : setTimeout(isFontReady.bind(null, t3, e3));
     })(o2, () => {
       u2.remove();
       e2.complete();
@@ -8178,9 +8379,9 @@ var FontLoader = class {
 };
 var FontFaceObject = class {
   compiledGlyphs = /* @__PURE__ */ Object.create(null);
-  #sn;
+  #mn;
   constructor(t2, e2 = null, i2, n2) {
-    this.#sn = t2;
+    this.#mn = t2;
     this._inspectFont = e2;
     i2 && (this.charProcOperatorList = i2);
     n2 && Object.assign(this, n2);
@@ -8191,7 +8392,7 @@ var FontFaceObject = class {
     if (this.cssFontInfo) {
       const e2 = { weight: this.cssFontInfo.fontWeight };
       this.cssFontInfo.italicAngle && (e2.style = `oblique ${this.cssFontInfo.italicAngle}deg`);
-      t2 = new FontFace(this.cssFontInfo.fontFamily, this.data, e2);
+      t2 = new FontFace(serializeFontFamily(this.cssFontInfo.fontFamily), this.data, e2);
     } else t2 = new FontFace(this.loadedName, this.data, {});
     this._inspectFont?.(this);
     return t2;
@@ -8203,7 +8404,7 @@ var FontFaceObject = class {
     if (this.cssFontInfo) {
       let i2 = `font-weight: ${this.cssFontInfo.fontWeight};`;
       this.cssFontInfo.italicAngle && (i2 += `font-style: oblique ${this.cssFontInfo.italicAngle}deg;`);
-      e2 = `@font-face {font-family:"${this.cssFontInfo.fontFamily}";${i2}src:${t2}}`;
+      e2 = `@font-face {font-family:${serializeFontFamily(this.cssFontInfo.fontFamily)};${i2}src:${t2}}`;
     } else e2 = `@font-face {font-family:"${this.loadedName}";src:${t2}}`;
     this._inspectFont?.(this, t2);
     return e2;
@@ -8217,84 +8418,84 @@ var FontFaceObject = class {
     } catch (t3) {
       warn(`getPathGenerator - ignoring character: "${t3}".`);
     }
-    const s2 = makePathFromDrawOPS(n2?.path);
+    const r2 = makePathFromDrawOPS(n2?.path);
     this.fontExtraProperties || t2.delete(i2);
-    return this.compiledGlyphs[e2] = s2;
+    return this.compiledGlyphs[e2] = r2;
   }
   get black() {
-    return this.#sn.black;
+    return this.#mn.black;
   }
   get bold() {
-    return this.#sn.bold;
+    return this.#mn.bold;
   }
   get disableFontFace() {
-    return this.#sn.disableFontFace;
+    return this.#mn.disableFontFace;
   }
   set disableFontFace(t2) {
     shadow(this, "disableFontFace", !!t2);
   }
   get fontExtraProperties() {
-    return this.#sn.fontExtraProperties;
+    return this.#mn.fontExtraProperties;
   }
   get isInvalidPDFjsFont() {
-    return this.#sn.isInvalidPDFjsFont;
+    return this.#mn.isInvalidPDFjsFont;
   }
   get isType3Font() {
-    return this.#sn.isType3Font;
+    return this.#mn.isType3Font;
   }
   get italic() {
-    return this.#sn.italic;
+    return this.#mn.italic;
   }
   get missingFile() {
-    return this.#sn.missingFile;
+    return this.#mn.missingFile;
   }
   get remeasure() {
-    return this.#sn.remeasure;
+    return this.#mn.remeasure;
   }
   get vertical() {
-    return this.#sn.vertical;
+    return this.#mn.vertical;
   }
   get ascent() {
-    return this.#sn.ascent;
+    return this.#mn.ascent;
   }
   get defaultWidth() {
-    return this.#sn.defaultWidth;
+    return this.#mn.defaultWidth;
   }
   get descent() {
-    return this.#sn.descent;
+    return this.#mn.descent;
   }
   get bbox() {
-    return this.#sn.bbox;
+    return this.#mn.bbox;
   }
   get fontMatrix() {
-    return this.#sn.fontMatrix;
+    return this.#mn.fontMatrix;
   }
   get fallbackName() {
-    return this.#sn.fallbackName;
+    return this.#mn.fallbackName;
   }
   get loadedName() {
-    return this.#sn.loadedName;
+    return this.#mn.loadedName;
   }
   get mimetype() {
-    return this.#sn.mimetype;
+    return this.#mn.mimetype;
   }
   get name() {
-    return this.#sn.name;
+    return this.#mn.name;
   }
   get data() {
-    return this.#sn.data;
+    return this.#mn.data;
   }
   clearData() {
-    this.#sn.clearData();
+    this.#mn.clearData();
   }
   get cssFontInfo() {
-    return this.#sn.cssFontInfo;
+    return this.#mn.cssFontInfo;
   }
   get systemFontInfo() {
-    return this.#sn.systemFontInfo;
+    return this.#mn.systemFontInfo;
   }
   get defaultVMetrics() {
-    return this.#sn.defaultVMetrics;
+    return this.#mn.defaultVMetrics;
   }
 };
 var CSS_FONT_INFO = class {
@@ -8323,203 +8524,212 @@ var PATTERN_INFO = class {
   static N_STOP = 12;
   static N_FIGURES = 16;
 };
-var CssFontInfo = class {
-  #rn;
-  #an = new TextDecoder();
-  #on;
-  constructor(t2) {
-    this.#rn = t2;
-    this.#on = new DataView(t2);
+var InfoUtils = class {
+  static get decoder() {
+    return shadow(this, "decoder", new TextDecoder());
   }
-  #ln(t2) {
+  static get encoder() {
+    return shadow(this, "encoder", new TextEncoder());
+  }
+};
+var CssFontInfo = class {
+  #fn;
+  #bn;
+  constructor(t2) {
+    this.#fn = t2;
+    this.#bn = new DataView(t2);
+  }
+  #yn(t2) {
     assert(t2 < CSS_FONT_INFO.strings.length, "Invalid string index");
-    let e2 = 0;
-    for (let i3 = 0; i3 < t2; i3++) e2 += this.#on.getUint32(e2) + 4;
-    const i2 = this.#on.getUint32(e2);
-    return this.#an.decode(new Uint8Array(this.#rn, e2 + 4, i2));
+    const { decoder: e2 } = InfoUtils;
+    let i2 = 0;
+    for (let e3 = 0; e3 < t2; e3++) i2 += this.#bn.getUint32(i2) + 4;
+    const n2 = this.#bn.getUint32(i2);
+    return e2.decode(new Uint8Array(this.#fn, i2 + 4, n2));
   }
   get fontFamily() {
-    return this.#ln(0);
+    return this.#yn(0);
   }
   get fontWeight() {
-    return this.#ln(1);
+    return this.#yn(1);
   }
   get italicAngle() {
-    return this.#ln(2);
+    return this.#yn(2);
   }
 };
 var SystemFontInfo = class {
-  #rn;
-  #an = new TextDecoder();
-  #on;
+  #fn;
+  #bn;
   constructor(t2) {
-    this.#rn = t2;
-    this.#on = new DataView(t2);
+    this.#fn = t2;
+    this.#bn = new DataView(t2);
   }
   get guessFallback() {
-    return 0 !== this.#on.getUint8(0);
+    return 0 !== this.#bn.getUint8(0);
   }
-  #ln(t2) {
+  #yn(t2) {
     assert(t2 < SYSTEM_FONT_INFO.strings.length, "Invalid string index");
-    let e2 = 5;
-    for (let i3 = 0; i3 < t2; i3++) e2 += this.#on.getUint32(e2) + 4;
-    const i2 = this.#on.getUint32(e2);
-    return this.#an.decode(new Uint8Array(this.#rn, e2 + 4, i2));
+    const { decoder: e2 } = InfoUtils;
+    let i2 = 5;
+    for (let e3 = 0; e3 < t2; e3++) i2 += this.#bn.getUint32(i2) + 4;
+    const n2 = this.#bn.getUint32(i2);
+    return e2.decode(new Uint8Array(this.#fn, i2 + 4, n2));
   }
   get css() {
-    return this.#ln(0);
+    return this.#yn(0);
   }
   get loadedName() {
-    return this.#ln(1);
+    return this.#yn(1);
   }
   get baseFontName() {
-    return this.#ln(2);
+    return this.#yn(2);
   }
   get src() {
-    return this.#ln(3);
+    return this.#yn(3);
   }
   get style() {
-    let t2 = 1;
-    t2 += 4 + this.#on.getUint32(t2);
-    const e2 = this.#on.getUint32(t2), i2 = this.#an.decode(new Uint8Array(this.#rn, t2 + 4, e2));
-    t2 += 4 + e2;
-    const n2 = this.#on.getUint32(t2);
-    return { style: i2, weight: this.#an.decode(new Uint8Array(this.#rn, t2 + 4, n2)) };
+    const { decoder: t2 } = InfoUtils;
+    let e2 = 1;
+    e2 += 4 + this.#bn.getUint32(e2);
+    const i2 = this.#bn.getUint32(e2), n2 = t2.decode(new Uint8Array(this.#fn, e2 + 4, i2));
+    e2 += 4 + i2;
+    const r2 = this.#bn.getUint32(e2);
+    return { style: n2, weight: t2.decode(new Uint8Array(this.#fn, e2 + 4, r2)) };
   }
 };
 var FontInfo = class {
-  #rn;
-  #an = new TextDecoder();
-  #on;
+  #fn;
+  #bn;
   constructor({ buffer: t2, extra: e2 }) {
-    this.#rn = t2;
-    this.#on = new DataView(t2);
+    this.#fn = t2;
+    this.#bn = new DataView(t2);
     e2 && Object.assign(this, e2);
   }
-  #hn(t2) {
+  #vn(t2) {
     assert(t2 < FONT_INFO.bools.length, "Invalid boolean index");
-    const e2 = Math.floor(t2 / 4), i2 = 2 * t2 % 8, n2 = this.#on.getUint8(e2) >> i2 & 3;
+    const e2 = Math.floor(t2 / 4), i2 = 2 * t2 % 8, n2 = this.#bn.getUint8(e2) >> i2 & 3;
     return 0 === n2 ? void 0 : 2 === n2;
   }
   get black() {
-    return this.#hn(0);
+    return this.#vn(0);
   }
   get bold() {
-    return this.#hn(1);
+    return this.#vn(1);
   }
   get disableFontFace() {
-    return this.#hn(2);
+    return this.#vn(2);
   }
   get fontExtraProperties() {
-    return this.#hn(3);
+    return this.#vn(3);
   }
   get isInvalidPDFjsFont() {
-    return this.#hn(4);
+    return this.#vn(4);
   }
   get isType3Font() {
-    return this.#hn(5);
+    return this.#vn(5);
   }
   get italic() {
-    return this.#hn(6);
+    return this.#vn(6);
   }
   get missingFile() {
-    return this.#hn(7);
+    return this.#vn(7);
   }
   get remeasure() {
-    return this.#hn(8);
+    return this.#vn(8);
   }
   get vertical() {
-    return this.#hn(9);
+    return this.#vn(9);
   }
-  #cn(t2) {
+  #wn(t2) {
     assert(t2 < FONT_INFO.numbers.length, "Invalid number index");
-    return this.#on.getFloat64(FONT_INFO.OFFSET_NUMBERS + 8 * t2);
+    return this.#bn.getFloat64(FONT_INFO.OFFSET_NUMBERS + 8 * t2);
   }
   get ascent() {
-    return this.#cn(0);
+    return this.#wn(0);
   }
   get defaultWidth() {
-    return this.#cn(1);
+    return this.#wn(1);
   }
   get descent() {
-    return this.#cn(2);
+    return this.#wn(2);
   }
-  #dn(t2, e2, i2, n2) {
-    const s2 = this.#on.getUint8(t2);
-    if (0 === s2) return;
-    assert(s2 === e2, "Invalid array length.");
+  #An(t2, e2, i2, n2) {
+    const r2 = this.#bn.getUint8(t2);
+    if (0 === r2) return;
+    assert(r2 === e2, "Invalid array length.");
     t2 += 1;
-    const r2 = new Array(s2);
-    for (let e3 = 0; e3 < s2; e3++) {
-      r2[e3] = this.#on[i2](t2, true);
+    const s2 = new Array(r2);
+    for (let e3 = 0; e3 < r2; e3++) {
+      s2[e3] = this.#bn[i2](t2, true);
       t2 += n2;
     }
-    return r2;
+    return s2;
   }
   get bbox() {
-    return this.#dn(FONT_INFO.OFFSET_BBOX, 4, "getInt16", 2);
+    return this.#An(FONT_INFO.OFFSET_BBOX, 4, "getInt16", 2);
   }
   get fontMatrix() {
-    return this.#dn(FONT_INFO.OFFSET_FONT_MATRIX, 6, "getFloat64", 8);
+    return this.#An(FONT_INFO.OFFSET_FONT_MATRIX, 6, "getFloat64", 8);
   }
   get defaultVMetrics() {
-    return this.#dn(FONT_INFO.OFFSET_DEFAULT_VMETRICS, 3, "getInt16", 2);
+    return this.#An(FONT_INFO.OFFSET_DEFAULT_VMETRICS, 3, "getInt16", 2);
   }
-  #ln(t2) {
+  #yn(t2) {
     assert(t2 < FONT_INFO.strings.length, "Invalid string index");
-    let e2 = FONT_INFO.OFFSET_STRINGS + 4;
-    for (let i3 = 0; i3 < t2; i3++) e2 += this.#on.getUint32(e2) + 4;
-    const i2 = this.#on.getUint32(e2);
-    return this.#an.decode(new Uint8Array(this.#rn, e2 + 4, i2));
+    const { decoder: e2 } = InfoUtils;
+    let i2 = FONT_INFO.OFFSET_STRINGS + 4;
+    for (let e3 = 0; e3 < t2; e3++) i2 += this.#bn.getUint32(i2) + 4;
+    const n2 = this.#bn.getUint32(i2);
+    return e2.decode(new Uint8Array(this.#fn, i2 + 4, n2));
   }
   get fallbackName() {
-    return this.#ln(0);
+    return this.#yn(0);
   }
   get loadedName() {
-    return this.#ln(1);
+    return this.#yn(1);
   }
   get mimetype() {
-    return this.#ln(2);
+    return this.#yn(2);
   }
   get name() {
-    return this.#ln(3);
+    return this.#yn(3);
   }
-  #un() {
+  #xn() {
     let t2 = FONT_INFO.OFFSET_STRINGS;
-    t2 += 4 + this.#on.getUint32(t2);
-    t2 += 4 + this.#on.getUint32(t2);
-    t2 += 4 + this.#on.getUint32(t2);
-    return { offset: t2, length: this.#on.getUint32(t2) };
+    t2 += 4 + this.#bn.getUint32(t2);
+    t2 += 4 + this.#bn.getUint32(t2);
+    t2 += 4 + this.#bn.getUint32(t2);
+    return { offset: t2, length: this.#bn.getUint32(t2) };
   }
   get data() {
-    const { offset: t2, length: e2 } = this.#un();
-    return 0 === e2 ? void 0 : new Uint8Array(this.#rn, t2 + 4, e2);
+    const { offset: t2, length: e2 } = this.#xn();
+    return 0 === e2 ? void 0 : new Uint8Array(this.#fn, t2 + 4, e2);
   }
   clearData() {
-    const { offset: t2, length: e2 } = this.#un();
+    const { offset: t2, length: e2 } = this.#xn();
     if (0 !== e2) {
-      this.#on.setUint32(t2, 0);
-      this.#rn = new Uint8Array(this.#rn, 0, t2 + 4).slice().buffer;
-      this.#on = new DataView(this.#rn);
+      this.#bn.setUint32(t2, 0);
+      this.#fn = new Uint8Array(this.#fn, 0, t2 + 4).slice().buffer;
+      this.#bn = new DataView(this.#fn);
     }
   }
   get cssFontInfo() {
     let t2 = FONT_INFO.OFFSET_STRINGS;
-    t2 += 4 + this.#on.getUint32(t2);
-    t2 += 4 + this.#on.getUint32(t2);
-    const e2 = this.#on.getUint32(t2);
+    t2 += 4 + this.#bn.getUint32(t2);
+    t2 += 4 + this.#bn.getUint32(t2);
+    const e2 = this.#bn.getUint32(t2);
     if (0 === e2) return null;
     const i2 = new Uint8Array(e2);
-    i2.set(new Uint8Array(this.#rn, t2 + 4, e2));
+    i2.set(new Uint8Array(this.#fn, t2 + 4, e2));
     return new CssFontInfo(i2.buffer);
   }
   get systemFontInfo() {
     let t2 = FONT_INFO.OFFSET_STRINGS;
-    t2 += 4 + this.#on.getUint32(t2);
-    const e2 = this.#on.getUint32(t2);
+    t2 += 4 + this.#bn.getUint32(t2);
+    const e2 = this.#bn.getUint32(t2);
     if (0 === e2) return null;
     const i2 = new Uint8Array(e2);
-    i2.set(new Uint8Array(this.#rn, t2 + 4, e2));
+    i2.set(new Uint8Array(this.#fn, t2 + 4, e2));
     return new SystemFontInfo(i2.buffer);
   }
 };
@@ -8530,11 +8740,11 @@ var PatternInfo = class {
     this.data = new Uint8Array(t2);
   }
   getIR() {
-    const t2 = this.view, e2 = this.data[PATTERN_INFO.KIND], i2 = !!this.data[PATTERN_INFO.HAS_BBOX], s2 = !!this.data[PATTERN_INFO.HAS_BACKGROUND], r2 = t2.getUint32(PATTERN_INFO.N_COORD, true), a2 = t2.getUint32(PATTERN_INFO.N_COLOR, true), o2 = t2.getUint32(PATTERN_INFO.N_STOP, true);
+    const t2 = this.view, e2 = this.data[PATTERN_INFO.KIND], i2 = !!this.data[PATTERN_INFO.HAS_BBOX], r2 = !!this.data[PATTERN_INFO.HAS_BACKGROUND], s2 = t2.getUint32(PATTERN_INFO.N_COORD, true), a2 = t2.getUint32(PATTERN_INFO.N_COLOR, true), o2 = t2.getUint32(PATTERN_INFO.N_STOP, true);
     let l2 = 20;
-    const h2 = new Float32Array(this.buffer, l2, 2 * r2);
-    l2 += 8 * r2;
-    const c2 = new Uint8Array(this.buffer, l2, 4 * a2);
+    const c2 = new Float32Array(this.buffer, l2, 2 * s2);
+    l2 += 8 * s2;
+    const h2 = new Uint8Array(this.buffer, l2, 4 * a2);
     l2 += 4 * a2;
     const d2 = [];
     for (let e3 = 0; e3 < o2; ++e3) {
@@ -8553,31 +8763,31 @@ var PatternInfo = class {
       }
     }
     let p2 = null;
-    if (s2) {
+    if (r2) {
       p2 = new Uint8Array(this.buffer, l2, 3);
       l2 += 3;
     }
-    if (1 === e2) return ["RadialAxial", "axial", u2, d2, Array.from(h2.slice(0, 2)), Array.from(h2.slice(2, 4)), null, null];
-    if (2 === e2) return ["RadialAxial", "radial", u2, d2, [h2[0], h2[1]], [h2[3], h2[4]], h2[2], h2[5]];
+    if (1 === e2) return ["RadialAxial", "axial", u2, d2, Array.from(c2.slice(0, 2)), Array.from(c2.slice(2, 4)), null, null];
+    if (2 === e2) return ["RadialAxial", "radial", u2, d2, [c2[0], c2[1]], [c2[3], c2[4]], c2[2], c2[5]];
     if (3 === e2) {
       const t3 = this.data[PATTERN_INFO.SHADING_TYPE];
       let e3 = null;
-      if (h2.length > 0) {
+      if (c2.length > 0) {
         e3 = n.slice();
-        for (let t4 = 0, i3 = h2.length; t4 < i3; t4 += 2) Util.pointBoundingBox(h2[t4], h2[t4 + 1], e3);
+        for (let t4 = 0, i3 = c2.length; t4 < i3; t4 += 2) Util.pointBoundingBox(c2[t4], c2[t4 + 1], e3);
       }
-      return ["Mesh", t3, h2, c2, r2, e3, u2, p2];
+      return ["Mesh", t3, c2, h2, s2, e3, u2, p2];
     }
     throw new Error(`Unsupported pattern kind: ${e2}`);
   }
 };
 var FontPathInfo = class {
-  #rn;
+  #fn;
   constructor(t2) {
-    this.#rn = t2;
+    this.#fn = t2;
   }
   get path() {
-    return FeatureTest.isFloat16ArraySupported ? new Float16Array(this.#rn) : new Float32Array(this.#rn);
+    return FeatureTest.isFloat16ArraySupported ? new Float16Array(this.#fn) : new Float32Array(this.#fn);
   }
 };
 function getFactoryUrlProp(t2) {
@@ -8586,14 +8796,14 @@ function getFactoryUrlProp(t2) {
   throw new Error(`Invalid factory url: "${t2}" must include trailing slash.`);
 }
 var isRefProxy = (t2) => "object" == typeof t2 && Number.isInteger(t2?.num) && t2.num >= 0 && Number.isInteger(t2?.gen) && t2.gen >= 0;
-var gt = function _isValidExplicitDest(t2, e2, i2) {
+var ft = function _isValidExplicitDest(t2, e2, i2) {
   if (!Array.isArray(i2) || i2.length < 2) return false;
-  const [n2, s2, ...r2] = i2;
+  const [n2, r2, ...s2] = i2;
   if (!t2(n2) && !Number.isInteger(n2)) return false;
-  if (!e2(s2)) return false;
-  const a2 = r2.length;
+  if (!e2(r2)) return false;
+  const a2 = s2.length;
   let o2 = true;
-  switch (s2.name) {
+  switch (r2.name) {
     case "XYZ":
       if (a2 < 2 || a2 > 3) return false;
       break;
@@ -8613,53 +8823,53 @@ var gt = function _isValidExplicitDest(t2, e2, i2) {
     default:
       return false;
   }
-  for (const t3 of r2) if (!("number" == typeof t3 || o2 && null === t3)) return false;
+  for (const t3 of s2) if (!("number" == typeof t3 || o2 && null === t3)) return false;
   return true;
 }.bind(null, isRefProxy, (t2) => "object" == typeof t2 && "string" == typeof t2?.name);
 var LoopbackPort = class {
-  #pn = /* @__PURE__ */ new Map();
-  #gn = Promise.resolve();
+  #En = /* @__PURE__ */ new Map();
+  #Cn = Promise.resolve();
   postMessage(t2, e2) {
     const i2 = { data: structuredClone(t2, e2 ? { transfer: e2 } : null) };
-    this.#gn.then(() => {
-      for (const [t3] of this.#pn) t3.call(this, i2);
+    this.#Cn.then(() => {
+      for (const [t3] of this.#En) t3.call(this, i2);
     });
   }
   addEventListener(t2, e2, i2 = null) {
     let n2 = null;
     if (i2?.signal instanceof AbortSignal) {
-      const { signal: s2 } = i2;
-      if (s2.aborted) {
+      const { signal: r2 } = i2;
+      if (r2.aborted) {
         warn("LoopbackPort - cannot use an `aborted` signal.");
         return;
       }
       const onAbort = () => this.removeEventListener(t2, e2);
-      n2 = () => s2.removeEventListener("abort", onAbort);
-      s2.addEventListener("abort", onAbort);
+      n2 = () => r2.removeEventListener("abort", onAbort);
+      r2.addEventListener("abort", onAbort);
     }
-    this.#pn.set(e2, n2);
+    this.#En.set(e2, n2);
   }
   removeEventListener(t2, e2) {
-    const i2 = this.#pn.get(e2);
+    const i2 = this.#En.get(e2);
     i2?.();
-    this.#pn.delete(e2);
+    this.#En.delete(e2);
   }
   terminate() {
-    for (const [, t2] of this.#pn) t2?.();
-    this.#pn.clear();
+    for (const [, t2] of this.#En) t2?.();
+    this.#En.clear();
   }
 };
 __webpack_require__(1689);
-var mt = 1;
-var ft = 2;
 var bt = 1;
 var yt = 2;
-var vt = 3;
-var wt = 4;
-var xt = 5;
-var At = 6;
-var Et = 7;
-var Ct = 8;
+var vt = 1;
+var wt = 2;
+var At = 3;
+var xt = 4;
+var Et = 5;
+var Ct = 6;
+var St = 7;
+var Tt = 8;
 function onFn() {
 }
 function wrapReason(t2) {
@@ -8680,7 +8890,7 @@ function wrapReason(t2) {
   return new UnknownErrorException(t2.message, t2.toString());
 }
 var MessageHandler = class {
-  #mn = new AbortController();
+  #Sn = new AbortController();
   constructor(t2, e2, i2) {
     this.sourceName = t2;
     this.targetName = e2;
@@ -8691,21 +8901,21 @@ var MessageHandler = class {
     this.streamControllers = /* @__PURE__ */ Object.create(null);
     this.callbackCapabilities = /* @__PURE__ */ Object.create(null);
     this.actionHandler = /* @__PURE__ */ Object.create(null);
-    i2.addEventListener("message", this.#fn.bind(this), { signal: this.#mn.signal });
+    i2.addEventListener("message", this.#Tn.bind(this), { signal: this.#Sn.signal });
   }
-  #fn({ data: t2 }) {
+  #Tn({ data: t2 }) {
     if (t2.targetName !== this.sourceName) return;
     if (t2.stream) {
-      this.#bn(t2);
+      this.#_n(t2);
       return;
     }
     if (t2.callback) {
       const e3 = t2.callbackId, i2 = this.callbackCapabilities[e3];
       if (!i2) throw new Error(`Cannot resolve callback ${e3}`);
       delete this.callbackCapabilities[e3];
-      if (t2.callback === mt) i2.resolve(t2.data);
+      if (t2.callback === bt) i2.resolve(t2.data);
       else {
-        if (t2.callback !== ft) throw new Error("Unexpected callback case");
+        if (t2.callback !== yt) throw new Error("Unexpected callback case");
         i2.reject(wrapReason(t2.reason));
       }
       return;
@@ -8713,15 +8923,15 @@ var MessageHandler = class {
     const e2 = this.actionHandler[t2.action];
     if (!e2) throw new Error(`Unknown action from worker: ${t2.action}`);
     if (t2.callbackId) {
-      const i2 = this.sourceName, n2 = t2.sourceName, s2 = this.comObj;
+      const i2 = this.sourceName, n2 = t2.sourceName, r2 = this.comObj;
       Promise.try(e2, t2.data).then(function(e3) {
-        s2.postMessage({ sourceName: i2, targetName: n2, callback: mt, callbackId: t2.callbackId, data: e3 });
+        r2.postMessage({ sourceName: i2, targetName: n2, callback: bt, callbackId: t2.callbackId, data: e3 });
       }, function(e3) {
-        s2.postMessage({ sourceName: i2, targetName: n2, callback: ft, callbackId: t2.callbackId, reason: wrapReason(e3) });
+        r2.postMessage({ sourceName: i2, targetName: n2, callback: yt, callbackId: t2.callbackId, reason: wrapReason(e3) });
       });
       return;
     }
-    t2.streamId ? this.#yn(t2) : e2(t2.data);
+    t2.streamId ? this.#kn(t2) : e2(t2.data);
   }
   on(t2, e2) {
     const i2 = this.actionHandler;
@@ -8732,118 +8942,118 @@ var MessageHandler = class {
     this.comObj.postMessage({ sourceName: this.sourceName, targetName: this.targetName, action: t2, data: e2 }, i2);
   }
   sendWithPromise(t2, e2, i2) {
-    const n2 = this.callbackId++, s2 = Promise.withResolvers();
-    this.callbackCapabilities[n2] = s2;
+    const n2 = this.callbackId++, r2 = Promise.withResolvers();
+    this.callbackCapabilities[n2] = r2;
     try {
       this.comObj.postMessage({ sourceName: this.sourceName, targetName: this.targetName, action: t2, callbackId: n2, data: e2 }, i2);
     } catch (t3) {
-      s2.reject(t3);
+      r2.reject(t3);
     }
-    return s2.promise;
+    return r2.promise;
   }
   sendWithStream(t2, e2, i2, n2) {
-    const s2 = this.streamId++, r2 = this.sourceName, a2 = this.targetName, o2 = this.comObj;
+    const r2 = this.streamId++, s2 = this.sourceName, a2 = this.targetName, o2 = this.comObj;
     return new ReadableStream({ start: (i3) => {
       const l2 = Promise.withResolvers();
-      this.streamControllers[s2] = { controller: i3, startCall: l2, pullCall: null, cancelCall: null, isClosed: false };
-      o2.postMessage({ sourceName: r2, targetName: a2, action: t2, streamId: s2, data: e2, desiredSize: i3.desiredSize }, n2);
+      this.streamControllers[r2] = { controller: i3, startCall: l2, pullCall: null, cancelCall: null, isClosed: false };
+      o2.postMessage({ sourceName: s2, targetName: a2, action: t2, streamId: r2, data: e2, desiredSize: i3.desiredSize }, n2);
       return l2.promise;
     }, pull: (t3) => {
       const e3 = Promise.withResolvers();
-      this.streamControllers[s2].pullCall = e3;
-      o2.postMessage({ sourceName: r2, targetName: a2, stream: At, streamId: s2, desiredSize: t3.desiredSize });
+      this.streamControllers[r2].pullCall = e3;
+      o2.postMessage({ sourceName: s2, targetName: a2, stream: Ct, streamId: r2, desiredSize: t3.desiredSize });
       return e3.promise;
     }, cancel: (t3) => {
       assert(t3 instanceof Error, "cancel must have a valid reason");
       const e3 = Promise.withResolvers();
-      this.streamControllers[s2].cancelCall = e3;
-      this.streamControllers[s2].isClosed = true;
-      o2.postMessage({ sourceName: r2, targetName: a2, stream: bt, streamId: s2, reason: wrapReason(t3) });
+      this.streamControllers[r2].cancelCall = e3;
+      this.streamControllers[r2].isClosed = true;
+      o2.postMessage({ sourceName: s2, targetName: a2, stream: vt, streamId: r2, reason: wrapReason(t3) });
       return e3.promise;
     } }, i2);
   }
-  #yn(t2) {
-    const e2 = t2.streamId, i2 = this.sourceName, n2 = t2.sourceName, s2 = this.comObj, r2 = this, a2 = this.actionHandler[t2.action], o2 = { enqueue(t3, r3 = 1, a3) {
+  #kn(t2) {
+    const e2 = t2.streamId, i2 = this.sourceName, n2 = t2.sourceName, r2 = this.comObj, s2 = this, a2 = this.actionHandler[t2.action], o2 = { enqueue(t3, s3 = 1, a3) {
       if (this.isCancelled) return;
       const o3 = this.desiredSize;
-      this.desiredSize -= r3;
+      this.desiredSize -= s3;
       if (o3 > 0 && this.desiredSize <= 0) {
         this.sinkCapability = Promise.withResolvers();
         this.ready = this.sinkCapability.promise;
       }
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: wt, streamId: e2, chunk: t3 }, a3);
+      r2.postMessage({ sourceName: i2, targetName: n2, stream: xt, streamId: e2, chunk: t3 }, a3);
     }, close() {
       if (!this.isCancelled) {
         this.isCancelled = true;
-        s2.postMessage({ sourceName: i2, targetName: n2, stream: vt, streamId: e2 });
-        delete r2.streamSinks[e2];
+        r2.postMessage({ sourceName: i2, targetName: n2, stream: At, streamId: e2 });
+        delete s2.streamSinks[e2];
       }
     }, error(t3) {
       assert(t3 instanceof Error, "error must have a valid reason");
       if (!this.isCancelled) {
         this.isCancelled = true;
-        s2.postMessage({ sourceName: i2, targetName: n2, stream: xt, streamId: e2, reason: wrapReason(t3) });
+        r2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, reason: wrapReason(t3) });
       }
     }, sinkCapability: Promise.withResolvers(), onPull: null, onCancel: null, isCancelled: false, desiredSize: t2.desiredSize, ready: null };
     o2.sinkCapability.resolve();
     o2.ready = o2.sinkCapability.promise;
     this.streamSinks[e2] = o2;
     Promise.try(a2, t2.data, o2).then(function() {
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: Ct, streamId: e2, success: true });
+      r2.postMessage({ sourceName: i2, targetName: n2, stream: Tt, streamId: e2, success: true });
     }, function(t3) {
-      s2.postMessage({ sourceName: i2, targetName: n2, stream: Ct, streamId: e2, reason: wrapReason(t3) });
+      r2.postMessage({ sourceName: i2, targetName: n2, stream: Tt, streamId: e2, reason: wrapReason(t3) });
     });
   }
-  #bn(t2) {
-    const e2 = t2.streamId, i2 = this.sourceName, n2 = t2.sourceName, s2 = this.comObj, r2 = this.streamControllers[e2], a2 = this.streamSinks[e2];
+  #_n(t2) {
+    const e2 = t2.streamId, i2 = this.sourceName, n2 = t2.sourceName, r2 = this.comObj, s2 = this.streamControllers[e2], a2 = this.streamSinks[e2];
     switch (t2.stream) {
+      case Tt:
+        t2.success ? s2.startCall.resolve() : s2.startCall.reject(wrapReason(t2.reason));
+        break;
+      case St:
+        t2.success ? s2.pullCall.resolve() : s2.pullCall.reject(wrapReason(t2.reason));
+        break;
       case Ct:
-        t2.success ? r2.startCall.resolve() : r2.startCall.reject(wrapReason(t2.reason));
-        break;
-      case Et:
-        t2.success ? r2.pullCall.resolve() : r2.pullCall.reject(wrapReason(t2.reason));
-        break;
-      case At:
         if (!a2) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, success: true });
+          r2.postMessage({ sourceName: i2, targetName: n2, stream: St, streamId: e2, success: true });
           break;
         }
         a2.desiredSize <= 0 && t2.desiredSize > 0 && a2.sinkCapability.resolve();
         a2.desiredSize = t2.desiredSize;
         Promise.try(a2.onPull || onFn).then(function() {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, success: true });
+          r2.postMessage({ sourceName: i2, targetName: n2, stream: St, streamId: e2, success: true });
         }, function(t3) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: Et, streamId: e2, reason: wrapReason(t3) });
+          r2.postMessage({ sourceName: i2, targetName: n2, stream: St, streamId: e2, reason: wrapReason(t3) });
         });
         break;
+      case xt:
+        assert(s2, "enqueue should have stream controller");
+        if (s2.isClosed) break;
+        s2.controller.enqueue(t2.chunk);
+        break;
+      case At:
+        assert(s2, "close should have stream controller");
+        if (s2.isClosed) break;
+        s2.isClosed = true;
+        s2.controller.close();
+        this.#Dn(s2, e2);
+        break;
+      case Et:
+        assert(s2, "error should have stream controller");
+        s2.controller.error(wrapReason(t2.reason));
+        this.#Dn(s2, e2);
+        break;
       case wt:
-        assert(r2, "enqueue should have stream controller");
-        if (r2.isClosed) break;
-        r2.controller.enqueue(t2.chunk);
+        t2.success ? s2.cancelCall.resolve() : s2.cancelCall.reject(wrapReason(t2.reason));
+        this.#Dn(s2, e2);
         break;
       case vt:
-        assert(r2, "close should have stream controller");
-        if (r2.isClosed) break;
-        r2.isClosed = true;
-        r2.controller.close();
-        this.#vn(r2, e2);
-        break;
-      case xt:
-        assert(r2, "error should have stream controller");
-        r2.controller.error(wrapReason(t2.reason));
-        this.#vn(r2, e2);
-        break;
-      case yt:
-        t2.success ? r2.cancelCall.resolve() : r2.cancelCall.reject(wrapReason(t2.reason));
-        this.#vn(r2, e2);
-        break;
-      case bt:
         if (!a2) break;
         const o2 = wrapReason(t2.reason);
         Promise.try(a2.onCancel || onFn, o2).then(function() {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: yt, streamId: e2, success: true });
+          r2.postMessage({ sourceName: i2, targetName: n2, stream: wt, streamId: e2, success: true });
         }, function(t3) {
-          s2.postMessage({ sourceName: i2, targetName: n2, stream: yt, streamId: e2, reason: wrapReason(t3) });
+          r2.postMessage({ sourceName: i2, targetName: n2, stream: wt, streamId: e2, reason: wrapReason(t3) });
         });
         a2.sinkCapability.reject(o2);
         a2.isCancelled = true;
@@ -8853,17 +9063,17 @@ var MessageHandler = class {
         throw new Error("Unexpected stream case");
     }
   }
-  async #vn(t2, e2) {
+  async #Dn(t2, e2) {
     await Promise.allSettled([t2.startCall?.promise, t2.pullCall?.promise, t2.cancelCall?.promise]);
     delete this.streamControllers[e2];
   }
   destroy() {
-    this.#mn?.abort();
-    this.#mn = null;
+    this.#Sn?.abort();
+    this.#Sn = null;
   }
 };
 var BaseBinaryDataFactory = class {
-  #wn = Object.freeze({ cMapUrl: "CMap", standardFontDataUrl: "font", wasmUrl: "wasm" });
+  #Pn = Object.freeze({ cMapUrl: "CMap", standardFontDataUrl: "font", wasmUrl: "wasm" });
   constructor({ cMapUrl: t2 = null, standardFontDataUrl: e2 = null, wasmUrl: i2 = null }) {
     this.cMapUrl = t2;
     this.standardFontDataUrl = e2;
@@ -8882,7 +9092,7 @@ var BaseBinaryDataFactory = class {
     if (!i2) throw new Error(`Ensure that the \`${t2}\` API parameter is provided.`);
     const n2 = `${i2}${e2}`;
     return this._fetch(n2, t2).catch((e3) => {
-      throw new Error(`Unable to load ${this.#wn[t2]} data at: ${n2}`);
+      throw new Error(`Unable to load ${this.#Pn[t2]} data at: ${n2}`);
     });
   }
   async _fetch(t2, e2) {
@@ -8896,14 +9106,14 @@ var DOMBinaryDataFactory = class extends BaseBinaryDataFactory {
   }
 };
 var BaseCanvasFactory = class {
-  #xn = false;
+  #Mn = false;
   constructor({ enableHWA: t2 = false }) {
-    this.#xn = t2;
+    this.#Mn = t2;
   }
   create(t2, e2) {
     if (t2 <= 0 || e2 <= 0) throw new Error("Invalid canvas size");
     const i2 = this._createCanvas(t2, e2);
-    return { canvas: i2, context: i2.getContext("2d", { willReadFrequently: !this.#xn }) };
+    return { canvas: i2, context: i2.getContext("2d", { willReadFrequently: !this.#Mn }) };
   }
   reset({ canvas: t2 }, e2, i2) {
     if (!t2) throw new Error("Canvas is not specified");
@@ -8950,7 +9160,7 @@ var BaseFilterFactory = class {
   addKnockoutFilter(t2 = 0) {
     return "none";
   }
-  addHighlightHCMFilter(t2, e2, i2, n2, s2) {
+  addHighlightHCMFilter(t2, e2, i2, n2, r2) {
     return "none";
   }
   addSelectionHCMFilter(t2, e2) {
@@ -8966,27 +9176,27 @@ var BaseFilterFactory = class {
   }
 };
 var DOMFilterFactory = class extends BaseFilterFactory {
-  #An;
-  #En;
-  #Cn;
-  #Sn;
-  #Tn;
-  #_n;
+  #In;
+  #Fn;
+  #On;
+  #Rn;
+  #Bn;
+  #Ln;
   #_ = 0;
   constructor({ docId: t2, ownerDocument: e2 = globalThis.document }) {
     super();
-    this.#Sn = t2;
-    this.#Tn = e2;
+    this.#Rn = t2;
+    this.#Bn = e2;
   }
   get #D() {
-    return this.#En ||= /* @__PURE__ */ new Map();
+    return this.#Fn ||= /* @__PURE__ */ new Map();
   }
-  get #kn() {
-    return this.#_n ||= /* @__PURE__ */ new Map();
+  get #Nn() {
+    return this.#Ln ||= /* @__PURE__ */ new Map();
   }
-  get #Dn() {
-    if (!this.#Cn) {
-      const t2 = this.#Tn.createElement("div"), { style: e2 } = t2;
+  get #Un() {
+    if (!this.#On) {
+      const t2 = this.#Bn.createElement("div"), { style: e2 } = t2;
       e2.colorScheme = "only light";
       e2.visibility = "hidden";
       e2.contain = "strict";
@@ -8994,92 +9204,87 @@ var DOMFilterFactory = class extends BaseFilterFactory {
       e2.position = "absolute";
       e2.top = e2.left = 0;
       e2.zIndex = -1;
-      const i2 = this.#Tn.createElementNS(a, "svg");
+      const i2 = this.#Bn.createElementNS(a, "svg");
       i2.setAttribute("width", 0);
       i2.setAttribute("height", 0);
-      this.#Cn = this.#Tn.createElementNS(a, "defs");
+      this.#On = this.#Bn.createElementNS(a, "defs");
       t2.append(i2);
-      i2.append(this.#Cn);
-      this.#Tn.body.append(t2);
+      i2.append(this.#On);
+      this.#Bn.body.append(t2);
     }
-    return this.#Cn;
+    return this.#On;
   }
-  #Mn(t2) {
+  #Hn(t2) {
     if (1 === t2.length) {
       const e3 = t2[0], i3 = new Array(256);
       for (let t3 = 0; t3 < 256; t3++) i3[t3] = e3[t3] / 255;
       const n3 = i3.join(",");
       return [n3, n3, n3];
     }
-    const [e2, i2, n2] = t2, s2 = new Array(256), r2 = new Array(256), a2 = new Array(256);
+    const [e2, i2, n2] = t2, r2 = new Array(256), s2 = new Array(256), a2 = new Array(256);
     for (let t3 = 0; t3 < 256; t3++) {
-      s2[t3] = e2[t3] / 255;
-      r2[t3] = i2[t3] / 255;
+      r2[t3] = e2[t3] / 255;
+      s2[t3] = i2[t3] / 255;
       a2[t3] = n2[t3] / 255;
     }
-    return [s2.join(","), r2.join(","), a2.join(",")];
+    return [r2.join(","), s2.join(","), a2.join(",")];
   }
-  #Pn(t2) {
-    if (void 0 === this.#An) {
-      this.#An = "";
-      const t3 = this.#Tn.URL;
-      t3 !== this.#Tn.baseURI && (isDataScheme(t3) ? warn('#createUrl: ignore "data:"-URL for performance reasons.') : this.#An = updateUrlHash(t3, ""));
+  #zn(t2) {
+    if (void 0 === this.#In) {
+      this.#In = "";
+      const t3 = this.#Bn.URL;
+      t3 !== this.#Bn.baseURI && (isDataScheme(t3) ? warn('#createUrl: ignore "data:"-URL for performance reasons.') : this.#In = updateUrlHash(t3, ""));
     }
-    return `url(${this.#An}#${t2})`;
+    return `url(${this.#In}#${t2})`;
   }
   addFilter(t2) {
     if (!t2) return "none";
     let e2 = this.#D.get(t2);
     if (e2) return e2;
-    const [i2, n2, s2] = this.#Mn(t2), r2 = 1 === t2.length ? i2 : `${i2}${n2}${s2}`;
-    e2 = this.#D.get(r2);
+    const [i2, n2, r2] = this.#Hn(t2), s2 = 1 === t2.length ? i2 : `${i2}${n2}${r2}`;
+    e2 = this.#D.get(s2);
     if (e2) {
       this.#D.set(t2, e2);
       return e2;
     }
-    const a2 = `g_${this.#Sn}_transfer_map_${this.#_++}`, o2 = this.#Pn(a2);
+    const a2 = `g_${this.#Rn}_transfer_map_${this.#_++}`, o2 = this.#zn(a2);
     this.#D.set(t2, o2);
-    this.#D.set(r2, o2);
-    const l2 = this.#In(a2);
-    this.#Fn(i2, n2, s2, l2);
+    this.#D.set(s2, o2);
+    const l2 = this.#Gn(a2);
+    this.#jn(i2, n2, r2, l2);
     return o2;
   }
   addHCMFilter(t2, e2) {
     const i2 = `${t2}-${e2}`, n2 = "base";
-    let s2 = this.#kn.get(n2);
-    if (s2?.key === i2) return s2.url;
-    if (s2) {
-      s2.filter?.remove();
-      s2.key = i2;
-      s2.url = "none";
-      s2.filter = null;
+    let r2 = this.#Nn.get(n2);
+    if (r2?.key === i2) return r2.url;
+    if (r2) {
+      r2.filter?.remove();
+      r2.key = i2;
+      r2.url = "none";
+      r2.filter = null;
     } else {
-      s2 = { key: i2, url: "none", filter: null };
-      this.#kn.set(n2, s2);
+      r2 = { key: i2, url: "none", filter: null };
+      this.#Nn.set(n2, r2);
     }
-    if (!t2 || !e2) return s2.url;
-    const r2 = this.#On(t2);
-    t2 = Util.makeHexColor(...r2);
-    const a2 = this.#On(e2);
+    if (!t2 || !e2) return r2.url;
+    const s2 = this.#Wn(t2);
+    t2 = Util.makeHexColor(...s2);
+    const a2 = this.#Wn(e2);
     e2 = Util.makeHexColor(...a2);
-    this.#Rn();
-    if ("#000000" === t2 && "#ffffff" === e2 || t2 === e2) return s2.url;
-    const o2 = new Array(256);
-    for (let t3 = 0; t3 <= 255; t3++) {
-      const e3 = t3 / 255;
-      o2[t3] = e3 <= 0.03928 ? e3 / 12.92 : ((e3 + 0.055) / 1.055) ** 2.4;
-    }
-    const l2 = o2.join(","), h2 = `g_${this.#Sn}_hcm_filter`, c2 = s2.filter = this.#In(h2);
-    this.#Fn(l2, l2, l2, c2);
-    this.#Bn(c2);
+    this.#Vn();
+    if ("#000000" === t2 && "#ffffff" === e2 || t2 === e2) return r2.url;
+    const o2 = Array.from({ length: 256 }, (t3, e3) => computeLuminance(e3 / 255)).join(","), l2 = `g_${this.#Rn}_hcm_filter`, c2 = r2.filter = this.#Gn(l2);
+    this.#jn(o2, o2, o2, c2);
+    this.#$n(c2);
     const getSteps = (t3, e3) => {
-      const i3 = r2[t3] / 255, n3 = a2[t3] / 255, s3 = new Array(e3 + 1);
-      for (let t4 = 0; t4 <= e3; t4++) s3[t4] = i3 + t4 / e3 * (n3 - i3);
-      return s3.join(",");
+      const i3 = s2[t3] / 255, n3 = a2[t3] / 255, r3 = new Array(e3 + 1);
+      for (let t4 = 0; t4 <= e3; t4++) r3[t4] = i3 + t4 / e3 * (n3 - i3);
+      return r3.join(",");
     };
-    this.#Fn(getSteps(0, 5), getSteps(1, 5), getSteps(2, 5), c2);
-    s2.url = this.#Pn(h2);
-    return s2.url;
+    this.#jn(getSteps(0, 5), getSteps(1, 5), getSteps(2, 5), c2);
+    r2.url = this.#zn(l2);
+    return r2.url;
   }
   addSelectionHCMFilter(t2, e2) {
     return this.addHighlightHCMFilter("selection", t2, e2, "HighlightText", "Highlight");
@@ -9094,24 +9299,24 @@ var DOMFilterFactory = class extends BaseFilterFactory {
   addAlphaFilter(t2) {
     let e2 = this.#D.get(t2);
     if (e2) return e2;
-    const [i2] = this.#Mn([t2]), n2 = `alpha_${i2}`;
+    const [i2] = this.#Hn([t2]), n2 = `alpha_${i2}`;
     e2 = this.#D.get(n2);
     if (e2) {
       this.#D.set(t2, e2);
       return e2;
     }
-    const s2 = `g_${this.#Sn}_alpha_map_${this.#_++}`, r2 = this.#Pn(s2);
-    this.#D.set(t2, r2);
-    this.#D.set(n2, r2);
-    const a2 = this.#In(s2);
-    this.#Ln(i2, a2);
-    return r2;
+    const r2 = `g_${this.#Rn}_alpha_map_${this.#_++}`, s2 = this.#zn(r2);
+    this.#D.set(t2, s2);
+    this.#D.set(n2, s2);
+    const a2 = this.#Gn(r2);
+    this.#qn(i2, a2);
+    return s2;
   }
   addLuminosityFilter(t2) {
     let e2, i2, n2 = this.#D.get(t2 || "luminosity");
     if (n2) return n2;
     if (t2) {
-      [e2] = this.#Mn([t2]);
+      [e2] = this.#Hn([t2]);
       i2 = `luminosity_${e2}`;
     } else i2 = "luminosity";
     n2 = this.#D.get(i2);
@@ -9119,129 +9324,129 @@ var DOMFilterFactory = class extends BaseFilterFactory {
       this.#D.set(t2, n2);
       return n2;
     }
-    const s2 = `g_${this.#Sn}_luminosity_map_${this.#_++}`, r2 = this.#Pn(s2);
-    this.#D.set(t2, r2);
-    this.#D.set(i2, r2);
-    const a2 = this.#In(s2);
-    this.#Nn(a2);
-    t2 && this.#Ln(e2, a2);
-    return r2;
+    const r2 = `g_${this.#Rn}_luminosity_map_${this.#_++}`, s2 = this.#zn(r2);
+    this.#D.set(t2, s2);
+    this.#D.set(i2, s2);
+    const a2 = this.#Gn(r2);
+    this.#Xn(a2);
+    t2 && this.#qn(e2, a2);
+    return s2;
   }
   addKnockoutFilter(t2 = 0) {
     const e2 = t2 > 0 ? Math.min(1 / t2, 1e6) : 1e6, i2 = `knockout_${e2}`, n2 = this.#D.get(i2);
     if (n2) return n2;
-    const s2 = `g_${this.#Sn}_knockout_filter_${this.#_++}`, r2 = this.#Pn(s2);
-    this.#D.set(i2, r2);
-    const o2 = this.#In(s2), l2 = this.#Tn.createElementNS(a, "feComponentTransfer");
+    const r2 = `g_${this.#Rn}_knockout_filter_${this.#_++}`, s2 = this.#zn(r2);
+    this.#D.set(i2, s2);
+    const o2 = this.#Gn(r2), l2 = this.#Bn.createElementNS(a, "feComponentTransfer");
     o2.append(l2);
-    const h2 = this.#Tn.createElementNS(a, "feFuncA");
-    h2.setAttribute("type", "linear");
-    h2.setAttribute("slope", `${e2}`);
-    h2.setAttribute("intercept", "0");
-    l2.append(h2);
-    return r2;
+    const c2 = this.#Bn.createElementNS(a, "feFuncA");
+    c2.setAttribute("type", "linear");
+    c2.setAttribute("slope", `${e2}`);
+    c2.setAttribute("intercept", "0");
+    l2.append(c2);
+    return s2;
   }
-  addHighlightHCMFilter(t2, e2, i2, n2, s2) {
-    const r2 = `${e2}-${i2}-${n2}-${s2}`;
-    let a2 = this.#kn.get(t2);
-    if (a2?.key === r2) return a2.url;
+  addHighlightHCMFilter(t2, e2, i2, n2, r2) {
+    const s2 = `${e2}-${i2}-${n2}-${r2}`;
+    let a2 = this.#Nn.get(t2);
+    if (a2?.key === s2) return a2.url;
     if (a2) {
       a2.filter?.remove();
-      a2.key = r2;
+      a2.key = s2;
       a2.url = "none";
       a2.filter = null;
     } else {
-      a2 = { key: r2, url: "none", filter: null };
-      this.#kn.set(t2, a2);
+      a2 = { key: s2, url: "none", filter: null };
+      this.#Nn.set(t2, a2);
     }
     if (!e2 || !i2) return a2.url;
-    const [o2, l2] = [e2, i2].map(this.#On.bind(this));
-    let h2 = Math.round(0.2126 * o2[0] + 0.7152 * o2[1] + 0.0722 * o2[2]), c2 = Math.round(0.2126 * l2[0] + 0.7152 * l2[1] + 0.0722 * l2[2]), [d2, u2] = [n2, s2].map(this.#Un.bind(this));
-    c2 < h2 && ([h2, c2, d2, u2] = [c2, h2, u2, d2]);
-    this.#Rn();
+    const [o2, l2] = [e2, i2].map(this.#Wn.bind(this));
+    let c2 = Math.round(0.2126 * o2[0] + 0.7152 * o2[1] + 0.0722 * o2[2]), h2 = Math.round(0.2126 * l2[0] + 0.7152 * l2[1] + 0.0722 * l2[2]), [d2, u2] = [n2, r2].map(this.#Kn.bind(this));
+    h2 < c2 && ([c2, h2, d2, u2] = [h2, c2, u2, d2]);
+    this.#Vn();
     const getSteps = (t3, e3, i3) => {
-      const n3 = new Array(256), s3 = (c2 - h2) / i3, r3 = t3 / 255, a3 = (e3 - t3) / (255 * i3);
+      const n3 = new Array(256), r3 = (h2 - c2) / i3, s3 = t3 / 255, a3 = (e3 - t3) / (255 * i3);
       let o3 = 0;
       for (let t4 = 0; t4 <= i3; t4++) {
-        const e4 = Math.round(h2 + t4 * s3), i4 = r3 + t4 * a3;
+        const e4 = Math.round(c2 + t4 * r3), i4 = s3 + t4 * a3;
         for (let t5 = o3; t5 <= e4; t5++) n3[t5] = i4;
         o3 = e4 + 1;
       }
       for (let t4 = o3; t4 < 256; t4++) n3[t4] = n3[o3 - 1];
       return n3.join(",");
-    }, p2 = `g_${this.#Sn}_hcm_${t2}_filter`, g2 = a2.filter = this.#In(p2);
-    this.#Bn(g2);
-    this.#Fn(getSteps(d2[0], u2[0], 5), getSteps(d2[1], u2[1], 5), getSteps(d2[2], u2[2], 5), g2);
-    a2.url = this.#Pn(p2);
+    }, p2 = `g_${this.#Rn}_hcm_${t2}_filter`, g2 = a2.filter = this.#Gn(p2);
+    this.#$n(g2);
+    this.#jn(getSteps(d2[0], u2[0], 5), getSteps(d2[1], u2[1], 5), getSteps(d2[2], u2[2], 5), g2);
+    a2.url = this.#zn(p2);
     return a2.url;
   }
   destroy(t2 = false) {
-    if (!t2 || !this.#_n?.size) {
-      this.#Cn?.parentNode.parentNode.remove();
-      this.#Cn = null;
-      this.#En?.clear();
-      this.#En = null;
-      this.#_n?.clear();
-      this.#_n = null;
+    if (!t2 || !this.#Ln?.size) {
+      this.#On?.parentNode.parentNode.remove();
+      this.#On = null;
+      this.#Fn?.clear();
+      this.#Fn = null;
+      this.#Ln?.clear();
+      this.#Ln = null;
       this.#_ = 0;
     }
   }
-  #Nn(t2) {
-    const e2 = this.#Tn.createElementNS(a, "feColorMatrix");
+  #Xn(t2) {
+    const e2 = this.#Bn.createElementNS(a, "feColorMatrix");
     e2.setAttribute("type", "matrix");
     e2.setAttribute("values", "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.3 0.59 0.11 0 0");
     t2.append(e2);
   }
-  #Bn(t2) {
-    const e2 = this.#Tn.createElementNS(a, "feColorMatrix");
+  #$n(t2) {
+    const e2 = this.#Bn.createElementNS(a, "feColorMatrix");
     e2.setAttribute("type", "matrix");
     e2.setAttribute("values", "0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 1 0");
     t2.append(e2);
   }
-  #In(t2) {
-    const e2 = this.#Tn.createElementNS(a, "filter");
+  #Gn(t2) {
+    const e2 = this.#Bn.createElementNS(a, "filter");
     e2.setAttribute("color-interpolation-filters", "sRGB");
     e2.setAttribute("id", t2);
-    this.#Dn.append(e2);
+    this.#Un.append(e2);
     return e2;
   }
-  #Hn(t2, e2, i2) {
-    const n2 = this.#Tn.createElementNS(a, e2);
+  #Yn(t2, e2, i2) {
+    const n2 = this.#Bn.createElementNS(a, e2);
     n2.setAttribute("type", "discrete");
     n2.setAttribute("tableValues", i2);
     t2.append(n2);
   }
-  #Fn(t2, e2, i2, n2) {
-    const s2 = this.#Tn.createElementNS(a, "feComponentTransfer");
-    n2.append(s2);
-    this.#Hn(s2, "feFuncR", t2);
-    this.#Hn(s2, "feFuncG", e2);
-    this.#Hn(s2, "feFuncB", i2);
+  #jn(t2, e2, i2, n2) {
+    const r2 = this.#Bn.createElementNS(a, "feComponentTransfer");
+    n2.append(r2);
+    this.#Yn(r2, "feFuncR", t2);
+    this.#Yn(r2, "feFuncG", e2);
+    this.#Yn(r2, "feFuncB", i2);
   }
-  #Ln(t2, e2) {
-    const i2 = this.#Tn.createElementNS(a, "feComponentTransfer");
+  #qn(t2, e2) {
+    const i2 = this.#Bn.createElementNS(a, "feComponentTransfer");
     e2.append(i2);
-    this.#Hn(i2, "feFuncA", t2);
+    this.#Yn(i2, "feFuncA", t2);
   }
-  #On(t2) {
-    this.#Dn.style.color = "CanvasText";
-    this.#Dn.style.backgroundColor = t2;
-    return getRGB(getComputedStyle(this.#Dn).getPropertyValue("background-color"));
+  #Wn(t2) {
+    this.#Un.style.color = "CanvasText";
+    this.#Un.style.backgroundColor = t2;
+    return getRGB(getComputedStyle(this.#Un).getPropertyValue("background-color"));
   }
-  #zn(t2) {
-    this.#Dn.style.color = "CanvasText";
-    this.#Dn.style.backgroundColor = t2;
-    return getRGBA(getComputedStyle(this.#Dn).getPropertyValue("background-color"));
+  #Jn(t2) {
+    this.#Un.style.color = "CanvasText";
+    this.#Un.style.backgroundColor = t2;
+    return getRGBA(getComputedStyle(this.#Un).getPropertyValue("background-color"));
   }
-  #Rn() {
-    this.#Dn.style.color = "";
-    this.#Dn.style.backgroundColor = "";
+  #Vn() {
+    this.#Un.style.color = "";
+    this.#Un.style.backgroundColor = "";
   }
-  #Un(t2) {
-    const [e2, i2, n2, s2] = this.#zn(t2);
-    if (1 === s2) return [e2, i2, n2];
-    const [r2, a2, o2] = this.#On("Canvas");
-    return [blend(e2, r2, s2), blend(i2, a2, s2), blend(n2, o2, s2)];
+  #Kn(t2) {
+    const [e2, i2, n2, r2] = this.#Jn(t2);
+    if (1 === r2) return [e2, i2, n2];
+    const [s2, a2, o2] = this.#Wn("Canvas");
+    return [blend(e2, s2, r2), blend(i2, a2, r2), blend(n2, o2, r2)];
   }
 };
 function blend(t2, e2, i2) {
@@ -9278,12 +9483,12 @@ var NodeBinaryDataFactory = class extends BaseBinaryDataFactory {
     })(t2);
   }
 };
-function convertBlackAndWhiteToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, width: n2, height: s2, nonBlackColor: r2 = 4294967295, inverseDecode: a2 = false }) {
-  const o2 = FeatureTest.isLittleEndian ? 4278190080 : 255, [l2, h2] = a2 ? [r2, o2] : [o2, r2], c2 = n2 >> 3, d2 = 7 & n2, u2 = l2 ^ h2, p2 = t2.length;
+function convertBlackAndWhiteToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, width: n2, height: r2, nonBlackColor: s2 = 4294967295, inverseDecode: a2 = false }) {
+  const o2 = FeatureTest.isLittleEndian ? 4278190080 : 255, [l2, c2] = a2 ? [s2, o2] : [o2, s2], h2 = n2 >> 3, d2 = 7 & n2, u2 = l2 ^ c2, p2 = t2.length;
   i2 = new Uint32Array(i2.buffer);
   let g2 = 0;
-  for (let n3 = 0; n3 < s2; ++n3) {
-    for (const n5 = e2 + c2; e2 < n5; ++e2, g2 += 8) {
+  for (let n3 = 0; n3 < r2; ++n3) {
+    for (const n5 = e2 + h2; e2 < n5; ++e2, g2 += 8) {
       const n6 = t2[e2];
       i2[g2] = l2 ^ -(n6 >> 7 & 1) & u2;
       i2[g2 + 1] = l2 ^ -(n6 >> 6 & 1) & u2;
@@ -9300,77 +9505,77 @@ function convertBlackAndWhiteToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, width: 
   }
   return { srcPos: e2, destPos: g2 };
 }
-function convertRGBToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, destPos: n2 = 0, width: s2, height: r2 }) {
+function convertRGBToRGBA({ src: t2, srcPos: e2 = 0, dest: i2, destPos: n2 = 0, width: r2, height: s2 }) {
   let a2 = 0;
-  const o2 = s2 * r2 * 3, l2 = o2 >> 2, h2 = new Uint32Array(t2.buffer, e2, l2), c2 = FeatureTest.isLittleEndian ? 4278190080 : 255;
+  const o2 = r2 * s2 * 3, l2 = o2 >> 2, c2 = new Uint32Array(t2.buffer, e2, l2), h2 = FeatureTest.isLittleEndian ? 4278190080 : 255;
   if (FeatureTest.isLittleEndian) {
     for (; a2 < l2 - 2; a2 += 3, n2 += 4) {
-      const t3 = h2[a2], e3 = h2[a2 + 1], s3 = h2[a2 + 2];
-      i2[n2] = t3 | c2;
-      i2[n2 + 1] = t3 >>> 24 | e3 << 8 | c2;
-      i2[n2 + 2] = e3 >>> 16 | s3 << 16 | c2;
-      i2[n2 + 3] = s3 >>> 8 | c2;
+      const t3 = c2[a2], e3 = c2[a2 + 1], r3 = c2[a2 + 2];
+      i2[n2] = t3 | h2;
+      i2[n2 + 1] = t3 >>> 24 | e3 << 8 | h2;
+      i2[n2 + 2] = e3 >>> 16 | r3 << 16 | h2;
+      i2[n2 + 3] = r3 >>> 8 | h2;
     }
-    for (let s3 = 4 * a2, r3 = e2 + o2; s3 < r3; s3 += 3) i2[n2++] = t2[s3] | t2[s3 + 1] << 8 | t2[s3 + 2] << 16 | c2;
+    for (let r3 = 4 * a2, s3 = e2 + o2; r3 < s3; r3 += 3) i2[n2++] = t2[r3] | t2[r3 + 1] << 8 | t2[r3 + 2] << 16 | h2;
   } else {
     for (; a2 < l2 - 2; a2 += 3, n2 += 4) {
-      const t3 = h2[a2], e3 = h2[a2 + 1], s3 = h2[a2 + 2];
-      i2[n2] = t3 | c2;
-      i2[n2 + 1] = t3 << 24 | e3 >>> 8 | c2;
-      i2[n2 + 2] = e3 << 16 | s3 >>> 16 | c2;
-      i2[n2 + 3] = s3 << 8 | c2;
+      const t3 = c2[a2], e3 = c2[a2 + 1], r3 = c2[a2 + 2];
+      i2[n2] = t3 | h2;
+      i2[n2 + 1] = t3 << 24 | e3 >>> 8 | h2;
+      i2[n2 + 2] = e3 << 16 | r3 >>> 16 | h2;
+      i2[n2 + 3] = r3 << 8 | h2;
     }
-    for (let s3 = 4 * a2, r3 = e2 + o2; s3 < r3; s3 += 3) i2[n2++] = t2[s3] << 24 | t2[s3 + 1] << 16 | t2[s3 + 2] << 8 | c2;
+    for (let r3 = 4 * a2, s3 = e2 + o2; r3 < s3; r3 += 3) i2[n2++] = t2[r3] << 24 | t2[r3 + 1] << 16 | t2[r3 + 2] << 8 | h2;
   }
   return { srcPos: e2 + o2, destPos: n2 };
 }
-var St = new class WebGPU {
-  #Gn = null;
-  #jn = null;
-  #Wn = null;
-  #Vn = null;
-  async #$n() {
+var _t = new class WebGPU {
+  #Qn = null;
+  #Zn = null;
+  #tr = null;
+  #er = null;
+  async #ir() {
     if (!globalThis.navigator?.gpu) return false;
     try {
       const t2 = await navigator.gpu.requestAdapter();
       if (!t2) return false;
-      this.#Vn = navigator.gpu.getPreferredCanvasFormat();
-      this.#jn = await t2.requestDevice();
+      this.#er = navigator.gpu.getPreferredCanvasFormat();
+      this.#Zn = await t2.requestDevice();
       return true;
     } catch {
       return false;
     }
   }
   init() {
-    return this.#Gn ||= this.#$n();
+    return this.#Qn ||= this.#ir();
   }
   get isReady() {
-    return null !== this.#jn;
+    return null !== this.#Zn;
   }
   loadMeshShader() {
-    if (!this.#jn || this.#Wn) return;
-    const t2 = this.#jn.createShaderModule({ code: "\nstruct Uniforms {\n  offsetX      : f32,\n  offsetY      : f32,\n  scaleX       : f32,\n  scaleY       : f32,\n  paddedWidth  : f32,\n  paddedHeight : f32,\n  borderSize   : f32,\n  _pad         : f32,\n};\n\n@group(0) @binding(0) var<uniform> u : Uniforms;\n\nstruct VertexInput {\n  @location(0) position : vec2<f32>,\n  @location(1) color    : vec4<f32>,\n};\n\nstruct VertexOutput {\n  @builtin(position) position : vec4<f32>,\n  @location(0)       color    : vec3<f32>,\n};\n\n@vertex\nfn vs_main(in : VertexInput) -> VertexOutput {\n  var out : VertexOutput;\n  let cx = (in.position.x + u.offsetX) * u.scaleX;\n  let cy = (in.position.y + u.offsetY) * u.scaleY;\n  out.position = vec4<f32>(\n    ((cx + u.borderSize) / u.paddedWidth) * 2.0 - 1.0,\n    1.0 - ((cy + u.borderSize) / u.paddedHeight) * 2.0,\n    0.0,\n    1.0\n  );\n  out.color = in.color.rgb;\n  return out;\n}\n\n@fragment\nfn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {\n  return vec4<f32>(in.color, 1.0);\n}\n" });
-    this.#Wn = this.#jn.createRenderPipeline({ layout: "auto", vertex: { module: t2, entryPoint: "vs_main", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }, { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "unorm8x4" }] }] }, fragment: { module: t2, entryPoint: "fs_main", targets: [{ format: this.#Vn }] }, primitive: { topology: "triangle-list" } });
+    if (!this.#Zn || this.#tr) return;
+    const t2 = this.#Zn.createShaderModule({ code: "\nstruct Uniforms {\n  offsetX      : f32,\n  offsetY      : f32,\n  scaleX       : f32,\n  scaleY       : f32,\n  paddedWidth  : f32,\n  paddedHeight : f32,\n  borderSize   : f32,\n  _pad         : f32,\n};\n\n@group(0) @binding(0) var<uniform> u : Uniforms;\n\nstruct VertexInput {\n  @location(0) position : vec2<f32>,\n  @location(1) color    : vec4<f32>,\n};\n\nstruct VertexOutput {\n  @builtin(position) position : vec4<f32>,\n  @location(0)       color    : vec3<f32>,\n};\n\n@vertex\nfn vs_main(in : VertexInput) -> VertexOutput {\n  var out : VertexOutput;\n  let cx = (in.position.x + u.offsetX) * u.scaleX;\n  let cy = (in.position.y + u.offsetY) * u.scaleY;\n  out.position = vec4<f32>(\n    ((cx + u.borderSize) / u.paddedWidth) * 2.0 - 1.0,\n    1.0 - ((cy + u.borderSize) / u.paddedHeight) * 2.0,\n    0.0,\n    1.0\n  );\n  out.color = in.color.rgb;\n  return out;\n}\n\n@fragment\nfn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {\n  return vec4<f32>(in.color, 1.0);\n}\n" });
+    this.#tr = this.#Zn.createRenderPipeline({ layout: "auto", vertex: { module: t2, entryPoint: "vs_main", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }, { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "unorm8x4" }] }] }, fragment: { module: t2, entryPoint: "fs_main", targets: [{ format: this.#er }] }, primitive: { topology: "triangle-list" } });
   }
-  draw(t2, e2, i2, n2, s2, r2, a2, o2) {
+  draw(t2, e2, i2, n2, r2, s2, a2, o2) {
     this.loadMeshShader();
-    const l2 = this.#jn, { offsetX: h2, offsetY: c2, scaleX: d2, scaleY: u2 } = n2, p2 = l2.createBuffer({ size: Math.max(t2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    const l2 = this.#Zn, { offsetX: c2, offsetY: h2, scaleX: d2, scaleY: u2 } = n2, p2 = l2.createBuffer({ size: Math.max(t2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     t2.byteLength > 0 && l2.queue.writeBuffer(p2, 0, t2);
     const g2 = l2.createBuffer({ size: Math.max(e2.byteLength, 4), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     e2.byteLength > 0 && l2.queue.writeBuffer(g2, 0, e2);
     const m2 = l2.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    l2.queue.writeBuffer(m2, 0, new Float32Array([h2, c2, d2, u2, r2, a2, o2, 0]));
-    const f2 = l2.createBindGroup({ layout: this.#Wn.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: m2 } }] }), b2 = new OffscreenCanvas(r2, a2), y2 = b2.getContext("webgpu");
-    y2.configure({ device: l2, format: this.#Vn, alphaMode: s2 ? "opaque" : "premultiplied" });
-    const v2 = s2 ? { r: s2[0] / 255, g: s2[1] / 255, b: s2[2] / 255, a: 1 } : { r: 0, g: 0, b: 0, a: 0 }, w2 = l2.createCommandEncoder(), x2 = w2.beginRenderPass({ colorAttachments: [{ view: y2.getCurrentTexture().createView(), clearValue: v2, loadOp: "clear", storeOp: "store" }] });
+    l2.queue.writeBuffer(m2, 0, new Float32Array([c2, h2, d2, u2, s2, a2, o2, 0]));
+    const f2 = l2.createBindGroup({ layout: this.#tr.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: m2 } }] }), b2 = new OffscreenCanvas(s2, a2), y2 = b2.getContext("webgpu");
+    y2.configure({ device: l2, format: this.#er, alphaMode: r2 ? "opaque" : "premultiplied" });
+    const v2 = r2 ? { r: r2[0] / 255, g: r2[1] / 255, b: r2[2] / 255, a: 1 } : { r: 0, g: 0, b: 0, a: 0 }, w2 = l2.createCommandEncoder(), A2 = w2.beginRenderPass({ colorAttachments: [{ view: y2.getCurrentTexture().createView(), clearValue: v2, loadOp: "clear", storeOp: "store" }] });
     if (i2 > 0) {
-      x2.setPipeline(this.#Wn);
-      x2.setBindGroup(0, f2);
-      x2.setVertexBuffer(0, p2);
-      x2.setVertexBuffer(1, g2);
-      x2.draw(i2);
+      A2.setPipeline(this.#tr);
+      A2.setBindGroup(0, f2);
+      A2.setVertexBuffer(0, p2);
+      A2.setVertexBuffer(1, g2);
+      A2.draw(i2);
     }
-    x2.end();
+    A2.end();
     l2.queue.submit([w2.finish()]);
     p2.destroy();
     g2.destroy();
@@ -9378,14 +9583,14 @@ var St = new class WebGPU {
     return b2.transferToImageBitmap();
   }
 }();
-var Tt = "Fill";
-var _t = "Stroke";
-var kt = "Shading";
+var kt = "Fill";
+var Dt = "Stroke";
+var Pt = "Shading";
 function applyBoundingBox(t2, e2) {
   if (!e2) return;
-  const i2 = e2[2] - e2[0], n2 = e2[3] - e2[1], s2 = new Path2D();
-  s2.rect(e2[0], e2[1], i2, n2);
-  t2.clip(s2);
+  const i2 = e2[2] - e2[0], n2 = e2[3] - e2[1], r2 = new Path2D();
+  r2.rect(e2[0], e2[1], i2, n2);
+  t2.clip(r2);
 }
 var BaseShadingPattern = class {
   matrix = null;
@@ -9419,23 +9624,23 @@ var RadialAxialShadingPattern = class extends BaseShadingPattern {
     return t2 + this._r1 > this._r0 && t2 + this._r0 > this._r1;
   }
   _createGradient(t2, e2 = null) {
-    let i2, n2 = this._p0, s2 = this._p1;
+    let i2, n2 = this._p0, r2 = this._p1;
     if (e2) {
       n2 = n2.slice();
-      s2 = s2.slice();
+      r2 = r2.slice();
       Util.applyTransform(n2, e2);
-      Util.applyTransform(s2, e2);
+      Util.applyTransform(r2, e2);
     }
-    if ("axial" === this._type) i2 = t2.createLinearGradient(n2[0], n2[1], s2[0], s2[1]);
+    if ("axial" === this._type) i2 = t2.createLinearGradient(n2[0], n2[1], r2[0], r2[1]);
     else if ("radial" === this._type) {
-      let r2 = this._r0, a2 = this._r1;
+      let s2 = this._r0, a2 = this._r1;
       if (e2) {
         const t3 = new Float32Array(2);
         Util.singularValueDecompose2dScale(e2, t3);
-        r2 *= t3[0];
+        s2 *= t3[0];
         a2 *= t3[0];
       }
-      i2 = t2.createRadialGradient(n2[0], n2[1], r2, s2[0], s2[1], a2);
+      i2 = t2.createRadialGradient(n2[0], n2[1], s2, r2[0], r2[1], a2);
     }
     for (const t3 of this._colorStops) i2.addColorStop(t3[0], t3[1]);
     return i2;
@@ -9448,48 +9653,48 @@ var RadialAxialShadingPattern = class extends BaseShadingPattern {
       Util.applyTransform(i2, e2);
       Util.applyTransform(n2, e2);
     }
-    let s2 = this._r1, r2 = this._r0;
+    let r2 = this._r1, s2 = this._r0;
     if (e2) {
       const t3 = new Float32Array(2);
       Util.singularValueDecompose2dScale(e2, t3);
-      s2 *= t3[0];
       r2 *= t3[0];
+      s2 *= t3[0];
     }
-    const a2 = t2.createRadialGradient(i2[0], i2[1], s2, n2[0], n2[1], r2), o2 = this._colorStops.map(([t3, e3]) => [1 - t3, e3]).reverse();
+    const a2 = t2.createRadialGradient(i2[0], i2[1], r2, n2[0], n2[1], s2), o2 = this._colorStops.map(([t3, e3]) => [1 - t3, e3]).reverse();
     for (const [t3, e3] of o2) a2.addColorStop(t3, e3);
     return a2;
   }
   getPattern(t2, e2, i2, n2) {
-    let s2;
-    if (n2 === _t || n2 === Tt) {
+    let r2;
+    if (n2 === Dt || n2 === kt) {
       if (this.isOriginBased()) {
         let n3 = Util.transform(i2, e2.baseTransform);
         this.matrix && (n3 = Util.transform(n3, this.matrix));
-        const s3 = 1e-3, r3 = Math.hypot(n3[0], n3[1]), a3 = Math.hypot(n3[2], n3[3]), o3 = (n3[0] * n3[2] + n3[1] * n3[3]) / (r3 * a3);
-        if (Math.abs(o3) < s3) {
+        const r3 = 1e-3, s3 = Math.hypot(n3[0], n3[1]), a3 = Math.hypot(n3[2], n3[3]), o3 = (n3[0] * n3[2] + n3[1] * n3[3]) / (s3 * a3);
+        if (Math.abs(o3) < r3) {
           if (!this.isRadial()) return this._createGradient(t2, n3);
-          if (Math.abs(r3 - a3) < s3) return this._createGradient(t2, n3);
+          if (Math.abs(s3 - a3) < r3) return this._createGradient(t2, n3);
         }
       }
-      const r2 = e2.current.getClippedPathBoundingBox(n2, getCurrentTransform(t2)) || [0, 0, 0, 0], a2 = Math.ceil(r2[2] - r2[0]) || 1, o2 = Math.ceil(r2[3] - r2[1]) || 1, l2 = e2.canvasFactory.create(a2, o2), h2 = l2.context;
-      h2.clearRect(0, 0, h2.canvas.width, h2.canvas.height);
-      h2.beginPath();
-      h2.rect(0, 0, h2.canvas.width, h2.canvas.height);
-      h2.translate(-r2[0], -r2[1]);
-      i2 = Util.transform(i2, [1, 0, 0, 1, r2[0], r2[1]]);
-      h2.transform(...e2.baseTransform);
-      this.matrix && h2.transform(...this.matrix);
-      applyBoundingBox(h2, this._bbox);
+      const s2 = e2.current.getClippedPathBoundingBox(n2, getCurrentTransform(t2)) || [0, 0, 0, 0], a2 = Math.ceil(s2[2] - s2[0]) || 1, o2 = Math.ceil(s2[3] - s2[1]) || 1, l2 = e2.canvasFactory.create(a2, o2), c2 = l2.context;
+      c2.clearRect(0, 0, c2.canvas.width, c2.canvas.height);
+      c2.beginPath();
+      c2.rect(0, 0, c2.canvas.width, c2.canvas.height);
+      c2.translate(-s2[0], -s2[1]);
+      i2 = Util.transform(i2, [1, 0, 0, 1, s2[0], s2[1]]);
+      c2.transform(...e2.baseTransform);
+      this.matrix && c2.transform(...this.matrix);
+      applyBoundingBox(c2, this._bbox);
       if (this.areConic()) {
-        h2.fillStyle = this._createReversedGradient(h2);
-        h2.fill();
+        c2.fillStyle = this._createReversedGradient(c2);
+        c2.fill();
       }
-      h2.fillStyle = this._createGradient(h2);
-      h2.fill();
-      s2 = t2.createPattern(l2.canvas, "no-repeat");
+      c2.fillStyle = this._createGradient(c2);
+      c2.fill();
+      r2 = t2.createPattern(l2.canvas, "no-repeat");
       e2.canvasFactory.destroy(l2);
-      const c2 = new DOMMatrix(i2);
-      s2.setTransform(c2);
+      const h2 = new DOMMatrix(i2);
+      r2.setTransform(h2);
     } else {
       if (this.areConic()) {
         t2.save();
@@ -9499,26 +9704,26 @@ var RadialAxialShadingPattern = class extends BaseShadingPattern {
         t2.restore();
       }
       applyBoundingBox(t2, this._bbox);
-      s2 = this._createGradient(t2);
+      r2 = this._createGradient(t2);
     }
-    return s2;
+    return r2;
   }
 };
-function drawTriangle(t2, e2, i2, n2, s2, r2, a2, o2) {
-  const l2 = e2.coords, h2 = e2.colors, c2 = t2.data, d2 = 4 * t2.width;
+function drawTriangle(t2, e2, i2, n2, r2, s2, a2, o2) {
+  const l2 = e2.coords, c2 = e2.colors, h2 = t2.data, d2 = 4 * t2.width;
   let u2;
   if (l2[2 * i2 + 1] > l2[2 * n2 + 1]) {
     u2 = i2;
     i2 = n2;
     n2 = u2;
-    u2 = r2;
-    r2 = a2;
+    u2 = s2;
+    s2 = a2;
     a2 = u2;
   }
-  if (l2[2 * n2 + 1] > l2[2 * s2 + 1]) {
+  if (l2[2 * n2 + 1] > l2[2 * r2 + 1]) {
     u2 = n2;
-    n2 = s2;
-    s2 = u2;
+    n2 = r2;
+    r2 = u2;
     u2 = a2;
     a2 = o2;
     o2 = u2;
@@ -9527,26 +9732,26 @@ function drawTriangle(t2, e2, i2, n2, s2, r2, a2, o2) {
     u2 = i2;
     i2 = n2;
     n2 = u2;
-    u2 = r2;
-    r2 = a2;
+    u2 = s2;
+    s2 = a2;
     a2 = u2;
   }
-  const p2 = (l2[2 * i2] + e2.offsetX) * e2.scaleX, g2 = (l2[2 * i2 + 1] + e2.offsetY) * e2.scaleY, m2 = (l2[2 * n2] + e2.offsetX) * e2.scaleX, f2 = (l2[2 * n2 + 1] + e2.offsetY) * e2.scaleY, b2 = (l2[2 * s2] + e2.offsetX) * e2.scaleX, y2 = (l2[2 * s2 + 1] + e2.offsetY) * e2.scaleY;
+  const p2 = (l2[2 * i2] + e2.offsetX) * e2.scaleX, g2 = (l2[2 * i2 + 1] + e2.offsetY) * e2.scaleY, m2 = (l2[2 * n2] + e2.offsetX) * e2.scaleX, f2 = (l2[2 * n2 + 1] + e2.offsetY) * e2.scaleY, b2 = (l2[2 * r2] + e2.offsetX) * e2.scaleX, y2 = (l2[2 * r2 + 1] + e2.offsetY) * e2.scaleY;
   if (g2 >= y2) return;
-  const v2 = h2[4 * r2], w2 = h2[4 * r2 + 1], x2 = h2[4 * r2 + 2], A2 = h2[4 * a2], E2 = h2[4 * a2 + 1], C2 = h2[4 * a2 + 2], S2 = h2[4 * o2], T2 = h2[4 * o2 + 1], _2 = h2[4 * o2 + 2], k2 = Math.round(g2), D2 = Math.round(y2);
-  let M2, P2, I2, O2, R2, B2, L2, N2;
+  const v2 = c2[4 * s2], w2 = c2[4 * s2 + 1], A2 = c2[4 * s2 + 2], x2 = c2[4 * a2], E2 = c2[4 * a2 + 1], C2 = c2[4 * a2 + 2], S2 = c2[4 * o2], T2 = c2[4 * o2 + 1], _2 = c2[4 * o2 + 2], k2 = Math.round(g2), D2 = Math.round(y2);
+  let P2, M2, I2, O2, R2, B2, L2, N2;
   for (let t3 = k2; t3 <= D2; t3++) {
     if (t3 < f2) {
       const e4 = t3 < g2 ? 0 : (g2 - t3) / (g2 - f2);
-      M2 = p2 - (p2 - m2) * e4;
-      P2 = v2 - (v2 - A2) * e4;
+      P2 = p2 - (p2 - m2) * e4;
+      M2 = v2 - (v2 - x2) * e4;
       I2 = w2 - (w2 - E2) * e4;
-      O2 = x2 - (x2 - C2) * e4;
+      O2 = A2 - (A2 - C2) * e4;
     } else {
       let e4;
       e4 = t3 > y2 ? 1 : f2 === y2 ? 0 : (f2 - t3) / (f2 - y2);
-      M2 = m2 - (m2 - b2) * e4;
-      P2 = A2 - (A2 - S2) * e4;
+      P2 = m2 - (m2 - b2) * e4;
+      M2 = x2 - (x2 - S2) * e4;
       I2 = E2 - (E2 - T2) * e4;
       O2 = C2 - (C2 - _2) * e4;
     }
@@ -9555,16 +9760,16 @@ function drawTriangle(t2, e2, i2, n2, s2, r2, a2, o2) {
     R2 = p2 - (p2 - b2) * e3;
     B2 = v2 - (v2 - S2) * e3;
     L2 = w2 - (w2 - T2) * e3;
-    N2 = x2 - (x2 - _2) * e3;
-    const i3 = Math.round(Math.min(M2, R2)), n3 = Math.round(Math.max(M2, R2));
-    let s3 = d2 * t3 + 4 * i3;
+    N2 = A2 - (A2 - _2) * e3;
+    const i3 = Math.round(Math.min(P2, R2)), n3 = Math.round(Math.max(P2, R2));
+    let r3 = d2 * t3 + 4 * i3;
     for (let t4 = i3; t4 <= n3; t4++) {
-      e3 = (M2 - t4) / (M2 - R2);
+      e3 = (P2 - t4) / (P2 - R2);
       e3 < 0 ? e3 = 0 : e3 > 1 && (e3 = 1);
-      c2[s3++] = P2 - (P2 - B2) * e3 | 0;
-      c2[s3++] = I2 - (I2 - L2) * e3 | 0;
-      c2[s3++] = O2 - (O2 - N2) * e3 | 0;
-      c2[s3++] = 255;
+      h2[r3++] = M2 - (M2 - B2) * e3 | 0;
+      h2[r3++] = I2 - (I2 - L2) * e3 | 0;
+      h2[r3++] = O2 - (O2 - N2) * e3 | 0;
+      h2[r3++] = 255;
     }
   }
 }
@@ -9578,15 +9783,15 @@ var MeshShadingPattern = class extends BaseShadingPattern {
     this._bbox = t2[6];
     this._background = t2[7];
     !(function loadMeshShader() {
-      St.loadMeshShader();
+      _t.loadMeshShader();
     })();
   }
   _createMeshCanvas(t2, e2, i2) {
-    const n2 = Math.floor(this._bounds[0]), s2 = Math.floor(this._bounds[1]), r2 = Math.ceil(this._bounds[2]) - n2, a2 = Math.ceil(this._bounds[3]) - s2, o2 = Math.min(Math.ceil(Math.abs(r2 * t2[0] * 1.1)), 3e3) || 1, l2 = Math.min(Math.ceil(Math.abs(a2 * t2[1] * 1.1)), 3e3) || 1, h2 = r2 ? r2 / o2 : 1, c2 = a2 ? a2 / l2 : 1, d2 = { coords: this._posData, colors: this._colData, offsetX: -n2, offsetY: -s2, scaleX: 1 / h2, scaleY: 1 / c2 }, u2 = o2 + 4, p2 = l2 + 4, g2 = i2.create(u2, p2);
+    const n2 = Math.floor(this._bounds[0]), r2 = Math.floor(this._bounds[1]), s2 = Math.ceil(this._bounds[2]) - n2, a2 = Math.ceil(this._bounds[3]) - r2, o2 = Math.min(Math.ceil(Math.abs(s2 * t2[0] * 1.1)), 3e3) || 1, l2 = Math.min(Math.ceil(Math.abs(a2 * t2[1] * 1.1)), 3e3) || 1, c2 = s2 ? s2 / o2 : 1, h2 = a2 ? a2 / l2 : 1, d2 = { coords: this._posData, colors: this._colData, offsetX: -n2, offsetY: -r2, scaleX: 1 / c2, scaleY: 1 / h2 }, u2 = o2 + 4, p2 = l2 + 4, g2 = i2.create(u2, p2);
     if ((function isGPUReady() {
-      return St.isReady;
-    })() && this._vertexCount > 48) g2.context.drawImage((function drawMeshWithGPU(t3, e3, i3, n3, s3, r3, a3, o3) {
-      return St.draw(t3, e3, i3, n3, s3, r3, a3, o3);
+      return _t.isReady;
+    })() && this._vertexCount > 48) g2.context.drawImage((function drawMeshWithGPU(t3, e3, i3, n3, r3, s3, a3, o3) {
+      return _t.draw(t3, e3, i3, n3, r3, s3, a3, o3);
     })(this._posData, this._colData, this._vertexCount, d2, e2, u2, p2, 2), 0, 0);
     else {
       const t3 = g2.context.createImageData(o2, l2);
@@ -9602,31 +9807,31 @@ var MeshShadingPattern = class extends BaseShadingPattern {
       for (let e3 = 0, i3 = this._vertexCount; e3 < i3; e3 += 3) drawTriangle(t3, d2, e3, e3 + 1, e3 + 2, e3, e3 + 1, e3 + 2);
       g2.context.putImageData(t3, 2, 2);
     }
-    return { canvas: g2.canvas, offsetX: n2 - 2 * h2, offsetY: s2 - 2 * c2, scaleX: h2, scaleY: c2 };
+    return { canvas: g2.canvas, offsetX: n2 - 2 * c2, offsetY: r2 - 2 * h2, scaleX: c2, scaleY: h2 };
   }
   isModifyingCurrentTransform() {
     return true;
   }
   getPattern(t2, e2, i2, n2) {
     applyBoundingBox(t2, this._bbox);
-    const s2 = new Float32Array(2);
-    if (n2 === kt) Util.singularValueDecompose2dScale(getCurrentTransform(t2), s2);
+    const r2 = new Float32Array(2);
+    if (n2 === Pt) Util.singularValueDecompose2dScale(getCurrentTransform(t2), r2);
     else if (this.matrix) {
-      Util.singularValueDecompose2dScale(this.matrix, s2);
-      const [t3, i3] = s2;
-      Util.singularValueDecompose2dScale(e2.baseTransform, s2);
-      s2[0] *= t3;
-      s2[1] *= i3;
-    } else Util.singularValueDecompose2dScale(e2.baseTransform, s2);
-    const r2 = this._createMeshCanvas(s2, n2 === kt ? null : this._background, e2.canvasFactory);
-    if (n2 !== kt) {
+      Util.singularValueDecompose2dScale(this.matrix, r2);
+      const [t3, i3] = r2;
+      Util.singularValueDecompose2dScale(e2.baseTransform, r2);
+      r2[0] *= t3;
+      r2[1] *= i3;
+    } else Util.singularValueDecompose2dScale(e2.baseTransform, r2);
+    const s2 = this._createMeshCanvas(r2, n2 === Pt ? null : this._background, e2.canvasFactory);
+    if (n2 !== Pt) {
       t2.setTransform(...e2.baseTransform);
       this.matrix && t2.transform(...this.matrix);
     }
-    t2.translate(r2.offsetX, r2.offsetY);
-    t2.scale(r2.scaleX, r2.scaleY);
-    const a2 = t2.createPattern(r2.canvas, "no-repeat");
-    e2.canvasFactory.destroy(r2);
+    t2.translate(s2.offsetX, s2.offsetY);
+    t2.scale(s2.scaleX, s2.scaleY);
+    const a2 = t2.createPattern(s2.canvas, "no-repeat");
+    e2.canvasFactory.destroy(s2);
     return a2;
   }
 };
@@ -9635,8 +9840,8 @@ var DummyShadingPattern = class extends BaseShadingPattern {
     return "hotpink";
   }
 };
-var Dt = 1;
-var Mt = 2;
+var Mt = 1;
+var It = 2;
 var TilingPattern = class _TilingPattern {
   static MAX_PATTERN_SIZE = 3e3;
   constructor(t2, e2, i2, n2) {
@@ -9655,34 +9860,34 @@ var TilingPattern = class _TilingPattern {
     this.patternBaseMatrix = this.matrix ? Util.transform(n2, this.matrix) : n2;
   }
   canSkipPatternCanvas([t2, e2, i2, n2]) {
-    const [s2, r2, a2, o2] = this.bbox, l2 = Math.abs(this.xstep), h2 = Math.abs(this.ystep);
-    if (t2 > l2 + 1e-6 || e2 > h2 + 1e-6) return null;
-    const c2 = Math.floor((i2 - a2) / l2) + 1, d2 = Math.ceil((i2 + t2 - s2) / l2) - 1, u2 = Math.floor((n2 - o2) / h2) + 1, p2 = Math.ceil((n2 + e2 - r2) / h2) - 1;
-    return d2 <= c2 && p2 <= u2 ? [c2, u2] : null;
+    const [r2, s2, a2, o2] = this.bbox, l2 = Math.abs(this.xstep), c2 = Math.abs(this.ystep);
+    if (t2 > l2 + 1e-6 || e2 > c2 + 1e-6) return null;
+    const h2 = Math.floor((i2 - a2) / l2) + 1, d2 = Math.ceil((i2 + t2 - r2) / l2) - 1, u2 = Math.floor((n2 - o2) / c2) + 1, p2 = Math.ceil((n2 + e2 - s2) / c2) - 1;
+    return d2 <= h2 && p2 <= u2 ? [h2, u2] : null;
   }
   updatePatternDims(t2, e2) {
-    const i2 = Util.inverseTransform(this.patternBaseMatrix), n2 = [t2[0], t2[1]], s2 = [t2[2], t2[3]];
+    const i2 = Util.inverseTransform(this.patternBaseMatrix), n2 = [t2[0], t2[1]], r2 = [t2[2], t2[3]];
     Util.applyTransform(n2, i2);
-    Util.applyTransform(s2, i2);
-    e2[0] = Math.abs(s2[0] - n2[0]);
-    e2[1] = Math.abs(s2[1] - n2[1]);
-    e2[2] = Math.min(n2[0], s2[0]);
-    e2[3] = Math.min(n2[1], s2[1]);
+    Util.applyTransform(r2, i2);
+    e2[0] = Math.abs(r2[0] - n2[0]);
+    e2[1] = Math.abs(r2[1] - n2[1]);
+    e2[2] = Math.min(n2[0], r2[0]);
+    e2[3] = Math.min(n2[1], r2[1]);
   }
   _renderTileCanvas(t2, e2, i2, n2) {
-    const [s2, r2, a2, o2] = this.bbox, l2 = t2.canvasFactory.create(i2.size, n2.size), h2 = l2.context, c2 = this.canvasGraphicsFactory.createCanvasGraphics(h2, e2);
-    c2.groupLevel = t2.groupLevel;
-    this.setFillAndStrokeStyleToContext(c2, this.paintType, this.color);
-    h2.translate(-i2.scale * s2, -n2.scale * r2);
-    c2.transform(0, i2.scale, 0, 0, n2.scale, 0, 0);
-    h2.save();
-    c2.dependencyTracker?.save();
-    this.clipBbox(c2, s2, r2, a2, o2);
-    c2.baseTransform = getCurrentTransform(c2.ctx);
-    c2.executeOperatorList(this.operatorList);
-    c2.endDrawing();
-    c2.dependencyTracker?.restore();
-    h2.restore();
+    const [r2, s2, a2, o2] = this.bbox, l2 = t2.canvasFactory.create(i2.size, n2.size), c2 = l2.context, h2 = this.canvasGraphicsFactory.createCanvasGraphics(c2, e2);
+    h2.groupLevel = t2.groupLevel;
+    this.setFillAndStrokeStyleToContext(h2, this.paintType, this.color);
+    c2.translate(-i2.scale * r2, -n2.scale * s2);
+    h2.transform(0, i2.scale, 0, 0, n2.scale, 0, 0);
+    c2.save();
+    h2.dependencyTracker?.save();
+    this.clipBbox(h2, r2, s2, a2, o2);
+    h2.baseTransform = getCurrentTransform(h2.ctx);
+    h2.executeOperatorList(this.operatorList);
+    h2.endDrawing();
+    h2.dependencyTracker?.restore();
+    c2.restore();
     return l2;
   }
   _getCombinedScales() {
@@ -9692,75 +9897,75 @@ var TilingPattern = class _TilingPattern {
     Util.singularValueDecompose2dScale(this.baseTransform, t2);
     return [e2 * t2[0], i2 * t2[1]];
   }
-  drawPattern(t2, e2, i2 = false, [n2, s2], r2) {
-    const [a2, o2, l2, h2] = this.bbox, c2 = t2.dependencyTracker;
-    c2 && (t2.dependencyTracker = new CanvasNestedDependencyTracker(c2, r2));
+  drawPattern(t2, e2, i2 = false, [n2, r2], s2) {
+    const [a2, o2, l2, c2] = this.bbox, h2 = t2.dependencyTracker;
+    h2 && (t2.dependencyTracker = new CanvasNestedDependencyTracker(h2, s2));
     t2.save();
     i2 ? t2.ctx.clip(e2, "evenodd") : t2.ctx.clip(e2);
     t2.ctx.setTransform(...this.patternBaseMatrix);
-    t2.ctx.translate(n2 * this.xstep, s2 * this.ystep);
+    t2.ctx.translate(n2 * this.xstep, r2 * this.ystep);
     if (this.needsIsolation || 1 !== t2.ctx.globalAlpha || "source-over" !== t2.ctx.globalCompositeOperation || t2.inSMaskMode) {
-      const e3 = l2 - a2, i3 = h2 - o2, [n3, s3] = this._getCombinedScales(), c3 = this.getSizeAndScale(e3, this.ctx.canvas.width, n3), d2 = this.getSizeAndScale(i3, this.ctx.canvas.height, s3), u2 = this._renderTileCanvas(t2, r2, c3, d2);
+      const e3 = l2 - a2, i3 = c2 - o2, [n3, r3] = this._getCombinedScales(), h3 = this.getSizeAndScale(e3, this.ctx.canvas.width, n3), d2 = this.getSizeAndScale(i3, this.ctx.canvas.height, r3), u2 = this._renderTileCanvas(t2, s2, h3, d2);
       t2.ctx.drawImage(u2.canvas, a2, o2, e3, i3);
       t2.canvasFactory.destroy(u2);
     } else {
       this.setFillAndStrokeStyleToContext(t2, this.paintType, this.color);
-      this.clipBbox(t2, a2, o2, l2, h2);
+      this.clipBbox(t2, a2, o2, l2, c2);
       t2.baseTransformStack.push(t2.baseTransform);
       t2.baseTransform = getCurrentTransform(t2.ctx);
       t2.executeOperatorList(this.operatorList);
       t2.baseTransform = t2.baseTransformStack.pop();
     }
     t2.restore();
-    c2 && (t2.dependencyTracker = c2);
+    h2 && (t2.dependencyTracker = h2);
   }
   createPatternCanvas(t2, e2) {
-    const [i2, n2, s2, r2] = this.bbox, a2 = s2 - i2, o2 = r2 - n2;
-    let { xstep: l2, ystep: h2 } = this;
+    const [i2, n2, r2, s2] = this.bbox, a2 = r2 - i2, o2 = s2 - n2;
+    let { xstep: l2, ystep: c2 } = this;
     l2 = Math.abs(l2);
-    h2 = Math.abs(h2);
+    c2 = Math.abs(c2);
     info("TilingType: " + this.tilingType);
-    const [c2, d2] = this._getCombinedScales();
+    const [h2, d2] = this._getCombinedScales();
     let u2 = a2, p2 = o2, g2 = false, m2 = false;
-    Math.ceil(l2 * c2) >= Math.ceil(a2 * c2) ? u2 = l2 : g2 = true;
-    Math.ceil(h2 * d2) >= Math.ceil(o2 * d2) ? p2 = h2 : m2 = true;
-    const f2 = this.getSizeAndScale(u2, this.ctx.canvas.width, c2), b2 = this.getSizeAndScale(p2, this.ctx.canvas.height, d2), y2 = this._renderTileCanvas(t2, e2, f2, b2);
+    Math.ceil(l2 * h2) >= Math.ceil(a2 * h2) ? u2 = l2 : g2 = true;
+    Math.ceil(c2 * d2) >= Math.ceil(o2 * d2) ? p2 = c2 : m2 = true;
+    const f2 = this.getSizeAndScale(u2, this.ctx.canvas.width, h2), b2 = this.getSizeAndScale(p2, this.ctx.canvas.height, d2), y2 = this._renderTileCanvas(t2, e2, f2, b2);
     if (g2 || m2) {
       const e3 = y2.canvas;
       g2 && (u2 = l2);
-      m2 && (p2 = h2);
-      const s3 = this.getSizeAndScale(u2, this.ctx.canvas.width, c2), r3 = this.getSizeAndScale(p2, this.ctx.canvas.height, d2), f3 = s3.size, b3 = r3.size, v2 = t2.canvasFactory.create(f3, b3), w2 = v2.context, x2 = g2 ? Math.floor(a2 / l2) : 0, A2 = m2 ? Math.floor(o2 / h2) : 0;
-      for (let t3 = 0; t3 <= x2; t3++) for (let i3 = 0; i3 <= A2; i3++) w2.drawImage(e3, f3 * t3, b3 * i3, f3, b3, 0, 0, f3, b3);
+      m2 && (p2 = c2);
+      const r3 = this.getSizeAndScale(u2, this.ctx.canvas.width, h2), s3 = this.getSizeAndScale(p2, this.ctx.canvas.height, d2), f3 = r3.size, b3 = s3.size, v2 = t2.canvasFactory.create(f3, b3), w2 = v2.context, A2 = g2 ? Math.floor(a2 / l2) : 0, x2 = m2 ? Math.floor(o2 / c2) : 0;
+      for (let t3 = 0; t3 <= A2; t3++) for (let i3 = 0; i3 <= x2; i3++) w2.drawImage(e3, f3 * t3, b3 * i3, f3, b3, 0, 0, f3, b3);
       t2.canvasFactory.destroy(y2);
-      return { canvas: v2.canvas, canvasEntry: v2, scaleX: s3.scale, scaleY: r3.scale, offsetX: i2, offsetY: n2 };
+      return { canvas: v2.canvas, canvasEntry: v2, scaleX: r3.scale, scaleY: s3.scale, offsetX: i2, offsetY: n2 };
     }
     return { canvas: y2.canvas, canvasEntry: y2, scaleX: f2.scale, scaleY: b2.scale, offsetX: i2, offsetY: n2 };
   }
   getSizeAndScale(t2, e2, i2) {
     const n2 = Math.max(_TilingPattern.MAX_PATTERN_SIZE, e2);
-    let s2 = Math.ceil(t2 * i2);
-    s2 >= n2 ? s2 = n2 : i2 = s2 / t2;
-    return { scale: i2, size: s2 };
+    let r2 = Math.ceil(t2 * i2);
+    r2 >= n2 ? r2 = n2 : i2 = r2 / t2;
+    return { scale: i2, size: r2 };
   }
-  clipBbox(t2, e2, i2, n2, s2) {
-    const r2 = n2 - e2, a2 = s2 - i2, o2 = new Path2D();
-    o2.rect(e2, i2, r2, a2);
-    Util.axialAlignedBoundingBox([e2, i2, n2, s2], getCurrentTransform(t2.ctx), t2.current.minMax);
+  clipBbox(t2, e2, i2, n2, r2) {
+    const s2 = n2 - e2, a2 = r2 - i2, o2 = new Path2D();
+    o2.rect(e2, i2, s2, a2);
+    Util.axialAlignedBoundingBox([e2, i2, n2, r2], getCurrentTransform(t2.ctx), t2.current.minMax);
     t2.ctx.clip(o2);
     t2.current.updateClipFromPath();
   }
   setFillAndStrokeStyleToContext(t2, e2, i2) {
-    const n2 = t2.ctx, s2 = t2.current;
-    s2.patternFill = s2.patternStroke = false;
+    const n2 = t2.ctx, r2 = t2.current;
+    r2.patternFill = r2.patternStroke = false;
     switch (e2) {
-      case Dt:
-        const { fillStyle: t3, strokeStyle: r2 } = this.ctx;
-        n2.fillStyle = s2.fillColor = t3;
-        n2.strokeStyle = s2.strokeColor = r2;
-        break;
       case Mt:
+        const { fillStyle: t3, strokeStyle: s2 } = this.ctx;
+        n2.fillStyle = r2.fillColor = t3;
+        n2.strokeStyle = r2.strokeColor = s2;
+        break;
+      case It:
         n2.fillStyle = n2.strokeStyle = i2;
-        s2.fillColor = s2.strokeColor = i2;
+        r2.fillColor = r2.strokeColor = i2;
         break;
       default:
         throw new FormatError(`Unsupported paint type: ${e2}`);
@@ -9769,9 +9974,9 @@ var TilingPattern = class _TilingPattern {
   isModifyingCurrentTransform() {
     return false;
   }
-  getPattern(t2, e2, i2, n2, s2) {
-    const r2 = n2 !== kt ? Util.transform(i2, this.patternBaseMatrix) : i2, a2 = this.createPatternCanvas(e2, s2);
-    let o2 = new DOMMatrix(r2);
+  getPattern(t2, e2, i2, n2, r2) {
+    const s2 = n2 !== Pt ? Util.transform(i2, this.patternBaseMatrix) : i2, a2 = this.createPatternCanvas(e2, r2);
+    let o2 = new DOMMatrix(s2);
     o2 = o2.translate(a2.offsetX, a2.offsetY);
     o2 = o2.scale(1 / a2.scaleX, 1 / a2.scaleY);
     const l2 = t2.createPattern(a2.canvas, "repeat");
@@ -9780,19 +9985,18 @@ var TilingPattern = class _TilingPattern {
     return l2;
   }
 };
-var Pt = 16;
-var It = new DOMMatrix();
-var Ft = new Float32Array(2);
+var Ft = 16;
+var Ot = new Float32Array(2);
 function mirrorContextOperations(t2, e2) {
   if (t2._removeMirroring) throw new Error("Context is already forwarding operations.");
   const i2 = /* @__PURE__ */ new Map();
   for (const n2 of ["save", "restore", "rotate", "scale", "translate", "transform", "setTransform", "resetTransform", "clip", "moveTo", "lineTo", "bezierCurveTo", "quadraticCurveTo", "arc", "arcTo", "ellipse", "rect", "roundRect", "closePath", "beginPath"]) {
-    const s2 = t2[n2];
-    if ("function" == typeof s2 && "function" == typeof e2[n2]) {
-      i2.set(n2, s2);
+    const r2 = t2[n2];
+    if ("function" == typeof r2 && "function" == typeof e2[n2]) {
+      i2.set(n2, r2);
       t2[n2] = function(...t3) {
         e2[n2](...t3);
-        return s2.apply(this, t3);
+        return r2.apply(this, t3);
       };
     }
   }
@@ -9801,24 +10005,24 @@ function mirrorContextOperations(t2, e2) {
     delete t2._removeMirroring;
   };
 }
-function drawImageAtIntegerCoords(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2) {
-  const [c2, d2, u2, p2, g2, m2] = getCurrentTransform(t2);
+function drawImageAtIntegerCoords(t2, e2, i2, n2, r2, s2, a2, o2, l2, c2) {
+  const [h2, d2, u2, p2, g2, m2] = getCurrentTransform(t2);
   if (0 === d2 && 0 === u2) {
-    const f2 = a2 * c2 + g2, b2 = Math.round(f2), y2 = o2 * p2 + m2, v2 = Math.round(y2), w2 = (a2 + l2) * c2 + g2, x2 = Math.abs(Math.round(w2) - b2) || 1, A2 = (o2 + h2) * p2 + m2, E2 = Math.abs(Math.round(A2) - v2) || 1;
-    t2.setTransform(Math.sign(c2), 0, 0, Math.sign(p2), b2, v2);
-    t2.drawImage(e2, i2, n2, s2, r2, 0, 0, x2, E2);
-    t2.setTransform(c2, d2, u2, p2, g2, m2);
-    return [x2, E2];
+    const f2 = a2 * h2 + g2, b2 = Math.round(f2), y2 = o2 * p2 + m2, v2 = Math.round(y2), w2 = (a2 + l2) * h2 + g2, A2 = Math.abs(Math.round(w2) - b2) || 1, x2 = (o2 + c2) * p2 + m2, E2 = Math.abs(Math.round(x2) - v2) || 1;
+    t2.setTransform(Math.sign(h2), 0, 0, Math.sign(p2), b2, v2);
+    t2.drawImage(e2, i2, n2, r2, s2, 0, 0, A2, E2);
+    t2.setTransform(h2, d2, u2, p2, g2, m2);
+    return [A2, E2];
   }
-  if (0 === c2 && 0 === p2) {
-    const f2 = o2 * u2 + g2, b2 = Math.round(f2), y2 = a2 * d2 + m2, v2 = Math.round(y2), w2 = (o2 + h2) * u2 + g2, x2 = Math.abs(Math.round(w2) - b2) || 1, A2 = (a2 + l2) * d2 + m2, E2 = Math.abs(Math.round(A2) - v2) || 1;
+  if (0 === h2 && 0 === p2) {
+    const f2 = o2 * u2 + g2, b2 = Math.round(f2), y2 = a2 * d2 + m2, v2 = Math.round(y2), w2 = (o2 + c2) * u2 + g2, A2 = Math.abs(Math.round(w2) - b2) || 1, x2 = (a2 + l2) * d2 + m2, E2 = Math.abs(Math.round(x2) - v2) || 1;
     t2.setTransform(0, Math.sign(d2), Math.sign(u2), 0, b2, v2);
-    t2.drawImage(e2, i2, n2, s2, r2, 0, 0, E2, x2);
-    t2.setTransform(c2, d2, u2, p2, g2, m2);
-    return [E2, x2];
+    t2.drawImage(e2, i2, n2, r2, s2, 0, 0, E2, A2);
+    t2.setTransform(h2, d2, u2, p2, g2, m2);
+    return [E2, A2];
   }
-  t2.drawImage(e2, i2, n2, s2, r2, a2, o2, l2, h2);
-  return [Math.hypot(c2, d2) * l2, Math.hypot(u2, p2) * h2];
+  t2.drawImage(e2, i2, n2, r2, s2, a2, o2, l2, c2);
+  return [Math.hypot(h2, d2) * l2, Math.hypot(u2, p2) * c2];
 }
 var CanvasExtraState = class {
   alphaIsShape = false;
@@ -9826,7 +10030,7 @@ var CanvasExtraState = class {
   fontSizeScale = 1;
   textMatrix = null;
   textMatrixScale = 1;
-  fontMatrix = r;
+  fontMatrix = s;
   leading = 0;
   x = 0;
   y = 0;
@@ -9835,7 +10039,7 @@ var CanvasExtraState = class {
   charSpacing = 0;
   wordSpacing = 0;
   textHScale = 1;
-  textRenderingMode = x;
+  textRenderingMode = A;
   textRise = 0;
   fillColor = "#000000";
   strokeColor = "#000000";
@@ -9847,7 +10051,7 @@ var CanvasExtraState = class {
   lineWidth = 1;
   activeSMask = null;
   transferMaps = "none";
-  minMax = s.slice();
+  minMax = r.slice();
   constructor(t2, e2) {
     this.clipBox = new Float32Array([0, 0, t2, e2]);
   }
@@ -9858,12 +10062,12 @@ var CanvasExtraState = class {
     t2.tilingPatternDims = this.tilingPatternDims?.slice();
     return t2;
   }
-  getPathBoundingBox(t2 = Tt, e2 = null) {
+  getPathBoundingBox(t2 = kt, e2 = null) {
     const i2 = this.minMax.slice();
-    if (t2 === _t) {
+    if (t2 === Dt) {
       e2 || unreachable("Stroke bounding box must include transform.");
-      Util.singularValueDecompose2dScale(e2, Ft);
-      const t3 = Ft[0] * this.lineWidth / 2, n2 = Ft[1] * this.lineWidth / 2;
+      Util.singularValueDecompose2dScale(e2, Ot);
+      const t3 = Ot[0] * this.lineWidth / 2, n2 = Ot[1] * this.lineWidth / 2;
       i2[0] -= t3;
       i2[1] -= n2;
       i2[2] += t3;
@@ -9880,39 +10084,39 @@ var CanvasExtraState = class {
   }
   startNewPathAndClipBox(t2) {
     this.clipBox.set(t2, 0);
-    this.minMax.set(s, 0);
+    this.minMax.set(r, 0);
   }
-  getClippedPathBoundingBox(t2 = Tt, e2 = null) {
+  getClippedPathBoundingBox(t2 = kt, e2 = null) {
     return Util.intersect(this.clipBox, this.getPathBoundingBox(t2, e2));
   }
 };
 function putBinaryImageData(t2, e2) {
-  const { width: i2, height: n2, kind: s2 } = e2, r2 = n2 % Pt, a2 = (n2 - r2) / Pt, o2 = 0 === r2 ? a2 : a2 + 1, l2 = t2.createImageData(i2, Pt);
-  let h2 = 0;
-  const c2 = e2.data, d2 = l2.data;
+  const { width: i2, height: n2, kind: r2 } = e2, s2 = n2 % Ft, a2 = (n2 - s2) / Ft, o2 = 0 === s2 ? a2 : a2 + 1, l2 = t2.createImageData(i2, Ft);
+  let c2 = 0;
+  const h2 = e2.data, d2 = l2.data;
   let u2;
-  if (s2 === _.GRAYSCALE_1BPP) for (u2 = 0; u2 < o2; u2++) {
-    ({ srcPos: h2 } = convertBlackAndWhiteToRGBA({ src: c2, srcPos: h2, dest: d2, width: i2, height: u2 < a2 ? Pt : r2 }));
-    t2.putImageData(l2, 0, u2 * Pt);
+  if (r2 === _.GRAYSCALE_1BPP) for (u2 = 0; u2 < o2; u2++) {
+    ({ srcPos: c2 } = convertBlackAndWhiteToRGBA({ src: h2, srcPos: c2, dest: d2, width: i2, height: u2 < a2 ? Ft : s2 }));
+    t2.putImageData(l2, 0, u2 * Ft);
   }
-  else if (s2 === _.RGBA_32BPP) {
-    let e3 = 0, n3 = i2 * Pt * 4;
+  else if (r2 === _.RGBA_32BPP) {
+    let e3 = 0, n3 = i2 * Ft * 4;
     for (u2 = 0; u2 < a2; u2++) {
-      d2.set(c2.subarray(h2, h2 + n3));
-      h2 += n3;
+      d2.set(h2.subarray(c2, c2 + n3));
+      c2 += n3;
       t2.putImageData(l2, 0, e3);
-      e3 += Pt;
+      e3 += Ft;
     }
     if (u2 < o2) {
-      n3 = i2 * r2 * 4;
-      d2.set(c2.subarray(h2, h2 + n3));
+      n3 = i2 * s2 * 4;
+      d2.set(h2.subarray(c2, c2 + n3));
       t2.putImageData(l2, 0, e3);
     }
   } else {
-    if (s2 !== _.RGB_24BPP) throw new Error(`bad image kind: ${s2}`);
+    if (r2 !== _.RGB_24BPP) throw new Error(`bad image kind: ${r2}`);
     for (u2 = 0; u2 < o2; u2++) {
-      ({ srcPos: h2 } = convertRGBToRGBA({ src: c2, srcPos: h2, dest: new Uint32Array(d2.buffer), width: i2, height: u2 < a2 ? Pt : r2 }));
-      t2.putImageData(l2, 0, u2 * Pt);
+      ({ srcPos: c2 } = convertRGBToRGBA({ src: h2, srcPos: c2, dest: new Uint32Array(d2.buffer), width: i2, height: u2 < a2 ? Ft : s2 }));
+      t2.putImageData(l2, 0, u2 * Ft);
     }
   }
 }
@@ -9921,12 +10125,12 @@ function putBinaryImageMask(t2, e2) {
     t2.drawImage(e2.bitmap, 0, 0);
     return;
   }
-  const { width: i2, height: n2 } = e2, s2 = n2 % Pt, r2 = (n2 - s2) / Pt, a2 = 0 === s2 ? r2 : r2 + 1, o2 = t2.createImageData(i2, Pt);
+  const { width: i2, height: n2 } = e2, r2 = n2 % Ft, s2 = (n2 - r2) / Ft, a2 = 0 === r2 ? s2 : s2 + 1, o2 = t2.createImageData(i2, Ft);
   let l2 = 0;
-  const h2 = e2.data, c2 = o2.data;
+  const c2 = e2.data, h2 = o2.data;
   for (let e3 = 0; e3 < a2; e3++) {
-    ({ srcPos: l2 } = convertBlackAndWhiteToRGBA({ src: h2, srcPos: l2, dest: c2, width: i2, height: e3 < r2 ? Pt : s2, nonBlackColor: 0 }));
-    t2.putImageData(o2, 0, e3 * Pt);
+    ({ srcPos: l2 } = convertBlackAndWhiteToRGBA({ src: c2, srcPos: l2, dest: h2, width: i2, height: e3 < s2 ? Ft : r2, nonBlackColor: 0 }));
+    t2.putImageData(o2, 0, e3 * Ft);
   }
 }
 function copyCtxState(t2, e2) {
@@ -9956,26 +10160,27 @@ function resetCtxToDefault(t2) {
 }
 function getImageSmoothingEnabled(t2, e2) {
   if (e2) return true;
-  Util.singularValueDecompose2dScale(t2, Ft);
+  Util.singularValueDecompose2dScale(t2, Ot);
   const i2 = Math.fround(OutputScale.pixelRatio * PixelsPerInch.PDF_TO_CSS_UNITS);
-  return Ft[0] <= i2 && Ft[1] <= i2;
+  return Ot[0] <= i2 && Ot[1] <= i2;
 }
-var Ot = ["butt", "round", "square"];
-var Rt = ["miter", "round", "bevel"];
-var Bt = {};
+var Rt = ["butt", "round", "square"];
+var Bt = ["miter", "round", "bevel"];
 var Lt = {};
+var Nt = {};
 var CanvasGraphics = class _CanvasGraphics {
-  #qn = 0;
-  #Kn = 0;
-  #Xn = null;
-  #Yn = null;
-  #Jn = null;
-  #Qn = null;
-  #Zn = 1;
-  #ts;
-  #es = null;
-  #is = [];
-  constructor(t2, e2, i2, n2, s2, { optionalContentConfig: r2, markedContentStack: a2 = null }, o2, l2, h2, c2) {
+  static #nr = null;
+  #rr = 0;
+  #sr = 0;
+  #ar = null;
+  #or = null;
+  #lr = null;
+  #cr = null;
+  #hr = 1;
+  #dr;
+  #ur = null;
+  #pr = [];
+  constructor(t2, e2, i2, n2, r2, { optionalContentConfig: s2, markedContentStack: a2 = null }, o2, l2, c2, h2) {
     this.ctx = t2;
     this.current = new CanvasExtraState(this.ctx.canvas.width, this.ctx.canvas.height);
     this.stateStack = [];
@@ -9984,7 +10189,7 @@ var CanvasGraphics = class _CanvasGraphics {
     this.commonObjs = e2;
     this.objs = i2;
     this.canvasFactory = n2;
-    this.filterFactory = s2;
+    this.filterFactory = r2;
     this.groupStack = [];
     this.baseTransform = null;
     this.baseTransformStack = [];
@@ -10000,7 +10205,7 @@ var CanvasGraphics = class _CanvasGraphics {
     this.suspendedCtx = null;
     this.contentVisible = true;
     this.markedContentStack = a2 || [];
-    this.optionalContentConfig = r2;
+    this.optionalContentConfig = s2;
     this.cachedPatterns = /* @__PURE__ */ new Map();
     this.annotationCanvasMap = o2;
     this.viewportScale = 1;
@@ -10010,8 +10215,8 @@ var CanvasGraphics = class _CanvasGraphics {
     this._cachedScaleForStroking = [-1, 0];
     this._cachedGetSinglePixelWidth = null;
     this._cachedBitmapsMap = /* @__PURE__ */ new Map();
-    this.dependencyTracker = h2 ?? null;
-    this.imagesTracker = c2 ?? null;
+    this.dependencyTracker = c2 ?? null;
+    this.imagesTracker = h2 ?? null;
   }
   getObject(t2, e2, i2 = null) {
     if ("string" == typeof e2) {
@@ -10021,12 +10226,12 @@ var CanvasGraphics = class _CanvasGraphics {
     return i2;
   }
   beginDrawing({ transform: t2, viewport: e2, transparency: i2 = false, background: n2 = null }) {
-    const s2 = this.ctx.canvas.width, r2 = this.ctx.canvas.height, a2 = this.ctx.fillStyle;
+    const r2 = this.ctx.canvas.width, s2 = this.ctx.canvas.height, a2 = this.ctx.fillStyle;
     this.ctx.fillStyle = n2 || "#ffffff";
-    this.ctx.fillRect(0, 0, s2, r2);
+    this.ctx.fillRect(0, 0, r2, s2);
     this.ctx.fillStyle = a2;
     if (i2) {
-      const t3 = this.transparentCanvasEntry = this.canvasFactory.create(s2, r2);
+      const t3 = this.transparentCanvasEntry = this.canvasFactory.create(r2, s2);
       this.compositeCtx = this.ctx;
       ({ canvas: this.transparentCanvas, context: this.ctx } = t3);
       this.ctx.save();
@@ -10043,12 +10248,12 @@ var CanvasGraphics = class _CanvasGraphics {
     this.viewportScale = e2.scale;
     this.baseTransform = getCurrentTransform(this.ctx);
   }
-  executeOperatorList(t2, e2, i2, n2, s2) {
-    const r2 = t2.argsArray, a2 = t2.fnArray;
+  executeOperatorList(t2, e2, i2, n2, r2) {
+    const s2 = t2.argsArray, a2 = t2.fnArray;
     let o2 = e2 || 0;
-    const l2 = r2.length;
+    const l2 = s2.length;
     if (l2 === o2) return o2;
-    const h2 = l2 - o2 > 10 && "function" == typeof i2, c2 = h2 ? Date.now() + 15 : 0;
+    const c2 = l2 - o2 > 10 && "function" == typeof i2, h2 = c2 ? Date.now() + 15 : 0;
     let d2 = 0;
     const u2 = this.commonObjs, p2 = this.objs;
     let g2, m2;
@@ -10063,9 +10268,9 @@ var CanvasGraphics = class _CanvasGraphics {
           continue;
         }
       }
-      if (!s2 || s2(o2)) {
+      if (!r2 || r2(o2)) {
         g2 = a2[o2];
-        m2 = r2[o2] ?? null;
+        m2 = s2[o2] ?? null;
         if (g2 !== B.dependency) null === m2 ? this[g2](o2) : this[g2](o2, ...m2);
         else for (const t3 of m2) {
           this.dependencyTracker?.recordNamedData(t3, o2);
@@ -10078,8 +10283,8 @@ var CanvasGraphics = class _CanvasGraphics {
       }
       o2++;
       if (o2 === l2) return o2;
-      if (h2 && ++d2 > 10) {
-        if (Date.now() > c2) {
+      if (c2 && ++d2 > 10) {
+        if (Date.now() > h2) {
           i2();
           return o2;
         }
@@ -10087,7 +10292,7 @@ var CanvasGraphics = class _CanvasGraphics {
       }
     }
   }
-  #ns() {
+  #gr() {
     for (; this.stateStack.length || this.inSMaskMode; ) this.restore();
     this.current.activeSMask = null;
     this.ctx.restore();
@@ -10103,31 +10308,31 @@ var CanvasGraphics = class _CanvasGraphics {
     }
   }
   endDrawing() {
-    this.#ns();
+    this.#gr();
     for (const t2 of this.smaskGroupCanvases) this.canvasFactory.destroy(t2);
     this.smaskGroupCanvases.length = 0;
     this._clearPreparedSMask();
     this.tempSMask = null;
     this.smaskStack.length = 0;
-    for (const t2 of this.#is) this.#ss(t2);
-    this.#is.length = 0;
-    this.#Xn = null;
-    this.#Yn = null;
-    this.#Jn = null;
-    this.#Qn = null;
-    this.#Zn = 1;
-    this.#es = null;
-    this.#Kn = 0;
-    this.#qn = 0;
+    for (const t2 of this.#pr) this.#mr(t2);
+    this.#pr.length = 0;
+    this.#ar = null;
+    this.#or = null;
+    this.#lr = null;
+    this.#cr = null;
+    this.#hr = 1;
+    this.#ur = null;
+    this.#sr = 0;
+    this.#rr = 0;
     this.cachedPatterns.clear();
     for (const t2 of this._cachedBitmapsMap.values()) {
       for (const e2 of t2.values()) "undefined" != typeof HTMLCanvasElement && e2 instanceof HTMLCanvasElement && (e2.width = e2.height = 0);
       t2.clear();
     }
     this._cachedBitmapsMap.clear();
-    this.#rs();
+    this.#fr();
   }
-  #rs() {
+  #fr() {
     if (this.pageColors) {
       const t2 = this.filterFactory.addHCMFilter(this.pageColors.foreground, this.pageColors.background);
       if ("none" !== t2) {
@@ -10139,92 +10344,92 @@ var CanvasGraphics = class _CanvasGraphics {
     }
   }
   _scaleImage(t2, e2) {
-    const i2 = t2.width ?? t2.displayWidth, n2 = t2.height ?? t2.displayHeight, s2 = [];
-    let r2 = Math.max(Math.hypot(e2[0], e2[1]), 1), a2 = Math.max(Math.hypot(e2[2], e2[3]), 1), o2 = i2, l2 = n2;
-    for (; r2 > 2 && o2 > 1 || a2 > 2 && l2 > 1; ) {
+    const i2 = t2.width ?? t2.displayWidth, n2 = t2.height ?? t2.displayHeight, r2 = [];
+    let s2 = Math.max(Math.hypot(e2[0], e2[1]), 1), a2 = Math.max(Math.hypot(e2[2], e2[3]), 1), o2 = i2, l2 = n2;
+    for (; s2 > 2 && o2 > 1 || a2 > 2 && l2 > 1; ) {
       let t3 = o2, e3 = l2;
-      if (r2 > 2 && o2 > 1) {
+      if (s2 > 2 && o2 > 1) {
         t3 = Math.ceil(o2 / 2);
-        r2 /= o2 / t3;
+        s2 /= o2 / t3;
       }
       if (a2 > 2 && l2 > 1) {
         e3 = Math.ceil(l2 / 2);
         a2 /= l2 / e3;
       }
-      s2.push({ newWidth: t3, newHeight: e3 });
+      r2.push({ newWidth: t3, newHeight: e3 });
       o2 = t3;
       l2 = e3;
     }
-    if (0 === s2.length) return { img: t2, paintWidth: i2, paintHeight: n2, tmpCanvas: null };
-    if (1 === s2.length) {
-      const { newWidth: e3, newHeight: r3 } = s2[0], a3 = this.canvasFactory.create(e3, r3);
-      a3.context.drawImage(t2, 0, 0, i2, n2, 0, 0, e3, r3);
-      return { img: a3.canvas, paintWidth: e3, paintHeight: r3, tmpCanvas: a3 };
+    if (0 === r2.length) return { img: t2, paintWidth: i2, paintHeight: n2, tmpCanvas: null };
+    if (1 === r2.length) {
+      const { newWidth: e3, newHeight: s3 } = r2[0], a3 = this.canvasFactory.create(e3, s3);
+      a3.context.drawImage(t2, 0, 0, i2, n2, 0, 0, e3, s3);
+      return { img: a3.canvas, paintWidth: e3, paintHeight: s3, tmpCanvas: a3 };
     }
-    let h2 = this.canvasFactory.create(1, 1), c2 = this.canvasFactory.create(1, 1), d2 = i2, u2 = n2, p2 = t2;
-    for (const { newWidth: t3, newHeight: e3 } of s2) {
-      this.canvasFactory.reset(c2, t3, e3);
-      c2.context.drawImage(p2, 0, 0, d2, u2, 0, 0, t3, e3);
-      [h2, c2] = [c2, h2];
-      p2 = h2.canvas;
+    let c2 = this.canvasFactory.create(1, 1), h2 = this.canvasFactory.create(1, 1), d2 = i2, u2 = n2, p2 = t2;
+    for (const { newWidth: t3, newHeight: e3 } of r2) {
+      this.canvasFactory.reset(h2, t3, e3);
+      h2.context.drawImage(p2, 0, 0, d2, u2, 0, 0, t3, e3);
+      [c2, h2] = [h2, c2];
+      p2 = c2.canvas;
       d2 = t3;
       u2 = e3;
     }
-    this.canvasFactory.destroy(c2);
-    return { img: h2.canvas, paintWidth: d2, paintHeight: u2, tmpCanvas: h2 };
+    this.canvasFactory.destroy(h2);
+    return { img: c2.canvas, paintWidth: d2, paintHeight: u2, tmpCanvas: c2 };
   }
   _createMaskCanvas(t2, e2) {
-    const i2 = this.ctx, { width: n2, height: r2 } = e2, a2 = this.current.fillColor, o2 = this.current.patternFill, l2 = getCurrentTransform(i2);
-    let h2, c2, d2, u2;
+    const i2 = this.ctx, { width: n2, height: s2 } = e2, a2 = this.current.fillColor, o2 = this.current.patternFill, l2 = getCurrentTransform(i2);
+    let c2, h2, d2, u2;
     if ((e2.bitmap || e2.data) && e2.count > 1) {
       const i3 = e2.bitmap || e2.data.buffer;
-      c2 = JSON.stringify(o2 ? l2 : [l2.slice(0, 4), a2]);
-      h2 = this._cachedBitmapsMap.getOrInsertComputed(i3, makeMap);
-      const n3 = h2.get(c2);
+      h2 = JSON.stringify(o2 ? l2 : [l2.slice(0, 4), a2]);
+      c2 = this._cachedBitmapsMap.getOrInsertComputed(i3, makeMap);
+      const n3 = c2.get(h2);
       if (n3 && !o2) {
         const e3 = Math.round(Math.min(l2[0], l2[2]) + l2[4]), i4 = Math.round(Math.min(l2[1], l2[3]) + l2[5]);
-        this.dependencyTracker?.recordDependencies(t2, pt);
+        this.dependencyTracker?.recordDependencies(t2, gt);
         return { canvas: n3, offsetX: e3, offsetY: i4 };
       }
       d2 = n3;
     }
     if (!d2) {
-      u2 = this.canvasFactory.create(n2, r2);
+      u2 = this.canvasFactory.create(n2, s2);
       putBinaryImageMask(u2.context, e2);
     }
-    let p2 = Util.transform(l2, [1 / n2, 0, 0, -1 / r2, 0, 0]);
-    p2 = Util.transform(p2, [1, 0, 0, 1, 0, -r2]);
-    const g2 = s.slice();
-    Util.axialAlignedBoundingBox([0, 0, n2, r2], p2, g2);
-    const [m2, f2, b2, y2] = g2, v2 = Math.round(b2 - m2) || 1, w2 = Math.round(y2 - f2) || 1, x2 = this.canvasFactory.create(v2, w2), A2 = x2.context, E2 = m2, C2 = f2;
-    A2.translate(-E2, -C2);
-    A2.transform(...p2);
+    let p2 = Util.transform(l2, [1 / n2, 0, 0, -1 / s2, 0, 0]);
+    p2 = Util.transform(p2, [1, 0, 0, 1, 0, -s2]);
+    const g2 = r.slice();
+    Util.axialAlignedBoundingBox([0, 0, n2, s2], p2, g2);
+    const [m2, f2, b2, y2] = g2, v2 = Math.round(b2 - m2) || 1, w2 = Math.round(y2 - f2) || 1, A2 = this.canvasFactory.create(v2, w2), x2 = A2.context, E2 = m2, C2 = f2;
+    x2.translate(-E2, -C2);
+    x2.transform(...p2);
     let S2 = null;
     if (!d2) {
-      const t3 = this._scaleImage(u2.canvas, getCurrentTransformInverse(A2));
+      const t3 = this._scaleImage(u2.canvas, getCurrentTransformInverse(x2));
       d2 = t3.img;
       S2 = t3.tmpCanvas;
       if (d2 !== u2.canvas) {
         this.canvasFactory.destroy(u2);
         u2 = null;
       }
-      if (h2 && o2) {
-        h2.set(c2, d2);
+      if (c2 && o2) {
+        c2.set(h2, d2);
         S2 = null;
         u2 = null;
       }
     }
-    A2.imageSmoothingEnabled = getImageSmoothingEnabled(getCurrentTransform(A2), e2.interpolate);
-    drawImageAtIntegerCoords(A2, d2, 0, 0, d2.width, d2.height, 0, 0, n2, r2);
+    x2.imageSmoothingEnabled = getImageSmoothingEnabled(getCurrentTransform(x2), e2.interpolate);
+    drawImageAtIntegerCoords(x2, d2, 0, 0, d2.width, d2.height, 0, 0, n2, s2);
     S2 && this.canvasFactory.destroy(S2);
     u2 && this.canvasFactory.destroy(u2);
-    A2.globalCompositeOperation = "source-in";
-    const T2 = Util.transform(getCurrentTransformInverse(A2), [1, 0, 0, 1, -E2, -C2]);
-    A2.fillStyle = o2 ? a2.getPattern(i2, this, T2, Tt, t2) : a2;
-    A2.fillRect(0, 0, n2, r2);
-    h2 && !o2 && h2.set(c2, x2.canvas);
-    this.dependencyTracker?.recordDependencies(t2, pt);
-    return { canvas: x2.canvas, canvasEntry: h2 && !o2 ? null : x2, offsetX: Math.round(E2), offsetY: Math.round(C2) };
+    x2.globalCompositeOperation = "source-in";
+    const T2 = Util.transform(getCurrentTransformInverse(x2), [1, 0, 0, 1, -E2, -C2]);
+    x2.fillStyle = o2 ? a2.getPattern(i2, this, T2, kt, t2) : a2;
+    x2.fillRect(0, 0, n2, s2);
+    c2 && !o2 && c2.set(h2, A2.canvas);
+    this.dependencyTracker?.recordDependencies(t2, gt);
+    return { canvas: A2.canvas, canvasEntry: c2 && !o2 ? null : A2, offsetX: Math.round(E2), offsetY: Math.round(C2) };
   }
   setLineWidth(t2, e2) {
     this.dependencyTracker?.recordSimpleData("lineWidth", t2);
@@ -10234,11 +10439,11 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   setLineCap(t2, e2) {
     this.dependencyTracker?.recordSimpleData("lineCap", t2);
-    this.ctx.lineCap = Ot[e2];
+    this.ctx.lineCap = Rt[e2];
   }
   setLineJoin(t2, e2) {
     this.dependencyTracker?.recordSimpleData("lineJoin", t2);
-    this.ctx.lineJoin = Rt[e2];
+    this.ctx.lineJoin = Bt[e2];
   }
   setMiterLimit(t2, e2) {
     this.dependencyTracker?.recordSimpleData("miterLimit", t2);
@@ -10330,24 +10535,24 @@ var CanvasGraphics = class _CanvasGraphics {
     this.current.activeSMask && !e2 ? this.beginSMaskMode(t2) : !this.current.activeSMask && e2 ? this.endSMaskMode() : this.current.activeSMask && e2 && this._ensurePreparedSMask(this.current.activeSMask);
   }
   _prepareSMaskCanvas(t2) {
-    const { canvas: e2, subtype: i2, backdrop: n2, transferMap: s2 } = t2, r2 = "Luminosity" === i2 || "Alpha" === i2 && s2;
-    if (!(r2 || "Luminosity" === i2 && n2)) {
+    const { canvas: e2, subtype: i2, backdrop: n2, transferMap: r2 } = t2, s2 = "Luminosity" === i2 || "Alpha" === i2 && r2;
+    if (!(s2 || "Luminosity" === i2 && n2)) {
       this.smaskPreparedFor = t2;
       return;
     }
     let a2;
     if ("Luminosity" === i2 && n2) {
-      const [t3, e3, i3] = getRGBA(n2), r3 = Math.round(0.3 * t3 + 0.59 * e3 + 0.11 * i3);
-      a2 = s2?.[r3] ?? r3;
-    } else a2 = s2?.[0] ?? 0;
-    const { width: o2, height: l2 } = this.ctx.canvas, h2 = o2 * l2 < 4 * (e2.width * e2.height), c2 = r2 ? { url: "Alpha" === i2 ? this.filterFactory.addAlphaFilter(s2) : this.filterFactory.addLuminosityFilter(s2), subtype: i2, transferMap: s2 } : null, d2 = "Luminosity" === i2 ? n2 : null;
+      const [t3, e3, i3] = getRGBA(n2), s3 = Math.round(0.3 * t3 + 0.59 * e3 + 0.11 * i3);
+      a2 = r2?.[s3] ?? s3;
+    } else a2 = r2?.[0] ?? 0;
+    const { width: o2, height: l2 } = this.ctx.canvas, c2 = o2 * l2 < 4 * (e2.width * e2.height), h2 = s2 ? { url: "Alpha" === i2 ? this.filterFactory.addAlphaFilter(r2) : this.filterFactory.addLuminosityFilter(r2), subtype: i2, transferMap: r2 } : null, d2 = "Luminosity" === i2 ? n2 : null;
     let u2, p2, g2;
-    if (h2) {
-      u2 = this._bakeSMaskCanvas(e2, t2.offsetX, t2.offsetY, o2, l2, d2, c2);
+    if (c2) {
+      u2 = this._bakeSMaskCanvas(e2, t2.offsetX, t2.offsetY, o2, l2, d2, h2);
       p2 = 0;
       g2 = 0;
     } else {
-      u2 = this._bakeSMaskCanvas(e2, 0, 0, e2.width, e2.height, d2, c2);
+      u2 = this._bakeSMaskCanvas(e2, 0, 0, e2.width, e2.height, d2, h2);
       p2 = t2.offsetX;
       g2 = t2.offsetY;
     }
@@ -10355,45 +10560,45 @@ var CanvasGraphics = class _CanvasGraphics {
     this.smaskPreparedFor = t2;
     this.smaskPreparedOffsetX = p2;
     this.smaskPreparedOffsetY = g2;
-    this.smaskPreparedOOBAlpha = h2 || 0 === a2 ? null : a2;
+    this.smaskPreparedOOBAlpha = c2 || 0 === a2 ? null : a2;
   }
-  _bakeSMaskCanvas(t2, e2, i2, n2, s2, r2, a2) {
-    r2 || a2 || unreachable("_bakeSMaskCanvas with neither backdrop nor filter");
-    const o2 = this.canvasFactory.create(n2, s2), l2 = o2.context;
+  _bakeSMaskCanvas(t2, e2, i2, n2, r2, s2, a2) {
+    s2 || a2 || unreachable("_bakeSMaskCanvas with neither backdrop nor filter");
+    const o2 = this.canvasFactory.create(n2, r2), l2 = o2.context;
     l2.drawImage(t2, e2, i2);
-    if (r2) {
+    if (s2) {
       l2.globalCompositeOperation = "destination-atop";
-      l2.fillStyle = r2;
-      l2.fillRect(0, 0, n2, s2);
+      l2.fillStyle = s2;
+      l2.fillRect(0, 0, n2, r2);
     }
     if (!a2) return o2;
-    const h2 = this.canvasFactory.create(n2, s2), c2 = h2.context;
-    c2.filter = a2.url;
-    const d2 = FeatureTest.isCanvasFilterSupported && "none" !== c2.filter && "" !== c2.filter;
-    c2.drawImage(o2.canvas, 0, 0);
-    FeatureTest.isCanvasFilterSupported && (c2.filter = "none");
+    const c2 = this.canvasFactory.create(n2, r2), h2 = c2.context;
+    h2.filter = a2.url;
+    const d2 = FeatureTest.isCanvasFilterSupported && "none" !== h2.filter && "" !== h2.filter;
+    h2.drawImage(o2.canvas, 0, 0);
+    FeatureTest.isCanvasFilterSupported && (h2.filter = "none");
     if (!d2) {
-      const t3 = c2.getImageData(0, 0, n2, s2), { data: e3 } = t3, { transferMap: i3 } = a2;
+      const t3 = h2.getImageData(0, 0, n2, r2), { data: e3 } = t3, { transferMap: i3 } = a2;
       if ("Luminosity" === a2.subtype) for (let t4 = 0, n3 = e3.length; t4 < n3; t4 += 4) {
         const n4 = 0.3 * e3[t4] + 0.59 * e3[t4 + 1] + 0.11 * e3[t4 + 2] + 0.5 | 0;
         e3[t4] = e3[t4 + 1] = e3[t4 + 2] = 0;
         e3[t4 + 3] = i3?.[n4] ?? n4;
       }
       else for (let t4 = 3, n3 = e3.length; t4 < n3; t4 += 4) e3[t4] = i3[e3[t4]];
-      c2.putImageData(t3, 0, 0);
+      h2.putImageData(t3, 0, 0);
     }
     this.canvasFactory.destroy(o2);
-    return h2;
+    return c2;
   }
   beginSMaskMode(t2) {
     if (this.inSMaskMode) throw new Error("beginSMaskMode called while already in smask mode");
     const { width: e2, height: i2 } = this.ctx.canvas, n2 = this.canvasFactory.create(e2, i2);
     this.smaskScratchCanvas = n2;
     this.suspendedCtx = this.ctx;
-    const s2 = this.ctx = n2.context;
-    s2.setTransform(this.suspendedCtx.getTransform());
-    copyCtxState(this.suspendedCtx, s2);
-    mirrorContextOperations(s2, this.suspendedCtx);
+    const r2 = this.ctx = n2.context;
+    r2.setTransform(this.suspendedCtx.getTransform());
+    copyCtxState(this.suspendedCtx, r2);
+    mirrorContextOperations(r2, this.suspendedCtx);
     this._ensurePreparedSMask(this.current.activeSMask);
     this.setGState(t2, [["BM", "source-over"]]);
   }
@@ -10407,120 +10612,120 @@ var CanvasGraphics = class _CanvasGraphics {
     this.smaskScratchCanvas = null;
     this._clearPreparedSMask();
   }
-  #as(t2, e2 = null, i2 = 1) {
-    const { width: n2, height: s2 } = t2, r2 = e2 ?? this.canvasFactory.create(n2, s2), a2 = r2.context, o2 = (i2 = Math.round(255 * i2) / 255) < 1;
-    o2 && void 0 === this.#ts && (this.#ts = FeatureTest.isCanvasFilterSupported ? /* @__PURE__ */ new Map() : "none");
+  #br(t2, e2 = null, i2 = 1) {
+    const { width: n2, height: r2 } = t2, s2 = e2 ?? this.canvasFactory.create(n2, r2), a2 = s2.context, o2 = (i2 = Math.round(255 * i2) / 255) < 1;
+    o2 && void 0 === this.#dr && (this.#dr = FeatureTest.isCanvasFilterSupported ? /* @__PURE__ */ new Map() : "none");
     let l2 = "none";
-    o2 && this.#ts instanceof Map && (l2 = this.#ts.getOrInsertComputed(i2, () => this.filterFactory.addKnockoutFilter(i2)));
+    o2 && this.#dr instanceof Map && (l2 = this.#dr.getOrInsertComputed(i2, () => this.filterFactory.addKnockoutFilter(i2)));
     if (!o2 || "none" !== l2) {
       if (e2) {
         a2.save();
         a2.setTransform(1, 0, 0, 1, 0, 0);
-        a2.clearRect(0, 0, n2, s2);
+        a2.clearRect(0, 0, n2, r2);
         a2.restore();
       }
       a2.filter = l2;
       a2.drawImage(t2, 0, 0);
       a2.filter = "none";
-      return r2;
-    }
-    const h2 = t2.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, n2, s2), c2 = a2.createImageData(n2, s2), d2 = h2.data, u2 = c2.data, p2 = i2 > 0 ? 1 / i2 : 1e6;
-    for (let t3 = 3, e3 = d2.length; t3 < e3; t3 += 4) u2[t3] = Math.min(Math.round(d2[t3] * p2), 255);
-    a2.putImageData(c2, 0, 0);
-    return r2;
-  }
-  #os(t2, e2, i2, n2) {
-    let s2 = t2?.[e2] ?? null;
-    if (s2 && (s2.canvas.width !== i2 || s2.canvas.height !== n2)) {
-      this.canvasFactory.destroy(s2);
-      s2 = null;
-    }
-    if (!s2) {
-      s2 = this.canvasFactory.create(i2, n2);
-      t2 && (t2[e2] = s2);
       return s2;
     }
-    const r2 = s2.context;
-    r2.save();
-    r2.setTransform(1, 0, 0, 1, 0, 0);
-    r2.clearRect(0, 0, i2, n2);
-    r2.restore();
+    const c2 = t2.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, n2, r2), h2 = a2.createImageData(n2, r2), d2 = c2.data, u2 = h2.data, p2 = i2 > 0 ? 1 / i2 : 1e6;
+    for (let t3 = 3, e3 = d2.length; t3 < e3; t3 += 4) u2[t3] = Math.min(Math.round(d2[t3] * p2), 255);
+    a2.putImageData(h2, 0, 0);
     return s2;
   }
-  #ls(t2, e2, i2 = {}) {
-    const { backdropCanvas: n2 = null, destTransform: s2 = [1, 0, 0, 1, 0, 0], backdropOffset: r2 = [0, 0], reuseMaskEntry: a2 = null, poolMeta: o2 = null, sourceAlpha: l2 = 1, sourceFilter: h2 = "none", knockoutAlpha: c2 = 1 } = i2, { width: d2, height: u2 } = e2, p2 = this.#as(e2, a2, c2), g2 = t2.globalCompositeOperation;
+  #yr(t2, e2, i2, n2) {
+    let r2 = t2?.[e2] ?? null;
+    if (r2 && (r2.canvas.width !== i2 || r2.canvas.height !== n2)) {
+      this.canvasFactory.destroy(r2);
+      r2 = null;
+    }
+    if (!r2) {
+      r2 = this.canvasFactory.create(i2, n2);
+      t2 && (t2[e2] = r2);
+      return r2;
+    }
+    const s2 = r2.context;
+    s2.save();
+    s2.setTransform(1, 0, 0, 1, 0, 0);
+    s2.clearRect(0, 0, i2, n2);
+    s2.restore();
+    return r2;
+  }
+  #vr(t2, e2, i2 = {}) {
+    const { backdropCanvas: n2 = null, destTransform: r2 = [1, 0, 0, 1, 0, 0], backdropOffset: s2 = [0, 0], reuseMaskEntry: a2 = null, poolMeta: o2 = null, sourceAlpha: l2 = 1, sourceFilter: c2 = "none", knockoutAlpha: h2 = 1 } = i2, { width: d2, height: u2 } = e2, p2 = this.#br(e2, a2, h2), g2 = t2.globalCompositeOperation;
     t2.save();
-    t2.setTransform(...s2);
+    t2.setTransform(...r2);
     t2.globalAlpha = 1;
     FeatureTest.isCanvasFilterSupported && (t2.filter = "none");
     t2.globalCompositeOperation = "destination-out";
     t2.drawImage(p2.canvas, 0, 0);
     if (n2) {
-      const [e3, i3] = r2, s3 = this.#os(o2, "knockoutBackdropEntry", d2, u2), a3 = s3.context;
+      const [e3, i3] = s2, r3 = this.#yr(o2, "knockoutBackdropEntry", d2, u2), a3 = r3.context;
       a3.drawImage(n2, e3, i3, d2, u2, 0, 0, d2, u2);
       a3.globalCompositeOperation = "destination-in";
       a3.drawImage(p2.canvas, 0, 0);
       a3.globalCompositeOperation = "source-over";
       t2.globalCompositeOperation = "destination-over";
-      t2.drawImage(s3.canvas, 0, 0);
-      o2 || this.canvasFactory.destroy(s3);
+      t2.drawImage(r3.canvas, 0, 0);
+      o2 || this.canvasFactory.destroy(r3);
     }
     t2.globalCompositeOperation = g2;
     t2.globalAlpha = l2;
-    FeatureTest.isCanvasFilterSupported && (t2.filter = h2 ?? "none");
+    FeatureTest.isCanvasFilterSupported && (t2.filter = c2 ?? "none");
     t2.drawImage(e2, 0, 0);
     t2.restore();
     a2 || this.canvasFactory.destroy(p2);
   }
-  #hs(t2 = 1) {
-    if (0 === this.#qn || this.#Kn > 0 || !this.contentVisible) return false;
-    this.#Kn++;
-    this.#Zn = t2;
-    const e2 = this.#is.at(-1), { canvas: i2 } = this.ctx, n2 = this.#os(e2, "knockoutTempEntry", i2.width, i2.height);
-    this.#Xn = n2;
-    const s2 = n2.context;
-    s2.save();
-    s2.setTransform(this.ctx.getTransform());
-    copyCtxState(this.ctx, s2);
-    this.#Qn = s2.globalCompositeOperation;
-    s2.globalCompositeOperation = "source-over";
-    mirrorContextOperations(s2, this.ctx);
-    this.#es = e2;
-    this.#Yn = this.ctx;
-    this.#Jn = this.suspendedCtx;
-    this.ctx = s2;
-    this.inSMaskMode && (this.suspendedCtx = s2);
+  #wr(t2 = 1) {
+    if (0 === this.#rr || this.#sr > 0 || !this.contentVisible) return false;
+    this.#sr++;
+    this.#hr = t2;
+    const e2 = this.#pr.at(-1), { canvas: i2 } = this.ctx, n2 = this.#yr(e2, "knockoutTempEntry", i2.width, i2.height);
+    this.#ar = n2;
+    const r2 = n2.context;
+    r2.save();
+    r2.setTransform(this.ctx.getTransform());
+    copyCtxState(this.ctx, r2);
+    this.#cr = r2.globalCompositeOperation;
+    r2.globalCompositeOperation = "source-over";
+    mirrorContextOperations(r2, this.ctx);
+    this.#ur = e2;
+    this.#or = this.ctx;
+    this.#lr = this.suspendedCtx;
+    this.ctx = r2;
+    this.inSMaskMode && (this.suspendedCtx = r2);
     return true;
   }
-  #cs(t2) {
+  #Ar(t2) {
     if (!t2) return;
-    const e2 = this.#Xn, i2 = this.#Yn, n2 = this.#Jn, s2 = e2.context;
-    this.#Xn = null;
-    this.#Yn = null;
-    this.#Jn = null;
-    this.inSMaskMode && this.suspendedCtx === s2 && this.ctx !== s2 && this.endSMaskMode();
+    const e2 = this.#ar, i2 = this.#or, n2 = this.#lr, r2 = e2.context;
+    this.#ar = null;
+    this.#or = null;
+    this.#lr = null;
+    this.inSMaskMode && this.suspendedCtx === r2 && this.ctx !== r2 && this.endSMaskMode();
     this.inSMaskMode && (this.suspendedCtx = n2);
     this.ctx._removeMirroring();
-    this.ctx.globalCompositeOperation = this.#Qn;
-    this.#Qn = null;
+    this.ctx.globalCompositeOperation = this.#cr;
+    this.#cr = null;
     copyCtxState(this.ctx, i2);
     this.ctx = i2;
-    const r2 = this.#es;
-    this.#es = null;
-    const a2 = this.#Zn;
-    this.#Zn = 1;
+    const s2 = this.#ur;
+    this.#ur = null;
+    const a2 = this.#hr;
+    this.#hr = 1;
     try {
-      this.#ls(n2 ?? i2, e2.canvas, { backdropCanvas: r2?.backdropCtx?.canvas ?? null, backdropOffset: r2?.backdropCtx ? [r2.offsetX, r2.offsetY] : [0, 0], reuseMaskEntry: r2?.knockoutMaskEntry ?? null, poolMeta: r2, knockoutAlpha: a2 });
+      this.#vr(n2 ?? i2, e2.canvas, { backdropCanvas: s2?.backdropCtx?.canvas ?? null, backdropOffset: s2?.backdropCtx ? [s2.offsetX, s2.offsetY] : [0, 0], reuseMaskEntry: s2?.knockoutMaskEntry ?? null, poolMeta: s2, knockoutAlpha: a2 });
     } finally {
-      s2.restore();
-      this.#Kn--;
-      r2 || this.canvasFactory.destroy(e2);
+      r2.restore();
+      this.#sr--;
+      s2 || this.canvasFactory.destroy(e2);
     }
   }
   compose(t2) {
     if (!this.current.activeSMask) return;
     t2 = t2 ? [Math.floor(t2[0]), Math.floor(t2[1]), Math.ceil(t2[2]), Math.ceil(t2[3])] : [0, 0, this.ctx.canvas.width, this.ctx.canvas.height];
-    const e2 = this.current.activeSMask, i2 = this.suspendedCtx, n2 = this.#Kn > 0 && i2 === this.ctx;
+    const e2 = this.current.activeSMask, i2 = this.suspendedCtx, n2 = this.#sr > 0 && i2 === this.ctx;
     this.composeSMask(n2 ? null : i2, e2, this.ctx, t2);
     if (!n2) {
       this.ctx.save();
@@ -10530,66 +10735,66 @@ var CanvasGraphics = class _CanvasGraphics {
     }
   }
   composeSMask(t2, e2, i2, n2) {
-    const s2 = n2[0], r2 = n2[1], a2 = n2[2] - s2, o2 = n2[3] - r2;
+    const r2 = n2[0], s2 = n2[1], a2 = n2[2] - r2, o2 = n2[3] - s2;
     if (0 === a2 || 0 === o2) return;
     const l2 = this.smaskPreparedEntry;
     if (l2) {
-      let t3 = s2, n3 = r2, h2 = a2, c2 = o2;
+      let t3 = r2, n3 = s2, c2 = a2, h2 = o2;
       const d2 = this.smaskPreparedOOBAlpha, u2 = null !== d2;
       if (u2) {
-        t3 = Math.max(s2, e2.offsetX);
-        n3 = Math.max(r2, e2.offsetY);
-        h2 = Math.min(s2 + a2, e2.offsetX + e2.canvas.width) - t3;
-        c2 = Math.min(r2 + o2, e2.offsetY + e2.canvas.height) - n3;
+        t3 = Math.max(r2, e2.offsetX);
+        n3 = Math.max(s2, e2.offsetY);
+        c2 = Math.min(r2 + a2, e2.offsetX + e2.canvas.width) - t3;
+        h2 = Math.min(s2 + o2, e2.offsetY + e2.canvas.height) - n3;
       }
-      if (h2 > 0 && c2 > 0) {
-        const e3 = t3 - this.smaskPreparedOffsetX, s3 = n3 - this.smaskPreparedOffsetY;
+      if (c2 > 0 && h2 > 0) {
+        const e3 = t3 - this.smaskPreparedOffsetX, r3 = n3 - this.smaskPreparedOffsetY;
         i2.save();
         i2.globalAlpha = 1;
         i2.setTransform(1, 0, 0, 1, 0, 0);
-        const r3 = new Path2D();
-        r3.rect(t3, n3, h2, c2);
-        i2.clip(r3);
+        const s3 = new Path2D();
+        s3.rect(t3, n3, c2, h2);
+        i2.clip(s3);
         i2.globalCompositeOperation = "destination-in";
-        i2.drawImage(l2.canvas, e3, s3, h2, c2, t3, n3, h2, c2);
+        i2.drawImage(l2.canvas, e3, r3, c2, h2, t3, n3, c2, h2);
         i2.restore();
       }
-      u2 && d2 < 255 && this._applySMaskOOBAlpha(i2, s2, r2, a2, o2, t3, n3, t3 + h2, n3 + c2, d2);
-    } else this.genericComposeSMask(e2, i2, a2, o2, s2, r2);
+      u2 && d2 < 255 && this._applySMaskOOBAlpha(i2, r2, s2, a2, o2, t3, n3, t3 + c2, n3 + h2, d2);
+    } else this.genericComposeSMask(e2, i2, a2, o2, r2, s2);
     if (t2) {
       t2.save();
       t2.globalAlpha = 1;
       t2.globalCompositeOperation = e2.blendMode || "source-over";
       t2.setTransform(1, 0, 0, 1, 0, 0);
-      t2.drawImage(i2.canvas, s2, r2, a2, o2, s2, r2, a2, o2);
+      t2.drawImage(i2.canvas, r2, s2, a2, o2, r2, s2, a2, o2);
       t2.restore();
     }
   }
-  _applySMaskOOBAlpha(t2, e2, i2, n2, s2, r2, a2, o2, l2, h2) {
-    const c2 = r2 < o2 && a2 < l2;
-    if (c2 && r2 === e2 && a2 === i2 && o2 === e2 + n2 && l2 === i2 + s2) return;
+  _applySMaskOOBAlpha(t2, e2, i2, n2, r2, s2, a2, o2, l2, c2) {
+    const h2 = s2 < o2 && a2 < l2;
+    if (h2 && s2 === e2 && a2 === i2 && o2 === e2 + n2 && l2 === i2 + r2) return;
     const d2 = new Path2D();
-    d2.rect(e2, i2, n2, s2);
-    c2 && d2.rect(r2, a2, o2 - r2, l2 - a2);
+    d2.rect(e2, i2, n2, r2);
+    h2 && d2.rect(s2, a2, o2 - s2, l2 - a2);
     t2.save();
-    t2.globalAlpha = h2 / 255;
+    t2.globalAlpha = c2 / 255;
     t2.setTransform(1, 0, 0, 1, 0, 0);
     t2.clip(d2, "evenodd");
     t2.globalCompositeOperation = "destination-in";
     t2.fillStyle = "#000000";
-    t2.fillRect(e2, i2, n2, s2);
+    t2.fillRect(e2, i2, n2, r2);
     t2.restore();
   }
-  genericComposeSMask(t2, e2, i2, n2, s2, r2) {
+  genericComposeSMask(t2, e2, i2, n2, r2, s2) {
     const { context: a2, offsetX: o2, offsetY: l2 } = t2;
     e2.save();
     e2.globalAlpha = 1;
     e2.setTransform(1, 0, 0, 1, 0, 0);
-    const h2 = new Path2D();
-    h2.rect(s2, r2, i2, n2);
-    e2.clip(h2);
+    const c2 = new Path2D();
+    c2.rect(r2, s2, i2, n2);
+    e2.clip(c2);
     e2.globalCompositeOperation = "destination-in";
-    e2.drawImage(a2.canvas, s2 - o2, r2 - l2, i2, n2, s2, r2, i2, n2);
+    e2.drawImage(a2.canvas, r2 - o2, s2 - l2, i2, n2, r2, s2, i2, n2);
     e2.restore();
   }
   save(t2) {
@@ -10615,107 +10820,107 @@ var CanvasGraphics = class _CanvasGraphics {
       this._cachedGetSinglePixelWidth = null;
     } else this.inSMaskMode && this.endSMaskMode();
   }
-  transform(t2, e2, i2, n2, s2, r2, a2) {
+  transform(t2, e2, i2, n2, r2, s2, a2) {
     this.dependencyTracker?.recordIncrementalData("transform", t2);
-    this.ctx.transform(e2, i2, n2, s2, r2, a2);
+    this.ctx.transform(e2, i2, n2, r2, s2, a2);
     this._cachedScaleForStroking[0] = -1;
     this._cachedGetSinglePixelWidth = null;
   }
   constructPath(t2, e2, i2, n2) {
-    let [s2] = i2;
+    let [r2] = i2;
     if (!n2) {
-      s2 ||= i2[0] = new Path2D();
+      r2 ||= i2[0] = new Path2D();
       e2 !== B.stroke && e2 !== B.closeStroke && (this.current.tilingPatternDims = null);
-      this[e2](t2, s2);
+      this[e2](t2, r2);
       return;
     }
     if (null !== this.dependencyTracker) {
       const i3 = e2 === B.stroke ? this.current.lineWidth / 2 : 0;
       this.dependencyTracker.resetBBox(t2).recordBBox(t2, this.ctx, n2[0] - i3, n2[2] + i3, n2[1] - i3, n2[3] + i3).recordDependencies(t2, ["transform"]);
     }
-    s2 instanceof Path2D || (s2 = i2[0] = makePathFromDrawOPS(s2));
+    r2 instanceof Path2D || (r2 = i2[0] = makePathFromDrawOPS(r2));
     Util.axialAlignedBoundingBox(n2, getCurrentTransform(this.ctx), this.current.minMax);
-    const r2 = this.current.tilingPatternDims;
-    if (r2 && e2 !== B.stroke && e2 !== B.closeStroke && this.current.fillColor instanceof TilingPattern) {
+    const s2 = this.current.tilingPatternDims;
+    if (s2 && e2 !== B.stroke && e2 !== B.closeStroke && this.current.fillColor instanceof TilingPattern) {
       const t3 = Util.intersect(this.current.clipBox, this.current.minMax);
-      t3 ? this.current.fillColor.updatePatternDims(t3, r2) : this.current.tilingPatternDims = null;
+      t3 ? this.current.fillColor.updatePatternDims(t3, s2) : this.current.tilingPatternDims = null;
     }
-    this[e2](t2, s2);
+    this[e2](t2, r2);
     this._pathStartIdx = t2;
   }
   closePath(t2) {
     this.ctx.closePath();
   }
   stroke(t2, e2, i2 = true) {
-    const n2 = i2 && this.#hs(this.current.strokeAlpha), s2 = this.ctx, r2 = this.current.strokeColor;
-    s2.globalAlpha = this.current.strokeAlpha;
-    if (this.contentVisible) if ("object" == typeof r2 && r2?.getPattern) {
-      const i3 = r2.isModifyingCurrentTransform() ? s2.getTransform() : null;
-      s2.save();
-      s2.strokeStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), _t, t2);
+    const n2 = i2 && this.#wr(this.current.strokeAlpha), r2 = this.ctx, s2 = this.current.strokeColor;
+    r2.globalAlpha = this.current.strokeAlpha;
+    if (this.contentVisible) if ("object" == typeof s2 && s2?.getPattern) {
+      const i3 = s2.isModifyingCurrentTransform() ? r2.getTransform() : null;
+      r2.save();
+      r2.strokeStyle = s2.getPattern(r2, this, getCurrentTransformInverse(r2), Dt, t2);
       if (i3) {
         const t3 = new Path2D();
-        t3.addPath(e2, s2.getTransform().invertSelf().multiplySelf(i3));
+        t3.addPath(e2, r2.getTransform().invertSelf().multiplySelf(i3));
         e2 = t3;
       }
       this.rescaleAndStroke(e2, false);
-      s2.restore();
+      r2.restore();
     } else this.rescaleAndStroke(e2, true);
-    this.dependencyTracker?.recordDependencies(t2, ot);
-    i2 && this.consumePath(t2, e2, this.current.getClippedPathBoundingBox(_t, getCurrentTransform(this.ctx)));
-    s2.globalAlpha = this.current.fillAlpha;
-    this.#cs(n2);
+    this.dependencyTracker?.recordDependencies(t2, lt);
+    i2 && this.consumePath(t2, e2, this.current.getClippedPathBoundingBox(Dt, getCurrentTransform(this.ctx)));
+    r2.globalAlpha = this.current.fillAlpha;
+    this.#Ar(n2);
   }
   closeStroke(t2, e2) {
     this.stroke(t2, e2);
   }
   fill(t2, e2, i2 = true) {
-    const n2 = i2 && this.#hs(this.current.fillAlpha), s2 = this.ctx, r2 = this.current.fillColor, a2 = this.current.patternFill;
+    const n2 = i2 && this.#wr(this.current.fillAlpha), r2 = this.ctx, s2 = this.current.fillColor, a2 = this.current.patternFill;
     let o2 = false;
     const l2 = this.current.getClippedPathBoundingBox();
-    this.dependencyTracker?.recordDependencies(t2, lt);
+    this.dependencyTracker?.recordDependencies(t2, ct);
     if (a2) {
-      const a3 = this.current.tilingPatternDims, h2 = a3 && r2.canSkipPatternCanvas(a3);
-      if (h2) {
-        r2.drawPattern(this, e2, this.pendingEOFill, h2, t2);
+      const a3 = this.current.tilingPatternDims, c2 = a3 && s2.canSkipPatternCanvas(a3);
+      if (c2) {
+        s2.drawPattern(this, e2, this.pendingEOFill, c2, t2);
         this.pendingEOFill = false;
         i2 && this.consumePath(t2, e2, l2);
         this.current.tilingPatternDims = null;
-        this.#cs(n2);
+        this.#Ar(n2);
         return;
       }
-      const c2 = r2.isModifyingCurrentTransform() ? s2.getTransform() : null;
+      const h2 = s2.isModifyingCurrentTransform() ? r2.getTransform() : null;
       this.dependencyTracker?.save(t2);
-      s2.save();
-      s2.fillStyle = r2.getPattern(s2, this, getCurrentTransformInverse(s2), Tt, t2);
-      if (c2) {
+      r2.save();
+      r2.fillStyle = s2.getPattern(r2, this, getCurrentTransformInverse(r2), kt, t2);
+      if (h2) {
         const t3 = new Path2D();
-        t3.addPath(e2, s2.getTransform().invertSelf().multiplySelf(c2));
+        t3.addPath(e2, r2.getTransform().invertSelf().multiplySelf(h2));
         e2 = t3;
       }
       o2 = true;
     }
     if (this.contentVisible && null !== l2) if (this.pendingEOFill) {
-      s2.fill(e2, "evenodd");
+      r2.fill(e2, "evenodd");
       this.pendingEOFill = false;
-    } else s2.fill(e2);
+    } else r2.fill(e2);
     if (o2) {
-      s2.restore();
+      r2.restore();
       this.dependencyTracker?.restore(t2);
     }
     i2 && this.consumePath(t2, e2, l2);
-    this.#cs(n2);
+    this.#Ar(n2);
   }
   eoFill(t2, e2) {
     this.pendingEOFill = true;
     this.fill(t2, e2);
   }
   fillStroke(t2, e2) {
-    const i2 = this.#hs(Math.min(this.current.fillAlpha, this.current.strokeAlpha));
+    const i2 = this.#wr(Math.min(this.current.fillAlpha, this.current.strokeAlpha));
     this.fill(t2, e2, false);
     this.stroke(t2, e2, false);
     this.consumePath(t2, e2);
-    this.#cs(i2);
+    this.#Ar(i2);
   }
   eoFillStroke(t2, e2) {
     this.pendingEOFill = true;
@@ -10732,18 +10937,18 @@ var CanvasGraphics = class _CanvasGraphics {
     this.consumePath(t2, e2);
   }
   rawFillPath(t2, e2) {
-    const i2 = this.#hs(this.current.fillAlpha);
+    const i2 = this.#wr(this.current.fillAlpha);
     this.ctx.fill(e2);
-    this.dependencyTracker?.recordDependencies(t2, ct).recordOperation(t2);
-    this.#cs(i2);
+    this.dependencyTracker?.recordDependencies(t2, dt).recordOperation(t2);
+    this.#Ar(i2);
   }
   clip(t2) {
     this.dependencyTracker?.recordFutureForcedDependency("clipMode", t2);
-    this.pendingClip = Bt;
+    this.pendingClip = Lt;
   }
   eoClip(t2) {
     this.dependencyTracker?.recordFutureForcedDependency("clipMode", t2);
-    this.pendingClip = Lt;
+    this.pendingClip = Nt;
   }
   beginText(t2) {
     this.current.textMatrix = null;
@@ -10761,7 +10966,7 @@ var CanvasGraphics = class _CanvasGraphics {
     }
     if (void 0 !== e2) {
       const t3 = new Path2D(), n2 = i2.getTransform().invertSelf();
-      for (const { transform: i3, x: s2, y: r2, fontSize: a2, path: o2 } of e2) o2 && t3.addPath(o2, new DOMMatrix(i3).preMultiplySelf(n2).translate(s2, r2).scale(a2, -a2));
+      for (const { transform: i3, x: r2, y: s2, fontSize: a2, path: o2 } of e2) o2 && t3.addPath(o2, new DOMMatrix(i3).preMultiplySelf(n2).translate(r2, s2).scale(a2, -a2));
       i2.clip(t3);
     }
     delete this.pendingTextPaths;
@@ -10784,23 +10989,23 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   setFont(t2, e2, i2) {
     this.dependencyTracker?.recordSimpleData("font", t2).recordSimpleDataFromNamed("fontObj", e2, t2);
-    const n2 = this.commonObjs.get(e2), s2 = this.current;
+    const n2 = this.commonObjs.get(e2), r2 = this.current;
     if (!n2) throw new Error(`Can't find font for ${e2}`);
-    s2.fontMatrix = n2.fontMatrix || r;
-    0 !== s2.fontMatrix[0] && 0 !== s2.fontMatrix[3] || warn("Invalid font matrix for font " + e2);
+    r2.fontMatrix = n2.fontMatrix || s;
+    0 !== r2.fontMatrix[0] && 0 !== r2.fontMatrix[3] || warn("Invalid font matrix for font " + e2);
     if (i2 < 0) {
       i2 = -i2;
-      s2.fontDirection = -1;
-    } else s2.fontDirection = 1;
+      r2.fontDirection = -1;
+    } else r2.fontDirection = 1;
     this.current.font = n2;
     this.current.fontSize = i2;
     if (n2.isType3Font) return;
     const a2 = n2.loadedName || "sans-serif", o2 = n2.systemFontInfo?.css || `"${a2}", ${n2.fallbackName}`;
     let l2 = "normal";
     n2.black ? l2 = "900" : n2.bold && (l2 = "bold");
-    const h2 = n2.italic ? "italic" : "normal", c2 = MathClamp(i2, 16, 100);
-    this.current.fontSizeScale = i2 / c2;
-    this.ctx.font = `${h2} ${l2} ${c2}px ${o2}`;
+    const c2 = n2.italic ? "italic" : "normal", h2 = MathClamp(i2, 16, 100);
+    this.current.fontSizeScale = i2 / h2;
+    this.ctx.font = `${c2} ${l2} ${h2}px ${o2}`;
   }
   setTextRenderingMode(t2, e2) {
     this.dependencyTracker?.recordSimpleData("textRenderingMode", t2);
@@ -10831,52 +11036,52 @@ var CanvasGraphics = class _CanvasGraphics {
     this.moveText(t2, 0, this.current.leading);
     this.dependencyTracker?.recordIncrementalData("moveText", this.dependencyTracker.getSimpleIndex("leading") ?? t2);
   }
-  #ds(t2, e2, i2) {
+  #xr(t2, e2, i2) {
     const n2 = new Path2D();
     n2.addPath(t2, new DOMMatrix(i2).invertSelf().multiplySelf(e2));
     return n2;
   }
-  paintChar(t2, e2, i2, n2, s2, r2) {
-    const a2 = this.ctx, o2 = this.current, l2 = o2.font, h2 = o2.textRenderingMode, c2 = o2.fontSize / o2.fontSizeScale, d2 = h2 & S, u2 = !!(h2 & T), p2 = o2.patternFill && !l2.missingFile, g2 = o2.patternStroke && !l2.missingFile;
+  paintChar(t2, e2, i2, n2, r2, s2) {
+    const a2 = this.ctx, o2 = this.current, l2 = o2.font, c2 = o2.textRenderingMode, h2 = o2.fontSize / o2.fontSizeScale, d2 = c2 & S, u2 = !!(c2 & T), p2 = o2.patternFill && !l2.missingFile, g2 = o2.patternStroke && !l2.missingFile;
     let m2;
     (l2.disableFontFace || u2 || p2 || g2) && !l2.missingFile && (m2 = l2.getPathGenerator(this.commonObjs, e2));
     if (m2 && (l2.disableFontFace || p2 || g2)) {
       a2.save();
       a2.translate(i2, n2);
-      a2.scale(c2, -c2);
+      a2.scale(h2, -h2);
       this.dependencyTracker?.recordCharacterBBox(t2, a2, l2);
       let e3;
-      if (d2 === x || d2 === E) if (s2) {
+      if (d2 === A || d2 === E) if (r2) {
         e3 = a2.getTransform();
-        a2.setTransform(...s2);
-        const t3 = this.#ds(m2, e3, s2);
+        a2.setTransform(...r2);
+        const t3 = this.#xr(m2, e3, r2);
         a2.fill(t3);
       } else a2.fill(m2);
-      if (d2 === A || d2 === E) if (r2) {
+      if (d2 === x || d2 === E) if (s2) {
         e3 ||= a2.getTransform();
-        a2.setTransform(...r2);
-        const { a: t3, b: i3, c: n3, d: s3 } = e3, o3 = Util.inverseTransform(r2), l3 = Util.transform([t3, i3, n3, s3, 0, 0], o3);
-        Util.singularValueDecompose2dScale(l3, Ft);
-        a2.lineWidth *= Math.max(Ft[0], Ft[1]) / c2;
-        a2.stroke(this.#ds(m2, e3, r2));
+        a2.setTransform(...s2);
+        const { a: t3, b: i3, c: n3, d: r3 } = e3, o3 = Util.inverseTransform(s2), l3 = Util.transform([t3, i3, n3, r3, 0, 0], o3);
+        Util.singularValueDecompose2dScale(l3, Ot);
+        a2.lineWidth *= Math.max(Ot[0], Ot[1]) / h2;
+        a2.stroke(this.#xr(m2, e3, s2));
       } else {
-        a2.lineWidth /= c2;
+        a2.lineWidth /= h2;
         a2.stroke(m2);
       }
       a2.restore();
     } else {
-      if (d2 === x || d2 === E) {
-        a2.fillText(e2, i2, n2);
-        this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2, () => a2.measureText(e2));
-      }
       if (d2 === A || d2 === E) {
-        this.dependencyTracker && this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2, () => a2.measureText(e2)).recordDependencies(t2, ot);
+        a2.fillText(e2, i2, n2);
+        this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, h2, i2, n2, () => a2.measureText(e2));
+      }
+      if (d2 === x || d2 === E) {
+        this.dependencyTracker && this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, h2, i2, n2, () => a2.measureText(e2)).recordDependencies(t2, lt);
         a2.strokeText(e2, i2, n2);
       }
     }
     if (u2) {
-      (this.pendingTextPaths ||= []).push({ transform: getCurrentTransform(a2), x: i2, y: n2, fontSize: c2, path: m2 });
-      this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, c2, i2, n2);
+      (this.pendingTextPaths ||= []).push({ transform: getCurrentTransform(a2), x: i2, y: n2, fontSize: h2, path: m2 });
+      this.dependencyTracker?.recordCharacterBBox(t2, a2, l2, h2, i2, n2);
     }
   }
   get isFontSubpixelAAEnabled() {
@@ -10894,29 +11099,29 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   showText(t2, e2) {
     if (this.dependencyTracker) {
-      this.dependencyTracker.recordDependencies(t2, dt).resetBBox(t2);
+      this.dependencyTracker.recordDependencies(t2, ut).resetBBox(t2);
       this.current.textRenderingMode & T && this.dependencyTracker.recordFutureForcedDependency("textClip", t2).inheritPendingDependenciesAsFutureForcedDependencies();
     }
     const i2 = this.current, n2 = i2.font;
     if (n2.isType3Font) {
-      const n3 = this.#hs(i2.fillAlpha);
+      const n3 = this.#wr(i2.fillAlpha);
       this.showType3Text(t2, e2);
       this.dependencyTracker?.recordShowTextOperation(t2);
-      this.#cs(n3);
+      this.#Ar(n3);
       return;
     }
-    const s2 = i2.fontSize;
-    if (0 === s2) {
+    const r2 = i2.fontSize;
+    if (0 === r2) {
       this.dependencyTracker?.recordOperation(t2);
       return;
     }
-    const r2 = this.#hs(i2.fillAlpha), a2 = this.ctx, o2 = i2.fontSizeScale, l2 = i2.charSpacing, h2 = i2.wordSpacing, c2 = i2.fontDirection, d2 = i2.textHScale * c2, u2 = e2.length, p2 = n2.vertical, g2 = p2 ? 1 : -1, m2 = n2.defaultVMetrics, f2 = s2 * i2.fontMatrix[0], b2 = i2.textRenderingMode === x && !n2.disableFontFace && !i2.patternFill;
+    const s2 = this.#wr(i2.fillAlpha), a2 = this.ctx, o2 = i2.fontSizeScale, l2 = i2.charSpacing, c2 = i2.wordSpacing, h2 = i2.fontDirection, d2 = i2.textHScale * h2, u2 = e2.length, p2 = n2.vertical, g2 = p2 ? 1 : -1, m2 = n2.defaultVMetrics, f2 = r2 * i2.fontMatrix[0], b2 = i2.textRenderingMode === A && !n2.disableFontFace && !i2.patternFill;
     a2.save();
     i2.textMatrix && a2.transform(...i2.textMatrix);
     a2.translate(i2.x, i2.y + i2.textRise);
-    c2 > 0 ? a2.scale(d2, -1) : a2.scale(d2, 1);
+    h2 > 0 ? a2.scale(d2, -1) : a2.scale(d2, 1);
     let y2, v2;
-    const w2 = i2.textRenderingMode & S, C2 = w2 === x || w2 === E, _2 = w2 === A || w2 === E;
+    const w2 = i2.textRenderingMode & S, C2 = w2 === A || w2 === E, _2 = w2 === x || w2 === E;
     let k2 = i2.lineWidth;
     const D2 = i2.textMatrixScale;
     0 === D2 || 0 === k2 ? _2 && (k2 = this.getSinglePixelWidth()) : k2 /= D2;
@@ -10927,24 +11132,24 @@ var CanvasGraphics = class _CanvasGraphics {
     a2.lineWidth = k2;
     if (C2 && i2.patternFill) {
       a2.save();
-      const e3 = i2.fillColor.getPattern(a2, this, getCurrentTransformInverse(a2), Tt, t2);
+      const e3 = i2.fillColor.getPattern(a2, this, getCurrentTransformInverse(a2), kt, t2);
       y2 = getCurrentTransform(a2);
       a2.restore();
       a2.fillStyle = e3;
     }
     if (_2 && i2.patternStroke) {
       a2.save();
-      const e3 = i2.strokeColor.getPattern(a2, this, getCurrentTransformInverse(a2), _t, t2);
+      const e3 = i2.strokeColor.getPattern(a2, this, getCurrentTransformInverse(a2), Dt, t2);
       v2 = getCurrentTransform(a2);
       a2.restore();
       a2.strokeStyle = e3;
     }
     if (n2.isInvalidPDFjsFont) {
       const n3 = [];
-      let s3 = 0;
+      let r3 = 0;
       for (const t3 of e2) {
         n3.push(t3.unicode);
-        s3 += t3.width;
+        r3 += t3.width;
       }
       const o3 = n3.join("");
       a2.fillText(o3, 0, 0);
@@ -10952,63 +11157,63 @@ var CanvasGraphics = class _CanvasGraphics {
         const e3 = a2.measureText(o3);
         this.dependencyTracker.recordBBox(t2, this.ctx, -e3.actualBoundingBoxLeft, e3.actualBoundingBoxRight, -e3.actualBoundingBoxAscent, e3.actualBoundingBoxDescent).recordShowTextOperation(t2);
       }
-      i2.x += s3 * f2 * d2;
+      i2.x += r3 * f2 * d2;
       a2.restore();
       this.compose();
-      this.#cs(r2);
+      this.#Ar(s2);
       return;
     }
-    let M2, P2 = 0;
-    for (M2 = 0; M2 < u2; ++M2) {
-      const i3 = e2[M2];
+    let P2, M2 = 0;
+    for (P2 = 0; P2 < u2; ++P2) {
+      const i3 = e2[P2];
       if ("number" == typeof i3) {
-        P2 += g2 * i3 * s2 / 1e3;
+        M2 += g2 * i3 * r2 / 1e3;
         continue;
       }
-      let r3 = false;
-      const d3 = (i3.isSpace ? h2 : 0) + l2, u3 = i3.fontChar, w3 = i3.accent;
-      let x2, A2, E2, C3 = i3.width;
+      let s3 = false;
+      const d3 = (i3.isSpace ? c2 : 0) + l2, u3 = i3.fontChar, w3 = i3.accent;
+      let A2, x2, E2, C3 = i3.width;
       if (p2) {
         const t3 = i3.vmetric || m2, e3 = -(i3.vmetric ? t3[1] : 0.5 * C3) * f2, n3 = t3[2] * f2;
         C3 = t3 ? -t3[0] : C3;
-        x2 = e3 / o2;
-        A2 = (P2 + n3) / o2;
+        A2 = e3 / o2;
+        x2 = (M2 + n3) / o2;
       } else {
-        x2 = P2 / o2;
-        A2 = 0;
+        A2 = M2 / o2;
+        x2 = 0;
       }
       if (n2.remeasure && C3 > 0) {
         E2 = a2.measureText(u3);
-        const t3 = 1e3 * E2.width / s2 * o2;
+        const t3 = 1e3 * E2.width / r2 * o2;
         if (C3 < t3 && this.isFontSubpixelAAEnabled) {
           const e3 = C3 / t3;
-          r3 = true;
+          s3 = true;
           a2.save();
           a2.scale(e3, 1);
-          x2 /= e3;
-        } else C3 !== t3 && (x2 += (C3 - t3) / 2e3 * s2 / o2);
+          A2 /= e3;
+        } else C3 !== t3 && (A2 += (C3 - t3) / 2e3 * r2 / o2);
       }
       if (this.contentVisible && (i3.isInFont || n2.missingFile)) if (b2 && !w3) {
-        a2.fillText(u3, x2, A2);
-        this.dependencyTracker?.recordCharacterBBox(t2, a2, E2 ? { bbox: null } : n2, s2 / o2, x2, A2, () => E2 ?? a2.measureText(u3));
+        a2.fillText(u3, A2, x2);
+        this.dependencyTracker?.recordCharacterBBox(t2, a2, E2 ? { bbox: null } : n2, r2 / o2, A2, x2, () => E2 ?? a2.measureText(u3));
       } else {
-        this.paintChar(t2, u3, x2, A2, y2, v2);
+        this.paintChar(t2, u3, A2, x2, y2, v2);
         if (w3) {
-          const e3 = x2 + s2 * w3.offset.x / o2, i4 = A2 - s2 * w3.offset.y / o2;
+          const e3 = A2 + r2 * w3.offset.x / o2, i4 = x2 - r2 * w3.offset.y / o2;
           this.paintChar(t2, w3.fontChar, e3, i4, y2, v2);
         }
       }
-      P2 += p2 ? C3 * f2 - d3 * c2 : C3 * f2 + d3 * c2;
-      r3 && a2.restore();
+      M2 += p2 ? C3 * f2 - d3 * h2 : C3 * f2 + d3 * h2;
+      s3 && a2.restore();
     }
-    p2 ? i2.y -= P2 : i2.x += P2 * d2;
+    p2 ? i2.y -= M2 : i2.x += M2 * d2;
     a2.restore();
     this.compose();
     this.dependencyTracker?.recordShowTextOperation(t2);
-    this.#cs(r2);
+    this.#Ar(s2);
   }
   showType3Text(t2, e2) {
-    const i2 = this.ctx, n2 = this.current, s2 = n2.font, a2 = n2.fontSize, o2 = n2.fontDirection, l2 = s2.vertical ? 1 : -1, h2 = n2.charSpacing, c2 = n2.wordSpacing, d2 = n2.textHScale * o2, u2 = n2.fontMatrix || r, p2 = e2.length;
+    const i2 = this.ctx, n2 = this.current, r2 = n2.font, a2 = n2.fontSize, o2 = n2.fontDirection, l2 = r2.vertical ? 1 : -1, c2 = n2.charSpacing, h2 = n2.wordSpacing, d2 = n2.textHScale * o2, u2 = n2.fontMatrix || s, p2 = e2.length;
     let g2, m2, f2, b2;
     if (n2.textRenderingMode === C || 0 === a2) return;
     this._cachedScaleForStroking[0] = -1;
@@ -11027,17 +11232,17 @@ var CanvasGraphics = class _CanvasGraphics {
         n2.x += b2 * d2;
         continue;
       }
-      const t3 = (m2.isSpace ? c2 : 0) + h2, r2 = s2.charProcOperatorList[m2.operatorListId];
-      if (r2) {
+      const t3 = (m2.isSpace ? h2 : 0) + c2, s2 = r2.charProcOperatorList.get(m2.operatorListId);
+      if (s2) {
         if (this.contentVisible) {
           this.save();
-          if (r2.fnArray[0] === B.setCharWidth) {
+          if (s2.fnArray[0] === B.setCharWidth) {
             n2.fillAlpha = n2.strokeAlpha = 1;
             i2.globalAlpha = 1;
           }
           i2.scale(a2, a2);
           i2.transform(...u2);
-          this.executeOperatorList(r2);
+          this.executeOperatorList(s2);
           this.restore();
         }
       } else warn(`Type3 character "${m2.operatorListId}" is not available.`);
@@ -11052,11 +11257,11 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   setCharWidth(t2, e2, i2) {
   }
-  setCharWidthAndBounds(t2, e2, i2, n2, s2, r2, a2) {
+  setCharWidthAndBounds(t2, e2, i2, n2, r2, s2, a2) {
     const o2 = new Path2D();
-    o2.rect(n2, s2, r2 - n2, a2 - s2);
+    o2.rect(n2, r2, s2 - n2, a2 - r2);
     this.ctx.clip(o2);
-    this.dependencyTracker?.recordBBox(t2, this.ctx, n2, r2, s2, a2).recordClipBox(t2, this.ctx, n2, r2, s2, a2);
+    this.dependencyTracker?.recordBBox(t2, this.ctx, n2, s2, r2, a2).recordClipBox(t2, this.ctx, n2, s2, r2, a2);
     this.endPath(t2);
   }
   getColorN_Pattern(t2, e2) {
@@ -11117,21 +11322,21 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   shadingFill(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = this.#hs(this.current.fillAlpha), n2 = this.ctx;
+    const i2 = this.#wr(this.current.fillAlpha), n2 = this.ctx;
     this.save(t2);
-    const r2 = this._getPattern(t2, e2);
-    n2.fillStyle = r2.getPattern(n2, this, getCurrentTransformInverse(n2), kt, t2);
+    const s2 = this._getPattern(t2, e2);
+    n2.fillStyle = s2.getPattern(n2, this, getCurrentTransformInverse(n2), Pt, t2);
     const a2 = getCurrentTransformInverse(n2);
     if (a2) {
-      const { width: t3, height: e3 } = n2.canvas, i3 = s.slice();
+      const { width: t3, height: e3 } = n2.canvas, i3 = r.slice();
       Util.axialAlignedBoundingBox([0, 0, t3, e3], a2, i3);
-      const [r3, o2, l2, h2] = i3;
-      this.ctx.fillRect(r3, o2, l2 - r3, h2 - o2);
+      const [s3, o2, l2, c2] = i3;
+      this.ctx.fillRect(s3, o2, l2 - s3, c2 - o2);
     } else this.ctx.fillRect(-1e10, -1e10, 2e10, 2e10);
-    this.dependencyTracker?.resetBBox(t2).recordFullPageBBox(t2).recordDependencies(t2, ut).recordDependencies(t2, lt).recordOperation(t2);
+    this.dependencyTracker?.resetBBox(t2).recordFullPageBBox(t2).recordDependencies(t2, pt).recordDependencies(t2, ct).recordOperation(t2);
     this.compose(this.current.getClippedPathBoundingBox());
     this.restore(t2);
-    this.#cs(i2);
+    this.#Ar(i2);
   }
   beginInlineImage() {
     unreachable("Should not call beginInlineImage");
@@ -11147,10 +11352,10 @@ var CanvasGraphics = class _CanvasGraphics {
       this.baseTransform = getCurrentTransform(this.ctx);
       if (i2) {
         Util.axialAlignedBoundingBox(i2, this.baseTransform, this.current.minMax);
-        const [e3, n2, s2, r2] = i2, a2 = new Path2D();
-        a2.rect(e3, n2, s2 - e3, r2 - n2);
+        const [e3, n2, r2, s2] = i2, a2 = new Path2D();
+        a2.rect(e3, n2, r2 - e3, s2 - n2);
         this.ctx.clip(a2);
-        this.dependencyTracker?.recordClipBox(t2, this.ctx, e3, s2, n2, r2);
+        this.dependencyTracker?.recordClipBox(t2, this.ctx, e3, r2, n2, s2);
         this.endPath(t2);
       }
     }
@@ -11170,11 +11375,11 @@ var CanvasGraphics = class _CanvasGraphics {
       this.current.activeSMask = null;
     }
     const n2 = this.ctx;
-    if (!(e2.needsIsolation && (e2.isolated || e2.hasSoftMask) || e2.knockout || e2.isGray || 0 !== this.#qn || 1 !== n2.globalAlpha || "source-over" !== n2.globalCompositeOperation || i2)) {
+    if (!(e2.needsIsolation && (e2.isolated || e2.hasSoftMask) || e2.knockout || e2.isGray || 0 !== this.#rr || 1 !== n2.globalAlpha || "source-over" !== n2.globalCompositeOperation || i2)) {
       if (e2.bbox) {
         let t3 = new Path2D();
-        const [i3, s2, r3, a3] = e2.bbox;
-        t3.rect(i3, s2, r3 - i3, a3 - s2);
+        const [i3, r2, s3, a3] = e2.bbox;
+        t3.rect(i3, r2, s3 - i3, a3 - r2);
         if (e2.matrix) {
           const i4 = new Path2D();
           i4.addPath(t3, new DOMMatrix(e2.matrix));
@@ -11183,39 +11388,39 @@ var CanvasGraphics = class _CanvasGraphics {
         n2.clip(t3);
       }
       this.groupStack.push(null);
-      this.#is.push(null);
+      this.#pr.push(null);
       this.groupLevel++;
       return;
     }
-    e2.isolated || e2.knockout || 0 !== this.#qn || info("TODO: Fully support non-isolated non-knockout groups.");
-    const r2 = getCurrentTransform(n2);
+    e2.isolated || e2.knockout || 0 !== this.#rr || info("TODO: Fully support non-isolated non-knockout groups.");
+    const s2 = getCurrentTransform(n2);
     e2.matrix && n2.transform(...e2.matrix);
     const a2 = [0, 0, n2.canvas.width, n2.canvas.height];
     let o2;
     if (e2.bbox) {
-      o2 = s.slice();
+      o2 = r.slice();
       Util.axialAlignedBoundingBox(e2.bbox, getCurrentTransform(n2), o2);
       o2 = Util.intersect(o2, a2) || [0, 0, 0, 0];
     } else o2 = a2;
-    const l2 = Math.floor(o2[0]), h2 = Math.floor(o2[1]), c2 = Math.max(Math.ceil(o2[2]) - l2, 1), d2 = Math.max(Math.ceil(o2[3]) - h2, 1);
-    this.current.startNewPathAndClipBox([0, 0, c2, d2]);
-    const u2 = this.canvasFactory.create(c2, d2);
+    const l2 = Math.floor(o2[0]), c2 = Math.floor(o2[1]), h2 = Math.max(Math.ceil(o2[2]) - l2, 1), d2 = Math.max(Math.ceil(o2[3]) - c2, 1);
+    this.current.startNewPathAndClipBox([0, 0, h2, d2]);
+    const u2 = this.canvasFactory.create(h2, d2);
     e2.smask && this.smaskGroupCanvases.push(u2);
-    const p2 = u2.context, g2 = e2.knockout && !e2.isolated ? n2 : null, m2 = !e2.isolated && !e2.knockout && !e2.smask && e2.needsIsolation && this.#qn > 0, f2 = e2.knockout ? this.canvasFactory.create(c2, d2) : null, b2 = this.#qn;
-    e2.knockout ? this.#qn++ : this.#qn = 0;
-    p2.translate(-l2, -h2);
-    p2.transform(...r2);
+    const p2 = u2.context, g2 = e2.knockout && !e2.isolated ? n2 : null, m2 = !e2.isolated && !e2.knockout && !e2.smask && e2.needsIsolation && this.#rr > 0, f2 = e2.knockout ? this.canvasFactory.create(h2, d2) : null, b2 = this.#rr;
+    e2.knockout ? this.#rr++ : this.#rr = 0;
+    p2.translate(-l2, -c2);
+    p2.transform(...s2);
     const y2 = !e2.isolated && !e2.smask && e2.needsIsolation, v2 = y2 && !i2 && 0 === b2 && !e2.knockout && !e2.isGray && e2.hasSoftMask && 1 === n2.globalAlpha && "source-over" === n2.globalCompositeOperation && "none" === this.current.transferMaps;
     if (y2 && (i2 || v2)) {
       p2.save();
       p2.setTransform(1, 0, 0, 1, 0, 0);
-      p2.drawImage(n2.canvas, -l2, -h2);
+      p2.drawImage(n2.canvas, -l2, -c2);
       p2.restore();
     }
     if (e2.bbox) {
       let t3 = new Path2D();
-      const [i3, n3, s2, r3] = e2.bbox;
-      t3.rect(i3, n3, s2 - i3, r3 - n3);
+      const [i3, n3, r2, s3] = e2.bbox;
+      t3.rect(i3, n3, r2 - i3, s3 - n3);
       if (e2.matrix) {
         const i4 = new Path2D();
         i4.addPath(t3, new DOMMatrix(e2.matrix));
@@ -11223,10 +11428,10 @@ var CanvasGraphics = class _CanvasGraphics {
       }
       p2.clip(t3);
     }
-    e2.smask && this.smaskStack.push({ canvas: u2.canvas, context: p2, offsetX: l2, offsetY: h2, subtype: e2.smask.subtype, backdrop: e2.smask.backdrop, transferMap: e2.smask.transferMap || null });
+    e2.smask && this.smaskStack.push({ canvas: u2.canvas, context: p2, offsetX: l2, offsetY: c2, subtype: e2.smask.subtype, backdrop: e2.smask.backdrop, transferMap: e2.smask.transferMap || null });
     if (!e2.smask || this.dependencyTracker) {
       n2.setTransform(1, 0, 0, 1, 0, 0);
-      n2.translate(l2, h2);
+      n2.translate(l2, c2);
       n2.save();
     }
     copyCtxState(n2, p2);
@@ -11234,16 +11439,16 @@ var CanvasGraphics = class _CanvasGraphics {
     this.dependencyTracker?.inheritSimpleDataAsFutureForcedDependencies(["fillAlpha", "strokeAlpha", "globalCompositeOperation"]).pushBaseTransform(n2);
     this.setGState(t2, [["BM", "source-over"], ["ca", 1], ["CA", 1], ["TR", null]]);
     this.groupStack.push(n2);
-    this.#is.push({ backdropCtx: g2, savedKnockoutLevel: b2, offsetX: l2, offsetY: h2, hasInnerBackdrop: m2, replaceBackdrop: v2, knockoutMaskEntry: f2, knockoutTempEntry: null, knockoutBackdropEntry: null });
+    this.#pr.push({ backdropCtx: g2, savedKnockoutLevel: b2, offsetX: l2, offsetY: c2, hasInnerBackdrop: m2, replaceBackdrop: v2, knockoutMaskEntry: f2, knockoutTempEntry: null, knockoutBackdropEntry: null });
     this.groupLevel++;
   }
   endGroup(t2, e2) {
     if (!this.contentVisible) return;
     this.groupLevel--;
-    const i2 = this.ctx, n2 = this.groupStack.pop(), r2 = this.#is.pop();
-    r2 && (this.#qn = r2.savedKnockoutLevel);
+    const i2 = this.ctx, n2 = this.groupStack.pop(), s2 = this.#pr.pop();
+    s2 && (this.#rr = s2.savedKnockoutLevel);
     if (null !== n2) {
-      e2.isGray && this.#us(i2);
+      e2.isGray && this.#Er(i2);
       this.ctx = n2;
       this.ctx.imageSmoothingEnabled = false;
       this.dependencyTracker?.popBaseTransform();
@@ -11254,33 +11459,33 @@ var CanvasGraphics = class _CanvasGraphics {
           this.ctx.restore();
           this.inSMaskMode && this.ctx.setTransform(this.suspendedCtx.getTransform());
         }
-        this.#ss(r2);
+        this.#mr(s2);
       } else {
         this.ctx.restore();
         const e3 = getCurrentTransform(this.ctx);
         this.restore(t2);
         this.ctx.save();
         this.ctx.setTransform(...e3);
-        const a2 = s.slice();
+        const a2 = r.slice();
         Util.axialAlignedBoundingBox([0, 0, i2.canvas.width, i2.canvas.height], e3, a2);
-        const o2 = this.#is.at(-1);
-        if (this.#qn > 0) if (r2.hasInnerBackdrop) {
-          const { width: t3, height: s2 } = i2.canvas, a3 = this.canvasFactory.create(t3, s2), o3 = a3.context;
-          o3.drawImage(n2.canvas, r2.offsetX, r2.offsetY, t3, s2, 0, 0, t3, s2);
+        const o2 = this.#pr.at(-1);
+        if (this.#rr > 0) if (s2.hasInnerBackdrop) {
+          const { width: t3, height: r2 } = i2.canvas, a3 = this.canvasFactory.create(t3, r2), o3 = a3.context;
+          o3.drawImage(n2.canvas, s2.offsetX, s2.offsetY, t3, r2, 0, 0, t3, r2);
           o3.globalCompositeOperation = "source-over";
           o3.drawImage(i2.canvas, 0, 0);
-          const l2 = this.#as(i2.canvas);
+          const l2 = this.#br(i2.canvas);
           o3.globalCompositeOperation = "destination-in";
           o3.drawImage(l2.canvas, 0, 0);
-          const h2 = this.ctx.globalCompositeOperation, c2 = this.ctx.globalAlpha, d2 = this.ctx.filter;
+          const c2 = this.ctx.globalCompositeOperation, h2 = this.ctx.globalAlpha, d2 = this.ctx.filter;
           this.ctx.save();
           this.ctx.setTransform(...e3);
           this.ctx.globalAlpha = 1;
           FeatureTest.isCanvasFilterSupported && (this.ctx.filter = "none");
           this.ctx.globalCompositeOperation = "destination-out";
           this.ctx.drawImage(l2.canvas, 0, 0);
-          this.ctx.globalCompositeOperation = h2;
-          this.ctx.globalAlpha = c2;
+          this.ctx.globalCompositeOperation = c2;
+          this.ctx.globalAlpha = h2;
           FeatureTest.isCanvasFilterSupported && (this.ctx.filter = d2 ?? "none");
           this.ctx.drawImage(a3.canvas, 0, 0);
           this.ctx.restore();
@@ -11288,10 +11493,10 @@ var CanvasGraphics = class _CanvasGraphics {
           this.canvasFactory.destroy(a3);
         } else {
           const t3 = o2?.backdropCtx ?? null;
-          this.#ls(this.ctx, i2.canvas, { backdropCanvas: t3?.canvas ?? null, destTransform: e3, backdropOffset: t3 ? [o2.offsetX + r2.offsetX, o2.offsetY + r2.offsetY] : [0, 0], sourceAlpha: this.ctx.globalAlpha, sourceFilter: this.ctx.filter });
+          this.#vr(this.ctx, i2.canvas, { backdropCanvas: t3?.canvas ?? null, destTransform: e3, backdropOffset: t3 ? [o2.offsetX + s2.offsetX, o2.offsetY + s2.offsetY] : [0, 0], sourceAlpha: this.ctx.globalAlpha, sourceFilter: this.ctx.filter });
         }
         else {
-          if (r2.replaceBackdrop) {
+          if (s2.replaceBackdrop) {
             const t3 = new Path2D();
             t3.rect(0, 0, i2.canvas.width, i2.canvas.height);
             this.ctx.clip(t3);
@@ -11301,12 +11506,12 @@ var CanvasGraphics = class _CanvasGraphics {
         }
         this.ctx.restore();
         this.canvasFactory.destroy({ canvas: i2.canvas, context: i2 });
-        this.#ss(r2);
+        this.#mr(s2);
         this.compose(a2);
       }
     } else this.restore(t2);
   }
-  #us(t2) {
+  #Er(t2) {
     const { canvas: e2 } = t2, { width: i2, height: n2 } = e2;
     if (FeatureTest.isCanvasFilterSupported) {
       t2.save();
@@ -11318,14 +11523,14 @@ var CanvasGraphics = class _CanvasGraphics {
       t2.restore();
       return;
     }
-    const s2 = t2.getImageData(0, 0, i2, n2), { data: r2 } = s2;
-    for (let t3 = 0, e3 = r2.length; t3 < e3; t3 += 4) {
-      const e4 = 0.2126 * r2[t3] + 0.7152 * r2[t3 + 1] + 0.0722 * r2[t3 + 2] + 0.5 | 0;
-      r2[t3] = r2[t3 + 1] = r2[t3 + 2] = e4;
+    const r2 = t2.getImageData(0, 0, i2, n2), { data: s2 } = r2;
+    for (let t3 = 0, e3 = s2.length; t3 < e3; t3 += 4) {
+      const e4 = 0.2126 * s2[t3] + 0.7152 * s2[t3 + 1] + 0.0722 * s2[t3 + 2] + 0.5 | 0;
+      s2[t3] = s2[t3 + 1] = s2[t3 + 2] = e4;
     }
-    t2.putImageData(s2, 0, 0);
+    t2.putImageData(r2, 0, 0);
   }
-  #ss(t2) {
+  #mr(t2) {
     if (t2) {
       if (t2.knockoutMaskEntry) {
         this.canvasFactory.destroy(t2.knockoutMaskEntry);
@@ -11341,53 +11546,50 @@ var CanvasGraphics = class _CanvasGraphics {
       }
     }
   }
-  beginAnnotation(t2, e2, i2, n2, s2, r2, a2) {
-    this.#ns();
+  beginAnnotation(t2, e2, i2, n2, r2, s2, a2) {
+    this.#gr();
     resetCtxToDefault(this.ctx);
     this.ctx.save();
     this.save(t2);
     this.baseTransform && this.ctx.setTransform(...this.baseTransform);
     if (i2) {
-      const s3 = i2[2] - i2[0], o2 = i2[3] - i2[1];
-      if (r2 && this.annotationCanvasMap) {
+      const r3 = i2[2] - i2[0], o2 = i2[3] - i2[1];
+      if (s2 && this.annotationCanvasMap) {
         (n2 = n2.slice())[4] -= i2[0];
         n2[5] -= i2[1];
-        (i2 = i2.slice())[0] = i2[1] = 0;
-        i2[2] = s3;
-        i2[3] = o2;
-        Util.singularValueDecompose2dScale(getCurrentTransform(this.ctx), Ft);
-        const { viewportScale: t3 } = this, r3 = Math.ceil(s3 * this.outputScaleX * t3), l2 = Math.ceil(o2 * this.outputScaleY * t3);
-        this.annotationCanvas = this.canvasFactory.create(r3, l2);
-        const { canvas: h2, context: c2 } = this.annotationCanvas;
+        Util.singularValueDecompose2dScale(getCurrentTransform(this.ctx), Ot);
+        const { viewportScale: t3 } = this, s3 = Math.ceil(r3 * this.outputScaleX * t3), l2 = Math.ceil(o2 * this.outputScaleY * t3);
+        this.annotationCanvas = this.canvasFactory.create(s3, l2);
+        const { canvas: c2, context: h2 } = this.annotationCanvas;
         if (a2) {
           const t4 = this.annotationCanvasMap.getOrInsertComputed(e2, makeArr);
-          h2.setAttribute("data-canvas-name", a2);
+          c2.setAttribute("data-canvas-name", a2);
           const i3 = t4.findIndex((t5) => t5.getAttribute("data-canvas-name") === a2);
-          -1 === i3 ? t4.push(h2) : t4[i3] = h2;
-        } else this.annotationCanvasMap.set(e2, h2);
+          -1 === i3 ? t4.push(c2) : t4[i3] = c2;
+        } else this.annotationCanvasMap.set(e2, c2);
         this.annotationCanvas.savedCtx = this.ctx;
-        this.ctx = c2;
+        this.ctx = h2;
         this.ctx.save();
-        this.ctx.setTransform(Ft[0], 0, 0, -Ft[1], 0, o2 * Ft[1]);
+        this.ctx.setTransform(Ot[0], 0, 0, -Ot[1], 0, o2 * Ot[1]);
         resetCtxToDefault(this.ctx);
       } else {
         resetCtxToDefault(this.ctx);
         this.endPath(t2);
         const e3 = new Path2D();
-        e3.rect(i2[0], i2[1], s3, o2);
+        e3.rect(i2[0], i2[1], r3, o2);
         this.ctx.clip(e3);
       }
     }
     this.current = new CanvasExtraState(this.ctx.canvas.width, this.ctx.canvas.height);
     this.baseTransformStack.push(this.baseTransform);
     this.transform(t2, ...n2);
-    this.transform(t2, ...s2);
+    this.transform(t2, ...r2);
     this.baseTransform = getCurrentTransform(this.ctx);
   }
   endAnnotation(t2) {
     if (this.annotationCanvas) {
       this.ctx.restore();
-      this.#rs();
+      this.#fr();
       this.ctx = this.annotationCanvas.savedCtx;
       delete this.annotationCanvas.savedCtx;
       delete this.annotationCanvas;
@@ -11398,76 +11600,76 @@ var CanvasGraphics = class _CanvasGraphics {
     if (!this.contentVisible) return;
     const i2 = e2.count;
     (e2 = this.getObject(t2, e2.data, e2)).count = i2;
-    const n2 = this.#hs(this.current.fillAlpha), s2 = this.ctx, r2 = this._createMaskCanvas(t2, e2), a2 = r2.canvas;
-    s2.save();
-    s2.setTransform(1, 0, 0, 1, 0, 0);
-    s2.drawImage(a2, r2.offsetX, r2.offsetY);
-    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, r2.offsetX, r2.offsetX + a2.width, r2.offsetY, r2.offsetY + a2.height).recordOperation(t2);
-    s2.restore();
-    r2.canvasEntry && this.canvasFactory.destroy(r2.canvasEntry);
+    const n2 = this.#wr(this.current.fillAlpha), r2 = this.ctx, s2 = this._createMaskCanvas(t2, e2), a2 = s2.canvas;
+    r2.save();
+    r2.setTransform(1, 0, 0, 1, 0, 0);
+    r2.drawImage(a2, s2.offsetX, s2.offsetY);
+    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, s2.offsetX, s2.offsetX + a2.width, s2.offsetY, s2.offsetY + a2.height).recordOperation(t2);
+    r2.restore();
+    s2.canvasEntry && this.canvasFactory.destroy(s2.canvasEntry);
     this.compose();
-    this.#cs(n2);
+    this.#Ar(n2);
   }
-  paintImageMaskXObjectRepeat(t2, e2, i2, n2 = 0, s2 = 0, r2, a2) {
+  paintImageMaskXObjectRepeat(t2, e2, i2, n2 = 0, r2 = 0, s2, a2) {
     if (!this.contentVisible) return;
     e2 = this.getObject(t2, e2.data, e2);
-    const o2 = this.#hs(this.current.fillAlpha), l2 = this.ctx;
+    const o2 = this.#wr(this.current.fillAlpha), l2 = this.ctx;
     l2.save();
-    const h2 = getCurrentTransform(l2);
-    l2.transform(i2, n2, s2, r2, 0, 0);
-    const c2 = this._createMaskCanvas(t2, e2);
-    l2.setTransform(1, 0, 0, 1, c2.offsetX - h2[4], c2.offsetY - h2[5]);
+    const c2 = getCurrentTransform(l2);
+    l2.transform(i2, n2, r2, s2, 0, 0);
+    const h2 = this._createMaskCanvas(t2, e2);
+    l2.setTransform(1, 0, 0, 1, h2.offsetX - c2[4], h2.offsetY - c2[5]);
     this.dependencyTracker?.resetBBox(t2);
     for (let e3 = 0, o3 = a2.length; e3 < o3; e3 += 2) {
-      const o4 = Util.transform(h2, [i2, n2, s2, r2, a2[e3], a2[e3 + 1]]);
-      l2.drawImage(c2.canvas, o4[4], o4[5]);
-      this.dependencyTracker?.recordBBox(t2, this.ctx, o4[4], o4[4] + c2.canvas.width, o4[5], o4[5] + c2.canvas.height);
+      const o4 = Util.transform(c2, [i2, n2, r2, s2, a2[e3], a2[e3 + 1]]);
+      l2.drawImage(h2.canvas, o4[4], o4[5]);
+      this.dependencyTracker?.recordBBox(t2, this.ctx, o4[4], o4[4] + h2.canvas.width, o4[5], o4[5] + h2.canvas.height);
     }
     l2.restore();
-    c2.canvasEntry && this.canvasFactory.destroy(c2.canvasEntry);
+    h2.canvasEntry && this.canvasFactory.destroy(h2.canvasEntry);
     this.compose();
     this.dependencyTracker?.recordOperation(t2);
-    this.#cs(o2);
+    this.#Ar(o2);
   }
   paintImageMaskXObjectGroup(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = this.#hs(this.current.fillAlpha), n2 = this.ctx, s2 = this.current.fillColor, r2 = this.current.patternFill;
-    this.dependencyTracker?.resetBBox(t2).recordDependencies(t2, pt);
+    const i2 = this.#wr(this.current.fillAlpha), n2 = this.ctx, r2 = this.current.fillColor, s2 = this.current.patternFill;
+    this.dependencyTracker?.resetBBox(t2).recordDependencies(t2, gt);
     for (const i3 of e2) {
-      const { data: e3, width: a2, height: o2, transform: l2 } = i3, h2 = this.canvasFactory.create(a2, o2), c2 = h2.context;
-      c2.save();
-      putBinaryImageMask(c2, this.getObject(t2, e3, i3));
-      c2.globalCompositeOperation = "source-in";
-      c2.fillStyle = r2 ? s2.getPattern(c2, this, getCurrentTransformInverse(n2), Tt, t2) : s2;
-      c2.fillRect(0, 0, a2, o2);
-      c2.restore();
+      const { data: e3, width: a2, height: o2, transform: l2 } = i3, c2 = this.canvasFactory.create(a2, o2), h2 = c2.context;
+      h2.save();
+      putBinaryImageMask(h2, this.getObject(t2, e3, i3));
+      h2.globalCompositeOperation = "source-in";
+      h2.fillStyle = s2 ? r2.getPattern(h2, this, getCurrentTransformInverse(n2), kt, t2) : r2;
+      h2.fillRect(0, 0, a2, o2);
+      h2.restore();
       n2.save();
       n2.transform(...l2);
       n2.scale(1, -1);
-      drawImageAtIntegerCoords(n2, h2.canvas, 0, 0, a2, o2, 0, -1, 1, 1);
-      this.canvasFactory.destroy(h2);
+      drawImageAtIntegerCoords(n2, c2.canvas, 0, 0, a2, o2, 0, -1, 1, 1);
+      this.canvasFactory.destroy(c2);
       this.dependencyTracker?.recordBBox(t2, n2, 0, a2, 0, o2);
       n2.restore();
     }
     this.compose();
     this.dependencyTracker?.recordOperation(t2);
-    this.#cs(i2);
+    this.#Ar(i2);
   }
   paintImageXObject(t2, e2) {
     if (!this.contentVisible) return;
     const i2 = this.getObject(t2, e2);
     i2 ? this.paintInlineImageXObject(t2, i2) : warn("Dependent image isn't ready yet");
   }
-  paintImageXObjectRepeat(t2, e2, i2, n2, s2) {
+  paintImageXObjectRepeat(t2, e2, i2, n2, r2) {
     if (!this.contentVisible) return;
-    const r2 = this.getObject(t2, e2);
-    if (!r2) {
+    const s2 = this.getObject(t2, e2);
+    if (!s2) {
       warn("Dependent image isn't ready yet");
       return;
     }
-    const a2 = r2.width, o2 = r2.height, l2 = [];
-    for (let t3 = 0, e3 = s2.length; t3 < e3; t3 += 2) l2.push({ transform: [i2, 0, 0, n2, s2[t3], s2[t3 + 1]], x: 0, y: 0, w: a2, h: o2 });
-    this.paintInlineImageXObjectGroup(t2, r2, l2);
+    const a2 = s2.width, o2 = s2.height, l2 = [];
+    for (let t3 = 0, e3 = r2.length; t3 < e3; t3 += 2) l2.push({ transform: [i2, 0, 0, n2, r2[t3], r2[t3 + 1]], x: 0, y: 0, w: a2, h: o2 });
+    this.paintInlineImageXObjectGroup(t2, s2, l2);
   }
   applyTransferMapsToCanvas(t2) {
     if ("none" !== this.current.transferMaps) {
@@ -11479,19 +11681,19 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   applyTransferMapsToBitmap(t2) {
     if ("none" === this.current.transferMaps) return { img: t2.bitmap, canvasEntry: null };
-    const { bitmap: e2, width: i2, height: n2 } = t2, s2 = this.canvasFactory.create(i2, n2), r2 = s2.context;
-    r2.filter = this.current.transferMaps;
-    r2.drawImage(e2, 0, 0);
-    r2.filter = "none";
-    return { img: s2.canvas, canvasEntry: s2 };
+    const { bitmap: e2, width: i2, height: n2 } = t2, r2 = this.canvasFactory.create(i2, n2), s2 = r2.context;
+    s2.filter = this.current.transferMaps;
+    s2.drawImage(e2, 0, 0);
+    s2.filter = "none";
+    return { img: r2.canvas, canvasEntry: r2 };
   }
   paintInlineImageXObject(t2, e2) {
     if (!this.contentVisible) return;
-    const i2 = e2.width, n2 = e2.height, s2 = this.#hs(this.current.fillAlpha), r2 = this.ctx;
+    const i2 = e2.width, n2 = e2.height, r2 = this.#wr(this.current.fillAlpha), s2 = this.ctx;
     this.save(t2);
-    const { filter: a2 } = r2;
-    "none" !== a2 && "" !== a2 && (r2.filter = "none");
-    r2.scale(1 / i2, -1 / n2);
+    const { filter: a2 } = s2;
+    "none" !== a2 && "" !== a2 && (s2.filter = "none");
+    s2.scale(1 / i2, -1 / n2);
     let o2, l2 = null;
     if (e2.bitmap) {
       const t3 = this.applyTransferMapsToBitmap(e2);
@@ -11503,51 +11705,51 @@ var CanvasGraphics = class _CanvasGraphics {
       o2 = this.applyTransferMapsToCanvas(t3.context);
       l2 = t3;
     }
-    const h2 = this._scaleImage(o2, getCurrentTransformInverse(r2));
-    r2.imageSmoothingEnabled = getImageSmoothingEnabled(getCurrentTransform(r2), e2.interpolate);
+    const c2 = this._scaleImage(o2, getCurrentTransformInverse(s2));
+    s2.imageSmoothingEnabled = getImageSmoothingEnabled(getCurrentTransform(s2), e2.interpolate);
     if (this.dependencyTracker) {
-      this.dependencyTracker.resetBBox(t2).recordBBox(t2, r2, 0, i2, -n2, 0).recordDependencies(t2, ht).recordOperation(t2);
-      this.imagesTracker?.record(r2, i2, n2, this.dependencyTracker.clipBox);
+      this.dependencyTracker.resetBBox(t2).recordBBox(t2, s2, 0, i2, -n2, 0).recordDependencies(t2, ht).recordOperation(t2);
+      this.imagesTracker?.record(s2, i2, n2, this.dependencyTracker.clipBox);
     }
-    drawImageAtIntegerCoords(r2, h2.img, 0, 0, h2.paintWidth, h2.paintHeight, 0, -n2, i2, n2);
-    h2.tmpCanvas && this.canvasFactory.destroy(h2.tmpCanvas);
+    drawImageAtIntegerCoords(s2, c2.img, 0, 0, c2.paintWidth, c2.paintHeight, 0, -n2, i2, n2);
+    c2.tmpCanvas && this.canvasFactory.destroy(c2.tmpCanvas);
     l2 && this.canvasFactory.destroy(l2);
     this.compose();
     this.restore(t2);
-    this.#cs(s2);
+    this.#Ar(r2);
   }
   paintInlineImageXObjectGroup(t2, e2, i2) {
     if (!this.contentVisible) return;
-    const n2 = this.#hs(this.current.fillAlpha), s2 = this.ctx;
-    let r2, a2 = null;
-    if (e2.bitmap) r2 = e2.bitmap;
+    const n2 = this.#wr(this.current.fillAlpha), r2 = this.ctx;
+    let s2, a2 = null;
+    if (e2.bitmap) s2 = e2.bitmap;
     else {
       const t3 = e2.width, i3 = e2.height, n3 = this.canvasFactory.create(t3, i3);
       putBinaryImageData(n3.context, e2);
-      r2 = this.applyTransferMapsToCanvas(n3.context);
+      s2 = this.applyTransferMapsToCanvas(n3.context);
       a2 = n3;
     }
     this.dependencyTracker?.resetBBox(t2);
     for (const e3 of i2) {
-      s2.save();
-      s2.transform(...e3.transform);
-      s2.scale(1, -1);
-      drawImageAtIntegerCoords(s2, r2, e3.x, e3.y, e3.w, e3.h, 0, -1, 1, 1);
-      this.dependencyTracker?.recordBBox(t2, s2, 0, 1, -1, 0);
-      s2.restore();
+      r2.save();
+      r2.transform(...e3.transform);
+      r2.scale(1, -1);
+      drawImageAtIntegerCoords(r2, s2, e3.x, e3.y, e3.w, e3.h, 0, -1, 1, 1);
+      this.dependencyTracker?.recordBBox(t2, r2, 0, 1, -1, 0);
+      r2.restore();
     }
     a2 && this.canvasFactory.destroy(a2);
     this.dependencyTracker?.recordOperation(t2);
     this.compose();
-    this.#cs(n2);
+    this.#Ar(n2);
   }
   paintSolidColorImageMask(t2) {
     if (!this.contentVisible) return;
-    const e2 = this.#hs(this.current.fillAlpha);
-    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, 0, 1, 0, 1).recordDependencies(t2, lt).recordOperation(t2);
+    const e2 = this.#wr(this.current.fillAlpha);
+    this.dependencyTracker?.resetBBox(t2).recordBBox(t2, this.ctx, 0, 1, 0, 1).recordDependencies(t2, ct).recordOperation(t2);
     this.ctx.fillRect(0, 0, 1, 1);
     this.compose();
-    this.#cs(e2);
+    this.#Ar(e2);
   }
   markPoint(t2, e2) {
   }
@@ -11575,9 +11777,9 @@ var CanvasGraphics = class _CanvasGraphics {
     const n2 = this.current.isEmptyClip();
     this.pendingClip && this.current.updateClipFromPath();
     this.pendingClip || this.compose(i2);
-    const s2 = this.ctx;
+    const r2 = this.ctx;
     if (this.pendingClip) {
-      n2 || (this.pendingClip === Lt ? s2.clip(e2, "evenodd") : s2.clip(e2));
+      n2 || (this.pendingClip === Nt ? r2.clip(e2, "evenodd") : r2.clip(e2));
       this.pendingClip = null;
       this.dependencyTracker?.bboxToClipBoxDropOperation(t2).recordFutureForcedDependency("clipPath", t2);
     } else this.dependencyTracker?.recordOperation(t2);
@@ -11596,60 +11798,60 @@ var CanvasGraphics = class _CanvasGraphics {
   }
   getScaleForStroking() {
     if (-1 === this._cachedScaleForStroking[0]) {
-      const { lineWidth: t2 } = this.current, { a: e2, b: i2, c: n2, d: s2 } = this.ctx.getTransform();
-      let r2, a2;
+      const { lineWidth: t2 } = this.current, { a: e2, b: i2, c: n2, d: r2 } = this.ctx.getTransform();
+      let s2, a2;
       if (0 === i2 && 0 === n2) {
-        const i3 = Math.abs(e2), n3 = Math.abs(s2);
-        if (i3 === n3) if (0 === t2) r2 = a2 = 1 / i3;
+        const i3 = Math.abs(e2), n3 = Math.abs(r2);
+        if (i3 === n3) if (0 === t2) s2 = a2 = 1 / i3;
         else {
           const e3 = i3 * t2;
-          r2 = a2 = e3 < 1 ? 1 / e3 : 1;
+          s2 = a2 = e3 < 1 ? 1 / e3 : 1;
         }
         else if (0 === t2) {
-          r2 = 1 / i3;
+          s2 = 1 / i3;
           a2 = 1 / n3;
         } else {
-          const e3 = i3 * t2, s3 = n3 * t2;
-          r2 = e3 < 1 ? 1 / e3 : 1;
-          a2 = s3 < 1 ? 1 / s3 : 1;
+          const e3 = i3 * t2, r3 = n3 * t2;
+          s2 = e3 < 1 ? 1 / e3 : 1;
+          a2 = r3 < 1 ? 1 / r3 : 1;
         }
       } else {
-        const o2 = Math.abs(e2 * s2 - i2 * n2), l2 = Math.hypot(e2, i2), h2 = Math.hypot(n2, s2);
+        const o2 = Math.abs(e2 * r2 - i2 * n2), l2 = Math.hypot(e2, i2), c2 = Math.hypot(n2, r2);
         if (0 === t2) {
-          r2 = h2 / o2;
+          s2 = c2 / o2;
           a2 = l2 / o2;
         } else {
           const e3 = t2 * o2;
-          r2 = h2 > e3 ? h2 / e3 : 1;
+          s2 = c2 > e3 ? c2 / e3 : 1;
           a2 = l2 > e3 ? l2 / e3 : 1;
         }
       }
-      this._cachedScaleForStroking[0] = r2;
+      this._cachedScaleForStroking[0] = s2;
       this._cachedScaleForStroking[1] = a2;
     }
     return this._cachedScaleForStroking;
   }
   rescaleAndStroke(t2, e2) {
-    const { ctx: i2, current: { lineWidth: n2 } } = this, [s2, r2] = this.getScaleForStroking();
-    if (s2 === r2) {
-      i2.lineWidth = (n2 || 1) * s2;
+    const { ctx: i2, current: { lineWidth: n2 } } = this, [r2, s2] = this.getScaleForStroking();
+    if (r2 === s2) {
+      i2.lineWidth = (n2 || 1) * r2;
       i2.stroke(t2);
       return;
     }
-    const a2 = i2.getLineDash();
+    const a2 = _CanvasGraphics.#nr ??= new DOMMatrix(), o2 = i2.getLineDash();
     e2 && i2.save();
-    i2.scale(s2, r2);
-    It.a = 1 / s2;
-    It.d = 1 / r2;
-    const o2 = new Path2D();
-    o2.addPath(t2, It);
-    if (a2.length > 0) {
-      const t3 = Math.max(s2, r2);
-      i2.setLineDash(a2.map((e3) => e3 / t3));
+    i2.scale(r2, s2);
+    a2.a = 1 / r2;
+    a2.d = 1 / s2;
+    const l2 = new Path2D();
+    l2.addPath(t2, a2);
+    if (o2.length > 0) {
+      const t3 = Math.max(r2, s2);
+      i2.setLineDash(o2.map((e3) => e3 / t3));
       i2.lineDashOffset /= t3;
     }
     i2.lineWidth = n2 || 1;
-    i2.stroke(o2);
+    i2.stroke(l2);
     e2 && i2.restore();
   }
   isContentVisible() {
@@ -11659,26 +11861,26 @@ var CanvasGraphics = class _CanvasGraphics {
 };
 for (const t2 in B) void 0 !== CanvasGraphics.prototype[t2] && (CanvasGraphics.prototype[B[t2]] = CanvasGraphics.prototype[t2]);
 var BasePDFStream = class {
-  #ps = null;
-  #gs = null;
+  #Cr = null;
+  #Sr = null;
   _fullReader = null;
   _rangeReaders = /* @__PURE__ */ new Set();
   _source = null;
   constructor(t2, e2, i2) {
     this._source = t2;
-    this.#ps = e2;
-    this.#gs = i2;
+    this.#Cr = e2;
+    this.#Sr = i2;
   }
   get _progressiveDataLength() {
     return this._fullReader?._loaded ?? 0;
   }
   getFullReader() {
     assert(!this._fullReader, "BasePDFStream.getFullReader can only be called once.");
-    return this._fullReader = new this.#ps(this);
+    return this._fullReader = new this.#Cr(this);
   }
   getRangeReader(t2, e2) {
     if (e2 <= this._progressiveDataLength) return null;
-    const i2 = new this.#gs(this, t2, e2);
+    const i2 = new this.#Sr(this, t2, e2);
     this._rangeReaders.add(i2);
     return i2;
   }
@@ -11749,14 +11951,14 @@ function getResponseOrigin(t2) {
   return URL.parse(t2)?.origin ?? null;
 }
 function validateRangeRequestCapabilities({ responseHeaders: t2, isHttp: e2, rangeChunkSize: i2, disableRange: n2 }) {
-  const s2 = { contentLength: 0, isRangeSupported: false }, r2 = parseInt(t2.get("Content-Length"), 10);
-  if (!Number.isInteger(r2)) return s2;
-  s2.contentLength = r2;
-  if (r2 <= 2 * i2) return s2;
-  if (n2 || !e2) return s2;
-  if ("bytes" !== t2.get("Accept-Ranges")) return s2;
-  "identity" === (t2.get("Content-Encoding") || "identity") && (s2.isRangeSupported = true);
-  return s2;
+  const r2 = { contentLength: 0, isRangeSupported: false }, s2 = parseInt(t2.get("Content-Length"), 10);
+  if (!Number.isInteger(s2)) return r2;
+  r2.contentLength = s2;
+  if (s2 <= 2 * i2) return r2;
+  if (n2 || !e2) return r2;
+  if ("bytes" !== t2.get("Accept-Ranges")) return r2;
+  "identity" === (t2.get("Content-Encoding") || "identity") && (r2.isRangeSupported = true);
+  return r2;
 }
 function extractFilenameFromHeader(t2) {
   const e2 = t2.get("Content-Disposition");
@@ -11776,13 +11978,13 @@ function extractFilenameFromHeader(t2) {
         let i3;
         const n2 = toParamRegExp("filename\\*((?!0\\d)\\d+)(\\*?)", "ig");
         for (; null !== (i3 = n2.exec(t5)); ) {
-          let [, t6, n3, s3] = i3;
+          let [, t6, n3, r3] = i3;
           t6 = parseInt(t6, 10);
           if (t6 in e4) {
             if (0 === t6) break;
-          } else e4[t6] = [n3, s3];
+          } else e4[t6] = [n3, r3];
         }
-        const s2 = [];
+        const r2 = [];
         for (let t6 = 0; t6 < e4.length && t6 in e4; ++t6) {
           let [i4, n3] = e4[t6];
           n3 = rfc2616unquote(n3);
@@ -11790,9 +11992,9 @@ function extractFilenameFromHeader(t2) {
             n3 = unescape(n3);
             0 === t6 && (n3 = rfc5987decode(n3));
           }
-          s2.push(n3);
+          r2.push(n3);
         }
-        return s2.join("");
+        return r2.join("");
       })(t4);
       if (i2) return fixupEncoding(rfc2047decode(i2));
       i2 = toParamRegExp("filename", "i").exec(t4);
@@ -11809,8 +12011,8 @@ function extractFilenameFromHeader(t2) {
         if (t5) {
           if (!/^[\x00-\xFF]+$/.test(i3)) return i3;
           try {
-            const n2 = new TextDecoder(t5, { fatal: true }), s2 = stringToBytes(i3);
-            i3 = n2.decode(s2);
+            const n2 = new TextDecoder(t5, { fatal: true }), r2 = stringToBytes(i3);
+            i3 = n2.decode(r2);
             e3 = false;
           } catch {
           }
@@ -11896,17 +12098,17 @@ var PDFFetchStreamReader = class extends BasePDFStreamReader {
   _reader = null;
   constructor(t2) {
     super(t2);
-    const { disableRange: e2, disableStream: i2, rangeChunkSize: n2, url: s2, withCredentials: r2 } = t2._source;
+    const { disableRange: e2, disableStream: i2, rangeChunkSize: n2, url: r2, withCredentials: s2 } = t2._source;
     this._isStreamingSupported = !i2;
     const a2 = new Headers(t2.headers);
-    fetchUrl(s2, a2, r2, this._abortController).then((i3) => {
+    fetchUrl(r2, a2, s2, this._abortController).then((i3) => {
       t2._responseOrigin = getResponseOrigin(i3.url);
-      ensureResponseStatus(i3.status, s2);
+      ensureResponseStatus(i3.status, r2);
       this._reader = i3.body.getReader();
-      const r3 = i3.headers, { contentLength: a3, isRangeSupported: o2 } = validateRangeRequestCapabilities({ responseHeaders: r3, isHttp: true, rangeChunkSize: n2, disableRange: e2 });
+      const s3 = i3.headers, { contentLength: a3, isRangeSupported: o2 } = validateRangeRequestCapabilities({ responseHeaders: s3, isHttp: true, rangeChunkSize: n2, disableRange: e2 });
       this._contentLength = a3;
       this._isRangeSupported = o2;
-      this._filename = extractFilenameFromHeader(r3);
+      this._filename = extractFilenameFromHeader(s3);
       !this._isStreamingSupported && this._isRangeSupported && this.cancel(new AbortException("Streaming is disabled."));
       this._headersCapability.resolve();
     }).catch(this._headersCapability.reject);
@@ -11930,9 +12132,9 @@ var PDFFetchStreamRangeReader = class extends BasePDFStreamRangeReader {
   _reader = null;
   constructor(t2, e2, i2) {
     super(t2, e2, i2);
-    const { url: n2, withCredentials: s2 } = t2._source, r2 = new Headers(t2.headers);
-    r2.append("Range", `bytes=${e2}-${i2 - 1}`);
-    fetchUrl(n2, r2, s2, this._abortController).then((e3) => {
+    const { url: n2, withCredentials: r2 } = t2._source, s2 = new Headers(t2.headers);
+    s2.append("Range", `bytes=${e2}-${i2 - 1}`);
+    fetchUrl(n2, s2, r2, this._abortController).then((e3) => {
       ensureResponseOrigin(getResponseOrigin(e3.url), t2._responseOrigin);
       ensureResponseStatus(e3.status, n2);
       this._reader = e3.body.getReader();
@@ -11971,7 +12173,7 @@ var PDFDataTransportStream = class extends BasePDFStream {
       switch (t3.type) {
         case "range":
         case "progressiveRead":
-          this.#ms(t3.begin, t3.chunk);
+          this.#Tr(t3.begin, t3.chunk);
           break;
         case "progressiveDone":
           this._fullReader?.progressiveDone();
@@ -11979,7 +12181,7 @@ var PDFDataTransportStream = class extends BasePDFStream {
       }
     });
   }
-  #ms(t2, e2) {
+  #Tr(t2, e2) {
     const i2 = transport_stream_getArrayBuffer(e2);
     if (void 0 === t2) this._fullReader ? this._fullReader._enqueue(i2) : this._queuedChunks.push(i2);
     else {
@@ -12007,20 +12209,20 @@ var PDFDataTransportStream = class extends BasePDFStream {
   }
 };
 var PDFDataTransportStreamReader = class extends BasePDFStreamReader {
-  #fs = endRequests.bind(this);
+  #_r = endRequests.bind(this);
   _done = false;
   _queuedChunks = null;
   _requests = [];
   constructor(t2) {
     super(t2);
-    const { pdfDataRangeTransport: e2, disableRange: i2, disableStream: n2 } = t2._source, { length: s2, contentDispositionFilename: r2 } = e2;
+    const { pdfDataRangeTransport: e2, disableRange: i2, disableStream: n2 } = t2._source, { length: r2, contentDispositionFilename: s2 } = e2;
     this._queuedChunks = t2._queuedChunks || [];
     for (const t3 of this._queuedChunks) this._loaded += t3.byteLength;
     this._done = t2._progressiveDone;
-    this._contentLength = s2;
+    this._contentLength = r2;
     this._isStreamingSupported = !n2;
     this._isRangeSupported = !i2;
-    isPdfFile(r2) && (this._filename = r2);
+    isPdfFile(s2) && (this._filename = s2);
     this._headersCapability.resolve();
     const a2 = this._loaded;
     Promise.resolve().then(() => {
@@ -12047,15 +12249,15 @@ var PDFDataTransportStreamReader = class extends BasePDFStreamReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#fs();
+    this.#_r();
   }
   progressiveDone() {
     this._done ||= true;
-    0 === this._queuedChunks.length && this.#fs();
+    0 === this._queuedChunks.length && this.#_r();
   }
 };
 var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
-  #fs = endRequests.bind(this);
+  #_r = endRequests.bind(this);
   onDone = null;
   _begin = -1;
   _done = false;
@@ -12070,7 +12272,7 @@ var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
       if (0 === this._requests.length) this._queuedChunk = t2;
       else {
         this._requests.shift().resolve({ value: t2, done: false });
-        this.#fs();
+        this.#_r();
       }
       this._done = true;
       this.onDone?.();
@@ -12089,12 +12291,12 @@ var PDFDataTransportStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#fs();
+    this.#_r();
     this.onDone?.();
   }
 };
 var PDFNetworkStream = class extends BasePDFStream {
-  #bs = /* @__PURE__ */ new WeakMap();
+  #kr = /* @__PURE__ */ new WeakMap();
   _responseOrigin = null;
   constructor(t2) {
     super(t2, PDFNetworkStreamReader, PDFNetworkStreamRangeReader);
@@ -12105,7 +12307,7 @@ var PDFNetworkStream = class extends BasePDFStream {
   }
   _request(t2) {
     const e2 = new XMLHttpRequest(), i2 = { validateStatus: null, onHeadersReceived: t2.onHeadersReceived, onDone: t2.onDone, onError: t2.onError, onProgress: t2.onProgress };
-    this.#bs.set(e2, i2);
+    this.#kr.set(e2, i2);
     e2.open("GET", this.url);
     e2.withCredentials = this._source.withCredentials;
     for (const [t3, i3] of this.headers) e2.setRequestHeader(t3, i3);
@@ -12116,25 +12318,25 @@ var PDFNetworkStream = class extends BasePDFStream {
     e2.responseType = "arraybuffer";
     assert(t2.onError, "Expected `onError` callback to be provided.");
     e2.onerror = () => t2.onError(e2.status);
-    e2.onreadystatechange = this.#ys.bind(this, e2);
-    e2.onprogress = this.#vs.bind(this, e2);
+    e2.onreadystatechange = this.#Dr.bind(this, e2);
+    e2.onprogress = this.#Pr.bind(this, e2);
     e2.send(null);
     return e2;
   }
-  #vs(t2, e2) {
-    const i2 = this.#bs.get(t2);
+  #Pr(t2, e2) {
+    const i2 = this.#kr.get(t2);
     i2?.onProgress?.(e2);
   }
-  #ys(t2, e2) {
-    const i2 = this.#bs.get(t2);
+  #Dr(t2, e2) {
+    const i2 = this.#kr.get(t2);
     if (!i2) return;
     if (t2.readyState >= 2 && i2.onHeadersReceived) {
       i2.onHeadersReceived();
       delete i2.onHeadersReceived;
     }
     if (4 !== t2.readyState) return;
-    if (!this.#bs.has(t2)) return;
-    this.#bs.delete(t2);
+    if (!this.#kr.has(t2)) return;
+    this.#kr.delete(t2);
     if (0 === t2.status && this.isHttp) {
       i2.onError(t2.status);
       return;
@@ -12144,21 +12346,21 @@ var PDFNetworkStream = class extends BasePDFStream {
       i2.onError(t2.status);
       return;
     }
-    const s2 = (function network_getArrayBuffer(t3) {
+    const r2 = (function network_getArrayBuffer(t3) {
       return "string" != typeof t3 ? t3 : stringToBytes(t3).buffer;
     })(t2.response);
     if (206 === n2) {
       const e3 = t2.getResponseHeader("Content-Range");
-      if (/bytes \d+-\d+\/\d+/.test(e3)) i2.onDone(s2);
+      if (/bytes \d+-\d+\/\d+/.test(e3)) i2.onDone(r2);
       else {
         warn('Missing or invalid "Content-Range" header.');
         i2.onError(0);
       }
-    } else s2 ? i2.onDone(s2) : i2.onError(t2.status);
+    } else r2 ? i2.onDone(r2) : i2.onError(t2.status);
   }
   _abortRequest(t2) {
-    if (this.#bs.has(t2)) {
-      this.#bs.delete(t2);
+    if (this.#kr.has(t2)) {
+      this.#kr.delete(t2);
       t2.abort();
     }
   }
@@ -12169,43 +12371,47 @@ var PDFNetworkStream = class extends BasePDFStream {
   }
 };
 var PDFNetworkStreamReader = class extends BasePDFStreamReader {
-  #fs = endRequests.bind(this);
+  #_r = endRequests.bind(this);
   _cachedChunks = [];
   _done = false;
   _requests = [];
   _storedError = null;
   constructor(t2) {
     super(t2);
-    this._fullRequestXhr = t2._request({ onHeadersReceived: this.#ws.bind(this), onDone: this.#xs.bind(this), onError: this.#As.bind(this), onProgress: this.#vs.bind(this) });
+    this._fullRequestXhr = t2._request({ onHeadersReceived: this.#Mr.bind(this), onDone: this.#Ir.bind(this), onError: this.#Fr.bind(this), onProgress: this.#Pr.bind(this) });
   }
-  #ws() {
+  #Mr() {
     const t2 = this._stream, { disableRange: e2, rangeChunkSize: i2 } = t2._source, n2 = this._fullRequestXhr;
     t2._responseOrigin = getResponseOrigin(n2.responseURL);
-    const s2 = n2.getAllResponseHeaders(), r2 = new Headers(s2 ? s2.trimStart().replace(/[^\S ]+$/, "").split(/[\r\n]+/).map((t3) => {
+    const r2 = n2.getAllResponseHeaders(), s2 = new Headers(r2 ? (function trimHeadersEnd(t3) {
+      let e3 = t3.length;
+      for (; e3 > 0 && " " !== t3[e3 - 1] && /\s/.test(t3[e3 - 1]); ) e3--;
+      return t3.slice(0, e3);
+    })(r2.trimStart()).split(/[\r\n]+/).map((t3) => {
       const [e3, ...i3] = t3.split(": ");
       return [e3, i3.join(": ")];
-    }) : []), { contentLength: a2, isRangeSupported: o2 } = validateRangeRequestCapabilities({ responseHeaders: r2, isHttp: t2.isHttp, rangeChunkSize: i2, disableRange: e2 });
+    }) : []), { contentLength: a2, isRangeSupported: o2 } = validateRangeRequestCapabilities({ responseHeaders: s2, isHttp: t2.isHttp, rangeChunkSize: i2, disableRange: e2 });
     this._contentLength = a2;
     this._isRangeSupported = o2;
-    this._filename = extractFilenameFromHeader(r2);
+    this._filename = extractFilenameFromHeader(s2);
     this._isRangeSupported && t2._abortRequest(n2);
     this._headersCapability.resolve();
   }
-  #xs(t2) {
+  #Ir(t2) {
     if (this._requests.length > 0) {
       this._requests.shift().resolve({ value: t2, done: false });
     } else this._cachedChunks.push(t2);
     this._done = true;
-    0 === this._cachedChunks.length && this.#fs();
+    0 === this._cachedChunks.length && this.#_r();
   }
-  #As(t2) {
+  #Fr(t2) {
     this._storedError = createResponseError(t2, this._stream.url);
     this._headersCapability.reject(this._storedError);
     for (const t3 of this._requests) t3.reject(this._storedError);
     this._requests.length = 0;
     this._cachedChunks.length = 0;
   }
-  #vs(t2) {
+  #Pr(t2) {
     this.onProgress?.({ loaded: t2.loaded, total: t2.lengthComputable ? t2.total : this._contentLength });
   }
   async read() {
@@ -12222,13 +12428,13 @@ var PDFNetworkStreamReader = class extends BasePDFStreamReader {
   cancel(t2) {
     this._done = true;
     this._headersCapability.reject(t2);
-    this.#fs();
+    this.#_r();
     this._stream._abortRequest(this._fullRequestXhr);
     this._fullRequestXhr = null;
   }
 };
 var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
-  #fs = endRequests.bind(this);
+  #_r = endRequests.bind(this);
   onClosed = null;
   _done = false;
   _queuedChunk = null;
@@ -12236,26 +12442,26 @@ var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
   _storedError = null;
   constructor(t2, e2, i2) {
     super(t2, e2, i2);
-    this._requestXhr = t2._request({ begin: e2, end: i2, onHeadersReceived: this.#ws.bind(this), onDone: this.#xs.bind(this), onError: this.#As.bind(this), onProgress: null });
+    this._requestXhr = t2._request({ begin: e2, end: i2, onHeadersReceived: this.#Mr.bind(this), onDone: this.#Ir.bind(this), onError: this.#Fr.bind(this), onProgress: null });
   }
-  #ws() {
+  #Mr() {
     const t2 = getResponseOrigin(this._requestXhr?.responseURL);
     try {
       ensureResponseOrigin(t2, this._stream._responseOrigin);
     } catch (t3) {
       this._storedError = t3;
-      this.#As(0);
+      this.#Fr(0);
     }
   }
-  #xs(t2) {
+  #Ir(t2) {
     if (this._requests.length > 0) {
       this._requests.shift().resolve({ value: t2, done: false });
     } else this._queuedChunk = t2;
     this._done = true;
-    this.#fs();
+    this.#_r();
     this.onClosed?.();
   }
-  #As(t2) {
+  #Fr(t2) {
     this._storedError ??= createResponseError(t2, this._stream.url);
     for (const t3 of this._requests) t3.reject(this._storedError);
     this._requests.length = 0;
@@ -12275,14 +12481,14 @@ var PDFNetworkStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
   cancel(t2) {
     this._done = true;
-    this.#fs();
+    this.#_r();
     this._stream._abortRequest(this._requestXhr);
     this.onClosed?.();
   }
 };
 function getReadableStream(t2, e2 = null) {
-  const i2 = process.getBuiltinModule("fs"), { Readable: n2 } = process.getBuiltinModule("stream"), s2 = i2.createReadStream(t2, e2);
-  return n2.toWeb(s2);
+  const i2 = process.getBuiltinModule("fs"), { Readable: n2 } = process.getBuiltinModule("stream"), r2 = i2.createReadStream(t2, e2);
+  return n2.toWeb(r2);
 }
 var PDFNodeStream = class extends BasePDFStream {
   constructor(t2) {
@@ -12295,18 +12501,18 @@ var PDFNodeStreamReader = class extends BasePDFStreamReader {
   _reader = null;
   constructor(t2) {
     super(t2);
-    const { disableRange: e2, disableStream: i2, rangeChunkSize: n2, url: s2 } = t2._source;
+    const { disableRange: e2, disableStream: i2, rangeChunkSize: n2, url: r2 } = t2._source;
     this._isStreamingSupported = !i2;
-    process.getBuiltinModule("fs/promises").lstat(s2).then((t3) => {
-      const i3 = getReadableStream(s2);
+    process.getBuiltinModule("fs/promises").lstat(r2).then((t3) => {
+      const i3 = getReadableStream(r2);
       this._reader = i3.getReader();
-      const { size: r2 } = t3;
-      this._contentLength = r2;
-      this._isRangeSupported = !e2 && r2 > 2 * n2;
+      const { size: s2 } = t3;
+      this._contentLength = s2;
+      this._isRangeSupported = !e2 && s2 > 2 * n2;
       !this._isStreamingSupported && this._isRangeSupported && this.cancel(new AbortException("Streaming is disabled."));
       this._headersCapability.resolve();
     }).catch((t3) => {
-      "ENOENT" === t3.code && (t3 = createResponseError(0, s2));
+      "ENOENT" === t3.code && (t3 = createResponseError(0, r2));
       this._headersCapability.reject(t3);
     });
   }
@@ -12346,120 +12552,120 @@ var PDFNodeStreamRangeReader = class extends BasePDFStreamRangeReader {
   }
 };
 var GlobalWorkerOptions = class {
-  static #Es = null;
-  static #Cs = "";
+  static #Or = null;
+  static #Rr = "";
   static get workerPort() {
-    return this.#Es;
+    return this.#Or;
   }
   static set workerPort(t2) {
     if (!("undefined" != typeof Worker && t2 instanceof Worker) && null !== t2) throw new Error("Invalid `workerPort` type.");
-    this.#Es = t2;
+    this.#Or = t2;
   }
   static get workerSrc() {
-    return this.#Cs;
+    return this.#Rr;
   }
   static set workerSrc(t2) {
     if ("string" != typeof t2) throw new Error("Invalid `workerSrc` type.");
-    this.#Cs = t2;
+    this.#Rr = t2;
   }
 };
 var Metadata = class {
-  #Ss;
-  #Ts;
+  #Br;
+  #Lr;
   constructor({ parsedData: t2, rawData: e2 }) {
-    this.#Ss = t2;
-    this.#Ts = e2;
+    this.#Br = t2;
+    this.#Lr = e2;
   }
   getRaw() {
-    return this.#Ts;
+    return this.#Lr;
   }
   get(t2) {
-    return this.#Ss.get(t2) ?? null;
+    return this.#Br.get(t2) ?? null;
   }
   [Symbol.iterator]() {
-    return this.#Ss.entries();
+    return this.#Br.entries();
   }
 };
-var Nt = /* @__PURE__ */ Symbol("INTERNAL");
+var Ut = /* @__PURE__ */ Symbol("INTERNAL");
 var OptionalContentGroup = class {
-  #_s = false;
-  #ks = false;
-  #Ds = false;
-  #Ms = true;
-  constructor(t2, { name: e2, intent: i2, usage: n2, rbGroups: s2 }) {
-    this.#_s = !!(t2 & l);
-    this.#ks = !!(t2 & h);
+  #Nr = false;
+  #Ur = false;
+  #Hr = false;
+  #zr = true;
+  constructor(t2, { name: e2, intent: i2, usage: n2, rbGroups: r2 }) {
+    this.#Nr = !!(t2 & l);
+    this.#Ur = !!(t2 & c);
     this.name = e2;
     this.intent = i2;
     this.usage = n2;
-    this.rbGroups = s2;
+    this.rbGroups = r2;
   }
   get visible() {
-    if (this.#Ds) return this.#Ms;
-    if (!this.#Ms) return false;
+    if (this.#Hr) return this.#zr;
+    if (!this.#zr) return false;
     const { print: t2, view: e2 } = this.usage;
-    return this.#_s ? "OFF" !== e2?.viewState : !this.#ks || "OFF" !== t2?.printState;
+    return this.#Nr ? "OFF" !== e2?.viewState : !this.#Ur || "OFF" !== t2?.printState;
   }
   _setVisible(t2, e2, i2 = false) {
-    t2 !== Nt && unreachable("Internal method `_setVisible` called.");
-    this.#Ds = i2;
-    this.#Ms = e2;
+    t2 !== Ut && unreachable("Internal method `_setVisible` called.");
+    this.#Hr = i2;
+    this.#zr = e2;
   }
   get serializable() {
-    return { userSet: this.#Ds, visible: this.#Ms };
+    return { userSet: this.#Hr, visible: this.#zr };
   }
 };
 var OptionalContentConfig = class _OptionalContentConfig {
-  #Ps = null;
-  #Is = /* @__PURE__ */ new Map();
-  #Fs = null;
-  #Os = null;
-  #Rs;
+  #Gr = null;
+  #jr = /* @__PURE__ */ new Map();
+  #Wr = null;
+  #Vr = null;
+  #$r;
   creator = null;
   name = null;
   constructor(t2, e2 = l, i2 = null) {
-    this.#Rs = t2;
+    this.#$r = t2;
     this.renderingIntent = e2;
     if (null !== t2) {
       this.name = t2.name;
       this.creator = t2.creator;
-      this.#Os = t2.order;
-      for (const i3 of t2.groups) this.#Is.set(i3.id, new OptionalContentGroup(e2, i3));
+      this.#Vr = t2.order;
+      for (const i3 of t2.groups) this.#jr.set(i3.id, new OptionalContentGroup(e2, i3));
       if (i2) {
-        i2.size !== this.#Is.size && unreachable("Incorrect serialized groupState.");
-        for (const [t3, e3] of i2) this.#Is.get(t3)._setVisible(Nt, e3.visible, e3.userSet);
+        i2.size !== this.#jr.size && unreachable("Incorrect serialized groupState.");
+        for (const [t3, e3] of i2) this.#jr.get(t3)._setVisible(Ut, e3.visible, e3.userSet);
       } else {
-        if ("OFF" === t2.baseState) for (const t3 of this.#Is.values()) t3._setVisible(Nt, false);
-        for (const e3 of t2.on) this.#Is.get(e3)._setVisible(Nt, true);
-        for (const e3 of t2.off) this.#Is.get(e3)._setVisible(Nt, false);
+        if ("OFF" === t2.baseState) for (const t3 of this.#jr.values()) t3._setVisible(Ut, false);
+        for (const e3 of t2.on) this.#jr.get(e3)._setVisible(Ut, true);
+        for (const e3 of t2.off) this.#jr.get(e3)._setVisible(Ut, false);
       }
-      this.#Fs = this.getHash();
+      this.#Wr = this.getHash();
     }
   }
-  #Bs(t2) {
+  #qr(t2) {
     const e2 = t2.length;
     if (e2 < 2) return true;
     const i2 = t2[0];
     for (let n2 = 1; n2 < e2; n2++) {
       const e3 = t2[n2];
-      let s2;
-      if (Array.isArray(e3)) s2 = this.#Bs(e3);
+      let r2;
+      if (Array.isArray(e3)) r2 = this.#qr(e3);
       else {
-        if (!this.#Is.has(e3)) {
+        if (!this.#jr.has(e3)) {
           warn(`Optional content group not found: ${e3}`);
           return true;
         }
-        s2 = this.#Is.get(e3).visible;
+        r2 = this.#jr.get(e3).visible;
       }
       switch (i2) {
         case "And":
-          if (!s2) return false;
+          if (!r2) return false;
           break;
         case "Or":
-          if (s2) return true;
+          if (r2) return true;
           break;
         case "Not":
-          return !s2;
+          return !r2;
         default:
           return true;
       }
@@ -12467,57 +12673,57 @@ var OptionalContentConfig = class _OptionalContentConfig {
     return "And" === i2;
   }
   isVisible(t2) {
-    if (0 === this.#Is.size) return true;
+    if (0 === this.#jr.size) return true;
     if (!t2) {
       info("Optional content group not defined.");
       return true;
     }
     if ("OCG" === t2.type) {
-      if (!this.#Is.has(t2.id)) {
+      if (!this.#jr.has(t2.id)) {
         warn(`Optional content group not found: ${t2.id}`);
         return true;
       }
-      return this.#Is.get(t2.id).visible;
+      return this.#jr.get(t2.id).visible;
     }
     if ("OCMD" === t2.type) {
-      if (t2.expression) return this.#Bs(t2.expression);
+      if (t2.expression) return this.#qr(t2.expression);
       if (!t2.policy || "AnyOn" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Is.has(e2)) {
+          if (!this.#jr.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (this.#Is.get(e2).visible) return true;
+          if (this.#jr.get(e2).visible) return true;
         }
         return false;
       }
       if ("AllOn" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Is.has(e2)) {
+          if (!this.#jr.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (!this.#Is.get(e2).visible) return false;
+          if (!this.#jr.get(e2).visible) return false;
         }
         return true;
       }
       if ("AnyOff" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Is.has(e2)) {
+          if (!this.#jr.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (!this.#Is.get(e2).visible) return true;
+          if (!this.#jr.get(e2).visible) return true;
         }
         return false;
       }
       if ("AllOff" === t2.policy) {
         for (const e2 of t2.ids) {
-          if (!this.#Is.has(e2)) {
+          if (!this.#jr.has(e2)) {
             warn(`Optional content group not found: ${e2}`);
             return true;
           }
-          if (this.#Is.get(e2).visible) return false;
+          if (this.#jr.get(e2).visible) return false;
         }
         return true;
       }
@@ -12528,11 +12734,11 @@ var OptionalContentConfig = class _OptionalContentConfig {
     return true;
   }
   setVisibility(t2, e2 = true, i2 = true) {
-    const n2 = this.#Is.get(t2);
+    const n2 = this.#jr.get(t2);
     if (n2) {
-      if (i2 && e2 && n2.rbGroups.length) for (const e3 of n2.rbGroups) for (const i3 of e3) i3 !== t2 && this.#Is.get(i3)?._setVisible(Nt, false, true);
-      n2._setVisible(Nt, !!e2, true);
-      this.#Ps = null;
+      if (i2 && e2 && n2.rbGroups.length) for (const e3 of n2.rbGroups) for (const i3 of e3) i3 !== t2 && this.#jr.get(i3)?._setVisible(Ut, false, true);
+      n2._setVisible(Ut, !!e2, true);
+      this.#Gr = null;
     } else warn(`Optional content group not found: ${t2}`);
   }
   setOCGState({ state: t2, preserveRB: e2 }) {
@@ -12545,7 +12751,7 @@ var OptionalContentConfig = class _OptionalContentConfig {
           i2 = n2;
           continue;
       }
-      const t3 = this.#Is.get(n2);
+      const t3 = this.#jr.get(n2);
       if (t3) switch (i2) {
         case "ON":
           this.setVisibility(n2, true, e2);
@@ -12557,163 +12763,183 @@ var OptionalContentConfig = class _OptionalContentConfig {
           this.setVisibility(n2, !t3.visible, e2);
       }
     }
-    this.#Ps = null;
+    this.#Gr = null;
   }
   get hasInitialVisibility() {
-    return null === this.#Fs || this.getHash() === this.#Fs;
+    return null === this.#Wr || this.getHash() === this.#Wr;
   }
   getOrder() {
-    return this.#Is.size ? this.#Os ? this.#Os.slice() : [...this.#Is.keys()] : null;
+    return this.#jr.size ? this.#Vr ? this.#Vr.slice() : [...this.#jr.keys()] : null;
   }
   getGroup(t2) {
-    return this.#Is.get(t2) || null;
+    return this.#jr.get(t2) || null;
   }
   getHash() {
-    if (null !== this.#Ps) return this.#Ps;
+    if (null !== this.#Gr) return this.#Gr;
     const t2 = new MurmurHash3_64();
-    for (const [e2, i2] of this.#Is) t2.update(`${e2}:${i2.visible}`);
-    return this.#Ps = t2.hexdigest();
+    for (const [e2, i2] of this.#jr) t2.update(`${e2}:${i2.visible}`);
+    return this.#Gr = t2.hexdigest();
   }
   [Symbol.iterator]() {
-    return this.#Is.entries();
+    return this.#jr.entries();
   }
   get serializable() {
     const t2 = /* @__PURE__ */ new Map();
-    for (const [e2, i2] of this.#Is) t2.set(e2, i2.serializable);
-    return { data: this.#Rs, renderingIntent: this.renderingIntent, groupState: t2 };
+    for (const [e2, i2] of this.#jr) t2.set(e2, i2.serializable);
+    return { data: this.#$r, renderingIntent: this.renderingIntent, groupState: t2 };
   }
   static fromSerializable({ data: t2, renderingIntent: e2, groupState: i2 }) {
     return new _OptionalContentConfig(t2, e2, i2);
   }
 };
 var PagesMapper = class {
-  #Ls = null;
-  #Ns = null;
-  #Us = 0;
-  #Hs = null;
-  #zs = null;
+  #Xr = null;
+  #Kr = null;
+  #Yr = 0;
+  #Jr = null;
+  #Qr = null;
   get pagesNumber() {
-    return this.#Us;
+    return this.#Yr;
   }
   set pagesNumber(t2) {
-    if (this.#Us !== t2) {
-      this.#Us = t2;
-      this.#Ls = null;
-      this.#Ns = null;
+    if (this.#Yr !== t2) {
+      this.#Yr = t2;
+      this.#Xr = null;
+      this.#Kr = null;
     }
   }
-  #Gs() {
-    if (this.#Ls) return;
-    const t2 = this.#Us, e2 = this.#Ls = new Uint32Array(t2);
+  #Zr() {
+    if (this.#Xr) return;
+    const t2 = this.#Yr, e2 = this.#Xr = new Uint32Array(t2);
     for (let i2 = 0; i2 < t2; i2++) e2[i2] = i2 + 1;
-    this.#Ns = new Int32Array(e2);
+    this.#Kr = new Int32Array(e2);
   }
-  #js() {
-    const t2 = /* @__PURE__ */ new Map(), e2 = this.#Ls;
-    for (let i2 = 0, n2 = this.#Us; i2 < n2; i2++) {
-      const n3 = e2[i2], s2 = t2.get(n3);
-      s2 ? s2.push(i2 + 1) : t2.set(n3, [i2 + 1]);
+  #ts() {
+    const t2 = /* @__PURE__ */ new Map(), e2 = this.#Xr;
+    for (let i2 = 0, n2 = this.#Yr; i2 < n2; i2++) {
+      const n3 = e2[i2], r2 = t2.get(n3);
+      r2 ? r2.push(i2 + 1) : t2.set(n3, [i2 + 1]);
     }
     return t2;
   }
   movePages(t2, e2, i2) {
-    this.#Gs();
-    const n2 = this.#Ls, s2 = this.#js(), r2 = e2.length, a2 = new Uint32Array(r2);
-    let o2 = 0;
+    this.#Zr();
+    const n2 = this.#Xr, r2 = e2.length, s2 = new Uint32Array(r2);
+    let a2 = 0;
     for (let t3 = 0; t3 < r2; t3++) {
-      const s3 = e2[t3] - 1;
-      a2[t3] = n2[s3];
-      s3 < i2 && o2++;
+      const r3 = e2[t3] - 1;
+      s2[t3] = n2[r3];
+      r3 < i2 && a2++;
     }
-    const l2 = this.#Us, h2 = l2 - r2, c2 = MathClamp(i2 - o2, 0, h2);
-    for (let e3 = 0, i3 = 0; e3 < l2; e3++) t2.has(e3 + 1) || (n2[i3++] = n2[e3]);
-    n2.copyWithin(c2 + r2, c2, h2);
-    n2.set(a2, c2);
-    this.#Ws(s2);
-    n2.every((t3, e3) => t3 === e3 + 1) && (this.#Ls = null);
+    const o2 = this.#Yr, l2 = o2 - r2, c2 = new Int32Array(o2), h2 = MathClamp(i2 - a2, 0, l2);
+    for (let e3 = 0, i3 = 0; e3 < o2; e3++) if (!t2.has(e3 + 1)) {
+      n2[i3] = n2[e3];
+      c2[i3++] = e3 + 1;
+    }
+    n2.copyWithin(h2 + r2, h2, l2);
+    n2.set(s2, h2);
+    c2.copyWithin(h2 + r2, h2, l2);
+    c2.set(e2, h2);
+    this.#Kr = c2;
+    n2.every((t3, e3) => t3 === e3 + 1) && (this.#Xr = null);
   }
   deletePages(t2) {
-    this.#Gs();
-    const e2 = this.#Ls, i2 = this.#js();
-    this.#zs = { pageNumberToId: e2.slice(), pagesNumber: this.#Us, prevPageNumbers: this.#Ns.slice() };
-    const n2 = this.#Us - t2.length;
-    this.#Us = n2;
-    const s2 = this.#Ls = new Uint32Array(n2);
-    this.#Ns = new Int32Array(n2);
-    let r2 = 0, a2 = 0;
+    this.#Zr();
+    const e2 = this.#Xr, i2 = this.#ts();
+    this.#Qr = { pageNumberToId: e2.slice(), pagesNumber: this.#Yr, prevPageNumbers: this.#Kr.slice() };
+    const n2 = this.#Yr - t2.length;
+    this.#Yr = n2;
+    const r2 = this.#Xr = new Uint32Array(n2);
+    this.#Kr = new Int32Array(n2);
+    let s2 = 0, a2 = 0;
     for (const i3 of t2) {
       const t3 = i3 - 1;
-      if (t3 !== r2) {
-        s2.set(e2.subarray(r2, t3), a2);
-        a2 += t3 - r2;
+      if (t3 !== s2) {
+        r2.set(e2.subarray(s2, t3), a2);
+        a2 += t3 - s2;
       }
-      r2 = t3 + 1;
+      s2 = t3 + 1;
     }
-    r2 < e2.length && s2.set(e2.subarray(r2), a2);
-    this.#Ws(i2, new Set(t2));
+    s2 < e2.length && r2.set(e2.subarray(s2), a2);
+    this.#es(i2, new Set(t2));
   }
   cancelDelete() {
-    if (this.#zs) {
-      this.#Ls = this.#zs.pageNumberToId;
-      this.#Us = this.#zs.pagesNumber;
-      this.#Ns = this.#zs.prevPageNumbers;
-      this.#zs = null;
+    if (this.#Qr) {
+      this.#Xr = this.#Qr.pageNumberToId;
+      this.#Yr = this.#Qr.pagesNumber;
+      this.#Kr = this.#Qr.prevPageNumbers;
+      this.#Qr = null;
     }
   }
   cleanSavedData() {
-    this.#zs = null;
+    this.#Qr = null;
   }
   copyPages(t2) {
-    this.#Gs();
-    this.#Hs = { pageNumbers: t2, pageIds: t2.map((t3) => this.#Ls[t3 - 1]) };
+    this.#Zr();
+    this.#Jr = { pageNumbers: t2, pageIds: t2.map((t3) => this.#Xr[t3 - 1]) };
   }
   cancelCopy() {
-    this.#Hs = null;
+    this.#Jr = null;
   }
   pastePages(t2) {
-    this.#Gs();
-    const e2 = this.#Ls, i2 = this.#js(), { pageNumbers: n2, pageIds: s2 } = this.#Hs, r2 = this.#Us + n2.length;
-    this.#Us = r2;
-    const a2 = this.#Ls = new Uint32Array(r2);
-    this.#Ns = new Int32Array(r2);
+    this.#Zr();
+    const e2 = this.#Xr, i2 = this.#ts(), { pageNumbers: n2, pageIds: r2 } = this.#Jr, s2 = this.#Yr + n2.length;
+    this.#Yr = s2;
+    const a2 = this.#Xr = new Uint32Array(s2);
+    this.#Kr = new Int32Array(s2);
     a2.set(e2.subarray(0, t2), 0);
-    a2.set(s2, t2);
+    a2.set(r2, t2);
     a2.set(e2.subarray(t2), t2 + n2.length);
-    this.#Ws(i2, null, t2, n2);
-    this.#Hs = null;
+    this.#es(i2, null, t2, n2);
+    this.#Jr = null;
   }
-  #Ws(t2, e2 = null, i2 = -1, n2 = null) {
-    const s2 = this.#Ns, r2 = this.#Ls, a2 = i2 + (n2?.length ?? 0), o2 = /* @__PURE__ */ new Map();
-    for (let l2 = 0, h2 = this.#Us; l2 < h2; l2++) {
+  #es(t2, e2 = null, i2 = -1, n2 = null) {
+    const r2 = this.#Kr, s2 = this.#Xr, a2 = i2 + (n2?.length ?? 0), o2 = /* @__PURE__ */ new Map();
+    for (let l2 = 0, c2 = this.#Yr; l2 < c2; l2++) {
       if (l2 >= i2 && l2 < a2) {
-        s2[l2] = -n2[l2 - i2];
+        r2[l2] = -n2[l2 - i2];
         continue;
       }
-      const h3 = r2[l2], c2 = t2.get(h3);
-      let d2 = o2.get(h3) || 0;
-      if (e2 && c2) for (; d2 < c2.length && e2.has(c2[d2]); ) d2++;
-      s2[l2] = c2?.[d2];
-      o2.set(h3, d2 + 1);
+      const c3 = s2[l2], h2 = t2.get(c3);
+      let d2 = o2.get(c3) || 0;
+      if (e2 && h2) for (; d2 < h2.length && e2.has(h2[d2]); ) d2++;
+      r2[l2] = h2?.[d2];
+      o2.set(c3, d2 + 1);
     }
   }
   hasBeenAltered() {
-    return null !== this.#Ls;
+    return null !== this.#Xr;
   }
-  getPageMappingForSaving(t2 = null) {
-    t2 ??= this.#js();
-    let e2 = 0;
-    for (const i3 of t2.values()) e2 = Math.max(e2, i3.length);
-    const i2 = new Array(e2);
-    for (let t3 = 0; t3 < e2; t3++) i2[t3] = { document: null, pageIndices: [], includePages: [] };
-    for (const [e3, n2] of t2) for (let t3 = 0, s2 = n2.length; t3 < s2; t3++) i2[t3].includePages.push([e3 - 1, n2[t3] - 1]);
-    for (const { includePages: t3, pageIndices: e3 } of i2) {
+  #is(t2 = null) {
+    if (!this.#Xr) return null;
+    const e2 = new Int32Array(this.#Yr).fill(-1), i2 = /* @__PURE__ */ new Map();
+    if (t2) for (const n2 of t2) {
+      const t3 = this.getPageId(n2), r2 = i2.get(t3) ?? 0;
+      i2.set(t3, r2 + 1);
+      e2[n2 - 1] = r2;
+    }
+    else for (let t3 = 0, n2 = this.#Yr; t3 < n2; t3++) {
+      const n3 = this.#Xr[t3], r2 = i2.get(n3) ?? 0;
+      i2.set(n3, r2 + 1);
+      e2[t3] = r2;
+    }
+    return e2;
+  }
+  getPageMappingForSaving(t2 = null, e2 = this.#is()) {
+    t2 ??= this.#ts();
+    let i2 = 0;
+    for (const e3 of t2.values()) i2 = Math.max(i2, e3.length);
+    const n2 = new Array(i2);
+    for (let t3 = 0; t3 < i2; t3++) n2[t3] = { document: null, pageIndices: [], includePages: [] };
+    for (const [e3, i3] of t2) for (let t3 = 0, r2 = i3.length; t3 < r2; t3++) n2[t3].includePages.push([e3 - 1, i3[t3] - 1]);
+    for (const { includePages: t3, pageIndices: e3 } of n2) {
       t3.sort((t4, e4) => t4[0] - e4[0]);
-      for (let i3 = 0, n2 = t3.length; i3 < n2; i3++) {
+      for (let i3 = 0, n3 = t3.length; i3 < n3; i3++) {
         e3.push(t3[i3][1]);
         t3[i3] = t3[i3][0];
       }
     }
-    return i2;
+    return { pageInfos: n2, copyLevels: e2 };
   }
   extractPages(t2) {
     t2 = Array.from(t2).sort((t3, e3) => t3 - e3);
@@ -12722,112 +12948,112 @@ var PagesMapper = class {
       const n3 = this.getPageId(t2[i2]);
       e2.getOrInsertComputed(n3, makeArr).push(i2 + 1);
     }
-    return this.getPageMappingForSaving(e2);
+    return this.getPageMappingForSaving(e2, this.#is(t2));
   }
   getPrevPageNumber(t2) {
-    return this.#Ns?.[t2 - 1] ?? 0;
+    return this.#Kr?.[t2 - 1] ?? 0;
   }
   getPageNumber(t2) {
-    if (!this.#Ls) return t2;
-    const e2 = this.#Ls;
-    for (let i2 = 0, n2 = this.#Us; i2 < n2; i2++) if (e2[i2] === t2) return i2 + 1;
+    if (!this.#Xr) return t2;
+    const e2 = this.#Xr;
+    for (let i2 = 0, n2 = this.#Yr; i2 < n2; i2++) if (e2[i2] === t2) return i2 + 1;
     return 0;
   }
   getPageId(t2) {
-    return this.#Ls?.[t2 - 1] ?? t2;
+    return this.#Xr?.[t2 - 1] ?? t2;
   }
   getMapping() {
-    return this.#Ls?.subarray(0, this.pagesNumber);
+    return this.#Xr?.subarray(0, this.pagesNumber);
   }
 };
-var Ut = /* @__PURE__ */ Symbol("INITIAL_DATA");
-var dataObj = () => ({ ...Promise.withResolvers(), data: Ut });
+var Ht = /* @__PURE__ */ Symbol("INITIAL_DATA");
+var dataObj = () => ({ ...Promise.withResolvers(), data: Ht });
 var PDFObjects = class {
-  #Vs = /* @__PURE__ */ new Map();
+  #ns = /* @__PURE__ */ new Map();
   get(t2, e2 = null) {
     if (e2) {
-      const i3 = this.#Vs.getOrInsertComputed(t2, dataObj);
+      const i3 = this.#ns.getOrInsertComputed(t2, dataObj);
       i3.promise.then(() => e2(i3.data));
       return null;
     }
-    const i2 = this.#Vs.get(t2);
-    if (!i2 || i2.data === Ut) throw new Error(`Requesting object that isn't resolved yet ${t2}.`);
+    const i2 = this.#ns.get(t2);
+    if (!i2 || i2.data === Ht) throw new Error(`Requesting object that isn't resolved yet ${t2}.`);
     return i2.data;
   }
   has(t2) {
-    const e2 = this.#Vs.get(t2);
-    return !!e2 && e2.data !== Ut;
+    const e2 = this.#ns.get(t2);
+    return !!e2 && e2.data !== Ht;
   }
   delete(t2) {
-    const e2 = this.#Vs.get(t2);
-    if (!e2 || e2.data === Ut) return false;
-    this.#Vs.delete(t2);
+    const e2 = this.#ns.get(t2);
+    if (!e2 || e2.data === Ht) return false;
+    this.#ns.delete(t2);
     return true;
   }
   resolve(t2, e2 = null) {
-    const i2 = this.#Vs.getOrInsertComputed(t2, dataObj);
-    if (i2.data !== Ut) throw new Error(`Object already resolved ${t2}.`);
+    const i2 = this.#ns.getOrInsertComputed(t2, dataObj);
+    if (i2.data !== Ht) throw new Error(`Object already resolved ${t2}.`);
     i2.data = e2;
     i2.resolve();
   }
   clear() {
-    for (const { data: t2 } of this.#Vs.values()) t2?.bitmap?.close();
-    this.#Vs.clear();
+    for (const { data: t2 } of this.#ns.values()) t2?.bitmap?.close();
+    this.#ns.clear();
   }
   *[Symbol.iterator]() {
-    for (const [t2, { data: e2 }] of this.#Vs) e2 !== Ut && (yield [t2, e2]);
+    for (const [t2, { data: e2 }] of this.#ns) e2 !== Ht && (yield [t2, e2]);
   }
 };
 var TextLayer = class _TextLayer {
-  #$s = Promise.withResolvers();
-  #Dt = null;
-  #qs = false;
-  #Ks = !!globalThis.FontInspector?.enabled;
-  #Xs = null;
-  #Ys = null;
-  #Js = null;
-  #Qs = 0;
-  #Zs = 0;
-  #tr = null;
-  #er = null;
-  #ir = 0;
-  #nr = 0;
-  #sr = /* @__PURE__ */ Object.create(null);
-  #rr = [];
-  #ar = null;
-  #or = [];
-  #lr = /* @__PURE__ */ new WeakMap();
-  #hr = null;
-  static #cr = /* @__PURE__ */ new Map();
-  static #dr = /* @__PURE__ */ new Map();
-  static #ur = /* @__PURE__ */ new WeakMap();
-  static #pr = null;
-  static #gr = /* @__PURE__ */ new Set();
+  #rs = Promise.withResolvers();
+  #Pt = null;
+  #ss = false;
+  #as = !!globalThis.FontInspector?.enabled;
+  #os = null;
+  #ls = null;
+  #cs = null;
+  #hs = 0;
+  #ds = 0;
+  #us = null;
+  #ps = null;
+  #gs = 0;
+  #ms = 0;
+  #fs = /* @__PURE__ */ Object.create(null);
+  #bs = [];
+  #ys = null;
+  #vs = [];
+  #ws = /* @__PURE__ */ new WeakMap();
+  #As = null;
+  static #xs = /* @__PURE__ */ new Map();
+  static #Es = /* @__PURE__ */ new Map();
+  static #Cs = /* @__PURE__ */ new WeakMap();
+  static #Ss = null;
+  static #Ts = /* @__PURE__ */ new Set();
   constructor({ textContentSource: t2, images: e2, container: i2, viewport: n2 }) {
-    if (t2 instanceof ReadableStream) this.#ar = t2;
+    if (t2 instanceof ReadableStream) this.#ys = t2;
     else {
       if ("object" != typeof t2) throw new Error('No "textContentSource" parameter specified.');
-      this.#ar = new ReadableStream({ start(e3) {
+      this.#ys = new ReadableStream({ start(e3) {
         e3.enqueue(t2);
         e3.close();
       } });
     }
-    this.#Dt = this.#er = i2;
-    this.#Xs = e2;
-    this.#nr = n2.scale * OutputScale.pixelRatio;
-    this.#ir = n2.rotation;
-    this.#Js = { div: null, properties: null, ctx: null };
-    const { pageWidth: s2, pageHeight: r2, pageX: a2, pageY: o2 } = n2.rawDims;
-    this.#hr = [1, 0, 0, -1, -a2, o2 + r2];
-    this.#Zs = s2;
-    this.#Qs = r2;
-    _TextLayer.#mr();
-    i2.style.setProperty("--min-font-size", _TextLayer.#pr);
+    this.#Pt = this.#ps = i2;
+    this.#os = e2;
+    this.#ms = n2.scale * OutputScale.pixelRatio;
+    this.#gs = n2.rotation;
+    this.#cs = { div: null, properties: null, ctx: null };
+    const { pageWidth: r2, pageHeight: s2, pageX: a2, pageY: o2 } = n2.rawDims;
+    this.#As = [1, 0, 0, -1, -a2, o2 + s2];
+    this.#ds = r2;
+    this.#hs = s2;
+    _TextLayer.#_s();
+    i2.style.setProperty("--min-font-size", _TextLayer.#Ss);
     setLayerDimensions(i2, n2);
-    this.#$s.promise.finally(() => {
-      _TextLayer.#gr.delete(this);
-      this.#Js = null;
-      this.#sr = null;
+    this.#rs.promise.finally(() => {
+      _TextLayer.#Ts.delete(this);
+      this.#cs = null;
+      this.#fs = null;
     }).catch(() => {
     });
   }
@@ -12836,164 +13062,164 @@ var TextLayer = class _TextLayer {
     return shadow(this, "fontFamilyMap", /* @__PURE__ */ new Map([["sans-serif", (t2 && e2 ? "Calibri, " : "") + "sans-serif"], ["monospace", (t2 && e2 ? "Lucida Console, " : "") + "monospace"]]));
   }
   render() {
-    this.#Xs && this.#Dt.append(this.#Xs.render());
+    this.#os && this.#Pt.append(this.#os.render());
     const pump = () => {
-      this.#tr.read().then(({ value: t2, done: e2 }) => {
-        if (e2) this.#$s.resolve();
+      this.#us.read().then(({ value: t2, done: e2 }) => {
+        if (e2) this.#rs.resolve();
         else {
-          this.#Ys ??= t2.lang;
-          Object.assign(this.#sr, t2.styles);
-          this.#fr(t2.items);
+          this.#ls ??= t2.lang;
+          Object.assign(this.#fs, t2.styles);
+          this.#ks(t2.items);
           pump();
         }
-      }, this.#$s.reject);
+      }, this.#rs.reject);
     };
-    this.#tr = this.#ar.getReader();
-    _TextLayer.#gr.add(this);
+    this.#us = this.#ys.getReader();
+    _TextLayer.#Ts.add(this);
     pump();
-    return this.#$s.promise;
+    return this.#rs.promise;
   }
   update({ viewport: t2, onBefore: e2 = null }) {
     const i2 = t2.scale * OutputScale.pixelRatio, n2 = t2.rotation;
-    if (n2 !== this.#ir) {
+    if (n2 !== this.#gs) {
       e2?.();
-      this.#ir = n2;
-      setLayerDimensions(this.#er, { rotation: n2 });
+      this.#gs = n2;
+      setLayerDimensions(this.#ps, { rotation: n2 });
     }
-    if (i2 !== this.#nr) {
+    if (i2 !== this.#ms) {
       e2?.();
-      this.#nr = i2;
-      const t3 = { div: null, properties: null, ctx: _TextLayer.#br(this.#Ys) };
-      for (const e3 of this.#or) {
-        t3.properties = this.#lr.get(e3);
+      this.#ms = i2;
+      const t3 = { div: null, properties: null, ctx: _TextLayer.#Ds(this.#ls) };
+      for (const e3 of this.#vs) {
+        t3.properties = this.#ws.get(e3);
         t3.div = e3;
-        this.#yr(t3);
+        this.#Ps(t3);
       }
     }
   }
   cancel() {
     const t2 = new AbortException("TextLayer task cancelled.");
-    this.#tr?.cancel(t2).catch(() => {
+    this.#us?.cancel(t2).catch(() => {
     });
-    this.#tr = null;
-    this.#$s.reject(t2);
+    this.#us = null;
+    this.#rs.reject(t2);
   }
   get textDivs() {
-    return this.#or;
+    return this.#vs;
   }
   get textContentItemsStr() {
-    return this.#rr;
+    return this.#bs;
   }
-  #fr(t2) {
-    if (this.#qs) return;
-    this.#Js.ctx ??= _TextLayer.#br(this.#Ys);
-    const e2 = this.#or, i2 = this.#rr;
+  #ks(t2) {
+    if (this.#ss) return;
+    this.#cs.ctx ??= _TextLayer.#Ds(this.#ls);
+    const e2 = this.#vs, i2 = this.#bs;
     for (const n2 of t2) {
       if (e2.length > 1e5) {
         warn("Ignoring additional textDivs for performance reasons.");
-        this.#qs = true;
+        this.#ss = true;
         return;
       }
       if (void 0 !== n2.str) {
         i2.push(n2.str);
-        this.#vr(n2);
+        this.#Ms(n2);
       } else if ("beginMarkedContentProps" === n2.type || "beginMarkedContent" === n2.type) {
-        const t3 = this.#Dt;
-        this.#Dt = document.createElement("span");
-        this.#Dt.classList.add("markedContent");
-        n2.id && this.#Dt.setAttribute("id", n2.id);
-        "Artifact" === n2.tag && (this.#Dt.ariaHidden = true);
-        t3.append(this.#Dt);
-      } else "endMarkedContent" === n2.type && (this.#Dt = this.#Dt.parentNode);
+        const t3 = this.#Pt;
+        this.#Pt = document.createElement("span");
+        this.#Pt.classList.add("markedContent");
+        n2.id && this.#Pt.setAttribute("id", n2.id);
+        "Artifact" === n2.tag && (this.#Pt.ariaHidden = true);
+        t3.append(this.#Pt);
+      } else "endMarkedContent" === n2.type && (this.#Pt = this.#Pt.parentNode);
     }
   }
-  #vr(t2) {
+  #Ms(t2) {
     const e2 = document.createElement("span"), i2 = { angle: 0, canvasWidth: 0, hasText: "" !== t2.str, hasEOL: t2.hasEOL, fontSize: 0 };
-    this.#or.push(e2);
-    const n2 = Util.transform(this.#hr, t2.transform);
-    let s2 = Math.atan2(n2[1], n2[0]);
-    const r2 = this.#sr[t2.fontName];
-    r2.vertical && (s2 += Math.PI / 2);
-    let a2 = this.#Ks && r2.fontSubstitution || r2.fontFamily;
+    this.#vs.push(e2);
+    const n2 = Util.transform(this.#As, t2.transform);
+    let r2 = Math.atan2(n2[1], n2[0]);
+    const s2 = this.#fs[t2.fontName];
+    s2.vertical && (r2 += Math.PI / 2);
+    let a2 = this.#as && s2.fontSubstitution || s2.fontFamily;
     a2 = _TextLayer.fontFamilyMap.get(a2) || a2;
-    const o2 = Math.hypot(n2[2], n2[3]), l2 = o2 * _TextLayer.#wr(a2, r2, this.#Ys);
-    let h2, c2;
-    if (0 === s2) {
-      h2 = n2[4];
-      c2 = n2[5] - l2;
+    const o2 = Math.hypot(n2[2], n2[3]), l2 = o2 * _TextLayer.#Is(a2, s2, this.#ls);
+    let c2, h2;
+    if (0 === r2) {
+      c2 = n2[4];
+      h2 = n2[5] - l2;
     } else {
-      h2 = n2[4] + l2 * Math.sin(s2);
-      c2 = n2[5] - l2 * Math.cos(s2);
+      c2 = n2[4] + l2 * Math.sin(r2);
+      h2 = n2[5] - l2 * Math.cos(r2);
     }
     const d2 = e2.style;
-    d2.left = `${(100 * h2 / this.#Zs).toFixed(2)}%`;
-    d2.top = `${(100 * c2 / this.#Qs).toFixed(2)}%`;
+    d2.left = `${(100 * c2 / this.#ds).toFixed(2)}%`;
+    d2.top = `${(100 * h2 / this.#hs).toFixed(2)}%`;
     d2.setProperty("--font-height", `${o2.toFixed(2)}px`);
     d2.fontFamily = a2;
     i2.fontSize = o2;
     e2.setAttribute("role", "presentation");
     e2.textContent = t2.str;
     e2.dir = t2.dir;
-    this.#Ks && (e2.dataset.fontName = r2.fontSubstitutionLoadedName || t2.fontName);
-    0 !== s2 && (i2.angle = s2 * (180 / Math.PI));
+    this.#as && (e2.dataset.fontName = s2.fontSubstitutionLoadedName || t2.fontName);
+    0 !== r2 && (i2.angle = r2 * (180 / Math.PI));
     let u2 = false;
     if (t2.str.length > 1) u2 = true;
     else if (" " !== t2.str && t2.transform[0] !== t2.transform[3]) {
       const e3 = Math.abs(t2.transform[0]), i3 = Math.abs(t2.transform[3]);
       e3 !== i3 && Math.max(e3, i3) / Math.min(e3, i3) > 1.5 && (u2 = true);
     }
-    u2 && (i2.canvasWidth = r2.vertical ? t2.height : t2.width);
-    this.#lr.set(e2, i2);
-    this.#Js.div = e2;
-    this.#Js.properties = i2;
-    this.#yr(this.#Js);
-    i2.hasText && this.#Dt.append(e2);
+    u2 && (i2.canvasWidth = s2.vertical ? t2.height : t2.width);
+    this.#ws.set(e2, i2);
+    this.#cs.div = e2;
+    this.#cs.properties = i2;
+    this.#Ps(this.#cs);
+    i2.hasText && this.#Pt.append(e2);
     if (i2.hasEOL) {
       const t3 = document.createElement("br");
       t3.setAttribute("role", "presentation");
-      this.#Dt.append(t3);
+      this.#Pt.append(t3);
     }
   }
-  #yr(t2) {
-    const { div: e2, properties: i2, ctx: n2 } = t2, { style: s2 } = e2;
+  #Ps(t2) {
+    const { div: e2, properties: i2, ctx: n2 } = t2, { style: r2 } = e2;
     if (0 !== i2.canvasWidth && i2.hasText) {
-      const { fontFamily: t3 } = s2, { canvasWidth: r2, fontSize: a2 } = i2;
-      _TextLayer.#xr(n2, a2 * this.#nr, t3);
+      const { fontFamily: t3 } = r2, { canvasWidth: s2, fontSize: a2 } = i2;
+      _TextLayer.#Fs(n2, a2 * this.#ms, t3);
       const { width: o2 } = n2.measureText(e2.textContent);
-      o2 > 0 && s2.setProperty("--scale-x", r2 * this.#nr / o2);
+      o2 > 0 && r2.setProperty("--scale-x", s2 * this.#ms / o2);
     }
-    0 !== i2.angle && s2.setProperty("--rotate", `${i2.angle}deg`);
+    0 !== i2.angle && r2.setProperty("--rotate", `${i2.angle}deg`);
   }
   static cleanup() {
-    if (!(this.#gr.size > 0)) {
-      this.#cr.clear();
-      for (const { canvas: t2 } of this.#dr.values()) t2.remove();
-      this.#dr.clear();
+    if (!(this.#Ts.size > 0)) {
+      this.#xs.clear();
+      for (const { canvas: t2 } of this.#Es.values()) t2.remove();
+      this.#Es.clear();
     }
   }
-  static #br(t2 = null) {
-    let e2 = this.#dr.get(t2 ||= "");
+  static #Ds(t2 = null) {
+    let e2 = this.#Es.get(t2 ||= "");
     if (!e2) {
       const i2 = document.createElement("canvas");
       i2.style.cssText = "position:absolute;top:0;left:0;width:0;height:0;display:none;letter-spacing:normal;word-spacing:normal";
       i2.lang = t2;
       document.body.append(i2);
       e2 = i2.getContext("2d", { alpha: false, willReadFrequently: true });
-      this.#dr.set(t2, e2);
-      this.#ur.set(e2, { size: 0, family: "" });
+      this.#Es.set(t2, e2);
+      this.#Cs.set(e2, { size: 0, family: "" });
     }
     return e2;
   }
-  static #xr(t2, e2, i2) {
-    const n2 = this.#ur.get(t2);
+  static #Fs(t2, e2, i2) {
+    const n2 = this.#Cs.get(t2);
     if (e2 !== n2.size || i2 !== n2.family) {
       t2.font = `${e2}px ${i2}`;
       n2.size = e2;
       n2.family = i2;
     }
   }
-  static #mr() {
-    if (null !== this.#pr) return;
+  static #_s() {
+    if (null !== this.#Ss) return;
     const t2 = document.createElement("div");
     t2.style.opacity = 0;
     t2.style.lineHeight = 1;
@@ -13001,29 +13227,29 @@ var TextLayer = class _TextLayer {
     t2.style.position = "absolute";
     t2.textContent = "X";
     document.body.append(t2);
-    this.#pr = t2.getBoundingClientRect().height;
+    this.#Ss = t2.getBoundingClientRect().height;
     t2.remove();
   }
-  static #wr(t2, e2, i2) {
-    const n2 = this.#cr.get(t2);
+  static #Is(t2, e2, i2) {
+    const n2 = this.#xs.get(t2);
     if (n2) return n2;
-    const s2 = this.#br(i2);
-    s2.canvas.width = s2.canvas.height = 30;
-    this.#xr(s2, 30, t2);
-    const r2 = s2.measureText(""), a2 = r2.fontBoundingBoxAscent, o2 = Math.abs(r2.fontBoundingBoxDescent);
-    s2.canvas.width = s2.canvas.height = 0;
+    const r2 = this.#Ds(i2);
+    r2.canvas.width = r2.canvas.height = 30;
+    this.#Fs(r2, 30, t2);
+    const s2 = r2.measureText(""), a2 = s2.fontBoundingBoxAscent, o2 = Math.abs(s2.fontBoundingBoxDescent);
+    r2.canvas.width = r2.canvas.height = 0;
     let l2 = 0.8;
     if (a2) l2 = a2 / (a2 + o2);
     else {
       FeatureTest.platform.isFirefox && warn("Enable the `dom.textMetrics.fontBoundingBox.enabled` preference in `about:config` to improve TextLayer rendering.");
       e2.ascent ? l2 = e2.ascent : e2.descent && (l2 = 1 + e2.descent);
     }
-    this.#cr.set(t2, l2);
+    this.#xs.set(t2, l2);
     return l2;
   }
 };
 function getDocument(t2 = {}) {
-  const e2 = new PDFDocumentLoadingTask(), { docId: n2 } = e2, s2 = t2.url ? (function getUrlProp(t3) {
+  const e2 = new PDFDocumentLoadingTask(), { docId: n2 } = e2, r2 = t2.url ? (function getUrlProp(t3) {
     if (t3 instanceof URL) return t3;
     if ("string" == typeof t3) {
       if (i) {
@@ -13035,16 +13261,16 @@ function getDocument(t2 = {}) {
       if (e3) return e3;
     }
     throw new Error("Invalid PDF url data: either string or URL-object is expected in the url property.");
-  })(t2.url) : null, r2 = t2.data ? (function getDataProp(t3) {
+  })(t2.url) : null, s2 = t2.data ? (function getDataProp(t3) {
     if (i && "undefined" != typeof Buffer && t3 instanceof Buffer) throw new Error("Please provide binary data as `Uint8Array`, rather than `Buffer`.");
     if (t3 instanceof Uint8Array && t3.byteLength === t3.buffer.byteLength) return t3;
     if ("string" == typeof t3) return stringToBytes(t3);
     if (t3 instanceof ArrayBuffer || ArrayBuffer.isView(t3) || "object" == typeof t3 && !isNaN(t3?.length)) return new Uint8Array(t3);
     throw new Error("Invalid PDF binary data: either TypedArray, string, or array-like object is expected in the data property.");
-  })(t2.data) : null, a2 = t2.httpHeaders || null, o2 = true === t2.withCredentials, l2 = t2.password ?? null, h2 = t2.range instanceof PDFDataRangeTransport ? t2.range : null, c2 = Number.isInteger(t2.rangeChunkSize) && t2.rangeChunkSize > 0 ? t2.rangeChunkSize : 65536;
+  })(t2.data) : null, a2 = t2.httpHeaders || null, o2 = true === t2.withCredentials, l2 = t2.password ?? null, c2 = t2.range instanceof PDFDataRangeTransport ? t2.range : null, h2 = Number.isInteger(t2.rangeChunkSize) && t2.rangeChunkSize > 0 ? t2.rangeChunkSize : 65536;
   let d2 = t2.worker instanceof PDFWorker ? t2.worker : null;
-  const u2 = t2.verbosity, p2 = "string" != typeof t2.docBaseUrl || isDataScheme(t2.docBaseUrl) ? null : t2.docBaseUrl, g2 = getFactoryUrlProp(t2.cMapUrl), m2 = false !== t2.cMapPacked, f2 = getFactoryUrlProp(t2.iccUrl), b2 = getFactoryUrlProp(t2.standardFontDataUrl), y2 = getFactoryUrlProp(t2.wasmUrl), v2 = true !== t2.stopAtErrors, w2 = Number.isInteger(t2.maxImageSize) && t2.maxImageSize > -1 ? t2.maxImageSize : -1, x2 = "boolean" == typeof t2.isOffscreenCanvasSupported ? t2.isOffscreenCanvasSupported : !i, A2 = "boolean" == typeof t2.isImageDecoderSupported ? t2.isImageDecoderSupported : !i, E2 = Number.isInteger(t2.canvasMaxAreaInBytes) ? t2.canvasMaxAreaInBytes : -1, C2 = "boolean" == typeof t2.disableFontFace ? t2.disableFontFace : i, S2 = true === t2.fontExtraProperties, T2 = true === t2.enableXfa, _2 = t2.ownerDocument || globalThis.document, k2 = true === t2.disableRange, D2 = true === t2.disableStream, M2 = true === t2.disableAutoFetch, P2 = true === t2.pdfBug, I2 = t2.CanvasFactory || (i ? NodeCanvasFactory : DOMCanvasFactory), O2 = t2.FilterFactory || (i ? NodeFilterFactory : DOMFilterFactory), R2 = t2.BinaryDataFactory || (i ? NodeBinaryDataFactory : DOMBinaryDataFactory), B2 = true === t2.enableHWA, L2 = true === t2.enableWebGPU ? (function initGPU() {
-    return St.init();
+  const u2 = t2.verbosity, p2 = "string" != typeof t2.docBaseUrl || isDataScheme(t2.docBaseUrl) ? null : t2.docBaseUrl, g2 = getFactoryUrlProp(t2.cMapUrl), m2 = false !== t2.cMapPacked, f2 = getFactoryUrlProp(t2.iccUrl), b2 = getFactoryUrlProp(t2.standardFontDataUrl), y2 = getFactoryUrlProp(t2.wasmUrl), v2 = true !== t2.stopAtErrors, w2 = Number.isInteger(t2.maxImageSize) && t2.maxImageSize > -1 ? t2.maxImageSize : -1, A2 = "boolean" == typeof t2.isOffscreenCanvasSupported ? t2.isOffscreenCanvasSupported : !i, x2 = "boolean" == typeof t2.isImageDecoderSupported ? t2.isImageDecoderSupported : !i, E2 = Number.isInteger(t2.canvasMaxAreaInBytes) ? t2.canvasMaxAreaInBytes : -1, C2 = "boolean" == typeof t2.disableFontFace ? t2.disableFontFace : i, S2 = true === t2.fontExtraProperties, T2 = true === t2.enableXfa, _2 = t2.ownerDocument || globalThis.document, k2 = true === t2.disableRange, D2 = true === t2.disableStream, P2 = true === t2.disableAutoFetch, M2 = true === t2.pdfBug, I2 = t2.CanvasFactory || (i ? NodeCanvasFactory : DOMCanvasFactory), O2 = t2.FilterFactory || (i ? NodeFilterFactory : DOMFilterFactory), R2 = t2.BinaryDataFactory || (i ? NodeBinaryDataFactory : DOMBinaryDataFactory), B2 = true === t2.enableHWA, L2 = true === t2.enableWebGPU ? (function initGPU() {
+    return _t.init();
   })() : Promise.resolve(false), N2 = false !== t2.useWasm, U2 = t2.pagesMapper || new PagesMapper(), H2 = "boolean" == typeof t2.useSystemFonts ? t2.useSystemFonts : !i && !C2, z2 = "boolean" == typeof t2.useWorkerFetch ? t2.useWorkerFetch : !!(R2 === DOMBinaryDataFactory && g2 && m2 && b2 && y2 && isValidFetchUrl(g2, document.baseURI) && isValidFetchUrl(b2, document.baseURI) && isValidFetchUrl(y2, document.baseURI));
   setVerbosityLevel(u2);
   const G2 = { canvasFactory: new I2({ ownerDocument: _2, enableHWA: B2 }), filterFactory: new O2({ docId: n2, ownerDocument: _2 }), binaryDataFactory: z2 ? null : new R2({ cMapUrl: g2, standardFontDataUrl: b2, wasmUrl: y2 }) };
@@ -13052,27 +13278,27 @@ function getDocument(t2 = {}) {
     d2 = PDFWorker.create({ verbosity: u2, port: GlobalWorkerOptions.workerPort });
     e2._worker = d2;
   }
-  const j2 = { docId: n2, apiVersion: "6.2.108", data: r2, password: l2, disableAutoFetch: M2, rangeChunkSize: c2, docBaseUrl: p2, enableXfa: T2, evaluatorOptions: { maxImageSize: w2, disableFontFace: C2, ignoreErrors: v2, isOffscreenCanvasSupported: x2, isImageDecoderSupported: A2, canvasMaxAreaInBytes: E2, fontExtraProperties: S2, useSystemFonts: H2, useWasm: N2, useWorkerFetch: z2, cMapUrl: g2, cMapPacked: m2, iccUrl: f2, standardFontDataUrl: b2, wasmUrl: y2, hasGPU: false } }, W2 = { ownerDocument: _2, pdfBug: P2, styleElement: null, enableHWA: B2, loadingParams: { disableAutoFetch: M2, enableXfa: T2 } };
+  const j2 = { docId: n2, apiVersion: "6.3.289", data: s2, password: l2, disableAutoFetch: P2, rangeChunkSize: h2, docBaseUrl: p2, enableXfa: T2, evaluatorOptions: { maxImageSize: w2, disableFontFace: C2, ignoreErrors: v2, isOffscreenCanvasSupported: A2, isImageDecoderSupported: x2, canvasMaxAreaInBytes: E2, fontExtraProperties: S2, useSystemFonts: H2, useWasm: N2, useWorkerFetch: z2, cMapUrl: g2, cMapPacked: m2, iccUrl: f2, standardFontDataUrl: b2, wasmUrl: y2, hasGPU: false } }, W2 = { ownerDocument: _2, pdfBug: M2, styleElement: null, enableHWA: B2, loadingParams: { disableAutoFetch: P2, enableXfa: T2 } };
   Promise.all([d2.promise, L2]).then(function([, t3]) {
     if (d2.destroyed) throw new Error("Worker was destroyed");
     j2.evaluatorOptions.hasGPU = t3;
-    const l3 = d2.messageHandler.sendWithPromise("GetDocRequest", j2, r2 ? [r2.buffer] : null);
+    const l3 = d2.messageHandler.sendWithPromise("GetDocRequest", j2, s2 ? [s2.buffer] : null);
     let u3;
-    if (r2) ;
-    else if (h2) u3 = new PDFDataTransportStream({ pdfDataRangeTransport: h2, disableRange: k2, disableStream: D2 });
+    if (s2) ;
+    else if (c2) u3 = new PDFDataTransportStream({ pdfDataRangeTransport: c2, disableRange: k2, disableStream: D2 });
     else {
-      if (!s2) throw new Error("getDocument - expected either `data`, `range`, or `url` parameter.");
+      if (!r2) throw new Error("getDocument - expected either `data`, `range`, or `url` parameter.");
       {
         const t4 = (function getNetworkStream(t5) {
           return isValidFetchUrl(t5) ? PDFFetchStream : i ? PDFNodeStream : PDFNetworkStream;
-        })(s2);
-        u3 = new t4({ url: s2, httpHeaders: a2, withCredentials: o2, rangeChunkSize: c2, disableRange: k2, disableStream: D2 });
+        })(r2);
+        u3 = new t4({ url: r2, httpHeaders: a2, withCredentials: o2, rangeChunkSize: h2, disableRange: k2, disableStream: D2 });
       }
     }
     return l3.then((t4) => {
       if (d2.destroyed) throw new Error("Worker was destroyed");
-      const i2 = new MessageHandler(n2, t4, d2.port), s3 = new WorkerTransport(i2, e2, u3, W2, G2, U2);
-      e2._transport = s3;
+      const i2 = new MessageHandler(n2, t4, d2.port), r3 = new WorkerTransport(i2, e2, u3, W2, G2, U2);
+      e2._transport = r3;
       if (e2.destroyed) throw new Error("Loading aborted");
       i2.send("Ready", null);
     });
@@ -13080,12 +13306,12 @@ function getDocument(t2 = {}) {
   return e2;
 }
 var PDFDocumentLoadingTask = class _PDFDocumentLoadingTask {
-  static #Sn = 0;
+  static #Rn = 0;
   _capability = Promise.withResolvers();
   _setupCapability = Promise.withResolvers();
   _transport = null;
   _worker = null;
-  docId = "d" + _PDFDocumentLoadingTask.#Sn++;
+  docId = "d" + _PDFDocumentLoadingTask.#Rn++;
   destroyed = false;
   onPassword = null;
   onProgress = null;
@@ -13113,8 +13339,8 @@ var PDFDocumentLoadingTask = class _PDFDocumentLoadingTask {
   }
 };
 var PDFDataRangeTransport = class {
-  #$s = Promise.withResolvers();
-  #Ar = null;
+  #rs = Promise.withResolvers();
+  #Os = null;
   constructor(t2, e2, i2 = false, n2 = null) {
     this.length = t2;
     this.initialData = e2;
@@ -13122,21 +13348,21 @@ var PDFDataRangeTransport = class {
     this.contentDispositionFilename = n2;
   }
   onDataRange(t2, e2) {
-    this.#Ar({ type: "range", begin: t2, chunk: e2 });
+    this.#Os({ type: "range", begin: t2, chunk: e2 });
   }
   onDataProgressiveRead(t2) {
-    this.#$s.promise.then(() => {
-      this.#Ar({ type: "progressiveRead", chunk: t2 });
+    this.#rs.promise.then(() => {
+      this.#Os({ type: "progressiveRead", chunk: t2 });
     });
   }
   onDataProgressiveDone() {
-    this.#$s.promise.then(() => {
-      this.#Ar({ type: "progressiveDone" });
+    this.#rs.promise.then(() => {
+      this.#Os({ type: "progressiveDone" });
     });
   }
   transportReady(t2) {
-    this.#Ar = t2;
-    this.#$s.resolve();
+    this.#Os = t2;
+    this.#rs.resolve();
   }
   requestDataRange(t2, e2) {
     unreachable("Abstract method PDFDataRangeTransport.requestDataRange");
@@ -13234,14 +13460,11 @@ var PDFDocumentProxy = class {
   saveDocument() {
     return this._transport.saveDocument();
   }
-  extractPages(t2) {
-    return this._transport.extractPages(t2);
+  extractPages(t2, e2 = null) {
+    return this._transport.extractPages(t2, e2);
   }
   getDownloadInfo() {
     return this._transport.downloadInfoCapability.promise;
-  }
-  getRawData(t2) {
-    return this._transport.getRawData(t2);
   }
   cleanup(t2 = false) {
     return this._transport.startCleanup(t2 || this.isPureXfa);
@@ -13272,24 +13495,24 @@ var PDFDocumentProxy = class {
   }
 };
 var PDFPageProxy = class _PDFPageProxy {
-  #Er = false;
-  #Cr = null;
-  constructor(t2, e2, i2, n2, s2 = false) {
+  #Rs = false;
+  #Bs = null;
+  constructor(t2, e2, i2, n2, r2 = false) {
     this._pageIndex = t2;
     this._pageInfo = e2;
     this._transport = i2;
-    this._stats = s2 ? new StatTimer() : null;
-    this._pdfBug = s2;
+    this._stats = r2 ? new StatTimer() : null;
+    this._pdfBug = r2;
     this.commonObjs = i2.commonObjs;
     this.objs = new PDFObjects();
     this._intentStates = /* @__PURE__ */ new Map();
     this.destroyed = false;
     this.recordedBBoxes = null;
-    this.#Cr = n2;
+    this.#Bs = n2;
     this.imageCoordinates = null;
   }
   clone(t2) {
-    const e2 = new _PDFPageProxy(t2, this._pageInfo, this._transport, this.#Cr, this._pdfBug);
+    const e2 = new _PDFPageProxy(t2, this._pageInfo, this._transport, this.#Bs, this._pdfBug);
     e2.clonedFromIndex = this.clonedFromIndex ?? this._pageIndex;
     this._transport.updatePage(e2);
     return e2;
@@ -13313,8 +13536,8 @@ var PDFPageProxy = class _PDFPageProxy {
   get view() {
     return this._pageInfo.view;
   }
-  getViewport({ scale: t2, rotation: e2 = this.rotate, offsetX: i2 = 0, offsetY: n2 = 0, dontFlip: s2 = false } = {}) {
-    return new PageViewport({ viewBox: this.view, userUnit: this.userUnit, scale: t2, rotation: e2, offsetX: i2, offsetY: n2, dontFlip: s2 });
+  getViewport({ scale: t2, rotation: e2 = this.rotate, offsetX: i2 = 0, offsetY: n2 = 0, dontFlip: r2 = false } = {}) {
+    return new PageViewport({ viewBox: this.view, userUnit: this.userUnit, scale: t2, rotation: e2, offsetX: i2, offsetY: n2, dontFlip: r2 });
   }
   getAnnotations({ intent: t2 = "display" } = {}) {
     const { renderingIntent: e2 } = this._transport.getRenderingIntent(t2);
@@ -13332,24 +13555,24 @@ var PDFPageProxy = class _PDFPageProxy {
   async getXfa() {
     return this._transport._htmlForXfa?.children[this._pageIndex] || null;
   }
-  render({ canvasContext: t2, canvas: e2 = t2.canvas, viewport: i2, intent: n2 = "display", annotationMode: s2 = m.ENABLE, transform: r2 = null, background: a2 = null, optionalContentConfigPromise: o2 = null, annotationCanvasMap: l2 = null, pageColors: c2 = null, printAnnotationStorage: d2 = null, isEditing: u2 = false, recordImages: p2 = false, recordOperations: g2 = false, operationsFilter: f2 = null }) {
+  render({ canvasContext: t2, canvas: e2 = t2.canvas, viewport: i2, intent: n2 = "display", annotationMode: r2 = m.ENABLE, transform: s2 = null, background: a2 = null, optionalContentConfigPromise: o2 = null, annotationCanvasMap: l2 = null, pageColors: h2 = null, printAnnotationStorage: d2 = null, isEditing: u2 = false, recordImages: p2 = false, recordOperations: g2 = false, operationsFilter: f2 = null }) {
     this._stats?.time("Overall");
-    const b2 = this._transport.getRenderingIntent(n2, s2, d2, u2), { renderingIntent: y2, cacheKey: v2 } = b2;
-    this.#Er = false;
+    const b2 = this._transport.getRenderingIntent(n2, r2, d2, u2), { renderingIntent: y2, cacheKey: v2 } = b2;
+    this.#Rs = false;
     o2 ||= this._transport.getOptionalContentConfig(y2);
     const w2 = this._intentStates.getOrInsertComputed(v2, makeObj);
     if (w2.streamReaderCancelTimeout) {
       clearTimeout(w2.streamReaderCancelTimeout);
       w2.streamReaderCancelTimeout = null;
     }
-    const x2 = !!(y2 & h);
+    const A2 = !!(y2 & c);
     if (!w2.displayReadyCapability) {
       w2.displayReadyCapability = Promise.withResolvers();
       w2.operatorList = { fnArray: [], argsArray: [], lastChunk: false, separateAnnots: null };
       this._stats?.time("Page Request");
       this._pumpOperatorList(b2);
     }
-    const A2 = !(!this._pdfBug || !globalThis.StepperManager?.enabled), E2 = !!e2 && !this.recordedBBoxes && (g2 || A2), C2 = !!e2 && !this.imageCoordinates && p2, complete = (t3) => {
+    const x2 = !(!this._pdfBug || !globalThis.StepperManager?.enabled), E2 = !!e2 && !this.recordedBBoxes && (g2 || x2), C2 = !!e2 && !this.imageCoordinates && p2, complete = (t3) => {
       w2.renderTasks.delete(_2);
       if (E2) {
         const t4 = _2.gfx?.dependencyTracker.take();
@@ -13359,8 +13582,8 @@ var PDFPageProxy = class _PDFPageProxy {
         }
       }
       C2 && !t3 && (this.imageCoordinates = _2.gfx?.imagesTracker.take());
-      x2 && (this.#Er = true);
-      this.#Sr();
+      A2 && (this.#Rs = true);
+      this.#Ls();
       if (t3) {
         _2.capability.reject(t3);
         this._abortOperatorList({ intentState: w2, reason: t3 instanceof Error ? t3 : new Error(t3) });
@@ -13373,8 +13596,8 @@ var PDFPageProxy = class _PDFPageProxy {
     };
     let S2 = null, T2 = null;
     (E2 || C2) && (T2 = new CanvasBBoxTracker(e2, w2.operatorList.length));
-    E2 && (S2 = new CanvasDependencyTracker(T2, A2));
-    const _2 = new InternalRenderTask({ callback: complete, params: { canvas: e2, canvasContext: t2, dependencyTracker: S2 ?? T2, imagesTracker: C2 ? new CanvasImagesTracker(e2) : null, viewport: i2, transform: r2, background: a2 }, objs: this.objs, commonObjs: this.commonObjs, annotationCanvasMap: l2, operatorList: w2.operatorList, pageIndex: this._pageIndex, canvasFactory: this._transport.canvasFactory, filterFactory: this._transport.filterFactory, useRequestAnimationFrame: !x2, pdfBug: this._pdfBug, pageColors: c2, enableHWA: this._transport.enableHWA, operationsFilter: f2 });
+    E2 && (S2 = new CanvasDependencyTracker(T2, x2));
+    const _2 = new InternalRenderTask({ callback: complete, params: { canvas: e2, canvasContext: t2, dependencyTracker: S2 ?? T2, imagesTracker: C2 ? new CanvasImagesTracker(e2) : null, viewport: i2, transform: s2, background: a2 }, objs: this.objs, commonObjs: this.commonObjs, annotationCanvasMap: l2, operatorList: w2.operatorList, pageIndex: this._pageIndex, canvasFactory: this._transport.canvasFactory, filterFactory: this._transport.filterFactory, useRequestAnimationFrame: !A2, pdfBug: this._pdfBug, pageColors: h2, enableHWA: this._transport.enableHWA, operationsFilter: f2 });
     (w2.renderTasks ||= /* @__PURE__ */ new Set()).add(_2);
     const k2 = _2.task;
     Promise.all([w2.displayReadyCapability.promise, o2]).then(([t3, e3]) => {
@@ -13389,26 +13612,26 @@ var PDFPageProxy = class _PDFPageProxy {
     return k2;
   }
   getOperatorList({ intent: t2 = "display", annotationMode: e2 = m.ENABLE, printAnnotationStorage: i2 = null, isEditing: n2 = false } = {}) {
-    const s2 = this._transport.getRenderingIntent(t2, e2, i2, n2, true), r2 = this._intentStates.getOrInsertComputed(s2.cacheKey, makeObj);
+    const r2 = this._transport.getRenderingIntent(t2, e2, i2, n2, true), s2 = this._intentStates.getOrInsertComputed(r2.cacheKey, makeObj);
     let a2;
-    if (!r2.opListReadCapability) {
+    if (!s2.opListReadCapability) {
       a2 = /* @__PURE__ */ Object.create(null);
       a2.operatorListChanged = function operatorListChanged() {
-        if (r2.operatorList.lastChunk) {
-          r2.opListReadCapability.resolve(r2.operatorList);
-          r2.renderTasks.delete(a2);
+        if (s2.operatorList.lastChunk) {
+          s2.opListReadCapability.resolve(s2.operatorList);
+          s2.renderTasks.delete(a2);
         }
       };
-      r2.opListReadCapability = Promise.withResolvers();
-      (r2.renderTasks ||= /* @__PURE__ */ new Set()).add(a2);
-      r2.operatorList = { fnArray: [], argsArray: [], lastChunk: false, separateAnnots: null };
+      s2.opListReadCapability = Promise.withResolvers();
+      (s2.renderTasks ||= /* @__PURE__ */ new Set()).add(a2);
+      s2.operatorList = { fnArray: [], argsArray: [], lastChunk: false, separateAnnots: null };
       this._stats?.time("Page Request");
-      this._pumpOperatorList(s2);
+      this._pumpOperatorList(r2);
     }
-    return r2.opListReadCapability.promise;
+    return s2.opListReadCapability.promise;
   }
   streamTextContent({ includeMarkedContent: t2 = false, disableNormalization: e2 = false } = {}) {
-    return this._transport.messageHandler.sendWithStream("GetTextContent", { pageId: this.#Cr.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, includeMarkedContent: true === t2, disableNormalization: true === e2 }, { highWaterMark: 100, size: (t3) => t3.items.length });
+    return this._transport.messageHandler.sendWithStream("GetTextContent", { pageId: this.#Bs.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, includeMarkedContent: true === t2, disableNormalization: true === e2 }, { highWaterMark: 100, size: (t3) => t3.items.length });
   }
   async getTextContent(t2 = {}) {
     if (this._transport._htmlForXfa) return this.getXfa().then((t3) => XfaText.textContent(t3));
@@ -13434,21 +13657,21 @@ var PDFPageProxy = class _PDFPageProxy {
       }
     }
     this.objs.clear();
-    this.#Er = false;
+    this.#Rs = false;
     return Promise.all(t2);
   }
   cleanup(t2 = false) {
-    this.#Er = true;
-    const e2 = this.#Sr();
+    this.#Rs = true;
+    const e2 = this.#Ls();
     t2 && e2 && (this._stats &&= new StatTimer());
     return e2;
   }
-  #Sr() {
-    if (!this.#Er || this.destroyed) return false;
+  #Ls() {
+    if (!this.#Rs || this.destroyed) return false;
     for (const { renderTasks: t2, operatorList: e2 } of this._intentStates.values()) if (t2.size > 0 || !e2.lastChunk) return false;
     this._intentStates.clear();
     this.objs.clear();
-    this.#Er = false;
+    this.#Rs = false;
     return true;
   }
   _startRenderPage(t2, e2) {
@@ -13466,10 +13689,10 @@ var PDFPageProxy = class _PDFPageProxy {
     e2.operatorList.lastChunk = t2.lastChunk;
     e2.operatorList.separateAnnots = t2.separateAnnots;
     for (const t3 of e2.renderTasks) t3.operatorListChanged();
-    t2.lastChunk && this.#Sr();
+    t2.lastChunk && this.#Ls();
   }
   _pumpOperatorList({ renderingIntent: t2, cacheKey: e2, annotationStorageSerializable: i2, modifiedIds: n2 }) {
-    const { map: s2, transfer: r2 } = i2, a2 = this._transport.messageHandler.sendWithStream("GetOperatorList", { pageId: this.#Cr.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, intent: t2, cacheKey: e2, annotationStorage: s2, modifiedIds: n2 }, void 0, r2).getReader(), o2 = this._intentStates.get(e2);
+    const { map: r2, transfer: s2 } = i2, a2 = this._transport.messageHandler.sendWithStream("GetOperatorList", { pageId: this.#Bs.getPageId(this._pageIndex + 1) - 1, pageIndex: this._pageIndex, intent: t2, cacheKey: e2, annotationStorage: r2, modifiedIds: n2 }, void 0, s2).getReader(), o2 = this._intentStates.get(e2);
     o2.streamReader = a2;
     const pump = () => {
       a2.read().then(({ value: t3, done: e3 }) => {
@@ -13484,7 +13707,7 @@ var PDFPageProxy = class _PDFPageProxy {
           if (o2.operatorList) {
             o2.operatorList.lastChunk = true;
             for (const t4 of o2.renderTasks) t4.operatorListChanged();
-            this.#Sr();
+            this.#Ls();
           }
           if (o2.displayReadyCapability) o2.displayReadyCapability.reject(t3);
           else {
@@ -13531,16 +13754,16 @@ var PDFPageProxy = class _PDFPageProxy {
   }
 };
 var PDFWorker = class _PDFWorker {
-  #$s = Promise.withResolvers();
-  #Tr = null;
-  #Es = null;
-  #_r = null;
-  static #kr = 0;
-  static #Dr = false;
-  static #Mr = /* @__PURE__ */ new WeakMap();
+  #rs = Promise.withResolvers();
+  #Ns = null;
+  #Or = null;
+  #Us = null;
+  static #Hs = 0;
+  static #zs = false;
+  static #Gs = /* @__PURE__ */ new WeakMap();
   static {
     if (i) {
-      this.#Dr = true;
+      this.#zs = true;
       GlobalWorkerOptions.workerSrc ||= "./pdf.worker.mjs";
     }
     this._isSameOrigin = (t2, e2) => {
@@ -13559,34 +13782,34 @@ var PDFWorker = class _PDFWorker {
     this.destroyed = false;
     this.verbosity = i2;
     if (e2) {
-      if (_PDFWorker.#Mr.has(e2)) throw new Error("Cannot use more than one PDFWorker per port.");
-      _PDFWorker.#Mr.set(e2, this);
-      this.#Pr(e2);
-    } else this.#Ir();
+      if (_PDFWorker.#Gs.has(e2)) throw new Error("Cannot use more than one PDFWorker per port.");
+      _PDFWorker.#Gs.set(e2, this);
+      this.#js(e2);
+    } else this.#Ws();
   }
   get promise() {
-    return this.#$s.promise;
+    return this.#rs.promise;
   }
-  #Fr() {
-    this.#$s.resolve();
-    this.#Tr.send("configure", { verbosity: this.verbosity });
+  #Vs() {
+    this.#rs.resolve();
+    this.#Ns.send("configure", { verbosity: this.verbosity });
   }
   get port() {
-    return this.#Es;
+    return this.#Or;
   }
   get messageHandler() {
-    return this.#Tr;
+    return this.#Ns;
   }
-  #Pr(t2) {
-    this.#Es = t2;
-    this.#Tr = new MessageHandler("main", "worker", t2);
-    this.#Tr.on("ready", () => {
+  #js(t2) {
+    this.#Or = t2;
+    this.#Ns = new MessageHandler("main", "worker", t2);
+    this.#Ns.on("ready", () => {
     });
-    this.#Fr();
+    this.#Vs();
   }
-  #Ir() {
-    if (_PDFWorker.#Dr || _PDFWorker.#Or) {
-      this.#Rr();
+  #Ws() {
+    if (_PDFWorker.#zs || _PDFWorker.#$s) {
+      this.#qs();
       return;
     }
     let { workerSrc: t2 } = _PDFWorker;
@@ -13596,18 +13819,18 @@ var PDFWorker = class _PDFWorker {
         n2.abort();
         i2.destroy();
         e2.terminate();
-        this.destroyed ? this.#$s.reject(new Error("Worker was destroyed")) : this.#Rr();
+        this.destroyed ? this.#rs.reject(new Error("Worker was destroyed")) : this.#qs();
       }, n2 = new AbortController();
       e2.addEventListener("error", () => {
-        this.#_r || terminateEarly();
+        this.#Us || terminateEarly();
       }, { signal: n2.signal });
       i2.on("test", (t3) => {
         n2.abort();
         if (!this.destroyed && t3) {
-          this.#Tr = i2;
-          this.#Es = e2;
-          this.#_r = e2;
-          this.#Fr();
+          this.#Ns = i2;
+          this.#Or = e2;
+          this.#Us = e2;
+          this.#Vs();
         } else terminateEarly();
       });
       i2.on("ready", (t3) => {
@@ -13616,7 +13839,7 @@ var PDFWorker = class _PDFWorker {
         else try {
           sendTest();
         } catch {
-          this.#Rr();
+          this.#qs();
         }
       });
       const sendTest = () => {
@@ -13628,39 +13851,39 @@ var PDFWorker = class _PDFWorker {
     } catch {
       info("The worker has been disabled.");
     }
-    this.#Rr();
+    this.#qs();
   }
-  #Rr() {
-    if (!_PDFWorker.#Dr) {
+  #qs() {
+    if (!_PDFWorker.#zs) {
       warn("Setting up fake worker.");
-      _PDFWorker.#Dr = true;
+      _PDFWorker.#zs = true;
     }
     _PDFWorker._setupFakeWorkerGlobal.then((t2) => {
       if (this.destroyed) {
-        this.#$s.reject(new Error("Worker was destroyed"));
+        this.#rs.reject(new Error("Worker was destroyed"));
         return;
       }
       const e2 = new LoopbackPort();
-      this.#Es = e2;
-      const i2 = "fake" + _PDFWorker.#kr++, n2 = new MessageHandler(i2 + "_worker", i2, e2);
+      this.#Or = e2;
+      const i2 = "fake" + _PDFWorker.#Hs++, n2 = new MessageHandler(i2 + "_worker", i2, e2);
       t2.setup(n2, e2);
-      this.#Tr = new MessageHandler(i2, i2 + "_worker", e2);
-      this.#Fr();
+      this.#Ns = new MessageHandler(i2, i2 + "_worker", e2);
+      this.#Vs();
     }).catch((t2) => {
-      this.#$s.reject(new Error(`Setting up fake worker failed: "${t2.message}".`));
+      this.#rs.reject(new Error(`Setting up fake worker failed: "${t2.message}".`));
     });
   }
   destroy() {
     this.destroyed = true;
-    this.#_r?.terminate();
-    this.#_r = null;
-    _PDFWorker.#Mr.delete(this.#Es);
-    this.#Es = null;
-    this.#Tr?.destroy();
-    this.#Tr = null;
+    this.#Us?.terminate();
+    this.#Us = null;
+    _PDFWorker.#Gs.delete(this.#Or);
+    this.#Or = null;
+    this.#Ns?.destroy();
+    this.#Ns = null;
   }
   static create(t2) {
-    const e2 = this.#Mr.get(t2?.port);
+    const e2 = this.#Gs.get(t2?.port);
     if (e2) {
       if (e2._pendingDestroy) throw new Error("PDFWorker.create - the worker is being destroyed.\nPlease remember to await `PDFDocumentLoadingTask.destroy()`-calls.");
       return e2;
@@ -13671,7 +13894,7 @@ var PDFWorker = class _PDFWorker {
     if (GlobalWorkerOptions.workerSrc) return GlobalWorkerOptions.workerSrc;
     throw new Error('No "GlobalWorkerOptions.workerSrc" specified.');
   }
-  static get #Or() {
+  static get #$s() {
     try {
       return globalThis.pdfjsWorker?.WorkerMessageHandler || null;
     } catch {
@@ -13680,7 +13903,7 @@ var PDFWorker = class _PDFWorker {
   }
   static get _setupFakeWorkerGlobal() {
     return shadow(this, "_setupFakeWorkerGlobal", (async () => {
-      if (this.#Or) return this.#Or;
+      if (this.#$s) return this.#$s;
       return (await import(
         /*webpackIgnore: true*/
         /*@vite-ignore*/
@@ -13691,100 +13914,100 @@ var PDFWorker = class _PDFWorker {
 };
 var WorkerTransport = class {
   downloadInfoCapability = Promise.withResolvers();
-  #Br = null;
-  #Lr = /* @__PURE__ */ new Map();
-  #Nr = null;
-  #Ur = /* @__PURE__ */ new Map();
-  #Hr = /* @__PURE__ */ new Map();
-  #zr = /* @__PURE__ */ new Map();
-  #Gr = null;
-  constructor(t2, e2, i2, n2, s2, r2) {
+  #Xs = null;
+  #Ks = /* @__PURE__ */ new Map();
+  #Ys = null;
+  #Js = /* @__PURE__ */ new Map();
+  #Qs = /* @__PURE__ */ new Map();
+  #Zs = /* @__PURE__ */ new Map();
+  #ta = null;
+  constructor(t2, e2, i2, n2, r2, s2) {
     this.messageHandler = t2;
     this.loadingTask = e2;
-    this.#Nr = i2;
+    this.#Ys = i2;
     this.commonObjs = new PDFObjects();
     this.fontLoader = new FontLoader({ ownerDocument: n2.ownerDocument, styleElement: n2.styleElement });
     this.enableHWA = n2.enableHWA;
     this.loadingParams = n2.loadingParams;
     this._params = n2;
-    this.canvasFactory = s2.canvasFactory;
-    this.filterFactory = s2.filterFactory;
-    this.binaryDataFactory = s2.binaryDataFactory;
-    this.pagesMapper = r2;
+    this.canvasFactory = r2.canvasFactory;
+    this.filterFactory = r2.filterFactory;
+    this.binaryDataFactory = r2.binaryDataFactory;
+    this.pagesMapper = s2;
     this.destroyed = false;
     this.destroyCapability = null;
     this.setupMessageHandler();
   }
   updatePage(t2) {
     const { _pageIndex: e2 } = t2;
-    this.#Ur.set(e2, t2);
-    this.#Hr.set(e2, Promise.resolve(t2));
+    this.#Js.set(e2, t2);
+    this.#Qs.set(e2, Promise.resolve(t2));
   }
-  #jr(t2, e2 = null) {
-    return this.#Lr.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, e2));
+  #ea(t2, e2 = null) {
+    return this.#Ks.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, e2));
   }
-  #vs({ loaded: t2, total: e2 }) {
+  #Pr({ loaded: t2, total: e2 }) {
     this.loadingTask.onProgress?.({ loaded: t2, total: e2, percent: e2 ? MathClamp(Math.round(t2 / e2 * 100), 0, 100) : NaN });
   }
   get annotationStorage() {
     return shadow(this, "annotationStorage", new AnnotationStorage());
   }
-  getRenderingIntent(t2, e2 = m.ENABLE, i2 = null, n2 = false, s2 = false) {
-    let r2 = l, a2 = et;
+  getRenderingIntent(t2, e2 = m.ENABLE, i2 = null, n2 = false, r2 = false) {
+    let s2 = l, a2 = it;
     switch (t2) {
       case "any":
-        r2 = o;
+        s2 = o;
         break;
       case "display":
         break;
       case "print":
-        r2 = h;
+        s2 = c;
         break;
       default:
         warn(`getRenderingIntent - invalid intent: ${t2}`);
     }
-    const f2 = r2 & h && i2 instanceof PrintAnnotationStorage ? i2 : this.annotationStorage;
+    const f2 = s2 & c && i2 instanceof PrintAnnotationStorage ? i2 : this.annotationStorage;
     switch (e2) {
       case m.DISABLE:
-        r2 += u;
+        s2 += u;
         break;
       case m.ENABLE:
         break;
       case m.ENABLE_FORMS:
-        r2 += c;
+        s2 += h;
         break;
       case m.ENABLE_STORAGE:
-        r2 += d;
+        s2 += d;
         a2 = f2.serializable;
         break;
       default:
         warn(`getRenderingIntent - invalid annotationMode: ${e2}`);
     }
-    n2 && (r2 += p);
-    s2 && (r2 += g);
+    n2 && (s2 += p);
+    r2 && (s2 += g);
     const { ids: b2, hash: y2 } = f2.modifiedIds;
-    return { renderingIntent: r2, cacheKey: [r2, a2.hash, y2].join("_"), annotationStorageSerializable: a2, modifiedIds: b2 };
+    return { renderingIntent: s2, cacheKey: [s2, a2.hash, y2].join("_"), annotationStorageSerializable: a2, modifiedIds: b2 };
   }
   destroy() {
     if (this.destroyCapability) return this.destroyCapability.promise;
     this.destroyed = true;
     this.destroyCapability = Promise.withResolvers();
-    this.#Gr?.reject(new Error("Worker was destroyed during onPassword callback"));
+    this.#ta?.reject(new Error("Worker was destroyed during onPassword callback"));
     const t2 = [];
-    for (const e3 of this.#Ur.values()) t2.push(e3._destroy());
-    this.#Ur.clear();
-    this.#Hr.clear();
-    this.#zr.clear();
+    for (const e3 of this.#Js.values()) t2.push(e3._destroy());
+    this.#Js.clear();
+    this.#Qs.clear();
+    this.#Zs.clear();
     Object.hasOwn(this, "annotationStorage") && this.annotationStorage.resetModified();
     const e2 = this.messageHandler.sendWithPromise("Terminate", null);
     t2.push(e2);
     Promise.all(t2).then(() => {
       this.commonObjs.clear();
       this.fontLoader.clear();
-      this.#Lr.clear();
+      this.#Ks.clear();
       this.filterFactory.destroy();
       TextLayer.cleanup();
-      this.#Nr?.cancelAllRequests(new AbortException("Worker was terminated."));
+      this.#Ys?.cancelAllRequests(new AbortException("Worker was terminated."));
       this.messageHandler?.destroy();
       this.messageHandler = null;
       this.destroyCapability.resolve();
@@ -13794,11 +14017,11 @@ var WorkerTransport = class {
   setupMessageHandler() {
     const { messageHandler: t2, loadingTask: e2 } = this;
     t2.on("GetReader", (t3, e3) => {
-      assert(this.#Nr, "GetReader - no `BasePDFStream` instance available.");
-      this.#Br = this.#Nr.getFullReader();
-      this.#Br.onProgress = (t4) => this.#vs(t4);
+      assert(this.#Ys, "GetReader - no `BasePDFStream` instance available.");
+      this.#Xs = this.#Ys.getFullReader();
+      this.#Xs.onProgress = (t4) => this.#Pr(t4);
       e3.onPull = () => {
-        this.#Br.read().then(function({ value: t4, done: i2 }) {
+        this.#Xs.read().then(function({ value: t4, done: i2 }) {
           if (i2) e3.close();
           else {
             assert(t4 instanceof ArrayBuffer, "GetReader - expected an ArrayBuffer.");
@@ -13809,21 +14032,21 @@ var WorkerTransport = class {
         });
       };
       e3.onCancel = (t4) => {
-        this.#Br.cancel(t4);
+        this.#Xs.cancel(t4);
         e3.ready.catch((t5) => {
           if (!this.destroyed) throw t5;
         });
       };
     });
     t2.on("ReaderHeadersReady", async (t3) => {
-      await this.#Br.headersReady;
-      const { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 } = this.#Br;
-      e3 && i2 && (this.#Br.onProgress = null);
+      await this.#Xs.headersReady;
+      const { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 } = this.#Xs;
+      e3 && i2 && (this.#Xs.onProgress = null);
       return { isStreamingSupported: e3, isRangeSupported: i2, contentLength: n2 };
     });
     t2.on("GetRangeReader", (t3, e3) => {
-      assert(this.#Nr, "GetRangeReader - no `BasePDFStream` instance available.");
-      const i2 = this.#Nr.getRangeReader(t3.begin, t3.end);
+      assert(this.#Ys, "GetRangeReader - no `BasePDFStream` instance available.");
+      const i2 = this.#Ys.getRangeReader(t3.begin, t3.end);
       if (i2) {
         e3.onPull = () => {
           i2.read().then(function({ value: t4, done: i3 }) {
@@ -13855,25 +14078,25 @@ var WorkerTransport = class {
       e2._capability.reject(wrapReason(t3));
     });
     t2.on("PasswordRequest", (t3) => {
-      this.#Gr = Promise.withResolvers();
+      this.#ta = Promise.withResolvers();
       try {
         if (!e2.onPassword) throw wrapReason(t3);
         const updatePassword = (t4) => {
-          t4 instanceof Error ? this.#Gr.reject(t4) : this.#Gr.resolve({ password: t4 });
+          t4 instanceof Error ? this.#ta.reject(t4) : this.#ta.resolve({ password: t4 });
         };
         e2.onPassword(updatePassword, t3.code);
       } catch (t4) {
-        this.#Gr.reject(t4);
+        this.#ta.reject(t4);
       }
-      return this.#Gr.promise;
+      return this.#ta.promise;
     });
     t2.on("DataLoaded", (t3) => {
-      this.#vs({ loaded: t3.length, total: t3.length });
+      this.#Pr({ loaded: t3.length, total: t3.length });
       this.downloadInfoCapability.resolve(t3);
     });
     t2.on("StartRenderPage", (t3) => {
       if (this.destroyed) return;
-      this.#Ur.get(t3.pageIndex)._startRenderPage(t3.transparency, t3.cacheKey);
+      this.#Js.get(t3.pageIndex)._startRenderPage(t3.transparency, t3.cacheKey);
     });
     t2.on("commonobj", ([e3, i2, n2]) => {
       if (this.destroyed) return null;
@@ -13886,7 +14109,7 @@ var WorkerTransport = class {
             this.commonObjs.resolve(e3, t3);
             break;
           }
-          const s2 = new FontInfo(n2), r2 = this._params.pdfBug && globalThis.FontInspector?.enabled ? (t3, e4) => globalThis.FontInspector.fontAdded(t3, e4) : null, a2 = new FontFaceObject(s2, r2, n2.charProcOperatorList, n2.extra);
+          const r2 = new FontInfo(n2), s2 = this._params.pdfBug && globalThis.FontInspector?.enabled ? (t3, e4) => globalThis.FontInspector.fontAdded(t3, e4) : null, a2 = new FontFaceObject(r2, s2, n2.charProcOperatorList, n2.extra);
           this.fontLoader.bind(a2).catch(() => t2.sendWithPromise("FontFallback", { id: e3 })).finally(() => {
             a2.fontExtraProperties || a2.clearData();
             this.commonObjs.resolve(e3, a2);
@@ -13895,7 +14118,7 @@ var WorkerTransport = class {
         case "CopyLocalImage":
           const { imageRef: o2 } = n2;
           assert(o2, "The imageRef must be defined.");
-          for (const t3 of this.#Ur.values()) for (const [, i3] of t3.objs) {
+          for (const t3 of this.#Js.values()) for (const [, i3] of t3.objs) {
             if (i3?.ref !== o2) continue;
             if (!i3.dataLen) return null;
             const t4 = structuredClone(i3);
@@ -13920,11 +14143,11 @@ var WorkerTransport = class {
     });
     t2.on("obj", ([t3, e3, i2, n2]) => {
       if (this.destroyed) return;
-      const s2 = this.#Ur.get(e3);
-      if (!s2.objs.has(t3)) if (0 !== s2._intentStates.size) switch (i2) {
+      const r2 = this.#Js.get(e3);
+      if (!r2.objs.has(t3)) if (0 !== r2._intentStates.size) switch (i2) {
         case "Image":
         case "Pattern":
-          s2.objs.resolve(t3, n2);
+          r2.objs.resolve(t3, n2);
           break;
         default:
           throw new Error(`Got unknown object type ${i2}`);
@@ -13932,7 +14155,7 @@ var WorkerTransport = class {
       else n2?.bitmap?.close();
     });
     t2.on("DocProgress", (t3) => {
-      this.destroyed || this.#vs(t3);
+      this.destroyed || this.#Pr(t3);
     });
     t2.on("FetchBinaryData", async (t3) => {
       if (this.destroyed) throw new Error("Worker was destroyed.");
@@ -13946,56 +14169,56 @@ var WorkerTransport = class {
   saveDocument() {
     this.annotationStorage.size <= 0 && warn("saveDocument called while `annotationStorage` is empty, please use the getData-method instead.");
     const { map: t2, transfer: e2 } = this.annotationStorage.serializable;
-    return this.messageHandler.sendWithPromise("SaveDocument", { isPureXfa: !!this._htmlForXfa, numPages: this._numPages, annotationStorage: t2, filename: this.#Br?.filename ?? null }, e2).finally(() => {
+    return this.messageHandler.sendWithPromise("SaveDocument", { isPureXfa: !!this._htmlForXfa, numPages: this._numPages, annotationStorage: t2, filename: this.#Xs?.filename ?? null }, e2).finally(() => {
       this.annotationStorage.resetModified();
     });
   }
-  extractPages(t2) {
-    const e2 = { pageInfos: t2 };
-    let i2;
-    const n2 = globalThis.ImageBitmap;
-    if ("function" == typeof n2) {
+  extractPages(t2, e2 = null) {
+    const i2 = { pageInfos: t2 };
+    let n2;
+    const r2 = globalThis.ImageBitmap;
+    if ("function" == typeof r2) {
       const e3 = Array.isArray(t2) ? t2 : [t2];
-      for (const t3 of e3) t3?.image instanceof n2 && (i2 ||= []).push(t3.image);
+      for (const t3 of e3) t3?.image instanceof r2 && (n2 ||= []).push(t3.image);
     }
     if (this.annotationStorage.size > 0) {
       const t3 = this.annotationStorage.serializable;
-      let { map: n3 } = t3;
-      t3.transfer?.length && (i2 ? i2.push(...t3.transfer) : i2 = t3.transfer);
+      let { map: r3 } = t3;
+      t3.transfer?.length && (n2 ? n2.push(...t3.transfer) : n2 = t3.transfer);
       const s2 = this.pagesMapper.getMapping();
       if (s2) {
         const t4 = /* @__PURE__ */ new Map();
-        for (const [e3, i3] of n3) {
-          if (void 0 !== i3?.pageIndex && i3.pageIndex >= 0 && i3.pageIndex < s2.length) {
-            const n4 = s2[i3.pageIndex] - 1;
-            if (n4 !== i3.pageIndex) {
-              t4.set(e3, { ...i3, pageIndex: n4 });
+        for (const [i3, n3] of r3) {
+          if (void 0 !== n3?.pageIndex && n3.pageIndex >= 0 && n3.pageIndex < s2.length) {
+            const r4 = e2?.[n3.pageIndex] ?? 0, a2 = s2[n3.pageIndex] - 1;
+            if (a2 !== n3.pageIndex || 0 !== r4) {
+              t4.set(i3, { ...n3, pageIndex: a2, copyLevel: r4 });
               continue;
             }
           }
-          t4.set(e3, i3);
+          t4.set(i3, n3);
         }
-        n3 = t4;
+        r3 = t4;
       }
-      e2.annotationStorage = n3;
+      i2.annotationStorage = r3;
     }
-    return this.messageHandler.sendWithPromise("ExtractPages", e2, i2).finally(() => {
+    return this.messageHandler.sendWithPromise("ExtractPages", i2, n2).finally(() => {
       this.annotationStorage.resetModified();
     });
   }
   getPage(t2) {
     if (!Number.isInteger(t2) || t2 <= 0 || t2 > this.pagesMapper.pagesNumber) return Promise.reject(new Error("Invalid page request."));
-    const e2 = t2 - 1, i2 = this.pagesMapper.getPageId(t2) - 1, n2 = this.#Hr.get(e2);
+    const e2 = t2 - 1, i2 = this.pagesMapper.getPageId(t2) - 1, n2 = this.#Qs.get(e2);
     if (n2) return n2;
-    const s2 = this.messageHandler.sendWithPromise("GetPage", { pageIndex: i2 }).then((t3) => {
+    const r2 = this.messageHandler.sendWithPromise("GetPage", { pageIndex: i2 }).then((t3) => {
       if (this.destroyed) throw new Error("Transport destroyed");
-      t3.refStr && this.#zr.set(t3.refStr, i2);
+      t3.refStr && this.#Zs.set(t3.refStr, i2);
       const n3 = new PDFPageProxy(e2, t3, this, this.pagesMapper, this._params.pdfBug);
-      this.#Ur.set(e2, n3);
+      this.#Js.set(e2, n3);
       return n3;
     });
-    this.#Hr.set(e2, s2);
-    return s2;
+    this.#Qs.set(e2, r2);
+    return r2;
   }
   async getPageIndex(t2) {
     if (!isRefProxy(t2)) throw new Error("Invalid pageIndex request.");
@@ -14007,16 +14230,16 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetAnnotations", { pageIndex: this.pagesMapper.getPageId(t2 + 1) - 1, intent: e2 });
   }
   getFieldObjects() {
-    return this.#jr("GetFieldObjects");
+    return this.#ea("GetFieldObjects");
   }
   getSignatures() {
-    return this.#jr("GetSignatures");
+    return this.#ea("GetSignatures");
   }
   getSignatureData(t2) {
     return this.messageHandler.sendWithPromise("GetSignatureData", t2);
   }
   hasJSActions() {
-    return this.#jr("HasJSActions");
+    return this.#ea("HasJSActions");
   }
   getCalculationOrderIds() {
     return this.messageHandler.sendWithPromise("GetCalculationOrderIds", null);
@@ -14052,7 +14275,7 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetAnnotationsByType", { types: t2, pageIndexesToSkip: e2 });
   }
   getDocJSActions() {
-    return this.#jr("GetDocJSActions");
+    return this.#ea("GetDocJSActions");
   }
   getPageJSActions(t2) {
     return this.messageHandler.sendWithPromise("GetPageJSActions", { pageIndex: this.pagesMapper.getPageId(t2 + 1) - 1 });
@@ -14064,37 +14287,34 @@ var WorkerTransport = class {
     return this.messageHandler.sendWithPromise("GetOutline", null);
   }
   getOptionalContentConfig(t2) {
-    return this.#jr("GetOptionalContentConfig").then((e2) => new OptionalContentConfig(e2, t2));
+    return this.#ea("GetOptionalContentConfig").then((e2) => new OptionalContentConfig(e2, t2));
   }
   getPermissions() {
     return this.messageHandler.sendWithPromise("GetPermissions", null);
   }
   getMetadata() {
     const t2 = "GetMetadata";
-    return this.#Lr.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, null).then((t3) => ({ info: t3[0], metadata: t3[1] ? new Metadata(t3[1]) : null, contentDispositionFilename: this.#Br?.filename ?? null, contentLength: this.#Br?.contentLength ?? null, hasStructTree: t3[2] })));
+    return this.#Ks.getOrInsertComputed(t2, () => this.messageHandler.sendWithPromise(t2, null).then((t3) => ({ info: t3[0], metadata: t3[1] ? new Metadata(t3[1]) : null, contentDispositionFilename: this.#Xs?.filename ?? null, contentLength: this.#Xs?.contentLength ?? null, hasStructTree: t3[2] })));
   }
   getMarkInfo() {
     return this.messageHandler.sendWithPromise("GetMarkInfo", null);
   }
-  getRawData(t2) {
-    return this.messageHandler.sendWithPromise("GetRawData", t2);
-  }
   async startCleanup(t2 = false) {
     if (!this.destroyed) {
       await this.messageHandler.sendWithPromise("Cleanup", null);
-      for (const t3 of this.#Ur.values()) {
+      for (const t3 of this.#Js.values()) {
         if (!t3.cleanup()) throw new Error(`startCleanup: Page ${t3.pageNumber} is currently rendering.`);
       }
       this.commonObjs.clear();
       t2 || this.fontLoader.clear();
-      this.#Lr.clear();
+      this.#Ks.clear();
       this.filterFactory.destroy(true);
       TextLayer.cleanup();
     }
   }
   cachedPageNumber(t2) {
     if (!isRefProxy(t2)) return null;
-    const e2 = 0 === t2.gen ? `${t2.num}R` : `${t2.num}R${t2.gen}`, i2 = this.#zr.get(e2);
+    const e2 = 0 === t2.gen ? `${t2.num}R` : `${t2.num}R${t2.gen}`, i2 = this.#Zs.get(e2);
     if (i2 >= 0) {
       const t3 = this.pagesMapper.getPageNumber(i2 + 1);
       if (0 !== t3) return t3;
@@ -14126,25 +14346,25 @@ var RenderTask = class {
   }
 };
 var InternalRenderTask = class _InternalRenderTask {
-  #Wr = null;
-  static #Vr = /* @__PURE__ */ new WeakSet();
-  constructor({ callback: t2, params: e2, objs: i2, commonObjs: n2, annotationCanvasMap: s2, operatorList: r2, pageIndex: a2, canvasFactory: o2, filterFactory: l2, useRequestAnimationFrame: h2 = false, pdfBug: c2 = false, pageColors: d2 = null, enableHWA: u2 = false, operationsFilter: p2 = null }) {
+  #ia = null;
+  static #na = /* @__PURE__ */ new WeakSet();
+  constructor({ callback: t2, params: e2, objs: i2, commonObjs: n2, annotationCanvasMap: r2, operatorList: s2, pageIndex: a2, canvasFactory: o2, filterFactory: l2, useRequestAnimationFrame: c2 = false, pdfBug: h2 = false, pageColors: d2 = null, enableHWA: u2 = false, operationsFilter: p2 = null }) {
     this.callback = t2;
     this.params = e2;
     this.objs = i2;
     this.commonObjs = n2;
-    this.annotationCanvasMap = s2;
+    this.annotationCanvasMap = r2;
     this.operatorListIdx = null;
-    this.operatorList = r2;
+    this.operatorList = s2;
     this._pageIndex = a2;
     this.canvasFactory = o2;
     this.filterFactory = l2;
-    this._pdfBug = c2;
+    this._pdfBug = h2;
     this.pageColors = d2;
     this.running = false;
     this.graphicsReadyCallback = null;
     this.graphicsReady = false;
-    this._useRequestAnimationFrame = true === h2 && "undefined" != typeof window;
+    this._useRequestAnimationFrame = true === c2 && "undefined" != typeof window;
     this.cancelled = false;
     this.capability = Promise.withResolvers();
     this.task = new RenderTask(this);
@@ -14166,17 +14386,17 @@ var InternalRenderTask = class _InternalRenderTask {
   initializeGraphics({ transparency: t2 = false, optionalContentConfig: e2 }) {
     if (this.cancelled) return;
     if (this._canvas) {
-      if (_InternalRenderTask.#Vr.has(this._canvas)) throw new Error("Cannot use the same canvas during multiple render() operations. Use different canvas or ensure previous operations were cancelled or completed.");
-      _InternalRenderTask.#Vr.add(this._canvas);
+      if (_InternalRenderTask.#na.has(this._canvas)) throw new Error("Cannot use the same canvas during multiple render() operations. Use different canvas or ensure previous operations were cancelled or completed.");
+      _InternalRenderTask.#na.add(this._canvas);
     }
     if (this._pdfBug && globalThis.StepperManager?.enabled) {
       this.stepper = globalThis.StepperManager.create(this._pageIndex);
       this.stepper.init(this.operatorList);
       this.stepper.nextBreakPoint = this.stepper.getNextBreakPoint();
     }
-    const { viewport: i2, transform: n2, background: s2, dependencyTracker: r2, imagesTracker: a2 } = this.params, o2 = this._canvasContext || this._canvas.getContext("2d", { alpha: false, willReadFrequently: !this._enableHWA });
-    this.gfx = new CanvasGraphics(o2, this.commonObjs, this.objs, this.canvasFactory, this.filterFactory, { optionalContentConfig: e2 }, this.annotationCanvasMap, this.pageColors, r2, a2);
-    this.gfx.beginDrawing({ transform: n2, viewport: i2, transparency: t2, background: s2 });
+    const { viewport: i2, transform: n2, background: r2, dependencyTracker: s2, imagesTracker: a2 } = this.params, o2 = this._canvasContext || this._canvas.getContext("2d", { alpha: false, willReadFrequently: !this._enableHWA });
+    this.gfx = new CanvasGraphics(o2, this.commonObjs, this.objs, this.canvasFactory, this.filterFactory, { optionalContentConfig: e2 }, this.annotationCanvasMap, this.pageColors, s2, a2);
+    this.gfx.beginDrawing({ transform: n2, viewport: i2, transparency: t2, background: r2 });
     this.operatorListIdx = 0;
     this.graphicsReady = true;
     this.graphicsReadyCallback?.();
@@ -14185,11 +14405,11 @@ var InternalRenderTask = class _InternalRenderTask {
     this.running = false;
     this.cancelled = true;
     this.gfx?.endDrawing();
-    if (this.#Wr) {
-      window.cancelAnimationFrame(this.#Wr);
-      this.#Wr = null;
+    if (this.#ia) {
+      window.cancelAnimationFrame(this.#ia);
+      this.#ia = null;
     }
-    _InternalRenderTask.#Vr.delete(this._canvas);
+    _InternalRenderTask.#na.delete(this._canvas);
     t2 ||= new RenderingCancelledException(`Rendering cancelled, page ${this._pageIndex + 1}`, e2);
     this.callback(t2);
     this.task.onError?.(t2);
@@ -14206,8 +14426,8 @@ var InternalRenderTask = class _InternalRenderTask {
     this.cancelled || (this.task.onContinue ? this.task.onContinue(this._scheduleNextBound) : this._scheduleNext());
   }
   _scheduleNext() {
-    this._useRequestAnimationFrame ? this.#Wr = window.requestAnimationFrame(() => {
-      this.#Wr = null;
+    this._useRequestAnimationFrame ? this.#ia = window.requestAnimationFrame(() => {
+      this.#ia = null;
       this._nextBound().catch(this._cancelBound);
     }) : Promise.resolve().then(this._nextBound).catch(this._cancelBound);
   }
@@ -14218,65 +14438,65 @@ var InternalRenderTask = class _InternalRenderTask {
         this.running = false;
         if (this.operatorList.lastChunk) {
           this.gfx.endDrawing();
-          _InternalRenderTask.#Vr.delete(this._canvas);
+          _InternalRenderTask.#na.delete(this._canvas);
           this.callback();
         }
       }
     }
   }
 };
-var Ht = "6.2.108";
-var zt = "0365cbde0";
+var zt = "6.3.289";
+var Gt = "1c8020a7d";
 __webpack_require__(3068);
 var ColorPicker = class _ColorPicker {
-  #$r = null;
-  #qr = null;
-  #Kr;
-  #Xr = null;
-  #Yr = false;
-  #Jr = false;
+  #ra = null;
+  #sa = null;
+  #aa;
+  #oa = null;
+  #la = false;
+  #ca = false;
   #o = null;
-  #Qr;
-  #Zr = null;
+  #ha;
+  #da = null;
   #v = null;
-  static #ta = null;
+  static #ua = null;
   static get _keyboardManager() {
     return shadow(this, "_keyboardManager", new KeyboardManager([[["Escape"], _ColorPicker.prototype._hideDropdownFromKeyboard], [["Space"], _ColorPicker.prototype._colorSelectFromKeyboard], [["ArrowDown", "ArrowRight"], _ColorPicker.prototype._moveToNext], [["ArrowUp", "ArrowLeft"], _ColorPicker.prototype._moveToPrevious], [["Home"], _ColorPicker.prototype._moveToBeginning], [["End"], _ColorPicker.prototype._moveToEnd]]));
   }
   constructor({ editor: t2 = null, uiManager: e2 = null }) {
     if (t2) {
-      this.#Jr = false;
+      this.#ca = false;
       this.#o = t2;
-    } else this.#Jr = true;
+    } else this.#ca = true;
     this.#v = t2?._uiManager || e2;
-    this.#Qr = this.#v._eventBus;
-    this.#Kr = t2?.color?.toUpperCase() || this.#v?.highlightColors.values().next().value || "#FFFF98";
-    _ColorPicker.#ta ||= Object.freeze({ blue: "pdfjs-editor-colorpicker-blue", green: "pdfjs-editor-colorpicker-green", pink: "pdfjs-editor-colorpicker-pink", red: "pdfjs-editor-colorpicker-red", yellow: "pdfjs-editor-colorpicker-yellow" });
+    this.#ha = this.#v._eventBus;
+    this.#aa = t2?.color?.toUpperCase() || this.#v?.highlightColors.values().next().value || "#FFFF98";
+    _ColorPicker.#ua ||= Object.freeze({ blue: "pdfjs-editor-colorpicker-blue", green: "pdfjs-editor-colorpicker-green", pink: "pdfjs-editor-colorpicker-pink", red: "pdfjs-editor-colorpicker-red", yellow: "pdfjs-editor-colorpicker-yellow" });
   }
   renderButton() {
-    const t2 = this.#$r = document.createElement("button");
+    const t2 = this.#ra = document.createElement("button");
     t2.className = "colorPicker";
     t2.tabIndex = "0";
     t2.setAttribute("data-l10n-id", "pdfjs-editor-colorpicker-button");
     t2.ariaHasPopup = "true";
     this.#o && (t2.ariaControls = `${this.#o.id}_colorpicker_dropdown`);
     const e2 = this.#v._signal;
-    t2.addEventListener("click", this.#ea.bind(this), { signal: e2 });
-    t2.addEventListener("keydown", this.#ia.bind(this), { signal: e2 });
-    const i2 = this.#qr = document.createElement("span");
+    t2.addEventListener("click", this.#pa.bind(this), { signal: e2 });
+    t2.addEventListener("keydown", this.#ga.bind(this), { signal: e2 });
+    const i2 = this.#sa = document.createElement("span");
     i2.className = "swatch";
     i2.ariaHidden = "true";
-    i2.style.backgroundColor = this.#Kr;
+    i2.style.backgroundColor = this.#aa;
     t2.append(i2);
     return t2;
   }
   renderMainDropdown() {
-    const t2 = this.#Xr = this.#na();
+    const t2 = this.#oa = this.#ma();
     t2.ariaOrientation = "horizontal";
     t2.ariaLabelledBy = "highlightColorPickerLabel";
     return t2;
   }
-  #na() {
+  #ma() {
     const t2 = document.createElement("div"), e2 = this.#v._signal;
     t2.addEventListener("contextmenu", noContextMenu, { signal: e2 });
     t2.className = "dropdown";
@@ -14286,135 +14506,135 @@ var ColorPicker = class _ColorPicker {
     t2.setAttribute("data-l10n-id", "pdfjs-editor-colorpicker-dropdown");
     this.#o && (t2.id = `${this.#o.id}_colorpicker_dropdown`);
     for (const [i2, n2] of this.#v.highlightColors) {
-      const s2 = document.createElement("button");
-      s2.tabIndex = "0";
-      s2.role = "option";
-      s2.setAttribute("data-color", n2);
-      s2.title = i2;
-      s2.setAttribute("data-l10n-id", _ColorPicker.#ta[i2]);
-      const r2 = document.createElement("span");
-      s2.append(r2);
-      r2.className = "swatch";
-      r2.style.backgroundColor = n2;
-      s2.ariaSelected = n2 === this.#Kr;
-      s2.addEventListener("click", this.#sa.bind(this, n2), { signal: e2 });
-      t2.append(s2);
+      const r2 = document.createElement("button");
+      r2.tabIndex = "0";
+      r2.role = "option";
+      r2.setAttribute("data-color", n2);
+      r2.title = i2;
+      r2.setAttribute("data-l10n-id", _ColorPicker.#ua[i2]);
+      const s2 = document.createElement("span");
+      r2.append(s2);
+      s2.className = "swatch";
+      s2.style.backgroundColor = n2;
+      r2.ariaSelected = n2 === this.#aa;
+      r2.addEventListener("click", this.#fa.bind(this, n2), { signal: e2 });
+      t2.append(r2);
     }
-    t2.addEventListener("keydown", this.#ia.bind(this), { signal: e2 });
+    t2.addEventListener("keydown", this.#ga.bind(this), { signal: e2 });
     return t2;
   }
-  #sa(t2, e2) {
+  #fa(t2, e2) {
     e2.stopPropagation();
-    this.#Qr.dispatch("switchannotationeditorparams", { source: this, type: v.HIGHLIGHT_COLOR, value: t2 });
-    this.updateColor(t2);
+    this.#ha.dispatch("switchannotationeditorparams", { source: this, type: v.HIGHLIGHT_COLOR, value: t2 });
+    this.update(t2);
   }
   _colorSelectFromKeyboard(t2) {
-    if (t2.target === this.#$r) {
-      this.#ea(t2);
+    if (t2.target === this.#ra) {
+      this.#pa(t2);
       return;
     }
     const e2 = t2.target.getAttribute("data-color");
-    e2 && this.#sa(e2, t2);
+    e2 && this.#fa(e2, t2);
   }
   _moveToNext(t2) {
-    this.#ra ? t2.target !== this.#$r ? t2.target.nextSibling?.focus() : this.#Xr.firstElementChild?.focus() : this.#ea(t2);
+    this.#ba ? t2.target !== this.#ra ? t2.target.nextSibling?.focus() : this.#oa.firstElementChild?.focus() : this.#pa(t2);
   }
   _moveToPrevious(t2) {
-    if (t2.target !== this.#Xr?.firstElementChild && t2.target !== this.#$r) {
-      this.#ra || this.#ea(t2);
+    if (t2.target !== this.#oa?.firstElementChild && t2.target !== this.#ra) {
+      this.#ba || this.#pa(t2);
       t2.target.previousSibling?.focus();
-    } else this.#ra && this._hideDropdownFromKeyboard();
+    } else this.#ba && this._hideDropdownFromKeyboard();
   }
   _moveToBeginning(t2) {
-    this.#ra ? this.#Xr.firstElementChild?.focus() : this.#ea(t2);
+    this.#ba ? this.#oa.firstElementChild?.focus() : this.#pa(t2);
   }
   _moveToEnd(t2) {
-    this.#ra ? this.#Xr.lastElementChild?.focus() : this.#ea(t2);
+    this.#ba ? this.#oa.lastElementChild?.focus() : this.#pa(t2);
   }
-  #ia(t2) {
+  #ga(t2) {
     _ColorPicker._keyboardManager.exec(this, t2);
   }
-  #ea(t2) {
-    if (this.#ra) {
+  #pa(t2) {
+    if (this.#ba) {
       this.hideDropdown();
       return;
     }
-    this.#Yr = 0 === t2.detail;
-    if (!this.#Zr) {
-      this.#Zr = new AbortController();
-      window.addEventListener("pointerdown", this.#g.bind(this), { signal: this.#v.combinedSignal(this.#Zr) });
+    this.#la = 0 === t2.detail;
+    if (!this.#da) {
+      this.#da = new AbortController();
+      window.addEventListener("pointerdown", this.#g.bind(this), { signal: this.#v.combinedSignal(this.#da) });
     }
-    this.#$r.ariaExpanded = "true";
-    if (this.#Xr) {
-      this.#Xr.classList.remove("hidden");
+    this.#ra.ariaExpanded = "true";
+    if (this.#oa) {
+      this.#oa.classList.remove("hidden");
       return;
     }
-    const e2 = this.#Xr = this.#na();
-    this.#$r.append(e2);
+    const e2 = this.#oa = this.#ma();
+    this.#ra.append(e2);
   }
   #g(t2) {
-    this.#Xr?.contains(t2.target) || this.hideDropdown();
+    this.#oa?.contains(t2.target) || this.hideDropdown();
   }
   hideDropdown() {
-    this.#Xr?.classList.add("hidden");
-    this.#$r.ariaExpanded = "false";
-    this.#Zr?.abort();
-    this.#Zr = null;
+    this.#oa?.classList.add("hidden");
+    this.#ra.ariaExpanded = "false";
+    this.#da?.abort();
+    this.#da = null;
   }
-  get #ra() {
-    return this.#Xr && !this.#Xr.classList.contains("hidden");
+  get #ba() {
+    return this.#oa && !this.#oa.classList.contains("hidden");
   }
   _hideDropdownFromKeyboard() {
-    if (!this.#Jr) if (this.#ra) {
+    if (!this.#ca) if (this.#ba) {
       this.hideDropdown();
-      this.#$r.focus({ preventScroll: true, focusVisible: this.#Yr });
+      this.#ra.focus({ preventScroll: true, focusVisible: this.#la });
     } else this.#o?.unselect();
   }
-  updateColor(t2) {
-    this.#qr && (this.#qr.style.backgroundColor = t2);
-    if (!this.#Xr) return;
+  update(t2) {
+    this.#sa && (this.#sa.style.backgroundColor = t2);
+    if (!this.#oa) return;
     const e2 = this.#v.highlightColors.values();
-    for (const i2 of this.#Xr.children) i2.ariaSelected = e2.next().value === t2.toUpperCase();
+    for (const i2 of this.#oa.children) i2.ariaSelected = e2.next().value === t2.toUpperCase();
   }
   destroy() {
-    this.#$r?.remove();
-    this.#$r = null;
-    this.#qr = null;
-    this.#Xr?.remove();
-    this.#Xr = null;
+    this.#ra?.remove();
+    this.#ra = null;
+    this.#sa = null;
+    this.#oa?.remove();
+    this.#oa = null;
   }
 };
 var BasicColorPicker = class _BasicColorPicker {
-  #aa = null;
-  #oa = false;
+  #ya = null;
+  #va = false;
   #o = null;
   #v = null;
-  static #ta = null;
+  static #ua = null;
   constructor(t2) {
     this.#o = t2;
     this.#v = t2._uiManager;
-    _BasicColorPicker.#ta ||= Object.freeze({ freetext: "pdfjs-editor-color-picker-free-text-input", ink: "pdfjs-editor-color-picker-ink-input" });
+    _BasicColorPicker.#ua ||= Object.freeze({ freetext: "pdfjs-editor-color-picker-free-text-input", ink: "pdfjs-editor-color-picker-ink-input" });
   }
   renderButton() {
-    if (this.#aa) return this.#aa;
-    const { editorType: t2, colorType: e2, colorAndOpacityType: i2, opacityType: n2, color: s2, opacity: r2 } = this.#o, a2 = this.#oa = FeatureTest.isAlphaColorInputSupported && void 0 !== n2, o2 = this.#aa = document.createElement("input");
+    if (this.#ya) return this.#ya;
+    const { editorType: t2, colorType: e2, colorAndOpacityType: i2, opacityType: n2, color: r2, opacity: s2 } = this.#o, a2 = this.#va = FeatureTest.isAlphaColorInputSupported && void 0 !== n2, o2 = this.#ya = document.createElement("input");
     o2.type = "color";
     if (a2) {
       o2.setAttribute("alpha", "");
-      const t3 = Util.hexNums[Math.round(255 * (r2 ?? 1))];
-      o2.value = (s2 || "#000000") + t3;
-    } else o2.value = s2 || "#000000";
+      const t3 = Util.hexNums[Math.round(255 * (s2 ?? 1))];
+      o2.value = (r2 || "#000000") + t3;
+    } else o2.value = r2 || "#000000";
     o2.className = "basicColorPicker";
     o2.tabIndex = 0;
-    o2.setAttribute("data-l10n-id", _BasicColorPicker.#ta[t2]);
+    o2.setAttribute("data-l10n-id", _BasicColorPicker.#ua[t2]);
     o2.addEventListener("input", () => {
       if (a2) {
         const t3 = getRGBA(o2.value);
         if (!t3) return;
-        const [s3, r3, a3, l2] = t3, h2 = Util.makeHexColor(s3, r3, a3);
-        if (void 0 !== i2) this.#v.updateParams(i2, { color: h2, opacity: l2 });
+        const [r3, s3, a3, l2] = t3, c2 = Util.makeHexColor(r3, s3, a3);
+        if (void 0 !== i2) this.#v.updateParams(i2, { color: c2, opacity: l2 });
         else {
-          this.#v.updateParams(e2, h2);
+          this.#v.updateParams(e2, c2);
           this.#v.updateParams(n2, l2);
         }
       } else this.#v.updateParams(e2, o2.value);
@@ -14422,19 +14642,19 @@ var BasicColorPicker = class _BasicColorPicker {
     return o2;
   }
   update(t2) {
-    if (this.#aa) if (this.#oa) {
+    if (this.#ya) if (this.#va) {
       const e2 = Util.hexNums[Math.round(255 * this.#o.opacity)];
-      this.#aa.value = t2 + e2;
-    } else this.#aa.value = t2;
+      this.#ya.value = t2 + e2;
+    } else this.#ya.value = t2;
   }
   updateOpacity(t2) {
-    if (!this.#aa || !this.#oa) return;
+    if (!this.#ya || !this.#va) return;
     const e2 = Util.hexNums[Math.round(255 * t2)];
-    this.#aa.value = this.#o.color + e2;
+    this.#ya.value = this.#o.color + e2;
   }
   destroy() {
-    this.#aa?.remove();
-    this.#aa = null;
+    this.#ya?.remove();
+    this.#ya = null;
   }
   hideDropdown() {
   }
@@ -14489,8 +14709,8 @@ var ColorConverters = class {
     return this.RGB_HTML(e2);
   }
   static RGB_CMYK([t2, e2, i2]) {
-    const n2 = 1 - t2, s2 = 1 - e2, r2 = 1 - i2;
-    return ["CMYK", n2, s2, r2, Math.min(n2, s2, r2)];
+    const n2 = 1 - t2, r2 = 1 - e2, s2 = 1 - i2;
+    return ["CMYK", n2, r2, s2, Math.min(n2, r2, s2)];
   }
 };
 var BaseSVGFactory = class {
@@ -14519,8 +14739,8 @@ var DOMSVGFactory = class extends BaseSVGFactory {
     return document.createElementNS(a, t2);
   }
 };
-var Gt = /* @__PURE__ */ new WeakSet();
-var jt = 60 * (/* @__PURE__ */ new Date()).getTimezoneOffset() * 1e3;
+var jt = /* @__PURE__ */ new WeakSet();
+var Wt = 60 * (/* @__PURE__ */ new Date()).getTimezoneOffset() * 1e3;
 var AnnotationElementFactory = class {
   static create(t2) {
     switch (t2.data.annotationType) {
@@ -14580,9 +14800,9 @@ var AnnotationElementFactory = class {
   }
 };
 var AnnotationElement = class _AnnotationElement {
-  #la = null;
-  #ha = false;
-  #ca = null;
+  #wa = null;
+  #Aa = false;
+  #xa = null;
   constructor(t2, { isRenderable: e2 = false, ignoreBorder: i2 = false, createQuadrilaterals: n2 = false } = {}) {
     this.isRenderable = e2;
     this.data = t2.data;
@@ -14622,28 +14842,28 @@ var AnnotationElement = class _AnnotationElement {
     const t2 = this.annotationStorage?.getEditor(this.data.id);
     if (t2) return t2.commentButtonPositionInPage;
     const { quadPoints: e2, inkLists: i2, rect: n2 } = this.data;
-    let s2 = -1 / 0, r2 = -1 / 0;
+    let r2 = -1 / 0, s2 = -1 / 0;
     if (e2?.length >= 8) {
-      for (let t3 = 0; t3 < e2.length; t3 += 8) if (e2[t3 + 1] > r2) {
-        r2 = e2[t3 + 1];
-        s2 = e2[t3 + 2];
-      } else e2[t3 + 1] === r2 && (s2 = Math.max(s2, e2[t3 + 2]));
-      return [s2, r2];
+      for (let t3 = 0; t3 < e2.length; t3 += 8) if (e2[t3 + 1] > s2) {
+        s2 = e2[t3 + 1];
+        r2 = e2[t3 + 2];
+      } else e2[t3 + 1] === s2 && (r2 = Math.max(r2, e2[t3 + 2]));
+      return [r2, s2];
     }
     if (i2?.length >= 1) {
-      for (const t3 of i2) for (let e3 = 0, i3 = t3.length; e3 < i3; e3 += 2) if (t3[e3 + 1] > r2) {
-        r2 = t3[e3 + 1];
-        s2 = t3[e3];
-      } else t3[e3 + 1] === r2 && (s2 = Math.max(s2, t3[e3]));
-      if (s2 !== 1 / 0) return [s2, r2];
+      for (const t3 of i2) for (let e3 = 0, i3 = t3.length; e3 < i3; e3 += 2) if (t3[e3 + 1] > s2) {
+        s2 = t3[e3 + 1];
+        r2 = t3[e3];
+      } else t3[e3 + 1] === s2 && (r2 = Math.max(r2, t3[e3]));
+      if (r2 !== 1 / 0) return [r2, s2];
     }
     return n2 ? [n2[2], n2[3]] : null;
   }
   _normalizePoint(t2) {
-    const { page: { view: e2 }, viewport: { rawDims: { pageWidth: i2, pageHeight: n2, pageX: s2, pageY: r2 } } } = this.parent;
+    const { page: { view: e2 }, viewport: { rawDims: { pageWidth: i2, pageHeight: n2, pageX: r2, pageY: s2 } } } = this.parent;
     t2[1] = e2[3] - t2[1] + e2[1];
-    t2[0] = 100 * (t2[0] - s2) / i2;
-    t2[1] = 100 * (t2[1] - r2) / n2;
+    t2[0] = 100 * (t2[0] - r2) / i2;
+    t2[1] = 100 * (t2[1] - s2) / n2;
     return t2;
   }
   get commentText() {
@@ -14656,113 +14876,113 @@ var AnnotationElement = class _AnnotationElement {
     t2 || this.removePopup();
   }
   removePopup() {
-    (this.#ca?.popup || this.popup)?.remove();
-    this.#ca = this.popup = null;
+    (this.#xa?.popup || this.popup)?.remove();
+    this.#xa = this.popup = null;
   }
   updateEdited(t2) {
     if (!this.container) return;
-    t2.rect && (this.#la ||= { rect: this.data.rect.slice(0) });
+    t2.rect && (this.#wa ||= { rect: this.data.rect.slice(0) });
     const { rect: e2, popup: i2 } = t2;
-    e2 && this.#da(e2);
-    let n2 = this.#ca?.popup || this.popup;
+    e2 && this.#Ea(e2);
+    let n2 = this.#xa?.popup || this.popup;
     if (!n2 && i2?.text) {
       this._createPopup(i2);
-      n2 = this.#ca.popup;
+      n2 = this.#xa.popup;
     }
     if (n2) {
       n2.updateEdited(t2);
       if (i2?.deleted) {
         n2.remove();
-        this.#ca = null;
+        this.#xa = null;
         this.popup = null;
       }
     }
   }
   resetEdited() {
-    if (this.#la) {
-      this.#da(this.#la.rect);
-      this.#ca?.popup.resetEdited();
-      this.#la = null;
+    if (this.#wa) {
+      this.#Ea(this.#wa.rect);
+      this.#xa?.popup.resetEdited();
+      this.#wa = null;
     }
   }
-  #da(t2) {
-    const { container: { style: e2 }, data: { rect: i2, rotation: n2 }, parent: { viewport: { rawDims: { pageWidth: s2, pageHeight: r2, pageX: a2, pageY: o2 } } } } = this;
+  #Ea(t2) {
+    const { container: { style: e2 }, data: { rect: i2, rotation: n2 }, parent: { viewport: { rawDims: { pageWidth: r2, pageHeight: s2, pageX: a2, pageY: o2 } } } } = this;
     i2?.splice(0, 4, ...t2);
-    e2.left = 100 * (t2[0] - a2) / s2 + "%";
-    e2.top = 100 * (r2 - t2[3] + o2) / r2 + "%";
+    e2.left = 100 * (t2[0] - a2) / r2 + "%";
+    e2.top = 100 * (s2 - t2[3] + o2) / s2 + "%";
     if (0 === n2) {
-      e2.width = 100 * (t2[2] - t2[0]) / s2 + "%";
-      e2.height = 100 * (t2[3] - t2[1]) / r2 + "%";
+      e2.width = 100 * (t2[2] - t2[0]) / r2 + "%";
+      e2.height = 100 * (t2[3] - t2[1]) / s2 + "%";
     } else this.setRotation(n2);
   }
   _createContainer(t2) {
-    const { data: e2, parent: { page: i2, viewport: n2 } } = this, s2 = document.createElement("section");
-    s2.setAttribute("data-annotation-id", e2.id);
-    this instanceof WidgetAnnotationElement || this instanceof LinkAnnotationElement || this instanceof MediaAnnotationElement || (s2.tabIndex = 0);
-    const { style: r2 } = s2;
-    r2.zIndex = this.parent.zIndex;
+    const { data: e2, parent: { page: i2, viewport: n2 } } = this, r2 = document.createElement("section");
+    r2.setAttribute("data-annotation-id", e2.id);
+    this instanceof WidgetAnnotationElement || this instanceof LinkAnnotationElement || this instanceof MediaAnnotationElement || (r2.tabIndex = 0);
+    const { style: s2 } = r2;
+    s2.zIndex = this.parent.zIndex;
     this.parent.zIndex += 2;
-    e2.alternativeText && (s2.title = e2.alternativeText);
-    e2.noRotate && s2.classList.add("norotate");
+    e2.alternativeText && (r2.title = e2.alternativeText);
+    e2.noRotate && r2.classList.add("norotate");
     if (!e2.rect || this instanceof PopupAnnotationElement) {
       const { rotation: t3 } = e2;
-      e2.hasOwnCanvas || 0 === t3 || this.setRotation(t3, s2);
-      return s2;
+      e2.hasOwnCanvas || 0 === t3 || this.setRotation(t3, r2);
+      return r2;
     }
     const { width: a2, height: o2 } = this;
     if (!t2 && e2.borderStyle.width > 0) {
-      r2.borderWidth = `${e2.borderStyle.width}px`;
+      s2.borderWidth = `${e2.borderStyle.width}px`;
       const t3 = e2.borderStyle.horizontalCornerRadius, i3 = e2.borderStyle.verticalCornerRadius;
       if (t3 > 0 || i3 > 0) {
         const e3 = `calc(${t3}px * var(--total-scale-factor)) / calc(${i3}px * var(--total-scale-factor))`;
-        r2.borderRadius = e3;
+        s2.borderRadius = e3;
       }
       switch (e2.borderStyle.style) {
         case D:
-          r2.borderStyle = "solid";
-          break;
-        case M:
-          r2.borderStyle = "dashed";
+          s2.borderStyle = "solid";
           break;
         case P:
+          s2.borderStyle = "dashed";
+          break;
+        case M:
           warn("Unimplemented border style: beveled");
           break;
         case I:
           warn("Unimplemented border style: inset");
           break;
         case O:
-          r2.borderBottomStyle = "solid";
+          s2.borderBottomStyle = "solid";
       }
       const n3 = e2.borderColor || null;
       if (n3) {
-        this.#ha = true;
-        r2.borderColor = Util.makeHexColor(...n3);
-      } else r2.borderWidth = 0;
+        this.#Aa = true;
+        s2.borderColor = Util.makeHexColor(...n3);
+      } else s2.borderWidth = 0;
     }
-    const l2 = Util.normalizeRect([e2.rect[0], i2.view[3] - e2.rect[1] + i2.view[1], e2.rect[2], i2.view[3] - e2.rect[3] + i2.view[1]]), { pageWidth: h2, pageHeight: c2, pageX: d2, pageY: u2 } = n2.rawDims;
-    r2.left = 100 * (l2[0] - d2) / h2 + "%";
-    r2.top = 100 * (l2[1] - u2) / c2 + "%";
+    const l2 = Util.normalizeRect([e2.rect[0], i2.view[3] - e2.rect[1] + i2.view[1], e2.rect[2], i2.view[3] - e2.rect[3] + i2.view[1]]), { pageWidth: c2, pageHeight: h2, pageX: d2, pageY: u2 } = n2.rawDims;
+    s2.left = 100 * (l2[0] - d2) / c2 + "%";
+    s2.top = 100 * (l2[1] - u2) / h2 + "%";
     const { rotation: p2 } = e2;
     if (e2.hasOwnCanvas || 0 === p2) {
-      r2.width = 100 * a2 / h2 + "%";
-      r2.height = 100 * o2 / c2 + "%";
-    } else this.setRotation(p2, s2);
-    return s2;
+      s2.width = 100 * a2 / c2 + "%";
+      s2.height = 100 * o2 / h2 + "%";
+    } else this.setRotation(p2, r2);
+    return r2;
   }
   setRotation(t2, e2 = this.container) {
     if (!this.data.rect) return;
     const { pageWidth: i2, pageHeight: n2 } = this.parent.viewport.rawDims;
-    let { width: s2, height: r2 } = this;
-    t2 % 180 != 0 && ([s2, r2] = [r2, s2]);
-    e2.style.width = 100 * s2 / i2 + "%";
-    e2.style.height = 100 * r2 / n2 + "%";
+    let { width: r2, height: s2 } = this;
+    t2 % 180 != 0 && ([r2, s2] = [s2, r2]);
+    e2.style.width = 100 * r2 / i2 + "%";
+    e2.style.height = 100 * s2 / n2 + "%";
     e2.setAttribute("data-main-rotation", (360 - t2) % 360);
   }
   get _commonActions() {
     const setColor = (t2, e2, i2) => {
-      const n2 = i2.detail[t2], s2 = n2[0], r2 = n2.slice(1);
-      i2.target.style[e2] = ColorConverters[`${s2}_HTML`](r2);
-      this.annotationStorage.setValue(this.data.id, { [e2]: ColorConverters[`${s2}_rgb`](r2) });
+      const n2 = i2.detail[t2], r2 = n2[0], s2 = n2.slice(1);
+      i2.target.style[e2] = ColorConverters[`${r2}_HTML`](s2);
+      this.annotationStorage.setValue(this.data.id, { [e2]: ColorConverters[`${r2}_rgb`](s2) });
     };
     return shadow(this, "_commonActions", { display: (t2) => {
       const { display: e2 } = t2.detail, i2 = e2 % 2 == 1;
@@ -14803,8 +15023,8 @@ var AnnotationElement = class _AnnotationElement {
   _dispatchEventFromSandbox(t2, e2) {
     const i2 = this._commonActions;
     for (const n2 of Object.keys(e2.detail)) {
-      const s2 = t2[n2] || i2[n2];
-      s2?.(e2);
+      const r2 = t2[n2] || i2[n2];
+      r2?.(e2);
     }
   }
   _setDefaultPropertiesFromJS(t2) {
@@ -14812,10 +15032,10 @@ var AnnotationElement = class _AnnotationElement {
     const e2 = this.annotationStorage.getRawValue(this.data.id);
     if (!e2) return;
     const i2 = this._commonActions;
-    for (const [n2, s2] of Object.entries(e2)) {
-      const r2 = i2[n2];
-      if (r2) {
-        r2({ detail: { [n2]: s2 }, target: t2 });
+    for (const [n2, r2] of Object.entries(e2)) {
+      const s2 = i2[n2];
+      if (s2) {
+        s2({ detail: { [n2]: r2 }, target: t2 });
         delete e2[n2];
       }
     }
@@ -14824,32 +15044,32 @@ var AnnotationElement = class _AnnotationElement {
     if (!this.container) return;
     const { quadPoints: t2 } = this.data;
     if (!t2) return;
-    const [e2, i2, n2, s2] = this.data.rect.map((t3) => Math.fround(t3));
+    const [e2, i2, n2, r2] = this.data.rect.map(Math.fround);
     if (8 === t2.length) {
-      const [r3, a2, o3, l3] = t2.subarray(2, 6);
-      if (n2 === r3 && s2 === a2 && e2 === o3 && i2 === l3) return;
+      const [s3, a2, o3, l3] = t2.subarray(2, 6);
+      if (n2 === s3 && r2 === a2 && e2 === o3 && i2 === l3) return;
     }
-    const { style: r2 } = this.container;
+    const { style: s2 } = this.container;
     let o2;
-    if (this.#ha) {
-      const { borderColor: t3, borderWidth: e3 } = r2;
-      r2.borderWidth = 0;
+    if (this.#Aa) {
+      const { borderColor: t3, borderWidth: e3 } = s2;
+      s2.borderWidth = 0;
       o2 = ["url('data:image/svg+xml;utf8,", `<svg xmlns="${a}" preserveAspectRatio="none" viewBox="0 0 1 1">`, `<g fill="transparent" stroke="${t3}" stroke-width="${e3}">`];
       this.container.classList.add("hasBorder");
     }
-    const l2 = n2 - e2, h2 = s2 - i2, { svgFactory: c2 } = this, d2 = c2.createElement("svg");
+    const l2 = n2 - e2, c2 = r2 - i2, { svgFactory: h2 } = this, d2 = h2.createElement("svg");
     d2.classList.add("quadrilateralsContainer");
     d2.setAttribute("width", 0);
     d2.setAttribute("height", 0);
     d2.role = "none";
-    const u2 = c2.createElement("defs");
+    const u2 = h2.createElement("defs");
     d2.append(u2);
-    const p2 = c2.createElement("clipPath"), g2 = `clippath_${this.data.id}`;
+    const p2 = h2.createElement("clipPath"), g2 = `clippath_${this.data.id}`;
     p2.setAttribute("id", g2);
     p2.setAttribute("clipPathUnits", "objectBoundingBox");
     u2.append(p2);
     for (let i3 = 2, n3 = t2.length; i3 < n3; i3 += 8) {
-      const n4 = t2[i3], r3 = t2[i3 + 1], a2 = t2[i3 + 2], d3 = t2[i3 + 3], u3 = c2.createElement("rect"), g3 = (a2 - e2) / l2, m2 = (s2 - r3) / h2, f2 = (n4 - a2) / l2, b2 = (r3 - d3) / h2;
+      const n4 = t2[i3], s3 = t2[i3 + 1], a2 = t2[i3 + 2], d3 = t2[i3 + 3], u3 = h2.createElement("rect"), g3 = (a2 - e2) / l2, m2 = (r2 - s3) / c2, f2 = (n4 - a2) / l2, b2 = (s3 - d3) / c2;
       u3.setAttribute("x", g3);
       u3.setAttribute("y", m2);
       u3.setAttribute("width", f2);
@@ -14857,9 +15077,9 @@ var AnnotationElement = class _AnnotationElement {
       p2.append(u3);
       o2?.push(`<rect vector-effect="non-scaling-stroke" x="${g3}" y="${m2}" width="${f2}" height="${b2}"/>`);
     }
-    if (this.#ha) {
+    if (this.#Aa) {
       o2.push("</g></svg>')");
-      r2.backgroundImage = o2.join("");
+      s2.backgroundImage = o2.join("");
     }
     this.container.append(d2);
     this.container.style.clipPath = `url(#${g2})`;
@@ -14874,13 +15094,13 @@ var AnnotationElement = class _AnnotationElement {
       i2 = e2.contentsObj;
       n2 = e2.modificationDate;
     }
-    this.#ca = new PopupAnnotationElement({ data: { color: e2.color, titleObj: e2.titleObj, modificationDate: n2, contentsObj: i2, richText: e2.richText, parentRect: e2.rect, borderStyle: 0, id: `popup_${e2.id}`, rotation: e2.rotation, noRotate: true }, linkService: this.linkService, parent: this.parent, elements: [this] });
+    this.#xa = new PopupAnnotationElement({ data: { color: e2.color, titleObj: e2.titleObj, modificationDate: n2, contentsObj: i2, richText: e2.richText, parentRect: e2.rect, borderStyle: 0, id: `popup_${e2.id}`, rotation: e2.rotation, noRotate: true }, linkService: this.linkService, parent: this.parent, elements: [this] });
   }
   get hasPopupElement() {
-    return !!(this.#ca || this.popup || this.data.popupRef);
+    return !!(this.#xa || this.popup || this.data.popupRef);
   }
   get extraPopupElement() {
-    return this.#ca;
+    return this.#xa;
   }
   render() {
     unreachable("Abstract method `AnnotationElement.render` called");
@@ -14888,18 +15108,18 @@ var AnnotationElement = class _AnnotationElement {
   _getElementsByName(t2, e2 = null) {
     const i2 = [];
     if (this._fieldObjects) {
-      const n2 = this._fieldObjects[t2] || [];
-      for (const { page: t3, id: s2, exportValues: r2 } of n2) {
+      const n2 = this._fieldObjects.get(t2) || [];
+      for (const { page: t3, id: r2, exportValues: s2 } of n2) {
         if (-1 === t3) continue;
-        if (s2 === e2) continue;
-        const n3 = "string" == typeof r2 ? r2 : null, a2 = document.querySelector(`[data-element-id="${s2}"]`);
-        !a2 || Gt.has(a2) ? i2.push({ id: s2, exportValue: n3, domElement: a2 }) : warn(`_getElementsByName - element not allowed: ${s2}`);
+        if (r2 === e2) continue;
+        const n3 = "string" == typeof s2 ? s2 : null, a2 = document.querySelector(`[data-element-id="${r2}"]`);
+        !a2 || jt.has(a2) ? i2.push({ id: r2, exportValue: n3, domElement: a2 }) : warn(`_getElementsByName - element not allowed: ${r2}`);
       }
       return i2;
     }
     for (const n2 of document.getElementsByName(t2)) {
-      const { exportValue: t3 } = n2, s2 = n2.getAttribute("data-element-id");
-      s2 !== e2 && (Gt.has(n2) && i2.push({ id: s2, exportValue: t3, domElement: n2 }));
+      const { exportValue: t3 } = n2, r2 = n2.getAttribute("data-element-id");
+      r2 !== e2 && (jt.has(n2) && i2.push({ id: r2, exportValue: t3, domElement: n2 }));
     }
     return i2;
   }
@@ -14993,16 +15213,16 @@ var LinkAnnotationElement = class extends AnnotationElement {
       this._bindNamedAction(i2, t2.action, t2.overlaidText);
       n2 = true;
     } else if (t2.attachment) {
-      this.#ua(i2, t2.attachmentId, t2.attachment, t2.overlaidText, t2.attachmentDest);
+      this.#Ca(i2, t2.attachmentId, t2.attachment, t2.overlaidText, t2.attachmentDest);
       n2 = true;
     } else if (t2.setOCGState) {
-      this.#pa(i2, t2.setOCGState, t2.overlaidText);
+      this.#Sa(i2, t2.setOCGState, t2.overlaidText);
       n2 = true;
     } else if (t2.dest) {
       this._bindLink(i2, t2.dest, t2.overlaidText);
       n2 = true;
     } else {
-      if (t2.actions && (t2.actions.Action || t2.actions["Mouse Up"] || t2.actions["Mouse Down"]) && this.enableScripting && this.hasJSActions) {
+      if (t2.actions && (t2.actions.has("Action") || t2.actions.has("Mouse Up") || t2.actions.has("Mouse Down")) && this.enableScripting && this.hasJSActions) {
         this._bindJSAction(i2, t2);
         n2 = true;
       }
@@ -15021,7 +15241,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
     }
     return this.container;
   }
-  #ga() {
+  #Ta() {
     this.container.setAttribute("data-internal-link", "");
   }
   _bindLink(t2, e2, i2 = "") {
@@ -15030,7 +15250,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
       e2 && this.linkService.goToDestination(e2);
       return false;
     };
-    (e2 || "" === e2) && this.#ga();
+    (e2 || "" === e2) && this.#Ta();
     i2 && (t2.title = i2);
   }
   _bindNamedAction(t2, e2, i2 = "") {
@@ -15040,61 +15260,61 @@ var LinkAnnotationElement = class extends AnnotationElement {
       return false;
     };
     i2 && (t2.title = i2);
-    this.#ga();
+    this.#Ta();
   }
-  #ua(t2, e2, i2, n2 = "", s2 = null) {
+  #Ca(t2, e2, i2, n2 = "", r2 = null) {
     t2.href = this.linkService.getAnchorUrl("");
     i2.description ? t2.title = i2.description : n2 && (t2.title = n2);
     const openAttachment = async () => {
       const t3 = await this.linkService.getAttachmentContent(e2);
-      t3 && this.downloadManager?.openOrDownloadData(t3, i2.filename, s2);
+      t3 && this.downloadManager?.openOrDownloadData(t3, i2.filename, r2);
     };
     t2.onclick = () => {
       openAttachment();
       return false;
     };
-    this.#ga();
+    this.#Ta();
   }
-  #pa(t2, e2, i2 = "") {
+  #Sa(t2, e2, i2 = "") {
     t2.href = this.linkService.getAnchorUrl("");
     t2.onclick = () => {
       this.linkService.executeSetOCGState(e2);
       return false;
     };
     i2 && (t2.title = i2);
-    this.#ga();
+    this.#Ta();
   }
-  _bindJSAction(t2, e2) {
+  _bindJSAction(t2, { actions: e2, id: i2, overlaidText: n2 }) {
     t2.href = this.linkService.getAnchorUrl("");
-    const i2 = /* @__PURE__ */ new Map([["Action", "onclick"], ["Mouse Up", "onmouseup"], ["Mouse Down", "onmousedown"]]);
-    for (const n2 of Object.keys(e2.actions)) {
-      const s2 = i2.get(n2);
-      s2 && (t2[s2] = () => {
-        this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2.id, name: n2 } });
+    const r2 = /* @__PURE__ */ new Map([["Action", "onclick"], ["Mouse Up", "onmouseup"], ["Mouse Down", "onmousedown"]]);
+    for (const n3 of e2.keys()) {
+      const e3 = r2.get(n3);
+      e3 && (t2[e3] = () => {
+        this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: i2, name: n3 } });
         return false;
       });
     }
-    e2.overlaidText && (t2.title = e2.overlaidText);
+    n2 && (t2.title = n2);
     t2.onclick ||= () => false;
-    this.#ga();
+    this.#Ta();
   }
   _bindResetFormAction(t2, e2) {
     const i2 = t2.onclick;
     i2 || (t2.href = this.linkService.getAnchorUrl(""));
-    this.#ga();
+    this.#Ta();
     if (this._fieldObjects) t2.onclick = () => {
       i2?.();
-      const { fields: t3, refs: n2, include: s2 } = e2, r2 = [];
+      const { fields: t3, refs: n2, include: r2 } = e2, s2 = [];
       if (0 !== t3.length || 0 !== n2.length) {
         const e3 = new Set(n2);
         for (const i3 of t3) {
-          const t4 = this._fieldObjects[i3] || [];
+          const t4 = this._fieldObjects.get(i3) || [];
           for (const { id: i4 } of t4) e3.add(i4);
         }
-        for (const t4 of Object.values(this._fieldObjects)) for (const i3 of t4) e3.has(i3.id) === s2 && r2.push(i3);
-      } else for (const t4 of Object.values(this._fieldObjects)) r2.push(...t4);
+        for (const t4 of this._fieldObjects.values()) for (const i3 of t4) e3.has(i3.id) === r2 && s2.push(i3);
+      } else for (const t4 of this._fieldObjects.values()) s2.push(...t4);
       const a2 = this.annotationStorage, o2 = [];
-      for (const t4 of r2) {
+      for (const t4 of s2) {
         const { id: e3 } = t4;
         o2.push(e3);
         switch (t4.type) {
@@ -15119,7 +15339,7 @@ var LinkAnnotationElement = class extends AnnotationElement {
             continue;
         }
         const i3 = document.querySelector(`[data-element-id="${e3}"]`);
-        i3 && (Gt.has(i3) ? i3.dispatchEvent(new Event("resetform")) : warn(`_bindResetFormAction - element not allowed: ${e3}`));
+        i3 && (jt.has(i3) ? i3.dispatchEvent(new Event("resetform")) : warn(`_bindResetFormAction - element not allowed: ${e3}`));
       }
       this.enableScripting && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: "app", ids: o2, name: "ResetForm" } });
       return false;
@@ -15155,9 +15375,9 @@ var WidgetAnnotationElement = class extends AnnotationElement {
   _getKeyModifier(t2) {
     return FeatureTest.platform.isMac ? t2.metaKey : t2.ctrlKey;
   }
-  _setEventListener(t2, e2, i2, n2, s2) {
+  _setEventListener(t2, e2, i2, n2, r2) {
     i2.includes("mouse") ? t2.addEventListener(i2, (t3) => {
-      this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: this.data.id, name: n2, value: s2(t3), shift: t3.shiftKey, modifier: this._getKeyModifier(t3) } });
+      this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: this.data.id, name: n2, value: r2(t3), shift: t3.shiftKey, modifier: this._getKeyModifier(t3) } });
     }) : t2.addEventListener(i2, (t3) => {
       if ("blur" === i2) {
         if (!e2.focused || !t3.relatedTarget) return;
@@ -15166,30 +15386,31 @@ var WidgetAnnotationElement = class extends AnnotationElement {
         if (e2.focused) return;
         e2.focused = true;
       }
-      s2 && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: this.data.id, name: n2, value: s2(t3) } });
+      r2 && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: this.data.id, name: n2, value: r2(t3) } });
     });
   }
   _setEventListeners(t2, e2, i2, n2) {
-    for (const [s2, r2] of i2) if ("Action" === r2 || this.data.actions?.[r2]) {
-      "Focus" !== r2 && "Blur" !== r2 || (e2 ||= { focused: false });
-      this._setEventListener(t2, e2, s2, r2, n2);
-      "Focus" !== r2 || this.data.actions?.Blur ? "Blur" !== r2 || this.data.actions?.Focus || this._setEventListener(t2, e2, "focus", "Focus", null) : this._setEventListener(t2, e2, "blur", "Blur", null);
+    const { actions: r2 } = this.data;
+    for (const [s2, a2] of i2) if ("Action" === a2 || r2?.has(a2)) {
+      "Focus" !== a2 && "Blur" !== a2 || (e2 ||= { focused: false });
+      this._setEventListener(t2, e2, s2, a2, n2);
+      "Focus" !== a2 || r2?.has("Blur") ? "Blur" !== a2 || r2?.has("Focus") || this._setEventListener(t2, e2, "focus", "Focus", null) : this._setEventListener(t2, e2, "blur", "Blur", null);
     }
   }
   _setTextStyle(t2) {
-    const e2 = ["left", "center", "right"], { fontColor: i2 } = this.data.defaultAppearanceData, n2 = this.data.defaultAppearanceData.fontSize || 9, s2 = t2.style;
-    let r2;
+    const e2 = ["left", "center", "right"], { fontColor: i2 } = this.data.defaultAppearanceData, n2 = this.data.defaultAppearanceData.fontSize || 9, r2 = t2.style;
+    let s2;
     const roundToOneDecimal = (t3) => Math.round(10 * t3) / 10;
     if (this.data.multiLine) {
       const t3 = Math.abs(this.data.rect[3] - this.data.rect[1] - 2), e3 = t3 / (Math.round(t3 / (1.35 * n2)) || 1);
-      r2 = Math.min(n2, roundToOneDecimal(e3 / 1.35));
+      s2 = Math.min(n2, roundToOneDecimal(e3 / 1.35));
     } else {
       const t3 = Math.abs(this.data.rect[3] - this.data.rect[1] - 2);
-      r2 = Math.min(n2, roundToOneDecimal(t3 / 1.35));
+      s2 = Math.min(n2, roundToOneDecimal(t3 / 1.35));
     }
-    s2.fontSize = `calc(${r2}px * var(--total-scale-factor))`;
-    s2.color = Util.makeHexColor(...i2);
-    null === this.data.textAlignment || this.data.comb || (s2.textAlign = e2[this.data.textAlignment]);
+    r2.fontSize = `calc(${s2}px * var(--total-scale-factor))`;
+    r2.color = Util.makeHexColor(...i2);
+    null === this.data.textAlignment || this.data.comb || (r2.textAlign = e2[this.data.textAlignment]);
   }
   _setRequired(t2, e2) {
     e2 ? t2.setAttribute("required", true) : t2.removeAttribute("required");
@@ -15201,10 +15422,10 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
     super(t2, { isRenderable: t2.renderForms || t2.data.hasOwnCanvas || !t2.data.hasAppearance && !!t2.data.fieldValue });
   }
   setPropertyOnSiblings(t2, e2, i2, n2) {
-    const s2 = this.annotationStorage;
-    for (const r2 of this._getElementsByName(t2.name, t2.id)) {
-      r2.domElement && (r2.domElement[e2] = i2);
-      s2.setValue(r2.id, { [n2]: i2 });
+    const r2 = this.annotationStorage;
+    for (const s2 of this._getElementsByName(t2.name, t2.id)) {
+      s2.domElement && (s2.domElement[e2] = i2);
+      r2.setValue(s2.id, { [n2]: i2 });
     }
   }
   render() {
@@ -15213,36 +15434,36 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
     let i2 = null;
     if (this.renderForms) {
       const n2 = t2.getValue(e2, { value: this.data.fieldValue });
-      let s2 = n2.value || "";
-      const r2 = t2.getValue(e2, { charLimit: this.data.maxLen }).charLimit;
-      r2 && s2.length > r2 && (s2 = s2.slice(0, r2));
+      let r2 = n2.value || "";
+      const s2 = t2.getValue(e2, { charLimit: this.data.maxLen }).charLimit;
+      s2 && r2.length > s2 && (r2 = r2.slice(0, s2));
       let a2 = n2.formattedValue || this.data.textContent?.join("\n") || null;
       a2 && this.data.comb && (a2 = a2.replaceAll(/\s+/g, ""));
-      const o2 = { userValue: s2, formattedValue: a2, lastCommittedValue: null, commitKey: 1, focused: false };
+      const o2 = { userValue: r2, formattedValue: a2, lastCommittedValue: null, commitKey: 1, focused: false };
       if (this.data.multiLine) {
         i2 = document.createElement("textarea");
-        i2.textContent = a2 ?? s2;
+        i2.textContent = a2 ?? r2;
         this.data.doNotScroll && (i2.style.overflowY = "hidden");
       } else {
         i2 = document.createElement("input");
         i2.type = this.data.password ? "password" : "text";
-        i2.setAttribute("value", a2 ?? s2);
+        i2.setAttribute("value", a2 ?? r2);
         this.data.doNotScroll && (i2.style.overflowX = "hidden");
       }
       if (this.data.hasOwnCanvas) {
         this.container.classList.add("hasOwnCanvas");
         t2.has(e2) && this.container.classList.add("sandboxModified");
       }
-      Gt.add(i2);
+      jt.add(i2);
       this.contentElement = i2;
       i2.setAttribute("data-element-id", e2);
       i2.disabled = this.data.readOnly;
       i2.name = this.data.fieldName;
       i2.tabIndex = 0;
-      const { datetimeFormat: l2, datetimeType: h2, timeStep: c2 } = this.data, d2 = !!h2 && this.enableScripting;
+      const { datetimeFormat: l2, datetimeType: c2, timeStep: h2 } = this.data, d2 = !!c2 && this.enableScripting;
       l2 && (i2.title = l2);
       this._setRequired(i2, this.data.required);
-      r2 && (i2.maxLength = r2);
+      s2 && (i2.maxLength = s2);
       i2.addEventListener("input", (n3) => {
         t2.setValue(e2, { value: n3.target.value });
         this.setPropertyOnSiblings(i2, "value", n3.target.value, "value");
@@ -15263,20 +15484,20 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
           if (o2.focused) return;
           const { target: e3 } = t3;
           if (d2) {
-            e3.type = h2;
-            c2 && (e3.step = c2);
+            e3.type = c2;
+            h2 && (e3.step = h2);
           }
           if (o2.userValue) {
             const t4 = o2.userValue;
-            if (d2) if ("time" === h2) {
+            if (d2) if ("time" === c2) {
               const i3 = new Date(t4), n4 = [i3.getHours(), i3.getMinutes(), i3.getSeconds()];
               e3.value = n4.map((t5) => t5.toString().padStart(2, "0")).join(":");
-            } else e3.value = new Date(t4 - jt).toISOString().split("date" === h2 ? "T" : ".", 1)[0];
+            } else e3.value = new Date(t4 - Wt).toISOString().split("date" === c2 ? "T" : ".", 1)[0];
             else e3.value = t4;
           }
           o2.lastCommittedValue = e3.value;
           o2.commitKey = 1;
-          this.data.actions?.Focus || (o2.focused = true);
+          this.data.actions?.has("Focus") || (o2.focused = true);
         });
         i2.addEventListener("updatefromsandbox", (i3) => {
           this.container.classList.add("sandboxModified");
@@ -15288,24 +15509,24 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
             const { formattedValue: n5 } = i4.detail;
             o2.formattedValue = n5;
             null != n5 && i4.target !== document.activeElement && (i4.target.value = n5);
-            const s3 = { formattedValue: n5 };
-            d2 && (s3.value = n5);
-            t2.setValue(e2, s3);
+            const r3 = { formattedValue: n5 };
+            d2 && (r3.value = n5);
+            t2.setValue(e2, r3);
           }, selRange(t3) {
             t3.target.setSelectionRange(...t3.detail.selRange);
           }, charLimit: (i4) => {
-            const { charLimit: n5 } = i4.detail, { target: s3 } = i4;
+            const { charLimit: n5 } = i4.detail, { target: r3 } = i4;
             if (0 === n5) {
-              s3.removeAttribute("maxLength");
+              r3.removeAttribute("maxLength");
               return;
             }
-            s3.setAttribute("maxLength", n5);
-            let r3 = o2.userValue;
-            if (r3 && !(r3.length <= n5)) {
-              r3 = r3.slice(0, n5);
-              s3.value = o2.userValue = r3;
-              t2.setValue(e2, { value: r3 });
-              this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: r3, willCommit: true, commitKey: 1, selStart: s3.selectionStart, selEnd: s3.selectionEnd } });
+            r3.setAttribute("maxLength", n5);
+            let s3 = o2.userValue;
+            if (s3 && !(s3.length <= n5)) {
+              s3 = s3.slice(0, n5);
+              r3.value = o2.userValue = s3;
+              t2.setValue(e2, { value: s3 });
+              this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: s3, willCommit: true, commitKey: 1, selStart: r3.selectionStart, selEnd: r3.selectionEnd } });
             }
           } };
           this._dispatchEventFromSandbox(n4, i3);
@@ -15326,59 +15547,60 @@ var TextWidgetAnnotationElement = class extends WidgetAnnotationElement {
         blurListener = null;
         i2.addEventListener("blur", (t3) => {
           if (!o2.focused || !t3.relatedTarget) return;
-          this.data.actions?.Blur || (o2.focused = false);
+          this.data.actions?.has("Blur") || (o2.focused = false);
           const { target: i3 } = t3;
-          let { value: s3 } = i3;
+          let { value: r3 } = i3;
           if (d2) {
-            if (s3 && "time" === h2) {
-              const t4 = s3.split(":").map((t5) => parseInt(t5, 10));
-              s3 = new Date(2e3, 0, 1, t4[0], t4[1], t4[2] || 0).valueOf();
+            if (r3 && "time" === c2) {
+              const t4 = r3.split(":").map((t5) => parseInt(t5, 10));
+              r3 = new Date(2e3, 0, 1, t4[0], t4[1], t4[2] || 0).valueOf();
               i3.step = "";
             } else {
-              s3.includes("T") || (s3 = `${s3}T00:00`);
-              s3 = new Date(s3).valueOf();
+              r3.includes("T") || (r3 = `${r3}T00:00`);
+              r3 = new Date(r3).valueOf();
             }
             i3.type = "text";
           }
-          o2.userValue = s3;
-          o2.lastCommittedValue !== s3 && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: s3, willCommit: true, commitKey: o2.commitKey, selStart: t3.target.selectionStart, selEnd: t3.target.selectionEnd } });
+          o2.userValue = r3;
+          o2.lastCommittedValue !== r3 && this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: r3, willCommit: true, commitKey: o2.commitKey, selStart: t3.target.selectionStart, selEnd: t3.target.selectionEnd } });
           n3(t3);
         });
-        this.data.actions?.Keystroke && i2.addEventListener("beforeinput", (t3) => {
+        this.data.actions?.has("Keystroke") && i2.addEventListener("beforeinput", (t3) => {
           o2.lastCommittedValue = null;
-          const { data: i3, target: n4 } = t3, { value: s3, selectionStart: r3, selectionEnd: a3 } = n4;
-          let l3 = r3, h3 = a3;
+          const { data: i3, target: n4 } = t3, { value: r3, selectionStart: s3, selectionEnd: a3 } = n4;
+          let l3 = s3, c3 = a3;
           switch (t3.inputType) {
             case "deleteWordBackward": {
-              const t4 = s3.substring(0, r3).match(/\w*\W*$/);
-              t4 && (l3 -= t4[0].length);
+              const t4 = /\w/;
+              for (; l3 > 0 && !t4.test(r3[l3 - 1]); ) l3--;
+              for (; l3 > 0 && t4.test(r3[l3 - 1]); ) l3--;
               break;
             }
             case "deleteWordForward": {
-              const t4 = s3.substring(r3).match(/^\W*\w*/);
-              t4 && (h3 += t4[0].length);
+              const t4 = r3.substring(s3).match(/^\W*\w*/);
+              t4 && (c3 += t4[0].length);
               break;
             }
             case "deleteContentBackward":
-              r3 === a3 && (l3 -= 1);
+              s3 === a3 && (l3 -= 1);
               break;
             case "deleteContentForward":
-              r3 === a3 && (h3 += 1);
+              s3 === a3 && (c3 += 1);
           }
           t3.preventDefault();
-          this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: s3, change: i3 || "", willCommit: false, selStart: l3, selEnd: h3 } });
+          this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: r3, change: i3 || "", willCommit: false, selStart: l3, selEnd: c3 } });
         });
         this._setEventListeners(i2, o2, [["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"]], (t3) => t3.target.value);
       }
       blurListener && i2.addEventListener("blur", blurListener);
       if (this.data.comb) {
-        const t3 = (this.data.rect[2] - this.data.rect[0]) / r2;
+        const t3 = (this.data.rect[2] - this.data.rect[0]) / s2;
         i2.classList.add("comb");
         i2.style.setProperty("--comb-width", `calc(${t3}px * var(--total-scale-factor))`);
         const e3 = this.data.textAlignment;
         if (1 === e3 || 2 === e3) {
           const setCombOffset = () => {
-            const t4 = r2 - i2.value.length;
+            const t4 = s2 - i2.value.length;
             i2.style.setProperty("--comb-offset", `${1 === e3 ? t4 >> 1 : t4}`);
           };
           setCombOffset();
@@ -15416,41 +15638,41 @@ var CheckboxWidgetAnnotationElement = class extends WidgetAnnotationElement {
       t2.setValue(i2, { value: n2 });
     }
     this.container.classList.add("buttonWidgetAnnotation", "checkBox");
-    const s2 = document.createElement("input");
-    Gt.add(s2);
-    s2.setAttribute("data-element-id", i2);
-    s2.disabled = e2.readOnly;
-    this._setRequired(s2, this.data.required);
-    s2.type = "checkbox";
-    s2.name = e2.fieldName;
-    n2 && s2.setAttribute("checked", true);
-    s2.setAttribute("exportValue", e2.exportValue);
-    s2.tabIndex = 0;
-    s2.addEventListener("change", (n3) => {
-      const { name: s3, checked: r2 } = n3.target;
-      for (const n4 of this._getElementsByName(s3, i2)) {
-        const i3 = r2 && n4.exportValue === e2.exportValue;
+    const r2 = document.createElement("input");
+    jt.add(r2);
+    r2.setAttribute("data-element-id", i2);
+    r2.disabled = e2.readOnly;
+    this._setRequired(r2, this.data.required);
+    r2.type = "checkbox";
+    r2.name = e2.fieldName;
+    n2 && r2.setAttribute("checked", true);
+    r2.setAttribute("exportValue", e2.exportValue);
+    r2.tabIndex = 0;
+    r2.addEventListener("change", (n3) => {
+      const { name: r3, checked: s2 } = n3.target;
+      for (const n4 of this._getElementsByName(r3, i2)) {
+        const i3 = s2 && n4.exportValue === e2.exportValue;
         n4.domElement && (n4.domElement.checked = i3);
         t2.setValue(n4.id, { value: i3 });
       }
-      t2.setValue(i2, { value: r2 });
+      t2.setValue(i2, { value: s2 });
     });
-    s2.addEventListener("resetform", (t3) => {
+    r2.addEventListener("resetform", (t3) => {
       const i3 = e2.defaultFieldValue || "Off";
       t3.target.checked = i3 === e2.exportValue;
     });
     if (this.enableScripting && this.hasJSActions) {
-      s2.addEventListener("updatefromsandbox", (e3) => {
+      r2.addEventListener("updatefromsandbox", (e3) => {
         const n3 = { value(e4) {
           e4.target.checked = "Off" !== e4.detail.value;
           t2.setValue(i2, { value: e4.target.checked });
         } };
         this._dispatchEventFromSandbox(n3, e3);
       });
-      this._setEventListeners(s2, null, [["change", "Validate"], ["change", "Action"], ["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"]], (t3) => t3.target.checked);
+      this._setEventListeners(r2, null, [["change", "Validate"], ["change", "Action"], ["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"]], (t3) => t3.target.checked);
     }
-    this._setDefaultPropertiesFromJS(s2);
-    this.container.append(s2);
+    this._setDefaultPropertiesFromJS(r2);
+    this.container.append(r2);
     return this.container;
   }
 };
@@ -15467,41 +15689,41 @@ var RadioButtonWidgetAnnotationElement = class extends WidgetAnnotationElement {
       t2.setValue(i2, { value: n2 });
     }
     if (n2) for (const n3 of this._getElementsByName(e2.fieldName, i2)) t2.setValue(n3.id, { value: false });
-    const s2 = document.createElement("input");
-    Gt.add(s2);
-    s2.setAttribute("data-element-id", i2);
-    s2.disabled = e2.readOnly;
-    this._setRequired(s2, this.data.required);
-    s2.type = "radio";
-    s2.name = e2.fieldName;
-    n2 && s2.setAttribute("checked", true);
-    s2.tabIndex = 0;
-    s2.addEventListener("change", (e3) => {
-      const { name: n3, checked: s3 } = e3.target;
+    const r2 = document.createElement("input");
+    jt.add(r2);
+    r2.setAttribute("data-element-id", i2);
+    r2.disabled = e2.readOnly;
+    this._setRequired(r2, this.data.required);
+    r2.type = "radio";
+    r2.name = e2.fieldName;
+    n2 && r2.setAttribute("checked", true);
+    r2.tabIndex = 0;
+    r2.addEventListener("change", (e3) => {
+      const { name: n3, checked: r3 } = e3.target;
       for (const e4 of this._getElementsByName(n3, i2)) t2.setValue(e4.id, { value: false });
-      t2.setValue(i2, { value: s3 });
+      t2.setValue(i2, { value: r3 });
     });
-    s2.addEventListener("resetform", (t3) => {
+    r2.addEventListener("resetform", (t3) => {
       const i3 = e2.defaultFieldValue;
       t3.target.checked = null != i3 && i3 === e2.buttonValue;
     });
     if (this.enableScripting && this.hasJSActions) {
       const n3 = e2.buttonValue;
-      s2.addEventListener("updatefromsandbox", (e3) => {
-        const s3 = { value: (e4) => {
-          const s4 = n3 === e4.detail.value;
+      r2.addEventListener("updatefromsandbox", (e3) => {
+        const r3 = { value: (e4) => {
+          const r4 = n3 === e4.detail.value;
           for (const n4 of this._getElementsByName(e4.target.name)) {
-            const e5 = s4 && n4.id === i2;
+            const e5 = r4 && n4.id === i2;
             n4.domElement && (n4.domElement.checked = e5);
             t2.setValue(n4.id, { value: e5 });
           }
         } };
-        this._dispatchEventFromSandbox(s3, e3);
+        this._dispatchEventFromSandbox(r3, e3);
       });
-      this._setEventListeners(s2, null, [["change", "Validate"], ["change", "Action"], ["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"]], (t3) => t3.target.checked);
+      this._setEventListeners(r2, null, [["change", "Validate"], ["change", "Action"], ["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"]], (t3) => t3.target.checked);
     }
-    this._setDefaultPropertiesFromJS(s2);
-    this.container.append(s2);
+    this._setDefaultPropertiesFromJS(r2);
+    this.container.append(r2);
     return this.container;
   }
 };
@@ -15529,13 +15751,13 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
   render() {
     this.container.classList.add("choiceWidgetAnnotation");
     const t2 = this.annotationStorage, e2 = this.data.id, i2 = t2.getValue(e2, { value: this.data.fieldValue }), n2 = document.createElement("select");
-    Gt.add(n2);
+    jt.add(n2);
     n2.setAttribute("data-element-id", e2);
     n2.disabled = this.data.readOnly;
     this._setRequired(n2, this.data.required);
     n2.name = this.data.fieldName;
     n2.tabIndex = 0;
-    let s2 = this.data.combo && this.data.options.length > 0;
+    let r2 = this.data.combo && this.data.options.length > 0;
     if (!this.data.combo) {
       n2.size = this.data.options.length;
       this.data.multiSelect && (n2.multiple = true);
@@ -15555,27 +15777,27 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
       e3.value = t3.exportValue;
       if (i2.value.includes(t3.exportValue)) {
         e3.setAttribute("selected", true);
-        s2 = false;
+        r2 = false;
       }
       n2.append(e3);
     }
-    let r2 = null;
-    if (s2) {
+    let s2 = null;
+    if (r2) {
       const t3 = document.createElement("option");
       t3.value = " ";
       t3.setAttribute("hidden", true);
       t3.setAttribute("selected", true);
       n2.prepend(t3);
-      r2 = () => {
+      s2 = () => {
         t3.remove();
-        n2.removeEventListener("input", r2);
-        r2 = null;
+        n2.removeEventListener("input", s2);
+        s2 = null;
       };
-      n2.addEventListener("input", r2);
+      n2.addEventListener("input", s2);
     }
     const getValue = (t3) => {
-      const e3 = t3 ? "value" : "textContent", { options: i3, multiple: s3 } = n2;
-      return s3 ? Array.prototype.filter.call(i3, (t4) => t4.selected).map((t4) => t4[e3]) : -1 === i3.selectedIndex ? null : i3[i3.selectedIndex][e3];
+      const e3 = t3 ? "value" : "textContent", { options: i3, multiple: r3 } = n2;
+      return r3 ? Array.prototype.filter.call(i3, (t4) => t4.selected).map((t4) => t4[e3]) : -1 === i3.selectedIndex ? null : i3[i3.selectedIndex][e3];
     };
     let a2 = getValue(false);
     const getItems = (t3) => {
@@ -15584,20 +15806,20 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
     };
     if (this.enableScripting && this.hasJSActions) {
       n2.addEventListener("updatefromsandbox", (i3) => {
-        const s3 = { value(i4) {
-          r2?.();
-          const s4 = i4.detail.value, o2 = new Set(Array.isArray(s4) ? s4 : [s4]);
+        const r3 = { value(i4) {
+          s2?.();
+          const r4 = i4.detail.value, o2 = new Set(Array.isArray(r4) ? r4 : [r4]);
           for (const t3 of n2.options) t3.selected = o2.has(t3.value);
           t2.setValue(e2, { value: getValue(true) });
           a2 = getValue(false);
         }, multipleSelection(t3) {
           n2.multiple = true;
         }, remove(i4) {
-          const s4 = n2.options, r3 = i4.detail.remove;
-          s4[r3].selected = false;
-          n2.remove(r3);
-          if (s4.length > 0) {
-            -1 === Array.prototype.findIndex.call(s4, (t3) => t3.selected) && (s4[0].selected = true);
+          const r4 = n2.options, s3 = i4.detail.remove;
+          r4[s3].selected = false;
+          n2.remove(s3);
+          if (r4.length > 0) {
+            -1 === Array.prototype.findIndex.call(r4, (t3) => t3.selected) && (r4[0].selected = true);
           }
           t2.setValue(e2, { value: getValue(true), items: getItems(i4) });
           a2 = getValue(false);
@@ -15606,20 +15828,20 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
           t2.setValue(e2, { value: null, items: [] });
           a2 = getValue(false);
         }, insert(i4) {
-          const { index: s4, displayValue: r3, exportValue: o2 } = i4.detail.insert, l2 = n2.children[s4], h2 = document.createElement("option");
-          fixDisplayValue(h2, r3);
-          h2.value = o2;
-          l2 ? l2.before(h2) : n2.append(h2);
+          const { index: r4, displayValue: s3, exportValue: o2 } = i4.detail.insert, l2 = n2.children[r4], c2 = document.createElement("option");
+          fixDisplayValue(c2, s3);
+          c2.value = o2;
+          l2 ? l2.before(c2) : n2.append(c2);
           t2.setValue(e2, { value: getValue(true), items: getItems(i4) });
           a2 = getValue(false);
         }, items(i4) {
-          const { items: s4 } = i4.detail;
+          const { items: r4 } = i4.detail;
           for (; 0 !== n2.length; ) n2.remove(0);
-          for (const t3 of s4) {
-            const { displayValue: e3, exportValue: i5 } = t3, s5 = document.createElement("option");
-            fixDisplayValue(s5, e3);
-            s5.value = i5;
-            n2.append(s5);
+          for (const t3 of r4) {
+            const { displayValue: e3, exportValue: i5 } = t3, r5 = document.createElement("option");
+            fixDisplayValue(r5, e3);
+            r5.value = i5;
+            n2.append(r5);
           }
           n2.options.length > 0 && (n2.options[0].selected = true);
           t2.setValue(e2, { value: getValue(true), items: getItems(i4) });
@@ -15632,13 +15854,13 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
         }, editable(t3) {
           t3.target.disabled = !t3.detail.editable;
         } };
-        this._dispatchEventFromSandbox(s3, i3);
+        this._dispatchEventFromSandbox(r3, i3);
       });
       n2.addEventListener("input", (i3) => {
-        const n3 = getValue(true), s3 = getValue(false);
+        const n3 = getValue(true), r3 = getValue(false);
         t2.setValue(e2, { value: n3 });
         i3.preventDefault();
-        this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: a2, change: s3, changeEx: n3, willCommit: false, commitKey: 1, keyDown: false } });
+        this.linkService.eventBus?.dispatch("dispatcheventinsandbox", { source: this, detail: { id: e2, name: "Keystroke", value: a2, change: r3, changeEx: n3, willCommit: false, commitKey: 1, keyDown: false } });
       });
       this._setEventListeners(n2, null, [["focus", "Focus"], ["blur", "Blur"], ["mousedown", "Mouse Down"], ["mouseenter", "Mouse Enter"], ["mouseleave", "Mouse Exit"], ["mouseup", "Mouse Up"], ["input", "Action"], ["input", "Validate"]], (t3) => t3.target.value);
     } else n2.addEventListener("input", function(i3) {
@@ -15653,22 +15875,22 @@ var ChoiceWidgetAnnotationElement = class extends WidgetAnnotationElement {
 };
 var PopupAnnotationElement = class extends AnnotationElement {
   constructor(t2) {
-    const { data: e2, elements: i2, parent: n2 } = t2, s2 = !!n2._commentManager;
-    super(t2, { isRenderable: !s2 && AnnotationElement._hasPopupData(e2) });
+    const { data: e2, elements: i2, parent: n2 } = t2, r2 = !!n2._commentManager;
+    super(t2, { isRenderable: !r2 && AnnotationElement._hasPopupData(e2) });
     this.elements = i2;
-    if (s2 && AnnotationElement._hasPopupData(e2)) {
-      const t3 = this.popup = this.#ma();
+    if (r2 && AnnotationElement._hasPopupData(e2)) {
+      const t3 = this.popup = this.#_a();
       for (const e3 of i2) e3.popup = t3;
     } else this.popup = null;
   }
-  #ma() {
+  #_a() {
     return new PopupElement({ container: this.container, color: this.data.color, titleObj: this.data.titleObj, modificationDate: this.data.modificationDate || this.data.creationDate, contentsObj: this.data.contentsObj, richText: this.data.richText, rect: this.data.rect, parentRect: this.data.parentRect || null, parent: this.parent, elements: this.elements, open: this.data.open, commentManager: this.parent._commentManager });
   }
   render() {
     const { container: t2 } = this;
     t2.classList.add("popupAnnotation");
     t2.role = "comment";
-    const e2 = this.popup = this.#ma(), i2 = [];
+    const e2 = this.popup = this.#_a(), i2 = [];
     for (const t3 of this.elements) {
       t3.popup = e2;
       t3.container.ariaHasPopup = "dialog";
@@ -15680,166 +15902,166 @@ var PopupAnnotationElement = class extends AnnotationElement {
   }
 };
 var PopupElement = class {
-  #q = null;
-  #fa = this.#ia.bind(this);
-  #ba = this.#ya.bind(this);
-  #va = this.#wa.bind(this);
-  #xa = this.#Aa.bind(this);
-  #Ea = null;
-  #Dt = null;
-  #Ca = null;
-  #Sa = null;
-  #Ta = null;
-  #_a = null;
-  #ka = null;
-  #Da = false;
-  #Ma = null;
-  #Pa = null;
-  #O = null;
-  #Ia = null;
-  #Fa = null;
-  #xe = null;
-  #Oa = null;
-  #be = null;
+  #X = null;
+  #ka = this.#ga.bind(this);
+  #Da = this.#Pa.bind(this);
+  #Ma = this.#Ia.bind(this);
+  #Fa = this.#Oa.bind(this);
   #Ra = null;
-  #la = null;
-  #Ba = false;
+  #Pt = null;
+  #Ba = null;
   #La = null;
   #Na = null;
-  constructor({ container: t2, color: e2, elements: i2, titleObj: n2, modificationDate: s2, contentsObj: r2, richText: a2, parent: o2, rect: l2, parentRect: h2, open: c2, commentManager: d2 = null }) {
-    this.#Dt = t2;
-    this.#Ra = n2;
-    this.#Ca = r2;
-    this.#be = a2;
-    this.#_a = o2;
-    this.#Ea = e2;
-    this.#Oa = l2;
-    this.#ka = h2;
-    this.#Ta = i2;
-    this.#q = d2;
-    this.#La = i2[0];
-    this.#Sa = PDFDateString.toDateObject(s2);
+  #Ua = null;
+  #Ha = null;
+  #za = false;
+  #Ga = null;
+  #ja = null;
+  #O = null;
+  #Wa = null;
+  #Va = null;
+  #xe = null;
+  #$a = null;
+  #ye = null;
+  #qa = null;
+  #wa = null;
+  #Xa = false;
+  #Ka = null;
+  #Ya = null;
+  constructor({ container: t2, color: e2, elements: i2, titleObj: n2, modificationDate: r2, contentsObj: s2, richText: a2, parent: o2, rect: l2, parentRect: c2, open: h2, commentManager: d2 = null }) {
+    this.#Pt = t2;
+    this.#qa = n2;
+    this.#Ba = s2;
+    this.#ye = a2;
+    this.#Ua = o2;
+    this.#Ra = e2;
+    this.#$a = l2;
+    this.#Ha = c2;
+    this.#Na = i2;
+    this.#X = d2;
+    this.#Ka = i2[0];
+    this.#La = PDFDateString.toDateObject(r2);
     this.trigger = i2.flatMap((t3) => t3.getElementsToTriggerPopup());
     if (!d2) {
-      this.#Ua();
-      this.#Dt.hidden = true;
-      c2 && this.#Aa();
+      this.#Ja();
+      this.#Pt.hidden = true;
+      h2 && this.#Oa();
     }
   }
-  #Ua() {
-    if (this.#Pa) return;
-    this.#Pa = new AbortController();
-    const { signal: t2 } = this.#Pa;
+  #Ja() {
+    if (this.#ja) return;
+    this.#ja = new AbortController();
+    const { signal: t2 } = this.#ja;
     for (const e2 of this.trigger) {
-      e2.addEventListener("click", this.#xa, { signal: t2 });
-      e2.addEventListener("pointerenter", this.#va, { signal: t2 });
-      e2.addEventListener("pointerleave", this.#ba, { signal: t2 });
+      e2.addEventListener("click", this.#Fa, { signal: t2 });
+      e2.addEventListener("pointerenter", this.#Ma, { signal: t2 });
+      e2.addEventListener("pointerleave", this.#Da, { signal: t2 });
       e2.classList.add("popupTriggerArea");
     }
-    for (const e2 of this.#Ta) e2.container?.addEventListener("keydown", this.#fa, { signal: t2 });
+    for (const e2 of this.#Na) e2.container?.addEventListener("keydown", this.#ka, { signal: t2 });
   }
-  #Ha() {
-    const t2 = this.#Ta.find((t3) => t3.hasCommentButton);
-    t2 && (this.#Fa = t2._normalizePoint(t2.commentButtonPosition));
+  #Qa() {
+    const t2 = this.#Na.find((t3) => t3.hasCommentButton);
+    t2 && (this.#Va = t2._normalizePoint(t2.commentButtonPosition));
   }
   renderCommentButton() {
-    if (this.#Ia) {
-      this.#Ia.parentNode || this.#La.container.after(this.#Ia);
+    if (this.#Wa) {
+      this.#Wa.parentNode || this.#Ka.container.after(this.#Wa);
       return;
     }
-    this.#Fa || this.#Ha();
-    if (!this.#Fa) return;
-    const { signal: t2 } = this.#Pa = new AbortController(), e2 = this.#La.hasOwnCommentButton, togglePopup = () => {
-      this.#q.toggleCommentPopup(this, true, void 0, !e2);
+    this.#Va || this.#Qa();
+    if (!this.#Va) return;
+    const { signal: t2 } = this.#ja = new AbortController(), e2 = this.#Ka.hasOwnCommentButton, togglePopup = () => {
+      this.#X.toggleCommentPopup(this, true, void 0, !e2);
     }, showPopup = () => {
-      this.#q.toggleCommentPopup(this, false, true, !e2);
+      this.#X.toggleCommentPopup(this, false, true, !e2);
     }, hidePopup = () => {
-      this.#q.toggleCommentPopup(this, false, false);
+      this.#X.toggleCommentPopup(this, false, false);
     };
     if (e2) {
-      this.#Ia = this.#La.container;
+      this.#Wa = this.#Ka.container;
       for (const e3 of this.trigger) {
         e3.ariaHasPopup = "dialog";
         e3.ariaControls = "commentPopup";
-        e3.addEventListener("keydown", this.#fa, { signal: t2 });
+        e3.addEventListener("keydown", this.#ka, { signal: t2 });
         e3.addEventListener("click", togglePopup, { signal: t2 });
         e3.addEventListener("pointerenter", showPopup, { signal: t2 });
         e3.addEventListener("pointerleave", hidePopup, { signal: t2 });
         e3.classList.add("popupTriggerArea");
       }
     } else {
-      const e3 = this.#Ia = document.createElement("button");
+      const e3 = this.#Wa = document.createElement("button");
       e3.className = "annotationCommentButton";
-      const i2 = this.#La.container;
+      const i2 = this.#Ka.container;
       e3.style.zIndex = parseInt(i2.style.zIndex, 10) + 1;
       e3.tabIndex = 0;
       e3.ariaHasPopup = "dialog";
       e3.ariaControls = "commentPopup";
       e3.setAttribute("data-l10n-id", "pdfjs-show-comment-button");
-      this.#za();
-      this.#Ga();
-      e3.addEventListener("keydown", this.#fa, { signal: t2 });
+      this.#Za();
+      this.#to();
+      e3.addEventListener("keydown", this.#ka, { signal: t2 });
       e3.addEventListener("click", togglePopup, { signal: t2 });
       e3.addEventListener("pointerenter", showPopup, { signal: t2 });
       e3.addEventListener("pointerleave", hidePopup, { signal: t2 });
       i2.after(e3);
     }
   }
-  #Ga() {
-    if (this.#La.extraPopupElement && !this.#La.editor) return;
-    this.#Ia || this.renderCommentButton();
-    const [t2, e2] = this.#Fa, { style: i2 } = this.#Ia;
+  #to() {
+    if (this.#Ka.extraPopupElement && !this.#Ka.editor) return;
+    this.#Wa || this.renderCommentButton();
+    const [t2, e2] = this.#Va, { style: i2 } = this.#Wa;
     i2.left = `calc(${t2}%)`;
     i2.top = `calc(${e2}% - var(--comment-button-dim))`;
   }
-  #za() {
-    if (!this.#La.extraPopupElement) {
-      this.#Ia || this.renderCommentButton();
-      this.#Ia.style.backgroundColor = this.commentButtonColor || "";
+  #Za() {
+    if (!this.#Ka.extraPopupElement) {
+      this.#Wa || this.renderCommentButton();
+      this.#Wa.style.backgroundColor = this.commentButtonColor || "";
     }
   }
   get commentButtonColor() {
-    const { color: t2, opacity: e2 } = this.#La.commentData;
-    return t2 ? this.#_a._commentManager.makeCommentColor(t2, e2) : null;
+    const { color: t2, opacity: e2 } = this.#Ka.commentData;
+    return t2 ? this.#Ua._commentManager.makeCommentColor(t2, e2) : null;
   }
   focusCommentButton() {
     setTimeout(() => {
-      this.#Ia?.focus();
+      this.#Wa?.focus();
     }, 0);
   }
   getData() {
-    const { richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: s2 } = this.#La.commentData;
-    return { contentsObj: { str: this.comment }, richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: s2 };
+    const { richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: r2 } = this.#Ka.commentData;
+    return { contentsObj: { str: this.comment }, richText: t2, color: e2, opacity: i2, creationDate: n2, modificationDate: r2 };
   }
   get elementBeforePopup() {
-    return this.#Ia;
+    return this.#Wa;
   }
   get comment() {
-    this.#Na ||= this.#La.commentText;
-    return this.#Na;
+    this.#Ya ||= this.#Ka.commentText;
+    return this.#Ya;
   }
   set comment(t2) {
-    t2 !== this.comment && (this.#La.commentText = this.#Na = t2);
+    t2 !== this.comment && (this.#Ka.commentText = this.#Ya = t2);
   }
   focus() {
-    this.#La.container?.focus();
+    this.#Ka.container?.focus();
   }
   get parentBoundingClientRect() {
-    return this.#La.layer.getBoundingClientRect();
+    return this.#Ka.layer.getBoundingClientRect();
   }
   setCommentButtonStates({ selected: t2, hasPopup: e2 }) {
-    if (this.#Ia) {
-      this.#Ia.classList.toggle("selected", t2);
-      this.#Ia.ariaExpanded = e2;
+    if (this.#Wa) {
+      this.#Wa.classList.toggle("selected", t2);
+      this.#Wa.ariaExpanded = e2;
     }
   }
   setSelectedCommentButton(t2) {
-    this.#Ia.classList.toggle("selected", t2);
+    this.#Wa.classList.toggle("selected", t2);
   }
   get commentPopupPosition() {
     if (this.#xe) return this.#xe;
-    const { x: t2, y: e2, height: i2 } = this.#Ia.getBoundingClientRect(), { x: n2, y: s2, width: r2, height: a2 } = this.#La.layer.getBoundingClientRect();
-    return [(t2 - n2) / r2, (e2 + i2 - s2) / a2];
+    const { x: t2, y: e2, height: i2 } = this.#Wa.getBoundingClientRect(), { x: n2, y: r2, width: s2, height: a2 } = this.#Ka.layer.getBoundingClientRect();
+    return [(t2 - n2) / s2, (e2 + i2 - r2) / a2];
   }
   set commentPopupPosition(t2) {
     this.#xe = t2;
@@ -15848,172 +16070,172 @@ var PopupElement = class {
     return null === this.#xe;
   }
   get commentButtonPosition() {
-    return this.#Fa;
+    return this.#Va;
   }
   get commentButtonWidth() {
-    return this.#Ia.getBoundingClientRect().width / this.parentBoundingClientRect.width;
+    return this.#Wa.getBoundingClientRect().width / this.parentBoundingClientRect.width;
   }
   editComment(t2) {
-    const [e2, i2] = this.#xe || this.commentButtonPosition.map((t3) => t3 / 100), n2 = this.parentBoundingClientRect, { x: s2, y: r2, width: a2, height: o2 } = n2;
-    this.#q.showDialog(null, this, s2 + e2 * a2, r2 + i2 * o2, { ...t2, parentDimensions: n2 });
+    const [e2, i2] = this.#xe || this.commentButtonPosition.map((t3) => t3 / 100), n2 = this.parentBoundingClientRect, { x: r2, y: s2, width: a2, height: o2 } = n2;
+    this.#X.showDialog(null, this, r2 + e2 * a2, s2 + i2 * o2, { ...t2, parentDimensions: n2 });
   }
   render() {
-    if (this.#Ma) return;
-    const t2 = this.#Ma = document.createElement("div");
+    if (this.#Ga) return;
+    const t2 = this.#Ga = document.createElement("div");
     t2.className = "popup";
-    if (this.#Ea) {
-      const e3 = t2.style.outlineColor = Util.makeHexColor(...this.#Ea);
+    if (this.#Ra) {
+      const e3 = t2.style.outlineColor = Util.makeHexColor(...this.#Ra);
       t2.style.backgroundColor = `color-mix(in srgb, ${e3} 30%, white)`;
     }
     const e2 = document.createElement("span");
     e2.className = "header";
-    if (this.#Ra?.str) {
+    if (this.#qa?.str) {
       const t3 = document.createElement("span");
       t3.className = "title";
       e2.append(t3);
-      ({ dir: t3.dir, str: t3.textContent } = this.#Ra);
+      ({ dir: t3.dir, str: t3.textContent } = this.#qa);
     }
     t2.append(e2);
-    if (this.#Sa) {
+    if (this.#La) {
       const t3 = document.createElement("time");
       t3.className = "popupDate";
       t3.setAttribute("data-l10n-id", "pdfjs-annotation-date-time-string");
-      t3.setAttribute("data-l10n-args", JSON.stringify({ dateObj: this.#Sa.valueOf() }));
-      t3.dateTime = this.#Sa.toISOString();
+      t3.setAttribute("data-l10n-args", JSON.stringify({ dateObj: this.#La.valueOf() }));
+      t3.dateTime = this.#La.toISOString();
       e2.append(t3);
     }
-    renderRichText({ html: this.#ja || this.#Ca.str, dir: this.#Ca?.dir, className: "popupContent" }, t2);
-    this.#Dt.append(t2);
+    renderRichText({ html: this.#eo || this.#Ba.str, dir: this.#Ba?.dir, className: "popupContent" }, t2);
+    this.#Pt.append(t2);
   }
-  get #ja() {
-    const t2 = this.#be, e2 = this.#Ca;
-    return !t2?.str || e2?.str && e2.str !== t2.str ? null : this.#be.html || null;
+  get #eo() {
+    const t2 = this.#ye, e2 = this.#Ba;
+    return !t2?.str || e2?.str && e2.str !== t2.str ? null : this.#ye.html || null;
   }
-  get #Wa() {
-    return this.#ja?.attributes?.style?.fontSize || 0;
+  get #io() {
+    return this.#eo?.attributes?.style?.fontSize || 0;
   }
-  get #Va() {
-    return this.#ja?.attributes?.style?.color || null;
+  get #no() {
+    return this.#eo?.attributes?.style?.color || null;
   }
-  #$a(t2) {
-    const e2 = [], i2 = { str: t2, html: { name: "div", attributes: { dir: "auto" }, children: [{ name: "p", children: e2 }] } }, n2 = { style: { color: this.#Va, fontSize: this.#Wa ? `calc(${this.#Wa}px * var(--total-scale-factor))` : "" } };
+  #ro(t2) {
+    const e2 = [], i2 = { str: t2, html: { name: "div", attributes: { dir: "auto" }, children: [{ name: "p", children: e2 }] } }, n2 = { style: { color: this.#no, fontSize: this.#io ? `calc(${this.#io}px * var(--total-scale-factor))` : "" } };
     for (const i3 of t2.split("\n")) e2.push({ name: "span", value: i3, attributes: n2 });
     return i2;
   }
-  #ia(t2) {
-    t2.altKey || t2.shiftKey || t2.ctrlKey || t2.metaKey || ("Enter" === t2.key || "Escape" === t2.key && this.#Da) && this.#Aa();
+  #ga(t2) {
+    t2.altKey || t2.shiftKey || t2.ctrlKey || t2.metaKey || ("Enter" === t2.key || "Escape" === t2.key && this.#za) && this.#Oa();
   }
   updateEdited({ rect: t2, popup: e2, deleted: i2 }) {
-    if (this.#q) {
+    if (this.#X) {
       if (i2) {
         this.remove();
-        this.#Na = null;
+        this.#Ya = null;
       } else if (e2) if (e2.deleted) this.remove();
       else {
-        this.#za();
-        this.#Na = e2.text;
+        this.#Za();
+        this.#Ya = e2.text;
       }
       if (t2) {
-        this.#Fa = null;
-        this.#Ha();
-        this.#Ga();
+        this.#Va = null;
+        this.#Qa();
+        this.#to();
       }
     } else if (i2 || e2?.deleted) this.remove();
     else {
-      this.#Ua();
-      this.#la ||= { contentsObj: this.#Ca, richText: this.#be };
+      this.#Ja();
+      this.#wa ||= { contentsObj: this.#Ba, richText: this.#ye };
       t2 && (this.#O = null);
       if (e2 && e2.text) {
-        this.#be = this.#$a(e2.text);
-        this.#Sa = PDFDateString.toDateObject(e2.date);
-        this.#Ca = null;
+        this.#ye = this.#ro(e2.text);
+        this.#La = PDFDateString.toDateObject(e2.date);
+        this.#Ba = null;
       }
-      this.#Ma?.remove();
-      this.#Ma = null;
+      this.#Ga?.remove();
+      this.#Ga = null;
     }
   }
   resetEdited() {
-    if (this.#la) {
-      ({ contentsObj: this.#Ca, richText: this.#be } = this.#la);
-      this.#la = null;
-      this.#Ma?.remove();
-      this.#Ma = null;
+    if (this.#wa) {
+      ({ contentsObj: this.#Ba, richText: this.#ye } = this.#wa);
+      this.#wa = null;
+      this.#Ga?.remove();
+      this.#Ga = null;
       this.#O = null;
     }
   }
   remove() {
-    this.#Pa?.abort();
-    this.#Pa = null;
-    this.#Ma?.remove();
-    this.#Ma = null;
-    this.#Ba = false;
-    this.#Da = false;
-    this.#Ia?.remove();
-    this.#Ia = null;
+    this.#ja?.abort();
+    this.#ja = null;
+    this.#Ga?.remove();
+    this.#Ga = null;
+    this.#Xa = false;
+    this.#za = false;
+    this.#Wa?.remove();
+    this.#Wa = null;
     if (this.trigger) for (const t2 of this.trigger) t2.classList.remove("popupTriggerArea");
   }
-  #qa() {
+  #so() {
     if (null !== this.#O) return;
-    const { page: { view: t2 }, viewport: { rawDims: { pageWidth: e2, pageHeight: i2, pageX: n2, pageY: s2 } } } = this.#_a;
-    let r2 = !!this.#ka, a2 = r2 ? this.#ka : this.#Oa;
-    for (const t3 of this.#Ta) if (!a2 || null !== Util.intersect(t3.data.rect, a2)) {
+    const { page: { view: t2 }, viewport: { rawDims: { pageWidth: e2, pageHeight: i2, pageX: n2, pageY: r2 } } } = this.#Ua;
+    let s2 = !!this.#Ha, a2 = s2 ? this.#Ha : this.#$a;
+    for (const t3 of this.#Na) if (!a2 || null !== Util.intersect(t3.data.rect, a2)) {
       a2 = t3.data.rect;
-      r2 = true;
+      s2 = true;
       break;
     }
-    const o2 = Util.normalizeRect([a2[0], t2[3] - a2[1] + t2[1], a2[2], t2[3] - a2[3] + t2[1]]), l2 = r2 ? a2[2] - a2[0] + 5 : 0, h2 = o2[0] + l2, c2 = o2[1];
-    this.#O = [100 * (h2 - n2) / e2, 100 * (c2 - s2) / i2];
-    const { style: d2 } = this.#Dt;
+    const o2 = Util.normalizeRect([a2[0], t2[3] - a2[1] + t2[1], a2[2], t2[3] - a2[3] + t2[1]]), l2 = s2 ? a2[2] - a2[0] + 5 : 0, c2 = o2[0] + l2, h2 = o2[1];
+    this.#O = [100 * (c2 - n2) / e2, 100 * (h2 - r2) / i2];
+    const { style: d2 } = this.#Pt;
     d2.left = `${this.#O[0]}%`;
     d2.top = `${this.#O[1]}%`;
   }
-  #Aa() {
-    if (this.#q) this.#q.toggleCommentPopup(this, false);
+  #Oa() {
+    if (this.#X) this.#X.toggleCommentPopup(this, false);
     else {
-      this.#Da = !this.#Da;
-      if (this.#Da) {
-        this.#wa();
-        this.#Dt.addEventListener("click", this.#xa);
-        this.#Dt.addEventListener("keydown", this.#fa);
+      this.#za = !this.#za;
+      if (this.#za) {
+        this.#Ia();
+        this.#Pt.addEventListener("click", this.#Fa);
+        this.#Pt.addEventListener("keydown", this.#ka);
       } else {
-        this.#ya();
-        this.#Dt.removeEventListener("click", this.#xa);
-        this.#Dt.removeEventListener("keydown", this.#fa);
+        this.#Pa();
+        this.#Pt.removeEventListener("click", this.#Fa);
+        this.#Pt.removeEventListener("keydown", this.#ka);
       }
     }
   }
-  #wa() {
-    this.#Ma || this.render();
-    if (this.isVisible) this.#Da && this.#Dt.classList.add("focused");
+  #Ia() {
+    this.#Ga || this.render();
+    if (this.isVisible) this.#za && this.#Pt.classList.add("focused");
     else {
-      this.#qa();
-      this.#Dt.hidden = false;
-      this.#Dt.style.zIndex = parseInt(this.#Dt.style.zIndex, 10) + 1e3;
+      this.#so();
+      this.#Pt.hidden = false;
+      this.#Pt.style.zIndex = parseInt(this.#Pt.style.zIndex, 10) + 1e3;
     }
   }
-  #ya() {
-    this.#Dt.classList.remove("focused");
-    if (!this.#Da && this.isVisible) {
-      this.#Dt.hidden = true;
-      this.#Dt.style.zIndex = parseInt(this.#Dt.style.zIndex, 10) - 1e3;
+  #Pa() {
+    this.#Pt.classList.remove("focused");
+    if (!this.#za && this.isVisible) {
+      this.#Pt.hidden = true;
+      this.#Pt.style.zIndex = parseInt(this.#Pt.style.zIndex, 10) - 1e3;
     }
   }
   forceHide() {
-    this.#Ba = this.isVisible;
-    this.#Ba && (this.#Dt.hidden = true);
+    this.#Xa = this.isVisible;
+    this.#Xa && (this.#Pt.hidden = true);
   }
   maybeShow() {
-    if (!this.#q) {
-      this.#Ua();
-      if (this.#Ba) {
-        this.#Ma || this.#wa();
-        this.#Ba = false;
-        this.#Dt.hidden = false;
+    if (!this.#X) {
+      this.#Ja();
+      if (this.#Xa) {
+        this.#Ga || this.#Ia();
+        this.#Xa = false;
+        this.#Pt.hidden = false;
       }
     }
   }
   get isVisible() {
-    return !this.#q && false === this.#Dt.hidden;
+    return !this.#X && false === this.#Pt.hidden;
   }
 };
 var FreeTextAnnotationElement = class extends AnnotationElement {
@@ -16045,18 +16267,48 @@ var FreeTextAnnotationElement = class extends AnnotationElement {
   }
 };
 var LineAnnotationElement = class extends AnnotationElement {
-  #Ka = null;
+  #ao = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
   }
   render() {
     this.container.classList.add("lineAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = this.#Ka = this.svgFactory.createElement("svg:line");
-    s2.setAttribute("x1", t2.rect[2] - t2.lineCoordinates[0]);
-    s2.setAttribute("y1", t2.rect[3] - t2.lineCoordinates[1]);
-    s2.setAttribute("x2", t2.rect[2] - t2.lineCoordinates[2]);
-    s2.setAttribute("y2", t2.rect[3] - t2.lineCoordinates[3]);
-    s2.setAttribute("stroke-width", t2.borderStyle.width || 1);
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), r2 = this.#ao = this.svgFactory.createElement("svg:line");
+    r2.setAttribute("x1", t2.rect[2] - t2.lineCoordinates[0]);
+    r2.setAttribute("y1", t2.rect[3] - t2.lineCoordinates[1]);
+    r2.setAttribute("x2", t2.rect[2] - t2.lineCoordinates[2]);
+    r2.setAttribute("y2", t2.rect[3] - t2.lineCoordinates[3]);
+    r2.setAttribute("stroke-width", t2.borderStyle.width || 1);
+    r2.setAttribute("stroke", "transparent");
+    r2.setAttribute("fill", "transparent");
+    n2.append(r2);
+    this.container.append(n2);
+    if (!t2.popupRef && this.hasPopupData) {
+      this.hasOwnCommentButton = true;
+      this._createPopup();
+    }
+    return this.container;
+  }
+  getElementsToTriggerPopup() {
+    return this.#ao;
+  }
+  addHighlightArea() {
+    this.container.classList.add("highlightArea");
+  }
+};
+var SquareAnnotationElement = class extends AnnotationElement {
+  #oo = null;
+  constructor(t2) {
+    super(t2, { isRenderable: true, ignoreBorder: true });
+  }
+  render() {
+    this.container.classList.add("squareAnnotation");
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), r2 = t2.borderStyle.width, s2 = this.#oo = this.svgFactory.createElement("svg:rect");
+    s2.setAttribute("x", r2 / 2);
+    s2.setAttribute("y", r2 / 2);
+    s2.setAttribute("width", e2 - r2);
+    s2.setAttribute("height", i2 - r2);
+    s2.setAttribute("stroke-width", r2 || 1);
     s2.setAttribute("stroke", "transparent");
     s2.setAttribute("fill", "transparent");
     n2.append(s2);
@@ -16068,58 +16320,28 @@ var LineAnnotationElement = class extends AnnotationElement {
     return this.container;
   }
   getElementsToTriggerPopup() {
-    return this.#Ka;
-  }
-  addHighlightArea() {
-    this.container.classList.add("highlightArea");
-  }
-};
-var SquareAnnotationElement = class extends AnnotationElement {
-  #Xa = null;
-  constructor(t2) {
-    super(t2, { isRenderable: true, ignoreBorder: true });
-  }
-  render() {
-    this.container.classList.add("squareAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Xa = this.svgFactory.createElement("svg:rect");
-    r2.setAttribute("x", s2 / 2);
-    r2.setAttribute("y", s2 / 2);
-    r2.setAttribute("width", e2 - s2);
-    r2.setAttribute("height", i2 - s2);
-    r2.setAttribute("stroke-width", s2 || 1);
-    r2.setAttribute("stroke", "transparent");
-    r2.setAttribute("fill", "transparent");
-    n2.append(r2);
-    this.container.append(n2);
-    if (!t2.popupRef && this.hasPopupData) {
-      this.hasOwnCommentButton = true;
-      this._createPopup();
-    }
-    return this.container;
-  }
-  getElementsToTriggerPopup() {
-    return this.#Xa;
+    return this.#oo;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
   }
 };
 var CircleAnnotationElement = class extends AnnotationElement {
-  #Ya = null;
+  #lo = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
   }
   render() {
     this.container.classList.add("circleAnnotation");
-    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), s2 = t2.borderStyle.width, r2 = this.#Ya = this.svgFactory.createElement("svg:ellipse");
-    r2.setAttribute("cx", e2 / 2);
-    r2.setAttribute("cy", i2 / 2);
-    r2.setAttribute("rx", e2 / 2 - s2 / 2);
-    r2.setAttribute("ry", i2 / 2 - s2 / 2);
-    r2.setAttribute("stroke-width", s2 || 1);
-    r2.setAttribute("stroke", "transparent");
-    r2.setAttribute("fill", "transparent");
-    n2.append(r2);
+    const { data: t2, width: e2, height: i2 } = this, n2 = this.svgFactory.create(e2, i2, true), r2 = t2.borderStyle.width, s2 = this.#lo = this.svgFactory.createElement("svg:ellipse");
+    s2.setAttribute("cx", e2 / 2);
+    s2.setAttribute("cy", i2 / 2);
+    s2.setAttribute("rx", e2 / 2 - r2 / 2);
+    s2.setAttribute("ry", i2 / 2 - r2 / 2);
+    s2.setAttribute("stroke-width", r2 || 1);
+    s2.setAttribute("stroke", "transparent");
+    s2.setAttribute("fill", "transparent");
+    n2.append(s2);
     this.container.append(n2);
     if (!t2.popupRef && this.hasPopupData) {
       this.hasOwnCommentButton = true;
@@ -16128,14 +16350,14 @@ var CircleAnnotationElement = class extends AnnotationElement {
     return this.container;
   }
   getElementsToTriggerPopup() {
-    return this.#Ya;
+    return this.#lo;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
   }
 };
 var PolylineAnnotationElement = class extends AnnotationElement {
-  #Ja = null;
+  #co = null;
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
     this.containerClassName = "polylineAnnotation";
@@ -16143,16 +16365,16 @@ var PolylineAnnotationElement = class extends AnnotationElement {
   }
   render() {
     this.container.classList.add(this.containerClassName);
-    const { data: { rect: t2, vertices: e2, borderStyle: i2, popupRef: n2 }, width: s2, height: r2 } = this;
+    const { data: { rect: t2, vertices: e2, borderStyle: i2, popupRef: n2 }, width: r2, height: s2 } = this;
     if (!e2) return this.container;
-    const a2 = this.svgFactory.create(s2, r2, true);
+    const a2 = this.svgFactory.create(r2, s2, true);
     let o2 = [];
     for (let i3 = 0, n3 = e2.length; i3 < n3; i3 += 2) {
-      const n4 = e2[i3] - t2[0], s3 = t2[3] - e2[i3 + 1];
-      o2.push(`${n4},${s3}`);
+      const n4 = e2[i3] - t2[0], r3 = t2[3] - e2[i3 + 1];
+      o2.push(`${n4},${r3}`);
     }
     o2 = o2.join(" ");
-    const l2 = this.#Ja = this.svgFactory.createElement(this.svgElementName);
+    const l2 = this.#co = this.svgFactory.createElement(this.svgElementName);
     l2.setAttribute("points", o2);
     l2.setAttribute("stroke-width", i2.width || 1);
     l2.setAttribute("stroke", "transparent");
@@ -16166,7 +16388,7 @@ var PolylineAnnotationElement = class extends AnnotationElement {
     return this.container;
   }
   getElementsToTriggerPopup() {
-    return this.#Ja;
+    return this.#co;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
@@ -16193,15 +16415,15 @@ var CaretAnnotationElement = class extends AnnotationElement {
   }
 };
 var InkAnnotationElement = class extends AnnotationElement {
-  #Qa = null;
-  #Za = [];
+  #ho = null;
+  #do = [];
   constructor(t2) {
     super(t2, { isRenderable: true, ignoreBorder: true });
     this.containerClassName = "inkAnnotation";
     this.svgElementName = "svg:polyline";
     this.annotationEditorType = "InkHighlight" === this.data.it ? y.HIGHLIGHT : y.INK;
   }
-  #to(t2, e2) {
+  #uo(t2, e2) {
     switch (t2) {
       case 90:
         return { transform: `rotate(90) translate(${-e2[0]},${e2[1]}) scale(1,-1)`, width: e2[3] - e2[1], height: e2[2] - e2[0] };
@@ -16215,22 +16437,22 @@ var InkAnnotationElement = class extends AnnotationElement {
   }
   render() {
     this.container.classList.add(this.containerClassName);
-    const { data: { rect: t2, rotation: e2, inkLists: i2, borderStyle: n2, popupRef: s2 } } = this, { transform: r2, width: a2, height: o2 } = this.#to(e2, t2), l2 = this.svgFactory.create(a2, o2, true), h2 = this.#Qa = this.svgFactory.createElement("svg:g");
-    l2.append(h2);
-    h2.setAttribute("stroke-width", n2.width || 1);
-    h2.setAttribute("stroke-linecap", "round");
-    h2.setAttribute("stroke-linejoin", "round");
-    h2.setAttribute("stroke-miterlimit", 10);
-    h2.setAttribute("stroke", "transparent");
-    h2.setAttribute("fill", "transparent");
-    h2.setAttribute("transform", r2);
+    const { data: { rect: t2, rotation: e2, inkLists: i2, borderStyle: n2, popupRef: r2 } } = this, { transform: s2, width: a2, height: o2 } = this.#uo(e2, t2), l2 = this.svgFactory.create(a2, o2, true), c2 = this.#ho = this.svgFactory.createElement("svg:g");
+    l2.append(c2);
+    c2.setAttribute("stroke-width", n2.width || 1);
+    c2.setAttribute("stroke-linecap", "round");
+    c2.setAttribute("stroke-linejoin", "round");
+    c2.setAttribute("stroke-miterlimit", 10);
+    c2.setAttribute("stroke", "transparent");
+    c2.setAttribute("fill", "transparent");
+    c2.setAttribute("transform", s2);
     for (const t3 of i2) {
       const e3 = this.svgFactory.createElement(this.svgElementName);
-      this.#Za.push(e3);
+      this.#do.push(e3);
       e3.setAttribute("points", t3.join(","));
-      h2.append(e3);
+      c2.append(e3);
     }
-    if (!s2 && this.hasPopupData) {
+    if (!r2 && this.hasPopupData) {
       this.hasOwnCommentButton = true;
       this._createPopup();
     }
@@ -16240,17 +16462,17 @@ var InkAnnotationElement = class extends AnnotationElement {
   }
   updateEdited(t2) {
     super.updateEdited(t2);
-    const { thickness: e2, points: i2, rect: n2 } = t2, s2 = this.#Qa;
-    e2 >= 0 && s2.setAttribute("stroke-width", e2 || 1);
-    if (i2) for (let t3 = 0, e3 = this.#Za.length; t3 < e3; t3++) this.#Za[t3].setAttribute("points", i2[t3].join(","));
+    const { thickness: e2, points: i2, rect: n2 } = t2, r2 = this.#ho;
+    e2 >= 0 && r2.setAttribute("stroke-width", e2 || 1);
+    if (i2) for (let t3 = 0, e3 = this.#do.length; t3 < e3; t3++) this.#do[t3].setAttribute("points", i2[t3].join(","));
     if (n2) {
-      const { transform: t3, width: e3, height: i3 } = this.#to(this.data.rotation, n2);
-      s2.parentElement.setAttribute("viewBox", `0 0 ${e3} ${i3}`);
-      s2.setAttribute("transform", t3);
+      const { transform: t3, width: e3, height: i3 } = this.#uo(this.data.rotation, n2);
+      r2.parentElement.setAttribute("viewBox", `0 0 ${e3} ${i3}`);
+      r2.setAttribute("transform", t3);
     }
   }
   getElementsToTriggerPopup() {
-    return this.#Za;
+    return this.#do;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
@@ -16355,7 +16577,7 @@ var StampAnnotationElement = class extends AnnotationElement {
   }
 };
 var FileAttachmentAnnotationElement = class extends AnnotationElement {
-  #eo = null;
+  #po = null;
   constructor(t2) {
     super(t2, { isRenderable: true });
     const { fileId: e2, file: i2 } = this.data;
@@ -16374,11 +16596,11 @@ var FileAttachmentAnnotationElement = class extends AnnotationElement {
       i2.src = `${this.imageResourcesPath}annotation-${/paperclip/i.test(e2.name) ? "paperclip" : "pushpin"}.svg`;
       e2.fillAlpha && e2.fillAlpha < 1 && (i2.style = `filter: opacity(${Math.round(100 * e2.fillAlpha)}%);`);
     }
-    i2.addEventListener("dblclick", this.#io.bind(this));
-    this.#eo = i2;
+    i2.addEventListener("dblclick", this.#go.bind(this));
+    this.#po = i2;
     const { isMac: n2 } = FeatureTest.platform;
     t2.addEventListener("keydown", (t3) => {
-      "Enter" === t3.key && (n2 ? t3.metaKey : t3.ctrlKey) && this.#io();
+      "Enter" === t3.key && (n2 ? t3.metaKey : t3.ctrlKey) && this.#go();
     });
     if (!e2.popupRef && this.hasPopupData) {
       this.hasOwnCommentButton = true;
@@ -16388,20 +16610,20 @@ var FileAttachmentAnnotationElement = class extends AnnotationElement {
     return t2;
   }
   getElementsToTriggerPopup() {
-    return this.#eo;
+    return this.#po;
   }
   addHighlightArea() {
     this.container.classList.add("highlightArea");
   }
-  async #io() {
+  async #go() {
     const { fileId: t2, filename: e2, content: i2 } = this, n2 = await this.linkService.getAttachmentContent(t2) || i2;
     n2 && this.downloadManager?.openOrDownloadData(n2, e2);
   }
 };
 var MediaAnnotationElement = class extends AnnotationElement {
   #L = new AbortController();
-  #no = null;
-  #so = null;
+  #mo = null;
+  #fo = null;
   constructor(t2) {
     super(t2, { isRenderable: !!t2.data.richMedia });
   }
@@ -16411,26 +16633,26 @@ var MediaAnnotationElement = class extends AnnotationElement {
     e2.className = "mediaPlayButton";
     e2.type = "button";
     e2.title = e2.ariaLabel = t2;
-    e2.addEventListener("click", () => this.#ro(e2), { signal: this.#L.signal });
+    e2.addEventListener("click", () => this.#bo(e2), { signal: this.#L.signal });
     this.container.append(e2);
     return this.container;
   }
-  async #ro(t2) {
+  async #bo(t2) {
     const { fileId: e2, filename: i2, contentType: n2 } = this.data.richMedia;
     t2.disabled = true;
-    let s2;
+    let r2;
     try {
-      s2 = await this.linkService.getAttachmentContent(e2);
+      r2 = await this.linkService.getAttachmentContent(e2);
     } catch {
       return;
     } finally {
       t2.disabled = false;
     }
-    if (!s2 || !t2.isConnected) return;
-    const { signal: r2 } = this.#L, a2 = URL.createObjectURL(new Blob([s2], { type: n2 }));
-    this.#no = a2;
+    if (!r2 || !t2.isConnected) return;
+    const { signal: s2 } = this.#L, a2 = URL.createObjectURL(new Blob([r2], { type: n2 }));
+    this.#mo = a2;
     const o2 = n2.startsWith("audio/"), l2 = document.createElement(o2 ? "audio" : "video");
-    this.#so = l2;
+    this.#fo = l2;
     l2.className = "mediaContent";
     this._setBackgroundColor(l2);
     l2.src = a2;
@@ -16446,79 +16668,79 @@ var MediaAnnotationElement = class extends AnnotationElement {
       this.container.addEventListener("pointerenter", () => {
         t3 = true;
         updateControls();
-      }, { signal: r2 });
+      }, { signal: s2 });
       this.container.addEventListener("pointerleave", () => {
         t3 = false;
         updateControls();
-      }, { signal: r2 });
+      }, { signal: s2 });
       this.container.addEventListener("focusin", () => {
         e3 = true;
         updateControls();
-      }, { signal: r2 });
+      }, { signal: s2 });
       this.container.addEventListener("focusout", () => {
         e3 = false;
         updateControls();
-      }, { signal: r2 });
+      }, { signal: s2 });
     }
-    l2.addEventListener("emptied", () => this.#ao(a2), { once: true, signal: r2 });
+    l2.addEventListener("emptied", () => this.#yo(a2), { once: true, signal: s2 });
     t2.replaceWith(l2);
     l2.play().catch(() => {
     });
   }
-  #ao(t2 = this.#no) {
-    if (t2 && t2 === this.#no) {
+  #yo(t2 = this.#mo) {
+    if (t2 && t2 === this.#mo) {
       URL.revokeObjectURL(t2);
-      this.#no = null;
+      this.#mo = null;
     }
   }
   destroy() {
     this.#L.abort();
-    if (this.#so) {
-      this.#so.pause();
-      this.#so.removeAttribute("src");
-      this.#so.load();
-      this.#so = null;
+    if (this.#fo) {
+      this.#fo.pause();
+      this.#fo.removeAttribute("src");
+      this.#fo.load();
+      this.#fo = null;
     }
-    this.#ao();
+    this.#yo();
   }
 };
 var AnnotationLayer = class _AnnotationLayer {
-  #oo = null;
-  #lo = null;
-  #W = null;
-  #ho = /* @__PURE__ */ new Map();
-  #co = null;
-  #do = null;
-  #Ta = [];
-  #uo = false;
+  #vo = null;
+  #wo = null;
+  #V = null;
+  #Ao = /* @__PURE__ */ new Map();
+  #xo = null;
+  #Eo = null;
+  #Na = [];
+  #Co = false;
   zIndex = 0;
-  constructor({ div: t2, accessibilityManager: e2, annotationCanvasMap: i2, annotationEditorUIManager: n2, page: s2, viewport: r2, structTreeLayer: a2, commentManager: o2, linkService: l2, annotationStorage: h2 }) {
+  constructor({ div: t2, accessibilityManager: e2, annotationCanvasMap: i2, annotationEditorUIManager: n2, page: r2, viewport: s2, structTreeLayer: a2, commentManager: o2, linkService: l2, annotationStorage: c2 }) {
     this.div = t2;
-    this.#oo = e2;
-    this.#lo = i2;
-    this.#co = a2 || null;
-    this.#do = l2 || null;
-    this.#W = h2 || new AnnotationStorage();
-    this.page = s2;
-    this.viewport = r2;
+    this.#vo = e2;
+    this.#wo = i2;
+    this.#xo = a2 || null;
+    this.#Eo = l2 || null;
+    this.#V = c2 || new AnnotationStorage();
+    this.page = r2;
+    this.viewport = s2;
     this._annotationEditorUIManager = n2;
     this._commentManager = o2 || null;
   }
   hasEditableAnnotations() {
-    return this.#ho.size > 0;
+    return this.#Ao.size > 0;
   }
   async render(t2) {
     const { annotations: e2, optionalContentConfig: i2 } = t2, n2 = this.div;
     setLayerDimensions(n2, this.viewport);
-    const s2 = /* @__PURE__ */ new Map(), r2 = [], a2 = { data: null, layer: n2, linkService: this.#do, downloadManager: t2.downloadManager, imageResourcesPath: t2.imageResourcesPath || "", renderForms: false !== t2.renderForms, svgFactory: new DOMSVGFactory(), annotationStorage: this.#W, enableComment: true === t2.enableComment, enableScripting: true === t2.enableScripting, hasJSActions: t2.hasJSActions, fieldObjects: t2.fieldObjects, parent: this, elements: null };
+    const r2 = /* @__PURE__ */ new Map(), s2 = [], a2 = { data: null, layer: n2, linkService: this.#Eo, downloadManager: t2.downloadManager, imageResourcesPath: t2.imageResourcesPath || "", renderForms: false !== t2.renderForms, svgFactory: new DOMSVGFactory(), annotationStorage: this.#V, enableComment: true === t2.enableComment, enableScripting: true === t2.enableScripting, hasJSActions: t2.hasJSActions, fieldObjects: t2.fieldObjects, parent: this, elements: null };
     for (const t3 of e2) {
       if (t3.noHTML) continue;
       const e3 = t3.annotationType === k.POPUP;
       if (e3) {
-        const e4 = s2.get(t3.id);
+        const e4 = r2.get(t3.id);
         if (!e4) continue;
         if (!this._commentManager) {
-          r2.push(t3);
+          s2.push(t3);
           continue;
         }
         a2.elements = e4;
@@ -16527,20 +16749,20 @@ var AnnotationLayer = class _AnnotationLayer {
       const n3 = AnnotationElementFactory.create(a2);
       if (!n3.isRenderable) continue;
       if (!e3) {
-        this.#Ta.push(n3);
-        t3.popupRef && s2.getOrInsertComputed(t3.popupRef, makeArr).push(n3);
+        this.#Na.push(n3);
+        t3.popupRef && r2.getOrInsertComputed(t3.popupRef, makeArr).push(n3);
       }
       const o2 = n3.render();
       t3.hidden && (o2.style.visibility = "hidden");
       n3.updateOC(i2);
       if (n3._isEditable) {
-        this.#ho.set(n3.data.id, n3);
+        this.#Ao.set(n3.data.id, n3);
         this._annotationEditorUIManager?.renderAnnotationElement(n3);
       }
     }
-    await this.#po();
-    for (const t3 of r2) {
-      const e3 = a2.elements = s2.get(t3.id);
+    await this.#So();
+    for (const t3 of s2) {
+      const e3 = a2.elements = r2.get(t3.id);
       a2.data = t3;
       const i3 = AnnotationElementFactory.create(a2);
       if (!i3.isRenderable) continue;
@@ -16549,40 +16771,43 @@ var AnnotationLayer = class _AnnotationLayer {
       t3.hidden && (n3.style.visibility = "hidden");
       e3.at(-1).container.after(n3);
     }
-    this.#go();
+    this.#To();
   }
-  async #po() {
-    if (0 === this.#Ta.length) return;
+  async #So() {
+    if (0 === this.#Na.length) return;
     this.div.replaceChildren();
     const t2 = [];
-    if (!this.#uo) {
-      this.#uo = true;
-      for (const { contentElement: e3, data: { id: i2 } } of this.#Ta) {
-        const n2 = e3.id = `${f}${i2}`;
-        t2.push(this.#co?.getAriaAttributes(n2).then((t3) => {
+    if (!this.#Co) {
+      this.#Co = true;
+      for (const { contentElement: e3, data: { hidden: i2, id: n2, oc: r2 } } of this.#Na) {
+        const s2 = e3.id = `${f}${n2}`, a2 = "a" === e3.localName && !i2 && !r2;
+        t2.push(this.#xo?.getAriaAttributes(s2, { enableLinkOwnership: a2 }).then((t3) => {
           if (t3) for (const [i3, n3] of t3) e3.setAttribute(i3, n3);
         }));
       }
     }
-    this.#Ta.sort(({ data: { rect: [t3, e3, i2, n2] } }, { data: { rect: [s2, r2, a2, o2] } }) => {
+    this.#Na.sort(({ data: { rect: [t3, e3, i2, n2] } }, { data: { rect: [r2, s2, a2, o2] } }) => {
       if (t3 === i2 && e3 === n2) return 1;
-      if (s2 === a2 && r2 === o2) return -1;
-      const l2 = (e3 + n2) / 2, h2 = (r2 + o2) / 2;
-      if (l2 >= o2 && h2 <= e3) return -1;
-      if (h2 >= n2 && l2 <= r2) return 1;
-      return (t3 + i2) / 2 - (s2 + a2) / 2;
+      if (r2 === a2 && s2 === o2) return -1;
+      const l2 = (e3 + n2) / 2, c2 = (s2 + o2) / 2;
+      if (l2 >= o2 && c2 <= e3) return -1;
+      if (c2 >= n2 && l2 <= s2) return 1;
+      return (t3 + i2) / 2 - (r2 + a2) / 2;
     });
     const e2 = document.createDocumentFragment();
-    for (const t3 of this.#Ta) {
+    for (const t3 of this.#Na) {
       e2.append(t3.container);
       this._commentManager ? (t3.extraPopupElement?.popup || t3.popup)?.renderCommentButton() : t3.extraPopupElement && e2.append(t3.extraPopupElement.render());
     }
     this.div.append(e2);
     await Promise.all(t2);
-    if (this.#oo) for (const t3 of this.#Ta) this.#oo.addPointerInTextLayer(t3.contentElement, false);
+    if (this.#vo) {
+      const t3 = await this.#xo?.getAnnotationIds();
+      for (const { contentElement: e3 } of this.#Na) t3?.has(e3.id) || this.#vo.addPointerInTextLayer(e3, false);
+    }
   }
   async addLinkAnnotations(t2) {
-    const e2 = { data: null, layer: this.div, linkService: this.#do, svgFactory: new DOMSVGFactory(), parent: this };
+    const e2 = { data: null, layer: this.div, linkService: this.#Eo, svgFactory: new DOMSVGFactory(), parent: this };
     for (const i2 of t2) {
       i2.borderStyle ||= _AnnotationLayer._defaultBorderStyle;
       e2.data = i2;
@@ -16590,32 +16815,32 @@ var AnnotationLayer = class _AnnotationLayer {
       if (t3.isRenderable) {
         t3.render();
         t3.contentElement.id = `${f}${i2.id}`;
-        this.#Ta.push(t3);
+        this.#Na.push(t3);
       }
     }
-    await this.#po();
+    await this.#So();
   }
   update({ viewport: t2, optionalContentConfig: e2 }) {
     const i2 = this.div;
     this.viewport = t2;
     setLayerDimensions(i2, { rotation: t2.rotation });
-    for (const t3 of this.#Ta) t3.updateOC(e2);
-    this.#go();
+    for (const t3 of this.#Na) t3.updateOC(e2);
+    this.#To();
     i2.hidden = false;
   }
   destroy() {
-    for (const t2 of this.#Ta) {
+    for (const t2 of this.#Na) {
       t2.destroy?.();
-      this.#oo?.removePointerInTextLayer(t2.contentElement);
+      this.#vo?.removePointerInTextLayer(t2.contentElement);
     }
-    this.#Ta.length = 0;
-    this.#ho.clear();
+    this.#Na.length = 0;
+    this.#Ao.clear();
     this.div.replaceChildren();
   }
-  #go() {
-    if (!this.#lo) return;
+  #To() {
+    if (!this.#wo) return;
     const t2 = this.div;
-    for (const [e2, i2] of this.#lo) {
+    for (const [e2, i2] of this.#wo) {
       const n2 = t2.querySelector(`[data-annotation-id="${e2}"]`);
       if (!n2) continue;
       if (Array.isArray(i2)) for (const t3 of i2) {
@@ -16626,20 +16851,20 @@ var AnnotationLayer = class _AnnotationLayer {
         i2.className = "annotationContent";
         i2.ariaHidden = true;
       }
-      const s2 = [];
-      for (const t3 of n2.children) "CANVAS" === t3.nodeName && s2.push(t3);
-      for (const t3 of s2) t3.remove();
-      const r2 = Array.isArray(i2) ? i2[0] : i2, { firstChild: a2 } = n2;
-      a2 ? a2.classList.contains("annotationContent") ? a2.after(r2) : a2.before(r2) : n2.append(r2);
+      const r2 = [];
+      for (const t3 of n2.children) "CANVAS" === t3.nodeName && r2.push(t3);
+      for (const t3 of r2) t3.remove();
+      const s2 = Array.isArray(i2) ? i2[0] : i2, { firstChild: a2 } = n2;
+      a2 ? a2.classList.contains("annotationContent") ? a2.after(s2) : a2.before(s2) : n2.append(s2);
       if (Array.isArray(i2)) {
-        let t3 = r2;
+        let t3 = s2;
         for (let e3 = 1, n3 = i2.length; e3 < n3; e3++) {
           t3.after(i2[e3]);
           t3 = i2[e3];
         }
       }
-      this.#lo.delete(e2);
-      const o2 = this.#ho.get(e2);
+      this.#wo.delete(e2);
+      const o2 = this.#Ao.get(e2);
       if (o2) if (o2._hasNoCanvas) {
         this._annotationEditorUIManager?.setMissingCanvas(e2, n2.id, i2);
         o2._hasNoCanvas = false;
@@ -16647,32 +16872,32 @@ var AnnotationLayer = class _AnnotationLayer {
     }
   }
   refreshCanvases() {
-    this.#go();
+    this.#To();
   }
   getEditableAnnotations() {
-    return this.#ho.values();
+    return this.#Ao.values();
   }
   getEditableAnnotation(t2) {
-    return this.#ho.get(t2);
+    return this.#Ao.get(t2);
   }
   addFakeAnnotation(t2) {
-    const { div: e2 } = this, { id: i2, rotation: n2 } = t2, s2 = new EditorAnnotationElement({ data: { id: i2, rect: t2.getPDFRect(), rotation: n2 }, editor: t2, layer: e2, parent: this, enableComment: !!this._commentManager, linkService: this.#do, annotationStorage: this.#W });
-    s2.render();
-    s2.contentElement.id = `${f}${i2}`;
-    s2.createOrUpdatePopup();
-    this.#Ta.push(s2);
-    return s2;
+    const { div: e2 } = this, { id: i2, rotation: n2 } = t2, r2 = new EditorAnnotationElement({ data: { id: i2, rect: t2.getPDFRect(), rotation: n2 }, editor: t2, layer: e2, parent: this, enableComment: !!this._commentManager, linkService: this.#Eo, annotationStorage: this.#V });
+    r2.render();
+    r2.contentElement.id = `${f}${i2}`;
+    r2.createOrUpdatePopup();
+    this.#Na.push(r2);
+    return r2;
   }
   removeAnnotation(t2) {
-    const e2 = this.#Ta.findIndex((e3) => e3.data.id === t2);
+    const e2 = this.#Na.findIndex((e3) => e3.data.id === t2);
     if (e2 < 0) return;
-    const [i2] = this.#Ta.splice(e2, 1);
-    this.#oo?.removePointerInTextLayer(i2.contentElement);
+    const [i2] = this.#Na.splice(e2, 1);
+    this.#vo?.removePointerInTextLayer(i2.contentElement);
   }
   updateFakeAnnotations(t2) {
     if (0 !== t2.length) {
       for (const e2 of t2) e2.updateFakeAnnotationElement(this);
-      this.#po();
+      this.#So();
     }
   }
   togglePointerEvents(t2 = false) {
@@ -16682,12 +16907,12 @@ var AnnotationLayer = class _AnnotationLayer {
     return shadow(this, "_defaultBorderStyle", Object.freeze({ width: 1, rawWidth: 1, style: D, dashArray: [3], horizontalCornerRadius: 0, verticalCornerRadius: 0 }));
   }
 };
-var Wt = /\r\n?|\n/g;
+var Vt = /\r\n?|\n/g;
 var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
-  #mo = "";
-  #fo = `${this.id}-editor`;
-  #bo = null;
-  #Wa;
+  #_o = "";
+  #ko = `${this.id}-editor`;
+  #Do = null;
+  #io;
   _colorPicker = null;
   static _freeTextDefaultContent = "";
   static _internalPadding = 0;
@@ -16702,7 +16927,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   constructor(t2) {
     super({ ...t2, name: "freeTextEditor" });
     this.color = t2.color || _FreeTextEditor._defaultColor || AnnotationEditor._defaultLineColor;
-    this.#Wa = t2.fontSize || _FreeTextEditor._defaultFontSize;
+    this.#io = t2.fontSize || _FreeTextEditor._defaultFontSize;
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.freetext);
     this.canAddComment = false;
   }
@@ -16723,17 +16948,17 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   updateParams(t2, e2) {
     switch (t2) {
       case v.FREETEXT_SIZE:
-        this.#yo(e2);
+        this.#Po(e2);
         break;
       case v.FREETEXT_COLOR:
-        this.#za(e2);
+        this.#Za(e2);
     }
   }
   static get defaultPropertiesToUpdate() {
     return [[v.FREETEXT_SIZE, _FreeTextEditor._defaultFontSize], [v.FREETEXT_COLOR, _FreeTextEditor._defaultColor || AnnotationEditor._defaultLineColor]];
   }
   get propertiesToUpdate() {
-    return [[v.FREETEXT_SIZE, this.#Wa], [v.FREETEXT_COLOR, this.color]];
+    return [[v.FREETEXT_SIZE, this.#io], [v.FREETEXT_COLOR, this.color]];
   }
   get toolbarButtons() {
     this._colorPicker ||= new BasicColorPicker(this);
@@ -16742,13 +16967,13 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   get colorType() {
     return v.FREETEXT_COLOR;
   }
-  #yo(t2) {
+  #Po(t2) {
     const setFontsize = (t3) => {
       this.editorDiv.style.fontSize = `calc(${t3}px * var(--total-scale-factor))`;
-      this.translate(0, -(t3 - this.#Wa) * this.parentScale);
-      this.#Wa = t3;
-      this.#vo();
-    }, e2 = this.#Wa;
+      this.translate(0, -(t3 - this.#io) * this.parentScale);
+      this.#io = t3;
+      this.#Mo();
+    }, e2 = this.#io;
     this.addCommands({ cmd: setFontsize.bind(this, t2), undo: setFontsize.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.FREETEXT_SIZE, overwriteIfSameType: true, keepUndo: true });
   }
   onUpdatedColor() {
@@ -16756,7 +16981,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     this._colorPicker?.update(this.color);
     super.onUpdatedColor();
   }
-  #za(t2) {
+  #Za(t2) {
     const setColor = (t3) => {
       this.color = t3;
       this.onUpdatedColor();
@@ -16768,7 +16993,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   }
   getInitialTranslation() {
     const t2 = this.parentScale;
-    return [-_FreeTextEditor._internalPadding * t2, -(_FreeTextEditor._internalPadding + this.#Wa) * t2];
+    return [-_FreeTextEditor._internalPadding * t2, -(_FreeTextEditor._internalPadding + this.#io) * t2];
   }
   rebuild() {
     if (this.parent) {
@@ -16782,8 +17007,8 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     this.editorDiv.contentEditable = true;
     this._isDraggable = false;
     this.div.removeAttribute("aria-activedescendant");
-    this.#bo = new AbortController();
-    const t2 = this._uiManager.combinedSignal(this.#bo);
+    this.#Do = new AbortController();
+    const t2 = this._uiManager.combinedSignal(this.#Do);
     this.editorDiv.addEventListener("keydown", this.editorDivKeydown.bind(this), { signal: t2 });
     this.editorDiv.addEventListener("focus", this.editorDivFocus.bind(this), { signal: t2 });
     this.editorDiv.addEventListener("blur", this.editorDivBlur.bind(this), { signal: t2 });
@@ -16795,10 +17020,10 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (!super.disableEditMode()) return false;
     this.overlayDiv.classList.add("enabled");
     this.editorDiv.contentEditable = false;
-    this.div.setAttribute("aria-activedescendant", this.#fo);
+    this.div.setAttribute("aria-activedescendant", this.#ko);
     this._isDraggable = true;
-    this.#bo?.abort();
-    this.#bo = null;
+    this.#Do?.abort();
+    this.#Do = null;
     this.div.focus({ preventScroll: true });
     this.isEditing = false;
     this.parent.div.classList.add("freetextEditing");
@@ -16829,29 +17054,29 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }
     super.remove();
   }
-  #wo() {
+  #Io() {
     const t2 = [];
     this.editorDiv.normalize();
     let e2 = null;
     for (const i2 of this.editorDiv.childNodes) if (e2?.nodeType !== Node.TEXT_NODE || "BR" !== i2.nodeName) {
-      t2.push(_FreeTextEditor.#xo(i2));
+      t2.push(_FreeTextEditor.#Fo(i2));
       e2 = i2;
     }
     return t2.join("\n");
   }
-  #vo() {
+  #Mo() {
     const [t2, e2] = this.parentDimensions;
     let i2;
     if (this.isAttachedToDOM) i2 = this.div.getBoundingClientRect();
     else {
-      const { currentLayer: t3, div: e3 } = this, n2 = e3.style.display, s2 = e3.classList.contains("hidden");
+      const { currentLayer: t3, div: e3 } = this, n2 = e3.style.display, r2 = e3.classList.contains("hidden");
       e3.classList.remove("hidden");
       e3.style.display = "hidden";
       t3.div.append(this.div);
       i2 = e3.getBoundingClientRect();
       e3.remove();
       e3.style.display = n2;
-      e3.classList.toggle("hidden", s2);
+      e3.classList.toggle("hidden", r2);
     }
     if (this.rotation % 180 == this.parentRotation % 180) {
       this.width = i2.width / t2;
@@ -16866,14 +17091,14 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (!this.isInEditMode()) return;
     super.commit();
     this.disableEditMode();
-    const t2 = this.#mo, e2 = this.#mo = this.#wo().trimEnd();
+    const t2 = this.#_o, e2 = this.#_o = this.#Io().trimEnd();
     if (t2 === e2) return;
     const setText = (t3) => {
-      this.#mo = t3;
+      this.#_o = t3;
       if (t3) {
-        this.#Ao();
+        this.#Oo();
         this._uiManager.rebuild(this);
-        this.#vo();
+        this.#Mo();
       } else this.remove();
     };
     this.addCommands({ cmd: () => {
@@ -16881,7 +17106,7 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }, undo: () => {
       setText(t2);
     }, mustExec: false });
-    this.#vo();
+    this.#Mo();
   }
   shouldGetKeyboardEvents() {
     return this.isInEditMode();
@@ -16929,13 +17154,13 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     super.render();
     this.editorDiv = document.createElement("div");
     this.editorDiv.className = "internal";
-    this.editorDiv.setAttribute("id", this.#fo);
+    this.editorDiv.setAttribute("id", this.#ko);
     this.editorDiv.setAttribute("data-l10n-id", "pdfjs-free-text2");
     this.editorDiv.setAttribute("data-l10n-attrs", "default-content");
     this.enableEditing();
     this.editorDiv.contentEditable = true;
     const { style: i2 } = this.editorDiv;
-    i2.fontSize = `calc(${this.#Wa}px * var(--total-scale-factor))`;
+    i2.fontSize = `calc(${this.#io}px * var(--total-scale-factor))`;
     i2.color = this.color;
     this.div.append(this.editorDiv);
     this.overlayDiv = document.createElement("div");
@@ -16944,34 +17169,34 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (this._isCopy || this.annotationElementId) {
       const [i3, n2] = this.parentDimensions;
       if (this.annotationElementId) {
-        const { position: s2 } = this._initialData;
-        let [r2, a2] = this.getInitialTranslation();
-        [r2, a2] = this.pageTranslationToScreen(r2, a2);
-        const [o2, l2] = this.pageDimensions, [h2, c2] = this.pageTranslation;
+        const { position: r2 } = this._initialData;
+        let [s2, a2] = this.getInitialTranslation();
+        [s2, a2] = this.pageTranslationToScreen(s2, a2);
+        const [o2, l2] = this.pageDimensions, [c2, h2] = this.pageTranslation;
         let d2, u2;
         switch (this.rotation) {
           case 0:
-            d2 = t2 + (s2[0] - h2) / o2;
-            u2 = e2 + this.height - (s2[1] - c2) / l2;
+            d2 = t2 + (r2[0] - c2) / o2;
+            u2 = e2 + this.height - (r2[1] - h2) / l2;
             break;
           case 90:
-            d2 = t2 + (s2[0] - h2) / o2;
-            u2 = e2 - (s2[1] - c2) / l2;
-            [r2, a2] = [a2, -r2];
+            d2 = t2 + (r2[0] - c2) / o2;
+            u2 = e2 - (r2[1] - h2) / l2;
+            [s2, a2] = [a2, -s2];
             break;
           case 180:
-            d2 = t2 - this.width + (s2[0] - h2) / o2;
-            u2 = e2 - (s2[1] - c2) / l2;
-            [r2, a2] = [-r2, -a2];
+            d2 = t2 - this.width + (r2[0] - c2) / o2;
+            u2 = e2 - (r2[1] - h2) / l2;
+            [s2, a2] = [-s2, -a2];
             break;
           case 270:
-            d2 = t2 + (s2[0] - h2 - this.height * l2) / o2;
-            u2 = e2 + (s2[1] - c2 - this.width * o2) / l2;
-            [r2, a2] = [-a2, r2];
+            d2 = t2 + (r2[0] - c2 - this.height * l2) / o2;
+            u2 = e2 + (r2[1] - h2 - this.width * o2) / l2;
+            [s2, a2] = [-a2, s2];
         }
-        this.setAt(d2 * i3, u2 * n2, r2, a2);
+        this.setAt(d2 * i3, u2 * n2, s2, a2);
       } else this._moveAfterPaste(t2, e2);
-      this.#Ao();
+      this.#Oo();
       this._isDraggable = true;
       this.editorDiv.contentEditable = false;
     } else {
@@ -16980,70 +17205,70 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     }
     return this.div;
   }
-  static #xo(t2) {
-    return (t2.nodeType === Node.TEXT_NODE ? t2.nodeValue : t2.innerText).replaceAll(Wt, "");
+  static #Fo(t2) {
+    return (t2.nodeType === Node.TEXT_NODE ? t2.nodeValue : t2.innerText).replaceAll(Vt, "");
   }
   editorDivPaste(t2) {
     const e2 = t2.clipboardData || window.clipboardData, { types: i2 } = e2;
     if (1 === i2.length && "text/plain" === i2[0]) return;
     t2.preventDefault();
-    const n2 = _FreeTextEditor.#Eo(e2.getData("text") || "").replaceAll(Wt, "\n");
+    const n2 = _FreeTextEditor.#Ro(e2.getData("text") || "").replaceAll(Vt, "\n");
     if (!n2) return;
-    const s2 = window.getSelection();
-    if (!s2.rangeCount) return;
+    const r2 = window.getSelection();
+    if (!r2.rangeCount) return;
     this.editorDiv.normalize();
-    s2.deleteFromDocument();
-    const r2 = s2.getRangeAt(0);
+    r2.deleteFromDocument();
+    const s2 = r2.getRangeAt(0);
     if (!n2.includes("\n")) {
-      r2.insertNode(document.createTextNode(n2));
+      s2.insertNode(document.createTextNode(n2));
       this.editorDiv.normalize();
-      s2.collapseToStart();
+      r2.collapseToStart();
       return;
     }
-    const { startContainer: a2, startOffset: o2 } = r2, l2 = [], h2 = [];
+    const { startContainer: a2, startOffset: o2 } = s2, l2 = [], c2 = [];
     if (a2.nodeType === Node.TEXT_NODE) {
       const t3 = a2.parentElement;
-      h2.push(a2.nodeValue.slice(o2).replaceAll(Wt, ""));
+      c2.push(a2.nodeValue.slice(o2).replaceAll(Vt, ""));
       if (t3 !== this.editorDiv) {
         let e3 = l2;
-        for (const i3 of this.editorDiv.childNodes) i3 !== t3 ? e3.push(_FreeTextEditor.#xo(i3)) : e3 = h2;
+        for (const i3 of this.editorDiv.childNodes) i3 !== t3 ? e3.push(_FreeTextEditor.#Fo(i3)) : e3 = c2;
       }
-      l2.push(a2.nodeValue.slice(0, o2).replaceAll(Wt, ""));
+      l2.push(a2.nodeValue.slice(0, o2).replaceAll(Vt, ""));
     } else if (a2 === this.editorDiv) {
       let t3 = l2, e3 = 0;
       for (const i3 of this.editorDiv.childNodes) {
-        e3++ === o2 && (t3 = h2);
-        t3.push(_FreeTextEditor.#xo(i3));
+        e3++ === o2 && (t3 = c2);
+        t3.push(_FreeTextEditor.#Fo(i3));
       }
     }
-    this.#mo = `${l2.join("\n")}${n2}${h2.join("\n")}`;
-    this.#Ao();
-    const c2 = new Range();
+    this.#_o = `${l2.join("\n")}${n2}${c2.join("\n")}`;
+    this.#Oo();
+    const h2 = new Range();
     let d2 = Math.sumPrecise(l2.map((t3) => t3.length));
     for (const { firstChild: t3 } of this.editorDiv.childNodes) if (t3.nodeType === Node.TEXT_NODE) {
       const e3 = t3.nodeValue.length;
       if (d2 <= e3) {
-        c2.setStart(t3, d2);
-        c2.setEnd(t3, d2);
+        h2.setStart(t3, d2);
+        h2.setEnd(t3, d2);
         break;
       }
       d2 -= e3;
     }
-    s2.removeAllRanges();
-    s2.addRange(c2);
+    r2.removeAllRanges();
+    r2.addRange(h2);
   }
-  #Ao() {
+  #Oo() {
     this.editorDiv.replaceChildren();
-    if (this.#mo) for (const t2 of this.#mo.split("\n")) {
+    if (this.#_o) for (const t2 of this.#_o.split("\n")) {
       const e2 = document.createElement("div");
       e2.append(t2 ? document.createTextNode(t2) : document.createElement("br"));
       this.editorDiv.append(e2);
     }
   }
-  #Co() {
-    return this.#mo.replaceAll(" ", " ");
+  #Bo() {
+    return this.#_o.replaceAll(" ", " ");
   }
-  static #Eo(t2) {
+  static #Ro(t2) {
     return t2.replaceAll(" ", " ");
   }
   get contentDiv() {
@@ -17056,48 +17281,48 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
   static async deserialize(t2, e2, i2) {
     let n2 = null;
     if (t2 instanceof FreeTextAnnotationElement) {
-      const { data: { defaultAppearanceData: { fontSize: e3, fontColor: i3 }, rect: s3, rotation: r2, id: a2, popupRef: o2, richText: l2, contentsObj: h2, creationDate: c2, modificationDate: d2 }, textContent: u2, textPosition: p2, parent: { page: { pageNumber: g2 } } } = t2;
+      const { data: { defaultAppearanceData: { fontSize: e3, fontColor: i3 }, rect: r3, rotation: s2, id: a2, popupRef: o2, richText: l2, contentsObj: c2, creationDate: h2, modificationDate: d2 }, textContent: u2, textPosition: p2, parent: { page: { pageNumber: g2 } } } = t2;
       if (!u2?.length) return null;
-      n2 = t2 = { annotationType: y.FREETEXT, color: Array.from(i3), fontSize: e3, value: u2.join("\n"), position: p2, pageIndex: g2 - 1, rect: s3.slice(0), rotation: r2, annotationElementId: a2, id: a2, deleted: false, popupRef: o2, comment: h2?.str || null, richText: l2, creationDate: c2, modificationDate: d2 };
+      n2 = t2 = { annotationType: y.FREETEXT, color: Array.from(i3), fontSize: e3, value: u2.join("\n"), position: p2, pageIndex: g2 - 1, rect: r3.slice(0), rotation: s2, annotationElementId: a2, id: a2, deleted: false, popupRef: o2, comment: c2?.str || null, richText: l2, creationDate: h2, modificationDate: d2 };
     }
-    const s2 = await super.deserialize(t2, e2, i2);
-    s2.#Wa = t2.fontSize;
-    s2.color = Util.makeHexColor(...t2.color);
-    s2.#mo = _FreeTextEditor.#Eo(t2.value);
-    s2._initialData = n2;
-    t2.comment && s2.setCommentData(t2);
-    return s2;
+    const r2 = await super.deserialize(t2, e2, i2);
+    r2.#io = t2.fontSize;
+    r2.color = Util.makeHexColor(...t2.color);
+    r2.#_o = _FreeTextEditor.#Ro(t2.value);
+    r2._initialData = n2;
+    t2.comment && r2.setCommentData(t2);
+    return r2;
   }
   serialize(t2 = false) {
     if (this.isEmpty()) return null;
     if (this.deleted) return this.serializeDeleted();
-    const e2 = AnnotationEditor._colorManager.convert(this.isAttachedToDOM ? getComputedStyle(this.editorDiv).color : this.color), i2 = Object.assign(super.serialize(t2), { color: e2, fontSize: this.#Wa, value: this.#Co() });
+    const e2 = AnnotationEditor._colorManager.convert(this.isAttachedToDOM ? getComputedStyle(this.editorDiv).color : this.color), i2 = Object.assign(super.serialize(t2), { color: e2, fontSize: this.#io, value: this.#Bo() });
     this.addComment(i2);
     if (t2) {
       i2.isCopy = true;
       return i2;
     }
-    if (this.annotationElementId && !this.#So(i2)) return null;
+    if (this.annotationElementId && !this.#Lo(i2)) return null;
     i2.id = this.annotationElementId;
     return i2;
   }
-  #So(t2) {
-    const { value: e2, fontSize: i2, color: n2, pageIndex: s2 } = this._initialData;
-    return this.hasEditedComment || this._hasBeenMoved || t2.value !== e2 || t2.fontSize !== i2 || t2.color.some((t3, e3) => t3 !== n2[e3]) || t2.pageIndex !== s2;
+  #Lo(t2) {
+    const { value: e2, fontSize: i2, color: n2, pageIndex: r2 } = this._initialData;
+    return this.hasEditedComment || this._hasBeenMoved || t2.value !== e2 || t2.fontSize !== i2 || t2.color.some((t3, e3) => t3 !== n2[e3]) || t2.pageIndex !== r2;
   }
   renderAnnotationElement(t2) {
     const e2 = super.renderAnnotationElement(t2);
     if (!e2) return null;
     const { style: i2 } = e2;
-    i2.fontSize = `calc(${this.#Wa}px * var(--total-scale-factor))`;
+    i2.fontSize = `calc(${this.#io}px * var(--total-scale-factor))`;
     i2.color = this.color;
     e2.replaceChildren();
-    for (const t3 of this.#mo.split("\n")) {
+    for (const t3 of this.#_o.split("\n")) {
       const i3 = document.createElement("div");
       i3.append(t3 ? document.createTextNode(t3) : document.createElement("br"));
       e2.append(i3);
     }
-    t2.updateEdited({ rect: this.getPDFRect(), popup: this._uiManager.hasCommentManager() || this.hasEditedComment ? this.comment : { text: this.#mo } });
+    t2.updateEdited({ rect: this.getPDFRect(), popup: this._uiManager.hasCommentManager() || this.hasEditedComment ? this.comment : { text: this.#_o } });
     return e2;
   }
   resetAnnotationElement(t2) {
@@ -17105,968 +17330,8 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     t2.resetEdited();
   }
 };
-var Outline = class {
-  static PRECISION = 1e-4;
-  toSVGPath() {
-    unreachable("Abstract method `toSVGPath` must be implemented.");
-  }
-  get box() {
-    unreachable("Abstract getter `box` must be implemented.");
-  }
-  serialize(t2, e2) {
-    unreachable("Abstract method `serialize` must be implemented.");
-  }
-  static _rescale(t2, e2, i2, n2, s2, r2) {
-    r2 ||= new Float32Array(t2.length);
-    for (let a2 = 0, o2 = t2.length; a2 < o2; a2 += 2) {
-      r2[a2] = e2 + t2[a2] * n2;
-      r2[a2 + 1] = i2 + t2[a2 + 1] * s2;
-    }
-    return r2;
-  }
-  static _rescaleAndSwap(t2, e2, i2, n2, s2, r2) {
-    r2 ||= new Float32Array(t2.length);
-    for (let a2 = 0, o2 = t2.length; a2 < o2; a2 += 2) {
-      r2[a2] = e2 + t2[a2 + 1] * n2;
-      r2[a2 + 1] = i2 + t2[a2] * s2;
-    }
-    return r2;
-  }
-  static _translate(t2, e2, i2, n2) {
-    n2 ||= new Float32Array(t2.length);
-    for (let s2 = 0, r2 = t2.length; s2 < r2; s2 += 2) {
-      n2[s2] = e2 + t2[s2];
-      n2[s2 + 1] = i2 + t2[s2 + 1];
-    }
-    return n2;
-  }
-  static svgRound(t2) {
-    return Math.round(1e4 * t2);
-  }
-  static _normalizePoint(t2, e2, i2, n2, s2) {
-    switch (s2) {
-      case 90:
-        return [1 - e2 / i2, t2 / n2];
-      case 180:
-        return [1 - t2 / i2, 1 - e2 / n2];
-      case 270:
-        return [e2 / i2, 1 - t2 / n2];
-      default:
-        return [t2 / i2, e2 / n2];
-    }
-  }
-  static createBezierPoints(t2, e2, i2, n2, s2, r2) {
-    return [(t2 + 5 * i2) / 6, (e2 + 5 * n2) / 6, (5 * i2 + s2) / 6, (5 * n2 + r2) / 6, (i2 + s2) / 2, (n2 + r2) / 2];
-  }
-};
-var FreeDrawOutliner = class _FreeDrawOutliner {
-  #To;
-  #_o = [];
-  #ko;
-  #Do;
-  #Mo = [];
-  #Po = new Float32Array(18);
-  #Io;
-  #Fo;
-  #Oo;
-  #Ro;
-  #Bo;
-  #Lo;
-  #No = [];
-  static #Uo = 8;
-  static #Ho = 2;
-  static #zo = _FreeDrawOutliner.#Uo + _FreeDrawOutliner.#Ho;
-  constructor({ x: t2, y: e2 }, i2, n2, s2, r2, a2 = 0) {
-    this.#To = i2;
-    this.#Lo = s2 * n2;
-    this.#Do = r2;
-    this.#Po.set([NaN, NaN, NaN, NaN, t2, e2], 6);
-    this.#ko = a2;
-    this.#Ro = _FreeDrawOutliner.#Uo * n2;
-    this.#Oo = _FreeDrawOutliner.#zo * n2;
-    this.#Bo = n2;
-    this.#No.push(t2, e2);
-  }
-  isEmpty() {
-    return isNaN(this.#Po[8]);
-  }
-  #Go() {
-    const t2 = this.#Po.subarray(4, 6), e2 = this.#Po.subarray(16, 18), [i2, n2, s2, r2] = this.#To;
-    return [(this.#Io + (t2[0] - e2[0]) / 2 - i2) / s2, (this.#Fo + (t2[1] - e2[1]) / 2 - n2) / r2, (this.#Io + (e2[0] - t2[0]) / 2 - i2) / s2, (this.#Fo + (e2[1] - t2[1]) / 2 - n2) / r2];
-  }
-  add({ x: t2, y: e2 }) {
-    this.#Io = t2;
-    this.#Fo = e2;
-    const [i2, n2, s2, r2] = this.#To;
-    let [a2, o2, l2, h2] = this.#Po.subarray(8, 12);
-    const c2 = t2 - l2, d2 = e2 - h2, u2 = Math.hypot(c2, d2);
-    if (u2 < this.#Oo) return false;
-    const p2 = u2 - this.#Ro, g2 = p2 / u2, m2 = g2 * c2, f2 = g2 * d2;
-    let b2 = a2, y2 = o2;
-    a2 = l2;
-    o2 = h2;
-    l2 += m2;
-    h2 += f2;
-    this.#No?.push(t2, e2);
-    const v2 = m2 / p2, w2 = -f2 / p2 * this.#Lo, x2 = v2 * this.#Lo;
-    this.#Po.set(this.#Po.subarray(2, 8), 0);
-    this.#Po.set([l2 + w2, h2 + x2], 4);
-    this.#Po.set(this.#Po.subarray(14, 18), 12);
-    this.#Po.set([l2 - w2, h2 - x2], 16);
-    if (isNaN(this.#Po[6])) {
-      if (0 === this.#Mo.length) {
-        this.#Po.set([a2 + w2, o2 + x2], 2);
-        this.#Mo.push(NaN, NaN, NaN, NaN, (a2 + w2 - i2) / s2, (o2 + x2 - n2) / r2);
-        this.#Po.set([a2 - w2, o2 - x2], 14);
-        this.#_o.push(NaN, NaN, NaN, NaN, (a2 - w2 - i2) / s2, (o2 - x2 - n2) / r2);
-      }
-      this.#Po.set([b2, y2, a2, o2, l2, h2], 6);
-      return !this.isEmpty();
-    }
-    this.#Po.set([b2, y2, a2, o2, l2, h2], 6);
-    if (Math.abs(Math.atan2(y2 - o2, b2 - a2) - Math.atan2(f2, m2)) < Math.PI / 2) {
-      [a2, o2, l2, h2] = this.#Po.subarray(2, 6);
-      this.#Mo.push(NaN, NaN, NaN, NaN, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
-      [a2, o2, b2, y2] = this.#Po.subarray(14, 18);
-      this.#_o.push(NaN, NaN, NaN, NaN, ((b2 + a2) / 2 - i2) / s2, ((y2 + o2) / 2 - n2) / r2);
-      return true;
-    }
-    [b2, y2, a2, o2, l2, h2] = this.#Po.subarray(0, 6);
-    this.#Mo.push(((b2 + 5 * a2) / 6 - i2) / s2, ((y2 + 5 * o2) / 6 - n2) / r2, ((5 * a2 + l2) / 6 - i2) / s2, ((5 * o2 + h2) / 6 - n2) / r2, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
-    [l2, h2, a2, o2, b2, y2] = this.#Po.subarray(12, 18);
-    this.#_o.push(((b2 + 5 * a2) / 6 - i2) / s2, ((y2 + 5 * o2) / 6 - n2) / r2, ((5 * a2 + l2) / 6 - i2) / s2, ((5 * o2 + h2) / 6 - n2) / r2, ((a2 + l2) / 2 - i2) / s2, ((o2 + h2) / 2 - n2) / r2);
-    return true;
-  }
-  toSVGPath() {
-    if (this.isEmpty()) return "";
-    const t2 = this.#Mo, e2 = this.#_o;
-    if (isNaN(this.#Po[6]) && !this.isEmpty()) return this.#jo();
-    const i2 = [];
-    i2.push(`M${t2[4]} ${t2[5]}`);
-    for (let e3 = 6; e3 < t2.length; e3 += 6) isNaN(t2[e3]) ? i2.push(`L${t2[e3 + 4]} ${t2[e3 + 5]}`) : i2.push(`C${t2[e3]} ${t2[e3 + 1]} ${t2[e3 + 2]} ${t2[e3 + 3]} ${t2[e3 + 4]} ${t2[e3 + 5]}`);
-    this.#Wo(i2);
-    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) isNaN(e2[t3]) ? i2.push(`L${e2[t3 + 4]} ${e2[t3 + 5]}`) : i2.push(`C${e2[t3]} ${e2[t3 + 1]} ${e2[t3 + 2]} ${e2[t3 + 3]} ${e2[t3 + 4]} ${e2[t3 + 5]}`);
-    this.#Vo(i2);
-    return i2.join(" ");
-  }
-  #jo() {
-    const [t2, e2, i2, n2] = this.#To, [s2, r2, a2, o2] = this.#Go();
-    return `M${(this.#Po[2] - t2) / i2} ${(this.#Po[3] - e2) / n2} L${(this.#Po[4] - t2) / i2} ${(this.#Po[5] - e2) / n2} L${s2} ${r2} L${a2} ${o2} L${(this.#Po[16] - t2) / i2} ${(this.#Po[17] - e2) / n2} L${(this.#Po[14] - t2) / i2} ${(this.#Po[15] - e2) / n2} Z`;
-  }
-  #Vo(t2) {
-    const e2 = this.#_o;
-    t2.push(`L${e2[4]} ${e2[5]} Z`);
-  }
-  #Wo(t2) {
-    const [e2, i2, n2, s2] = this.#To, r2 = this.#Po.subarray(4, 6), a2 = this.#Po.subarray(16, 18), [o2, l2, h2, c2] = this.#Go();
-    t2.push(`L${(r2[0] - e2) / n2} ${(r2[1] - i2) / s2} L${o2} ${l2} L${h2} ${c2} L${(a2[0] - e2) / n2} ${(a2[1] - i2) / s2}`);
-  }
-  newFreeDrawOutline(t2, e2, i2, n2, s2, r2) {
-    return new FreeDrawOutline(t2, e2, i2, n2, s2, r2);
-  }
-  getOutlines() {
-    const t2 = this.#Mo, e2 = this.#_o, i2 = this.#Po, [n2, s2, r2, a2] = this.#To, o2 = new Float32Array((this.#No?.length ?? 0) + 2);
-    for (let t3 = 0, e3 = o2.length - 2; t3 < e3; t3 += 2) {
-      o2[t3] = (this.#No[t3] - n2) / r2;
-      o2[t3 + 1] = (this.#No[t3 + 1] - s2) / a2;
-    }
-    o2[o2.length - 2] = (this.#Io - n2) / r2;
-    o2[o2.length - 1] = (this.#Fo - s2) / a2;
-    if (isNaN(i2[6]) && !this.isEmpty()) return this.#$o(o2);
-    const l2 = new Float32Array(this.#Mo.length + 24 + this.#_o.length);
-    let h2 = t2.length;
-    for (let e3 = 0; e3 < h2; e3 += 2) if (isNaN(t2[e3])) l2[e3] = l2[e3 + 1] = NaN;
-    else {
-      l2[e3] = t2[e3];
-      l2[e3 + 1] = t2[e3 + 1];
-    }
-    h2 = this.#qo(l2, h2);
-    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) for (let i3 = 0; i3 < 6; i3 += 2) if (isNaN(e2[t3 + i3])) {
-      l2[h2] = l2[h2 + 1] = NaN;
-      h2 += 2;
-    } else {
-      l2[h2] = e2[t3 + i3];
-      l2[h2 + 1] = e2[t3 + i3 + 1];
-      h2 += 2;
-    }
-    this.#Ko(l2, h2);
-    return this.newFreeDrawOutline(l2, o2, this.#To, this.#Bo, this.#ko, this.#Do);
-  }
-  #$o(t2) {
-    const e2 = this.#Po, [i2, n2, s2, r2] = this.#To, [a2, o2, l2, h2] = this.#Go(), c2 = new Float32Array(36);
-    c2.set([NaN, NaN, NaN, NaN, (e2[2] - i2) / s2, (e2[3] - n2) / r2, NaN, NaN, NaN, NaN, (e2[4] - i2) / s2, (e2[5] - n2) / r2, NaN, NaN, NaN, NaN, a2, o2, NaN, NaN, NaN, NaN, l2, h2, NaN, NaN, NaN, NaN, (e2[16] - i2) / s2, (e2[17] - n2) / r2, NaN, NaN, NaN, NaN, (e2[14] - i2) / s2, (e2[15] - n2) / r2], 0);
-    return this.newFreeDrawOutline(c2, t2, this.#To, this.#Bo, this.#ko, this.#Do);
-  }
-  #Ko(t2, e2) {
-    const i2 = this.#_o;
-    t2.set([NaN, NaN, NaN, NaN, i2[4], i2[5]], e2);
-    return e2 + 6;
-  }
-  #qo(t2, e2) {
-    const i2 = this.#Po.subarray(4, 6), n2 = this.#Po.subarray(16, 18), [s2, r2, a2, o2] = this.#To, [l2, h2, c2, d2] = this.#Go();
-    t2.set([NaN, NaN, NaN, NaN, (i2[0] - s2) / a2, (i2[1] - r2) / o2, NaN, NaN, NaN, NaN, l2, h2, NaN, NaN, NaN, NaN, c2, d2, NaN, NaN, NaN, NaN, (n2[0] - s2) / a2, (n2[1] - r2) / o2], e2);
-    return e2 + 24;
-  }
-};
-var FreeDrawOutline = class extends Outline {
-  #To;
-  #Xo = new Float32Array(4);
-  #ko;
-  #Do;
-  #No;
-  #Bo;
-  #Yo;
-  constructor(t2, e2, i2, n2, s2, r2) {
-    super();
-    this.#Yo = t2;
-    this.#No = e2;
-    this.#To = i2;
-    this.#Bo = n2;
-    this.#ko = s2;
-    this.#Do = r2;
-    this.firstPoint = [NaN, NaN];
-    this.lastPoint = [NaN, NaN];
-    this.#Jo(r2);
-    const [a2, o2, l2, h2] = this.#Xo;
-    for (let e3 = 0, i3 = t2.length; e3 < i3; e3 += 2) {
-      t2[e3] = (t2[e3] - a2) / l2;
-      t2[e3 + 1] = (t2[e3 + 1] - o2) / h2;
-    }
-    for (let t3 = 0, i3 = e2.length; t3 < i3; t3 += 2) {
-      e2[t3] = (e2[t3] - a2) / l2;
-      e2[t3 + 1] = (e2[t3 + 1] - o2) / h2;
-    }
-  }
-  toSVGPath() {
-    const t2 = [`M${this.#Yo[4]} ${this.#Yo[5]}`];
-    for (let e2 = 6, i2 = this.#Yo.length; e2 < i2; e2 += 6) isNaN(this.#Yo[e2]) ? t2.push(`L${this.#Yo[e2 + 4]} ${this.#Yo[e2 + 5]}`) : t2.push(`C${this.#Yo[e2]} ${this.#Yo[e2 + 1]} ${this.#Yo[e2 + 2]} ${this.#Yo[e2 + 3]} ${this.#Yo[e2 + 4]} ${this.#Yo[e2 + 5]}`);
-    t2.push("Z");
-    return t2.join(" ");
-  }
-  serialize([t2, e2, i2, n2], s2) {
-    const r2 = i2 - t2, a2 = n2 - e2;
-    let o2, l2;
-    switch (s2) {
-      case 0:
-        o2 = Outline._rescale(this.#Yo, t2, n2, r2, -a2);
-        l2 = Outline._rescale(this.#No, t2, n2, r2, -a2);
-        break;
-      case 90:
-        o2 = Outline._rescaleAndSwap(this.#Yo, t2, e2, r2, a2);
-        l2 = Outline._rescaleAndSwap(this.#No, t2, e2, r2, a2);
-        break;
-      case 180:
-        o2 = Outline._rescale(this.#Yo, i2, e2, -r2, a2);
-        l2 = Outline._rescale(this.#No, i2, e2, -r2, a2);
-        break;
-      case 270:
-        o2 = Outline._rescaleAndSwap(this.#Yo, i2, n2, -r2, -a2);
-        l2 = Outline._rescaleAndSwap(this.#No, i2, n2, -r2, -a2);
-    }
-    return { outline: Array.from(o2), points: [Array.from(l2)] };
-  }
-  #Jo(t2) {
-    const e2 = this.#Yo;
-    let i2 = e2[4], s2 = e2[5];
-    const r2 = [i2, s2, i2, s2];
-    let a2 = i2, o2 = s2, l2 = i2, h2 = s2;
-    const c2 = t2 ? Math.max : Math.min, d2 = new Float32Array(4);
-    for (let t3 = 6, u3 = e2.length; t3 < u3; t3 += 6) {
-      const u4 = e2[t3 + 4], p2 = e2[t3 + 5];
-      if (isNaN(e2[t3])) {
-        Util.pointBoundingBox(u4, p2, r2);
-        if (o2 > p2) {
-          a2 = u4;
-          o2 = p2;
-        } else o2 === p2 && (a2 = c2(a2, u4));
-        if (h2 < p2) {
-          l2 = u4;
-          h2 = p2;
-        } else h2 === p2 && (l2 = c2(l2, u4));
-      } else {
-        d2.set(n, 0);
-        Util.bezierBoundingBox(i2, s2, ...e2.slice(t3, t3 + 6), d2);
-        Util.rectBoundingBox(...d2, r2);
-        if (o2 > d2[1]) {
-          a2 = d2[0];
-          o2 = d2[1];
-        } else o2 === d2[1] && (a2 = c2(a2, d2[0]));
-        if (h2 < d2[3]) {
-          l2 = d2[2];
-          h2 = d2[3];
-        } else h2 === d2[3] && (l2 = c2(l2, d2[2]));
-      }
-      i2 = u4;
-      s2 = p2;
-    }
-    const u2 = this.#Xo;
-    u2[0] = r2[0] - this.#ko;
-    u2[1] = r2[1] - this.#ko;
-    u2[2] = r2[2] - r2[0] + 2 * this.#ko;
-    u2[3] = r2[3] - r2[1] + 2 * this.#ko;
-    this.firstPoint = [a2, o2];
-    this.lastPoint = [l2, h2];
-  }
-  get box() {
-    return this.#Xo;
-  }
-  newOutliner(t2, e2, i2, n2, s2, r2 = 0) {
-    return new FreeDrawOutliner(t2, e2, i2, n2, s2, r2);
-  }
-  getNewOutline(t2, e2) {
-    const [i2, n2, s2, r2] = this.#Xo, [a2, o2, l2, h2] = this.#To, c2 = s2 * l2, d2 = r2 * h2, u2 = i2 * l2 + a2, p2 = n2 * h2 + o2, g2 = this.newOutliner({ x: this.#No[0] * c2 + u2, y: this.#No[1] * d2 + p2 }, this.#To, this.#Bo, t2, this.#Do, e2 ?? this.#ko);
-    for (let t3 = 2; t3 < this.#No.length; t3 += 2) g2.add({ x: this.#No[t3] * c2 + u2, y: this.#No[t3 + 1] * d2 + p2 });
-    return g2.getOutlines();
-  }
-};
-var HighlightOutliner = class {
-  #To;
-  #Qo;
-  #Zo;
-  #tl = [];
-  #el = [];
-  constructor(t2, e2 = 0, i2 = 0, s2 = true) {
-    const r2 = n.slice(), a2 = 1e-4;
-    for (const { x: i3, y: n2, width: s3, height: o3 } of t2) {
-      const t3 = Math.floor((i3 - e2) / a2) * a2, l3 = Math.ceil((i3 + s3 + e2) / a2) * a2, h3 = Math.floor((n2 - e2) / a2) * a2, c3 = Math.ceil((n2 + o3 + e2) / a2) * a2, d3 = [t3, h3, c3, true], u3 = [l3, h3, c3, false];
-      this.#tl.push(d3, u3);
-      Util.rectBoundingBox(t3, h3, l3, c3, r2);
-    }
-    const o2 = r2[2] - r2[0] + 2 * i2, l2 = r2[3] - r2[1] + 2 * i2, h2 = r2[0] - i2, c2 = r2[1] - i2;
-    let d2 = s2 ? -1 / 0 : 1 / 0, u2 = 1 / 0;
-    const p2 = this.#tl.at(s2 ? -1 : -2), g2 = [p2[0], p2[2]];
-    for (const t3 of this.#tl) {
-      const [e3, i3, n2, r3] = t3;
-      if (!r3 && s2) if (i3 < u2) {
-        u2 = i3;
-        d2 = e3;
-      } else i3 === u2 && (d2 = Math.max(d2, e3));
-      else if (r3 && !s2) if (i3 < u2) {
-        u2 = i3;
-        d2 = e3;
-      } else i3 === u2 && (d2 = Math.min(d2, e3));
-      t3[0] = (e3 - h2) / o2;
-      t3[1] = (i3 - c2) / l2;
-      t3[2] = (n2 - c2) / l2;
-    }
-    this.#To = new Float32Array([h2, c2, o2, l2]);
-    this.#Qo = [d2, u2];
-    this.#Zo = g2;
-  }
-  getOutlines() {
-    this.#tl.sort((t3, e2) => t3[0] - e2[0] || t3[1] - e2[1] || t3[2] - e2[2]);
-    const t2 = [];
-    for (const e2 of this.#tl) if (e2[3]) {
-      t2.push(...this.#il(e2));
-      this.#nl(e2);
-    } else {
-      this.#sl(e2);
-      t2.push(...this.#il(e2));
-    }
-    return this.#rl(t2);
-  }
-  #rl(t2) {
-    const e2 = [], i2 = /* @__PURE__ */ new Set();
-    for (const i3 of t2) {
-      const [t3, n3, s3] = i3;
-      e2.push([t3, n3, i3], [t3, s3, i3]);
-    }
-    e2.sort((t3, e3) => t3[1] - e3[1] || t3[0] - e3[0]);
-    for (let t3 = 0, n3 = e2.length; t3 < n3; t3 += 2) {
-      const n4 = e2[t3][2], s3 = e2[t3 + 1][2];
-      n4.push(s3);
-      s3.push(n4);
-      i2.add(n4);
-      i2.add(s3);
-    }
-    const n2 = [];
-    let s2;
-    for (; i2.size > 0; ) {
-      const t3 = i2.values().next().value;
-      let [e3, r2, a2, o2, l2] = t3;
-      i2.delete(t3);
-      let h2 = e3, c2 = r2;
-      s2 = [e3, a2];
-      n2.push(s2);
-      for (; ; ) {
-        let t4;
-        if (i2.has(o2)) t4 = o2;
-        else {
-          if (!i2.has(l2)) break;
-          t4 = l2;
-        }
-        i2.delete(t4);
-        [e3, r2, a2, o2, l2] = t4;
-        if (h2 !== e3) {
-          s2.push(h2, c2, e3, c2 === r2 ? r2 : a2);
-          h2 = e3;
-        }
-        c2 = c2 === r2 ? a2 : r2;
-      }
-      s2.push(h2, c2);
-    }
-    return new HighlightOutline(n2, this.#To, this.#Qo, this.#Zo);
-  }
-  #al(t2) {
-    const e2 = this.#el;
-    let i2 = 0, n2 = e2.length - 1;
-    for (; i2 <= n2; ) {
-      const s2 = i2 + n2 >> 1, r2 = e2[s2][0];
-      if (r2 === t2) return s2;
-      r2 < t2 ? i2 = s2 + 1 : n2 = s2 - 1;
-    }
-    return n2 + 1;
-  }
-  #nl([, t2, e2]) {
-    const i2 = this.#al(t2);
-    this.#el.splice(i2, 0, [t2, e2]);
-  }
-  #sl([, t2, e2]) {
-    const i2 = this.#al(t2);
-    for (let n2 = i2; n2 < this.#el.length; n2++) {
-      const [i3, s2] = this.#el[n2];
-      if (i3 !== t2) break;
-      if (i3 === t2 && s2 === e2) {
-        this.#el.splice(n2, 1);
-        return;
-      }
-    }
-    for (let n2 = i2 - 1; n2 >= 0; n2--) {
-      const [i3, s2] = this.#el[n2];
-      if (i3 !== t2) break;
-      if (i3 === t2 && s2 === e2) {
-        this.#el.splice(n2, 1);
-        return;
-      }
-    }
-  }
-  #il(t2) {
-    const [e2, i2, n2] = t2, s2 = [[e2, i2, n2]], r2 = this.#al(n2);
-    for (let t3 = 0; t3 < r2; t3++) {
-      const [i3, n3] = this.#el[t3];
-      for (let t4 = 0, r3 = s2.length; t4 < r3; t4++) {
-        const [, a2, o2] = s2[t4];
-        if (!(n3 <= a2 || o2 <= i3)) if (a2 >= i3) if (o2 > n3) s2[t4][1] = n3;
-        else {
-          if (1 === r3) return [];
-          s2.splice(t4, 1);
-          t4--;
-          r3--;
-        }
-        else {
-          s2[t4][2] = i3;
-          o2 > n3 && s2.push([e2, n3, o2]);
-        }
-      }
-    }
-    return s2;
-  }
-};
-var HighlightOutline = class extends Outline {
-  #To;
-  #ol;
-  constructor(t2, e2, i2, n2) {
-    super();
-    this.#ol = t2;
-    this.#To = e2;
-    this.firstPoint = i2;
-    this.lastPoint = n2;
-  }
-  toSVGPath() {
-    const t2 = [];
-    for (const e2 of this.#ol) {
-      let [i2, n2] = e2;
-      t2.push(`M${i2} ${n2}`);
-      for (let s2 = 2; s2 < e2.length; s2 += 2) {
-        const r2 = e2[s2], a2 = e2[s2 + 1];
-        if (r2 === i2) {
-          t2.push(`V${a2}`);
-          n2 = a2;
-        } else if (a2 === n2) {
-          t2.push(`H${r2}`);
-          i2 = r2;
-        }
-      }
-      t2.push("Z");
-    }
-    return t2.join(" ");
-  }
-  serialize([t2, e2, i2, n2], s2) {
-    const r2 = [], a2 = i2 - t2, o2 = n2 - e2;
-    for (const e3 of this.#ol) {
-      const i3 = new Array(e3.length);
-      for (let s3 = 0; s3 < e3.length; s3 += 2) {
-        i3[s3] = t2 + e3[s3] * a2;
-        i3[s3 + 1] = n2 - e3[s3 + 1] * o2;
-      }
-      r2.push(i3);
-    }
-    return r2;
-  }
-  get box() {
-    return this.#To;
-  }
-};
-var FreeHighlightOutliner = class extends FreeDrawOutliner {
-  newFreeDrawOutline(t2, e2, i2, n2, s2, r2) {
-    return new FreeHighlightOutline(t2, e2, i2, n2, s2, r2);
-  }
-};
-var FreeHighlightOutline = class extends FreeDrawOutline {
-  newOutliner(t2, e2, i2, n2, s2, r2 = 0) {
-    return new FreeHighlightOutliner(t2, e2, i2, n2, s2, r2);
-  }
-};
-var HighlightEditor = class _HighlightEditor extends AnnotationEditor {
-  #ll = null;
-  #hl = 0;
-  #cl;
-  #dl = null;
-  #a = null;
-  #ul = null;
-  #pl = null;
-  #gl = 0;
-  #ml = null;
-  #fl = null;
-  #_ = null;
-  #bl = false;
-  #Qo = null;
-  #Zo = null;
-  #yl = null;
-  #ye = "";
-  #Lo;
-  #vl = "";
-  static _defaultColor = null;
-  static _defaultOpacity = 1;
-  static _defaultThickness = 12;
-  static _type = "highlight";
-  static _editorType = y.HIGHLIGHT;
-  static _freeHighlightId = -1;
-  static _freeHighlight = null;
-  static _freeHighlightClipId = "";
-  static get _keyboardManager() {
-    const t2 = _HighlightEditor.prototype;
-    return shadow(this, "_keyboardManager", new KeyboardManager([[["ArrowLeft"], t2._moveCaret, { args: [0] }], [["ArrowRight"], t2._moveCaret, { args: [1] }], [["ArrowUp"], t2._moveCaret, { args: [2] }], [["ArrowDown"], t2._moveCaret, { args: [3] }]]));
-  }
-  constructor(t2) {
-    super({ ...t2, name: "highlightEditor" });
-    this.color = t2.color || _HighlightEditor._defaultColor;
-    this.#Lo = t2.thickness || _HighlightEditor._defaultThickness;
-    this.opacity = t2.opacity || _HighlightEditor._defaultOpacity;
-    this.#cl = t2.boxes || null;
-    this.#vl = t2.methodOfCreation || "";
-    this.#ye = t2.text || "";
-    this._isDraggable = false;
-    this.defaultL10nId = "pdfjs-editor-highlight-editor";
-    if (t2.highlightId > -1) {
-      this.#bl = true;
-      this.#wl(t2);
-      this.#xl();
-    } else if (this.#cl) {
-      this.#ll = t2.anchorNode;
-      this.#hl = t2.anchorOffset;
-      this.#pl = t2.focusNode;
-      this.#gl = t2.focusOffset;
-      this.#Al();
-      this.#xl();
-      this.rotate(this.rotation);
-    }
-    this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.highlight);
-  }
-  get telemetryInitialData() {
-    return { action: "added", type: this.#bl ? "free_highlight" : "highlight", color: this._uiManager.getNonHCMColorName(this.color), thickness: this.#Lo, methodOfCreation: this.#vl };
-  }
-  get telemetryFinalData() {
-    return { type: "highlight", color: this._uiManager.getNonHCMColorName(this.color) };
-  }
-  static computeTelemetryFinalData(t2) {
-    return { numberOfColors: t2.get("color").size };
-  }
-  #Al() {
-    const t2 = new HighlightOutliner(this.#cl, 1e-3);
-    this.#fl = t2.getOutlines();
-    [this.x, this.y, this.width, this.height] = this.#fl.box;
-    const e2 = new HighlightOutliner(this.#cl, 25e-4, 1e-3, "ltr" === this._uiManager.direction);
-    this.#ul = e2.getOutlines();
-    const { firstPoint: i2 } = this.#fl;
-    this.#Qo = [(i2[0] - this.x) / this.width, (i2[1] - this.y) / this.height];
-    const { lastPoint: n2 } = this.#ul;
-    this.#Zo = [(n2[0] - this.x) / this.width, (n2[1] - this.y) / this.height];
-  }
-  #wl({ highlightOutlines: t2, highlightId: e2, clipPathId: i2 }) {
-    this.#fl = t2;
-    this.#ul = t2.getNewOutline(this.#Lo / 2 + 1.5, 25e-4);
-    if (e2 >= 0) {
-      this.#_ = e2;
-      this.#dl = i2;
-      this.parent.drawLayer.finalizeDraw(e2, { bbox: t2.box, path: { d: t2.toSVGPath() } });
-      this.#yl = this.parent.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: true }, bbox: this.#ul.box, path: { d: this.#ul.toSVGPath() } }, true);
-    } else if (this.parent) {
-      const e3 = this.parent.viewport.rotation;
-      this.parent.drawLayer.updateProperties(this.#_, { bbox: _HighlightEditor.#El(this.#fl.box, (e3 - this.rotation + 360) % 360), path: { d: t2.toSVGPath() } });
-      this.parent.drawLayer.updateProperties(this.#yl, { bbox: _HighlightEditor.#El(this.#ul.box, e3), path: { d: this.#ul.toSVGPath() } });
-    }
-    const [n2, s2, r2, a2] = t2.box;
-    switch (this.rotation) {
-      case 0:
-        this.x = n2;
-        this.y = s2;
-        this.width = r2;
-        this.height = a2;
-        break;
-      case 90: {
-        const [t3, e3] = this.parentDimensions;
-        this.x = s2;
-        this.y = 1 - n2;
-        this.width = r2 * e3 / t3;
-        this.height = a2 * t3 / e3;
-        break;
-      }
-      case 180:
-        this.x = 1 - n2;
-        this.y = 1 - s2;
-        this.width = r2;
-        this.height = a2;
-        break;
-      case 270: {
-        const [t3, e3] = this.parentDimensions;
-        this.x = 1 - s2;
-        this.y = n2;
-        this.width = r2 * e3 / t3;
-        this.height = a2 * t3 / e3;
-        break;
-      }
-    }
-    const { firstPoint: o2 } = t2;
-    this.#Qo = [(o2[0] - n2) / r2, (o2[1] - s2) / a2];
-    const { lastPoint: l2 } = this.#ul;
-    this.#Zo = [(l2[0] - n2) / r2, (l2[1] - s2) / a2];
-  }
-  static initialize(t2, e2) {
-    AnnotationEditor.initialize(t2, e2);
-    _HighlightEditor._defaultColor ||= e2.highlightColors?.values().next().value || "#fff066";
-  }
-  static updateDefaultParams(t2, e2) {
-    switch (t2) {
-      case v.HIGHLIGHT_COLOR:
-        _HighlightEditor._defaultColor = e2;
-        break;
-      case v.HIGHLIGHT_THICKNESS:
-        _HighlightEditor._defaultThickness = e2;
-    }
-  }
-  translateInPage(t2, e2) {
-  }
-  get toolbarPosition() {
-    return this.#Zo;
-  }
-  get commentButtonPosition() {
-    return this.#Qo;
-  }
-  updateParams(t2, e2) {
-    switch (t2) {
-      case v.HIGHLIGHT_COLOR:
-        this.#za(e2);
-        break;
-      case v.HIGHLIGHT_THICKNESS:
-        this.#Cl(e2);
-    }
-  }
-  static get defaultPropertiesToUpdate() {
-    return [[v.HIGHLIGHT_COLOR, _HighlightEditor._defaultColor], [v.HIGHLIGHT_THICKNESS, _HighlightEditor._defaultThickness]];
-  }
-  get propertiesToUpdate() {
-    return [[v.HIGHLIGHT_COLOR, this.color || _HighlightEditor._defaultColor], [v.HIGHLIGHT_THICKNESS, this.#Lo || _HighlightEditor._defaultThickness], [v.HIGHLIGHT_FREE, this.#bl]];
-  }
-  onUpdatedColor() {
-    this.parent?.drawLayer.updateProperties(this.#_, { root: { fill: this.color, "fill-opacity": this.opacity } });
-    this.#a?.updateColor(this.color);
-    super.onUpdatedColor();
-  }
-  #za(t2) {
-    const setColorAndOpacity = (t3, e3) => {
-      this.color = t3;
-      this.opacity = e3;
-      this.onUpdatedColor();
-    }, e2 = this.color, i2 = this.opacity;
-    this.addCommands({ cmd: setColorAndOpacity.bind(this, t2, _HighlightEditor._defaultOpacity), undo: setColorAndOpacity.bind(this, e2, i2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.HIGHLIGHT_COLOR, overwriteIfSameType: true, keepUndo: true });
-    this._reportTelemetry({ action: "color_changed", color: this._uiManager.getNonHCMColorName(t2) }, true);
-  }
-  #Cl(t2) {
-    const e2 = this.#Lo, setThickness = (t3) => {
-      this.#Lo = t3;
-      this.#Sl(t3);
-    };
-    this.addCommands({ cmd: setThickness.bind(this, t2), undo: setThickness.bind(this, e2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.INK_THICKNESS, overwriteIfSameType: true, keepUndo: true });
-    this._reportTelemetry({ action: "thickness_changed", thickness: t2 }, true);
-  }
-  get toolbarButtons() {
-    if (this._uiManager.highlightColors) {
-      return [["colorPicker", this.#a = new ColorPicker({ editor: this })]];
-    }
-    return super.toolbarButtons;
-  }
-  disableEditing() {
-    super.disableEditing();
-    this.div.classList.toggle("disabled", true);
-  }
-  enableEditing() {
-    super.enableEditing();
-    this.div.classList.toggle("disabled", false);
-  }
-  fixAndSetPosition() {
-    return super.fixAndSetPosition(this.#Tl());
-  }
-  getBaseTranslation() {
-    return [0, 0];
-  }
-  getRect(t2, e2) {
-    return super.getRect(t2, e2, this.#Tl());
-  }
-  onceAdded(t2) {
-    this.annotationElementId || this.parent.addUndoableEditor(this);
-    t2 && this.div.focus();
-  }
-  remove() {
-    this.#_l();
-    this._reportTelemetry({ action: "deleted" });
-    super.remove();
-  }
-  rebuild() {
-    if (this.parent) {
-      super.rebuild();
-      if (null !== this.div) {
-        this.#xl();
-        this.isAttachedToDOM || this.parent.add(this);
-      }
-    }
-  }
-  setParent(t2) {
-    let e2 = false;
-    if (this.parent && !t2) this.#_l();
-    else if (t2) {
-      this.#xl(t2);
-      e2 = !this.parent && this.div?.classList.contains("selectedEditor");
-    }
-    super.setParent(t2);
-    this.show(this._isVisible);
-    e2 && this.select();
-  }
-  #Sl(t2) {
-    if (this.#bl) {
-      this.#wl({ highlightOutlines: this.#fl.getNewOutline(t2 / 2) });
-      this.fixAndSetPosition();
-      this.setDims();
-    }
-  }
-  #_l() {
-    if (null !== this.#_ && this.parent) {
-      this.parent.drawLayer.remove(this.#_);
-      this.#_ = null;
-      this.parent.drawLayer.remove(this.#yl);
-      this.#yl = null;
-    }
-  }
-  #xl(t2 = this.parent) {
-    if (null === this.#_) {
-      ({ id: this.#_, clipPathId: this.#dl } = t2.drawLayer.draw({ bbox: this.#fl.box, root: { viewBox: "0 0 1 1", fill: this.color, "fill-opacity": this.opacity }, rootClass: { highlight: true, free: this.#bl }, path: { d: this.#fl.toSVGPath() } }, false, true));
-      this.#yl = t2.drawLayer.drawOutline({ rootClass: { highlightOutline: true, free: this.#bl }, bbox: this.#ul.box, path: { d: this.#ul.toSVGPath() } }, this.#bl);
-      this.#ml && (this.#ml.style.clipPath = this.#dl);
-    }
-  }
-  static #El([t2, e2, i2, n2], s2) {
-    switch (s2) {
-      case 90:
-        return [1 - e2 - n2, t2, n2, i2];
-      case 180:
-        return [1 - t2 - i2, 1 - e2 - n2, i2, n2];
-      case 270:
-        return [e2, 1 - t2 - i2, n2, i2];
-    }
-    return [t2, e2, i2, n2];
-  }
-  rotate(t2) {
-    const { drawLayer: e2 } = this.parent;
-    let i2;
-    if (this.#bl) {
-      t2 = (t2 - this.rotation + 360) % 360;
-      i2 = _HighlightEditor.#El(this.#fl.box, t2);
-    } else i2 = _HighlightEditor.#El([this.x, this.y, this.width, this.height], t2);
-    e2.updateProperties(this.#_, { bbox: i2, root: { "data-main-rotation": t2 } });
-    e2.updateProperties(this.#yl, { bbox: _HighlightEditor.#El(this.#ul.box, t2), root: { "data-main-rotation": t2 } });
-  }
-  render() {
-    if (this.div) return this.div;
-    const t2 = super.render();
-    if (this.#ye) {
-      t2.setAttribute("aria-label", this.#ye);
-      t2.setAttribute("role", "mark");
-    }
-    this.#bl ? t2.classList.add("free") : this.div.addEventListener("keydown", this.#kl.bind(this), { signal: this._uiManager._signal });
-    const e2 = this.#ml = document.createElement("div");
-    t2.append(e2);
-    e2.setAttribute("aria-hidden", "true");
-    e2.className = "internal";
-    e2.style.clipPath = this.#dl;
-    this.setDims();
-    bindEvents(this, this.#ml, ["pointerover", "pointerleave"]);
-    this.enableEditing();
-    return t2;
-  }
-  pointerover() {
-    this.isSelected || this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: true } });
-  }
-  pointerleave() {
-    this.isSelected || this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: false } });
-  }
-  #kl(t2) {
-    _HighlightEditor._keyboardManager.exec(this, t2);
-  }
-  _moveCaret(t2) {
-    this.parent.unselect(this);
-    switch (t2) {
-      case 0:
-      case 2:
-        this.#Dl(true);
-        break;
-      case 1:
-      case 3:
-        this.#Dl(false);
-    }
-  }
-  #Dl(t2) {
-    if (!this.#ll) return;
-    const e2 = window.getSelection();
-    t2 ? e2.setPosition(this.#ll, this.#hl) : e2.setPosition(this.#pl, this.#gl);
-  }
-  select() {
-    super.select();
-    this.#yl && this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { hovered: false, selected: true } });
-  }
-  unselect() {
-    super.unselect();
-    if (this.#yl) {
-      this.parent?.drawLayer.updateProperties(this.#yl, { rootClass: { selected: false } });
-      this.#bl || this.#Dl(false);
-    }
-  }
-  get _mustFixPosition() {
-    return !this.#bl;
-  }
-  show(t2 = this._isVisible) {
-    super.show(t2);
-    if (this.parent) {
-      this.parent.drawLayer.updateProperties(this.#_, { rootClass: { hidden: !t2 } });
-      this.parent.drawLayer.updateProperties(this.#yl, { rootClass: { hidden: !t2 } });
-    }
-  }
-  #Tl() {
-    return this.#bl ? this.rotation : 0;
-  }
-  #Ml() {
-    if (this.#bl) return null;
-    const [t2, e2] = this.pageDimensions, [i2, n2] = this.pageTranslation, s2 = this.#cl, r2 = new Float32Array(8 * s2.length);
-    let a2 = 0;
-    for (const { x: o2, y: l2, width: h2, height: c2 } of s2) {
-      const s3 = o2 * t2 + i2, d2 = (1 - l2) * e2 + n2;
-      r2[a2] = r2[a2 + 4] = s3;
-      r2[a2 + 1] = r2[a2 + 3] = d2;
-      r2[a2 + 2] = r2[a2 + 6] = s3 + h2 * t2;
-      r2[a2 + 5] = r2[a2 + 7] = d2 - c2 * e2;
-      a2 += 8;
-    }
-    return r2;
-  }
-  #Pl(t2) {
-    return this.#fl.serialize(t2, this.#Tl());
-  }
-  static startHighlighting(t2, e2, { target: i2, x: n2, y: s2 }) {
-    const { x: r2, y: a2, width: o2, height: l2 } = i2.getBoundingClientRect(), h2 = new AbortController(), c2 = t2.combinedSignal(h2), pointerUpCallback = (e3) => {
-      h2.abort();
-      this.#Il(t2, e3);
-    };
-    window.addEventListener("blur", pointerUpCallback, { signal: c2 });
-    window.addEventListener("pointerup", pointerUpCallback, { signal: c2 });
-    window.addEventListener("pointerdown", stopEvent, { capture: true, passive: false, signal: c2 });
-    window.addEventListener("contextmenu", noContextMenu, { signal: c2 });
-    i2.addEventListener("pointermove", this.#Fl.bind(this, t2), { signal: c2 });
-    this._freeHighlight = new FreeHighlightOutliner({ x: n2, y: s2 }, [r2, a2, o2, l2], t2.scale, this._defaultThickness / 2, e2, 1e-3);
-    ({ id: this._freeHighlightId, clipPathId: this._freeHighlightClipId } = t2.drawLayer.draw({ bbox: [0, 0, 1, 1], root: { viewBox: "0 0 1 1", fill: this._defaultColor, "fill-opacity": this._defaultOpacity }, rootClass: { highlight: true, free: true }, path: { d: this._freeHighlight.toSVGPath() } }, true, true));
-  }
-  static #Fl(t2, e2) {
-    this._freeHighlight.add(e2) && t2.drawLayer.updateProperties(this._freeHighlightId, { path: { d: this._freeHighlight.toSVGPath() } });
-  }
-  static #Il(t2, e2) {
-    this._freeHighlight.isEmpty() ? t2.drawLayer.remove(this._freeHighlightId) : t2.createAndAddNewEditor(e2, false, { highlightId: this._freeHighlightId, highlightOutlines: this._freeHighlight.getOutlines(), clipPathId: this._freeHighlightClipId, methodOfCreation: "main_toolbar" });
-    this._freeHighlightId = -1;
-    this._freeHighlight = null;
-    this._freeHighlightClipId = "";
-  }
-  static async deserialize(t2, e2, i2) {
-    let n2 = null;
-    if (t2 instanceof HighlightAnnotationElement) {
-      const { data: { quadPoints: e3, rect: i3, rotation: s3, id: r3, color: a3, opacity: o3, popupRef: l3, richText: h3, contentsObj: c3, creationDate: d3, modificationDate: u3 }, parent: { page: { pageNumber: p3 } } } = t2;
-      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a3), opacity: o3, quadPoints: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
-    } else if (t2 instanceof InkAnnotationElement) {
-      const { data: { inkLists: e3, rect: i3, rotation: s3, id: r3, color: a3, borderStyle: { rawWidth: o3 }, popupRef: l3, richText: h3, contentsObj: c3, creationDate: d3, modificationDate: u3 }, parent: { page: { pageNumber: p3 } } } = t2;
-      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a3), thickness: o3, inkLists: e3, boxes: null, pageIndex: p3 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r3, id: r3, deleted: false, popupRef: l3, richText: h3, comment: c3?.str || null, creationDate: d3, modificationDate: u3 };
-    }
-    const { color: s2, quadPoints: r2, inkLists: a2, outlines: o2, opacity: l2 } = t2, h2 = await super.deserialize(t2, e2, i2);
-    h2.color = Util.makeHexColor(...s2);
-    h2.opacity = l2 || 1;
-    a2 && (h2.#Lo = t2.thickness);
-    h2._initialData = n2;
-    t2.comment && h2.setCommentData(t2);
-    const [c2, d2] = h2.pageDimensions, [u2, p2] = h2.pageTranslation;
-    if (r2) {
-      const t3 = h2.#cl = [];
-      for (let e3 = 0; e3 < r2.length; e3 += 8) t3.push({ x: (r2[e3] - u2) / c2, y: 1 - (r2[e3 + 1] - p2) / d2, width: (r2[e3 + 2] - r2[e3]) / c2, height: (r2[e3 + 1] - r2[e3 + 5]) / d2 });
-      h2.#Al();
-      h2.#xl();
-      h2.rotate(h2.rotation);
-    } else if (a2 || o2) {
-      h2.#bl = true;
-      const t3 = (a2 || o2.points)[0], i3 = { x: t3[0] - u2, y: d2 - (t3[1] - p2) }, n3 = new FreeHighlightOutliner(i3, [0, 0, c2, d2], 1, h2.#Lo / 2, true, 1e-3);
-      for (let e3 = 0, s4 = t3.length; e3 < s4; e3 += 2) {
-        i3.x = t3[e3] - u2;
-        i3.y = d2 - (t3[e3 + 1] - p2);
-        n3.add(i3);
-      }
-      const { id: s3, clipPathId: r3 } = e2.drawLayer.draw({ bbox: [0, 0, 1, 1], root: { viewBox: "0 0 1 1", fill: h2.color, "fill-opacity": h2._defaultOpacity }, rootClass: { highlight: true, free: true }, path: { d: n3.toSVGPath() } }, true, true);
-      h2.#wl({ highlightOutlines: n3.getOutlines(), highlightId: s3, clipPathId: r3 });
-      h2.#xl();
-      h2.rotate(h2.parentRotation);
-    }
-    return h2;
-  }
-  serialize(t2 = false) {
-    if (this.isEmpty() || t2) return null;
-    if (this.deleted) return this.serializeDeleted();
-    const e2 = AnnotationEditor._colorManager.convert(this._uiManager.getNonHCMColor(this.color)), i2 = super.serialize(t2);
-    Object.assign(i2, { color: e2, opacity: this.opacity, thickness: this.#Lo, quadPoints: this.#Ml(), outlines: this.#Pl(i2.rect) });
-    this.addComment(i2);
-    if (this.annotationElementId && !this.#So(i2)) return null;
-    i2.id = this.annotationElementId;
-    return i2;
-  }
-  #So(t2) {
-    const { color: e2 } = this._initialData;
-    return this.hasEditedComment || t2.color.some((t3, i2) => t3 !== e2[i2]);
-  }
-  renderAnnotationElement(t2) {
-    if (this.deleted) {
-      t2.hide();
-      return null;
-    }
-    t2.updateEdited({ rect: this.getPDFRect(), popup: this.comment });
-    return null;
-  }
-  static canCreateNewEmptyEditor() {
-    return false;
-  }
-};
 var DrawingOptions = class {
-  #Ol = /* @__PURE__ */ Object.create(null);
+  #No = /* @__PURE__ */ Object.create(null);
   updateProperty(t2, e2) {
     this[t2] = e2;
     this.updateSVGProperty(t2, e2);
@@ -18075,15 +17340,15 @@ var DrawingOptions = class {
     if (t2) for (const [e2, i2] of Object.entries(t2)) e2.startsWith("_") || this.updateProperty(e2, i2);
   }
   updateSVGProperty(t2, e2) {
-    this.#Ol[t2] = e2;
+    this.#No[t2] = e2;
   }
   toSVGProperties() {
-    const t2 = this.#Ol;
-    this.#Ol = /* @__PURE__ */ Object.create(null);
+    const t2 = this.#No;
+    this.#No = /* @__PURE__ */ Object.create(null);
     return { root: t2 };
   }
   reset() {
-    this.#Ol = /* @__PURE__ */ Object.create(null);
+    this.#No = /* @__PURE__ */ Object.create(null);
   }
   updateAll(t2 = this) {
     this.updateProperties(t2);
@@ -18093,19 +17358,23 @@ var DrawingOptions = class {
   }
 };
 var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
-  #Rl = null;
-  #Bl;
+  #Uo = null;
+  #Ho;
+  _clipPathId = null;
   _colorPicker = null;
   _drawId = null;
+  _drawOutlines = null;
+  _focusDrawId = null;
   static _currentDrawId = -1;
   static _currentParent = null;
-  static #Ll = null;
-  static #Nl = null;
-  static #Ul = null;
+  static #zo = null;
+  static #Go = null;
+  static #jo = null;
+  static #Wo = null;
   static _INNER_MARGIN = 3;
   constructor(t2) {
     super(t2);
-    this.#Bl = t2.mustBeCommitted || false;
+    this.#Ho = t2.mustBeCommitted || false;
     this._addOutlines(t2);
   }
   onUpdatedColor() {
@@ -18117,27 +17386,48 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   }
   _addOutlines(t2) {
     if (t2.drawOutlines) {
-      this.#Hl(t2);
-      this.#xl();
+      this.#Vo(t2);
+      this.#$o();
     }
   }
-  #Hl({ drawOutlines: t2, drawId: e2, drawingOptions: i2 }) {
-    this.#Rl = t2;
+  #Vo({ drawOutlines: t2, drawId: e2, drawingOptions: i2, clipPathId: n2 }) {
+    this._drawOutlines = t2;
     this._drawingOptions ||= i2;
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert[this.editorType]);
     if (e2 >= 0) {
       this._drawId = e2;
+      this._clipPathId = n2 ?? null;
       this.parent.drawLayer.finalizeDraw(e2, t2.defaultProperties);
-    } else this._drawId = this.#zl(t2, this.parent);
-    this.#Gl(t2.box);
+      this.#qo(this.parent);
+    } else this._drawId = this.#Xo(t2, this.parent);
+    this.#Ko(t2.box);
   }
-  #zl(t2, e2) {
-    const { id: i2 } = e2.drawLayer.draw(_DrawingEditor._mergeSVGProperties(this._drawingOptions.toSVGProperties(), t2.defaultSVGProperties), false, false);
+  #Xo(t2, e2) {
+    const { id: i2, clipPathId: n2 } = e2.drawLayer.draw(_DrawingEditor._mergeSVGProperties(this._drawingOptions.toSVGProperties(), t2.defaultSVGProperties), false, this.constructor._hasClipPath);
+    this.constructor._hasClipPath && (this._clipPathId = n2);
+    this.#qo(e2);
     return i2;
+  }
+  #qo(t2) {
+    const e2 = this._drawOutlines.getFocusSVGProperties(this.#Yo);
+    e2 && (this._focusDrawId = t2.drawLayer.drawOutline(e2, this._drawOutlines.focusMustRemoveSelfIntersections));
+  }
+  #Jo(t2 = this.#Yo) {
+    null !== this._focusDrawId && this.parent?.drawLayer.updateProperties(this._focusDrawId, this._drawOutlines.getFocusSVGProperties(t2));
+  }
+  #Qo(t2) {
+    null !== this._focusDrawId && this.parent?.drawLayer.updateProperties(this._focusDrawId, { rootClass: t2 });
+  }
+  #Zo() {
+    const { parent: t2, _drawId: e2, _focusDrawId: i2, _isVisible: n2 } = this;
+    if (!t2 || null === e2) return;
+    const r2 = { hidden: !n2 };
+    t2.drawLayer.updateProperties(e2, { rootClass: r2 });
+    null !== i2 && t2.drawLayer.updateProperties(i2, { rootClass: r2 });
   }
   static _mergeSVGProperties(t2, e2) {
     const i2 = new Set(Object.keys(t2));
-    for (const [n2, s2] of Object.entries(e2)) i2.has(n2) ? Object.assign(t2[n2], s2) : t2[n2] = s2;
+    for (const [n2, r2] of Object.entries(e2)) i2.has(n2) ? Object.assign(t2[n2], r2) : t2[n2] = r2;
     return t2;
   }
   static getDefaultDrawingOptions(t2) {
@@ -18149,14 +17439,29 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   static get isDrawer() {
     return true;
   }
+  static get _hasClipPath() {
+    return false;
+  }
+  static get _hasDrawClass() {
+    return true;
+  }
   static get supportMultipleDrawings() {
     return false;
+  }
+  get _drawRotation() {
+    return this.rotation;
+  }
+  get _opacityName() {
+    return this.constructor.typesMap.get(this.opacityType);
+  }
+  get #Yo() {
+    return (this.parentRotation - this._drawRotation + 360) % 360;
   }
   static updateDefaultParams(t2, e2) {
     const i2 = this.typesMap.get(t2);
     i2 && this._defaultDrawingOptions.updateProperty(i2, e2);
     if (this._currentParent) {
-      _DrawingEditor.#Ll.updateProperty(i2, e2);
+      _DrawingEditor.#zo.updateProperty(i2, e2);
       this._currentParent.drawLayer.updateProperties(this._currentDrawId, this._defaultDrawingOptions.toSVGProperties());
     }
   }
@@ -18175,38 +17480,39 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     return t2;
   }
   _updateProperty(t2, e2, i2) {
-    const n2 = this._drawingOptions, s2 = n2[e2], setter = (i3) => {
+    const n2 = this._drawingOptions, r2 = n2[e2], setter = (i3) => {
       n2.updateProperty(e2, i3);
-      const s3 = this.#Rl.updateProperty(e2, i3);
-      s3 && this.#Gl(s3);
+      const r3 = this._drawOutlines.updateProperty(e2, i3);
+      r3 && this.#Ko(r3);
       this.parent?.drawLayer.updateProperties(this._drawId, n2.toSVGProperties());
       t2 === this.colorType ? this.onUpdatedColor() : t2 === this.opacityType && this.onUpdatedOpacity();
     };
-    this.addCommands({ cmd: setter.bind(this, i2), undo: setter.bind(this, s2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: t2, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setter.bind(this, i2), undo: setter.bind(this, r2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: t2, overwriteIfSameType: true, keepUndo: true });
   }
-  _updateColorAndOpacity(t2, e2) {
-    const i2 = this.constructor.typesMap.get(this.colorType), n2 = this.constructor.typesMap.get(this.opacityType), s2 = this._drawingOptions, r2 = s2[i2], a2 = s2[n2], setter = (t3, e3) => {
-      s2.updateProperty(i2, t3);
-      s2.updateProperty(n2, e3);
-      this.#Rl.updateProperty(i2, t3);
-      this.#Rl.updateProperty(n2, e3);
+  _updateColorAndOpacity(t2, e2, i2 = this.colorAndOpacityType) {
+    const n2 = this.constructor.typesMap.get(this.colorType), r2 = this._opacityName, s2 = this._drawingOptions, a2 = s2[n2], o2 = s2[r2], setter = (t3, e3) => {
+      s2.updateProperty(n2, t3);
+      s2.updateProperty(r2, e3);
+      this._drawOutlines.updateProperty(n2, t3);
+      this._drawOutlines.updateProperty(r2, e3);
       this.parent?.drawLayer.updateProperties(this._drawId, s2.toSVGProperties());
       this.onUpdatedColor();
       this.onUpdatedOpacity();
     };
-    this.addCommands({ cmd: setter.bind(this, t2, e2), undo: setter.bind(this, r2, a2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: v.INK_COLOR_AND_OPACITY, overwriteIfSameType: true, keepUndo: true });
+    this.addCommands({ cmd: setter.bind(this, t2, e2), undo: setter.bind(this, a2, o2), post: this._uiManager.updateUI.bind(this._uiManager, this), mustExec: true, type: i2, overwriteIfSameType: true, keepUndo: true });
   }
   _onResizing() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathResizingSVGProperties(this.#jl()), { bbox: this.#Wl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this._drawOutlines.getPathResizingSVGProperties(this.#tl()), { bbox: this.#el() }));
   }
   _onResized() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathResizedSVGProperties(this.#jl()), { bbox: this.#Wl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this._drawOutlines.getPathResizedSVGProperties(this.#tl()), { bbox: this.#el() }));
+    this.#Jo();
   }
   _onTranslating(t2, e2) {
-    this.parent?.drawLayer.updateProperties(this._drawId, { bbox: this.#Wl() });
+    this.parent?.drawLayer.updateProperties(this._drawId, { bbox: this.#el() });
   }
   _onTranslated() {
-    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this.#Rl.getPathTranslatedSVGProperties(this.#jl(), this.parentDimensions), { bbox: this.#Wl() }));
+    this.parent?.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties(this._drawOutlines.getPathTranslatedSVGProperties(this.#tl(), this.parentDimensions), { bbox: this.#el() }));
   }
   _onStartDragging() {
     this.parent?.drawLayer.updateProperties(this._drawId, { rootClass: { moving: true } });
@@ -18214,10 +17520,15 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   _onStopDragging() {
     this.parent?.drawLayer.updateProperties(this._drawId, { rootClass: { moving: false } });
   }
+  get _mustBeDisabledOnCommit() {
+    return true;
+  }
   commit() {
     super.commit();
-    this.disableEditMode();
-    this.disableEditing();
+    if (this._mustBeDisabledOnCommit) {
+      this.disableEditMode();
+      this.disableEditing();
+    }
   }
   disableEditing() {
     super.disableEditing();
@@ -18236,23 +17547,24 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   onceAdded(t2) {
     this.annotationElementId || this.parent.addUndoableEditor(this);
     this._isDraggable = true;
-    if (this.#Bl) {
-      this.#Bl = false;
+    if (this.#Ho) {
+      this.#Ho = false;
       this.commit();
       this.parent.setSelected(this);
       t2 && this.isOnScreen && this.div.focus();
     }
   }
   remove() {
-    this.#_l();
+    this._uiManager.removeShouldRescale(this);
+    this.#il();
     super.remove();
   }
   rebuild() {
     if (this.parent) {
       super.rebuild();
       if (null !== this.div) {
-        this.#xl();
-        this.#Gl(this.#Rl.box);
+        this.#$o();
+        this.#Ko(this._drawOutlines.box);
         this.isAttachedToDOM || this.parent.add(this);
       }
     }
@@ -18261,104 +17573,139 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     let e2 = false;
     if (this.parent && !t2) {
       this._uiManager.removeShouldRescale(this);
-      this.#_l();
+      this.#il();
     } else if (t2) {
       this._uiManager.addShouldRescale(this);
-      this.#xl(t2);
+      this.#$o(t2);
       e2 = !this.parent && this.div?.classList.contains("selectedEditor");
     }
     super.setParent(t2);
+    this.#Zo();
     e2 && this.select();
   }
-  #_l() {
-    if (null !== this._drawId && this.parent) {
-      this.parent.drawLayer.remove(this._drawId);
-      this._drawId = null;
-      this._drawingOptions.reset();
+  #il() {
+    if (null === this._drawId || !this.parent) return;
+    const { drawLayer: t2 } = this.parent;
+    t2.remove(this._drawId);
+    this._drawId = null;
+    if (null !== this._focusDrawId) {
+      t2.remove(this._focusDrawId);
+      this._focusDrawId = null;
     }
+    this._drawingOptions.reset();
   }
-  #xl(t2 = this.parent) {
-    if (null === this._drawId || this.parent !== t2) if (null === this._drawId) {
+  #$o(t2 = this.parent) {
+    if (null === this._drawId || this.parent !== t2) {
+      if (null !== this._drawId) {
+        const { drawLayer: e2 } = this.parent;
+        e2.updateParent(this._drawId, t2.drawLayer);
+        null !== this._focusDrawId && e2.updateParent(this._focusDrawId, t2.drawLayer);
+        return;
+      }
       this._drawingOptions.updateAll();
-      this._drawId = this.#zl(this.#Rl, t2);
-    } else this.parent.drawLayer.updateParent(this._drawId, t2.drawLayer);
-  }
-  #Vl([t2, e2, i2, n2]) {
-    const { parentDimensions: [s2, r2], rotation: a2 } = this;
-    switch (a2) {
-      case 90:
-        return [e2, 1 - t2, i2 * (r2 / s2), n2 * (s2 / r2)];
-      case 180:
-        return [1 - t2, 1 - e2, i2, n2];
-      case 270:
-        return [1 - e2, t2, i2 * (r2 / s2), n2 * (s2 / r2)];
-      default:
-        return [t2, e2, i2, n2];
+      this._drawId = this.#Xo(this._drawOutlines, t2);
+      this._clipPathId && this.#Uo && (this.#Uo.style.clipPath = this._clipPathId);
     }
   }
-  #jl() {
-    const { x: t2, y: e2, width: i2, height: n2, parentDimensions: [s2, r2], rotation: a2 } = this;
+  #nl([t2, e2, i2, n2]) {
+    const { parentDimensions: [r2, s2], _drawRotation: a2 } = this;
     switch (a2) {
       case 90:
-        return [1 - e2, t2, i2 * (s2 / r2), n2 * (r2 / s2)];
-      case 180:
-        return [1 - t2, 1 - e2, i2, n2];
-      case 270:
         return [e2, 1 - t2, i2 * (s2 / r2), n2 * (r2 / s2)];
+      case 180:
+        return [1 - t2, 1 - e2, i2, n2];
+      case 270:
+        return [1 - e2, t2, i2 * (s2 / r2), n2 * (r2 / s2)];
       default:
         return [t2, e2, i2, n2];
     }
   }
-  #Gl(t2) {
-    [this.x, this.y, this.width, this.height] = this.#Vl(t2);
+  #tl() {
+    const { x: t2, y: e2, width: i2, height: n2, parentDimensions: [r2, s2], _drawRotation: a2 } = this;
+    switch (a2) {
+      case 90:
+        return [1 - e2, t2, i2 * (r2 / s2), n2 * (s2 / r2)];
+      case 180:
+        return [1 - t2, 1 - e2, i2, n2];
+      case 270:
+        return [e2, 1 - t2, i2 * (r2 / s2), n2 * (s2 / r2)];
+      default:
+        return [t2, e2, i2, n2];
+    }
+  }
+  #Ko(t2) {
+    [this.x, this.y, this.width, this.height] = this.#nl(t2);
     if (this.div) {
       this.fixAndSetPosition();
       this.setDims();
     }
     this._onResized();
   }
-  #Wl() {
-    const { x: t2, y: e2, width: i2, height: n2, rotation: s2, parentRotation: r2, parentDimensions: [a2, o2] } = this;
-    switch ((4 * s2 + r2) / 90) {
+  #el(t2 = this.parentRotation) {
+    const { x: e2, y: i2, width: n2, height: r2, _drawRotation: s2, parentDimensions: [a2, o2] } = this;
+    switch ((4 * s2 + t2) / 90) {
       case 1:
-        return [1 - e2 - n2, t2, n2, i2];
+        return [1 - i2 - r2, e2, r2, n2];
       case 2:
-        return [1 - t2 - i2, 1 - e2 - n2, i2, n2];
+        return [1 - e2 - n2, 1 - i2 - r2, n2, r2];
       case 3:
-        return [e2, 1 - t2 - i2, n2, i2];
+        return [i2, 1 - e2 - n2, r2, n2];
       case 4:
-        return [t2, e2 - i2 * (a2 / o2), n2 * (o2 / a2), i2 * (a2 / o2)];
+        return [e2, i2 - n2 * (a2 / o2), r2 * (o2 / a2), n2 * (a2 / o2)];
       case 5:
-        return [1 - e2, t2, i2 * (a2 / o2), n2 * (o2 / a2)];
+        return [1 - i2, e2, n2 * (a2 / o2), r2 * (o2 / a2)];
       case 6:
-        return [1 - t2 - n2 * (o2 / a2), 1 - e2, n2 * (o2 / a2), i2 * (a2 / o2)];
+        return [1 - e2 - r2 * (o2 / a2), 1 - i2, r2 * (o2 / a2), n2 * (a2 / o2)];
       case 7:
-        return [e2 - i2 * (a2 / o2), 1 - t2 - n2 * (o2 / a2), i2 * (a2 / o2), n2 * (o2 / a2)];
+        return [i2 - n2 * (a2 / o2), 1 - e2 - r2 * (o2 / a2), n2 * (a2 / o2), r2 * (o2 / a2)];
       case 8:
-        return [t2 - i2, e2 - n2, i2, n2];
+        return [e2 - n2, i2 - r2, n2, r2];
       case 9:
-        return [1 - e2, t2 - i2, n2, i2];
+        return [1 - i2, e2 - n2, r2, n2];
       case 10:
-        return [1 - t2, 1 - e2, i2, n2];
+        return [1 - e2, 1 - i2, n2, r2];
       case 11:
-        return [e2 - n2, 1 - t2, n2, i2];
+        return [i2 - r2, 1 - e2, r2, n2];
       case 12:
-        return [t2 - n2 * (o2 / a2), e2, n2 * (o2 / a2), i2 * (a2 / o2)];
+        return [e2 - r2 * (o2 / a2), i2, r2 * (o2 / a2), n2 * (a2 / o2)];
       case 13:
-        return [1 - e2 - i2 * (a2 / o2), t2 - n2 * (o2 / a2), i2 * (a2 / o2), n2 * (o2 / a2)];
+        return [1 - i2 - n2 * (a2 / o2), e2 - r2 * (o2 / a2), n2 * (a2 / o2), r2 * (o2 / a2)];
       case 14:
-        return [1 - t2, 1 - e2 - i2 * (a2 / o2), n2 * (o2 / a2), i2 * (a2 / o2)];
+        return [1 - e2, 1 - i2 - n2 * (a2 / o2), r2 * (o2 / a2), n2 * (a2 / o2)];
       case 15:
-        return [e2, 1 - t2, i2 * (a2 / o2), n2 * (o2 / a2)];
+        return [i2, 1 - e2, n2 * (a2 / o2), r2 * (o2 / a2)];
       default:
-        return [t2, e2, i2, n2];
+        return [e2, i2, n2, r2];
     }
   }
-  rotate() {
-    this.parent && this.parent.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties({ bbox: this.#Wl() }, this.#Rl.updateRotation((this.parentRotation - this.rotation + 360) % 360)));
+  rotate(t2 = this.parentRotation) {
+    if (!this.parent || null === this._drawId) return;
+    const e2 = (t2 - this._drawRotation + 360) % 360;
+    this.parent.drawLayer.updateProperties(this._drawId, _DrawingEditor._mergeSVGProperties({ bbox: this.#el(t2) }, this._drawOutlines.updateRotation(e2)));
+    this.#Jo(e2);
+  }
+  show(t2 = this._isVisible) {
+    super.show(t2);
+    this.#Zo();
+  }
+  select() {
+    super.select();
+    this.#Qo({ hovered: false, selected: true });
+  }
+  unselect() {
+    super.unselect();
+    this.#Qo({ selected: false });
+  }
+  pointerover() {
+    this.isSelected || this.#Qo({ hovered: true });
+  }
+  pointerleave() {
+    this.isSelected || this.#Qo({ hovered: false });
   }
   onScaleChanging() {
-    this.parent && this.#Gl(this.#Rl.updateParentDimensions(this.parentDimensions, this.parent.scale));
+    if (!this.parent) return;
+    const t2 = this._drawOutlines.updateParentDimensions(this.parentDimensions, this.parent.scale);
+    t2 && this.#Ko(t2);
   }
   static onScaleChangingWhenDrawing() {
   }
@@ -18370,78 +17717,116 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
       e2 = this.y;
     }
     const i2 = super.render();
-    i2.classList.add("draw");
-    const n2 = document.createElement("div");
+    this.constructor._hasDrawClass && i2.classList.add("draw");
+    const n2 = this.#Uo = document.createElement("div");
     i2.append(n2);
     n2.setAttribute("aria-hidden", "true");
     n2.className = "internal";
+    this._clipPathId && (n2.style.clipPath = this._clipPathId);
+    bindEvents(this, n2, ["pointerover", "pointerleave"]);
     this.setDims();
     this._uiManager.addShouldRescale(this);
     this.disableEditing();
     this._isCopy && this._moveAfterPaste(t2, e2);
     return i2;
   }
-  static createDrawerInstance(t2, e2, i2, n2, s2) {
+  static createDrawerInstance(t2) {
     unreachable("Not implemented");
   }
+  static _getDrawingTarget(t2, { target: e2 }) {
+    return e2;
+  }
+  static _getPointerCoords({ offsetX: t2, offsetY: e2, clientX: i2, clientY: n2 }, r2 = null) {
+    if (!r2) return [t2, e2];
+    let s2 = i2 - r2.clientX, a2 = n2 - r2.clientY;
+    switch (this._currentParent.viewport.rotation) {
+      case 90:
+        [s2, a2] = [a2, -s2];
+        break;
+      case 180:
+        [s2, a2] = [-s2, -a2];
+        break;
+      case 270:
+        [s2, a2] = [-a2, s2];
+    }
+    return [r2.offsetX + s2, r2.offsetY + a2];
+  }
+  static _addDrawingListeners(t2, e2) {
+  }
+  static _endDrawingSession(t2 = false) {
+    return this._currentParent.endDrawingSession(t2);
+  }
   static startDrawing(t2, e2, i2, n2) {
-    const { target: s2, offsetX: r2, offsetY: a2, pointerId: o2, pointerType: l2 } = n2;
-    if (CurrentPointers.isInitializedAndDifferentPointerType(l2)) return;
-    const { viewport: { rotation: h2 } } = t2, { width: c2, height: d2 } = s2.getBoundingClientRect(), u2 = _DrawingEditor.#Nl = new AbortController(), p2 = t2.combinedSignal(u2);
-    CurrentPointers.setPointer(l2, o2);
+    const { pointerId: r2, pointerType: s2 } = n2;
+    if (CurrentPointers.isInitializedAndDifferentPointerType(s2)) return;
+    const a2 = this._getDrawingTarget(t2, n2), [o2, l2] = this._getPointerCoords(n2), { viewport: { rotation: c2 } } = t2, { x: h2, y: d2, width: u2, height: p2 } = a2.getBoundingClientRect(), g2 = _DrawingEditor.#Go = new AbortController(), m2 = t2.combinedSignal(g2);
+    CurrentPointers.setPointer(s2, r2);
     window.addEventListener("pointerup", (t3) => {
       CurrentPointers.isSamePointerIdOrRemove(t3.pointerId) && this._endDraw(t3);
-    }, { signal: p2 });
+    }, { signal: m2 });
     window.addEventListener("pointercancel", (t3) => {
-      CurrentPointers.isSamePointerIdOrRemove(t3.pointerId) && this._currentParent.endDrawingSession();
-    }, { signal: p2 });
+      CurrentPointers.isSamePointerIdOrRemove(t3.pointerId) && this._endDrawingSession();
+    }, { signal: m2 });
     window.addEventListener("pointerdown", (t3) => {
       if (CurrentPointers.isSamePointerType(t3.pointerType)) {
         CurrentPointers.initializeAndAddPointerId(t3.pointerId);
-        if (_DrawingEditor.#Ll.isCancellable()) {
-          _DrawingEditor.#Ll.removeLastElement();
-          _DrawingEditor.#Ll.isEmpty() ? this._currentParent.endDrawingSession(true) : this._endDraw(null);
+        if (_DrawingEditor.#zo.isCancellable()) {
+          _DrawingEditor.#zo.removeLastElement();
+          _DrawingEditor.#zo.isEmpty() ? this._endDrawingSession(true) : this._endDraw(null);
         }
       }
-    }, { capture: true, passive: false, signal: p2 });
-    window.addEventListener("contextmenu", noContextMenu, { signal: p2 });
-    s2.addEventListener("pointermove", this._drawMove.bind(this), { signal: p2 });
-    s2.addEventListener("touchmove", (t3) => {
+    }, { capture: true, passive: false, signal: m2 });
+    window.addEventListener("contextmenu", noContextMenu, { signal: m2 });
+    a2.addEventListener("pointermove", this._drawMove.bind(this), { signal: m2 });
+    a2.addEventListener("touchmove", (t3) => {
       CurrentPointers.isSameTimeStamp(t3.timeStamp) && stopEvent(t3);
-    }, { signal: p2 });
+    }, { signal: m2 });
+    this._addDrawingListeners(a2, m2);
     t2.toggleDrawing();
     e2._editorUndoBar?.hide();
-    if (_DrawingEditor.#Ll) t2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.startNew(r2, a2, c2, d2, h2));
-    else {
-      e2.updateUIForDefaultProperties(this);
-      _DrawingEditor.#Ll = this.createDrawerInstance(r2, a2, c2, d2, h2);
-      _DrawingEditor.#Ul = this.getDefaultDrawingOptions();
-      this._currentParent = t2;
-      ({ id: this._currentDrawId } = t2.drawLayer.draw(this._mergeSVGProperties(_DrawingEditor.#Ul.toSVGProperties(), _DrawingEditor.#Ll.defaultSVGProperties), true, false));
+    if (_DrawingEditor.#zo) {
+      t2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#zo.startNew(o2, l2, u2, p2, c2));
+      return;
     }
+    e2.updateUIForDefaultProperties(this);
+    _DrawingEditor.#zo = this.createDrawerInstance({ x: o2, y: l2, box: [h2, d2, u2, p2], rotation: c2, parent: t2, isLTR: i2 });
+    _DrawingEditor.#jo = this.getDefaultDrawingOptions();
+    this._currentParent = t2;
+    const { id: f2, clipPathId: b2 } = t2.drawLayer.draw(this._mergeSVGProperties(_DrawingEditor.#jo.toSVGProperties(), _DrawingEditor.#zo.defaultSVGProperties), true, this._hasClipPath);
+    this._currentDrawId = f2;
+    _DrawingEditor.#Wo = this._hasClipPath ? b2 : null;
   }
   static _drawMove(t2) {
     CurrentPointers.isSameTimeStamp(t2.timeStamp);
-    if (!_DrawingEditor.#Ll) return;
-    const { offsetX: e2, offsetY: i2, pointerId: n2 } = t2;
-    if (CurrentPointers.isSamePointerId(n2)) if (CurrentPointers.isUsingMultiplePointers()) this._endDraw(t2);
-    else {
-      this._currentParent.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.add(e2, i2));
-      CurrentPointers.setTimeStamp(t2.timeStamp);
-      stopEvent(t2);
+    if (!_DrawingEditor.#zo) return;
+    if (!CurrentPointers.isSamePointerId(t2.pointerId)) return;
+    if (CurrentPointers.isUsingMultiplePointers()) {
+      this._endDraw(t2);
+      return;
     }
+    let e2;
+    const i2 = t2.getCoalescedEvents?.();
+    if (i2?.length) {
+      const n2 = [];
+      for (const e3 of i2) n2.push(...this._getPointerCoords(e3, t2));
+      e2 = _DrawingEditor.#zo.addPoints(n2);
+    } else e2 = _DrawingEditor.#zo.add(...this._getPointerCoords(t2));
+    this._currentParent.drawLayer.updateProperties(this._currentDrawId, e2);
+    CurrentPointers.setTimeStamp(t2.timeStamp);
+    stopEvent(t2);
   }
   static _cleanup(t2) {
     if (t2) {
       this._currentDrawId = -1;
       this._currentParent = null;
-      _DrawingEditor.#Ll = null;
-      _DrawingEditor.#Ul = null;
+      _DrawingEditor.#zo = null;
+      _DrawingEditor.#jo = null;
+      _DrawingEditor.#Wo = null;
       CurrentPointers.clearTimeStamp();
     }
-    if (_DrawingEditor.#Nl) {
-      _DrawingEditor.#Nl.abort();
-      _DrawingEditor.#Nl = null;
+    if (_DrawingEditor.#Go) {
+      _DrawingEditor.#Go.abort();
+      _DrawingEditor.#Go = null;
       CurrentPointers.clearPointerIds();
     }
   }
@@ -18450,9 +17835,9 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     if (e2) {
       e2.toggleDrawing(true);
       this._cleanup(false);
-      t2?.target === e2.div && e2.drawLayer.updateProperties(this._currentDrawId, _DrawingEditor.#Ll.end(t2.offsetX, t2.offsetY));
+      e2.drawLayer.updateProperties(this._currentDrawId, t2?.target === e2.div ? _DrawingEditor.#zo.end(...this._getPointerCoords(t2)) : _DrawingEditor.#zo.end());
       if (this.supportMultipleDrawings) {
-        const t3 = _DrawingEditor.#Ll, i2 = this._currentDrawId, n2 = t3.getLastElement();
+        const t3 = _DrawingEditor.#zo, i2 = this._currentDrawId, n2 = t3.getLastElement();
         e2.addCommands({ cmd: () => {
           e2.drawLayer.updateProperties(i2, t3.setLastElement(n2));
         }, undo: () => {
@@ -18468,10 +17853,10 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     if (!e2) return null;
     e2.toggleDrawing(true);
     e2.cleanUndoStack(v.DRAW_STEP);
-    if (!_DrawingEditor.#Ll.isEmpty()) {
-      const { pageDimensions: [i2, n2], scale: s2 } = e2, r2 = e2.createAndAddNewEditor({ offsetX: 0, offsetY: 0 }, false, { drawId: this._currentDrawId, drawOutlines: _DrawingEditor.#Ll.getOutlines(i2 * s2, n2 * s2, s2, this._INNER_MARGIN), drawingOptions: _DrawingEditor.#Ul, mustBeCommitted: !t2 });
+    if (!_DrawingEditor.#zo.isEmpty()) {
+      const { pageDimensions: [i2, n2], scale: r2 } = e2, s2 = e2.createAndAddNewEditor({ offsetX: 0, offsetY: 0 }, false, { drawId: this._currentDrawId, clipPathId: _DrawingEditor.#Wo, drawOutlines: _DrawingEditor.#zo.getOutlines(i2 * r2, n2 * r2, r2, this._INNER_MARGIN), drawingOptions: _DrawingEditor.#jo, mustBeCommitted: !t2 });
       this._cleanup(true);
-      return r2;
+      return s2;
     }
     e2.drawLayer.remove(this._currentDrawId);
     this._cleanup(true);
@@ -18479,21 +17864,21 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
   }
   createDrawingOptions(t2) {
   }
-  static deserializeDraw(t2, e2, i2, n2, s2, r2) {
+  static deserializeDraw(t2, e2, i2, n2, r2, s2, a2) {
     unreachable("Not implemented");
   }
   static async deserialize(t2, e2, i2) {
-    const { rawDims: { pageWidth: n2, pageHeight: s2, pageX: r2, pageY: a2 } } = e2.viewport, o2 = this.deserializeDraw(r2, a2, n2, s2, this._INNER_MARGIN, t2), l2 = await super.deserialize(t2, e2, i2);
+    const { rawDims: { pageWidth: n2, pageHeight: r2, pageX: s2, pageY: a2 } } = e2.viewport, o2 = this.deserializeDraw(s2, a2, n2, r2, this._INNER_MARGIN, t2, i2), l2 = await super.deserialize(t2, e2, i2);
     l2.createDrawingOptions(t2);
-    l2.#Hl({ drawOutlines: o2 });
-    l2.#xl();
+    l2.#Vo({ drawOutlines: o2 });
+    l2.#$o();
     l2.onScaleChanging();
     l2.rotate();
     return l2;
   }
   serializeDraw(t2) {
-    const [e2, i2] = this.pageTranslation, [n2, s2] = this.pageDimensions;
-    return this.#Rl.serialize([e2, i2, n2, s2], t2);
+    const [e2, i2] = this.pageTranslation, [n2, r2] = this.pageDimensions;
+    return this._drawOutlines.serialize([e2, i2, n2, r2], t2);
   }
   renderAnnotationElement(t2) {
     t2.updateEdited({ rect: this.getPDFRect() });
@@ -18503,195 +17888,1162 @@ var DrawingEditor = class _DrawingEditor extends AnnotationEditor {
     return false;
   }
 };
-var InkDrawOutliner = class {
-  #Po = new Float64Array(6);
-  #Ka;
-  #$l;
-  #ir;
-  #Lo;
-  #No;
-  #ql = "";
-  #Kl = 0;
-  #ol = new InkDrawOutline();
-  #Xl;
-  #Yl;
-  constructor(t2, e2, i2, n2, s2, r2) {
-    this.#Xl = i2;
-    this.#Yl = n2;
-    this.#ir = s2;
-    this.#Lo = r2;
-    [t2, e2] = this.#Jl(t2, e2);
-    const a2 = this.#Ka = [NaN, NaN, NaN, NaN, t2, e2];
-    this.#No = [t2, e2];
-    this.#$l = [{ line: a2, points: this.#No }];
-    this.#Po.set(a2, 0);
+var Outline = class {
+  static PRECISION = 1e-4;
+  focusOutline = null;
+  toSVGPath() {
+    unreachable("Abstract method `toSVGPath` must be implemented.");
+  }
+  get box() {
+    unreachable("Abstract getter `box` must be implemented.");
+  }
+  serialize(t2, e2) {
+    unreachable("Abstract method `serialize` must be implemented.");
+  }
+  get defaultSVGProperties() {
+    unreachable("Abstract getter `defaultSVGProperties` must be implemented.");
+  }
+  get defaultProperties() {
+    return this.defaultSVGProperties;
+  }
+  getFocusSVGProperties(t2) {
+    return null;
+  }
+  get focusMustRemoveSelfIntersections() {
+    return false;
   }
   updateProperty(t2, e2) {
-    "stroke-width" === t2 && (this.#Lo = e2);
+    return null;
   }
-  #Jl(t2, e2) {
-    return Outline._normalizePoint(t2, e2, this.#Xl, this.#Yl, this.#ir);
+  updateParentDimensions(t2, e2) {
+    return null;
+  }
+  serializeQuadPoints(t2, e2) {
+    return null;
+  }
+  updateRotation(t2) {
+    return {};
+  }
+  getPathResizingSVGProperties(t2) {
+    return {};
+  }
+  getPathResizedSVGProperties(t2) {
+    return {};
+  }
+  getPathTranslatedSVGProperties(t2, e2) {
+    return {};
+  }
+  static _rotateBox([t2, e2, i2, n2], r2) {
+    switch (r2) {
+      case 90:
+        return [1 - e2 - n2, t2, n2, i2];
+      case 180:
+        return [1 - t2 - i2, 1 - e2 - n2, i2, n2];
+      case 270:
+        return [e2, 1 - t2 - i2, n2, i2];
+    }
+    return [t2, e2, i2, n2];
+  }
+  static _rescale(t2, e2, i2, n2, r2, s2) {
+    s2 ||= new Float32Array(t2.length);
+    for (let a2 = 0, o2 = t2.length; a2 < o2; a2 += 2) {
+      s2[a2] = e2 + t2[a2] * n2;
+      s2[a2 + 1] = i2 + t2[a2 + 1] * r2;
+    }
+    return s2;
+  }
+  static _rescaleAndSwap(t2, e2, i2, n2, r2, s2) {
+    s2 ||= new Float32Array(t2.length);
+    for (let a2 = 0, o2 = t2.length; a2 < o2; a2 += 2) {
+      s2[a2] = e2 + t2[a2 + 1] * n2;
+      s2[a2 + 1] = i2 + t2[a2] * r2;
+    }
+    return s2;
+  }
+  static _translate(t2, e2, i2, n2) {
+    n2 ||= new Float32Array(t2.length);
+    for (let r2 = 0, s2 = t2.length; r2 < s2; r2 += 2) {
+      n2[r2] = e2 + t2[r2];
+      n2[r2 + 1] = i2 + t2[r2 + 1];
+    }
+    return n2;
+  }
+  static svgRound(t2) {
+    return Math.round(1e4 * t2);
+  }
+  static _normalizePoint(t2, e2, i2, n2, r2) {
+    switch (r2) {
+      case 90:
+        return [1 - e2 / i2, t2 / n2];
+      case 180:
+        return [1 - t2 / i2, 1 - e2 / n2];
+      case 270:
+        return [e2 / i2, 1 - t2 / n2];
+      default:
+        return [t2 / i2, e2 / n2];
+    }
+  }
+  static createBezierPoints(t2, e2, i2, n2, r2, s2) {
+    return [(t2 + 5 * i2) / 6, (e2 + 5 * n2) / 6, (5 * i2 + r2) / 6, (5 * n2 + s2) / 6, (i2 + r2) / 2, (n2 + s2) / 2];
+  }
+};
+var FreeDrawOutliner = class _FreeDrawOutliner {
+  #rl;
+  #sl = [];
+  #al;
+  #ol;
+  #ll = [];
+  #cl = new Float32Array(18);
+  #hl;
+  #dl;
+  #ul;
+  #pl;
+  #gl;
+  #ml;
+  #fl = [];
+  static #bl = 8;
+  static #yl = 2;
+  static #vl = _FreeDrawOutliner.#bl + _FreeDrawOutliner.#yl;
+  constructor(t2, e2, i2, n2, r2, s2, a2 = 0) {
+    this.#rl = i2;
+    this.#ml = r2 * n2;
+    this.#ol = s2;
+    this.#cl.set([NaN, NaN, NaN, NaN, t2, e2], 6);
+    this.#al = a2;
+    this.#pl = _FreeDrawOutliner.#bl * n2;
+    this.#ul = _FreeDrawOutliner.#vl * n2;
+    this.#gl = n2;
+    this.#fl.push(t2, e2);
   }
   isEmpty() {
-    return !this.#$l?.length;
+    return isNaN(this.#cl[8]);
   }
   isCancellable() {
-    return this.#No.length <= 10;
+    return this.#fl.length <= 10;
+  }
+  removeLastElement() {
+    this.#cl.fill(NaN);
+    this.#ll.length = this.#sl.length = this.#fl.length = 0;
+    return { path: { d: "" } };
+  }
+  #wl() {
+    const t2 = this.#cl.subarray(4, 6), e2 = this.#cl.subarray(16, 18), [i2, n2, r2, s2] = this.#rl;
+    return [(this.#hl + (t2[0] - e2[0]) / 2 - i2) / r2, (this.#dl + (t2[1] - e2[1]) / 2 - n2) / s2, (this.#hl + (e2[0] - t2[0]) / 2 - i2) / r2, (this.#dl + (e2[1] - t2[1]) / 2 - n2) / s2];
   }
   add(t2, e2) {
-    [t2, e2] = this.#Jl(t2, e2);
-    const [i2, n2, s2, r2] = this.#Po.subarray(2, 6), a2 = t2 - s2, o2 = e2 - r2;
-    if (Math.hypot(this.#Xl * a2, this.#Yl * o2) <= 2) return null;
-    this.#No.push(t2, e2);
-    if (isNaN(i2)) {
-      this.#Po.set([s2, r2, t2, e2], 2);
-      this.#Ka.push(NaN, NaN, NaN, NaN, t2, e2);
-      return { path: { d: this.toSVGPath() } };
+    this.#hl = t2;
+    this.#dl = e2;
+    const [i2, n2, r2, s2] = this.#rl;
+    let [a2, o2, l2, c2] = this.#cl.subarray(8, 12);
+    const h2 = t2 - l2, d2 = e2 - c2, u2 = Math.hypot(h2, d2);
+    if (u2 < this.#ul) return false;
+    const p2 = u2 - this.#pl, g2 = p2 / u2, m2 = g2 * h2, f2 = g2 * d2;
+    let b2 = a2, y2 = o2;
+    a2 = l2;
+    o2 = c2;
+    l2 += m2;
+    c2 += f2;
+    this.#fl?.push(t2, e2);
+    const v2 = m2 / p2, w2 = -f2 / p2 * this.#ml, A2 = v2 * this.#ml;
+    this.#cl.set(this.#cl.subarray(2, 8), 0);
+    this.#cl.set([l2 + w2, c2 + A2], 4);
+    this.#cl.set(this.#cl.subarray(14, 18), 12);
+    this.#cl.set([l2 - w2, c2 - A2], 16);
+    if (isNaN(this.#cl[6])) {
+      if (0 === this.#ll.length) {
+        this.#cl.set([a2 + w2, o2 + A2], 2);
+        this.#ll.push(NaN, NaN, NaN, NaN, (a2 + w2 - i2) / r2, (o2 + A2 - n2) / s2);
+        this.#cl.set([a2 - w2, o2 - A2], 14);
+        this.#sl.push(NaN, NaN, NaN, NaN, (a2 - w2 - i2) / r2, (o2 - A2 - n2) / s2);
+      }
+      this.#cl.set([b2, y2, a2, o2, l2, c2], 6);
+      return !this.isEmpty();
     }
-    isNaN(this.#Po[0]) && this.#Ka.splice(6, 6);
-    this.#Po.set([i2, n2, s2, r2, t2, e2], 0);
-    this.#Ka.push(...Outline.createBezierPoints(i2, n2, s2, r2, t2, e2));
-    return { path: { d: this.toSVGPath() } };
+    this.#cl.set([b2, y2, a2, o2, l2, c2], 6);
+    if (Math.abs(Math.atan2(y2 - o2, b2 - a2) - Math.atan2(f2, m2)) < Math.PI / 2) {
+      [a2, o2, l2, c2] = this.#cl.subarray(2, 6);
+      this.#ll.push(NaN, NaN, NaN, NaN, ((a2 + l2) / 2 - i2) / r2, ((o2 + c2) / 2 - n2) / s2);
+      [a2, o2, b2, y2] = this.#cl.subarray(14, 18);
+      this.#sl.push(NaN, NaN, NaN, NaN, ((b2 + a2) / 2 - i2) / r2, ((y2 + o2) / 2 - n2) / s2);
+      return true;
+    }
+    [b2, y2, a2, o2, l2, c2] = this.#cl.subarray(0, 6);
+    this.#ll.push(((b2 + 5 * a2) / 6 - i2) / r2, ((y2 + 5 * o2) / 6 - n2) / s2, ((5 * a2 + l2) / 6 - i2) / r2, ((5 * o2 + c2) / 6 - n2) / s2, ((a2 + l2) / 2 - i2) / r2, ((o2 + c2) / 2 - n2) / s2);
+    [l2, c2, a2, o2, b2, y2] = this.#cl.subarray(12, 18);
+    this.#sl.push(((b2 + 5 * a2) / 6 - i2) / r2, ((y2 + 5 * o2) / 6 - n2) / s2, ((5 * a2 + l2) / 6 - i2) / r2, ((5 * o2 + c2) / 6 - n2) / s2, ((a2 + l2) / 2 - i2) / r2, ((o2 + c2) / 2 - n2) / s2);
+    return true;
+  }
+  toSVGPath() {
+    if (this.isEmpty()) return "";
+    const t2 = this.#ll, e2 = this.#sl;
+    if (isNaN(this.#cl[6]) && !this.isEmpty()) return this.#Al();
+    const i2 = [];
+    i2.push(`M${t2[4]} ${t2[5]}`);
+    for (let e3 = 6; e3 < t2.length; e3 += 6) isNaN(t2[e3]) ? i2.push(`L${t2[e3 + 4]} ${t2[e3 + 5]}`) : i2.push(`C${t2[e3]} ${t2[e3 + 1]} ${t2[e3 + 2]} ${t2[e3 + 3]} ${t2[e3 + 4]} ${t2[e3 + 5]}`);
+    this.#xl(i2);
+    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) isNaN(e2[t3]) ? i2.push(`L${e2[t3 + 4]} ${e2[t3 + 5]}`) : i2.push(`C${e2[t3]} ${e2[t3 + 1]} ${e2[t3 + 2]} ${e2[t3 + 3]} ${e2[t3 + 4]} ${e2[t3 + 5]}`);
+    this.#El(i2);
+    return i2.join(" ");
+  }
+  #Al() {
+    const [t2, e2, i2, n2] = this.#rl, [r2, s2, a2, o2] = this.#wl();
+    return `M${(this.#cl[2] - t2) / i2} ${(this.#cl[3] - e2) / n2} L${(this.#cl[4] - t2) / i2} ${(this.#cl[5] - e2) / n2} L${r2} ${s2} L${a2} ${o2} L${(this.#cl[16] - t2) / i2} ${(this.#cl[17] - e2) / n2} L${(this.#cl[14] - t2) / i2} ${(this.#cl[15] - e2) / n2} Z`;
+  }
+  #El(t2) {
+    const e2 = this.#sl;
+    t2.push(`L${e2[4]} ${e2[5]} Z`);
+  }
+  #xl(t2) {
+    const [e2, i2, n2, r2] = this.#rl, s2 = this.#cl.subarray(4, 6), a2 = this.#cl.subarray(16, 18), [o2, l2, c2, h2] = this.#wl();
+    t2.push(`L${(s2[0] - e2) / n2} ${(s2[1] - i2) / r2} L${o2} ${l2} L${c2} ${h2} L${(a2[0] - e2) / n2} ${(a2[1] - i2) / r2}`);
+  }
+  newFreeDrawOutline(t2, e2, i2, n2, r2, s2) {
+    return new FreeDrawOutline(t2, e2, i2, n2, r2, s2);
+  }
+  getOutlines() {
+    const t2 = this.#ll, e2 = this.#sl, i2 = this.#cl, [n2, r2, s2, a2] = this.#rl, o2 = new Float32Array((this.#fl?.length ?? 0) + 2);
+    for (let t3 = 0, e3 = o2.length - 2; t3 < e3; t3 += 2) {
+      o2[t3] = (this.#fl[t3] - n2) / s2;
+      o2[t3 + 1] = (this.#fl[t3 + 1] - r2) / a2;
+    }
+    o2[o2.length - 2] = (this.#hl - n2) / s2;
+    o2[o2.length - 1] = (this.#dl - r2) / a2;
+    if (isNaN(i2[6]) && !this.isEmpty()) return this.#Cl(o2);
+    const l2 = new Float32Array(this.#ll.length + 24 + this.#sl.length);
+    let c2 = t2.length;
+    for (let e3 = 0; e3 < c2; e3 += 2) if (isNaN(t2[e3])) l2[e3] = l2[e3 + 1] = NaN;
+    else {
+      l2[e3] = t2[e3];
+      l2[e3 + 1] = t2[e3 + 1];
+    }
+    c2 = this.#Sl(l2, c2);
+    for (let t3 = e2.length - 6; t3 >= 6; t3 -= 6) for (let i3 = 0; i3 < 6; i3 += 2) if (isNaN(e2[t3 + i3])) {
+      l2[c2] = l2[c2 + 1] = NaN;
+      c2 += 2;
+    } else {
+      l2[c2] = e2[t3 + i3];
+      l2[c2 + 1] = e2[t3 + i3 + 1];
+      c2 += 2;
+    }
+    this.#Tl(l2, c2);
+    return this.newFreeDrawOutline(l2, o2, this.#rl, this.#gl, this.#al, this.#ol);
+  }
+  #Cl(t2) {
+    const e2 = this.#cl, [i2, n2, r2, s2] = this.#rl, [a2, o2, l2, c2] = this.#wl(), h2 = new Float32Array(36);
+    h2.set([NaN, NaN, NaN, NaN, (e2[2] - i2) / r2, (e2[3] - n2) / s2, NaN, NaN, NaN, NaN, (e2[4] - i2) / r2, (e2[5] - n2) / s2, NaN, NaN, NaN, NaN, a2, o2, NaN, NaN, NaN, NaN, l2, c2, NaN, NaN, NaN, NaN, (e2[16] - i2) / r2, (e2[17] - n2) / s2, NaN, NaN, NaN, NaN, (e2[14] - i2) / r2, (e2[15] - n2) / s2], 0);
+    return this.newFreeDrawOutline(h2, t2, this.#rl, this.#gl, this.#al, this.#ol);
+  }
+  #Tl(t2, e2) {
+    const i2 = this.#sl;
+    t2.set([NaN, NaN, NaN, NaN, i2[4], i2[5]], e2);
+    return e2 + 6;
+  }
+  #Sl(t2, e2) {
+    const i2 = this.#cl.subarray(4, 6), n2 = this.#cl.subarray(16, 18), [r2, s2, a2, o2] = this.#rl, [l2, c2, h2, d2] = this.#wl();
+    t2.set([NaN, NaN, NaN, NaN, (i2[0] - r2) / a2, (i2[1] - s2) / o2, NaN, NaN, NaN, NaN, l2, c2, NaN, NaN, NaN, NaN, h2, d2, NaN, NaN, NaN, NaN, (n2[0] - r2) / a2, (n2[1] - s2) / o2], e2);
+    return e2 + 24;
+  }
+};
+var FreeDrawOutline = class extends Outline {
+  #rl;
+  #_l = new Float32Array(4);
+  #al;
+  #ol;
+  #fl;
+  #gl;
+  #kl;
+  constructor(t2, e2, i2, n2, r2, s2) {
+    super();
+    this.#kl = t2;
+    this.#fl = e2;
+    this.#rl = i2;
+    this.#gl = n2;
+    this.#al = r2;
+    this.#ol = s2;
+    this.firstPoint = [NaN, NaN];
+    this.lastPoint = [NaN, NaN];
+    this.#Dl(s2);
+    const [a2, o2, l2, c2] = this.#_l;
+    for (let e3 = 0, i3 = t2.length; e3 < i3; e3 += 2) {
+      t2[e3] = (t2[e3] - a2) / l2;
+      t2[e3 + 1] = (t2[e3 + 1] - o2) / c2;
+    }
+    for (let t3 = 0, i3 = e2.length; t3 < i3; t3 += 2) {
+      e2[t3] = (e2[t3] - a2) / l2;
+      e2[t3 + 1] = (e2[t3 + 1] - o2) / c2;
+    }
+  }
+  toSVGPath() {
+    const t2 = [`M${this.#kl[4]} ${this.#kl[5]}`];
+    for (let e2 = 6, i2 = this.#kl.length; e2 < i2; e2 += 6) isNaN(this.#kl[e2]) ? t2.push(`L${this.#kl[e2 + 4]} ${this.#kl[e2 + 5]}`) : t2.push(`C${this.#kl[e2]} ${this.#kl[e2 + 1]} ${this.#kl[e2 + 2]} ${this.#kl[e2 + 3]} ${this.#kl[e2 + 4]} ${this.#kl[e2 + 5]}`);
+    t2.push("Z");
+    return t2.join(" ");
+  }
+  serialize([t2, e2, i2, n2], r2) {
+    const s2 = i2 - t2, a2 = n2 - e2;
+    let o2, l2;
+    switch (r2) {
+      case 0:
+        o2 = Outline._rescale(this.#kl, t2, n2, s2, -a2);
+        l2 = Outline._rescale(this.#fl, t2, n2, s2, -a2);
+        break;
+      case 90:
+        o2 = Outline._rescaleAndSwap(this.#kl, t2, e2, s2, a2);
+        l2 = Outline._rescaleAndSwap(this.#fl, t2, e2, s2, a2);
+        break;
+      case 180:
+        o2 = Outline._rescale(this.#kl, i2, e2, -s2, a2);
+        l2 = Outline._rescale(this.#fl, i2, e2, -s2, a2);
+        break;
+      case 270:
+        o2 = Outline._rescaleAndSwap(this.#kl, i2, n2, -s2, -a2);
+        l2 = Outline._rescaleAndSwap(this.#fl, i2, n2, -s2, -a2);
+    }
+    return { outline: Array.from(o2), points: [Array.from(l2)] };
+  }
+  #Dl(t2) {
+    const e2 = this.#kl;
+    let i2 = e2[4], r2 = e2[5];
+    const s2 = [i2, r2, i2, r2];
+    let a2 = i2, o2 = r2, l2 = i2, c2 = r2;
+    const h2 = t2 ? Math.max : Math.min, d2 = new Float32Array(4);
+    for (let t3 = 6, u3 = e2.length; t3 < u3; t3 += 6) {
+      const u4 = e2[t3 + 4], p2 = e2[t3 + 5];
+      if (isNaN(e2[t3])) {
+        Util.pointBoundingBox(u4, p2, s2);
+        if (o2 > p2) {
+          a2 = u4;
+          o2 = p2;
+        } else o2 === p2 && (a2 = h2(a2, u4));
+        if (c2 < p2) {
+          l2 = u4;
+          c2 = p2;
+        } else c2 === p2 && (l2 = h2(l2, u4));
+      } else {
+        d2.set(n, 0);
+        Util.bezierBoundingBox(i2, r2, ...e2.slice(t3, t3 + 6), d2);
+        Util.rectBoundingBox(...d2, s2);
+        if (o2 > d2[1]) {
+          a2 = d2[0];
+          o2 = d2[1];
+        } else o2 === d2[1] && (a2 = h2(a2, d2[0]));
+        if (c2 < d2[3]) {
+          l2 = d2[2];
+          c2 = d2[3];
+        } else c2 === d2[3] && (l2 = h2(l2, d2[2]));
+      }
+      i2 = u4;
+      r2 = p2;
+    }
+    const u2 = this.#_l;
+    u2[0] = s2[0] - this.#al;
+    u2[1] = s2[1] - this.#al;
+    u2[2] = s2[2] - s2[0] + 2 * this.#al;
+    u2[3] = s2[3] - s2[1] + 2 * this.#al;
+    this.firstPoint = [a2, o2];
+    this.lastPoint = [l2, c2];
+  }
+  get box() {
+    return this.#_l;
+  }
+  newOutliner(t2, e2, i2, n2, r2, s2, a2 = 0) {
+    return new FreeDrawOutliner(t2, e2, i2, n2, r2, s2, a2);
+  }
+  updateThickness(t2) {
+    const e2 = this.getNewOutline(t2);
+    this.#kl = e2.#kl;
+    this.#fl = e2.#fl;
+    this.#_l.set(e2.#_l);
+    this.firstPoint = e2.firstPoint;
+    this.lastPoint = e2.lastPoint;
+    return this.#_l;
+  }
+  getNewOutline(t2, e2) {
+    const [i2, n2, r2, s2] = this.#_l, [a2, o2, l2, c2] = this.#rl, h2 = r2 * l2, d2 = s2 * c2, u2 = i2 * l2 + a2, p2 = n2 * c2 + o2, g2 = this.#fl, m2 = this.newOutliner(g2[0] * h2 + u2, g2[1] * d2 + p2, this.#rl, this.#gl, t2, this.#ol, e2 ?? this.#al);
+    for (let t3 = 2, e3 = g2.length; t3 < e3; t3 += 2) m2.add(g2[t3] * h2 + u2, g2[t3 + 1] * d2 + p2);
+    return m2.getOutlines();
+  }
+};
+function getHighlightSVGProperties(t2) {
+  return { bbox: t2.box, root: { viewBox: "0 0 1 1" }, rootClass: { highlight: true, free: t2.isFree }, path: { d: t2.toSVGPath() } };
+}
+function getHighlightFocusSVGProperties(t2, e2) {
+  const { focusOutline: i2 } = t2;
+  return { bbox: Outline._rotateBox(i2.box, e2), root: { "data-main-rotation": e2 }, rootClass: { highlightOutline: true, free: t2.isFree }, path: { d: i2.toSVGPath() } };
+}
+var HighlightOutliner = class {
+  #rl;
+  #Pl;
+  #Ml;
+  #Il = [];
+  #Fl = [];
+  constructor(t2, e2 = 0, i2 = 0, r2 = true) {
+    const s2 = n.slice(), a2 = 1e-4;
+    for (const { x: i3, y: n2, width: r3, height: o3 } of t2) {
+      const t3 = Math.floor((i3 - e2) / a2) * a2, l3 = Math.ceil((i3 + r3 + e2) / a2) * a2, c3 = Math.floor((n2 - e2) / a2) * a2, h3 = Math.ceil((n2 + o3 + e2) / a2) * a2, d3 = [t3, c3, h3, true], u3 = [l3, c3, h3, false];
+      this.#Il.push(d3, u3);
+      Util.rectBoundingBox(t3, c3, l3, h3, s2);
+    }
+    const o2 = s2[2] - s2[0] + 2 * i2, l2 = s2[3] - s2[1] + 2 * i2, c2 = s2[0] - i2, h2 = s2[1] - i2;
+    let d2 = r2 ? -1 / 0 : 1 / 0, u2 = 1 / 0;
+    const p2 = this.#Il.at(r2 ? -1 : -2), g2 = [p2[0], p2[2]];
+    for (const t3 of this.#Il) {
+      const [e3, i3, n2, s3] = t3;
+      if (!s3 && r2) if (i3 < u2) {
+        u2 = i3;
+        d2 = e3;
+      } else i3 === u2 && (d2 = Math.max(d2, e3));
+      else if (s3 && !r2) if (i3 < u2) {
+        u2 = i3;
+        d2 = e3;
+      } else i3 === u2 && (d2 = Math.min(d2, e3));
+      t3[0] = (e3 - c2) / o2;
+      t3[1] = (i3 - h2) / l2;
+      t3[2] = (n2 - h2) / l2;
+    }
+    this.#rl = new Float32Array([c2, h2, o2, l2]);
+    this.#Pl = [d2, u2];
+    this.#Ml = g2;
+  }
+  getOutlines() {
+    this.#Il.sort((t3, e2) => t3[0] - e2[0] || t3[1] - e2[1] || t3[2] - e2[2]);
+    const t2 = [];
+    for (const e2 of this.#Il) if (e2[3]) {
+      t2.push(...this.#Ol(e2));
+      this.#Rl(e2);
+    } else {
+      this.#Bl(e2);
+      t2.push(...this.#Ol(e2));
+    }
+    return this.#Ll(t2);
+  }
+  #Ll(t2) {
+    const e2 = [], i2 = /* @__PURE__ */ new Set();
+    for (const i3 of t2) {
+      const [t3, n3, r3] = i3;
+      e2.push([t3, n3, i3], [t3, r3, i3]);
+    }
+    e2.sort((t3, e3) => t3[1] - e3[1] || t3[0] - e3[0]);
+    for (let t3 = 0, n3 = e2.length; t3 < n3; t3 += 2) {
+      const n4 = e2[t3][2], r3 = e2[t3 + 1][2];
+      n4.push(r3);
+      r3.push(n4);
+      i2.add(n4);
+      i2.add(r3);
+    }
+    const n2 = [];
+    let r2;
+    for (; i2.size > 0; ) {
+      const t3 = i2.values().next().value;
+      let [e3, s2, a2, o2, l2] = t3;
+      i2.delete(t3);
+      let c2 = e3, h2 = s2;
+      r2 = [e3, a2];
+      n2.push(r2);
+      for (; ; ) {
+        let t4;
+        if (i2.has(o2)) t4 = o2;
+        else {
+          if (!i2.has(l2)) break;
+          t4 = l2;
+        }
+        i2.delete(t4);
+        [e3, s2, a2, o2, l2] = t4;
+        if (c2 !== e3) {
+          r2.push(c2, h2, e3, h2 === s2 ? s2 : a2);
+          c2 = e3;
+        }
+        h2 = h2 === s2 ? a2 : s2;
+      }
+      r2.push(c2, h2);
+    }
+    return new HighlightOutline(n2, this.#rl, this.#Pl, this.#Ml);
+  }
+  #Nl(t2) {
+    const e2 = this.#Fl;
+    let i2 = 0, n2 = e2.length - 1;
+    for (; i2 <= n2; ) {
+      const r2 = i2 + n2 >> 1, s2 = e2[r2][0];
+      if (s2 === t2) return r2;
+      s2 < t2 ? i2 = r2 + 1 : n2 = r2 - 1;
+    }
+    return n2 + 1;
+  }
+  #Rl([, t2, e2]) {
+    const i2 = this.#Nl(t2);
+    this.#Fl.splice(i2, 0, [t2, e2]);
+  }
+  #Bl([, t2, e2]) {
+    const i2 = this.#Nl(t2);
+    for (let n2 = i2; n2 < this.#Fl.length; n2++) {
+      const [i3, r2] = this.#Fl[n2];
+      if (i3 !== t2) break;
+      if (i3 === t2 && r2 === e2) {
+        this.#Fl.splice(n2, 1);
+        return;
+      }
+    }
+    for (let n2 = i2 - 1; n2 >= 0; n2--) {
+      const [i3, r2] = this.#Fl[n2];
+      if (i3 !== t2) break;
+      if (i3 === t2 && r2 === e2) {
+        this.#Fl.splice(n2, 1);
+        return;
+      }
+    }
+  }
+  #Ol(t2) {
+    const [e2, i2, n2] = t2, r2 = [[e2, i2, n2]], s2 = this.#Nl(n2);
+    for (let t3 = 0; t3 < s2; t3++) {
+      const [i3, n3] = this.#Fl[t3];
+      for (let t4 = 0, s3 = r2.length; t4 < s3; t4++) {
+        const [, a2, o2] = r2[t4];
+        if (!(n3 <= a2 || o2 <= i3)) if (a2 >= i3) if (o2 > n3) r2[t4][1] = n3;
+        else {
+          if (1 === s3) return [];
+          r2.splice(t4, 1);
+          t4--;
+          s3--;
+        }
+        else {
+          r2[t4][2] = i3;
+          o2 > n3 && r2.push([e2, n3, o2]);
+        }
+      }
+    }
+    return r2;
+  }
+};
+var HighlightOutline = class extends Outline {
+  #rl;
+  #Ul = null;
+  #Hl;
+  constructor(t2, e2, i2, n2) {
+    super();
+    this.#Hl = t2;
+    this.#rl = e2;
+    this.firstPoint = i2;
+    this.lastPoint = n2;
+  }
+  static build(t2, e2) {
+    const i2 = new HighlightOutliner(t2, 1e-3).getOutlines();
+    i2.#Ul = t2;
+    i2.focusOutline = new HighlightOutliner(t2, 25e-4, 1e-3, e2).getOutlines();
+    return i2;
+  }
+  get isFree() {
+    return false;
+  }
+  get defaultSVGProperties() {
+    return getHighlightSVGProperties(this);
+  }
+  getFocusSVGProperties(t2) {
+    return getHighlightFocusSVGProperties(this, t2);
+  }
+  updateRotation(t2) {
+    return { root: { "data-main-rotation": t2 } };
+  }
+  serializeQuadPoints([t2, e2], [i2, n2]) {
+    const r2 = this.#Ul, s2 = new Float32Array(8 * r2.length);
+    let a2 = 0;
+    for (const { x: o2, y: l2, width: c2, height: h2 } of r2) {
+      const r3 = o2 * i2 + t2, d2 = (1 - l2) * n2 + e2;
+      s2[a2] = s2[a2 + 4] = r3;
+      s2[a2 + 1] = s2[a2 + 3] = d2;
+      s2[a2 + 2] = s2[a2 + 6] = r3 + c2 * i2;
+      s2[a2 + 5] = s2[a2 + 7] = d2 - h2 * n2;
+      a2 += 8;
+    }
+    return s2;
+  }
+  toSVGPath() {
+    const t2 = [];
+    for (const e2 of this.#Hl) {
+      let [i2, n2] = e2;
+      t2.push(`M${i2} ${n2}`);
+      for (let r2 = 2; r2 < e2.length; r2 += 2) {
+        const s2 = e2[r2], a2 = e2[r2 + 1];
+        if (s2 === i2) {
+          t2.push(`V${a2}`);
+          n2 = a2;
+        } else if (a2 === n2) {
+          t2.push(`H${s2}`);
+          i2 = s2;
+        }
+      }
+      t2.push("Z");
+    }
+    return t2.join(" ");
+  }
+  serialize([t2, e2, i2, n2], r2) {
+    const s2 = [], a2 = i2 - t2, o2 = n2 - e2;
+    for (const e3 of this.#Hl) {
+      const i3 = new Array(e3.length);
+      for (let r3 = 0; r3 < e3.length; r3 += 2) {
+        i3[r3] = t2 + e3[r3] * a2;
+        i3[r3 + 1] = n2 - e3[r3 + 1] * o2;
+      }
+      s2.push(i3);
+    }
+    return s2;
+  }
+  get box() {
+    return this.#rl;
+  }
+};
+var FreeHighlightOutliner = class extends FreeDrawOutliner {
+  newFreeDrawOutline(t2, e2, i2, n2, r2, s2) {
+    return new FreeHighlightOutline(t2, e2, i2, n2, r2, s2);
+  }
+};
+var FreeHighlightDrawer = class {
+  #zl;
+  #ml;
+  constructor(t2, e2, i2, n2, r2, s2, a2) {
+    this.#zl = new FreeHighlightOutliner(t2, e2, i2, n2, r2, s2, a2);
+    this.#ml = r2;
+  }
+  add(t2, e2) {
+    return this.#zl.add(t2, e2) ? { path: { d: this.#zl.toSVGPath() } } : null;
+  }
+  addPoints(t2) {
+    let e2 = false;
+    for (let i2 = 0, n2 = t2.length; i2 < n2; i2 += 2) e2 = this.#zl.add(t2[i2], t2[i2 + 1]) || e2;
+    return e2 ? { path: { d: this.#zl.toSVGPath() } } : null;
   }
   end(t2, e2) {
-    const i2 = this.add(t2, e2);
-    return i2 || (2 === this.#No.length ? { path: { d: this.toSVGPath() } } : null);
+    return void 0 === t2 ? null : this.add(t2, e2);
   }
-  startNew(t2, e2, i2, n2, s2) {
-    this.#Xl = i2;
-    this.#Yl = n2;
-    this.#ir = s2;
-    [t2, e2] = this.#Jl(t2, e2);
-    const r2 = this.#Ka = [NaN, NaN, NaN, NaN, t2, e2];
-    this.#No = [t2, e2];
-    const a2 = this.#$l.at(-1);
+  isEmpty() {
+    return this.#zl.isEmpty();
+  }
+  isCancellable() {
+    return this.#zl.isCancellable();
+  }
+  removeLastElement() {
+    return this.#zl.removeLastElement();
+  }
+  updateProperty(t2, e2) {
+    return null;
+  }
+  getOutlines() {
+    const t2 = this.#zl.getOutlines();
+    t2.buildFocusOutline(2 * this.#ml);
+    return t2;
+  }
+  get defaultSVGProperties() {
+    return { bbox: [0, 0, 1, 1], root: { viewBox: "0 0 1 1" }, rootClass: { highlight: true, free: true }, path: { d: this.#zl.toSVGPath() } };
+  }
+};
+var FreeHighlightOutline = class _FreeHighlightOutline extends FreeDrawOutline {
+  static #Gl = 1.5;
+  newOutliner(t2, e2, i2, n2, r2, s2, a2 = 0) {
+    return new FreeHighlightOutliner(t2, e2, i2, n2, r2, s2, a2);
+  }
+  get isFree() {
+    return true;
+  }
+  buildFocusOutline(t2) {
+    this.focusOutline = this.getNewOutline(t2 / 2 + _FreeHighlightOutline.#Gl, 25e-4);
+  }
+  get defaultSVGProperties() {
+    return getHighlightSVGProperties(this);
+  }
+  getFocusSVGProperties(t2) {
+    return getHighlightFocusSVGProperties(this, t2);
+  }
+  get focusMustRemoveSelfIntersections() {
+    return true;
+  }
+  updateRotation(t2) {
+    return { root: { "data-main-rotation": t2 } };
+  }
+  updateProperty(t2, e2) {
+    if ("thickness" !== t2) return null;
+    const i2 = this.updateThickness(e2 / 2);
+    this.buildFocusOutline(e2);
+    return i2;
+  }
+  getPathResizedSVGProperties() {
+    return { path: { d: this.toSVGPath() } };
+  }
+};
+var HighlightDrawingOptions = class _HighlightDrawingOptions extends DrawingOptions {
+  constructor(t2 = null) {
+    super();
+    super.updateProperties(t2);
+  }
+  updateSVGProperty(t2, e2) {
+    "thickness" !== t2 && super.updateSVGProperty(t2, e2);
+  }
+  clone() {
+    const t2 = new _HighlightDrawingOptions();
+    t2.updateAll(this);
+    return t2;
+  }
+};
+var HighlightEditor = class _HighlightEditor extends DrawingEditor {
+  #jl = null;
+  #Wl = 0;
+  #Vl = null;
+  #$l = 0;
+  #ql = "";
+  #ve = "";
+  static _DEFAULT_OPACITY = 1;
+  static _DEFAULT_THICKNESS = 12;
+  static _defaultDrawingOptions = null;
+  static _type = "highlight";
+  static _editorType = y.HIGHLIGHT;
+  static get _keyboardManager() {
+    const t2 = _HighlightEditor.prototype;
+    return shadow(this, "_keyboardManager", new KeyboardManager([[["ArrowLeft"], t2._moveCaret, { args: [0] }], [["ArrowRight"], t2._moveCaret, { args: [1] }], [["ArrowUp"], t2._moveCaret, { args: [2] }], [["ArrowDown"], t2._moveCaret, { args: [3] }]]));
+  }
+  constructor(t2) {
+    super({ ...t2, name: "highlightEditor" });
+    this.#jl = t2.anchorNode || null;
+    this.#Wl = t2.anchorOffset || 0;
+    this.#Vl = t2.focusNode || null;
+    this.#$l = t2.focusOffset || 0;
+    this.#ql = t2.methodOfCreation || (this._drawOutlines?.isFree ? "main_toolbar" : "");
+    this.#ve = t2.text || "";
+    this._isDraggable = false;
+    this.defaultL10nId = "pdfjs-editor-highlight-editor";
+    this.rotate();
+  }
+  static initialize(t2, e2) {
+    AnnotationEditor.initialize(t2, e2);
+    this._defaultDrawingOptions ||= new HighlightDrawingOptions({ fill: e2.highlightColors?.values().next().value || "#fff066", "fill-opacity": _HighlightEditor._DEFAULT_OPACITY, thickness: _HighlightEditor._DEFAULT_THICKNESS });
+  }
+  static getDefaultDrawingOptions(t2) {
+    const e2 = this._defaultDrawingOptions.clone();
+    e2.updateProperties(t2);
+    return e2;
+  }
+  static get typesMap() {
+    return shadow(this, "typesMap", /* @__PURE__ */ new Map([[v.HIGHLIGHT_COLOR, "fill"], [v.HIGHLIGHT_THICKNESS, "thickness"]]));
+  }
+  static get isDrawer() {
+    return false;
+  }
+  static get _hasClipPath() {
+    return true;
+  }
+  static get _hasDrawClass() {
+    return false;
+  }
+  _addOutlines(t2) {
+    const { boxes: e2, drawOutlines: i2 } = t2;
+    if (e2 || i2) {
+      this._drawingOptions ||= t2.drawingOptions || _HighlightEditor.getDefaultDrawingOptions();
+      e2 && (t2 = { ...t2, drawOutlines: HighlightOutline.build(e2, "ltr" === this._uiManager.direction) });
+      super._addOutlines(t2);
+    }
+  }
+  get colorType() {
+    return v.HIGHLIGHT_COLOR;
+  }
+  get color() {
+    return this._drawingOptions.fill;
+  }
+  get opacity() {
+    return this._drawingOptions["fill-opacity"];
+  }
+  get _opacityName() {
+    return "fill-opacity";
+  }
+  get _drawRotation() {
+    return this._drawOutlines?.isFree ? this.rotation : 0;
+  }
+  get isResizable() {
+    return false;
+  }
+  get _mustBeDisabledOnCommit() {
+    return false;
+  }
+  get _mustFixPosition() {
+    return !this._drawOutlines?.isFree;
+  }
+  get telemetryInitialData() {
+    return { action: "added", type: this._drawOutlines.isFree ? "free_highlight" : "highlight", color: this._uiManager.getNonHCMColorName(this.color), thickness: this._drawingOptions.thickness, methodOfCreation: this.#ql };
+  }
+  get telemetryFinalData() {
+    return { type: "highlight", color: this._uiManager.getNonHCMColorName(this.color) };
+  }
+  static computeTelemetryFinalData(t2) {
+    return { numberOfColors: t2.get("color").size };
+  }
+  translateInPage(t2, e2) {
+  }
+  get toolbarPosition() {
+    return this.#Xl(this._drawOutlines.focusOutline.lastPoint);
+  }
+  get commentButtonPosition() {
+    return this.#Xl(this._drawOutlines.firstPoint);
+  }
+  #Xl([t2, e2]) {
+    const [i2, n2, r2, s2] = this._drawOutlines.box;
+    return [(t2 - i2) / r2, (e2 - n2) / s2];
+  }
+  updateParams(t2, e2) {
+    switch (t2) {
+      case v.HIGHLIGHT_COLOR:
+        this._updateColorAndOpacity(e2, _HighlightEditor._DEFAULT_OPACITY, t2);
+        this._reportTelemetry({ action: "color_changed", color: this._uiManager.getNonHCMColorName(e2) }, true);
+        break;
+      case v.HIGHLIGHT_THICKNESS:
+        super.updateParams(t2, e2);
+        this._reportTelemetry({ action: "thickness_changed", thickness: e2 }, true);
+    }
+  }
+  get propertiesToUpdate() {
+    const t2 = super.propertiesToUpdate;
+    t2.push([v.HIGHLIGHT_FREE, this._drawOutlines.isFree]);
+    return t2;
+  }
+  get toolbarButtons() {
+    if (this._uiManager.highlightColors) {
+      this._colorPicker = new ColorPicker({ editor: this });
+      return [["colorPicker", this._colorPicker]];
+    }
+    return super.toolbarButtons;
+  }
+  fixAndSetPosition() {
+    return super.fixAndSetPosition(this._drawRotation);
+  }
+  getRect(t2, e2) {
+    return super.getRect(t2, e2, this._drawRotation);
+  }
+  onceAdded(t2) {
+    this.annotationElementId || this.parent.addUndoableEditor(this);
+    t2 && this.div.focus();
+  }
+  remove() {
+    this._reportTelemetry({ action: "deleted" });
+    super.remove();
+  }
+  render() {
+    if (this.div) return this.div;
+    const t2 = super.render();
+    if (this.#ve) {
+      t2.setAttribute("aria-label", this.#ve);
+      t2.setAttribute("role", "mark");
+    }
+    this._drawOutlines.isFree ? t2.classList.add("free") : t2.addEventListener("keydown", this.#Kl.bind(this), { signal: this._uiManager._signal });
+    this.enableEditing();
+    return t2;
+  }
+  #Kl(t2) {
+    _HighlightEditor._keyboardManager.exec(this, t2);
+  }
+  _moveCaret(t2) {
+    this.parent.unselect(this);
+    switch (t2) {
+      case 0:
+      case 2:
+        this.#Yl(true);
+        break;
+      case 1:
+      case 3:
+        this.#Yl(false);
+    }
+  }
+  #Yl(t2) {
+    if (!this.#jl) return;
+    const e2 = window.getSelection();
+    t2 ? e2.setPosition(this.#jl, this.#Wl) : e2.setPosition(this.#Vl, this.#$l);
+  }
+  unselect() {
+    super.unselect();
+    this._drawOutlines.isFree || this.#Yl(false);
+  }
+  static createDrawerInstance({ x: t2, y: e2, box: i2, parent: n2, isLTR: r2 }) {
+    return new FreeHighlightDrawer(t2, e2, i2, n2.scale, this._defaultDrawingOptions.thickness / 2, r2, 1e-3);
+  }
+  static _getDrawingTarget(t2, { target: e2 }) {
+    return e2.closest(".textLayer");
+  }
+  static _getPointerCoords({ x: t2, y: e2 }) {
+    return [t2, e2];
+  }
+  static _addDrawingListeners(t2, e2) {
+    t2.classList.add("free");
+    e2.addEventListener("abort", () => t2.classList.remove("free"), { once: true });
+    window.addEventListener("blur", () => this._endDraw(null), { signal: e2 });
+    window.addEventListener("pointerdown", stopEvent, { capture: true, passive: false, signal: e2 });
+  }
+  static _endDrawingSession(t2 = false) {
+    return this.endDrawing(t2);
+  }
+  createDrawingOptions({ color: t2, opacity: e2, thickness: i2 }) {
+    const { _defaultDrawingOptions: n2, _DEFAULT_OPACITY: r2 } = _HighlightEditor;
+    this._drawingOptions = _HighlightEditor.getDefaultDrawingOptions({ fill: Util.makeHexColor(...t2), "fill-opacity": e2 || r2, thickness: i2 || n2.thickness });
+  }
+  static deserializeDraw(t2, e2, i2, n2, r2, s2, a2) {
+    const { quadPoints: o2 } = s2;
+    if (o2) {
+      const r3 = [];
+      for (let s3 = 0, a3 = o2.length; s3 < a3; s3 += 8) r3.push({ x: (o2[s3] - t2) / i2, y: 1 - (o2[s3 + 1] - e2) / n2, width: (o2[s3 + 2] - o2[s3]) / i2, height: (o2[s3 + 1] - o2[s3 + 5]) / n2 });
+      return HighlightOutline.build(r3, "ltr" === a2.direction);
+    }
+    const l2 = s2.thickness || this._defaultDrawingOptions.thickness, c2 = (s2.inkLists || s2.outlines.points)[0], h2 = new FreeHighlightOutliner(c2[0] - t2, n2 - (c2[1] - e2), [0, 0, i2, n2], 1, l2 / 2, true, 1e-3);
+    for (let i3 = 0, r3 = c2.length; i3 < r3; i3 += 2) h2.add(c2[i3] - t2, n2 - (c2[i3 + 1] - e2));
+    const d2 = h2.getOutlines();
+    d2.buildFocusOutline(l2);
+    return d2;
+  }
+  static async deserialize(t2, e2, i2) {
+    let n2 = null;
+    if (t2 instanceof HighlightAnnotationElement) {
+      const { data: { quadPoints: e3, rect: i3, rotation: r3, id: s2, color: a2, opacity: o2, popupRef: l2, richText: c2, contentsObj: h2, creationDate: d2, modificationDate: u2 }, parent: { page: { pageNumber: p2 } } } = t2;
+      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a2), opacity: o2, quadPoints: e3, pageIndex: p2 - 1, rect: i3.slice(0), rotation: r3, annotationElementId: s2, id: s2, deleted: false, popupRef: l2, richText: c2, comment: h2?.str || null, creationDate: d2, modificationDate: u2 };
+    } else if (t2 instanceof InkAnnotationElement) {
+      const { data: { inkLists: e3, rect: i3, rotation: r3, id: s2, color: a2, borderStyle: { rawWidth: o2 }, popupRef: l2, richText: c2, contentsObj: h2, creationDate: d2, modificationDate: u2 }, parent: { page: { pageNumber: p2 } } } = t2;
+      n2 = t2 = { annotationType: y.HIGHLIGHT, color: Array.from(a2), thickness: o2, inkLists: e3, pageIndex: p2 - 1, rect: i3.slice(0), rotation: r3, annotationElementId: s2, id: s2, deleted: false, popupRef: l2, richText: c2, comment: h2?.str || null, creationDate: d2, modificationDate: u2 };
+    }
+    const r2 = await super.deserialize(t2, e2, i2);
+    r2._initialData = n2;
+    t2.comment && r2.setCommentData(t2);
+    return r2;
+  }
+  serialize(t2 = false) {
+    if (this.isEmpty() || t2) return null;
+    if (this.deleted) return this.serializeDeleted();
+    const e2 = super.serialize(t2);
+    Object.assign(e2, { color: AnnotationEditor._colorManager.convert(this._uiManager.getNonHCMColor(this.color)), opacity: this.opacity, thickness: this._drawingOptions.thickness, quadPoints: this._drawOutlines.serializeQuadPoints(this.pageTranslation, this.pageDimensions), outlines: this._drawOutlines.serialize(e2.rect, this._drawRotation) });
+    this.addComment(e2);
+    if (this.annotationElementId && !this.#Lo(e2)) return null;
+    e2.id = this.annotationElementId;
+    return e2;
+  }
+  #Lo(t2) {
+    const { color: e2 } = this._initialData;
+    return this.hasEditedComment || t2.color.some((t3, i2) => t3 !== e2[i2]);
+  }
+  renderAnnotationElement(t2) {
+    if (this.deleted) {
+      t2.hide();
+      return null;
+    }
+    t2.updateEdited({ rect: this.getPDFRect(), popup: this.comment });
+    return null;
+  }
+};
+var InkDrawOutliner = class {
+  #cl = new Float64Array(6);
+  #Jl = new Float64Array(2);
+  #ao;
+  #Ql;
+  #gs;
+  #ml;
+  #fl;
+  #Zl = "";
+  #tc = 0;
+  #Hl = new InkDrawOutline();
+  #ec;
+  #ic;
+  constructor(t2, e2, i2, n2, r2, s2) {
+    this.#ec = i2;
+    this.#ic = n2;
+    this.#gs = r2;
+    this.#ml = s2;
+    [t2, e2] = this.#nc(t2, e2);
+    const a2 = this.#ao = [NaN, NaN, NaN, NaN, t2, e2];
+    this.#fl = [t2, e2];
+    this.#Ql = [{ line: a2, points: this.#fl }];
+    this.#cl.set(a2, 0);
+    this.#Jl.set([t2, e2], 0);
+  }
+  updateProperty(t2, e2) {
+    "stroke-width" === t2 && (this.#ml = e2);
+  }
+  #nc(t2, e2) {
+    return Outline._normalizePoint(t2, e2, this.#ec, this.#ic, this.#gs);
+  }
+  isEmpty() {
+    return !this.#Ql?.length;
+  }
+  isCancellable() {
+    return this.#fl.length <= 10;
+  }
+  add(t2, e2) {
+    this.#rc(t2, e2) && this.toSVGPath();
+    return { path: { d: this.#sc() } };
+  }
+  addPoints(t2) {
+    let e2 = false;
+    for (let i2 = 0, n2 = t2.length; i2 < n2; i2 += 2) if (this.#rc(t2[i2], t2[i2 + 1])) {
+      e2 = true;
+      if (this.#fl.length <= 6) {
+        this.toSVGPath();
+        e2 = false;
+      }
+    }
+    e2 && this.toSVGPath();
+    return { path: { d: this.#sc() } };
+  }
+  #rc(t2, e2) {
+    [t2, e2] = this.#nc(t2, e2);
+    this.#Jl.set([t2, e2], 0);
+    const [i2, n2, r2, s2] = this.#cl.subarray(2, 6), a2 = t2 - r2, o2 = e2 - s2;
+    if (Math.hypot(this.#ec * a2, this.#ic * o2) <= 2) return false;
+    this.#fl.push(t2, e2);
+    if (isNaN(i2)) {
+      this.#cl.set([r2, s2, t2, e2], 2);
+      this.#ao.push(NaN, NaN, NaN, NaN, t2, e2);
+      return true;
+    }
+    isNaN(this.#cl[0]) && this.#ao.splice(6, 6);
+    this.#cl.set([i2, n2, r2, s2, t2, e2], 0);
+    this.#ao.push(...Outline.createBezierPoints(i2, n2, r2, s2, t2, e2));
+    return true;
+  }
+  end(t2, e2) {
+    return void 0 !== t2 && this.#rc(t2, e2) || 2 === this.#fl.length ? { path: { d: this.toSVGPath() } } : { path: { d: this.#Zl } };
+  }
+  startNew(t2, e2, i2, n2, r2) {
+    this.#ec = i2;
+    this.#ic = n2;
+    this.#gs = r2;
+    [t2, e2] = this.#nc(t2, e2);
+    const s2 = this.#ao = [NaN, NaN, NaN, NaN, t2, e2];
+    this.#fl = [t2, e2];
+    this.#Jl.set([t2, e2], 0);
+    const a2 = this.#Ql.at(-1);
     if (a2) {
       a2.line = new Float32Array(a2.line);
       a2.points = new Float32Array(a2.points);
     }
-    this.#$l.push({ line: r2, points: this.#No });
-    this.#Po.set(r2, 0);
-    this.#Kl = 0;
+    this.#Ql.push({ line: s2, points: this.#fl });
+    this.#cl.set(s2, 0);
+    this.#tc = 0;
     this.toSVGPath();
     return null;
   }
   getLastElement() {
-    return this.#$l.at(-1);
+    return this.#Ql.at(-1);
   }
   setLastElement(t2) {
-    if (!this.#$l) return this.#ol.setLastElement(t2);
-    this.#$l.push(t2);
-    this.#Ka = t2.line;
-    this.#No = t2.points;
-    this.#Kl = 0;
+    if (!this.#Ql) return this.#Hl.setLastElement(t2);
+    this.#Ql.push(t2);
+    this.#ao = t2.line;
+    this.#fl = t2.points;
+    this.#tc = 0;
     return { path: { d: this.toSVGPath() } };
   }
   removeLastElement() {
-    if (!this.#$l) return this.#ol.removeLastElement();
-    this.#$l.pop();
-    this.#ql = "";
-    for (let t2 = 0, e2 = this.#$l.length; t2 < e2; t2++) {
-      const { line: e3, points: i2 } = this.#$l[t2];
-      this.#Ka = e3;
-      this.#No = i2;
-      this.#Kl = 0;
+    if (!this.#Ql) return this.#Hl.removeLastElement();
+    this.#Ql.pop();
+    this.#Zl = "";
+    for (let t2 = 0, e2 = this.#Ql.length; t2 < e2; t2++) {
+      const { line: e3, points: i2 } = this.#Ql[t2];
+      this.#ao = e3;
+      this.#fl = i2;
+      this.#tc = 0;
       this.toSVGPath();
     }
-    return { path: { d: this.#ql } };
+    return { path: { d: this.#Zl } };
+  }
+  #sc() {
+    const t2 = Outline.svgRound(this.#Jl[0]), e2 = Outline.svgRound(this.#Jl[1]);
+    if (2 === this.#fl.length) {
+      const i2 = Outline.svgRound(this.#ao[4]), n2 = Outline.svgRound(this.#ao[5]);
+      return `${this.#Zl} M ${i2} ${n2} L ${t2} ${e2}`;
+    }
+    return `${this.#Zl} L ${t2} ${e2}`;
   }
   toSVGPath() {
-    const t2 = Outline.svgRound(this.#Ka[4]), e2 = Outline.svgRound(this.#Ka[5]);
-    if (2 === this.#No.length) {
-      this.#ql = `${this.#ql} M ${t2} ${e2} Z`;
-      return this.#ql;
+    const t2 = Outline.svgRound(this.#ao[4]), e2 = Outline.svgRound(this.#ao[5]);
+    if (2 === this.#fl.length) {
+      this.#Zl = `${this.#Zl} M ${t2} ${e2} Z`;
+      return this.#Zl;
     }
-    if (this.#No.length <= 6) {
-      const i3 = this.#ql.lastIndexOf("M");
-      this.#ql = `${this.#ql.slice(0, i3)} M ${t2} ${e2}`;
-      this.#Kl = 6;
+    if (this.#fl.length <= 6) {
+      const i3 = this.#Zl.lastIndexOf("M");
+      this.#Zl = `${this.#Zl.slice(0, i3)} M ${t2} ${e2}`;
+      this.#tc = 6;
     }
-    if (4 === this.#No.length) {
-      const t3 = Outline.svgRound(this.#Ka[10]), e3 = Outline.svgRound(this.#Ka[11]);
-      this.#ql = `${this.#ql} L ${t3} ${e3}`;
-      this.#Kl = 12;
-      return this.#ql;
+    if (4 === this.#fl.length) {
+      const t3 = Outline.svgRound(this.#ao[10]), e3 = Outline.svgRound(this.#ao[11]);
+      this.#Zl = `${this.#Zl} L ${t3} ${e3}`;
+      this.#tc = 12;
+      return this.#Zl;
     }
     const i2 = [];
-    if (0 === this.#Kl) {
+    if (0 === this.#tc) {
       i2.push(`M ${t2} ${e2}`);
-      this.#Kl = 6;
+      this.#tc = 6;
     }
-    for (let t3 = this.#Kl, e3 = this.#Ka.length; t3 < e3; t3 += 6) {
-      const [e4, n2, s2, r2, a2, o2] = this.#Ka.slice(t3, t3 + 6).map(Outline.svgRound);
-      i2.push(`C${e4} ${n2} ${s2} ${r2} ${a2} ${o2}`);
+    for (let t3 = this.#tc, e3 = this.#ao.length; t3 < e3; t3 += 6) {
+      const [e4, n2, r2, s2, a2, o2] = this.#ao.slice(t3, t3 + 6).map(Outline.svgRound);
+      i2.push(`C${e4} ${n2} ${r2} ${s2} ${a2} ${o2}`);
     }
-    this.#ql += i2.join(" ");
-    this.#Kl = this.#Ka.length;
-    return this.#ql;
+    this.#Zl += i2.join(" ");
+    this.#tc = this.#ao.length;
+    return this.#Zl;
   }
   getOutlines(t2, e2, i2, n2) {
-    const s2 = this.#$l.at(-1);
-    s2.line = new Float32Array(s2.line);
-    s2.points = new Float32Array(s2.points);
-    this.#ol.build(this.#$l, t2, e2, i2, this.#ir, this.#Lo, n2);
-    this.#Po = null;
-    this.#Ka = null;
-    this.#$l = null;
-    this.#ql = null;
-    return this.#ol;
+    const r2 = this.#Ql.at(-1);
+    r2.line = new Float32Array(r2.line);
+    r2.points = new Float32Array(r2.points);
+    this.#Hl.build(this.#Ql, t2, e2, i2, this.#gs, this.#ml, n2);
+    this.#cl = null;
+    this.#ao = null;
+    this.#Ql = null;
+    this.#Zl = null;
+    return this.#Hl;
   }
   get defaultSVGProperties() {
     return { root: { viewBox: "0 0 10000 10000" }, rootClass: { draw: true }, bbox: [0, 0, 1, 1] };
   }
 };
 var InkDrawOutline = class extends Outline {
-  #Xo;
-  #Ql = 0;
-  #ko;
-  #$l;
-  #Xl;
-  #Yl;
-  #Zl;
-  #ir;
-  #Lo;
-  build(t2, e2, i2, n2, s2, r2, a2) {
-    this.#Xl = e2;
-    this.#Yl = i2;
-    this.#Zl = n2;
-    this.#ir = s2;
-    this.#Lo = r2;
-    this.#ko = a2 ?? 0;
-    this.#$l = t2;
-    this.#th();
+  #_l;
+  #ac = 0;
+  #al;
+  #Ql;
+  #ec;
+  #ic;
+  #oc;
+  #gs;
+  #ml;
+  build(t2, e2, i2, n2, r2, s2, a2) {
+    this.#ec = e2;
+    this.#ic = i2;
+    this.#oc = n2;
+    this.#gs = r2;
+    this.#ml = s2;
+    this.#al = a2 ?? 0;
+    this.#Ql = t2;
+    this.#lc();
   }
   get thickness() {
-    return this.#Lo;
+    return this.#ml;
   }
   setLastElement(t2) {
-    this.#$l.push(t2);
+    this.#Ql.push(t2);
     return { path: { d: this.toSVGPath() } };
   }
   removeLastElement() {
-    this.#$l.pop();
+    this.#Ql.pop();
     return { path: { d: this.toSVGPath() } };
   }
   toSVGPath() {
     const t2 = [];
-    for (const { line: e2 } of this.#$l) {
+    for (const { line: e2 } of this.#Ql) {
       t2.push(`M${Outline.svgRound(e2[4])} ${Outline.svgRound(e2[5])}`);
       if (6 !== e2.length) if (12 === e2.length && isNaN(e2[6])) t2.push(`L${Outline.svgRound(e2[10])} ${Outline.svgRound(e2[11])}`);
       else for (let i2 = 6, n2 = e2.length; i2 < n2; i2 += 6) {
-        const [n3, s2, r2, a2, o2, l2] = e2.subarray(i2, i2 + 6).map(Outline.svgRound);
-        t2.push(`C${n3} ${s2} ${r2} ${a2} ${o2} ${l2}`);
+        const [n3, r2, s2, a2, o2, l2] = e2.subarray(i2, i2 + 6).map(Outline.svgRound);
+        t2.push(`C${n3} ${r2} ${s2} ${a2} ${o2} ${l2}`);
       }
       else t2.push("Z");
     }
     return t2.join("");
   }
-  serialize([t2, e2, i2, n2], s2) {
-    const r2 = [], a2 = [], [o2, l2, h2, c2] = this.#eh();
+  serialize([t2, e2, i2, n2], r2) {
+    const s2 = [], a2 = [], [o2, l2, c2, h2] = this.#cc();
     let d2, u2, p2, g2, m2, f2, b2, y2, v2;
-    switch (this.#ir) {
+    switch (this.#gs) {
       case 0:
         v2 = Outline._rescale;
         d2 = t2;
@@ -18699,8 +19051,8 @@ var InkDrawOutline = class extends Outline {
         p2 = i2;
         g2 = -n2;
         m2 = t2 + o2 * i2;
-        f2 = e2 + (1 - l2 - c2) * n2;
-        b2 = t2 + (o2 + h2) * i2;
+        f2 = e2 + (1 - l2 - h2) * n2;
+        b2 = t2 + (o2 + c2) * i2;
         y2 = e2 + (1 - l2) * n2;
         break;
       case 90:
@@ -18711,8 +19063,8 @@ var InkDrawOutline = class extends Outline {
         g2 = n2;
         m2 = t2 + l2 * i2;
         f2 = e2 + o2 * n2;
-        b2 = t2 + (l2 + c2) * i2;
-        y2 = e2 + (o2 + h2) * n2;
+        b2 = t2 + (l2 + h2) * i2;
+        y2 = e2 + (o2 + c2) * n2;
         break;
       case 180:
         v2 = Outline._rescale;
@@ -18720,10 +19072,10 @@ var InkDrawOutline = class extends Outline {
         u2 = e2;
         p2 = -i2;
         g2 = n2;
-        m2 = t2 + (1 - o2 - h2) * i2;
+        m2 = t2 + (1 - o2 - c2) * i2;
         f2 = e2 + l2 * n2;
         b2 = t2 + (1 - o2) * i2;
-        y2 = e2 + (l2 + c2) * n2;
+        y2 = e2 + (l2 + h2) * n2;
         break;
       case 270:
         v2 = Outline._rescaleAndSwap;
@@ -18731,101 +19083,101 @@ var InkDrawOutline = class extends Outline {
         u2 = e2 + n2;
         p2 = -i2;
         g2 = -n2;
-        m2 = t2 + (1 - l2 - c2) * i2;
-        f2 = e2 + (1 - o2 - h2) * n2;
+        m2 = t2 + (1 - l2 - h2) * i2;
+        f2 = e2 + (1 - o2 - c2) * n2;
         b2 = t2 + (1 - l2) * i2;
         y2 = e2 + (1 - o2) * n2;
     }
-    for (const { line: t3, points: e3 } of this.#$l) {
-      r2.push(v2(t3, d2, u2, p2, g2, s2 ? new Array(t3.length) : null));
-      a2.push(v2(e3, d2, u2, p2, g2, s2 ? new Array(e3.length) : null));
+    for (const { line: t3, points: e3 } of this.#Ql) {
+      s2.push(v2(t3, d2, u2, p2, g2, r2 ? new Array(t3.length) : null));
+      a2.push(v2(e3, d2, u2, p2, g2, r2 ? new Array(e3.length) : null));
     }
-    return { lines: r2, points: a2, rect: [m2, f2, b2, y2] };
+    return { lines: s2, points: a2, rect: [m2, f2, b2, y2] };
   }
-  static deserialize(t2, e2, i2, n2, s2, { paths: { lines: r2, points: a2 }, rotation: o2, thickness: l2 }) {
-    const h2 = [];
-    let c2, d2, u2, p2, g2;
+  static deserialize(t2, e2, i2, n2, r2, { paths: { lines: s2, points: a2 }, rotation: o2, thickness: l2 }) {
+    const c2 = [];
+    let h2, d2, u2, p2, g2;
     switch (o2) {
       case 0:
         g2 = Outline._rescale;
-        c2 = -t2 / i2;
+        h2 = -t2 / i2;
         d2 = e2 / n2 + 1;
         u2 = 1 / i2;
         p2 = -1 / n2;
         break;
       case 90:
         g2 = Outline._rescaleAndSwap;
-        c2 = -e2 / n2;
+        h2 = -e2 / n2;
         d2 = -t2 / i2;
         u2 = 1 / n2;
         p2 = 1 / i2;
         break;
       case 180:
         g2 = Outline._rescale;
-        c2 = t2 / i2 + 1;
+        h2 = t2 / i2 + 1;
         d2 = -e2 / n2;
         u2 = -1 / i2;
         p2 = 1 / n2;
         break;
       case 270:
         g2 = Outline._rescaleAndSwap;
-        c2 = e2 / n2 + 1;
+        h2 = e2 / n2 + 1;
         d2 = t2 / i2 + 1;
         u2 = -1 / n2;
         p2 = -1 / i2;
     }
-    if (!r2) {
-      r2 = [];
+    if (!s2) {
+      s2 = [];
       for (const t3 of a2) {
         const e3 = t3.length;
         if (2 === e3) {
-          r2.push(new Float32Array([NaN, NaN, NaN, NaN, t3[0], t3[1]]));
+          s2.push(new Float32Array([NaN, NaN, NaN, NaN, t3[0], t3[1]]));
           continue;
         }
         if (4 === e3) {
-          r2.push(new Float32Array([NaN, NaN, NaN, NaN, t3[0], t3[1], NaN, NaN, NaN, NaN, t3[2], t3[3]]));
+          s2.push(new Float32Array([NaN, NaN, NaN, NaN, t3[0], t3[1], NaN, NaN, NaN, NaN, t3[2], t3[3]]));
           continue;
         }
         const i3 = new Float32Array(3 * (e3 - 2));
-        r2.push(i3);
-        let [n3, s3, a3, o3] = t3.subarray(0, 4);
-        i3.set([NaN, NaN, NaN, NaN, n3, s3], 0);
-        for (let r3 = 4; r3 < e3; r3 += 2) {
-          const e4 = t3[r3], l3 = t3[r3 + 1];
-          i3.set(Outline.createBezierPoints(n3, s3, a3, o3, e4, l3), 3 * (r3 - 2));
-          [n3, s3, a3, o3] = [a3, o3, e4, l3];
+        s2.push(i3);
+        let [n3, r3, a3, o3] = t3.subarray(0, 4);
+        i3.set([NaN, NaN, NaN, NaN, n3, r3], 0);
+        for (let s3 = 4; s3 < e3; s3 += 2) {
+          const e4 = t3[s3], l3 = t3[s3 + 1];
+          i3.set(Outline.createBezierPoints(n3, r3, a3, o3, e4, l3), 3 * (s3 - 2));
+          [n3, r3, a3, o3] = [a3, o3, e4, l3];
         }
       }
     }
-    for (let t3 = 0, e3 = r2.length; t3 < e3; t3++) h2.push({ line: g2(r2[t3].map((t4) => t4 ?? NaN), c2, d2, u2, p2), points: g2(a2[t3].map((t4) => t4 ?? NaN), c2, d2, u2, p2) });
+    for (let t3 = 0, e3 = s2.length; t3 < e3; t3++) c2.push({ line: g2(s2[t3].map((t4) => t4 ?? NaN), h2, d2, u2, p2), points: g2(a2[t3].map((t4) => t4 ?? NaN), h2, d2, u2, p2) });
     const m2 = new this.prototype.constructor();
-    m2.build(h2, i2, n2, 1, o2, l2, s2);
+    m2.build(c2, i2, n2, 1, o2, l2, r2);
     return m2;
   }
-  #ih(t2 = this.#Lo) {
-    const e2 = this.#ko + t2 / 2 * this.#Zl;
-    return this.#ir % 180 == 0 ? [e2 / this.#Xl, e2 / this.#Yl] : [e2 / this.#Yl, e2 / this.#Xl];
+  #hc(t2 = this.#ml) {
+    const e2 = this.#al + t2 / 2 * this.#oc;
+    return this.#gs % 180 == 0 ? [e2 / this.#ec, e2 / this.#ic] : [e2 / this.#ic, e2 / this.#ec];
   }
-  #eh() {
-    const [t2, e2, i2, n2] = this.#Xo, [s2, r2] = this.#ih(0);
-    return [t2 + s2, e2 + r2, i2 - 2 * s2, n2 - 2 * r2];
+  #cc() {
+    const [t2, e2, i2, n2] = this.#_l, [r2, s2] = this.#hc(0);
+    return [t2 + r2, e2 + s2, i2 - 2 * r2, n2 - 2 * s2];
   }
-  #th() {
-    const t2 = this.#Xo = s.slice();
-    for (const { line: e3 } of this.#$l) {
+  #lc() {
+    const t2 = this.#_l = r.slice();
+    for (const { line: e3 } of this.#Ql) {
       if (e3.length <= 12) {
         for (let i4 = 4, n3 = e3.length; i4 < n3; i4 += 6) Util.pointBoundingBox(e3[i4], e3[i4 + 1], t2);
         continue;
       }
       let i3 = e3[4], n2 = e3[5];
-      for (let s2 = 6, r2 = e3.length; s2 < r2; s2 += 6) {
-        const [r3, a2, o2, l2, h2, c2] = e3.subarray(s2, s2 + 6);
-        Util.bezierBoundingBox(i3, n2, r3, a2, o2, l2, h2, c2, t2);
-        i3 = h2;
-        n2 = c2;
+      for (let r2 = 6, s2 = e3.length; r2 < s2; r2 += 6) {
+        const [s3, a2, o2, l2, c2, h2] = e3.subarray(r2, r2 + 6);
+        Util.bezierBoundingBox(i3, n2, s3, a2, o2, l2, c2, h2, t2);
+        i3 = c2;
+        n2 = h2;
       }
     }
-    const [e2, i2] = this.#ih();
+    const [e2, i2] = this.#hc();
     t2[0] = MathClamp(t2[0] - e2, 0, 1);
     t2[1] = MathClamp(t2[1] - i2, 0, 1);
     t2[2] = MathClamp(t2[2] + e2, 0, 1);
@@ -18834,122 +19186,122 @@ var InkDrawOutline = class extends Outline {
     t2[3] -= t2[1];
   }
   get box() {
-    return this.#Xo;
+    return this.#_l;
   }
   updateProperty(t2, e2) {
-    return "stroke-width" === t2 ? this.#Cl(e2) : null;
+    return "stroke-width" === t2 ? this.#dc(e2) : null;
   }
-  #Cl(t2) {
-    const [e2, i2] = this.#ih();
-    this.#Lo = t2;
-    const [n2, s2] = this.#ih(), [r2, a2] = [n2 - e2, s2 - i2], o2 = this.#Xo;
-    o2[0] -= r2;
+  #dc(t2) {
+    const [e2, i2] = this.#hc();
+    this.#ml = t2;
+    const [n2, r2] = this.#hc(), [s2, a2] = [n2 - e2, r2 - i2], o2 = this.#_l;
+    o2[0] -= s2;
     o2[1] -= a2;
-    o2[2] += 2 * r2;
+    o2[2] += 2 * s2;
     o2[3] += 2 * a2;
     return o2;
   }
   updateParentDimensions([t2, e2], i2) {
-    const [n2, s2] = this.#ih();
-    this.#Xl = t2;
-    this.#Yl = e2;
-    this.#Zl = i2;
-    const [r2, a2] = this.#ih(), o2 = r2 - n2, l2 = a2 - s2, h2 = this.#Xo;
-    h2[0] -= o2;
-    h2[1] -= l2;
-    h2[2] += 2 * o2;
-    h2[3] += 2 * l2;
-    return h2;
+    const [n2, r2] = this.#hc();
+    this.#ec = t2;
+    this.#ic = e2;
+    this.#oc = i2;
+    const [s2, a2] = this.#hc(), o2 = s2 - n2, l2 = a2 - r2, c2 = this.#_l;
+    c2[0] -= o2;
+    c2[1] -= l2;
+    c2[2] += 2 * o2;
+    c2[3] += 2 * l2;
+    return c2;
   }
   updateRotation(t2) {
-    this.#Ql = t2;
+    this.#ac = t2;
     return { path: { transform: this.rotationTransform } };
   }
   get viewBox() {
-    return this.#Xo.map(Outline.svgRound).join(" ");
+    return this.#_l.map(Outline.svgRound).join(" ");
   }
   get defaultProperties() {
-    const [t2, e2] = this.#Xo;
+    const [t2, e2] = this.#_l;
     return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}` } };
   }
   get rotationTransform() {
-    const [, , t2, e2] = this.#Xo;
-    let i2 = 0, n2 = 0, s2 = 0, r2 = 0, a2 = 0, o2 = 0;
-    switch (this.#Ql) {
+    const [, , t2, e2] = this.#_l;
+    let i2 = 0, n2 = 0, r2 = 0, s2 = 0, a2 = 0, o2 = 0;
+    switch (this.#ac) {
       case 90:
         n2 = e2 / t2;
-        s2 = -t2 / e2;
+        r2 = -t2 / e2;
         a2 = t2;
         break;
       case 180:
         i2 = -1;
-        r2 = -1;
+        s2 = -1;
         a2 = t2;
         o2 = e2;
         break;
       case 270:
         n2 = -e2 / t2;
-        s2 = t2 / e2;
+        r2 = t2 / e2;
         o2 = e2;
         break;
       default:
         return "";
     }
-    return `matrix(${i2} ${n2} ${s2} ${r2} ${Outline.svgRound(a2)} ${Outline.svgRound(o2)})`;
+    return `matrix(${i2} ${n2} ${r2} ${s2} ${Outline.svgRound(a2)} ${Outline.svgRound(o2)})`;
   }
   getPathResizingSVGProperties([t2, e2, i2, n2]) {
-    const [s2, r2] = this.#ih(), [a2, o2, l2, h2] = this.#Xo;
-    if (Math.abs(l2 - s2) <= Outline.PRECISION || Math.abs(h2 - r2) <= Outline.PRECISION) {
-      const s3 = t2 + i2 / 2 - (a2 + l2 / 2), r3 = e2 + n2 / 2 - (o2 + h2 / 2);
-      return { path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: `${this.rotationTransform} translate(${s3} ${r3})` } };
+    const [r2, s2] = this.#hc(), [a2, o2, l2, c2] = this.#_l;
+    if (Math.abs(l2 - r2) <= Outline.PRECISION || Math.abs(c2 - s2) <= Outline.PRECISION) {
+      const r3 = t2 + i2 / 2 - (a2 + l2 / 2), s3 = e2 + n2 / 2 - (o2 + c2 / 2);
+      return { path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: `${this.rotationTransform} translate(${r3} ${s3})` } };
     }
-    const c2 = (i2 - 2 * s2) / (l2 - 2 * s2), d2 = (n2 - 2 * r2) / (h2 - 2 * r2), u2 = l2 / i2, p2 = h2 / n2;
-    return { path: { "transform-origin": `${Outline.svgRound(a2)} ${Outline.svgRound(o2)}`, transform: `${this.rotationTransform} scale(${u2} ${p2}) translate(${Outline.svgRound(s2)} ${Outline.svgRound(r2)}) scale(${c2} ${d2}) translate(${Outline.svgRound(-s2)} ${Outline.svgRound(-r2)})` } };
+    const h2 = (i2 - 2 * r2) / (l2 - 2 * r2), d2 = (n2 - 2 * s2) / (c2 - 2 * s2), u2 = l2 / i2, p2 = c2 / n2;
+    return { path: { "transform-origin": `${Outline.svgRound(a2)} ${Outline.svgRound(o2)}`, transform: `${this.rotationTransform} scale(${u2} ${p2}) translate(${Outline.svgRound(r2)} ${Outline.svgRound(s2)}) scale(${h2} ${d2}) translate(${Outline.svgRound(-r2)} ${Outline.svgRound(-s2)})` } };
   }
   getPathResizedSVGProperties([t2, e2, i2, n2]) {
-    const [s2, r2] = this.#ih(), a2 = this.#Xo, [o2, l2, h2, c2] = a2;
+    const [r2, s2] = this.#hc(), a2 = this.#_l, [o2, l2, c2, h2] = a2;
     a2[0] = t2;
     a2[1] = e2;
     a2[2] = i2;
     a2[3] = n2;
-    if (Math.abs(h2 - s2) <= Outline.PRECISION || Math.abs(c2 - r2) <= Outline.PRECISION) {
-      const s3 = t2 + i2 / 2 - (o2 + h2 / 2), r3 = e2 + n2 / 2 - (l2 + c2 / 2);
-      for (const { line: t3, points: e3 } of this.#$l) {
-        Outline._translate(t3, s3, r3, t3);
-        Outline._translate(e3, s3, r3, e3);
+    if (Math.abs(c2 - r2) <= Outline.PRECISION || Math.abs(h2 - s2) <= Outline.PRECISION) {
+      const r3 = t2 + i2 / 2 - (o2 + c2 / 2), s3 = e2 + n2 / 2 - (l2 + h2 / 2);
+      for (const { line: t3, points: e3 } of this.#Ql) {
+        Outline._translate(t3, r3, s3, t3);
+        Outline._translate(e3, r3, s3, e3);
       }
       return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: this.rotationTransform || null, d: this.toSVGPath() } };
     }
-    const d2 = (i2 - 2 * s2) / (h2 - 2 * s2), u2 = (n2 - 2 * r2) / (c2 - 2 * r2), p2 = -d2 * (o2 + s2) + t2 + s2, g2 = -u2 * (l2 + r2) + e2 + r2;
-    if (1 !== d2 || 1 !== u2 || 0 !== p2 || 0 !== g2) for (const { line: t3, points: e3 } of this.#$l) {
+    const d2 = (i2 - 2 * r2) / (c2 - 2 * r2), u2 = (n2 - 2 * s2) / (h2 - 2 * s2), p2 = -d2 * (o2 + r2) + t2 + r2, g2 = -u2 * (l2 + s2) + e2 + s2;
+    if (1 !== d2 || 1 !== u2 || 0 !== p2 || 0 !== g2) for (const { line: t3, points: e3 } of this.#Ql) {
       Outline._rescale(t3, p2, g2, d2, u2, t3);
       Outline._rescale(e3, p2, g2, d2, u2, e3);
     }
     return { root: { viewBox: this.viewBox }, path: { "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}`, transform: this.rotationTransform || null, d: this.toSVGPath() } };
   }
   getPathTranslatedSVGProperties([t2, e2], i2) {
-    const [n2, s2] = i2, r2 = this.#Xo, a2 = t2 - r2[0], o2 = e2 - r2[1];
-    if (this.#Xl === n2 && this.#Yl === s2) for (const { line: t3, points: e3 } of this.#$l) {
+    const [n2, r2] = i2, s2 = this.#_l, a2 = t2 - s2[0], o2 = e2 - s2[1];
+    if (this.#ec === n2 && this.#ic === r2) for (const { line: t3, points: e3 } of this.#Ql) {
       Outline._translate(t3, a2, o2, t3);
       Outline._translate(e3, a2, o2, e3);
     }
     else {
-      const t3 = this.#Xl / n2, e3 = this.#Yl / s2;
-      this.#Xl = n2;
-      this.#Yl = s2;
-      for (const { line: i3, points: n3 } of this.#$l) {
+      const t3 = this.#ec / n2, e3 = this.#ic / r2;
+      this.#ec = n2;
+      this.#ic = r2;
+      for (const { line: i3, points: n3 } of this.#Ql) {
         Outline._rescale(i3, a2, o2, t3, e3, i3);
         Outline._rescale(n3, a2, o2, t3, e3, n3);
       }
-      r2[2] *= t3;
-      r2[3] *= e3;
+      s2[2] *= t3;
+      s2[3] *= e3;
     }
-    r2[0] = t2;
-    r2[1] = e2;
+    s2[0] = t2;
+    s2[1] = e2;
     return { root: { viewBox: this.viewBox }, path: { d: this.toSVGPath(), "transform-origin": `${Outline.svgRound(t2)} ${Outline.svgRound(e2)}` } };
   }
   get defaultSVGProperties() {
-    const t2 = this.#Xo;
+    const t2 = this.#_l;
     return { root: { viewBox: this.viewBox }, rootClass: { draw: true }, path: { d: this.toSVGPath(), "transform-origin": `${Outline.svgRound(t2[0])} ${Outline.svgRound(t2[1])}`, transform: this.rotationTransform || null }, bbox: t2 };
   }
 };
@@ -18996,22 +19348,22 @@ var InkEditor = class _InkEditor extends DrawingEditor {
   static get typesMap() {
     return shadow(this, "typesMap", /* @__PURE__ */ new Map([[v.INK_THICKNESS, "stroke-width"], [v.INK_COLOR, "stroke"], [v.INK_OPACITY, "stroke-opacity"]]));
   }
-  static createDrawerInstance(t2, e2, i2, n2, s2) {
-    return new InkDrawOutliner(t2, e2, i2, n2, s2, this._defaultDrawingOptions["stroke-width"]);
+  static createDrawerInstance({ x: t2, y: e2, box: [, , i2, n2], rotation: r2 }) {
+    return new InkDrawOutliner(t2, e2, i2, n2, r2, this._defaultDrawingOptions["stroke-width"]);
   }
-  static deserializeDraw(t2, e2, i2, n2, s2, r2) {
-    return InkDrawOutline.deserialize(t2, e2, i2, n2, s2, r2);
+  static deserializeDraw(t2, e2, i2, n2, r2, s2) {
+    return InkDrawOutline.deserialize(t2, e2, i2, n2, r2, s2);
   }
   static async deserialize(t2, e2, i2) {
     let n2 = null;
     if (t2 instanceof InkAnnotationElement) {
-      const { data: { inkLists: e3, rect: i3, rotation: s3, id: r2, color: a2, opacity: o2, borderStyle: { rawWidth: l2 }, popupRef: h2, richText: c2, contentsObj: d2, creationDate: u2, modificationDate: p2 }, parent: { page: { pageNumber: g2 } } } = t2;
-      n2 = t2 = { annotationType: y.INK, color: Array.from(a2), thickness: l2, opacity: o2, paths: { points: e3 }, boxes: null, pageIndex: g2 - 1, rect: i3.slice(0), rotation: s3, annotationElementId: r2, id: r2, deleted: false, popupRef: h2, richText: c2, comment: d2?.str || null, creationDate: u2, modificationDate: p2 };
+      const { data: { inkLists: e3, rect: i3, rotation: r3, id: s2, color: a2, opacity: o2, borderStyle: { rawWidth: l2 }, popupRef: c2, richText: h2, contentsObj: d2, creationDate: u2, modificationDate: p2 }, parent: { page: { pageNumber: g2 } } } = t2;
+      n2 = t2 = { annotationType: y.INK, color: Array.from(a2), thickness: l2, opacity: o2, paths: { points: e3 }, boxes: null, pageIndex: g2 - 1, rect: i3.slice(0), rotation: r3, annotationElementId: s2, id: s2, deleted: false, popupRef: c2, richText: h2, comment: d2?.str || null, creationDate: u2, modificationDate: p2 };
     }
-    const s2 = await super.deserialize(t2, e2, i2);
-    s2._initialData = n2;
-    t2.comment && s2.setCommentData(t2);
-    return s2;
+    const r2 = await super.deserialize(t2, e2, i2);
+    r2._initialData = n2;
+    t2.comment && r2.setCommentData(t2);
+    return r2;
   }
   get toolbarButtons() {
     this._colorPicker ||= new BasicColorPicker(this);
@@ -19063,19 +19415,19 @@ var InkEditor = class _InkEditor extends DrawingEditor {
   serialize(t2 = false) {
     if (this.isEmpty()) return null;
     if (this.deleted) return this.serializeDeleted();
-    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { stroke: n2, "stroke-opacity": s2, "stroke-width": r2 } } = this, a2 = Object.assign(super.serialize(t2), { color: AnnotationEditor._colorManager.convert(n2), opacity: s2, thickness: r2, paths: { lines: e2, points: i2 } });
+    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { stroke: n2, "stroke-opacity": r2, "stroke-width": s2 } } = this, a2 = Object.assign(super.serialize(t2), { color: AnnotationEditor._colorManager.convert(n2), opacity: r2, thickness: s2, paths: { lines: e2, points: i2 } });
     this.addComment(a2);
     if (t2) {
       a2.isCopy = true;
       return a2;
     }
-    if (this.annotationElementId && !this.#So(a2)) return null;
+    if (this.annotationElementId && !this.#Lo(a2)) return null;
     a2.id = this.annotationElementId;
     return a2;
   }
-  #So(t2) {
-    const { color: e2, thickness: i2, opacity: n2, pageIndex: s2 } = this._initialData;
-    return this.hasEditedComment || this._hasBeenMoved || this._hasBeenResized || t2.color.some((t3, i3) => t3 !== e2[i3]) || t2.thickness !== i2 || t2.opacity !== n2 || t2.pageIndex !== s2;
+  #Lo(t2) {
+    const { color: e2, thickness: i2, opacity: n2, pageIndex: r2 } = this._initialData;
+    return this.hasEditedComment || this._hasBeenMoved || this._hasBeenResized || t2.color.some((t3, i3) => t3 !== e2[i3]) || t2.thickness !== i2 || t2.opacity !== n2 || t2.pageIndex !== r2;
   }
   renderAnnotationElement(t2) {
     if (this.deleted) {
@@ -19096,54 +19448,54 @@ var ContourDrawOutline = class extends InkDrawOutline {
 };
 __webpack_require__(5213);
 var SignatureExtractor = class {
-  static #nh = { maxDim: 512, sigmaSFactor: 0.02, sigmaR: 25, kernelSize: 16 };
-  static #sh(t2, e2, i2, n2) {
+  static #uc = { maxDim: 512, sigmaSFactor: 0.02, sigmaR: 25, kernelSize: 16 };
+  static #pc(t2, e2, i2, n2) {
     n2 -= e2;
     return 0 === (i2 -= t2) ? n2 > 0 ? 0 : 4 : 1 === i2 ? n2 + 6 : 2 - n2;
   }
-  static #rh = new Int32Array([0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1, 1, 0, 1, 1]);
-  static #ah(t2, e2, i2, n2, s2, r2, a2) {
-    const o2 = this.#sh(i2, n2, s2, r2);
-    for (let s3 = 0; s3 < 8; s3++) {
-      const r3 = (-s3 + o2 - a2 + 16) % 8;
-      if (0 !== t2[(i2 + this.#rh[2 * r3]) * e2 + (n2 + this.#rh[2 * r3 + 1])]) return r3;
+  static #gc = new Int32Array([0, 1, -1, 1, -1, 0, -1, -1, 0, -1, 1, -1, 1, 0, 1, 1]);
+  static #mc(t2, e2, i2, n2, r2, s2, a2) {
+    const o2 = this.#pc(i2, n2, r2, s2);
+    for (let r3 = 0; r3 < 8; r3++) {
+      const s3 = (-r3 + o2 - a2 + 16) % 8;
+      if (0 !== t2[(i2 + this.#gc[2 * s3]) * e2 + (n2 + this.#gc[2 * s3 + 1])]) return s3;
     }
     return -1;
   }
-  static #oh(t2, e2, i2, n2, s2, r2, a2) {
-    const o2 = this.#sh(i2, n2, s2, r2);
-    for (let s3 = 0; s3 < 8; s3++) {
-      const r3 = (s3 + o2 + a2 + 16) % 8;
-      if (0 !== t2[(i2 + this.#rh[2 * r3]) * e2 + (n2 + this.#rh[2 * r3 + 1])]) return r3;
+  static #fc(t2, e2, i2, n2, r2, s2, a2) {
+    const o2 = this.#pc(i2, n2, r2, s2);
+    for (let r3 = 0; r3 < 8; r3++) {
+      const s3 = (r3 + o2 + a2 + 16) % 8;
+      if (0 !== t2[(i2 + this.#gc[2 * s3]) * e2 + (n2 + this.#gc[2 * s3 + 1])]) return s3;
     }
     return -1;
   }
-  static #lh(t2, e2, i2, n2) {
-    const s2 = t2.length, r2 = new Int32Array(s2);
-    for (let e3 = 0; e3 < s2; e3++) r2[e3] = t2[e3] <= n2 ? 1 : 0;
-    for (let t3 = 1; t3 < i2 - 1; t3++) r2[t3 * e2] = r2[t3 * e2 + e2 - 1] = 0;
-    for (let t3 = 0; t3 < e2; t3++) r2[t3] = r2[e2 * i2 - 1 - t3] = 0;
+  static #bc(t2, e2, i2, n2) {
+    const r2 = t2.length, s2 = new Int32Array(r2);
+    for (let e3 = 0; e3 < r2; e3++) s2[e3] = t2[e3] <= n2 ? 1 : 0;
+    for (let t3 = 1; t3 < i2 - 1; t3++) s2[t3 * e2] = s2[t3 * e2 + e2 - 1] = 0;
+    for (let t3 = 0; t3 < e2; t3++) s2[t3] = s2[e2 * i2 - 1 - t3] = 0;
     let a2, o2 = 1;
     const l2 = [];
     for (let t3 = 1; t3 < i2 - 1; t3++) {
       a2 = 1;
       for (let i3 = 1; i3 < e2 - 1; i3++) {
-        const n3 = t3 * e2 + i3, s3 = r2[n3];
-        if (0 === s3) continue;
-        let h2 = t3, c2 = i3;
-        if (1 === s3 && 0 === r2[n3 - 1]) {
+        const n3 = t3 * e2 + i3, r3 = s2[n3];
+        if (0 === r3) continue;
+        let c2 = t3, h2 = i3;
+        if (1 === r3 && 0 === s2[n3 - 1]) {
           o2 += 1;
-          c2 -= 1;
+          h2 -= 1;
         } else {
-          if (!(s3 >= 1 && 0 === r2[n3 + 1])) {
-            1 !== s3 && (a2 = Math.abs(s3));
+          if (!(r3 >= 1 && 0 === s2[n3 + 1])) {
+            1 !== r3 && (a2 = Math.abs(r3));
             continue;
           }
           o2 += 1;
-          c2 += 1;
-          s3 > 1 && (a2 = s3);
+          h2 += 1;
+          r3 > 1 && (a2 = r3);
         }
-        const d2 = [i3, t3], u2 = c2 === i3 + 1, p2 = { isHole: u2, points: d2, id: o2, parent: 0 };
+        const d2 = [i3, t3], u2 = h2 === i3 + 1, p2 = { isHole: u2, points: d2, id: o2, parent: 0 };
         l2.push(p2);
         let g2;
         for (const t4 of l2) if (t4.id === a2) {
@@ -19151,81 +19503,81 @@ var SignatureExtractor = class {
           break;
         }
         g2 ? g2.isHole ? p2.parent = u2 ? g2.parent : a2 : p2.parent = u2 ? a2 : g2.parent : p2.parent = u2 ? a2 : 0;
-        const m2 = this.#ah(r2, e2, t3, i3, h2, c2, 0);
+        const m2 = this.#mc(s2, e2, t3, i3, c2, h2, 0);
         if (-1 === m2) {
-          r2[n3] = -o2;
-          1 !== r2[n3] && (a2 = Math.abs(r2[n3]));
+          s2[n3] = -o2;
+          1 !== s2[n3] && (a2 = Math.abs(s2[n3]));
           continue;
         }
-        let f2 = this.#rh[2 * m2], b2 = this.#rh[2 * m2 + 1];
+        let f2 = this.#gc[2 * m2], b2 = this.#gc[2 * m2 + 1];
         const y2 = t3 + f2, v2 = i3 + b2;
-        h2 = y2;
-        c2 = v2;
-        let w2 = t3, x2 = i3;
+        c2 = y2;
+        h2 = v2;
+        let w2 = t3, A2 = i3;
         for (; ; ) {
-          const s4 = this.#oh(r2, e2, w2, x2, h2, c2, 1);
-          f2 = this.#rh[2 * s4];
-          b2 = this.#rh[2 * s4 + 1];
-          const l3 = w2 + f2, u3 = x2 + b2;
+          const r4 = this.#fc(s2, e2, w2, A2, c2, h2, 1);
+          f2 = this.#gc[2 * r4];
+          b2 = this.#gc[2 * r4 + 1];
+          const l3 = w2 + f2, u3 = A2 + b2;
           d2.push(u3, l3);
-          const p3 = w2 * e2 + x2;
-          0 === r2[p3 + 1] ? r2[p3] = -o2 : 1 === r2[p3] && (r2[p3] = o2);
-          if (l3 === t3 && u3 === i3 && w2 === y2 && x2 === v2) {
-            1 !== r2[n3] && (a2 = Math.abs(r2[n3]));
+          const p3 = w2 * e2 + A2;
+          0 === s2[p3 + 1] ? s2[p3] = -o2 : 1 === s2[p3] && (s2[p3] = o2);
+          if (l3 === t3 && u3 === i3 && w2 === y2 && A2 === v2) {
+            1 !== s2[n3] && (a2 = Math.abs(s2[n3]));
             break;
           }
-          h2 = w2;
-          c2 = x2;
+          c2 = w2;
+          h2 = A2;
           w2 = l3;
-          x2 = u3;
+          A2 = u3;
         }
       }
     }
     return l2;
   }
-  static #hh(t2, e2, i2, n2) {
+  static #yc(t2, e2, i2, n2) {
     if (i2 - e2 <= 4) {
-      for (let s3 = e2; s3 < i2 - 2; s3 += 2) n2.push(t2[s3], t2[s3 + 1]);
+      for (let r3 = e2; r3 < i2 - 2; r3 += 2) n2.push(t2[r3], t2[r3 + 1]);
       return;
     }
-    const s2 = t2[e2], r2 = t2[e2 + 1], a2 = t2[i2 - 4] - s2, o2 = t2[i2 - 3] - r2, l2 = Math.hypot(a2, o2), h2 = a2 / l2, c2 = o2 / l2, d2 = h2 * r2 - c2 * s2, u2 = o2 / a2, p2 = 1 / l2, g2 = Math.atan(u2), m2 = Math.cos(g2), f2 = Math.sin(g2), b2 = p2 * (Math.abs(m2) + Math.abs(f2)), y2 = p2 * (1 - b2 + b2 ** 2), v2 = Math.max(Math.atan(Math.abs(f2 + m2) * y2), Math.atan(Math.abs(f2 - m2) * y2));
-    let w2 = 0, x2 = e2;
+    const r2 = t2[e2], s2 = t2[e2 + 1], a2 = t2[i2 - 4] - r2, o2 = t2[i2 - 3] - s2, l2 = Math.hypot(a2, o2), c2 = a2 / l2, h2 = o2 / l2, d2 = c2 * s2 - h2 * r2, u2 = o2 / a2, p2 = 1 / l2, g2 = Math.atan(u2), m2 = Math.cos(g2), f2 = Math.sin(g2), b2 = p2 * (Math.abs(m2) + Math.abs(f2)), y2 = p2 * (1 - b2 + b2 ** 2), v2 = Math.max(Math.atan(Math.abs(f2 + m2) * y2), Math.atan(Math.abs(f2 - m2) * y2));
+    let w2 = 0, A2 = e2;
     for (let n3 = e2 + 2; n3 < i2 - 2; n3 += 2) {
-      const e3 = Math.abs(d2 - h2 * t2[n3 + 1] + c2 * t2[n3]);
+      const e3 = Math.abs(d2 - c2 * t2[n3 + 1] + h2 * t2[n3]);
       if (e3 > w2) {
-        x2 = n3;
+        A2 = n3;
         w2 = e3;
       }
     }
     if (w2 > (l2 * v2) ** 2) {
-      this.#hh(t2, e2, x2 + 2, n2);
-      this.#hh(t2, x2, i2, n2);
-    } else n2.push(s2, r2);
+      this.#yc(t2, e2, A2 + 2, n2);
+      this.#yc(t2, A2, i2, n2);
+    } else n2.push(r2, s2);
   }
-  static #ch(t2) {
+  static #vc(t2) {
     const e2 = [], i2 = t2.length;
-    this.#hh(t2, 0, i2, e2);
+    this.#yc(t2, 0, i2, e2);
     e2.push(t2[i2 - 2], t2[i2 - 1]);
     return e2.length <= 4 ? null : e2;
   }
-  static #dh(t2, e2, i2, n2, s2, r2) {
-    const a2 = new Float32Array(r2 ** 2), o2 = -2 * n2 ** 2, l2 = r2 >> 1;
-    for (let t3 = 0; t3 < r2; t3++) {
+  static #wc(t2, e2, i2, n2, r2, s2) {
+    const a2 = new Float32Array(s2 ** 2), o2 = -2 * n2 ** 2, l2 = s2 >> 1;
+    for (let t3 = 0; t3 < s2; t3++) {
       const e3 = (t3 - l2) ** 2;
-      for (let i3 = 0; i3 < r2; i3++) a2[t3 * r2 + i3] = Math.exp((e3 + (i3 - l2) ** 2) / o2);
+      for (let i3 = 0; i3 < s2; i3++) a2[t3 * s2 + i3] = Math.exp((e3 + (i3 - l2) ** 2) / o2);
     }
-    const h2 = new Float32Array(256), c2 = -2 * s2 ** 2;
-    for (let t3 = 0; t3 < 256; t3++) h2[t3] = Math.exp(t3 ** 2 / c2);
+    const c2 = new Float32Array(256), h2 = -2 * r2 ** 2;
+    for (let t3 = 0; t3 < 256; t3++) c2[t3] = Math.exp(t3 ** 2 / h2);
     const d2 = t2.length, u2 = new Uint8Array(d2), p2 = new Uint32Array(256);
-    for (let n3 = 0; n3 < i2; n3++) for (let s3 = 0; s3 < e2; s3++) {
-      const o3 = n3 * e2 + s3, c3 = t2[o3];
+    for (let n3 = 0; n3 < i2; n3++) for (let r3 = 0; r3 < e2; r3++) {
+      const o3 = n3 * e2 + r3, h3 = t2[o3];
       let d3 = 0, g2 = 0;
-      for (let o4 = 0; o4 < r2; o4++) {
+      for (let o4 = 0; o4 < s2; o4++) {
         const u3 = n3 + o4 - l2;
-        if (!(u3 < 0 || u3 >= i2)) for (let i3 = 0; i3 < r2; i3++) {
-          const n4 = s3 + i3 - l2;
+        if (!(u3 < 0 || u3 >= i2)) for (let i3 = 0; i3 < s2; i3++) {
+          const n4 = r3 + i3 - l2;
           if (n4 < 0 || n4 >= e2) continue;
-          const p3 = t2[u3 * e2 + n4], m2 = a2[o4 * r2 + i3] * h2[Math.abs(p3 - c3)];
+          const p3 = t2[u3 * e2 + n4], m2 = a2[o4 * s2 + i3] * c2[Math.abs(p3 - h3)];
           d3 += p3 * m2;
           g2 += m2;
         }
@@ -19234,123 +19586,123 @@ var SignatureExtractor = class {
     }
     return [u2, p2];
   }
-  static #uh(t2) {
+  static #Ac(t2) {
     const e2 = new Uint32Array(256);
     for (const i2 of t2) e2[i2]++;
     return e2;
   }
-  static #ph(t2) {
+  static #xc(t2) {
     const e2 = t2.length, i2 = new Uint8ClampedArray(e2 >> 2);
-    let n2 = -1 / 0, s2 = 1 / 0;
-    for (let e3 = 0, r3 = i2.length; e3 < r3; e3++) {
-      const r4 = i2[e3] = t2[e3 << 2];
-      n2 = Math.max(n2, r4);
-      s2 = Math.min(s2, r4);
+    let n2 = -1 / 0, r2 = 1 / 0;
+    for (let e3 = 0, s3 = i2.length; e3 < s3; e3++) {
+      const s4 = i2[e3] = t2[e3 << 2];
+      n2 = Math.max(n2, s4);
+      r2 = Math.min(r2, s4);
     }
-    const r2 = 255 / (n2 - s2);
-    for (let t3 = 0, e3 = i2.length; t3 < e3; t3++) i2[t3] = (i2[t3] - s2) * r2;
+    const s2 = 255 / (n2 - r2);
+    for (let t3 = 0, e3 = i2.length; t3 < e3; t3++) i2[t3] = (i2[t3] - r2) * s2;
     return i2;
   }
-  static #gh(t2) {
+  static #Ec(t2) {
     let e2, i2 = -1 / 0, n2 = -1 / 0;
-    const s2 = t2.findIndex((t3) => 0 !== t3);
-    let r2 = s2, a2 = s2;
-    for (e2 = s2; e2 < 256; e2++) {
-      const s3 = t2[e2];
-      if (s3 > i2) {
-        if (e2 - r2 > n2) {
-          n2 = e2 - r2;
+    const r2 = t2.findIndex((t3) => 0 !== t3);
+    let s2 = r2, a2 = r2;
+    for (e2 = r2; e2 < 256; e2++) {
+      const r3 = t2[e2];
+      if (r3 > i2) {
+        if (e2 - s2 > n2) {
+          n2 = e2 - s2;
           a2 = e2 - 1;
         }
-        i2 = s3;
-        r2 = e2;
+        i2 = r3;
+        s2 = e2;
       }
     }
     for (e2 = a2 - 1; e2 >= 0 && !(t2[e2] > t2[e2 + 1]); e2--) ;
     return e2;
   }
-  static #mh(t2) {
-    const e2 = t2, { width: i2, height: n2 } = t2, { maxDim: s2 } = this.#nh;
-    let r2 = i2, a2 = n2;
-    if (i2 > s2 || n2 > s2) {
-      let o3 = i2, l3 = n2, h2 = Math.log2(Math.max(i2, n2) / s2);
-      const c2 = Math.floor(h2);
-      h2 = h2 === c2 ? c2 - 1 : c2;
-      for (let i3 = 0; i3 < h2; i3++) {
-        r2 = Math.ceil(o3 / 2);
+  static #Cc(t2) {
+    const e2 = t2, { width: i2, height: n2 } = t2, { maxDim: r2 } = this.#uc;
+    let s2 = i2, a2 = n2;
+    if (i2 > r2 || n2 > r2) {
+      let o3 = i2, l3 = n2, c2 = Math.log2(Math.max(i2, n2) / r2);
+      const h2 = Math.floor(c2);
+      c2 = c2 === h2 ? h2 - 1 : h2;
+      for (let i3 = 0; i3 < c2; i3++) {
+        s2 = Math.ceil(o3 / 2);
         a2 = Math.ceil(l3 / 2);
-        const i4 = new OffscreenCanvas(r2, a2);
-        i4.getContext("2d").drawImage(t2, 0, 0, o3, l3, 0, 0, r2, a2);
-        o3 = r2;
+        const i4 = new OffscreenCanvas(s2, a2);
+        i4.getContext("2d").drawImage(t2, 0, 0, o3, l3, 0, 0, s2, a2);
+        o3 = s2;
         l3 = a2;
         t2 !== e2 && t2.close();
         t2 = i4.transferToImageBitmap();
       }
-      const d2 = Math.min(s2 / r2, s2 / a2);
-      r2 = Math.round(r2 * d2);
+      const d2 = Math.min(r2 / s2, r2 / a2);
+      s2 = Math.round(s2 * d2);
       a2 = Math.round(a2 * d2);
     }
-    const o2 = new OffscreenCanvas(r2, a2).getContext("2d", { willReadFrequently: true });
+    const o2 = new OffscreenCanvas(s2, a2).getContext("2d", { willReadFrequently: true });
     o2.fillStyle = "white";
-    o2.fillRect(0, 0, r2, a2);
+    o2.fillRect(0, 0, s2, a2);
     o2.filter = "grayscale(1)";
-    o2.drawImage(t2, 0, 0, t2.width, t2.height, 0, 0, r2, a2);
-    const l2 = o2.getImageData(0, 0, r2, a2).data;
-    return [this.#ph(l2), r2, a2];
+    o2.drawImage(t2, 0, 0, t2.width, t2.height, 0, 0, s2, a2);
+    const l2 = o2.getImageData(0, 0, s2, a2).data;
+    return [this.#xc(l2), s2, a2];
   }
-  static extractContoursFromText(t2, { fontFamily: e2, fontStyle: i2, fontWeight: n2 }, s2, r2, a2, o2) {
-    let l2 = new OffscreenCanvas(1, 1), h2 = l2.getContext("2d", { alpha: false });
-    const c2 = h2.font = `${i2} ${n2} 200px ${e2}`, { actualBoundingBoxLeft: d2, actualBoundingBoxRight: u2, actualBoundingBoxAscent: p2, actualBoundingBoxDescent: g2, fontBoundingBoxAscent: m2, fontBoundingBoxDescent: f2, width: b2 } = h2.measureText(t2), y2 = 1.5, v2 = Math.ceil(Math.max(Math.abs(d2) + Math.abs(u2) || 0, b2) * y2), w2 = Math.ceil(Math.max(Math.abs(p2) + Math.abs(g2) || 200, Math.abs(m2) + Math.abs(f2) || 200) * y2);
+  static extractContoursFromText(t2, { fontFamily: e2, fontStyle: i2, fontWeight: n2 }, r2, s2, a2, o2) {
+    let l2 = new OffscreenCanvas(1, 1), c2 = l2.getContext("2d", { alpha: false });
+    const h2 = c2.font = `${i2} ${n2} 200px ${e2}`, { actualBoundingBoxLeft: d2, actualBoundingBoxRight: u2, actualBoundingBoxAscent: p2, actualBoundingBoxDescent: g2, fontBoundingBoxAscent: m2, fontBoundingBoxDescent: f2, width: b2 } = c2.measureText(t2), y2 = 1.5, v2 = Math.ceil(Math.max(Math.abs(d2) + Math.abs(u2) || 0, b2) * y2), w2 = Math.ceil(Math.max(Math.abs(p2) + Math.abs(g2) || 200, Math.abs(m2) + Math.abs(f2) || 200) * y2);
     l2 = new OffscreenCanvas(v2, w2);
-    h2 = l2.getContext("2d", { alpha: true, willReadFrequently: true });
-    h2.font = c2;
-    h2.filter = "grayscale(1)";
-    h2.fillStyle = "white";
-    h2.fillRect(0, 0, v2, w2);
-    h2.fillStyle = "black";
-    h2.fillText(t2, 0.5 * v2 / 2, 1.5 * w2 / 2);
-    const x2 = this.#ph(h2.getImageData(0, 0, v2, w2).data), A2 = this.#uh(x2), E2 = this.#gh(A2), C2 = this.#lh(x2, v2, w2, E2);
-    return this.processDrawnLines({ lines: { curves: C2, width: v2, height: w2 }, pageWidth: s2, pageHeight: r2, rotation: a2, innerMargin: o2, mustSmooth: true, areContours: true });
+    c2 = l2.getContext("2d", { alpha: true, willReadFrequently: true });
+    c2.font = h2;
+    c2.filter = "grayscale(1)";
+    c2.fillStyle = "white";
+    c2.fillRect(0, 0, v2, w2);
+    c2.fillStyle = "black";
+    c2.fillText(t2, 0.5 * v2 / 2, 1.5 * w2 / 2);
+    const A2 = this.#xc(c2.getImageData(0, 0, v2, w2).data), x2 = this.#Ac(A2), E2 = this.#Ec(x2), C2 = this.#bc(A2, v2, w2, E2);
+    return this.processDrawnLines({ lines: { curves: C2, width: v2, height: w2 }, pageWidth: r2, pageHeight: s2, rotation: a2, innerMargin: o2, mustSmooth: true, areContours: true });
   }
-  static process(t2, e2, i2, n2, s2) {
-    const [r2, a2, o2] = this.#mh(t2), [l2, h2] = this.#dh(r2, a2, o2, Math.hypot(a2, o2) * this.#nh.sigmaSFactor, this.#nh.sigmaR, this.#nh.kernelSize), c2 = this.#gh(h2), d2 = this.#lh(l2, a2, o2, c2);
-    return this.processDrawnLines({ lines: { curves: d2, width: a2, height: o2 }, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: s2, mustSmooth: true, areContours: true });
+  static process(t2, e2, i2, n2, r2) {
+    const [s2, a2, o2] = this.#Cc(t2), [l2, c2] = this.#wc(s2, a2, o2, Math.hypot(a2, o2) * this.#uc.sigmaSFactor, this.#uc.sigmaR, this.#uc.kernelSize), h2 = this.#Ec(c2), d2 = this.#bc(l2, a2, o2, h2);
+    return this.processDrawnLines({ lines: { curves: d2, width: a2, height: o2 }, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: r2, mustSmooth: true, areContours: true });
   }
-  static processDrawnLines({ lines: t2, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: s2, mustSmooth: r2, areContours: a2 }) {
+  static processDrawnLines({ lines: t2, pageWidth: e2, pageHeight: i2, rotation: n2, innerMargin: r2, mustSmooth: s2, areContours: a2 }) {
     n2 % 180 != 0 && ([e2, i2] = [i2, e2]);
-    const { curves: o2, width: l2, height: h2 } = t2, c2 = t2.thickness ?? 0, d2 = [], u2 = Math.min(e2 / l2, i2 / h2), p2 = u2 / e2, g2 = u2 / i2, m2 = [];
+    const { curves: o2, width: l2, height: c2 } = t2, h2 = t2.thickness ?? 0, d2 = [], u2 = Math.min(e2 / l2, i2 / c2), p2 = u2 / e2, g2 = u2 / i2, m2 = [];
     for (const { points: t3 } of o2) {
-      const e3 = r2 ? this.#ch(t3) : t3;
+      const e3 = s2 ? this.#vc(t3) : t3;
       if (!e3) continue;
       m2.push(e3);
-      const i3 = e3.length, n3 = new Float32Array(i3), s3 = new Float32Array(3 * (2 === i3 ? 2 : i3 - 2));
-      d2.push({ line: s3, points: n3 });
+      const i3 = e3.length, n3 = new Float32Array(i3), r3 = new Float32Array(3 * (2 === i3 ? 2 : i3 - 2));
+      d2.push({ line: r3, points: n3 });
       if (2 === i3) {
         n3[0] = e3[0] * p2;
         n3[1] = e3[1] * g2;
-        s3.set([NaN, NaN, NaN, NaN, n3[0], n3[1]], 0);
+        r3.set([NaN, NaN, NaN, NaN, n3[0], n3[1]], 0);
         continue;
       }
-      let [a3, o3, l3, h3] = e3;
+      let [a3, o3, l3, c3] = e3;
       a3 *= p2;
       o3 *= g2;
       l3 *= p2;
-      h3 *= g2;
-      n3.set([a3, o3, l3, h3], 0);
-      s3.set([NaN, NaN, NaN, NaN, a3, o3], 0);
+      c3 *= g2;
+      n3.set([a3, o3, l3, c3], 0);
+      r3.set([NaN, NaN, NaN, NaN, a3, o3], 0);
       for (let t4 = 4; t4 < i3; t4 += 2) {
-        const i4 = n3[t4] = e3[t4] * p2, r3 = n3[t4 + 1] = e3[t4 + 1] * g2;
-        s3.set(Outline.createBezierPoints(a3, o3, l3, h3, i4, r3), 3 * (t4 - 2));
-        [a3, o3, l3, h3] = [l3, h3, i4, r3];
+        const i4 = n3[t4] = e3[t4] * p2, s3 = n3[t4 + 1] = e3[t4 + 1] * g2;
+        r3.set(Outline.createBezierPoints(a3, o3, l3, c3, i4, s3), 3 * (t4 - 2));
+        [a3, o3, l3, c3] = [l3, c3, i4, s3];
       }
     }
     if (0 === d2.length) return null;
     const f2 = a2 ? new ContourDrawOutline() : new InkDrawOutline();
-    f2.build(d2, e2, i2, 1, n2, a2 ? 0 : c2, s2);
-    return { outline: f2, newCurves: m2, areContours: a2, thickness: c2, width: l2, height: h2 };
+    f2.build(d2, e2, i2, 1, n2, a2 ? 0 : h2, r2);
+    return { outline: f2, newCurves: m2, areContours: a2, thickness: h2, width: l2, height: c2 };
   }
-  static async compressSignature({ outlines: t2, areContours: e2, thickness: i2, width: n2, height: s2 }) {
-    let r2, a2 = 1 / 0, o2 = -1 / 0, l2 = 0;
+  static async compressSignature({ outlines: t2, areContours: e2, thickness: i2, width: n2, height: r2 }) {
+    let s2, a2 = 1 / 0, o2 = -1 / 0, l2 = 0;
     for (const e3 of t2) {
       l2 += e3.length;
       for (let t3 = 2, i3 = e3.length; t3 < i3; t3++) {
@@ -19359,17 +19711,17 @@ var SignatureExtractor = class {
         o2 = Math.max(o2, i4);
       }
     }
-    r2 = a2 >= -128 && o2 <= 127 ? Int8Array : a2 >= -32768 && o2 <= 32767 ? Int16Array : Int32Array;
-    const h2 = t2.length, c2 = 8 + 3 * h2, d2 = new Uint32Array(c2);
+    s2 = a2 >= -128 && o2 <= 127 ? Int8Array : a2 >= -32768 && o2 <= 32767 ? Int16Array : Int32Array;
+    const c2 = t2.length, h2 = 8 + 3 * c2, d2 = new Uint32Array(h2);
     let u2 = 0;
-    d2[u2++] = c2 * Uint32Array.BYTES_PER_ELEMENT + (l2 - 2 * h2) * r2.BYTES_PER_ELEMENT;
+    d2[u2++] = h2 * Uint32Array.BYTES_PER_ELEMENT + (l2 - 2 * c2) * s2.BYTES_PER_ELEMENT;
     d2[u2++] = 0;
     d2[u2++] = n2;
-    d2[u2++] = s2;
+    d2[u2++] = r2;
     d2[u2++] = e2 ? 0 : 1;
     d2[u2++] = Math.max(0, Math.floor(i2 ?? 0));
-    d2[u2++] = h2;
-    d2[u2++] = r2.BYTES_PER_ELEMENT;
+    d2[u2++] = c2;
+    d2[u2++] = s2.BYTES_PER_ELEMENT;
     for (const e3 of t2) {
       d2[u2++] = e3.length - 2;
       d2[u2++] = e3[0];
@@ -19378,7 +19730,7 @@ var SignatureExtractor = class {
     const p2 = new CompressionStream("deflate-raw"), g2 = p2.writable.getWriter();
     await g2.ready;
     g2.write(d2);
-    const m2 = r2.prototype.constructor;
+    const m2 = s2.prototype.constructor;
     for (const e3 of t2) {
       const t3 = new m2(e3.length - 2);
       for (let i3 = 2, n3 = e3.length; i3 < n3; i3++) t3[i3 - 2] = e3[i3] - e3[i3 - 2];
@@ -19389,32 +19741,32 @@ var SignatureExtractor = class {
   }
   static async decompressSignature(t2) {
     try {
-      const e2 = Uint8Array.fromBase64(t2), { readable: i2, writable: n2 } = new DecompressionStream("deflate-raw"), s2 = n2.getWriter();
-      await s2.ready;
-      s2.write(e2).then(async () => {
-        await s2.ready;
-        await s2.close();
+      const e2 = Uint8Array.fromBase64(t2), { readable: i2, writable: n2 } = new DecompressionStream("deflate-raw"), r2 = n2.getWriter();
+      await r2.ready;
+      r2.write(e2).then(async () => {
+        await r2.ready;
+        await r2.close();
       }).catch(() => {
       });
-      let r2 = null, a2 = 0;
+      let s2 = null, a2 = 0;
       for await (const t3 of i2) {
-        r2 ||= new Uint8Array(new Uint32Array(t3.buffer, 0, 4)[0]);
-        r2.set(t3, a2);
+        s2 ||= new Uint8Array(new Uint32Array(t3.buffer, 0, 4)[0]);
+        s2.set(t3, a2);
         a2 += t3.length;
       }
-      const o2 = new Uint32Array(r2.buffer, 0, r2.length >> 2), l2 = o2[1];
+      const o2 = new Uint32Array(s2.buffer, 0, s2.length >> 2), l2 = o2[1];
       if (0 !== l2) throw new Error(`Invalid version: ${l2}`);
-      const h2 = o2[2], c2 = o2[3], d2 = 0 === o2[4], u2 = o2[5], p2 = o2[6], g2 = o2[7], m2 = [], f2 = (8 + 3 * p2) * Uint32Array.BYTES_PER_ELEMENT;
+      const c2 = o2[2], h2 = o2[3], d2 = 0 === o2[4], u2 = o2[5], p2 = o2[6], g2 = o2[7], m2 = [], f2 = (8 + 3 * p2) * Uint32Array.BYTES_PER_ELEMENT;
       let b2;
       switch (g2) {
         case Int8Array.BYTES_PER_ELEMENT:
-          b2 = new Int8Array(r2.buffer, f2);
+          b2 = new Int8Array(s2.buffer, f2);
           break;
         case Int16Array.BYTES_PER_ELEMENT:
-          b2 = new Int16Array(r2.buffer, f2);
+          b2 = new Int16Array(s2.buffer, f2);
           break;
         case Int32Array.BYTES_PER_ELEMENT:
-          b2 = new Int32Array(r2.buffer, f2);
+          b2 = new Int32Array(s2.buffer, f2);
       }
       a2 = 0;
       for (let t3 = 0; t3 < p2; t3++) {
@@ -19423,7 +19775,7 @@ var SignatureExtractor = class {
         for (let e4 = 0; e4 < 2; e4++) i3[e4] = o2[3 * t3 + 8 + e4 + 1];
         for (let t4 = 0; t4 < e3; t4++) i3[t4 + 2] = i3[t4] + b2[a2++];
       }
-      return { areContours: d2, thickness: u2, outlines: m2, width: h2, height: c2 };
+      return { areContours: d2, thickness: u2, outlines: m2, width: c2, height: h2 };
     } catch (t3) {
       warn(`decompressSignature: ${t3}`);
       return null;
@@ -19453,18 +19805,18 @@ var DrawnSignatureOptions = class _DrawnSignatureOptions extends InkDrawingOptio
   }
 };
 var SignatureEditor = class _SignatureEditor extends DrawingEditor {
-  #fh = false;
-  #bh = null;
-  #yh = null;
-  #vh = null;
+  #Sc = false;
+  #Tc = null;
+  #_c = null;
+  #kc = null;
   static _type = "signature";
   static _editorType = y.SIGNATURE;
   static _defaultDrawingOptions = null;
   constructor(t2) {
     super({ ...t2, mustBeCommitted: true, name: "signatureEditor" });
     this._willKeepAspectRatio = true;
-    this.#yh = t2.signatureData || null;
-    this.#bh = null;
+    this.#_c = t2.signatureData || null;
+    this.#Tc = null;
     this.defaultL10nId = "pdfjs-editor-signature-editor1";
   }
   static initialize(t2, e2) {
@@ -19487,7 +19839,7 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     return false;
   }
   get telemetryFinalData() {
-    return { type: "signature", hasDescription: !!this.#bh };
+    return { type: "signature", hasDescription: !!this.#Tc };
   }
   static computeTelemetryFinalData(t2) {
     const e2 = t2.get("hasDescription");
@@ -19509,15 +19861,15 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
       e2 = this.y;
     }
     super.render();
-    if (null === this._drawId) if (this.#yh) {
-      const { lines: t3, mustSmooth: e3, areContours: i3, description: n2, uuid: s2, heightInPage: r2 } = this.#yh, { rawDims: { pageWidth: a2, pageHeight: o2 }, rotation: l2 } = this.parent.viewport, h2 = SignatureExtractor.processDrawnLines({ lines: t3, pageWidth: a2, pageHeight: o2, rotation: l2, innerMargin: _SignatureEditor._INNER_MARGIN, mustSmooth: e3, areContours: i3 });
-      this.addSignature(h2, r2, n2, s2);
+    if (null === this._drawId) if (this.#_c) {
+      const { lines: t3, mustSmooth: e3, areContours: i3, description: n2, uuid: r2, heightInPage: s2 } = this.#_c, { rawDims: { pageWidth: a2, pageHeight: o2 }, rotation: l2 } = this.parent.viewport, c2 = SignatureExtractor.processDrawnLines({ lines: t3, pageWidth: a2, pageHeight: o2, rotation: l2, innerMargin: _SignatureEditor._INNER_MARGIN, mustSmooth: e3, areContours: i3 });
+      this.addSignature(c2, s2, n2, r2);
     } else {
       this.div.setAttribute("data-l10n-args", JSON.stringify({ description: "" }));
       this.div.hidden = true;
       this._uiManager.getSignature(this);
     }
-    else this.div.setAttribute("data-l10n-args", JSON.stringify({ description: this.#bh || "" }));
+    else this.div.setAttribute("data-l10n-args", JSON.stringify({ description: this.#Tc || "" }));
     if (i2) {
       this._isCopy = true;
       this._moveAfterPaste(t2, e2);
@@ -19525,17 +19877,17 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     return this.div;
   }
   setUuid(t2) {
-    this.#vh = t2;
+    this.#kc = t2;
     this.addEditToolbar();
   }
   getUuid() {
-    return this.#vh;
+    return this.#kc;
   }
   get description() {
-    return this.#bh;
+    return this.#Tc;
   }
   set description(t2) {
-    this.#bh = t2;
+    this.#Tc = t2;
     if (this.div) {
       this.div.setAttribute("data-l10n-args", JSON.stringify({ description: t2 }));
       super.addEditToolbar().then((e2) => {
@@ -19544,35 +19896,35 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     }
   }
   getSignaturePreview() {
-    const { newCurves: t2, areContours: e2, thickness: i2, width: n2, height: s2 } = this.#yh, r2 = Math.max(n2, s2);
-    return { areContours: e2, outline: SignatureExtractor.processDrawnLines({ lines: { curves: t2.map((t3) => ({ points: t3 })), thickness: i2, width: n2, height: s2 }, pageWidth: r2, pageHeight: r2, rotation: 0, innerMargin: 0, mustSmooth: false, areContours: e2 }).outline };
+    const { newCurves: t2, areContours: e2, thickness: i2, width: n2, height: r2 } = this.#_c, s2 = Math.max(n2, r2);
+    return { areContours: e2, outline: SignatureExtractor.processDrawnLines({ lines: { curves: t2.map((t3) => ({ points: t3 })), thickness: i2, width: n2, height: r2 }, pageWidth: s2, pageHeight: s2, rotation: 0, innerMargin: 0, mustSmooth: false, areContours: e2 }).outline };
   }
   get toolbarButtons() {
     return this._uiManager.signatureManager ? [["editSignature", this._uiManager.signatureManager]] : super.toolbarButtons;
   }
   addSignature(t2, e2, i2, n2) {
-    const { x: s2, y: r2 } = this, { outline: a2 } = this.#yh = t2;
-    this.#fh = a2 instanceof ContourDrawOutline;
+    const { x: r2, y: s2 } = this, { outline: a2 } = this.#_c = t2;
+    this.#Sc = a2 instanceof ContourDrawOutline;
     this.description = i2;
     let o2;
-    if (this.#fh) o2 = _SignatureEditor.getDefaultDrawingOptions();
+    if (this.#Sc) o2 = _SignatureEditor.getDefaultDrawingOptions();
     else {
       o2 = _SignatureEditor._defaultDrawnSignatureOptions.clone();
       o2.updateProperties({ "stroke-width": a2.thickness });
     }
     this._addOutlines({ drawOutlines: a2, drawingOptions: o2 });
     const [, l2] = this.pageDimensions;
-    let h2 = e2 / l2;
-    h2 = h2 >= 1 ? 0.5 : h2;
-    this.width *= h2 / this.height;
+    let c2 = e2 / l2;
+    c2 = c2 >= 1 ? 0.5 : c2;
+    this.width *= c2 / this.height;
     if (this.width >= 1) {
-      h2 *= 0.9 / this.width;
+      c2 *= 0.9 / this.width;
       this.width = 0.9;
     }
-    this.height = h2;
+    this.height = c2;
     this.setDims();
-    this.x = s2;
-    this.y = r2;
+    this.x = r2;
+    this.y = s2;
     this.center();
     this._onResized();
     this.onScaleChanging();
@@ -19587,8 +19939,8 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     return SignatureExtractor.process(t2, e2, i2, n2, _SignatureEditor._INNER_MARGIN);
   }
   getFromText(t2, e2) {
-    const { rawDims: { pageWidth: i2, pageHeight: n2 }, rotation: s2 } = this.parent.viewport;
-    return SignatureExtractor.extractContoursFromText(t2, e2, i2, n2, s2, _SignatureEditor._INNER_MARGIN);
+    const { rawDims: { pageWidth: i2, pageHeight: n2 }, rotation: r2 } = this.parent.viewport;
+    return SignatureExtractor.extractContoursFromText(t2, e2, i2, n2, r2, _SignatureEditor._INNER_MARGIN);
   }
   getDrawnSignature(t2) {
     const { rawDims: { pageWidth: e2, pageHeight: i2 }, rotation: n2 } = this.parent.viewport;
@@ -19603,52 +19955,52 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
   }
   serialize(t2 = false) {
     if (this.isEmpty()) return null;
-    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { "stroke-width": n2 } } = this, s2 = Object.assign(super.serialize(t2), { isSignature: true, areContours: this.#fh, color: [0, 0, 0], thickness: this.#fh ? 0 : n2 });
-    this.addComment(s2);
+    const { lines: e2, points: i2 } = this.serializeDraw(t2), { _drawingOptions: { "stroke-width": n2 } } = this, r2 = Object.assign(super.serialize(t2), { isSignature: true, areContours: this.#Sc, color: [0, 0, 0], thickness: this.#Sc ? 0 : n2 });
+    this.addComment(r2);
     if (t2) {
-      s2.paths = { lines: e2, points: i2 };
-      s2.uuid = this.#vh;
-      s2.isCopy = true;
-    } else s2.lines = e2;
-    this.#bh && (s2.accessibilityData = { type: "Figure", alt: this.#bh });
-    return s2;
+      r2.paths = { lines: e2, points: i2 };
+      r2.uuid = this.#kc;
+      r2.isCopy = true;
+    } else r2.lines = e2;
+    this.#Tc && (r2.accessibilityData = { type: "Figure", alt: this.#Tc });
+    return r2;
   }
-  static deserializeDraw(t2, e2, i2, n2, s2, r2) {
-    return r2.areContours ? ContourDrawOutline.deserialize(t2, e2, i2, n2, s2, r2) : InkDrawOutline.deserialize(t2, e2, i2, n2, s2, r2);
+  static deserializeDraw(t2, e2, i2, n2, r2, s2) {
+    return s2.areContours ? ContourDrawOutline.deserialize(t2, e2, i2, n2, r2, s2) : InkDrawOutline.deserialize(t2, e2, i2, n2, r2, s2);
   }
   static async deserialize(t2, e2, i2) {
     const n2 = await super.deserialize(t2, e2, i2);
-    n2.#fh = t2.areContours;
+    n2.#Sc = t2.areContours;
     n2.description = t2.accessibilityData?.alt || "";
-    n2.#vh = t2.uuid;
+    n2.#kc = t2.uuid;
     return n2;
   }
 };
 var StampEditor = class extends AnnotationEditor {
-  #wh = null;
-  #xh = null;
-  #Ah = null;
-  #Eh = null;
-  #Ch = null;
-  #Sh = "";
-  #Th = null;
-  #_h = false;
-  #kh = null;
-  #Dh = false;
-  #Mh = false;
+  #Dc = null;
+  #Pc = null;
+  #Mc = null;
+  #Ic = null;
+  #Fc = null;
+  #Oc = "";
+  #Rc = null;
+  #Bc = false;
+  #Lc = null;
+  #Nc = false;
+  #Uc = false;
   static _type = "stamp";
   static _editorType = y.STAMP;
   constructor(t2) {
     super({ ...t2, name: "stampEditor" });
-    this.#Eh = t2.bitmapUrl;
-    this.#Ch = t2.bitmapFile;
+    this.#Ic = t2.bitmapUrl;
+    this.#Fc = t2.bitmapFile;
     this.defaultL10nId = "pdfjs-editor-stamp-editor";
   }
   static initialize(t2, e2) {
     AnnotationEditor.initialize(t2, e2);
   }
   static isHandlingMimeForPasting(t2) {
-    return X.includes(t2);
+    return K.includes(t2);
   }
   static paste(t2, e2) {
     e2.pasteEditor({ mode: y.STAMP }, { bitmapFile: t2.getAsFile() });
@@ -19664,26 +20016,26 @@ var StampEditor = class extends AnnotationEditor {
     const e2 = t2.get("hasAltText");
     return { hasAltText: e2.get(true) ?? 0, hasNoAltText: e2.get(false) ?? 0 };
   }
-  #Ph(t2, e2 = false) {
+  #Hc(t2, e2 = false) {
     if (t2) {
-      this.#wh = t2.bitmap;
+      this.#Dc = t2.bitmap;
       if (!e2) {
-        this.#xh = t2.id;
-        this.#Dh = t2.isSvg;
+        this.#Pc = t2.id;
+        this.#Nc = t2.isSvg;
       }
-      t2.file && (this.#Sh = t2.file.name);
-      this.#Ih();
+      t2.file && (this.#Oc = t2.file.name);
+      this.#zc();
     } else this.remove();
   }
-  #Fh() {
-    this.#Ah = null;
+  #Gc() {
+    this.#Mc = null;
     this._uiManager.enableWaiting(false);
-    if (this.#Th) if (this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#wh) this.addEditToolbar().then(() => {
+    if (this.#Rc) if (this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#Dc) this.addEditToolbar().then(() => {
       this._editToolbar.hide();
       this._uiManager.editAltText(this, true);
     });
     else {
-      if (!this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#wh) {
+      if (!this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && this.#Dc) {
         this._reportTelemetry({ action: "pdfjs.image.image_added", data: { alt_text_modal: false, alt_text_type: "empty" } });
         try {
           this.mlGuessAltText();
@@ -19698,7 +20050,7 @@ var StampEditor = class extends AnnotationEditor {
     const { mlManager: i2 } = this._uiManager;
     if (!i2) throw new Error("No ML.");
     if (!await i2.isEnabledFor("altText")) throw new Error("ML isn't enabled for alt text.");
-    const { data: n2, width: s2, height: r2 } = t2 || this.copyCanvas(null, null, true).imageData, a2 = await i2.guess({ name: "altText", request: { data: n2, width: s2, height: r2, channels: n2.length / (s2 * r2) } });
+    const { data: n2, width: r2, height: s2 } = t2 || this.copyCanvas(null, null, true).imageData, a2 = await i2.guess({ name: "altText", request: { data: n2, width: r2, height: s2, channels: n2.length / (r2 * s2) } });
     if (!a2) throw new Error("No response from the AI service.");
     if (a2.error) throw new Error("Error from the AI service.");
     if (a2.cancel) return null;
@@ -19708,37 +20060,37 @@ var StampEditor = class extends AnnotationEditor {
     e2 && !this.hasAltTextData() && (this.altTextData = { alt: o2, decorative: false });
     return o2;
   }
-  #Oh() {
-    if (this.#xh) {
+  #jc() {
+    if (this.#Pc) {
       this._uiManager.enableWaiting(true);
-      this._uiManager.imageManager.getFromId(this.#xh).then((t3) => this.#Ph(t3, true)).finally(() => this.#Fh());
+      this._uiManager.imageManager.getFromId(this.#Pc).then((t3) => this.#Hc(t3, true)).finally(() => this.#Gc());
       return;
     }
-    if (this.#Eh) {
-      const t3 = this.#Eh;
-      this.#Eh = null;
+    if (this.#Ic) {
+      const t3 = this.#Ic;
+      this.#Ic = null;
       this._uiManager.enableWaiting(true);
-      this.#Ah = this._uiManager.imageManager.getFromUrl(t3).then((t4) => this.#Ph(t4)).finally(() => this.#Fh());
+      this.#Mc = this._uiManager.imageManager.getFromUrl(t3).then((t4) => this.#Hc(t4)).finally(() => this.#Gc());
       return;
     }
-    if (this.#Ch) {
-      const t3 = this.#Ch;
-      this.#Ch = null;
+    if (this.#Fc) {
+      const t3 = this.#Fc;
+      this.#Fc = null;
       this._uiManager.enableWaiting(true);
-      this.#Ah = this._uiManager.imageManager.getFromFile(t3).then((t4) => this.#Ph(t4)).finally(() => this.#Fh());
+      this.#Mc = this._uiManager.imageManager.getFromFile(t3).then((t4) => this.#Hc(t4)).finally(() => this.#Gc());
       return;
     }
     const t2 = document.createElement("input");
     t2.type = "file";
-    t2.accept = X.join(",");
+    t2.accept = K.join(",");
     const e2 = this._uiManager._signal;
-    this.#Ah = new Promise((i2) => {
+    this.#Mc = new Promise((i2) => {
       t2.addEventListener("change", async () => {
         if (t2.files && 0 !== t2.files.length) {
           this._uiManager.enableWaiting(true);
           const e3 = await this._uiManager.imageManager.getFromFile(t2.files[0]);
           this._reportTelemetry({ action: "pdfjs.image.image_selected", data: { alt_text_modal: this._uiManager.useNewAltTextFlow } });
-          this.#Ph(e3);
+          this.#Hc(e3);
         } else this.remove();
         i2();
       }, { signal: e2 });
@@ -19746,18 +20098,18 @@ var StampEditor = class extends AnnotationEditor {
         this.remove();
         i2();
       }, { signal: e2 });
-    }).finally(() => this.#Fh());
+    }).finally(() => this.#Gc());
     t2.click();
   }
   remove() {
-    if (this.#xh) {
-      this.#wh = null;
-      this._uiManager.imageManager.deleteId(this.#xh);
-      this.#Th?.remove();
-      this.#Th = null;
-      if (this.#kh) {
-        clearTimeout(this.#kh);
-        this.#kh = null;
+    if (this.#Pc) {
+      this.#Dc = null;
+      this._uiManager.imageManager.deleteId(this.#Pc);
+      this.#Rc?.remove();
+      this.#Rc = null;
+      if (this.#Lc) {
+        clearTimeout(this.#Lc);
+        this.#Lc = null;
       }
     }
     super.remove();
@@ -19766,17 +20118,17 @@ var StampEditor = class extends AnnotationEditor {
     if (this.parent) {
       super.rebuild();
       if (null !== this.div) {
-        this.#xh && null === this.#Th && this.#Oh();
+        this.#Pc && null === this.#Rc && this.#jc();
         this.isAttachedToDOM || this.parent.add(this);
       }
-    } else this.#xh && this.#Oh();
+    } else this.#Pc && this.#jc();
   }
   onceAdded(t2) {
     this._isDraggable = true;
     t2 && this.div.focus();
   }
   isEmpty() {
-    return !(this.#Ah || this.#wh || this.#Eh || this.#Ch || this.#xh || this.#_h);
+    return !(this.#Mc || this.#Dc || this.#Ic || this.#Fc || this.#Pc || this.#Bc);
   }
   get toolbarButtons() {
     return [["altText", this.createAltText()]];
@@ -19794,7 +20146,7 @@ var StampEditor = class extends AnnotationEditor {
     super.render();
     this.div.hidden = true;
     this.createAltText();
-    this.#_h || (this.#wh ? this.#Ih() : this.#Oh());
+    this.#Bc || (this.#Dc ? this.#zc() : this.#jc());
     this._isCopy && this._moveAfterPaste(t2, e2);
     this._uiManager.addShouldRescale(this);
     return this.div;
@@ -19803,10 +20155,10 @@ var StampEditor = class extends AnnotationEditor {
     const { id: i2, bitmap: n2 } = this._uiManager.imageManager.getFromCanvas(t2, e2);
     e2.remove();
     if (i2 && this._uiManager.imageManager.isValidId(i2)) {
-      this.#xh = i2;
-      n2 && (this.#wh = n2);
-      this.#_h = false;
-      this.#Ih();
+      this.#Pc = i2;
+      n2 && (this.#Dc = n2);
+      this.#Bc = false;
+      this.#zc();
     }
   }
   _onResized() {
@@ -19814,184 +20166,184 @@ var StampEditor = class extends AnnotationEditor {
   }
   onScaleChanging() {
     if (!this.parent) return;
-    null !== this.#kh && clearTimeout(this.#kh);
-    this.#kh = setTimeout(() => {
-      this.#kh = null;
-      this.#Rh();
+    null !== this.#Lc && clearTimeout(this.#Lc);
+    this.#Lc = setTimeout(() => {
+      this.#Lc = null;
+      this.#Wc();
     }, 200);
   }
-  #Ih() {
+  #zc() {
     const { div: t2 } = this;
-    let { width: e2, height: i2 } = this.#wh;
-    const [n2, s2] = this.pageDimensions, r2 = 0.75;
+    let { width: e2, height: i2 } = this.#Dc;
+    const [n2, r2] = this.pageDimensions, s2 = 0.75;
     if (this.width) {
       e2 = this.width * n2;
-      i2 = this.height * s2;
-    } else if (e2 > r2 * n2 || i2 > r2 * s2) {
-      const t3 = Math.min(r2 * n2 / e2, r2 * s2 / i2);
+      i2 = this.height * r2;
+    } else if (e2 > s2 * n2 || i2 > s2 * r2) {
+      const t3 = Math.min(s2 * n2 / e2, s2 * r2 / i2);
       e2 *= t3;
       i2 *= t3;
     }
     this._uiManager.enableWaiting(false);
-    const a2 = this.#Th = document.createElement("canvas");
+    const a2 = this.#Rc = document.createElement("canvas");
     a2.setAttribute("role", "img");
     this.addContainer(a2);
     this.width = e2 / n2;
-    this.height = i2 / s2;
+    this.height = i2 / r2;
     this.setDims();
     this._initialOptions?.isCentered ? this.center() : this.fixAndSetPosition();
     this._initialOptions = null;
     this._uiManager.useNewAltTextWhenAddingImage && this._uiManager.useNewAltTextFlow && !this.annotationElementId || (t2.hidden = false);
-    this.#Rh();
-    if (!this.#Mh) {
+    this.#Wc();
+    if (!this.#Uc) {
       this.parent.addUndoableEditor(this);
-      this.#Mh = true;
+      this.#Uc = true;
     }
     this._reportTelemetry({ action: "inserted_image" });
-    this.#Sh && this.div.setAttribute("aria-description", this.#Sh);
+    this.#Oc && this.div.setAttribute("aria-description", this.#Oc);
     this.annotationElementId || this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.stamp);
   }
   copyCanvas(t2, e2, i2 = false) {
     t2 ||= 224;
-    const { width: n2, height: s2 } = this.#wh, r2 = new OutputScale();
-    let a2 = this.#wh, o2 = n2, l2 = s2, h2 = null;
+    const { width: n2, height: r2 } = this.#Dc, s2 = new OutputScale();
+    let a2 = this.#Dc, o2 = n2, l2 = r2, c2 = null;
     if (e2) {
-      if (n2 > e2 || s2 > e2) {
-        const t4 = Math.min(e2 / n2, e2 / s2);
+      if (n2 > e2 || r2 > e2) {
+        const t4 = Math.min(e2 / n2, e2 / r2);
         o2 = Math.floor(n2 * t4);
-        l2 = Math.floor(s2 * t4);
+        l2 = Math.floor(r2 * t4);
       }
-      h2 = document.createElement("canvas");
-      const t3 = h2.width = Math.ceil(o2 * r2.sx), i3 = h2.height = Math.ceil(l2 * r2.sy);
-      this.#Dh || (a2 = this.#Bh(t3, i3));
-      const c3 = h2.getContext("2d");
-      c3.filter = this._uiManager.hcmFilter;
+      c2 = document.createElement("canvas");
+      const t3 = c2.width = Math.ceil(o2 * s2.sx), i3 = c2.height = Math.ceil(l2 * s2.sy);
+      this.#Nc || (a2 = this.#Vc(t3, i3));
+      const h3 = c2.getContext("2d");
+      h3.filter = this._uiManager.hcmFilter;
       let d2 = "white", u2 = "#cfcfd8";
       if ("none" !== this._uiManager.hcmFilter) u2 = "black";
       else if (ColorScheme.isDarkMode) {
         d2 = "#8f8f9d";
         u2 = "#42414d";
       }
-      const p2 = 15, g2 = p2 * r2.sx, m2 = p2 * r2.sy, f2 = new OffscreenCanvas(2 * g2, 2 * m2), b2 = f2.getContext("2d");
+      const p2 = 15, g2 = p2 * s2.sx, m2 = p2 * s2.sy, f2 = new OffscreenCanvas(2 * g2, 2 * m2), b2 = f2.getContext("2d");
       b2.fillStyle = d2;
       b2.fillRect(0, 0, 2 * g2, 2 * m2);
       b2.fillStyle = u2;
       b2.fillRect(0, 0, g2, m2);
       b2.fillRect(g2, m2, g2, m2);
-      c3.fillStyle = c3.createPattern(f2, "repeat");
-      c3.fillRect(0, 0, t3, i3);
-      c3.drawImage(a2, 0, 0, a2.width, a2.height, 0, 0, t3, i3);
+      h3.fillStyle = h3.createPattern(f2, "repeat");
+      h3.fillRect(0, 0, t3, i3);
+      h3.drawImage(a2, 0, 0, a2.width, a2.height, 0, 0, t3, i3);
     }
-    let c2 = null;
+    let h2 = null;
     if (i2) {
       let e3, i3;
-      if (r2.symmetric && a2.width < t2 && a2.height < t2) {
+      if (s2.symmetric && a2.width < t2 && a2.height < t2) {
         e3 = a2.width;
         i3 = a2.height;
       } else {
-        a2 = this.#wh;
-        if (n2 > t2 || s2 > t2) {
-          const r3 = Math.min(t2 / n2, t2 / s2);
-          e3 = Math.floor(n2 * r3);
-          i3 = Math.floor(s2 * r3);
-          this.#Dh || (a2 = this.#Bh(e3, i3));
+        a2 = this.#Dc;
+        if (n2 > t2 || r2 > t2) {
+          const s3 = Math.min(t2 / n2, t2 / r2);
+          e3 = Math.floor(n2 * s3);
+          i3 = Math.floor(r2 * s3);
+          this.#Nc || (a2 = this.#Vc(e3, i3));
         }
       }
       const o3 = new OffscreenCanvas(e3, i3).getContext("2d", { willReadFrequently: true });
       o3.drawImage(a2, 0, 0, a2.width, a2.height, 0, 0, e3, i3);
-      c2 = { width: e3, height: i3, data: o3.getImageData(0, 0, e3, i3).data };
+      h2 = { width: e3, height: i3, data: o3.getImageData(0, 0, e3, i3).data };
     }
-    return { canvas: h2, width: o2, height: l2, imageData: c2 };
+    return { canvas: c2, width: o2, height: l2, imageData: h2 };
   }
-  #Bh(t2, e2) {
-    const { width: i2, height: n2 } = this.#wh;
-    let s2 = i2, r2 = n2, a2 = this.#wh;
-    for (; s2 > 2 * t2 || r2 > 2 * e2; ) {
-      const i3 = s2, n3 = r2;
-      s2 > 2 * t2 && (s2 = Math.ceil(s2 / 2));
-      r2 > 2 * e2 && (r2 = Math.ceil(r2 / 2));
-      const o2 = new OffscreenCanvas(s2, r2);
-      o2.getContext("2d").drawImage(a2, 0, 0, i3, n3, 0, 0, s2, r2);
+  #Vc(t2, e2) {
+    const { width: i2, height: n2 } = this.#Dc;
+    let r2 = i2, s2 = n2, a2 = this.#Dc;
+    for (; r2 > 2 * t2 || s2 > 2 * e2; ) {
+      const i3 = r2, n3 = s2;
+      r2 > 2 * t2 && (r2 = Math.ceil(r2 / 2));
+      s2 > 2 * e2 && (s2 = Math.ceil(s2 / 2));
+      const o2 = new OffscreenCanvas(r2, s2);
+      o2.getContext("2d").drawImage(a2, 0, 0, i3, n3, 0, 0, r2, s2);
       a2 = o2.transferToImageBitmap();
     }
     return a2;
   }
-  #Rh() {
-    const [t2, e2] = this.parentDimensions, { width: i2, height: n2 } = this, s2 = new OutputScale(), r2 = Math.ceil(i2 * t2 * s2.sx), a2 = Math.ceil(n2 * e2 * s2.sy), o2 = this.#Th;
-    if (!o2 || o2.width === r2 && o2.height === a2) return;
-    o2.width = r2;
+  #Wc() {
+    const [t2, e2] = this.parentDimensions, { width: i2, height: n2 } = this, r2 = new OutputScale(), s2 = Math.ceil(i2 * t2 * r2.sx), a2 = Math.ceil(n2 * e2 * r2.sy), o2 = this.#Rc;
+    if (!o2 || o2.width === s2 && o2.height === a2) return;
+    o2.width = s2;
     o2.height = a2;
-    const l2 = this.#Dh ? this.#wh : this.#Bh(r2, a2), h2 = o2.getContext("2d");
-    h2.filter = this._uiManager.hcmFilter;
-    h2.drawImage(l2, 0, 0, l2.width, l2.height, 0, 0, r2, a2);
+    const l2 = this.#Nc ? this.#Dc : this.#Vc(s2, a2), c2 = o2.getContext("2d");
+    c2.filter = this._uiManager.hcmFilter;
+    c2.drawImage(l2, 0, 0, l2.width, l2.height, 0, 0, s2, a2);
   }
-  #Lh(t2) {
+  #$c(t2) {
     if (t2) {
-      if (this.#Dh) {
-        const t4 = this._uiManager.imageManager.getSvgUrl(this.#xh);
+      if (this.#Nc) {
+        const t4 = this._uiManager.imageManager.getSvgUrl(this.#Pc);
         if (t4) return t4;
       }
       const t3 = document.createElement("canvas");
-      ({ width: t3.width, height: t3.height } = this.#wh);
-      t3.getContext("2d").drawImage(this.#wh, 0, 0);
+      ({ width: t3.width, height: t3.height } = this.#Dc);
+      t3.getContext("2d").drawImage(this.#Dc, 0, 0);
       return t3.toDataURL();
     }
-    if (this.#Dh) {
-      const [t3, e2] = this.pageDimensions, i2 = Math.round(this.width * t3 * PixelsPerInch.PDF_TO_CSS_UNITS), n2 = Math.round(this.height * e2 * PixelsPerInch.PDF_TO_CSS_UNITS), s2 = new OffscreenCanvas(i2, n2);
-      s2.getContext("2d").drawImage(this.#wh, 0, 0, this.#wh.width, this.#wh.height, 0, 0, i2, n2);
-      return s2.transferToImageBitmap();
+    if (this.#Nc) {
+      const [t3, e2] = this.pageDimensions, i2 = Math.round(this.width * t3 * PixelsPerInch.PDF_TO_CSS_UNITS), n2 = Math.round(this.height * e2 * PixelsPerInch.PDF_TO_CSS_UNITS), r2 = new OffscreenCanvas(i2, n2);
+      r2.getContext("2d").drawImage(this.#Dc, 0, 0, this.#Dc.width, this.#Dc.height, 0, 0, i2, n2);
+      return r2.transferToImageBitmap();
     }
-    return structuredClone(this.#wh);
+    return structuredClone(this.#Dc);
   }
   static async deserialize(t2, e2, i2) {
-    let n2 = null, s2 = false;
+    let n2 = null, r2 = false;
     if (t2 instanceof StampAnnotationElement) {
-      const { data: { rect: r3, rotation: a3, id: o3, structParent: l3, popupRef: h3, richText: c3, contentsObj: d3, creationDate: u3, modificationDate: p3 }, container: g2, parent: { page: { pageNumber: m2 } }, canvas: b2 } = t2;
+      const { data: { rect: s3, rotation: a3, id: o3, structParent: l3, popupRef: c3, richText: h3, contentsObj: d3, creationDate: u3, modificationDate: p3 }, container: g2, parent: { page: { pageNumber: m2 } }, canvas: b2 } = t2;
       let v2, w2;
       if (b2) {
         delete t2.canvas;
         ({ id: v2, bitmap: w2 } = i2.imageManager.getFromCanvas(g2.id, b2));
         b2.remove();
       } else {
-        s2 = true;
+        r2 = true;
         t2._hasNoCanvas = true;
       }
-      const x2 = (await e2._structTree.getAriaAttributes(`${f}${o3}`))?.get("aria-label") || "";
-      n2 = t2 = { annotationType: y.STAMP, bitmapId: v2, bitmap: w2, pageIndex: m2 - 1, rect: r3.slice(0), rotation: a3, annotationElementId: o3, id: o3, deleted: false, accessibilityData: { decorative: false, altText: x2 }, isSvg: false, structParent: l3, popupRef: h3, richText: c3, comment: d3?.str || null, creationDate: u3, modificationDate: p3 };
+      const A2 = (await e2._structTree.getAriaAttributes(`${f}${o3}`))?.get("aria-label") || "";
+      n2 = t2 = { annotationType: y.STAMP, bitmapId: v2, bitmap: w2, pageIndex: m2 - 1, rect: s3.slice(0), rotation: a3, annotationElementId: o3, id: o3, deleted: false, accessibilityData: { decorative: false, altText: A2 }, isSvg: false, structParent: l3, popupRef: c3, richText: h3, comment: d3?.str || null, creationDate: u3, modificationDate: p3 };
     }
-    const r2 = await super.deserialize(t2, e2, i2), { rect: a2, bitmap: o2, bitmapUrl: l2, bitmapId: h2, isSvg: c2, accessibilityData: d2 } = t2;
-    if (s2) {
-      i2.addMissingCanvas(t2.id, r2);
-      r2.#_h = true;
-    } else if (h2 && i2.imageManager.isValidId(h2)) {
-      r2.#xh = h2;
-      o2 && (r2.#wh = o2);
-    } else r2.#Eh = l2;
-    r2.#Dh = c2;
-    const [u2, p2] = r2.pageDimensions;
-    r2.width = (a2[2] - a2[0]) / u2;
-    r2.height = (a2[3] - a2[1]) / p2;
-    d2 && (r2.altTextData = d2);
-    r2._initialData = n2;
-    t2.comment && r2.setCommentData(t2);
-    r2.#Mh = !!n2;
-    return r2;
+    const s2 = await super.deserialize(t2, e2, i2), { rect: a2, bitmap: o2, bitmapUrl: l2, bitmapId: c2, isSvg: h2, accessibilityData: d2 } = t2;
+    if (r2) {
+      i2.addMissingCanvas(t2.id, s2);
+      s2.#Bc = true;
+    } else if (c2 && i2.imageManager.isValidId(c2)) {
+      s2.#Pc = c2;
+      o2 && (s2.#Dc = o2);
+    } else s2.#Ic = l2;
+    s2.#Nc = h2;
+    const [u2, p2] = s2.pageDimensions;
+    s2.width = (a2[2] - a2[0]) / u2;
+    s2.height = (a2[3] - a2[1]) / p2;
+    d2 && (s2.altTextData = d2);
+    s2._initialData = n2;
+    t2.comment && s2.setCommentData(t2);
+    s2.#Uc = !!n2;
+    return s2;
   }
   serialize(t2 = false, e2 = null) {
     if (this.isEmpty()) return null;
     if (this.deleted) return this.serializeDeleted();
-    const i2 = Object.assign(super.serialize(t2), { bitmapId: this.#xh, isSvg: this.#Dh });
+    const i2 = Object.assign(super.serialize(t2), { bitmapId: this.#Pc, isSvg: this.#Nc });
     this.addComment(i2);
     if (t2) {
-      i2.bitmapUrl = this.#Lh(true);
+      i2.bitmapUrl = this.#$c(true);
       i2.accessibilityData = this.serializeAltText(true);
       i2.isCopy = true;
       return i2;
     }
-    const { decorative: n2, altText: s2 } = this.serializeAltText(false);
-    !n2 && s2 && (i2.accessibilityData = { type: "Figure", alt: s2 });
+    const { decorative: n2, altText: r2 } = this.serializeAltText(false);
+    !n2 && r2 && (i2.accessibilityData = { type: "Figure", alt: r2 });
     if (this.annotationElementId) {
-      const t3 = this.#So(i2);
+      const t3 = this.#Lo(i2);
       if (t3.isSame) return null;
       t3.isSameAltText ? delete i2.accessibilityData : i2.accessibilityData.structParent = this._initialData.structParent ?? -1;
       i2.id = this.annotationElementId;
@@ -20000,25 +20352,25 @@ var StampEditor = class extends AnnotationEditor {
     }
     if (null === e2) return i2;
     e2.stamps ||= /* @__PURE__ */ new Map();
-    const r2 = this.#Dh ? (i2.rect[2] - i2.rect[0]) * (i2.rect[3] - i2.rect[1]) : null;
-    if (e2.stamps.has(this.#xh)) {
-      if (this.#Dh) {
-        const t3 = e2.stamps.get(this.#xh);
-        if (r2 > t3.area) {
-          t3.area = r2;
+    const s2 = this.#Nc ? (i2.rect[2] - i2.rect[0]) * (i2.rect[3] - i2.rect[1]) : null;
+    if (e2.stamps.has(this.#Pc)) {
+      if (this.#Nc) {
+        const t3 = e2.stamps.get(this.#Pc);
+        if (s2 > t3.area) {
+          t3.area = s2;
           t3.serialized.bitmap.close();
-          t3.serialized.bitmap = this.#Lh(false);
+          t3.serialized.bitmap = this.#$c(false);
         }
       }
     } else {
-      e2.stamps.set(this.#xh, { area: r2, serialized: i2 });
-      i2.bitmap = this.#Lh(false);
+      e2.stamps.set(this.#Pc, { area: s2, serialized: i2 });
+      i2.bitmap = this.#$c(false);
     }
     return i2;
   }
-  #So(t2) {
-    const { pageIndex: e2, accessibilityData: { altText: i2 } } = this._initialData, n2 = t2.pageIndex === e2, s2 = (t2.accessibilityData?.alt || "") === i2;
-    return { isSame: !this.hasEditedComment && !this._hasBeenMoved && !this._hasBeenResized && n2 && s2, isSameAltText: s2 };
+  #Lo(t2) {
+    const { pageIndex: e2, accessibilityData: { altText: i2 } } = this._initialData, n2 = t2.pageIndex === e2, r2 = (t2.accessibilityData?.alt || "") === i2;
+    return { isSame: !this.hasEditedComment && !this._hasBeenMoved && !this._hasBeenResized && n2 && r2, isSameAltText: r2 };
   }
   renderAnnotationElement(t2) {
     if (this.deleted) {
@@ -20030,44 +20382,44 @@ var StampEditor = class extends AnnotationEditor {
   }
 };
 var AnnotationEditorLayer = class _AnnotationEditorLayer {
-  #oo;
-  #Nh = false;
-  #Uh = null;
-  #Hh = null;
-  #zh = null;
-  #Gh = /* @__PURE__ */ new Map();
-  #jh = false;
-  #Wh = false;
-  #Vh = false;
-  #$h = null;
-  #qh = null;
-  #Kh = null;
-  #Xh = null;
-  #Yh = null;
-  #Jh = -1;
+  #vo;
+  #qc = false;
+  #Xc = null;
+  #Kc = null;
+  #Yc = null;
+  #Jc = /* @__PURE__ */ new Map();
+  #Qc = false;
+  #Zc = false;
+  #th = false;
+  #eh = null;
+  #ih = null;
+  #nh = null;
+  #rh = null;
+  #sh = null;
+  #ah = -1;
   #v;
   static _initialized = false;
-  static #Z = new Map([FreeTextEditor, InkEditor, StampEditor, HighlightEditor, SignatureEditor].map((t2) => [t2._editorType, t2]));
-  constructor({ uiManager: t2, pageIndex: e2, div: i2, structTreeLayer: n2, accessibilityManager: s2, annotationLayer: r2, drawLayer: a2, textLayer: o2, viewport: l2, l10n: h2 }) {
-    const c2 = [..._AnnotationEditorLayer.#Z.values()];
+  static #tt = new Map([FreeTextEditor, InkEditor, StampEditor, HighlightEditor, SignatureEditor].map((t2) => [t2._editorType, t2]));
+  constructor({ uiManager: t2, pageIndex: e2, div: i2, structTreeLayer: n2, accessibilityManager: r2, annotationLayer: s2, drawLayer: a2, textLayer: o2, viewport: l2, l10n: c2 }) {
+    const h2 = [..._AnnotationEditorLayer.#tt.values()];
     if (!_AnnotationEditorLayer._initialized) {
       _AnnotationEditorLayer._initialized = true;
-      for (const e3 of c2) e3.initialize(h2, t2);
+      for (const e3 of h2) e3.initialize(c2, t2);
     }
-    t2.registerEditorTypes(c2);
+    t2.registerEditorTypes(h2);
     this.#v = t2;
     this.pageIndex = e2;
     this.div = i2;
-    this.#oo = s2;
-    this.#Uh = r2;
+    this.#vo = r2;
+    this.#Xc = s2;
     this.viewport = l2;
-    this.#Kh = o2;
+    this.#nh = o2;
     this.drawLayer = a2;
     this._structTree = n2;
     this.#v.addLayer(this);
   }
   get isEmpty() {
-    return 0 === this.#Gh.size;
+    return 0 === this.#Jc.size;
   }
   get isInvisible() {
     return this.isEmpty && this.#v.getMode() === y.NONE;
@@ -20076,7 +20428,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     this.#v.updateToolbar(t2);
   }
   updateMode(t2 = this.#v.getMode()) {
-    this.#Qh();
+    this.#oh();
     switch (t2) {
       case y.NONE:
         this.div.classList.toggle("nonEditing", true);
@@ -20106,12 +20458,12 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     if (t2 === y.POPUP) e2.toggle("commentEditing", true);
     else {
       e2.toggle("commentEditing", false);
-      for (const i2 of _AnnotationEditorLayer.#Z.values()) e2.toggle(`${i2._type}Editing`, t2 === i2._editorType);
+      for (const i2 of _AnnotationEditorLayer.#tt.values()) e2.toggle(`${i2._type}Editing`, t2 === i2._editorType);
     }
     this.div.hidden = false;
   }
   hasTextLayer(t2) {
-    return t2 === this.#Kh?.div;
+    return t2 === this.#nh?.div;
   }
   setEditingState(t2) {
     this.#v.setEditingState(t2);
@@ -20129,20 +20481,20 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     this.div.classList.toggle("disabled", !t2);
   }
   toggleAnnotationLayerPointerEvents(t2 = false) {
-    this.#Uh?.togglePointerEvents(t2);
+    this.#Xc?.togglePointerEvents(t2);
   }
-  get #Zh() {
-    return 0 !== this.#Gh.size ? this.#Gh.values() : this.#v.getEditors(this.pageIndex);
+  get #lh() {
+    return 0 !== this.#Jc.size ? this.#Jc.values() : this.#v.getEditors(this.pageIndex);
   }
   async enable() {
-    this.#Vh = true;
+    this.#th = true;
     this.div.tabIndex = 0;
     this.togglePointerEvents(true);
     this.div.classList.toggle("nonEditing", false);
-    this.#Yh?.abort();
-    this.#Yh = null;
+    this.#sh?.abort();
+    this.#sh = null;
     const t2 = /* @__PURE__ */ new Set();
-    for (const e3 of this.#Zh) {
+    for (const e3 of this.#lh) {
       e3.enableEditing();
       e3.show(true);
       if (e3.annotationElementId) {
@@ -20150,7 +20502,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         t2.add(e3.annotationElementId);
       }
     }
-    const e2 = this.#Uh;
+    const e2 = this.#Xc;
     if (e2) for (const i2 of e2.getEditableAnnotations()) {
       i2.hide();
       if (this.#v.isDeletedAnnotationElement(i2.data.id)) continue;
@@ -20161,47 +20513,47 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         e3.enableEditing();
       }
     }
-    this.#Vh = false;
+    this.#th = false;
     this.#v._eventBus.dispatch("editorsrendered", { source: this, pageNumber: this.pageIndex + 1 });
   }
   disable() {
-    this.#Wh = true;
+    this.#Zc = true;
     this.div.tabIndex = -1;
     this.togglePointerEvents(false);
     this.div.classList.toggle("nonEditing", true);
-    if (this.#Kh && !this.#Yh) {
-      this.#Yh = new AbortController();
-      const t3 = this.#v.combinedSignal(this.#Yh);
-      this.#Kh.div.addEventListener("pointerdown", (t4) => {
+    if (this.#nh && !this.#sh) {
+      this.#sh = new AbortController();
+      const t3 = this.#v.combinedSignal(this.#sh);
+      this.#nh.div.addEventListener("pointerdown", (t4) => {
         const { clientX: e3, clientY: i3, timeStamp: n2 } = t4;
-        if (n2 - this.#Jh > 500) {
-          this.#Jh = n2;
+        if (n2 - this.#ah > 500) {
+          this.#ah = n2;
           return;
         }
-        this.#Jh = -1;
-        const { classList: s2 } = this.div;
-        s2.toggle("getElements", true);
-        const r2 = document.elementsFromPoint(e3, i3);
-        s2.toggle("getElements", false);
-        if (!this.div.contains(r2[0])) return;
+        this.#ah = -1;
+        const { classList: r2 } = this.div;
+        r2.toggle("getElements", true);
+        const s2 = document.elementsFromPoint(e3, i3);
+        r2.toggle("getElements", false);
+        if (!this.div.contains(s2[0])) return;
         let a2;
         const o2 = new RegExp(`^${b}[0-9]+$`);
-        for (const t5 of r2) if (o2.test(t5.id)) {
+        for (const t5 of s2) if (o2.test(t5.id)) {
           a2 = t5.id;
           break;
         }
         if (!a2) return;
-        const l2 = this.#Gh.get(a2);
+        const l2 = this.#Jc.get(a2);
         if (null === l2?.annotationElementId) {
           stopEvent(t4);
           l2.dblclick(t4);
         }
       }, { signal: t3, capture: true });
     }
-    const t2 = this.#Uh, e2 = [];
+    const t2 = this.#Xc, e2 = [];
     if (t2) {
       const i3 = /* @__PURE__ */ new Map(), n2 = /* @__PURE__ */ new Map();
-      for (const t3 of this.#Zh) {
+      for (const t3 of this.#lh) {
         t3.disableEditing();
         if (t3.annotationElementId) if (null === t3.serialize()) {
           n2.set(t3.annotationElementId, t3);
@@ -20216,92 +20568,86 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
           e3.updateEdited({ deleted: true });
           continue;
         }
-        let s2 = n2.get(t3);
-        if (s2) {
-          s2.resetAnnotationElement(e3);
-          s2.show(false);
+        let r2 = n2.get(t3);
+        if (r2) {
+          r2.resetAnnotationElement(e3);
+          r2.show(false);
           e3.show();
         } else {
-          s2 = i3.get(t3);
-          if (s2) {
-            this.#v.addChangedExistingAnnotation(s2);
-            s2.renderAnnotationElement(e3) && s2.show(false);
+          r2 = i3.get(t3);
+          if (r2) {
+            this.#v.addChangedExistingAnnotation(r2);
+            r2.renderAnnotationElement(e3) && r2.show(false);
           }
           e3.show();
         }
       }
     }
-    this.#Qh();
+    this.#oh();
     this.isEmpty && (this.div.hidden = true);
     const { classList: i2 } = this.div;
-    for (const t3 of _AnnotationEditorLayer.#Z.values()) i2.remove(`${t3._type}Editing`);
+    for (const t3 of _AnnotationEditorLayer.#tt.values()) i2.remove(`${t3._type}Editing`);
     this.disableTextSelection();
     this.toggleAnnotationLayerPointerEvents(true);
     t2?.updateFakeAnnotations(e2);
-    this.#Wh = false;
+    this.#Zc = false;
   }
   getEditableAnnotation(t2) {
-    return this.#Uh?.getEditableAnnotation(t2) || null;
+    return this.#Xc?.getEditableAnnotation(t2) || null;
   }
   setActiveEditor(t2) {
     this.#v.getActive() !== t2 && this.#v.setActiveEditor(t2);
   }
   enableTextSelection() {
     this.div.tabIndex = -1;
-    if (this.#Kh?.div && !this.#Xh) {
-      this.#Xh = new AbortController();
-      const t2 = this.#v.combinedSignal(this.#Xh);
-      this.#Kh.div.addEventListener("pointerdown", this.#tc.bind(this), { signal: t2 });
-      this.#Kh.div.classList.add("highlighting");
+    if (this.#nh?.div && !this.#rh) {
+      this.#rh = new AbortController();
+      const t2 = this.#v.combinedSignal(this.#rh);
+      this.#nh.div.addEventListener("pointerdown", this.#ch.bind(this), { signal: t2 });
+      this.#nh.div.classList.add("highlighting");
     }
   }
   disableTextSelection() {
     this.div.tabIndex = 0;
-    if (this.#Kh?.div && this.#Xh) {
-      this.#Xh.abort();
-      this.#Xh = null;
-      this.#Kh.div.classList.remove("highlighting");
+    if (this.#nh?.div && this.#rh) {
+      this.#rh.abort();
+      this.#rh = null;
+      this.#nh.div.classList.remove("highlighting");
     }
   }
-  #tc(t2) {
+  #ch(t2) {
     this.#v.unselectAll();
     const { target: e2 } = t2;
-    if (e2 === this.#Kh.div || ("img" === e2.getAttribute("role") || e2.classList.contains("endOfContent") || e2.classList.contains("textLayerImages") || e2.classList.contains("textLayerImagePlaceholder")) && this.#Kh.div.contains(e2)) {
+    if (e2 === this.#nh.div || ("img" === e2.getAttribute("role") || e2.classList.contains("endOfContent") || e2.classList.contains("textLayerImages") || e2.classList.contains("textLayerImagePlaceholder")) && this.#nh.div.contains(e2)) {
       const { isMac: e3 } = FeatureTest.platform;
       if (0 !== t2.button || t2.ctrlKey && e3) return;
       this.#v.showAllEditors("highlight", true, true);
-      this.#Kh.div.classList.add("free");
-      this.toggleDrawing();
-      HighlightEditor.startHighlighting(this, "ltr" === this.#v.direction, { target: this.#Kh.div, x: t2.x, y: t2.y });
-      this.#Kh.div.addEventListener("pointerup", () => {
-        this.#Kh.div.classList.remove("free");
-        this.toggleDrawing(true);
-      }, { once: true, signal: this.#v._signal });
+      HighlightEditor.startDrawing(this, this.#v, "ltr" === this.#v.direction, t2);
       t2.preventDefault();
     }
   }
   enableClick() {
-    if (this.#Hh) return;
-    this.#Hh = new AbortController();
-    const t2 = this.#v.combinedSignal(this.#Hh);
+    if (this.#Kc) return;
+    this.#Kc = new AbortController();
+    const t2 = this.#v.combinedSignal(this.#Kc);
     this.div.addEventListener("pointerdown", this.pointerdown.bind(this), { signal: t2 });
     const e2 = this.pointerup.bind(this);
     this.div.addEventListener("pointerup", e2, { signal: t2 });
     this.div.addEventListener("pointercancel", e2, { signal: t2 });
   }
   disableClick() {
-    this.#Hh?.abort();
-    this.#Hh = null;
+    this.#Kc?.abort();
+    this.#Kc = null;
   }
   attach(t2) {
-    this.#Gh.set(t2.id, t2);
+    this.#Jc.set(t2.id, t2);
     const { annotationElementId: e2 } = t2;
     e2 && this.#v.isDeletedAnnotationElement(e2) && this.#v.removeDeletedAnnotationElement(t2);
   }
   detach(t2) {
-    this.#Gh.delete(t2.id);
-    this.#oo?.removePointerInTextLayer(t2.contentDiv);
-    !this.#Wh && t2.annotationElementId && this.#v.addDeletedAnnotationElement(t2);
+    this.#Jc.delete(t2.id);
+    this.#vo?.removePointerInTextLayer(t2.contentDiv);
+    !this.#Zc && t2.annotationElementId && this.#v.addDeletedAnnotationElement(t2);
   }
   remove(t2) {
     this.detach(t2);
@@ -20336,7 +20682,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         t2.isAttachedToDOM = true;
       }
       t2.fixAndSetPosition();
-      t2.onceAdded(!this.#Vh);
+      t2.onceAdded(!this.#th);
       this.#v.addToAnnotationStorage(t2);
       t2._reportTelemetry(t2.telemetryInitialData);
     }
@@ -20344,10 +20690,10 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
   moveEditorInDOM(t2) {
     if (!t2.isAttachedToDOM) return;
     const { activeElement: e2 } = document;
-    if (t2.div.contains(e2) && !this.#zh) {
+    if (t2.div.contains(e2) && !this.#Yc) {
       t2._focusEventsAllowed = false;
-      this.#zh = setTimeout(() => {
-        this.#zh = null;
+      this.#Yc = setTimeout(() => {
+        this.#Yc = null;
         if (t2.div.contains(document.activeElement)) t2._focusEventsAllowed = true;
         else {
           t2.div.addEventListener("focusin", () => {
@@ -20357,7 +20703,7 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
         }
       }, 0);
     }
-    t2._structTreeParentId = this.#oo?.moveElementInDOM(this.div, t2.div, t2.contentDiv, true);
+    t2._structTreeParentId = this.#vo?.moveElementInDOM(this.div, t2.div, t2.contentDiv, true);
   }
   addOrRebuild(t2) {
     if (t2.needsToBeRebuilt()) {
@@ -20372,45 +20718,45 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     }, mustExec: false });
   }
   getEditorByUID(t2) {
-    for (const e2 of this.#Gh.values()) if (e2.uid === t2) return e2;
+    for (const e2 of this.#Jc.values()) if (e2.uid === t2) return e2;
     return null;
   }
-  get #ec() {
-    return _AnnotationEditorLayer.#Z.get(this.#v.getMode());
+  get #hh() {
+    return _AnnotationEditorLayer.#tt.get(this.#v.getMode());
   }
   combinedSignal(t2) {
     return this.#v.combinedSignal(t2);
   }
-  #ic(t2) {
-    const e2 = this.#ec;
+  #dh(t2) {
+    const e2 = this.#hh;
     return e2 ? new e2.prototype.constructor(t2) : null;
   }
   canCreateNewEmptyEditor() {
-    return this.#ec?.canCreateNewEmptyEditor();
+    return this.#hh?.canCreateNewEmptyEditor();
   }
   async pasteEditor(t2, e2) {
     this.updateToolbar(t2);
     await this.#v.updateMode(t2.mode);
-    const { offsetX: i2, offsetY: n2 } = this.#nc(), s2 = this.#v.getId(), r2 = this.#ic({ parent: this, id: s2, x: i2, y: n2, uiManager: this.#v, isCentered: true, ...e2 });
-    r2 && this.add(r2);
+    const { offsetX: i2, offsetY: n2 } = this.#uh(), r2 = this.#v.getId(), s2 = this.#dh({ parent: this, id: r2, x: i2, y: n2, uiManager: this.#v, isCentered: true, ...e2 });
+    s2 && this.add(s2);
   }
   async deserialize(t2) {
-    return await _AnnotationEditorLayer.#Z.get(t2.annotationType ?? t2.annotationEditorType)?.deserialize(t2, this, this.#v) || null;
+    return await _AnnotationEditorLayer.#tt.get(t2.annotationType ?? t2.annotationEditorType)?.deserialize(t2, this, this.#v) || null;
   }
   createAndAddNewEditor(t2, e2, i2 = {}) {
-    const n2 = this.#v.getId(), s2 = this.#ic({ parent: this, id: n2, x: t2.offsetX, y: t2.offsetY, uiManager: this.#v, isCentered: e2, ...i2 });
-    s2 && this.add(s2);
-    return s2;
+    const n2 = this.#v.getId(), r2 = this.#dh({ parent: this, id: n2, x: t2.offsetX, y: t2.offsetY, uiManager: this.#v, isCentered: e2, ...i2 });
+    r2 && this.add(r2);
+    return r2;
   }
   get boundingClientRect() {
     return this.div.getBoundingClientRect();
   }
-  #nc() {
-    const { x: t2, y: e2, width: i2, height: n2 } = this.boundingClientRect, s2 = Math.max(0, t2), r2 = Math.max(0, e2), a2 = (s2 + Math.min(window.innerWidth, t2 + i2)) / 2 - t2, o2 = (r2 + Math.min(window.innerHeight, e2 + n2)) / 2 - e2, [l2, h2] = this.viewport.rotation % 180 == 0 ? [a2, o2] : [o2, a2];
-    return { offsetX: l2, offsetY: h2 };
+  #uh() {
+    const { x: t2, y: e2, width: i2, height: n2 } = this.boundingClientRect, r2 = Math.max(0, t2), s2 = Math.max(0, e2), a2 = (r2 + Math.min(window.innerWidth, t2 + i2)) / 2 - t2, o2 = (s2 + Math.min(window.innerHeight, e2 + n2)) / 2 - e2, [l2, c2] = this.viewport.rotation % 180 == 0 ? [a2, o2] : [o2, a2];
+    return { offsetX: l2, offsetY: c2 };
   }
   addNewEditor(t2 = {}) {
-    this.createAndAddNewEditor(this.#nc(), true, t2);
+    this.createAndAddNewEditor(this.#uh(), true, t2);
   }
   setSelected(t2) {
     this.#v.setSelected(t2);
@@ -20425,11 +20771,11 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     const { isMac: e2 } = FeatureTest.platform;
     if (0 !== t2.button || t2.ctrlKey && e2) return;
     if (t2.target !== this.div) return;
-    if (!this.#jh) return;
-    this.#jh = false;
-    if (this.#ec?.isDrawer && this.#ec.supportMultipleDrawings) return;
-    if (!this.#Nh) {
-      this.#Nh = true;
+    if (!this.#Qc) return;
+    this.#Qc = false;
+    if (this.#hh?.isDrawer && this.#hh.supportMultipleDrawings) return;
+    if (!this.#qc) {
+      this.#qc = true;
       return;
     }
     const i2 = this.#v.getMode();
@@ -20437,56 +20783,56 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
   }
   pointerdown(t2) {
     this.#v.getMode() === y.HIGHLIGHT && this.enableTextSelection();
-    if (this.#jh) {
-      this.#jh = false;
+    if (this.#Qc) {
+      this.#Qc = false;
       return;
     }
     const { isMac: e2 } = FeatureTest.platform;
     if (0 !== t2.button || t2.ctrlKey && e2) return;
     if (t2.target !== this.div) return;
-    this.#jh = true;
-    if (this.#ec?.isDrawer) {
+    this.#Qc = true;
+    if (this.#hh?.isDrawer) {
       this.startDrawingSession(t2);
       return;
     }
     const i2 = this.#v.getActive();
-    this.#Nh = !i2 || i2.isEmpty();
+    this.#qc = !i2 || i2.isEmpty();
   }
   startDrawingSession(t2) {
     this.div.focus({ preventScroll: true });
-    if (this.#$h) {
-      this.#ec.startDrawing(this, this.#v, false, t2);
+    if (this.#eh) {
+      this.#hh.startDrawing(this, this.#v, false, t2);
       return;
     }
     this.#v.setCurrentDrawingSession(this);
-    this.#$h = new AbortController();
-    const e2 = this.#v.combinedSignal(this.#$h);
+    this.#eh = new AbortController();
+    const e2 = this.#v.combinedSignal(this.#eh);
     this.div.addEventListener("blur", ({ relatedTarget: t3 }) => {
       if (t3 && !this.div.contains(t3)) {
-        this.#qh = null;
+        this.#ih = null;
         this.commitOrRemove();
       }
     }, { signal: e2 });
-    this.#ec.startDrawing(this, this.#v, false, t2);
+    this.#hh.startDrawing(this, this.#v, false, t2);
   }
   pause(t2) {
     if (t2) {
       const { activeElement: t3 } = document;
-      this.div.contains(t3) && (this.#qh = t3);
+      this.div.contains(t3) && (this.#ih = t3);
       return;
     }
-    this.#qh && setTimeout(() => {
-      this.#qh?.focus();
-      this.#qh = null;
+    this.#ih && setTimeout(() => {
+      this.#ih?.focus();
+      this.#ih = null;
     }, 0);
   }
   endDrawingSession(t2 = false) {
-    if (!this.#$h) return null;
+    if (!this.#eh) return null;
     this.#v.setCurrentDrawingSession(null);
-    this.#$h.abort();
-    this.#$h = null;
-    this.#qh = null;
-    return this.#ec.endDrawing(t2);
+    this.#eh.abort();
+    this.#eh = null;
+    this.#ih = null;
+    return this.#hh.endDrawing(t2);
   }
   findNewParent(t2, e2, i2) {
     const n2 = this.#v.findParent(e2, i2);
@@ -20495,14 +20841,14 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
     return true;
   }
   commitOrRemove() {
-    if (this.#$h) {
+    if (this.#eh) {
       this.endDrawingSession();
       return true;
     }
     return false;
   }
   onScaleChanging() {
-    this.#$h && this.#ec.onScaleChangingWhenDrawing(this);
+    this.#eh && this.#hh.onScaleChangingWhenDrawing(this);
   }
   destroy() {
     this.commitOrRemove();
@@ -20510,22 +20856,22 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
       this.#v.commitOrRemove();
       this.#v.setActiveEditor(null);
     }
-    if (this.#zh) {
-      clearTimeout(this.#zh);
-      this.#zh = null;
+    if (this.#Yc) {
+      clearTimeout(this.#Yc);
+      this.#Yc = null;
     }
-    for (const t2 of this.#Gh.values()) {
-      this.#oo?.removePointerInTextLayer(t2.contentDiv);
+    for (const t2 of this.#Jc.values()) {
+      this.#vo?.removePointerInTextLayer(t2.contentDiv);
       t2.setParent(null);
       t2.isAttachedToDOM = false;
       t2.div.remove();
     }
     this.div = null;
-    this.#Gh.clear();
+    this.#Jc.clear();
     this.#v.removeLayer(this);
   }
-  #Qh() {
-    for (const t2 of this.#Gh.values()) t2.isEmpty() && t2.remove();
+  #oh() {
+    for (const t2 of this.#Jc.values()) t2.isEmpty() && t2.remove();
   }
   async render({ viewport: t2 }) {
     this.viewport = t2;
@@ -20540,11 +20886,11 @@ var AnnotationEditorLayer = class _AnnotationEditorLayer {
   }
   update({ viewport: t2 }) {
     this.#v.commitOrRemove();
-    this.#Qh();
+    this.#oh();
     const e2 = this.viewport.rotation, i2 = t2.rotation;
     this.viewport = t2;
     setLayerDimensions(this.div, { rotation: i2 });
-    if (e2 !== i2) for (const t3 of this.#Gh.values()) t3.rotate(i2);
+    if (e2 !== i2) for (const t3 of this.#Jc.values()) t3.rotate(i2);
   }
   get pageDimensions() {
     const { pageWidth: t2, pageHeight: e2 } = this.viewport.rawDims;
@@ -20563,8 +20909,8 @@ function getTextLayer(t2) {
 }
 function isPointBefore(t2, e2, i2, n2) {
   if (t2 === i2) return e2 <= n2;
-  const s2 = t2.compareDocumentPosition(i2);
-  return !!(s2 & Node.DOCUMENT_POSITION_FOLLOWING) || !(s2 & Node.DOCUMENT_POSITION_PRECEDING) && null;
+  const r2 = t2.compareDocumentPosition(i2);
+  return !!(r2 & Node.DOCUMENT_POSITION_FOLLOWING) || !(r2 & Node.DOCUMENT_POSITION_PRECEDING) && null;
 }
 function normalizeEdgeBoundary(t2, e2, i2) {
   if (t2.nodeType !== Node.ELEMENT_NODE || !t2.classList.contains("textLayer") || e2 !== t2.childNodes.length) return { container: t2, offset: e2 };
@@ -20573,133 +20919,133 @@ function normalizeEdgeBoundary(t2, e2, i2) {
   return n2 && i2.contains(n2) ? n2.nodeType === Node.TEXT_NODE ? { container: n2, offset: n2.textContent.length } : { container: n2, offset: n2.childNodes.length } : null;
 }
 var DrawLayer = class _DrawLayer {
-  #_a = null;
-  #sc = /* @__PURE__ */ new Map();
-  #Kh = null;
+  #Ua = null;
+  #ph = /* @__PURE__ */ new Map();
+  #nh = null;
   #st = null;
-  #Et = null;
-  #rc = null;
-  #ac = /* @__PURE__ */ new Map();
+  #Ct = null;
+  #gh = null;
+  #mh = /* @__PURE__ */ new Map();
   static #_ = 0;
-  static #oc = 0;
-  static #lc = null;
-  static #hc = /* @__PURE__ */ new Set();
-  static #cc = false;
-  static #dc = /* @__PURE__ */ new Set();
-  static #uc = /* @__PURE__ */ new WeakMap();
+  static #fh = 0;
+  static #bh = null;
+  static #yh = /* @__PURE__ */ new Set();
+  static #vh = false;
+  static #wh = /* @__PURE__ */ new Set();
+  static #Ah = /* @__PURE__ */ new WeakMap();
   constructor({ filterFactory: t2 = null, pageColors: e2 = null, pageIndex: i2, textLayer: n2 = null }) {
     this.pageIndex = i2;
     this.#st = t2;
-    this.#Et = e2;
+    this.#Ct = e2;
     if (n2) {
-      const t3 = _DrawLayer.#uc.get(n2);
+      const t3 = _DrawLayer.#Ah.get(n2);
       if (t3?.selectionDiv) {
         t3.selectionDiv.remove();
-        _DrawLayer.#hc.delete(t3.selectionDiv);
+        _DrawLayer.#yh.delete(t3.selectionDiv);
       }
-      _DrawLayer.#uc.set(n2, { drawLayer: this });
-      _DrawLayer.#dc.add(n2);
-      this.#Kh = n2;
-      this.#rc = new MutationObserver((t4) => {
-        if (this.#_a && this.#Kh?.isConnected && _DrawLayer.#pc()) {
+      _DrawLayer.#Ah.set(n2, { drawLayer: this });
+      _DrawLayer.#wh.add(n2);
+      this.#nh = n2;
+      this.#gh = new MutationObserver((t4) => {
+        if (this.#Ua && this.#nh?.isConnected && _DrawLayer.#xh()) {
           for (const { addedNodes: e3 } of t4) for (const t5 of e3) if (t5.nodeType === Node.ELEMENT_NODE && t5.classList.contains("endOfContent")) {
-            _DrawLayer.#Ut();
+            _DrawLayer.#Ht();
             return;
           }
         }
       });
-      this.#rc.observe(n2, { childList: true });
-      if (null === _DrawLayer.#lc) {
-        _DrawLayer.#lc = new AbortController();
-        const { signal: t4 } = _DrawLayer.#lc;
-        document.addEventListener("selectionchange", _DrawLayer.#Ut.bind(_DrawLayer), { signal: t4 });
+      this.#gh.observe(n2, { childList: true });
+      if (null === _DrawLayer.#bh) {
+        _DrawLayer.#bh = new AbortController();
+        const { signal: t4 } = _DrawLayer.#bh;
+        document.addEventListener("selectionchange", _DrawLayer.#Ht.bind(_DrawLayer), { signal: t4 });
         document.addEventListener("pointerdown", () => {
-          _DrawLayer.#cc = true;
+          _DrawLayer.#vh = true;
         }, { signal: t4 });
         document.addEventListener("pointerup", () => {
-          _DrawLayer.#cc = false;
+          _DrawLayer.#vh = false;
         }, { signal: t4 });
         window.addEventListener("blur", () => {
-          _DrawLayer.#cc = false;
+          _DrawLayer.#vh = false;
         }, { signal: t4 });
       }
     }
   }
   setParent(t2) {
-    if (this.#_a) {
-      if (this.#_a !== t2) {
-        if (this.#sc.size > 0) for (const e2 of this.#sc.values()) {
+    if (this.#Ua) {
+      if (this.#Ua !== t2) {
+        if (this.#ph.size > 0) for (const e2 of this.#ph.values()) {
           e2.remove();
           t2.append(e2);
         }
-        this.#_a = t2;
+        this.#Ua = t2;
       }
     } else {
-      this.#_a = t2;
-      this.#Kh?.isConnected && _DrawLayer.#pc() && _DrawLayer.#Ut();
+      this.#Ua = t2;
+      this.#nh?.isConnected && _DrawLayer.#xh() && _DrawLayer.#Ht();
     }
   }
-  static #gc(t2) {
-    const e2 = this.#uc.get(t2);
+  static #Eh(t2) {
+    const e2 = this.#Ah.get(t2);
     if (e2?.selectionDiv) {
       e2.selectionDiv.remove();
-      this.#hc.delete(e2.selectionDiv);
+      this.#yh.delete(e2.selectionDiv);
       e2.selectionDiv = null;
       e2.path = null;
     }
   }
-  static #pc() {
+  static #xh() {
     const t2 = document.getSelection();
     return !!t2 && !t2.isCollapsed;
   }
-  static #mc() {
-    return this.#dc.keys().filter((t2) => t2.isConnected).toArray().sort(compareTextLayers);
+  static #Ch() {
+    return this.#wh.keys().filter((t2) => t2.isConnected).toArray().sort(compareTextLayers);
   }
-  static #Ut() {
+  static #Ht() {
     const t2 = document.getSelection();
     if (!t2 || t2.isCollapsed) {
-      for (const t3 of this.#hc) t3.remove();
-      this.#hc.clear();
+      for (const t3 of this.#yh) t3.remove();
+      this.#yh.clear();
       return;
     }
-    const e2 = /* @__PURE__ */ new WeakMap(), i2 = this.#mc(), n2 = [];
-    for (let e3 = 0, s3 = t2.rangeCount; e3 < s3; e3++) {
-      const s4 = t2.getRangeAt(e3);
-      if (s4.collapsed) continue;
-      let { startContainer: r2, startOffset: a2, endContainer: o2, endOffset: l2 } = s4, h2 = getTextLayer(r2), c2 = getTextLayer(o2);
-      const d2 = null === h2, u2 = null === c2;
-      if (this.#cc && d2 !== u2) return;
+    const e2 = /* @__PURE__ */ new WeakMap(), i2 = this.#Ch(), n2 = [];
+    for (let e3 = 0, r3 = t2.rangeCount; e3 < r3; e3++) {
+      const r4 = t2.getRangeAt(e3);
+      if (r4.collapsed) continue;
+      let { startContainer: s2, startOffset: a2, endContainer: o2, endOffset: l2 } = r4, c2 = getTextLayer(s2), h2 = getTextLayer(o2);
+      const d2 = null === c2, u2 = null === h2;
+      if (this.#vh && d2 !== u2) return;
       if (1 === t2.rangeCount) {
-        const { anchorNode: e4, anchorOffset: i3, focusNode: n3, focusOffset: s5 } = t2, d3 = getTextLayer(e4), u3 = getTextLayer(n3), p3 = isPointBefore(e4, i3, n3, s5);
+        const { anchorNode: e4, anchorOffset: i3, focusNode: n3, focusOffset: r5 } = t2, d3 = getTextLayer(e4), u3 = getTextLayer(n3), p3 = isPointBefore(e4, i3, n3, r5);
         if (d3 && u3 && null !== p3) if (p3) {
-          r2 = e4;
+          s2 = e4;
           a2 = i3;
-          h2 = d3;
+          c2 = d3;
           o2 = n3;
-          l2 = s5;
-          c2 = u3;
-        } else {
-          r2 = n3;
-          a2 = s5;
+          l2 = r5;
           h2 = u3;
+        } else {
+          s2 = n3;
+          a2 = r5;
+          c2 = u3;
           o2 = e4;
           l2 = i3;
-          c2 = d3;
+          h2 = d3;
         }
       }
-      const p2 = i2.filter((t3) => s4.intersectsNode(t3));
+      const p2 = i2.filter((t3) => r4.intersectsNode(t3));
       if (0 === p2.length) continue;
       let g2 = false;
-      if (!h2) {
-        h2 = p2[0];
-        r2 = h2;
+      if (!c2) {
+        c2 = p2[0];
+        s2 = c2;
         a2 = 0;
         g2 = true;
       }
-      if (!c2) {
-        c2 = p2.at(-1);
-        o2 = c2;
-        l2 = c2.childNodes.length;
+      if (!h2) {
+        h2 = p2.at(-1);
+        o2 = h2;
+        l2 = h2.childNodes.length;
         g2 = true;
       }
       if (o2.nodeType === Node.ELEMENT_NODE) {
@@ -20709,24 +21055,24 @@ var DrawLayer = class _DrawLayer {
           o2 = t3;
           l2 = t3.nodeType === Node.TEXT_NODE ? t3.textContent.length : t3.childNodes.length;
         } else if (o2.classList.contains("textLayer") && o2.childNodes.length === l2) {
-          const t3 = normalizeEdgeBoundary(o2, l2, c2);
+          const t3 = normalizeEdgeBoundary(o2, l2, h2);
           if (!t3) continue;
           o2 = t3.container;
           l2 = t3.offset;
         }
       }
-      if (r2.nodeType === Node.ELEMENT_NODE) {
-        const t3 = normalizeEdgeBoundary(r2, a2, h2);
+      if (s2.nodeType === Node.ELEMENT_NODE) {
+        const t3 = normalizeEdgeBoundary(s2, a2, c2);
         if (!t3) continue;
-        r2 = t3.container;
+        s2 = t3.container;
         a2 = t3.offset;
       }
-      if (h2 !== c2 || g2 || !p2.includes(h2)) for (const t3 of p2) {
+      if (c2 !== h2 || g2 || !p2.includes(c2)) for (const t3 of p2) {
         const e4 = t3.firstChild;
         if (!e4) continue;
         const i3 = document.createRange();
-        t3 === h2 ? i3.setStart(r2, a2) : i3.setStartBefore(e4);
-        if (t3 === c2) i3.setEnd(o2, l2);
+        t3 === c2 ? i3.setStart(s2, a2) : i3.setStartBefore(e4);
+        if (t3 === h2) i3.setEnd(o2, l2);
         else {
           const e5 = t3.lastChild;
           if (!e5) continue;
@@ -20738,114 +21084,114 @@ var DrawLayer = class _DrawLayer {
         }
         i3.collapsed || n2.push([i3, t3]);
       }
-      else n2.push([s4, h2]);
+      else n2.push([r4, c2]);
     }
-    const s2 = new Set(n2.map((t3) => t3[1]));
-    for (const t3 of this.#dc) s2.has(t3) || this.#gc(t3);
+    const r2 = new Set(n2.map((t3) => t3[1]));
+    for (const t3 of this.#wh) r2.has(t3) || this.#Eh(t3);
     for (const [t3, i3] of n2) {
-      const n3 = _DrawLayer.#uc.get(i3);
+      const n3 = _DrawLayer.#Ah.get(i3);
       if (!n3) continue;
-      let s3 = e2.get(i3);
-      if (!s3) {
+      let r3 = e2.get(i3);
+      if (!r3) {
         const t4 = i3.getBoundingClientRect();
-        s3 = (e3, i4, n4, s4) => ({ x: (e3 - t4.x) / t4.width, y: (i4 - t4.y) / t4.height, width: n4 / t4.width, height: s4 / t4.height });
-        e2.set(i3, s3);
+        r3 = (e3, i4, n4, r4) => ({ x: (e3 - t4.x) / t4.width, y: (i4 - t4.y) / t4.height, width: n4 / t4.width, height: r4 / t4.height });
+        e2.set(i3, r3);
       }
-      const r2 = [];
+      const s2 = [];
       for (let { x: e3, y: i4, width: n4, height: a3 } of t3.getClientRects()) if (0 !== n4 && 0 !== a3) {
-        ({ x: e3, y: i4, width: n4, height: a3 } = s3(e3, i4, n4, a3));
-        1 === n4 && 1 === a3 || r2.push(`M${e3} ${i4} h${n4} v${a3} h-${n4} Z`);
+        ({ x: e3, y: i4, width: n4, height: a3 } = r3(e3, i4, n4, a3));
+        1 === n4 && 1 === a3 || s2.push(`M${e3} ${i4} h${n4} v${a3} h-${n4} Z`);
       }
-      if (0 === r2.length) continue;
+      if (0 === s2.length) continue;
       const a2 = n3.drawLayer;
       let o2 = n3.selectionDiv, l2 = n3.path;
       if (!o2) {
-        const t4 = "clip_selection_" + _DrawLayer.#oc++;
+        const t4 = "clip_selection_" + _DrawLayer.#fh++;
         o2 = document.createElement("div");
         o2.className = "selection";
         o2.style.clipPath = `url(#${t4})`;
-        const e3 = a2.#st?.createSelectionStyle(a2.#Et);
+        const e3 = a2.#st?.createSelectionStyle(a2.#Ct);
         if (e3) for (const [t5, i5] of Object.entries(e3)) o2.style.setProperty(t5, i5);
         const i4 = _DrawLayer._svgFactory.create(1, 1, true);
         i4.setAttribute("aria-hidden", "true");
         i4.setAttribute("width", "100%");
         i4.setAttribute("height", "100%");
-        const s4 = _DrawLayer._svgFactory.createElement("clipPath");
-        s4.setAttribute("id", t4);
-        s4.setAttribute("clipPathUnits", "objectBoundingBox");
+        const r4 = _DrawLayer._svgFactory.createElement("clipPath");
+        r4.setAttribute("id", t4);
+        r4.setAttribute("clipPathUnits", "objectBoundingBox");
         l2 = _DrawLayer._svgFactory.createElement("path");
-        s4.append(l2);
-        i4.append(s4);
+        r4.append(l2);
+        i4.append(r4);
         o2.append(i4);
         n3.path = l2;
         n3.selectionDiv = o2;
       }
-      if (!o2.parentNode && a2.#_a) {
-        a2.#_a.append(o2);
-        this.#hc.add(o2);
+      if (a2.#Ua && o2.parentNode !== a2.#Ua) {
+        a2.#Ua.append(o2);
+        this.#yh.add(o2);
       }
-      l2.setAttribute("d", r2.join(" "));
+      l2.setAttribute("d", s2.join(" "));
     }
   }
   static get _svgFactory() {
     return shadow(this, "_svgFactory", new DOMSVGFactory());
   }
-  static #fc(t2, [e2, i2, n2, s2]) {
-    const { style: r2 } = t2;
-    r2.top = 100 * i2 + "%";
-    r2.left = 100 * e2 + "%";
-    r2.width = 100 * n2 + "%";
-    r2.height = 100 * s2 + "%";
+  static #Sh(t2, [e2, i2, n2, r2]) {
+    const { style: s2 } = t2;
+    s2.top = 100 * i2 + "%";
+    s2.left = 100 * e2 + "%";
+    s2.width = 100 * n2 + "%";
+    s2.height = 100 * r2 + "%";
   }
-  #bc() {
+  #Th() {
     const t2 = _DrawLayer._svgFactory.create(1, 1, true);
-    this.#_a.append(t2);
+    this.#Ua.append(t2);
     t2.setAttribute("aria-hidden", "true");
     return t2;
   }
-  #yc(t2, e2) {
+  #_h(t2, e2) {
     const i2 = _DrawLayer._svgFactory.createElement("clipPath");
     t2.append(i2);
     const n2 = `clip_${e2}`;
     i2.setAttribute("id", n2);
     i2.setAttribute("clipPathUnits", "objectBoundingBox");
-    const s2 = _DrawLayer._svgFactory.createElement("use");
-    i2.append(s2);
-    s2.setAttribute("href", `#${e2}`);
-    s2.classList.add("clip");
+    const r2 = _DrawLayer._svgFactory.createElement("use");
+    i2.append(r2);
+    r2.setAttribute("href", `#${e2}`);
+    r2.classList.add("clip");
     return n2;
   }
-  #vc(t2, e2) {
+  #kh(t2, e2) {
     for (const [i2, n2] of Object.entries(e2)) null === n2 ? t2.removeAttribute(i2) : t2.setAttribute(i2, n2);
   }
   draw(t2, e2 = false, i2 = false) {
-    const n2 = _DrawLayer.#_++, s2 = this.#bc(), r2 = _DrawLayer._svgFactory.createElement("defs");
-    s2.append(r2);
+    const n2 = _DrawLayer.#_++, r2 = this.#Th(), s2 = _DrawLayer._svgFactory.createElement("defs");
+    r2.append(s2);
     const a2 = _DrawLayer._svgFactory.createElement("path");
-    r2.append(a2);
+    s2.append(a2);
     const o2 = `path_${n2}`;
     a2.setAttribute("id", o2);
     a2.setAttribute("vector-effect", "non-scaling-stroke");
-    e2 && this.#ac.set(n2, a2);
-    const l2 = i2 ? this.#yc(r2, o2) : null, h2 = _DrawLayer._svgFactory.createElement("use");
-    s2.append(h2);
-    h2.setAttribute("href", `#${o2}`);
-    this.updateProperties(s2, t2);
-    this.#sc.set(n2, s2);
+    e2 && this.#mh.set(n2, a2);
+    const l2 = i2 ? this.#_h(s2, o2) : null, c2 = _DrawLayer._svgFactory.createElement("use");
+    r2.append(c2);
+    c2.setAttribute("href", `#${o2}`);
+    this.updateProperties(r2, t2);
+    this.#ph.set(n2, r2);
     return { id: n2, clipPathId: `url(#${l2})` };
   }
   drawOutline(t2, e2) {
-    const i2 = _DrawLayer.#_++, n2 = this.#bc(), s2 = _DrawLayer._svgFactory.createElement("defs");
-    n2.append(s2);
-    const r2 = _DrawLayer._svgFactory.createElement("path");
-    s2.append(r2);
+    const i2 = _DrawLayer.#_++, n2 = this.#Th(), r2 = _DrawLayer._svgFactory.createElement("defs");
+    n2.append(r2);
+    const s2 = _DrawLayer._svgFactory.createElement("path");
+    r2.append(s2);
     const a2 = `path_${i2}`;
-    r2.setAttribute("id", a2);
-    r2.setAttribute("vector-effect", "non-scaling-stroke");
+    s2.setAttribute("id", a2);
+    s2.setAttribute("vector-effect", "non-scaling-stroke");
     let o2;
     if (e2) {
       const t3 = _DrawLayer._svgFactory.createElement("mask");
-      s2.append(t3);
+      r2.append(t3);
       o2 = `mask_${i2}`;
       t3.setAttribute("id", o2);
       t3.setAttribute("maskUnits", "objectBoundingBox");
@@ -20866,70 +21212,70 @@ var DrawLayer = class _DrawLayer {
     n2.append(l2);
     l2.setAttribute("href", `#${a2}`);
     o2 && l2.setAttribute("mask", `url(#${o2})`);
-    const h2 = l2.cloneNode();
-    n2.append(h2);
+    const c2 = l2.cloneNode();
+    n2.append(c2);
     l2.classList.add("mainOutline");
-    h2.classList.add("secondaryOutline");
+    c2.classList.add("secondaryOutline");
     this.updateProperties(n2, t2);
-    this.#sc.set(i2, n2);
+    this.#ph.set(i2, n2);
     return i2;
   }
   finalizeDraw(t2, e2) {
-    this.#ac.delete(t2);
+    this.#mh.delete(t2);
     this.updateProperties(t2, e2);
   }
   updateProperties(t2, e2) {
     if (!e2) return;
-    const { root: i2, bbox: n2, rootClass: s2, path: r2 } = e2, a2 = "number" == typeof t2 ? this.#sc.get(t2) : t2;
+    const { root: i2, bbox: n2, rootClass: r2, path: s2 } = e2, a2 = "number" == typeof t2 ? this.#ph.get(t2) : t2;
     if (a2) {
-      i2 && this.#vc(a2, i2);
-      n2 && _DrawLayer.#fc(a2, n2);
-      if (s2) {
-        const { classList: t3 } = a2;
-        for (const [e3, i3] of Object.entries(s2)) t3.toggle(e3, i3);
-      }
+      i2 && this.#kh(a2, i2);
+      n2 && _DrawLayer.#Sh(a2, n2);
       if (r2) {
+        const { classList: t3 } = a2;
+        for (const [e3, i3] of Object.entries(r2)) t3.toggle(e3, i3);
+      }
+      if (s2) {
         const t3 = a2.firstElementChild.firstElementChild;
-        this.#vc(t3, r2);
+        this.#kh(t3, s2);
       }
     }
   }
   updateParent(t2, e2) {
     if (e2 === this) return;
-    const i2 = this.#sc.get(t2);
+    const i2 = this.#ph.get(t2);
     if (i2) {
-      e2.#_a.append(i2);
-      this.#sc.delete(t2);
-      e2.#sc.set(t2, i2);
+      e2.#Ua.append(i2);
+      this.#ph.delete(t2);
+      e2.#ph.set(t2, i2);
     }
   }
   remove(t2) {
-    this.#ac.delete(t2);
-    if (null !== this.#_a) {
-      this.#sc.get(t2).remove();
-      this.#sc.delete(t2);
+    this.#mh.delete(t2);
+    if (null !== this.#Ua) {
+      this.#ph.get(t2).remove();
+      this.#ph.delete(t2);
     }
   }
   destroy() {
-    this.#_a = null;
-    for (const t2 of this.#sc.values()) t2.remove();
-    this.#sc.clear();
-    this.#ac.clear();
-    this.#rc?.disconnect();
-    this.#rc = null;
-    if (this.#Kh) {
-      const t2 = _DrawLayer.#uc.get(this.#Kh);
+    this.#Ua = null;
+    for (const t2 of this.#ph.values()) t2.remove();
+    this.#ph.clear();
+    this.#mh.clear();
+    this.#gh?.disconnect();
+    this.#gh = null;
+    if (this.#nh) {
+      const t2 = _DrawLayer.#Ah.get(this.#nh);
       if (t2?.drawLayer === this) {
-        _DrawLayer.#gc(this.#Kh);
-        _DrawLayer.#uc.delete(this.#Kh);
-        _DrawLayer.#dc.delete(this.#Kh);
-        if (0 === _DrawLayer.#dc.size) {
-          _DrawLayer.#lc?.abort();
-          _DrawLayer.#lc = null;
-          _DrawLayer.#cc = false;
+        _DrawLayer.#Eh(this.#nh);
+        _DrawLayer.#Ah.delete(this.#nh);
+        _DrawLayer.#wh.delete(this.#nh);
+        if (0 === _DrawLayer.#wh.size) {
+          _DrawLayer.#bh?.abort();
+          _DrawLayer.#bh = null;
+          _DrawLayer.#vh = false;
         }
       }
-      this.#Kh = null;
+      this.#nh = null;
     }
   }
 };
@@ -20937,62 +21283,62 @@ function percentage(t2) {
   return `${(100 * t2).toFixed(2)}%`;
 }
 var TextLayerImages = class _TextLayerImages {
-  #wc = [];
-  #xc = /* @__PURE__ */ new Map();
-  #Ac = null;
-  #Ec = 0;
-  #Zs = 0;
-  #Qs = 0;
-  static #Cc = null;
+  #Dh = [];
+  #Ph = /* @__PURE__ */ new Map();
+  #Mh = null;
+  #Ih = 0;
+  #ds = 0;
+  #hs = 0;
+  static #Fh = null;
   constructor(t2, e2, i2, n2) {
-    this.#Ec = t2;
-    this.#wc = e2;
-    this.#Zs = i2.rawDims.pageWidth;
-    this.#Qs = i2.rawDims.pageHeight;
-    this.#Ac = n2;
+    this.#Ih = t2;
+    this.#Dh = e2;
+    this.#ds = i2.rawDims.pageWidth;
+    this.#hs = i2.rawDims.pageHeight;
+    this.#Mh = n2;
   }
   render() {
     const t2 = document.createElement("div");
     t2.className = "textLayerImages";
-    for (let e2 = 0; e2 < this.#wc.length; e2 += 6) {
-      const i2 = this.#Sc(this.#wc.subarray(e2, e2 + 6));
+    for (let e2 = 0; e2 < this.#Dh.length; e2 += 6) {
+      const i2 = this.#Oh(this.#Dh.subarray(e2, e2 + 6));
       i2 && t2.append(i2);
     }
     t2.addEventListener("contextmenu", (t3) => {
       if (!(t3.target instanceof HTMLCanvasElement)) return;
-      const e2 = t3.target, i2 = this.#xc.get(e2);
+      const e2 = t3.target, i2 = this.#Ph.get(e2);
       if (!i2) return;
-      const n2 = _TextLayerImages.#Cc?.deref();
+      const n2 = _TextLayerImages.#Fh?.deref();
       if (n2 === e2) return;
       if (n2) {
         n2.width = 0;
         n2.height = 0;
       }
-      _TextLayerImages.#Cc = new WeakRef(e2);
-      const { inverseTransform: s2, x1: r2, y1: a2, width: o2, height: l2 } = i2, h2 = this.#Ac(), c2 = Math.ceil(r2 * h2.width), d2 = Math.ceil(a2 * h2.height), u2 = Math.floor((r2 + o2 / this.#Zs) * h2.width), p2 = Math.floor((a2 + l2 / this.#Qs) * h2.height);
-      e2.width = u2 - c2;
+      _TextLayerImages.#Fh = new WeakRef(e2);
+      const { inverseTransform: r2, x1: s2, y1: a2, width: o2, height: l2 } = i2, c2 = this.#Mh(), h2 = Math.ceil(s2 * c2.width), d2 = Math.ceil(a2 * c2.height), u2 = Math.floor((s2 + o2 / this.#ds) * c2.width), p2 = Math.floor((a2 + l2 / this.#hs) * c2.height);
+      e2.width = u2 - h2;
       e2.height = p2 - d2;
       const g2 = e2.getContext("2d");
-      g2.setTransform(...s2);
-      g2.translate(-c2, -d2);
-      g2.drawImage(h2, 0, 0);
+      g2.setTransform(...r2);
+      g2.translate(-h2, -d2);
+      g2.drawImage(c2, 0, 0);
     });
     return t2;
   }
-  #Sc([t2, e2, i2, n2, s2, r2]) {
-    const a2 = Math.hypot((s2 - t2) * this.#Zs, (r2 - e2) * this.#Qs), o2 = Math.hypot((i2 - t2) * this.#Zs, (n2 - e2) * this.#Qs);
-    if (a2 < this.#Ec || o2 < this.#Ec) return null;
-    const l2 = [(s2 - t2) * this.#Zs / a2, (r2 - e2) * this.#Qs / a2, (i2 - t2) * this.#Zs / o2, (n2 - e2) * this.#Qs / o2, 0, 0], h2 = Util.inverseTransform(l2), c2 = document.createElement("canvas");
-    c2.className = "textLayerImagePlaceholder";
-    c2.width = 0;
-    c2.height = 0;
-    Object.assign(c2.style, { opacity: 0, position: "absolute", left: percentage(t2), top: percentage(e2), width: percentage(a2 / this.#Zs), height: percentage(o2 / this.#Qs), transformOrigin: "0% 0%", transform: `matrix(${l2.join(",")})` });
-    this.#xc.set(c2, { inverseTransform: h2, width: a2, height: o2, x1: t2, y1: e2 });
-    return c2;
+  #Oh([t2, e2, i2, n2, r2, s2]) {
+    const a2 = Math.hypot((r2 - t2) * this.#ds, (s2 - e2) * this.#hs), o2 = Math.hypot((i2 - t2) * this.#ds, (n2 - e2) * this.#hs);
+    if (a2 < this.#Ih || o2 < this.#Ih) return null;
+    const l2 = [(r2 - t2) * this.#ds / a2, (s2 - e2) * this.#hs / a2, (i2 - t2) * this.#ds / o2, (n2 - e2) * this.#hs / o2, 0, 0], c2 = Util.inverseTransform(l2), h2 = document.createElement("canvas");
+    h2.className = "textLayerImagePlaceholder";
+    h2.width = 0;
+    h2.height = 0;
+    Object.assign(h2.style, { opacity: 0, position: "absolute", left: percentage(t2), top: percentage(e2), width: percentage(a2 / this.#ds), height: percentage(o2 / this.#hs), transformOrigin: "0% 0%", transform: `matrix(${l2.join(",")})` });
+    this.#Ph.set(h2, { inverseTransform: c2, width: a2, height: o2, x1: t2, y1: e2 });
+    return h2;
   }
 };
 globalThis._pdfjsTestingUtils = { HighlightOutliner };
-globalThis.pdfjsLib = { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType: v, AnnotationEditorType: y, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode: m, AnnotationType: k, applyOpacity, build: zt, ColorPicker, createValidAbsoluteUrl, CSSConstants, DOMSVGFactory, DrawLayer, FeatureTest, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, GlobalWorkerOptions, ImageKind: _, InvalidPDFException, isDataScheme, isPdfFile, isValidExplicitDest: gt, makeArr, makeMap, makeObj, makeSet, MathClamp, noContextMenu, normalizeUnicode, OPS: B, OutputScale, PasswordException, PasswordResponses: G, PDFDataRangeTransport, PDFDateString, PDFWorker, PermissionFlag: w, PixelsPerInch, RenderingCancelledException, renderRichText, ResponseException, setLayerDimensions, shadow, SignatureExtractor, stopEvent, SupportedImageMimeTypes: X, TextLayer, TextLayerImages, TouchManager, updateUrlHash, Util, VerbosityLevel: R, version: Ht, XfaLayer };
+globalThis.pdfjsLib = { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType: v, AnnotationEditorType: y, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode: m, AnnotationType: k, applyOpacity, build: Gt, ColorPicker, createValidAbsoluteUrl, CSSConstants, DOMSVGFactory, DrawLayer, FeatureTest, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, GlobalWorkerOptions, ImageKind: _, InvalidPDFException, isDataScheme, isPdfFile, isValidExplicitDest: ft, makeArr, makeMap, makeObj, makeSet, MathClamp, noContextMenu, normalizeUnicode, OPS: B, OutputScale, PasswordException, PasswordResponses: G, PDFDataRangeTransport, PDFDateString, PDFWorker, PermissionFlag: w, PixelsPerInch, RenderingCancelledException, renderRichText, ResponseException, setLayerDimensions, shadow, SignatureExtractor, stopEvent, SupportedImageMimeTypes: K, TextLayer, TextLayerImages, TouchManager, updateUrlHash, Util, VerbosityLevel: R, version: zt, XfaLayer };
 
 // frontend/src/pdf-preview.js
 var PDF_PREVIEW_MAX_PAGES = 1e3;
@@ -21002,7 +21348,7 @@ var PDF_PREVIEW_MAX_DECODED_CANVAS_BYTES = PDF_PREVIEW_MAX_DECODED_IMAGE_PIXELS 
 var PDF_PREVIEW_MIN_SCALE = 0.35;
 var PDF_PREVIEW_MAX_SCALE = 3;
 var pdfWorkerUrl = new URL("./codex-bridge-pdf-worker.js", import.meta.url);
-pdfWorkerUrl.searchParams.set("v", Ht);
+pdfWorkerUrl.searchParams.set("v", zt);
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl.href;
 function boundedScale(value) {
   return Math.min(PDF_PREVIEW_MAX_SCALE, Math.max(PDF_PREVIEW_MIN_SCALE, value));
