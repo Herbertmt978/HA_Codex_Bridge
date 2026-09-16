@@ -22,7 +22,7 @@ updates:
       - "*"
     multi-ecosystem-group: weekly-maintenance
     ignore:
-      # jsdom 30 drops the Node 20 support retained by this repository.
+      # Review jsdom majors separately before changing the supported Node floor.
       - dependency-name: "jsdom"
         update-types:
           - "version-update:semver-major"
@@ -33,11 +33,6 @@ updates:
       - "*"
     multi-ecosystem-group: weekly-maintenance
     ignore:
-      # Home Assistant 2026.8.3 requires this exact test fixture; 0.13.358+
-      # targets Home Assistant 2026.9 prereleases.
-      - dependency-name: "pytest-homeassistant-custom-component"
-        versions:
-          - ">=0.13.358"
       # The pinned Home Assistant test fixture requires pytest==9.0.3.
       - dependency-name: "pytest"
         versions:

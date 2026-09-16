@@ -6,7 +6,7 @@
   "description": "Build and security checks for the Home Assistant Codex Bridge panel.",
   "license": "MIT",
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "build": "npm run build:panel && npm run build:pdf-worker",
@@ -24,10 +24,10 @@
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.62.1",
     "esbuild": "0.28.2",
-    "eslint": "10.9.1",
-    "globals": "17.11.0",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
     "jsdom": "29.1.1",
-    "pdfjs-dist": "6.2.108",
-    "vitest": "4.1.11"
+    "pdfjs-dist": "6.3.289",
+    "vitest": "5.0.0"
   }
 }
