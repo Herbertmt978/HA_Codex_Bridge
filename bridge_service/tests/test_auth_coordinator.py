@@ -164,6 +164,42 @@ def test_start_reads_persisted_account_and_publishes_only_safe_state() -> None:
     _assert_monotonic(states)
 
 
+def test_turn_auth_failure_expires_cached_account_until_sign_in_completes() -> None:
+    client = FakeAppServerClient()
+    client.script("account/read", _chatgpt_account(), _chatgpt_account())
+    client.script("account/login/start", _device_login())
+    states: list[Any] = []
+    coordinator = _coordinator(client, states)
+    ready = coordinator.start()
+
+    coordinator.report_auth_failure(client.generation)
+    expired = coordinator.status()
+    assert expired.state == "expired"
+    assert expired.auth_required is True
+    assert expired.revision > ready.revision
+    assert states[-1] == expired
+    assert len(client.calls) == 1  # Do not trust the rejected cached account again.
+    coordinator.report_auth_failure(client.generation)
+    assert coordinator.status().revision == expired.revision
+
+    login = coordinator.start_device_login()
+    coordinator.report_auth_failure(client.generation)
+    assert states[-1] == login
+    client.emit("account/login/completed", {"loginId": "login-1", "success": True})
+    assert coordinator.status().state == "ok"
+    assert coordinator.status().auth_required is False
+    _assert_monotonic(states)
+
+
+def test_old_generation_auth_failure_does_not_expire_current_account() -> None:
+    client = FakeAppServerClient(generation=2)
+    client.script("account/read", _chatgpt_account())
+    coordinator = _coordinator(client)
+    ready = coordinator.start()
+    coordinator.report_auth_failure(1)
+    assert coordinator.status() == ready
+
+
 def test_start_retries_a_transient_account_read_failure() -> None:
     client = FakeAppServerClient()
     client.script(

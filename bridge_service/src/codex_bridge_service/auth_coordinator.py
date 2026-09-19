@@ -307,6 +307,31 @@ class CodexAuthCoordinator:
         assert operation is not None
         return self._finish_account_read(operation, generation, response)
 
+    def report_auth_failure(self, generation: int) -> None:
+        """Expire the current account after a typed failure from its active turn."""
+
+        with self._lock:
+            if (
+                self._closed
+                or generation != self._client.generation
+                or generation != self._observed_generation
+                or self._operation is not None
+                or self._active_login_id is not None
+                or self._status.state != "ok"
+            ):
+                return
+            # account/read without refreshing credentials can still return the
+            # rejected account. Keep this state until an auth operation or an
+            # account/generation change supplies a new authoritative observation.
+            published = self._set_status_locked(
+                state="expired",
+                busy=False,
+                auth_required=True,
+                message="Codex sign-in expired. Start a new sign-in from Home Assistant.",
+                **cleared_device_fields(),
+            )
+        self._notify(published)
+
     def start_device_login(
         self,
         *,

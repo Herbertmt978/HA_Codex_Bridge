@@ -683,6 +683,17 @@
           };
           emitAuthEvent();
         },
+        expireLogin() {
+          harnessState.auth = {
+            ...harnessState.auth,
+            revision: ++harnessState.authRevision,
+            state: "expired",
+            busy: false,
+            auth_required: true,
+            message: "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+          };
+          emitAuthEvent();
+        },
         get subscriptions() {
           return clone(harnessState.subscriptions);
         },

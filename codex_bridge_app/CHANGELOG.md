@@ -4,6 +4,8 @@ All notable App changes are recorded here.
 
 ## Unreleased
 
+- Keep the account status and sign-in controls consistent when a Codex run reports expired authentication, and keep the sign-in warning fully visible above the conversation on desktop and mobile.
+
 - Prevents a second cancellation of the same Codex app-server generation while
   its process is shutting down. Failed generations remain marked until cleanup
   completes, including after protocol errors.

@@ -706,6 +706,9 @@ def create_app(
             ),
             browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
             provider_admission_check=provider_account_admission_ready,
+            auth_failure_listener=getattr(
+                resolved_auth_coordinator, "report_auth_failure", None
+            ),
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(
