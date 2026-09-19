@@ -29,10 +29,10 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Coordinated release candidate `1.0.2` pairs App, Integration and panel with
-  Bridge `0.7.7` and Codex `0.144.5`. It repairs expired-login reporting, keeps
-  sign-in and retry controls visible, and prevents repeated generation
-  cancellation. Signed publication and target deployment are separate gates.
+- App release candidate `1.0.3` uses verified Codex `0.155.1`, Bridge `0.7.7`
+  and the existing Integration/panel `1.0.2`. Astra is offered when the runtime
+  catalogue advertises it; the pinned older client omitted it. Signed
+  publication and target deployment remain separate gates.
 
 - Latest signed and target-accepted coordinated release: App/Integration/panel
   `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` (`amd64`). It was published

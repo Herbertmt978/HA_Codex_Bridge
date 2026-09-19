@@ -26,10 +26,11 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current paired App, Integration and panel release is `1.0.2`, is `amd64`
-only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
-reporting and keeps sign-in and retry controls visible. Update both the App
-and HACS Integration, restart Home Assistant, and reload the panel. App and
+The current App release is `1.0.3` (`amd64`), using Bridge `0.7.7` and
+Codex `0.155.1` with Integration and panel `1.0.2`. The runtime update allows
+Astra to appear when the signed-in account's catalogue advertises it. Update
+the Supervisor App; an existing Integration/panel `1.0.2` needs no update.
+Earlier Integration versions still require the `1.0.2` login and layout fixes. App and
 Integration versions are independent when an App-only fix does not change the
 negotiated API or panel. The compatible panel adds the immediate composer
 Send-state update and preserves the account-neutral local-chat contract: local

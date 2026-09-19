@@ -202,6 +202,7 @@ class _SharedClient:
                     "source": "appServer",
                     "turns": [],
                     "sessionId": f"session-{thread_id}",
+                    "projectId": None,
                 },
                 "model": params["model"],
                 "modelProvider": "openai",

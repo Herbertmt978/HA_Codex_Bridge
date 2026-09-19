@@ -190,6 +190,7 @@ def _thread(
         "source": "appServer",
         "turns": turns or [],
         "sessionId": f"session-{thread_id}",
+        "projectId": None,
     }
 
 
@@ -2433,6 +2434,7 @@ def test_projection_denies_punctuation_wrapped_absolute_paths(
     assert (
         question_display(
             {
+                "isBlocking": True,
                 "questions": [
                     {
                         "id": "scope",
@@ -4124,6 +4126,7 @@ def test_deleting_terminal_thread_reclaims_idempotency_capacity(
                     "threadId": remote_thread_id,
                     "turnId": turn_id,
                     "itemId": "delete-capacity-question",
+                    "isBlocking": True,
                     "questions": [
                         {
                             "id": "scope",
@@ -5691,6 +5694,7 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
             "item/tool/requestUserInput",
             {
                 "itemId": "scheduled-question",
+                "isBlocking": True,
                 "questions": [
                     {
                         "id": "scope",
@@ -5880,6 +5884,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
                     "threadId": remote_thread_id,
                     "turnId": turn_id,
                     "itemId": "idle-refresh-question",
+                    "isBlocking": True,
                     "questions": [
                         {
                             "id": "scope",
@@ -6642,6 +6647,7 @@ def test_thread_delete_waits_for_inflight_interaction_publication(
                         "threadId": remote_thread_id,
                         "turnId": turn_id,
                         "itemId": "delete-question-item",
+                        "isBlocking": True,
                         "questions": [
                             {
                                 "id": "scope",
@@ -6836,6 +6842,7 @@ def test_absolute_path_text_is_not_projected_in_user_question(
                 "threadId": remote_thread_id,
                 "turnId": turn_id,
                 "itemId": "absolute-question-item",
+                "isBlocking": True,
                 "questions": [question],
             },
             request_id="provider-absolute-question",
@@ -6870,6 +6877,7 @@ def test_user_question_deferred_answer_is_exact_and_secret_questions_are_rejecte
             "threadId": remote_thread_id,
             "turnId": turn_id,
             "itemId": "question-item-1",
+            "isBlocking": True,
             "questions": [
                 {
                     "id": "scope",

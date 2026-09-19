@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 1.0.3
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Makes GPT-6 Astra available in the model picker when the signed-in account's
+  runtime catalogue advertises it; the previous client version omitted Astra.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.7` without changing its Integration API compatibility.
+- Retains Integration and panel `1.0.2`; only the Supervisor App needs updating
+  from the previous paired release.
+- Reports a blocked automatic runtime update as a failed workflow when updater
+  credentials are missing, rather than silently skipping the pull request.
+
 ## 1.0.2
 
 - Keep the account status and sign-in controls consistent when a Codex run reports expired authentication, and keep the sign-in warning fully visible above the conversation on desktop and mobile.

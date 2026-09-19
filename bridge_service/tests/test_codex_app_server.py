@@ -646,6 +646,7 @@ def test_real_runtime_broker_preserves_a_rapid_five_thousand_word_response(
         "source": "appServer",
         "turns": [],
         "sessionId": "session-long-response",
+        "projectId": None,
     }
     fake_server.configure(
         responses={

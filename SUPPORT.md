@@ -41,11 +41,12 @@ workspace paths, or workspace secrets.
   network is separate from provider-side web search. Do not treat a plausible
   answer without web-search activity as a live result.
 
-The current paired App, Integration and panel release is `1.0.2`, is `amd64`
-only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
-reporting and keeps sign-in and retry controls visible. Update both the App
-and HACS Integration, restart Home Assistant, and reload the panel. Confirm
-the signed `1.0.2` release and immutable-image evidence on GitHub before
+The current App release is `1.0.3` (`amd64`), using Bridge `0.7.7` and
+Codex `0.155.1` with Integration and panel `1.0.2`. The runtime update allows
+Astra to appear when the signed-in account's catalogue advertises it. Update
+the Supervisor App; an existing Integration/panel `1.0.2` needs no update.
+Earlier Integration versions still require the `1.0.2` login and layout fixes. Confirm
+the signed App `1.0.3` release and immutable-image evidence on GitHub before
 installing. Existing workspace, network, authentication and recovery
 boundaries remain unchanged.
 

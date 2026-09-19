@@ -46,10 +46,11 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
-- **1.0.2 release:** App, Integration and panel `1.0.2` include the expired-login
-  status and sign-in layout repairs, with Bridge `0.7.7` and Codex `0.144.5`.
-  Update both the Supervisor App and HACS Integration, restart Home Assistant,
-  and reload the panel. Publication and target checks remain separately recorded.
+- **1.0.3 App release:** upgrades the verified Codex runtime to `0.155.1`,
+  enabling Astra discovery for eligible accounts. Bridge remains `0.7.7` and
+  Integration/panel remain `1.0.2`, including the expired-login and layout
+  repairs. Update the Supervisor App. Publication and target checks remain
+  separately recorded below.
 
 - **Historical fully target-HA-accepted release:** App, Integration, and panel `0.7.5`, Bridge
   `0.6.3`, and Codex `0.144.5` were installed and running on target Home
