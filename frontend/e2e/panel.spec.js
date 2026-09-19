@@ -157,6 +157,61 @@ test("keeps sidebar hover and keyboard focus stable during HA updates", async ({
   expect(new Set(samples.map((sample) => sample.background)).size).toBe(1);
 });
 
+test("keeps a populated plugin catalogue stable through frequent HA refreshes", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#thread-model-select")).toBeVisible();
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._activeDestination = "plugins";
+    panel._desktopFeatures.plugins.loaded = true;
+    panel._desktopFeatures.plugins.data = {
+      plugins: Array.from({ length: 4294 }, (_, index) => ({ id: `plugin-${index}`, name: `Plugin ${index}`, description: "Catalogue description" })),
+      marketplaces: [],
+    };
+    panel._render(true);
+  });
+  const install = panel.locator('[data-desktop-action="install-plugin"]').first();
+  await install.focus();
+  await install.hover();
+  const result = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const surface = panel.shadowRoot.getElementById("desktop-feature-surface");
+    const control = surface.querySelector('[data-desktop-action="install-plugin"]');
+    const table = surface.querySelector("table");
+    let changes = 0;
+    const observer = new MutationObserver((records) => { changes += records.length; });
+    observer.observe(surface, { childList: true, subtree: true });
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      await new Promise(requestAnimationFrame);
+    }
+    observer.disconnect();
+    return { changes, sameTable: surface.querySelector("table") === table, focused: panel.shadowRoot.activeElement === control, hovered: control.matches(":hover"), count: surface.querySelectorAll('[data-desktop-action="install-plugin"]').length };
+  });
+  expect(result).toEqual({ changes: 0, sameTable: true, focused: true, hovered: true, count: 4294 });
+  await panel.locator('[data-desktop-action="open-marketplace-form"]').click();
+  const ref = panel.locator('[data-desktop-field="ref_name"]');
+  await ref.fill("working draft");
+  const draftResult = await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const control = panel.shadowRoot.querySelector('[data-desktop-field="ref_name"]');
+    control.setSelectionRange(2, 5);
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      panel._renderDesktopSurface();
+    }
+    return { sameControl: panel.shadowRoot.querySelector('[data-desktop-field="ref_name"]') === control, focused: panel.shadowRoot.activeElement === control, selection: [control.selectionStart, control.selectionEnd] };
+  });
+  expect(draftResult).toEqual({ sameControl: true, focused: true, selection: [2, 5] });
+  await expect(ref).toHaveValue("working draft");
+  await panel.locator('[data-desktop-action="close-form"]').click();
+  await panel.locator('[data-desktop-action="open-marketplace-form"]').click();
+  await expect(ref).toHaveValue("");
+  await panel.getByRole("button", { name: "Chats", exact: true }).click();
+  await expect(panel.locator("#prompt-input")).toBeVisible();
+});
+
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
   const requests = [];
   const pageErrors = [];

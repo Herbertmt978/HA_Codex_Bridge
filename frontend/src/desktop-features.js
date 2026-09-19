@@ -381,10 +381,20 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   return section;
 }
 
+const renderedFeatureInputs = new WeakMap();
+
+function featureDraftInputs(state) {
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+}
+
+export function syncDesktopFeatureDrafts(container, state) {
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered) rendered.drafts = featureDraftInputs(state);
+}
+
 export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
-  container.replaceChildren();
   container.onclick = (event) => {
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
@@ -395,6 +405,19 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     const submit = form?.querySelector('[data-desktop-action^="submit-"]');
     if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
   };
+  // HA pushes unrelated state changes frequently. Keep the existing controls
+  // and large catalogues mounted until an input used by this view changes.
+  // Input handlers sync the draft snapshot because those edits are already in
+  // the DOM. Programmatic draft resets must still invalidate the rendered view.
+  const inputs = JSON.stringify({
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined }, timezone, hasActiveProject, activeProjectId,
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
+  });
+  const drafts = featureDraftInputs(state);
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered?.inputs === inputs && rendered.drafts === drafts) return;
+  container.replaceChildren();
+  renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div"); heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));

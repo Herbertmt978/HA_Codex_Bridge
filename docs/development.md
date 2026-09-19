@@ -53,8 +53,8 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current App release is `1.0.3` (`amd64`), using Bridge `0.7.8` and
-Codex `0.155.1` with Integration and panel `1.0.3`. Update both the Supervisor
+The current App release is `1.0.4` (`amd64`), using Bridge `0.7.8` and
+Codex `0.155.1` with Integration and panel `1.0.4`. Update both the Supervisor
 App and the HACS Integration, then restart Home Assistant and refresh the panel.
 This release enables Astra discovery for eligible accounts and preserves sidebar
 hover and keyboard focus during background updates. Preserve

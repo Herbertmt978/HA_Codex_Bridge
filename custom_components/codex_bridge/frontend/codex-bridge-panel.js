@@ -23278,10 +23278,17 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   }
   return section2;
 }
+var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
+function featureDraftInputs(state) {
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+}
+function syncDesktopFeatureDrafts(container, state) {
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered) rendered.drafts = featureDraftInputs(state);
+}
 function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
-  container.replaceChildren();
   container.onclick = (event) => {
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
@@ -23292,6 +23299,19 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const submit = form?.querySelector('[data-desktop-action^="submit-"]');
     if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
   };
+  const inputs = JSON.stringify({
+    destination,
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0 },
+    timezone,
+    hasActiveProject,
+    activeProjectId,
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null
+  });
+  const drafts = featureDraftInputs(state);
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered?.inputs === inputs && rendered.drafts === drafts) return;
+  container.replaceChildren();
+  renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div");
   heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
@@ -23328,7 +23348,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.3";
+var PANEL_VERSION = "1.0.4";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -28869,6 +28889,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     this._captureDesktopFormDraft(target);
@@ -28938,6 +28959,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     if (target.dataset.desktopField === "agents_scope") {
@@ -29341,6 +29363,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...state.formDraft || {}, [field]: target.value };
+    syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
   _clearDesktopFormDraft(state) {
     state.formDraft = {};

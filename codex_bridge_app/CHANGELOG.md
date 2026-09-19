@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 1.0.4
+
+- Updates the paired Integration and panel to `1.0.4`, preserving keyboard focus
+  and pointer hover on feature-page controls during unrelated Home Assistant updates.
+- Avoids rebuilding populated plugin catalogues until their displayed data changes.
+- Keeps action handlers and Settings capability availability current when their
+  inputs change.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+
 ## 1.0.3
 
 - Accommodates the growing, unpaginated plugin catalogue within bounded runtime
