@@ -29,6 +29,11 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
+- Coordinated release candidate `1.0.2` pairs App, Integration and panel with
+  Bridge `0.7.7` and Codex `0.144.5`. It repairs expired-login reporting, keeps
+  sign-in and retry controls visible, and prevents repeated generation
+  cancellation. Signed publication and target deployment are separate gates.
+
 - Latest signed and target-accepted coordinated release: App/Integration/panel
   `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` (`amd64`). It was published
   from exact main commit `5387a2abcdeac3a5a3c01fe96876634af56542ad` by signed

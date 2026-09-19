@@ -23328,7 +23328,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.0";
+var PANEL_VERSION = "1.0.2";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);

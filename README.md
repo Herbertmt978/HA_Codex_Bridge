@@ -46,6 +46,11 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
+- **1.0.2 release:** App, Integration and panel `1.0.2` include the expired-login
+  status and sign-in layout repairs, with Bridge `0.7.7` and Codex `0.144.5`.
+  Update both the Supervisor App and HACS Integration, restart Home Assistant,
+  and reload the panel. Publication and target checks remain separately recorded.
+
 - **Historical fully target-HA-accepted release:** App, Integration, and panel `0.7.5`, Bridge
   `0.6.3`, and Codex `0.144.5` were installed and running on target Home
   Assistant `192.168.50.20` on 2026-07-16. ChatGPT Pro remained connected. A

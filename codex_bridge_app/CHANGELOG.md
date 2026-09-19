@@ -2,7 +2,7 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.0.2
 
 - Keep the account status and sign-in controls consistent when a Codex run reports expired authentication, and keep the sign-in warning fully visible above the conversation on desktop and mobile.
 - Preserve rejected authentication through restarts until sign-in or a validated credential refresh succeeds. Keep connection-error retry controls visible above long conversations.
@@ -10,6 +10,12 @@ All notable App changes are recorded here.
 - Prevents a second cancellation of the same Codex app-server generation while
   its process is shutting down. Failed generations remain marked until cleanup
   completes, including after protocol errors.
+
+- Updates the paired Integration and panel to `1.0.2`, refreshes the tested dependencies and Home Assistant image builder, and pins Chromium `152.0.7977.82-r0`.
+
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.7` without changing its Integration API compatibility.
 
 ## 1.0.1
 
