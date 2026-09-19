@@ -2,14 +2,15 @@
 
 ## Status before you start
 
-Install App `1.0.1` on `amd64`; it uses Bridge `0.7.6` with Codex `0.144.5`.
-The compatible Integration and panel remain `1.0.0` because this is an App-only
-restore bootstrap fix. Confirm that the signed App `1.0.1` image and immutable
-publication evidence are present on GitHub before installing. It repairs
-supported restored ownership and fixed private modes before dropping
-privileges. The compatible panel changes
-**Send** state immediately as a prompt is typed and retains account-neutral
-local chats across a ChatGPT account switch. This remains a custom
+The current paired App, Integration and panel release is `1.0.2`, is `amd64`
+only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
+reporting and keeps sign-in and retry controls visible. Update both the App
+and HACS Integration, restart Home Assistant, and reload the panel. Confirm
+that the signed App `1.0.2` image and immutable publication evidence are
+present on GitHub before installing. It repairs supported restored ownership
+and fixed private modes before dropping privileges. The compatible panel
+changes **Send** state immediately as a prompt is typed and retains account-
+neutral local chats across a ChatGPT account switch. This remains a custom
 Integration/App repository: HACS or Home Assistant installation does not imply
 a HACS or Home Assistant listing, review, endorsement, or support.
 

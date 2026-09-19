@@ -195,22 +195,23 @@ Bridge. Retain workspaces until their contents have been reviewed.
 
 ## Release status
 
-The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
-`0.7.6` with Codex `0.144.5`. The compatible Integration and panel remain
-`1.0.0` because the restore bootstrap does not change their API or UI. Verify
-the App's signed `1.0.1` image and immutable publication evidence on GitHub
-before installing. App `1.0.1` repairs supported restored ownership and fixed
-private modes before dropping privileges. The compatible panel fixes the composer
+The current paired App, Integration and panel release is `1.0.2`, is `amd64`
+only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
+reporting and keeps sign-in and retry controls visible. Update both the App
+and HACS Integration, restart Home Assistant, and reload the panel. Verify the
+App's signed `1.0.2` image and immutable publication evidence before
+installing. App `1.0.1` repairs supported restored ownership and fixed private
+modes before dropping privileges. The compatible panel fixes the composer
 defect so **Send** is rendered immediately after each prompt edit and retains
-the account-neutral local-chat contract:
-Home Assistant chats, projects, transcripts, files, workspace settings, archive
-state, and automation targets remain local and static across a ChatGPT account
-change. Only stale private provider-thread continuity is detached, so the next
-message starts a fresh provider conversation through the newly connected account.
-Identity-less account reads detach that private continuity and block prompts and
-automations until ownership is verified. A newer account hint invalidates an
-account check already in flight, and a prompt queued before the switch is
-stopped locally before any provider start or resume request.
+the account-neutral local-chat contract: Home Assistant chats, projects,
+transcripts, files, workspace settings, archive state, and automation targets
+remain local and static across a ChatGPT account change. Only stale private
+provider-thread continuity is detached, so the next message starts a fresh
+provider conversation through the newly connected account. Identity-less
+account reads detach that private continuity and block prompts and automations
+until ownership is verified. A newer account hint invalidates an account check
+already in flight, and a prompt queued before the switch is stopped locally
+before any provider start or resume request.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit

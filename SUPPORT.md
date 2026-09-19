@@ -41,14 +41,13 @@ workspace paths, or workspace secrets.
   network is separate from provider-side web search. Do not treat a plausible
   answer without web-search activity as a live result.
 
-The stable `1.0.0` App/Integration/panel release retains the
-`amd64`-only Supervisor scope, Bridge `0.7.6`, and Codex `0.144.5`. It fixes a
-panel-only composer defect: **Send** now enables or disables immediately as a
-prompt is typed, without needing a refresh. The local chat contract is account
-neutral: chats, projects, transcripts, files, workspace settings, archive
-state, and automation targets remain available across a ChatGPT account
-change; only stale private provider-thread continuity is detached. Verify the
-signed `1.0.0` release and immutable-image evidence on GitHub before installing.
+The current paired App, Integration and panel release is `1.0.2`, is `amd64`
+only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
+reporting and keeps sign-in and retry controls visible. Update both the App
+and HACS Integration, restart Home Assistant, and reload the panel. Confirm
+the signed `1.0.2` release and immutable-image evidence on GitHub before
+installing. Existing workspace, network, authentication and recovery
+boundaries remain unchanged.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit

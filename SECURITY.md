@@ -71,19 +71,20 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
-`0.7.6` with Codex `0.144.5`; the compatible Integration and panel remain
-`1.0.0` because their API and UI do not change. Verify the App's signed `1.0.1`
-image and immutable publication evidence on GitHub before installing. The App
-repairs only allowlisted restored ownership and fixed private modes before it
-drops privileges. The compatible panel's composer Send-state fix and
-account-neutral local-chat contract are
-presentation and continuity improvements, not expansions of authority. Native
-Live web search remains provider-gated for Supervisor prompts and automations;
-bounded time-sensitive guidance does not relax the blocked model-controlled
-shell network. Image generation remains gated by both `imageGeneration` and
-`namespaceTools`, uses a signed-in ChatGPT account rather than an API key, and
-keeps only bounded private PNG/JPEG/WebP artifacts.
+The current paired App, Integration and panel release is `1.0.2`, is `amd64`
+only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
+reporting and keeps sign-in and retry controls visible. Update both the App
+and HACS Integration, restart Home Assistant, and reload the panel. Verify the
+App's signed `1.0.2` image and immutable publication evidence on GitHub before
+installing. The App repairs only allowlisted restored ownership and fixed
+private modes before it drops privileges. The compatible panel's composer
+Send-state fix and account-neutral local-chat contract are presentation and
+continuity improvements, not expansions of authority. Native Live web search
+remains provider-gated for Supervisor prompts and automations; bounded time-
+sensitive guidance does not relax the blocked model-controlled shell network.
+Image generation remains gated by both `imageGeneration` and `namespaceTools`,
+uses a signed-in ChatGPT account rather than an API key, and keeps only
+bounded private PNG/JPEG/WebP artifacts.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit

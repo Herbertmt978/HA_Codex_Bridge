@@ -6,11 +6,15 @@ administrator panel and connects to this App through Supervisor.
 
 ## Status
 
-- Stable App/Integration release: `1.0.0` (`amd64` only)
+- Stable App/Integration release: `1.0.2` (`amd64` only)
 - Previous signed and target-accepted App/Integration: `0.8.11`
-- Bundled Bridge: `0.7.6`
+- Bundled Bridge: `0.7.7`
 - Bundled Codex: `0.144.5`
 - App repository: <https://github.com/Herbertmt978/HA_Codex_Bridge>
+
+Release `1.0.2` repairs expired-login reporting and keeps sign-in and retry
+controls visible. Update both the App and HACS Integration, restart Home
+Assistant, and reload the panel.
 
 Release `1.0.0` promotes the App to Home Assistant's stable lifecycle stage,
 retains the account-neutral chat contract accepted in `0.8.11`, and enables
