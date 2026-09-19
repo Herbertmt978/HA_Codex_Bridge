@@ -26,17 +26,19 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
-`0.7.6` with Codex `0.144.5`. The compatible Integration and panel remain
-`1.0.0`: App and Integration versions are independent when an App-only fix does
-not change the negotiated API or panel. The compatible panel adds the immediate
-composer Send-state update and preserves the account-neutral local-chat
-contract: local chats survive a ChatGPT account switch while stale private
-provider-thread continuity is detached. Provider-gated native web search
-defaults to Live for Supervisor prompts and automations, with bounded
-time-sensitive guidance; model-controlled shell networking remains disabled.
-Signed-in image generation requires both `imageGeneration` and `namespaceTools`,
-uses no API key, and keeps bounded PNG/JPEG/WebP artifacts private.
+The current paired App, Integration and panel release is `1.0.2`, is `amd64`
+only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
+reporting and keeps sign-in and retry controls visible. Update both the App
+and HACS Integration, restart Home Assistant, and reload the panel. App and
+Integration versions are independent when an App-only fix does not change the
+negotiated API or panel. The compatible panel adds the immediate composer
+Send-state update and preserves the account-neutral local-chat contract: local
+chats survive a ChatGPT account switch while stale private provider-thread
+continuity is detached. Provider-gated native web search defaults to Live for
+Supervisor prompts and automations, with bounded time-sensitive guidance;
+model-controlled shell networking remains disabled. Signed-in image generation
+requires both `imageGeneration` and `namespaceTools`, uses no API key, and
+keeps bounded PNG/JPEG/WebP artifacts private.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
