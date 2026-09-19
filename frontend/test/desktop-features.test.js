@@ -73,6 +73,44 @@ describe("desktop feature surfaces", () => {
     expect(surface.querySelector('[data-desktop-action="uninstall-plugin"]')).not.toBeNull();
   });
 
+  it.each([
+    ["scheduled", "schedule", "title", "general"],
+    ["skills", "skill", "name", "general"],
+    ["plugins", "marketplace", "ref_name", "general"],
+    ["settings", "mcp", "name", "mcp"],
+    ["settings", null, "agents_content", "instructions"],
+  ])("keeps edited %s %s controls mounted across HA refreshes", (destination, form, field, settingsTab) => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._activeDestination = destination;
+    const state = panel._desktopFeatures[destination];
+    Object.assign(state, { loaded: true, form, settingsTab, agentsScope: "global" });
+    panel._render(true);
+    const selector = `[data-desktop-field="${field}"]`;
+    const control = panel.shadowRoot.querySelector(selector);
+    control.focus();
+    for (const eventType of ["input", "change"]) {
+      control.value = `unsaved ${eventType}`;
+      control.setSelectionRange(2, 5);
+      control.dispatchEvent(new Event(eventType, { bubbles: true }));
+      panel.hass = { states: {} };
+      panel._renderDesktopSurface();
+      expect(panel.shadowRoot.querySelector(selector)).toBe(control);
+      expect(panel.shadowRoot.activeElement).toBe(control);
+      expect([control.selectionStart, control.selectionEnd]).toEqual([2, 5]);
+    }
+    if (form) {
+      panel._clearDesktopFormDraft(state);
+      panel._renderDesktopSurface();
+      expect(panel.shadowRoot.querySelector(selector).value).toBe("");
+    } else {
+      state.agentsDrafts = {};
+      state.data.agents = { content: "saved instructions" };
+      panel._renderDesktopSurface();
+      expect(panel.shadowRoot.querySelector(selector).value).toBe("saved instructions");
+    }
+  });
+
   it("refreshes action handlers and native-tool status without needless rebuilding", () => {
     const host = document.createElement("div");
     const state = { data: { plugins: [{ id: "p1", name: "Plugin one" }] } };

@@ -24,7 +24,7 @@ import { getApprovalViewModel, renderApproval } from "./views/approval.js";
 import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js";
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
-import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
+import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
 const PANEL_VERSION = "1.0.4";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
@@ -5643,6 +5643,7 @@ class CodexBridgePanel extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
 
@@ -5715,6 +5716,7 @@ class CodexBridgePanel extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     if (target.dataset.desktopField === "agents_scope") {
@@ -6159,6 +6161,7 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.value };
+    syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
 
   _clearDesktopFormDraft(state) {
