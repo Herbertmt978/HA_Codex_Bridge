@@ -164,6 +164,114 @@ def test_start_reads_persisted_account_and_publishes_only_safe_state() -> None:
     _assert_monotonic(states)
 
 
+def test_turn_auth_failure_expires_cached_account_until_sign_in_completes() -> None:
+    client = FakeAppServerClient()
+    client.script("account/read", _chatgpt_account(), _chatgpt_account())
+    client.script("account/login/start", _device_login())
+    states: list[Any] = []
+    coordinator = _coordinator(client, states)
+    ready = coordinator.start()
+
+    coordinator.report_auth_failure(client.generation)
+    expired = coordinator.status()
+    assert expired.state == "expired"
+    assert expired.auth_required is True
+    assert expired.revision > ready.revision
+    assert states[-1] == expired
+    assert len(client.calls) == 1  # Do not trust the rejected cached account again.
+    coordinator.report_auth_failure(client.generation)
+    assert coordinator.status().revision == expired.revision
+
+    login = coordinator.start_device_login()
+    coordinator.report_auth_failure(client.generation)
+    assert states[-1] == login
+    client.emit("account/login/completed", {"loginId": "login-1", "success": True})
+    assert coordinator.status().state == "ok"
+    assert coordinator.status().auth_required is False
+    _assert_monotonic(states)
+
+
+def test_old_generation_auth_failure_does_not_expire_current_account() -> None:
+    client = FakeAppServerClient(generation=2)
+    client.script("account/read", _chatgpt_account())
+    coordinator = _coordinator(client)
+    ready = coordinator.start()
+    coordinator.report_auth_failure(1)
+    assert coordinator.status() == ready
+
+
+@pytest.mark.parametrize("close_during_login", [False, True])
+def test_rejected_account_survives_restart_and_cached_account_hints(
+    close_during_login: bool,
+) -> None:
+    client = FakeAppServerClient()
+    client.script("account/read", *[_chatgpt_account()] * 5)
+    client.script("account/login/start", _device_login())
+    client.script("account/login/cancel", {})
+    states: list[Any] = []
+    coordinator = _coordinator(client, states)
+    coordinator.start()
+    coordinator.report_auth_failure(1)
+    client.generation = 2
+    assert coordinator.status().state == "expired"
+    client.emit("account/updated", {"authMode": "chatgpt"})
+    assert coordinator.status().state == "expired"
+    if close_during_login:
+        coordinator.start_device_login()
+    coordinator.close()
+    assert states[-1].reauthentication_required is True
+    assert "reauthentication_required" not in states[-1].model_dump()
+
+    restarted_client = FakeAppServerClient()
+    restarted_client.script("account/read", _chatgpt_account(), _chatgpt_account())
+    restarted_client.script("account/login/start", _device_login())
+    restarted = _coordinator(restarted_client, initial_status=states[-1])
+    assert restarted.start().state == "expired"
+    restarted.start_device_login()
+    restarted_client.emit(
+        "account/login/completed", {"loginId": "login-1", "success": True}
+    )
+    assert restarted.status().state == "ok"
+    assert restarted.status().reauthentication_required is False
+
+
+def test_recovery_poll_refreshes_rejected_credentials_before_accepting_account() -> (
+    None
+):
+    client = FakeAppServerClient()
+    client.script("account/read", *[_chatgpt_account()] * 3)
+    client.script(
+        "account/rateLimits/read", RuntimeError("rejected"), {"rateLimits": {}}
+    )
+    client.script("account/login/start", _device_login())
+    coordinator = _coordinator(client, active_login_poll_interval_seconds=0)
+    coordinator.start()
+    coordinator.report_auth_failure(1)
+    coordinator.start_device_login()
+    pending = coordinator.status()
+    assert pending.state == "login_running"
+    assert pending.reauthentication_required is True
+    assert client.calls[-2].params == {"refreshToken": True}
+    assert client.calls[-1].method == "account/rateLimits/read"
+    recovered = coordinator.status()
+    assert client.calls[-2].params == {"refreshToken": True}
+    assert client.calls[-1].method == "account/rateLimits/read"
+    assert recovered.state == "ok"
+    assert recovered.reauthentication_required is False
+
+
+def test_turn_rejection_is_retained_when_account_reconciliation_was_unavailable() -> (
+    None
+):
+    client = FakeAppServerClient()
+    client.script("account/read", _chatgpt_account(), RuntimeError("unavailable"))
+    coordinator = _coordinator(client)
+    coordinator.start()
+    client.emit("account/updated", {"authMode": "chatgpt"})
+    coordinator.report_auth_failure(client.generation)
+    assert coordinator.status().state == "expired"
+    assert coordinator.status().reauthentication_required is True
+
 def test_start_retries_a_transient_account_read_failure() -> None:
     client = FakeAppServerClient()
     client.script(

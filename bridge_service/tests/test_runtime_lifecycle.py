@@ -1158,6 +1158,79 @@ def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(
     assert client.calls == ["start", "close"]
 
 
+@pytest.mark.skipif(os.name == "nt", reason="workspace turns require POSIX dir_fd")
+@pytest.mark.parametrize("classification", ["unauthorized", "serverOverloaded"])
+def test_failed_turn_updates_shared_auth_only_for_authentication_failure(
+    tmp_path: Path, classification: str
+) -> None:
+    client = _SharedClient()
+    client.turn_in_progress = True
+    app = _ha_app(tmp_path, client)
+    thread = _seed_blocked_thread(app, name="Expired sign-in")
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    with TestClient(app) as http:
+        before = http.get("/auth/status", headers=headers).json()
+        submitted = http.post(
+            f"/threads/{thread.thread_id}/prompts",
+            headers=headers,
+            json={"prompt": "hello", "client_request_id": "expires-during-turn"},
+        )
+        assert submitted.status_code == 202
+        _wait_until(lambda: "turn/start" in client.calls)
+        client.notification_handlers["turn/completed"](
+            AppServerNotification(
+                method="turn/completed",
+                generation=client.generation,
+                params={
+                    "threadId": "codex-thread-1",
+                    "turn": {
+                        "id": "codex-turn-1",
+                        "items": [],
+                        "status": "failed",
+                        "error": {
+                            "message": "private provider detail",
+                            "codexErrorInfo": classification,
+                            "additionalDetails": None,
+                        },
+                    },
+                },
+            )
+        )
+        _wait_until(
+            lambda: app.state.storage.load_thread(thread.thread_id).status == "error"
+        )
+        auth = http.get("/auth/status", headers=headers).json()
+        assert http.get("/status", headers=headers).json()["auth"] == auth
+        if classification == "unauthorized":
+            assert auth["state"] == "expired"
+            assert auth["auth_required"] is True
+            assert auth["revision"] > before["revision"]
+            rejected = http.post(
+                f"/threads/{thread.thread_id}/prompts",
+                headers=headers,
+                json={"prompt": "retry", "client_request_id": "blocked-until-login"},
+            )
+            assert rejected.status_code == 409
+            assert client.calls.count("turn/start") == 1
+        else:
+            assert auth == before
+
+    restarted = _ha_app(tmp_path, _SharedClient())
+    with TestClient(restarted) as http:
+        restored = http.get("/auth/status", headers=headers).json()
+        assert "reauthentication_required" not in restored
+        assert restored["state"] == (
+            "expired" if classification == "unauthorized" else "ok"
+        )
+        if classification == "unauthorized":
+            rejected = http.post(
+                f"/threads/{thread.thread_id}/prompts",
+                headers=headers,
+                json={"prompt": "retry", "client_request_id": "blocked-after-restart"},
+            )
+            assert rejected.status_code == 409
+
+
 def test_auth_required_blocks_new_turn_until_generation_reconciles(
     tmp_path: Path,
 ) -> None:

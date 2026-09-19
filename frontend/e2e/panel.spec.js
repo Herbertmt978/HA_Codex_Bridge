@@ -244,6 +244,17 @@ for (const viewport of [
   expect(scrollContract.transcriptScrollHeight).toBeGreaterThan(scrollContract.transcriptClientHeight);
   expect(scrollContract.transcriptScrollTop).toBeGreaterThan(0);
   expect(scrollContract.composerTopAfter).toBeCloseTo(scrollContract.composerTopBefore, 1);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._scrollMessagesToBottom(true);
+    panel._hass.connection.sendMessagePromise = async () => {
+      throw new Error("Bridge connection lost");
+    };
+    panel._setError("The connection was interrupted.", { retryable: true });
+  });
+  const error = page.locator("codex-bridge-panel").locator("#error-strip");
+  await expect(error).toBeInViewport({ ratio: 1 });
+  await expect(error.getByRole("button", { name: "Retry connection" })).toBeInViewport({ ratio: 1 });
   });
 }
 
@@ -566,6 +577,47 @@ test("runs the Home Assistant first-run and ChatGPT device sign-in flow without 
     expect(renderedText).not.toContain(privateFragment);
   }
 });
+
+for (const viewport of [{ width: 1755, height: 850 }, { width: 1024, height: 600 }, { width: 390, height: 844 }]) {
+  test(`keeps expired sign-in status and recovery controls visible at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      window.__codexHarness.updateThread("thr_vba_1", {
+        status: "error",
+        last_error: "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+      });
+      window.__codexHarness.emitThreadEvent("thr_vba_1", "run.failed", {
+        run_id: "expired-run", failure_type: "auth.expired", auth_required: true,
+        error: "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+      });
+      window.__codexHarness.expireLogin();
+    });
+    const banner = panel.locator("#status-banner");
+    await expect(panel.locator("#account-pill")).toHaveText("ChatGPT not connected");
+    await expect(banner).toContainText("Your ChatGPT sign-in expired");
+    const signIn = banner.getByRole("button", { name: "Sign in with ChatGPT", exact: true });
+    await expect(signIn).toBeInViewport({ ratio: 1 });
+    if (viewport.width < 600) {
+      expect((await signIn.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    }
+    const geometry = await banner.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const scroll = element.parentElement.querySelector("#conversation-scroll").getBoundingClientRect();
+      return { height: element.clientHeight, contentHeight: element.scrollHeight, bottom: rect.bottom, scrollTop: scroll.top };
+    });
+    expect(geometry.contentHeight).toBeLessThanOrEqual(geometry.height + 1);
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.scrollTop + 1);
+    await page.screenshot({ path: testInfo.outputPath("expired-sign-in.png"), fullPage: true });
+    await signIn.click();
+    await expect(banner.getByRole("button", { name: "Open ChatGPT", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.evaluate(() => window.__codexHarness.completeLogin());
+    await expect(panel.locator("#account-pill")).toHaveText("ChatGPT Pro");
+    await expect(banner).toBeHidden();
+  });
+}
 
 test("creates a workspace project and first chat at compact widths in both colour schemes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });

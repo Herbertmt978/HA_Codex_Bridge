@@ -3114,6 +3114,8 @@ template.innerHTML = `
     }
 
     .main-top,
+    .status-banner,
+    .error-strip,
     .interaction-region,
     .message-list,
     .run-activity-region {
@@ -3121,9 +3123,18 @@ template.innerHTML = `
       margin-inline: auto;
     }
 
+    .status-banner.visible,
+    .error-strip.visible {
+      flex: 0 0 auto;
+      margin-top: 10px;
+    }
+
     .main-top {
-      max-height: min(25vh, 220px);
+      flex: 0 0 auto;
+      grid-auto-rows: max-content;
+      max-height: none;
       padding: 10px 0 0;
+      overflow: visible;
     }
 
     .runtime-item {
@@ -4584,6 +4595,12 @@ template.innerHTML = `
         overflow: visible;
       }
 
+      .banner-action,
+      .banner-dismiss {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
       .message-list {
         flex: 0 0 auto;
         min-height: 0;
@@ -4771,19 +4788,19 @@ template.innerHTML = `
           <button class="icon-button" type="button" data-action="refresh-thread" title="Refresh" aria-label="Refresh" id="refresh-thread-button"></button>
         </div>
       </div>
-      <div class="main-top">
-        <div class="runtime-shell" id="runtime-strip"></div>
-        <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
-        <section class="onboarding-shell" id="onboarding-shell">
-          <div class="onboarding-heading">
-            <strong id="onboarding-title">Home Assistant setup</strong>
-            <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
-          </div>
-          <div id="onboarding"></div>
-        </section>
-        <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
-      </div>
+      <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
+      <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
       <div class="conversation-scroll" id="conversation-scroll">
+        <div class="main-top">
+          <div class="runtime-shell" id="runtime-strip"></div>
+          <section class="onboarding-shell" id="onboarding-shell">
+            <div class="onboarding-heading">
+              <strong id="onboarding-title">Home Assistant setup</strong>
+              <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
+            </div>
+            <div id="onboarding"></div>
+          </section>
+        </div>
         <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
@@ -7959,6 +7976,7 @@ class CodexBridgePanel extends HTMLElement {
     const lowered = String(message || "").toLowerCase();
     return (
       lowered.includes("codex login expired") ||
+      lowered.includes("codex sign-in expired") ||
       lowered.includes("401 unauthorized") ||
       lowered.includes("refresh token")
     );

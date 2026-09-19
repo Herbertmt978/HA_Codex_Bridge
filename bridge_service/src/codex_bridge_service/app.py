@@ -534,7 +534,10 @@ def create_app(
                     operation_id=f"auth-status:{status.revision}",
                     relative_path=_AUTH_STATE_FILENAME,
                     state_revision=status.revision,
-                    state_payload=payload,
+                    state_payload={
+                        **payload,
+                        "reauthentication_required": status.reauthentication_required,
+                    },
                     event=EventDraft(
                         scope="auth",
                         event_type="auth.status_changed",
@@ -706,6 +709,9 @@ def create_app(
             ),
             browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
             provider_admission_check=provider_account_admission_ready,
+            auth_failure_listener=getattr(
+                resolved_auth_coordinator, "report_auth_failure", None
+            ),
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(

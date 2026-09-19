@@ -289,6 +289,8 @@ class CodexAccountRecord(BaseModel):
 
 
 class CodexAuthStatusRecord(BaseModel):
+    # Durable coordinator metadata, excluded from browser/API projections.
+    reauthentication_required: bool = Field(default=False, exclude=True)
     revision: int = Field(default=0, ge=0)
     state: str = "unknown"
     busy: bool = False

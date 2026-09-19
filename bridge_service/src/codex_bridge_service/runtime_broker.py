@@ -466,6 +466,7 @@ class RuntimeBroker:
         browser_broker: BrowserBroker | None = None,
         browser_dynamic_tools_enabled: bool = False,
         provider_admission_check: Callable[[], bool] | None = None,
+        auth_failure_listener: Callable[[int], None] | None = None,
     ) -> None:
         if type(browser_dynamic_tools_enabled) is not bool:
             raise ValueError("browser dynamic tool state must be a boolean")
@@ -504,6 +505,7 @@ class RuntimeBroker:
             else _positive_timeout(interaction_timeout_seconds)
         )
         self._run_terminal_listener = run_terminal_listener
+        self._auth_failure_listener = auth_failure_listener
         self._image_generation_authority = image_generation_authority
         self._browser_broker = browser_broker
         # This has no durable representation. A restored runtime cannot regain
@@ -2887,6 +2889,20 @@ class RuntimeBroker:
         run.completed_item_ids = []
         self._compact_terminal_state_locked()
         persistence_error: RuntimeStateError | None = None
+        # Persist auth rejection before the terminal event and before releasing
+        # the lease. A restart between the two writes must remain auth-blocked.
+        auth_projection_failed = False
+        if (
+            failure is not None
+            and failure.auth_required
+            and run.generation is not None
+            and self._auth_failure_listener is not None
+        ):
+            try:
+                self._auth_failure_listener(run.generation)
+            except Exception:
+                auth_projection_failed = True
+                self._fatal_error = True
         with self.storage._thread_mutation_lock:
             projection = self._thread_projection_record_locked(run)
             projection_payloads = (
@@ -2932,6 +2948,9 @@ class RuntimeBroker:
             if run.generation is not None:
                 self.app_server.abort_generation(run.generation)
             raise RuntimeUnavailableError() from persistence_error
+
+        if auth_projection_failed:
+            raise RuntimeUnavailableError()
 
         if status == "failed" and failure is not None and failure.blocked:
             try:
