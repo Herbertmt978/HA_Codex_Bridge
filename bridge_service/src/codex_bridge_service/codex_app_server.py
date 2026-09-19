@@ -45,7 +45,9 @@ _MAX_REQUEST_ID_TEXT_BYTES = 256
 _MAX_METHOD_BYTES = 512
 _RETIRED_ID_LIMIT = 2048
 _STDERR_READ_BYTES = 16 * 1024
-_DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
+# Plugin catalogues are returned as one unpaginated frame (over 8 MiB on the
+# current service). Keep a finite transport cap with room for catalogue growth.
+_DEFAULT_MAX_MESSAGE_BYTES = 32 * 1024 * 1024
 _DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 _MODEL_PROVIDER_CAPABILITIES_TIMEOUT_SECONDS = 5.0
 _CALLBACK_COMPLETION_RESERVE = 2

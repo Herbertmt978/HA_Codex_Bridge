@@ -29,8 +29,8 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- App release candidate `1.0.3` uses verified Codex `0.155.1`, Bridge `0.7.7`
-  and the existing Integration/panel `1.0.2`. Astra is offered when the runtime
+- App release candidate `1.0.3` uses verified Codex `0.155.1`, Bridge `0.7.8`
+  and paired Integration/panel `1.0.3`. Astra is offered when the runtime
   catalogue advertises it; the pinned older client omitted it. Signed
   publication and target deployment remain separate gates.
 

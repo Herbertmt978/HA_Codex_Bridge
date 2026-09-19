@@ -35,8 +35,8 @@ _MAX_NAME_BYTES = 128
 _MAX_TEXT_BYTES = 4096
 _MAX_SKILLS = 512
 # Keep projection bounded while accommodating the current Codex marketplace
-# catalogue (which contains roughly 1,900 plugins).
-_MAX_PLUGINS = 4096
+# catalogue (which now contains over 4,000 plugins).
+_MAX_PLUGINS = 8192
 _MAX_MARKETPLACES = 128
 _PLUGIN_CATALOGUE_TIMEOUT_SECONDS = 60.0
 _PROVIDER_CAPABILITIES_TTL_SECONDS = 5.0

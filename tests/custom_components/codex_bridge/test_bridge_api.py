@@ -694,7 +694,41 @@ async def test_plugin_catalogue_uses_the_bounded_cold_response_timeout() -> None
 
 
 @pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
-async def test_plugin_catalogue_response_is_limited_to_eight_mebibytes(
+async def test_plugin_catalogue_above_eight_mebibytes_is_accepted(
+    bridge_server_factory, method: str
+) -> None:
+    payload = {
+        "cwd": ".",
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {
+                        "id": f"plugin-{index}",
+                        "name": f"Plugin {index}",
+                        "description": "x" * 1024,
+                    }
+                    for index in range(8192)
+                ],
+            }
+        ],
+    }
+    assert len(json.dumps(payload).encode()) > 8 * 1024 * 1024
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        return web.json_response(payload)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        assert await getattr(client, method)(".") == payload
+
+
+@pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
+async def test_plugin_catalogue_response_size_remains_bounded(
     bridge_server_factory, monkeypatch, method: str
 ) -> None:
     async def handler(request: web.Request) -> web.Response:

@@ -26,7 +26,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.0.2";
+const PANEL_VERSION = "1.0.3";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -5981,16 +5981,18 @@ class CodexBridgePanel extends HTMLElement {
   _renderDesktopNavigation() {
     const nav = this.shadowRoot.getElementById("desktop-destinations");
     if (!nav) return;
-    nav.replaceChildren();
-    for (const destination of DESTINATIONS) {
-      const control = document.createElement("button");
-      control.type = "button";
-      control.className = "desktop-destination";
-      control.dataset.action = "select-desktop-destination";
-      control.dataset.destination = destination.id;
-      control.textContent = destination.label;
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      let control = nav.children[index];
+      if (!control) {
+        control = document.createElement("button");
+        control.type = "button";
+        control.className = "desktop-destination";
+        control.dataset.action = "select-desktop-destination";
+        control.dataset.destination = destination.id;
+        control.textContent = destination.label;
+        nav.append(control);
+      }
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
-      nav.append(control);
     }
   }
 

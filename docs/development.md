@@ -53,11 +53,11 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current App release is `1.0.3` (`amd64`), using Bridge `0.7.7` and
-Codex `0.155.1` with Integration and panel `1.0.2`. The runtime update allows
-Astra to appear when the signed-in account's catalogue advertises it. Update
-the Supervisor App; an existing Integration/panel `1.0.2` needs no update.
-Earlier Integration versions still require the `1.0.2` login and layout fixes. Preserve
+The current App release is `1.0.3` (`amd64`), using Bridge `0.7.8` and
+Codex `0.155.1` with Integration and panel `1.0.3`. Update both the Supervisor
+App and the HACS Integration, then restart Home Assistant and refresh the panel.
+This release enables Astra discovery for eligible accounts and preserves sidebar
+hover and keyboard focus during background updates. Preserve
 their independent version authorities when an App-only fix does not change the
 negotiated API or panel. Preserve the panel's immediate composer Send-state
 rendering and the account-neutral local-chat contract: local records remain

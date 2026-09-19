@@ -4,13 +4,20 @@ All notable App changes are recorded here.
 
 ## 1.0.3
 
+- Accommodates the growing, unpaginated plugin catalogue within bounded runtime
+  and Integration response limits, fixing the Plugins unavailable error and
+  retaining every plugin in the current catalogue.
+
+- Declines optional background questions without blocking the compatible panel or
+  suspending idle timeouts; blocking questions continue to request an answer.
+
 - Bundles the Sigstore-verified Codex runtime `0.155.1`.
 - Makes GPT-6 Astra available in the model picker when the signed-in account's
   runtime catalogue advertises it; the previous client version omitted Astra.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.
-- Bundles Bridge `0.7.7` without changing its Integration API compatibility.
-- Retains Integration and panel `1.0.2`; only the Supervisor App needs updating
-  from the previous paired release.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+- Updates Integration and panel to `1.0.3`, preserving sidebar hover and keyboard
+  focus during Home Assistant background refreshes.
 - Reports a blocked automatic runtime update as a failed workflow when updater
   credentials are missing, rather than silently skipping the pull request.
 

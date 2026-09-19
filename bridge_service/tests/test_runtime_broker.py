@@ -5921,6 +5921,61 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
         broker.close()
 
 
+def test_optional_question_is_declined_without_suspending_idle_timeout(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    limits = ResourceLimits(run_idle_timeout_seconds=0.4)
+    broker = RuntimeBroker(
+        storage=storage,
+        app_server=client,
+        runtime_gate=RuntimeGate(limits=limits),
+        resource_limits=limits,
+        watchdog_interval_seconds=0.01,
+        turn_timeout_seconds=5.0,
+        interaction_timeout_seconds=5.0,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Continue while asking an optional question",
+            client_request_id="optional-question-run",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        assert client.emit_request(
+            "item/tool/requestUserInput",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "optional-question",
+                "isBlocking": False,
+                "questions": [
+                    {
+                        "id": "scope",
+                        "header": "Scope",
+                        "question": "Any optional preferences?",
+                        "options": [],
+                        "isOther": True,
+                        "isSecret": False,
+                    }
+                ],
+            },
+            request_id="provider-optional-question",
+        ) == {"answers": {"scope": {"answers": []}}}
+        assert broker.pending_interactions(thread_id=thread.thread_id) == ()
+        assert not any(
+            event.event_type == "interaction.created"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        _wait_until(lambda: client.aborted_generations == [1], timeout=2.0)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "error")
+    finally:
+        broker.close()
+
+
 def test_cancel_approval_transitions_run_to_cancelled(
     tmp_path: Path,
 ) -> None:
