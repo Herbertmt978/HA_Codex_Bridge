@@ -215,7 +215,8 @@ def test_codex_updater_uses_scoped_app_token_and_guarded_auto_merge() -> None:
     assert '-z "${UPDATER_APP_ACTOR}"' in credential_check
     assert 'echo "available=false" >> "$GITHUB_OUTPUT"' in credential_check
     assert 'echo "available=true" >> "$GITHUB_OUTPUT"' in credential_check
-    assert "::notice title=Codex updater skipped::" in credential_check
+    assert "::error title=Codex update blocked::" in credential_check
+    assert "exit 1" in credential_check
 
     token_steps = [
         step

@@ -131,6 +131,32 @@ async function seedRunStageActivity(page) {
   await expect(page.locator("codex-bridge-panel").locator("#run-step-chip")).toBeVisible();
 }
 
+test("keeps sidebar hover and keyboard focus stable during HA updates", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const plugins = page.locator('codex-bridge-panel [data-destination="plugins"]');
+  await plugins.focus();
+  await plugins.hover();
+  const samples = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const control = panel.shadowRoot.querySelector('[data-destination="plugins"]');
+    await Promise.all(control.getAnimations().map((animation) => animation.finished));
+    const results = [];
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      await new Promise(requestAnimationFrame);
+      results.push({
+        connected: control.isConnected,
+        hovered: control.matches(":hover"),
+        focused: panel.shadowRoot.activeElement === control,
+        background: getComputedStyle(control).backgroundColor,
+      });
+    }
+    return results;
+  });
+  expect(samples.every((sample) => sample.connected && sample.hovered && sample.focused)).toBe(true);
+  expect(new Set(samples.map((sample) => sample.background)).size).toBe(1);
+});
+
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
   const requests = [];
   const pageErrors = [];

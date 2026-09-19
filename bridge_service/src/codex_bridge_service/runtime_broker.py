@@ -2499,6 +2499,11 @@ class RuntimeBroker:
             if request.method == "item/permissions/requestApproval":
                 return {"permissions": {}, "scope": "turn"}
             if request.method == "item/tool/requestUserInput":
+                # The compatible panel only presents blocking questions. Decline
+                # optional input without creating a waiting interaction or
+                # suppressing the run's idle watchdog.
+                if params.get("isBlocking") is False:
+                    return _empty_answers(params)
                 display = question_display(params)
                 if display is None:
                     return _empty_answers(params)

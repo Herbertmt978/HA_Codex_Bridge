@@ -53,10 +53,11 @@ acceptance until retested. The first unattended App update is proven. External
 blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
 rollback remain unproven.
 
-The current paired App, Integration and panel release is `1.0.2`, is `amd64`
-only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
-reporting and keeps sign-in and retry controls visible. Update both the App
-and HACS Integration, restart Home Assistant, and reload the panel. Preserve
+The current App release is `1.0.3` (`amd64`), using Bridge `0.7.8` and
+Codex `0.155.1` with Integration and panel `1.0.3`. Update both the Supervisor
+App and the HACS Integration, then restart Home Assistant and refresh the panel.
+This release enables Astra discovery for eligible accounts and preserves sidebar
+hover and keyboard focus during background updates. Preserve
 their independent version authorities when an App-only fix does not change the
 negotiated API or panel. Preserve the panel's immediate composer Send-state
 rendering and the account-neutral local-chat contract: local records remain
@@ -144,6 +145,12 @@ unverified URL or token.
 
 ## Verified updater setup
 
+Dependabot maintains the repository's supported package manifests and Actions.
+The Codex runtime uses a custom lock with verified archives, signatures and
+protocol schemas, so the daily `Verified Codex update` workflow owns runtime
+updates instead of Dependabot. It checks stable upstream releases, verifies
+the assets, regenerates the contract and opens a narrowly scoped App update.
+
 For unattended updates, the scheduled Codex updater uses a dedicated GitHub App
 installed only on this repository. Grant that App **Contents: read and write**
 and **Pull requests: read and write**; do not grant Actions, Packages,
@@ -152,7 +159,9 @@ client ID as repository variable `CODEX_UPDATER_APP_CLIENT_ID` and its private
 key as Actions secret `CODEX_UPDATER_APP_PRIVATE_KEY`. Also set repository
 variable `CODEX_UPDATER_APP_ACTOR` to the installed App's login (for example,
 `codex-updater[bot]`). All three values are mandatory: if any is absent, the
-workflow logs an actionable notice and creates no pull request. It deliberately
+workflow fails with an actionable error when an update is available and creates
+no pull request. Check failed scheduled runs so missing setup cannot silently
+leave the runtime behind. It deliberately
 does not fall back to `GITHUB_TOKEN`, because that token cannot start the
 required pull-request CI. The required policy checks both the PR author and the
 event actor against `CODEX_UPDATER_APP_ACTOR`, so a collaborator cannot retain

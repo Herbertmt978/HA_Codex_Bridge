@@ -23328,7 +23328,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.2";
+var PANEL_VERSION = "1.0.3";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -29167,16 +29167,18 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderDesktopNavigation() {
     const nav = this.shadowRoot.getElementById("desktop-destinations");
     if (!nav) return;
-    nav.replaceChildren();
-    for (const destination of DESTINATIONS) {
-      const control = document.createElement("button");
-      control.type = "button";
-      control.className = "desktop-destination";
-      control.dataset.action = "select-desktop-destination";
-      control.dataset.destination = destination.id;
-      control.textContent = destination.label;
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      let control = nav.children[index];
+      if (!control) {
+        control = document.createElement("button");
+        control.type = "button";
+        control.className = "desktop-destination";
+        control.dataset.action = "select-desktop-destination";
+        control.dataset.destination = destination.id;
+        control.textContent = destination.label;
+        nav.append(control);
+      }
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
-      nav.append(control);
     }
   }
   _renderAppMenu() {

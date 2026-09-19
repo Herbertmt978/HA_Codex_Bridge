@@ -2,11 +2,12 @@
 
 ## Status before you start
 
-The current paired App, Integration and panel release is `1.0.2`, is `amd64`
-only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
-reporting and keeps sign-in and retry controls visible. Update both the App
-and HACS Integration, restart Home Assistant, and reload the panel. Confirm
-that the signed App `1.0.2` image and immutable publication evidence are
+The current App release is `1.0.3` (`amd64`), using Bridge `0.7.8` and
+Codex `0.155.1` with Integration and panel `1.0.3`. Update both the Supervisor
+App and the HACS Integration, then restart Home Assistant and refresh the panel.
+This release enables Astra discovery for eligible accounts and preserves sidebar
+hover and keyboard focus during background updates. Confirm
+that the signed App `1.0.3` image and immutable publication evidence are
 present on GitHub before installing. It repairs supported restored ownership
 and fixed private modes before dropping privileges. The compatible panel
 changes **Send** state immediately as a prompt is typed and retains account-

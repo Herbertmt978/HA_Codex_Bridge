@@ -208,9 +208,9 @@ jobs:
           UPDATER_APP_PRIVATE_KEY: ${{ secrets.CODEX_UPDATER_APP_PRIVATE_KEY }}
         run: |
           if [[ -z "${UPDATER_APP_CLIENT_ID}" || -z "${UPDATER_APP_PRIVATE_KEY}" || -z "${UPDATER_APP_ACTOR}" ]]; then
-            echo "::notice title=Codex updater skipped::Configure CODEX_UPDATER_APP_CLIENT_ID, CODEX_UPDATER_APP_PRIVATE_KEY, and CODEX_UPDATER_APP_ACTOR before this workflow can create an update pull request."
+            echo "::error title=Codex update blocked::A verified runtime update is available, but CODEX_UPDATER_APP_CLIENT_ID, CODEX_UPDATER_APP_PRIVATE_KEY, and CODEX_UPDATER_APP_ACTOR must be configured before a pull request can be created."
             echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            exit 1
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
 

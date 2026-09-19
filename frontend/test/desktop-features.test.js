@@ -124,6 +124,33 @@ describe("desktop feature surfaces", () => {
     expect(panel._callWS).toHaveBeenCalledWith("get_agents");
   });
 
+  it("preserves navigation focus and nodes across Home Assistant refreshes", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._config = { panel_title: "Codex Bridge", capabilities: [] };
+    panel._callWS = vi.fn().mockResolvedValue({});
+    panel._render(true);
+    const nav = panel.shadowRoot.getElementById("desktop-destinations");
+    const plugins = nav.querySelector('[data-destination="plugins"]');
+    const settings = nav.querySelector('[data-destination="settings"]');
+    const observer = new MutationObserver(() => {});
+    observer.observe(nav, { childList: true });
+    plugins.focus();
+
+    for (let update = 0; update < 5; update += 1) panel.hass = { states: {} };
+
+    expect(nav.querySelector('[data-destination="plugins"]')).toBe(plugins);
+    expect(panel.shadowRoot.activeElement).toBe(plugins);
+    expect(observer.takeRecords()).toEqual([]);
+    settings.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settings.getAttribute("aria-current")).toBe("page");
+    expect(plugins.getAttribute("aria-current")).toBe("false");
+    expect(observer.takeRecords()).toEqual([]);
+    observer.disconnect();
+  });
+
   it("renders non-MCP settings when the default MCP capability is disabled", async () => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
