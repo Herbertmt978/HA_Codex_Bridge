@@ -896,7 +896,9 @@ class CodexAppServerClient:
                 if reader is not None:
                     reader.join()
                 with self._state_lock:
-                    failure = self._generation_failures.pop(
+                    # Keep the marker until process teardown completes so a
+                    # concurrent abort cannot accept this generation again.
+                    failure = self._generation_failures.get(
                         generation,
                         AppServerUnavailableError(),
                     )
