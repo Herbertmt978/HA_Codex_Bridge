@@ -1,3 +1,6 @@
+import { renderScheduleForm, scheduleSummary } from "./scheduled-tasks.js";
+export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
+
 const DESTINATIONS = Object.freeze([
   { id: "chats", label: "Chats", icon: "chat" },
   { id: "scheduled", label: "Scheduled", icon: "calendar" },
@@ -68,21 +71,6 @@ export function normalizeMarketplacesResponse(value) {
   const record = asRecord(value);
   const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
   return marketplaces.filter((marketplace) => marketplace && typeof marketplace === "object").map((marketplace) => ({ name: marketplace.name, plugins: Array.isArray(marketplace.plugins) ? marketplace.plugins : [] }));
-}
-
-export function buildAutomationPayload(values = {}) {
-  const target = values.thread_id ? { kind: "continue_thread", thread_id: values.thread_id } : { kind: "standalone", project_id: values.project_id };
-  const kind = values.schedule_type || "once";
-  const schedule = kind === "interval"
-    ? { kind, seconds: Number(values.interval_seconds), anchor_at: values.anchor_at || values.run_at }
-    : kind === "RRULE" || kind === "rrule"
-      ? { kind: "rrule", rule: values.rrule, start_at: values.start_at || values.run_at, timezone: values.timezone }
-      : { kind: "once", at: values.run_at };
-  return { name: values.name || values.title || "Untitled automation", prompt: values.prompt || "", target, schedule, mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || values.reasoning || null };
-}
-
-export function buildAutomationUpdatePayload(values = {}) {
-  return { expected_revision: Number(values.revision), ...buildAutomationPayload(values) };
 }
 
 export function normalizeDesktopError(error) {
@@ -237,34 +225,12 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
-  section.append(toolbar);
+  if (!state.form) section.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    const editing = state.editingAutomation || {};
-    const schedule = editing.schedule || {};
-    const form = documentRef.createElement("form");
-    form.className = "desktop-form";
-    form.dataset.desktopForm = "schedule";
-    form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
-    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
-    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
-    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
-    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
-    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
-    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
-    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
-    const actions = documentRef.createElement("div");
-    actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
-    form.append(actions);
-    section.append(form);
+    section.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    return section;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data);
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, schedule: scheduleSummary(row.schedule, defaultTimezone) }));
   section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
@@ -422,7 +388,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
-  container.append(heading);
+  if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) { container.setAttribute("aria-busy", "true"); container.append(renderEmpty(documentRef, "Loading…")); return; }
   container.setAttribute("aria-busy", "false");
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }

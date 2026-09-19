@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "../src/codex-bridge-panel.js";
-import { buildAutomationPayload, buildAutomationUpdatePayload, getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "../src/desktop-features.js";
+import { getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "../src/desktop-features.js";
 
 describe("desktop feature surfaces", () => {
   beforeEach(() => document.body.replaceChildren());
@@ -13,9 +13,6 @@ describe("desktop feature surfaces", () => {
     expect(normalizeDesktopError({ message: "x".repeat(800) })).toHaveLength(500);
     expect(normalizeSkillsResponse({ data: [{ cwd: "proj", skills: [{ name: "safe" }] }] })).toEqual([{ name: "safe", scope: "proj" }]);
     expect(normalizePluginsResponse({ marketplaces: [{ name: "official", plugins: [{ id: "p1", name: "Plugin" }] }] })).toEqual([{ id: "p1", name: "Plugin", marketplace_name: "official" }]);
-    expect(buildAutomationPayload({ project_id: "p1", schedule_type: "interval", interval_seconds: "60", run_at: "2026-01-01T00:00:00Z", mode: "edit" })).toMatchObject({ target: { kind: "standalone", project_id: "p1" }, schedule: { kind: "interval", seconds: 60, anchor_at: "2026-01-01T00:00:00Z" }, mode: "edit" });
-    expect(buildAutomationUpdatePayload({ revision: "3", thread_id: "t1", schedule_type: "once", run_at: "2026-01-01T00:00:00Z" })).toMatchObject({ expected_revision: 3, target: { kind: "continue_thread", thread_id: "t1" } });
-    expect(buildAutomationPayload({ project_id: "p1", schedule_type: "rrule", rrule: "RRULE:FREQ=DAILY", run_at: "2026-01-01T00:00:00Z", timezone: "Europe/London" }).schedule).toEqual({ kind: "rrule", rule: "RRULE:FREQ=DAILY", start_at: "2026-01-01T00:00:00Z", timezone: "Europe/London" });
   });
 
   it("loads plugins and marketplaces from one catalogue request", async () => {
@@ -584,41 +581,60 @@ describe("desktop feature surfaces", () => {
     });
   });
 
-  it("preserves scheduled form drafts across status renders, including selects and textareas", async () => {
+  it("keeps schedule menus mounted through refreshes and submits the visible choices", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._config = { capabilities: [] };
     panel._activeDestination = "scheduled";
+    panel._projects = [{ project_id: "p1", kind: "direct" }];
+    panel._selectedProjectId = "p1";
     panel._desktopFeatures.scheduled.loaded = true;
     panel._desktopFeatures.scheduled.data = { automations: [] };
     panel._callWS = vi.fn().mockResolvedValue({});
     panel._loadDesktopDestination = vi.fn().mockResolvedValue(undefined);
     panel._render(true);
-
     await panel._handleDesktopAction("open-schedule-form", {}, null);
-    const prompt = panel.shadowRoot.querySelector('[data-desktop-field="prompt"]');
-    const scheduleType = panel.shadowRoot.querySelector('[data-desktop-field="schedule_type"]');
-    const mode = panel.shadowRoot.querySelector('[data-desktop-field="mode"]');
-    prompt.value = "Keep this prompt";
-    prompt.dispatchEvent(new Event("input", { bubbles: true }));
-    scheduleType.value = "interval";
-    scheduleType.dispatchEvent(new Event("change", { bubbles: true }));
-    mode.value = "full-auto";
-    mode.dispatchEvent(new Event("change", { bubbles: true }));
-    panel.shadowRoot.querySelector('[data-desktop-field="interval_seconds"]').value = "60";
-    panel.shadowRoot.querySelector('[data-desktop-field="interval_seconds"]').dispatchEvent(new Event("input", { bubbles: true }));
-
-    panel._renderDesktopSurface();
-    expect(panel.shadowRoot.querySelector('[data-desktop-field="prompt"]').value).toBe("Keep this prompt");
-    expect(panel.shadowRoot.querySelector('[data-desktop-field="schedule_type"]').value).toBe("interval");
-    expect(panel.shadowRoot.querySelector('[data-desktop-field="mode"]').value).toBe("full-auto");
-
-    const submitTarget = panel.shadowRoot.querySelector('[data-desktop-field="prompt"]');
-    await panel._handleDesktopAction("submit-schedule", {}, submitTarget);
+    const get = (name) => panel.shadowRoot.querySelector(`[data-desktop-field="${name}"]`);
+    const change = (name, value) => { const field = get(name); field.value = value; field.dispatchEvent(new Event("change", { bubbles: true })); };
+    change("title", "My scheduled task");
+    change("prompt", "Keep this prompt");
+    change("repeat", "interval");
+    change("interval_count", "1");
+    change("interval_unit", "minutes");
+    change("mode", "full-auto");
+    const mode = get("mode");
+    mode.focus();
+    for (let i = 0; i < 5; i += 1) { panel.hass = { states: {} }; panel._renderDesktopSurface(); }
+    expect(get("mode")).toBe(mode);
+    expect(panel.shadowRoot.activeElement).toBe(mode);
+    expect(get("prompt").value).toBe("Keep this prompt");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    mode.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(panel._callWS).not.toHaveBeenCalled();
+    await panel._handleDesktopAction("submit-schedule", {}, get("prompt"));
     expect(panel._callWS).toHaveBeenCalledWith("create_automation", expect.objectContaining({
-      prompt: "Keep this prompt",
-      schedule: expect.objectContaining({ kind: "interval", seconds: 60 }),
-      mode: "full-auto",
+      name: "My scheduled task", prompt: "Keep this prompt", target: { kind: "standalone", project_id: "p1" },
+      schedule: expect.objectContaining({ kind: "interval", seconds: 60 }), mode: "full-auto",
     }));
     expect(panel._desktopFeatures.scheduled.formDraft).toEqual({});
+  });
+
+  it("shows a list refresh error after a scheduled task was saved", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._activeDestination = "scheduled";
+    panel._projects = [{ project_id: "p1", kind: "direct" }];
+    const state = panel._desktopFeatures.scheduled;
+    state.loaded = true; state.data = { automations: [] };
+    panel._callWS = vi.fn().mockImplementation((action) => action === "create_automation" ? Promise.resolve({}) : Promise.reject(new Error("List unavailable")));
+    panel._render(true);
+    await panel._handleDesktopAction("open-schedule-form", {}, null);
+    const title = panel.shadowRoot.querySelector('[name="title"]');
+    title.value = "Saved task";
+    panel.shadowRoot.querySelector('[name="prompt"]').value = "Describe the workspace";
+    await panel._handleDesktopAction("submit-schedule", {}, title);
+    expect(state.form).toBeNull();
+    expect(state.error).toMatch(/list unavailable/i);
+    expect(panel.shadowRoot.textContent).toContain("List unavailable");
   });
 
   it("preserves skill form drafts across status renders and clears them when cancelled", async () => {
@@ -690,8 +706,8 @@ describe("desktop feature surfaces", () => {
     });
 
     await panel._handleDesktopAction("update-automation", { id: "a1", revision: "2" }, null);
-    const runAt = panel.shadowRoot.querySelector('[data-desktop-field="run_at"]');
-    expect(runAt.value).toBe("2026-01-01T00:00:00Z");
+    const runAt = panel.shadowRoot.querySelector('[data-desktop-field="date"]');
+    expect(runAt.value).toBe("2026-01-01");
 
     await panel._handleDesktopAction("submit-schedule-update", {}, runAt);
     expect(panel._callWS).toHaveBeenCalledWith("update_automation", {

@@ -738,6 +738,24 @@
                 return clone({ ...statusPayload, auth: harnessState.auth });
               case "codex_bridge/list_projects":
                 return clone(projects);
+              case "codex_bridge/list_automations":
+                return clone(harnessState.automations || []);
+              case "codex_bridge/create_automation": {
+                const { type, ...definition } = payload;
+                const records = harnessState.automations ||= [];
+                const record = { ...definition, automation_id: `automation_${records.length + 1}`, revision: 1, enabled: true };
+                records.push(record);
+                return clone(record);
+              }
+              case "codex_bridge/get_automation":
+                return clone(harnessState.automations.find((record) => record.automation_id === payload.automation_id));
+              case "codex_bridge/update_automation": {
+                const record = harnessState.automations.find((item) => item.automation_id === payload.automation_id);
+                if (record.revision !== payload.expected_revision) throw new Error("Task changed. Reload before saving.");
+                const { type, expected_revision, ...definition } = payload;
+                Object.assign(record, definition, { revision: expected_revision + 1 });
+                return clone(record);
+              }
               case "codex_bridge/list_threads":
                 return clone(Object.values(threadMap));
               case "codex_bridge/get_thread":

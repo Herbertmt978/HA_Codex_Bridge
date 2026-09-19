@@ -93,6 +93,87 @@ async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
 }
 
+test("creates and edits a scheduled task using the reference form", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  const form = panel.locator(".schedule-editor");
+  await expect(form.getByText("Home Assistant", { exact: true })).toBeVisible();
+  await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toBeVisible();
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Morning summary");
+  await form.getByRole("textbox", { name: "Task instructions" }).fill("Summarise overnight events in Home Assistant.");
+  await form.getByRole("combobox", { name: "Repeat", exact: true }).selectOption("weekdays");
+  await form.getByLabel("Time", { exact: true }).fill("09:00");
+  await expect(form.locator(".schedule-preview")).toHaveText("Every weekday at 09:00 · Europe/London");
+  await expect(form.locator('[name="project_id"], [name="thread_id"], [name="revision"], [name="rrule"]')).toHaveCount(0);
+  await form.screenshot({ path: test.info().outputPath("scheduled-desktop.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  const repeat = form.getByRole("combobox", { name: "Repeat", exact: true });
+  await repeat.focus();
+  await repeat.press("Space");
+  const stable = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const select = panel.shadowRoot.querySelector('[name="repeat"]');
+    const observer = new MutationObserver(() => {});
+    observer.observe(select.closest("form"), { childList: true, subtree: true });
+    for (let index = 0; index < 12; index += 1) {
+      panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
+      panel._renderDesktopSurface();
+      await new Promise(requestAnimationFrame);
+    }
+    const result = { same: panel.shadowRoot.querySelector('[name="repeat"]') === select, focus: panel.shadowRoot.activeElement === select, mutations: observer.takeRecords().length };
+    observer.disconnect(); return result;
+  });
+  await repeat.press("Escape");
+  expect(stable).toEqual({ same: true, focus: true, mutations: 0 });
+  expect(await websocketCalls(page, "codex_bridge/create_automation")).toHaveLength(0);
+
+  await form.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(panel.getByRole("cell", { name: "Morning summary", exact: true })).toBeVisible();
+  const created = (await websocketCalls(page, "codex_bridge/create_automation"))[0].payload;
+  expect(created).toMatchObject({ name: "Morning summary", target: { kind: "standalone", project_id: "prj_vba" }, schedule: { kind: "rrule", rule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0;BYSECOND=0", timezone: "Europe/London" }, mode: "observe" });
+  await panel.getByRole("button", { name: "Update", exact: true }).click();
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Renamed summary");
+  await form.getByRole("button", { name: "Save changes", exact: true }).click();
+  const updated = (await websocketCalls(page, "codex_bridge/update_automation"))[0].payload;
+  expect(updated).toMatchObject({ name: "Renamed summary", expected_revision: 1, target: created.target, schedule: created.schedule });
+});
+
+test("keeps a schedule draft after a save error and fits a narrow screen", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const form = panel.locator(".schedule-editor");
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Check on this chat");
+  await form.getByRole("textbox", { name: "Task instructions" }).fill("Check for anything needing attention.");
+  await form.getByRole("combobox", { name: "Runs in", exact: true }).selectOption("continue_thread");
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const send = panel.hass.connection.sendMessagePromise;
+    panel.hass.connection.sendMessagePromise = (request) => request.type === "codex_bridge/create_automation" ? Promise.reject(new Error("Temporary connection failure")) : send(request);
+  });
+  await form.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(form.getByRole("alert")).toHaveText("Temporary connection failure");
+  await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toHaveValue("Check on this chat");
+  await expect(form.getByRole("combobox", { name: "Runs in", exact: true })).toHaveValue("continue_thread");
+  const overflow = await form.evaluate((node) => node.scrollWidth > node.clientWidth || node.getBoundingClientRect().right > window.innerWidth);
+  expect(overflow).toBe(false);
+  await form.screenshot({ path: test.info().outputPath("scheduled-mobile.png") });
+});
+
 async function seedRunStageActivity(page) {
   await page.evaluate(() => {
     const harness = window.__codexHarness;

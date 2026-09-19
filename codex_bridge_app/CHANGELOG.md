@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.0.5
+
+- Replaces the technical Scheduled form with title, task instructions, Details
+  and Frequency cards. Supports new or current chats, familiar repeat choices
+  and a preview in Home Assistant's time zone.
+- Keeps saved schedule timing and permissions when editing existing tasks.
+- Keeps dropdowns mounted during background updates and stops Enter in a
+  dropdown from submitting the form.
+- Updates setup, usage and troubleshooting instructions to match the current
+  App and panel, including separate HACS and App updates.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+
 ## 1.0.4
 
 - Updates the paired Integration and panel to `1.0.4`, preserving keyboard focus

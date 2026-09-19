@@ -1,293 +1,121 @@
 # Codex Bridge App documentation
 
-## Runtime boundary
+For setup, follow [Installation](../docs/installation.md). For common problems,
+see [Support](../SUPPORT.md). This page explains the App's settings and limits.
 
-The App hosts the private Bridge and Codex runtime. Home Assistant remains the
-client-facing boundary: the Integration authorizes Home Assistant users and
-uses the Supervisor-managed private connection to the App.
+## Configuration
 
-Do not publish the App or Bridge to a browser, LAN, or WAN. Nabu Casa,
-Cloudflare, a VPN, or another correctly configured HTTPS reverse proxy must
-terminate at Home Assistant; it must not proxy a browser to the App or Bridge.
-The App does not request ingress, host networking,
-Docker access, devices, `/share`, Home Assistant configuration, or broad
-Supervisor roles.
+The App has one configuration option:
 
-## Filesystem and persistence
+| Option | Default | What it does |
+| --- | --- | --- |
+| Enable MCP (`enable_mcp`) | Off | Allows configuration of trusted outbound HTTPS MCP servers. Save and restart the App after changing it. |
 
-The only writable host mapping is `app_config:rw`, mounted at `/config`.
-Workspaces live under `/config/workspaces`; they are the only files an operator
-should grant to Codex. Private Bridge and ChatGPT device-login state live under
-the App-private `/data` volume.
+ChatGPT login is completed in the Codex Bridge panel. Do not enter account
+credentials, device codes or API keys in App configuration.
 
-Create cold backups with the App stopped so Home Assistant captures a consistent
-state. See [backup and recovery](../docs/backup-restore.md).
+## Files and permissions
 
-## Tool sandbox
+Workspaces live beneath the App's `/config/workspaces`. This is its own
+private mapping, not Home Assistant Core's configuration directory. The App
+keeps Bridge records and ChatGPT login state in private `/data` storage.
+It does not mount your PC, broad host shares or Home Assistant configuration.
 
-The trusted Bridge and Codex parent may contact OpenAI for ChatGPT account login
-and prompt handling. Model-controlled tools run through the locked Bubblewrap
-sandbox and constrained AppArmor child profile. They are limited to the selected
-workspace and have no network access to Home Assistant, Supervisor, other Apps,
-the LAN, or the internet.
+Observe mode gives Codex a read-only workspace. Edit and Full auto allow
+changes in the selected workspace. Full auto affects approvals; it does not
+remove the file or network restrictions. Model-controlled shell commands
+cannot access the LAN or internet. The trusted Codex runtime can contact
+OpenAI for login and responses.
 
-The Bridge selects a managed Codex permission profile for every new or resumed
-chat and verifies the profile provenance and resulting sandbox before starting
-a turn. **Observe** receives a read-only workspace. **Edit** and **Full auto**
-receive the selected writable workspace; Full auto changes approval handling,
-not its filesystem or network boundary. Any profile or sandbox mismatch fails
-closed.
+The App checks its sandbox at startup. If readiness reports
+`sandbox_unavailable`, collect redacted logs and use [Support](../SUPPORT.md).
+Do not disable AppArmor, add container privileges or broaden mounts.
 
-At startup, a fail-closed attestation verifies the locked binaries and profiles,
-namespace and mount isolation, capabilities, seccomp/no-new-privileges state,
-workspace-only writes, protected private state, hidden parent environment, and
-network restrictions. If the attestation is missing, stale, malformed, wrongly
-owned, or inconsistent with the running release, readiness reports the
-non-sensitive fatal state `sandbox_unavailable`. Do not broaden permissions to
-work around it.
+## Authentication and models
 
-On target HAOS, Codex `0.144.4`'s official `--no-proc` fallback works: denial of
-a fresh `/proc` mount leaves user, PID, and network namespaces, the read-only
-filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally empty.
-Attestation inspects that state without requiring procfs or broader container
-privileges. App `0.6.1`'s fatal readiness cause was instead a
-sandbox-self-test contract mismatch: it required `writableRoots` exactly
-`[workspace]`, while the real `ha_bridge` `workspaceWrite` response includes
-bounded supplemental roots (`.agents`, `.codex`, `.cursor`, `.git`, and
-`.vscode`) beneath the workspace. The proc-less probe already used direct
-`capget`/`prctl`/`lsm_get_self_attr` calls, without requesting `SYS_ADMIN` or
-weakening isolation; App `0.6.2` validates canonical contained supplemental
-roots and hardens `lsm_get_self_attr` record parsing.
+In the panel, choose **Sign in with ChatGPT**, open the displayed device-login
+page and approve the intended account. Wait for the panel to confirm it.
+**Cancel** stops a pending login; **Sign out** ends an established session.
+Initial login and re-authentication require access to the ChatGPT website.
+Normal panel use stays on Home Assistant.
 
-## Authentication
+Local chats, projects and files remain when you change ChatGPT accounts. The
+next message uses the newly connected account without resuming the previous
+account's private provider conversation or automatically replaying old messages.
 
-The Integration starts Codex's ChatGPT device-login flow. From the panel, select
-**Sign in with ChatGPT**, then complete the approved ChatGPT device-auth page in
-a browser. **Cancel** ends only an unfinished sign-in; **Sign out** removes an
-established session. Initial sign-in and re-authentication require access to the
-approved ChatGPT page, while normal signed-in panel use remains on the Home
-Assistant origin. While device approval is pending, the panel performs a
-bounded two-second account check and keeps the one-time code until Codex
-authoritatively confirms the session. Uncorrelated completion events are never
-allowed to replace a newer login.
+The model and reasoning menus come from the installed Codex runtime and your
+account. Astra is supported by the bundled Codex `0.155.1` when advertised for
+the account. If a model is missing, check App updates and connection status;
+updating the HACS Integration alone does not update Codex.
 
-Credentials stay in private App state and are not entered in App options, Home
-Assistant configuration, or a browser URL. No OpenAI API key is part of this
-contract. If a device or credential is suspected compromised, stop the App,
-use **Sign out**, and revoke the ChatGPT session through normal account controls.
+## Scheduled tasks
 
-## Automations and capability configuration
+Open **Scheduled** and choose **New schedule**. Enter a title, instructions,
+chat destination, repeat pattern and time. The preview uses Home Assistant's
+time zone. **Advanced** contains permission, model and reasoning overrides.
+See [Scheduled tasks](../docs/scheduled-tasks.md) for all repeat options.
 
-The administrator-only panel exposes these App-backed surfaces:
+Home Assistant owns the clock, so it and the App must be running. The Bridge
+stores definitions and run history and prevents duplicate claims. Unattended
+runs cannot answer approvals or questions; overlaps, missed windows and
+capacity limits can result in a skipped run. Results appear in chats and run
+history. The panel does not offer desktop or mobile notification preferences.
 
-- Automations persist a prompt, target (project or existing thread), mode, and
-  schedule. Home Assistant's scheduler asks for the next due UTC occurrence;
-  the Bridge performs revision-checked, idempotent claims and records run
-  history. Once, interval, and RFC 5545 recurrence schedules are validated;
-  overlap, capacity, pause, and misfire skips are explicit outcomes.
-- Skills are listed or managed in the selected workspace and created under
-  `.agents/skills/`. Global `AGENTS.md` is kept in the private Codex home;
-  project `AGENTS.md` is kept at that project's workspace root. Writes are
-  atomic, bounded, and retain private rollback snapshots.
-- Plugins and marketplaces are projected from Codex's native configuration.
-  Sources and names are validated, credentials are rejected, and no arbitrary
-  file path or JSON-RPC payload is passed through this API. The published/live-
-  accepted `0.7.1` run returned `capabilities_unavailable` (HTTP 503); no
-  `0.7.1` plugin or marketplace list/mutation acceptance was claimed. The
-  `0.7.5` acceptance did not exercise plugins or marketplaces, so no current
-  plugin or marketplace acceptance is claimed.
-- MCP is disabled by default. To opt in, set **Enable MCP** in the App
-  configuration, save, and restart. Disabled startup suppresses MCP before
-  Codex reads saved configuration and removes the native MCP server table;
-  cleanup failure keeps readiness unavailable. Other Codex extensions are
-  preserved.
-- Enabled MCP servers are outbound streamable HTTP. The endpoint must use a
-  trusted HTTPS hostname; literal IPs, local/internal names, and known
-  non-public DNS answers fail validation. DNS checks are best effort and are
-  not a connection-time IP allowlist, so the provider remains an administrator
-  trust decision. Bearer-token configuration is unsupported. OAuth login is
-  explicit and the one-shot authorization URL is returned with `no-store`;
-  the Bridge never logs or stores it. MCP elicitation is handled by a
-  decline-only callback.
+## Skills, plugins and instructions
 
-These operations are not a second network boundary: the browser remains on
-Home Assistant, and a configured MCP server does not make the App or Bridge
-public.
+Skills are scoped to the selected workspace and created under `.agents/skills/`.
+Global instructions are stored in the private Codex home; project instructions
+are stored in the selected project's `AGENTS.md`. Changes keep private backups.
 
-## Model catalogue
+Plugins and marketplaces are read from Codex's configuration. Plugin catalogue
+loading was verified with the larger catalogue in `1.0.3`; this does not mean
+every third-party plugin has been tested. Review each plugin and marketplace
+before installing it.
 
-The App asks the installed Codex runtime for its model catalogue and each
-model's supported reasoning levels. If live app-server discovery fails, it
-dynamically reads the installed Codex bundled catalogue. Stale results retry
-after 15 seconds; a verified last-known-good catalogue is preferred over the
-bundled recovery, and the static fallback is used only if neither is available.
-Every recovery state is marked stale, and configured selections are preserved
-rather than silently changing a chat to another model. GPT-5.6 and
-model-specific Max/Ultra levels are displayable whenever Codex advertises them;
-the Bridge does not keep a hardcoded model-name list. A confirmed account or
-plan change expires the signed-out catalogue immediately, so newly entitled
-models and reasoning levels are fetched on the next status request rather than
-waiting for the normal cache lifetime.
+## MCP servers
 
-## Provider-gated native tools
+MCP is disabled by default, including saved server configuration. Enable the
+App option and restart before adding a server in **Settings → MCP servers**.
+Disabling MCP and restarting clears the saved native MCP server table; it
+leaves skills, plugins, marketplaces and instructions alone.
 
-For a Supervisor-connected Integration, native web search defaults to `live`
-for prompts and manual automation runs only when the App's installed Codex
-runtime advertises web-search support. The preference survives a signed-out
-startup and activates automatically when device login completes. The
-Integration can disable it, and an
-external legacy Bridge does not inherit the default. This is provider-side web
-search, not shell networking: model-controlled shell networking remains
-disabled by the tool sandbox.
+Only outbound streamable-HTTP servers at trusted HTTPS hostnames are allowed.
+Literal IPs, local/internal names and known non-public DNS answers are rejected.
+DNS checks happen during validation, not on every connection, so you must
+still trust the provider. Bearer-token settings are not supported.
 
-Image generation requires a signed-in ChatGPT account and both provider
-capabilities named `imageGeneration` and `namespaceTools`. It never requires or
-uses an OpenAI API key. The Bridge validates and stores only bounded PNG, JPEG,
-and WebP output as private artifacts, then makes them available through Home
-Assistant's authenticated path. Capability absence or a failed probe leaves
-these tools unavailable.
+OAuth sign-in is an explicit, one-time flow. Do not save or share its temporary
+URL. MCP requests that require elicitation are declined. Enabling MCP does not
+publish an App or Bridge endpoint.
 
-The App deliberately does not mount the desktop machine's local skill bundle.
-Image generation here is the provider-native tool, so a model-authored remark
-about an unavailable local image skill guide is narration rather than a
-capability result. The advertised native-tool status and the presence of a
-validated generated artifact are authoritative. The panel does not instruct
-users to invoke a non-existent App-local `$imagegen` skill.
+## Search, images and browser support
 
-## Run stages and private previews
+Native web search is enabled by default for Supervisor connections when the
+runtime supports it; Integration options can disable it. Look for search
+activity when a task needs current information. Image generation also depends
+on runtime support and the signed-in account. It does not need an API key.
 
-The panel presents plan stages, allowlisted tool activity, file/line totals,
-and aggregate subagent status. It never receives agent IDs, prompts, private
-paths, raw commands, model names, messages, or arbitrary provider status text
-for this view.
+File previews and downloads use Home Assistant's authenticated route. The PDF
+viewer renders validated files locally, with a maximum size of 8 MB and
+scripting disabled. It is not an interactive web browser.
 
-Selected text, raster-image, and PDF artifacts are fetched through Home
-Assistant's administrator-authenticated artifact route. PDF preview requires a
-known and observed size of no more than 8 MB plus a valid leading PDF signature;
-the panel then renders the bytes on canvas with the bundled local PDF.js
-renderer. PDF.js scripting, eval, and XFA support are disabled. No iframe or
-native browser PDF embed is used. HTML, SVG, XML, invalid PDFs, unknown-size
-files, and oversized files keep the safe open/download fallback. This does not
-expose a browser, CDP, App, or Bridge endpoint. Browser automation needs the
-separate isolation recorded in
-[ADR 0006](../docs/aegis/adr/0006-preview-and-browser-boundary.md).
-
-The panel options menu exposes **Focus mode** when the browser permits the
-standards fullscreen API. It can be entered only from that user gesture,
-leaves the existing Home Assistant transport and authorization path unchanged,
-uses the Codex-style tinted navigation and floating context treatment, and uses
-native Escape plus accessible focus restoration on exit.
+The App-owned browser worker remains disabled pending isolation and network
+attestation. [Issue #43](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/43)
+and the [browser acceptance record](../docs/acceptance/browser-worker.md)
+explain the remaining work. Native web search does not enable this worker.
 
 ## Updates and recovery
 
-On each App start, the ready Bridge publishes its Supervisor-assigned private
-App IP with a fresh non-secret publication marker. This ensures Supervisor
-re-pushes discovery after an App restart while retaining the Supervisor-issued
-discovery UUID. Discovery failures are logged by safe category only; tokens and
-endpoint credentials are never logged.
+This release pairs App, Integration and panel `1.0.5`, with Bridge `0.7.8` and
+Codex `0.155.1`. Update the App through Supervisor and the Integration through
+HACS, then restart Home Assistant and reload the panel after an Integration
+change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).
 
-An App update is a new versioned image; Codex and the Bridge are not updated in
-a running container. App-image rollback is not yet validated: do not state or
-assume that Supervisor can select an arbitrary earlier image. Until a prior
-immutable App tag and restore procedure are published and tested, recover with
-a cold Home Assistant backup or, where one already exists, a private external
-Bridge. Retain workspaces until their contents have been reviewed.
+Codex is part of the immutable App image and does not self-update inside a
+running container. The daily verified updater opens repository PRs for stable
+runtime releases; a signed App release must be published before HA can use it.
 
-## Release status
-
-The current paired App, Integration and panel release is `1.0.2`, is `amd64`
-only, and uses Bridge `0.7.7` with Codex `0.144.5`. It repairs expired-login
-reporting and keeps sign-in and retry controls visible. Update both the App
-and HACS Integration, restart Home Assistant, and reload the panel. Verify the
-App's signed `1.0.2` image and immutable publication evidence before
-installing. App `1.0.1` repairs supported restored ownership and fixed private
-modes before dropping privileges. The compatible panel fixes the composer
-defect so **Send** is rendered immediately after each prompt edit and retains
-the account-neutral local-chat contract: Home Assistant chats, projects,
-transcripts, files, workspace settings, archive state, and automation targets
-remain local and static across a ChatGPT account change. Only stale private
-provider-thread continuity is detached, so the next message starts a fresh
-provider conversation through the newly connected account. Identity-less
-account reads detach that private continuity and block prompts and automations
-until ownership is verified. A newer account hint invalidates an account check
-already in flight, and a prompt queued before the switch is stopped locally
-before any provider start or resume request.
-
-The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
-uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
-`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
-`29633146637`, and immutable image digest
-`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
-Its signature, SBOM, provenance, account-switch behavior, and preserved local
-chat history were verified on target Home Assistant. The remaining bounds are
-unchanged: PDF list/archive/preview/download, external Nabu Casa/Cloudflare
-routing, cold restore, arbitrary App-image rollback, and the secure App-owned
-browser worker remain unproven.
-
-The historical fully target-HA-accepted matrix, App, Integration, and panel
-`0.7.5` with Bridge `0.6.3` and Codex `0.144.5`,
-were installed and running on target Home Assistant `192.168.50.20` on
-2026-07-16. ChatGPT Pro remained connected. A fresh direct chat defaulted to
-`gpt-5.6-sol` with `low` thinking; the runtime catalogue exposed Sol, Terra,
-and Luna plus Low, Medium, High, XHigh, Max, and Ultra where advertised. The
-compact composer showed five-hour `Off` and Week `60%`. The natural prompt
-`what is the weather in Malta like today` recorded `Searching the web` and
-returned current live conditions; shell networking remained disabled.
-
-App publication run `29511116947` verified the signed `0.7.5` image, SBOM, and
-provenance. Its immutable digest is
-`sha256:6214ab4fa471f3356460c1c392e582981cd1b80ad2fc2173ddb925aaba6336d0`,
-with attestation `35670902`. This acceptance does not establish image-
-generation, plugin/marketplace, MCP, external-routing, cold-restore, or
-arbitrary prior-image rollback acceptance.
-
-Historical App/Integration/panel `0.8.4` with Bridge `0.7.3` and Codex
-`0.144.5` was the previous signed release. It was published from exact main commit
-`ccc698e96a2142d46ba96fb1419857461efe81ca`; signed App publication
-`29571157282` passed and the paired
-[0.8.4 Integration release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/0.8.4)
-points to that commit. This publication evidence does not claim that `0.8.4`
-completed the target-HA matrix.
-
-The latest bounded target smoke remains `0.8.3`. On target Home Assistant
-`192.168.50.20`, App and Integration `0.8.3` reported
-Bridge `0.7.2` and Codex `0.144.5`; ChatGPT Pro, projects, and chat history
-were retained. The old `0.8.0 PDF acceptance` thread recovered from the false
-**Working / Preparing a response / Stop / steer** state to a truthful ready/
-Run completed state. A fresh GPT-5.6-Sol prompt completed. Sol, Terra, and Luna
-and advertised Max/Ultra reasoning levels were visible; five-hour usage showed
-`Off`; and the Malta prompt exposed `Searching the web` and `Using web search`
-before returning live conditions. No false global **Connection issue** remained.
-
-The release restores operational aggregate workspace-scan failures to the
-typed, retryable local **Files** contract and adds the measured Codex-style
-wide-screen alignment pass. Artifact-index and preview failures remain local to
-**Files** and cannot overwrite a valid reply or healthy chat state. The current
-PDF artifact scan still returns the typed `409` local Files conflict, so
-PDF/archive/restore acceptance is not claimed. External Nabu Casa/Cloudflare
-routing, cold restore, arbitrary image rollback, and the secure App-owned
-browser worker remain unproven. The paired App/Integration release workflow
-completed its first live automatic exercise for `0.8.4`.
-
-The signed, live-accepted `0.6.5` matrix remains historical evidence only. App `0.6.1` is known-bad
-on target HAOS because its sandbox self-test required `writableRoots` exactly
-`[workspace]` while the real `ha_bridge` `workspaceWrite` response includes
-bounded supplemental roots beneath the workspace. App `0.6.2` validates
-canonical contained supplemental roots and hardens `lsm_get_self_attr` record
-parsing. The historical `0.6.5` image passed target-HAOS startup, its production sandbox
-self-test and attestation, an authenticated API v1 readiness request,
-Supervisor discovery, Integration pairing, and panel loading. A redacted
-ChatGPT device-login start/cancel cycle also passed. The target `0.7.1` run
-retained ChatGPT Pro, showed dynamic GPT-5.6, rendered the five-hour window
-`Off`, and preserved existing chats/history. Scheduled and Skills form drafts
-survived rerenders; Skills create/list/delete passed; the MCP form draft
-survived and was cancelled. A one-time Observe automation was claimed exactly
-at `2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted.
-The historical `0.7.1` live Plugins/marketplaces list returned
-`capabilities_unavailable` (HTTP 503); no `0.7.1` plugin or marketplace
-list/mutation acceptance was claimed. The first unattended App update is
-proven, and this manual update kept the prior-version backup. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, and arbitrary
-previous-image rollback remain unproven.
-
-For responsible vulnerability reporting, see [SECURITY.md](../SECURITY.md).
+Take a [cold backup](../docs/backup-restore.md) before updating. Full cold
+restore acceptance and arbitrary App-image rollback remain unvalidated.
+Remote access must terminate at Home Assistant, using its normal Nabu Casa,
+Cloudflare or HTTPS reverse-proxy route. Keep the App and Bridge private.
