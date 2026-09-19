@@ -13,7 +13,7 @@ import sys
 from threading import Event
 import time
 import tomllib
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -1030,6 +1030,60 @@ def test_abort_generation_fails_waiters_discards_tokens_and_restarts_only_match(
         client.close()
 
     assert client.abort_generation(2) is False
+
+
+@pytest.mark.parametrize("failure_source", ["abort", "protocol"])
+def test_failed_generation_cannot_be_aborted_again_during_supervisor_teardown(
+    fake_server: FakeAppServer,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_source: str,
+) -> None:
+    module = _load_module()
+    client = _client(module, fake_server)
+    process = SimpleNamespace(stdin=None, poll=lambda: None)
+    repeated_aborts: list[bool] = []
+
+    def reader_finished() -> None:
+        if failure_source == "abort":
+            assert client.abort_generation(1) is True
+        else:
+            client._mark_generation_failed(1, module.AppServerProtocolError())
+
+    def spawn() -> tuple[int, Any]:
+        client._generation = 1
+        client._process = process
+        client._reader_thread = SimpleNamespace(join=reader_finished)
+        return 1, process
+
+    def stop(_process: Any) -> None:
+        # The reader has finished, but the process has not exited yet. A second
+        # cancellation must not be accepted in this supervisor teardown gap.
+        repeated_aborts.append(client.abort_generation(1))
+        client._closing.set()
+
+    monkeypatch.setattr(client, "_spawn_generation", spawn)
+    monkeypatch.setattr(
+        client,
+        "_request_for_generation",
+        lambda *args, **kwargs: {
+            "codexHome": str(fake_server.codex_home.resolve()),
+            "platformFamily": "windows" if os.name == "nt" else "unix",
+            "platformOs": "windows" if os.name == "nt" else "linux",
+            "userAgent": f"Codex Desktop/{CODEX_VERSION} (test; x86_64)",
+        },
+    )
+    monkeypatch.setattr(client, "_write_message", lambda *args: None)
+    monkeypatch.setattr(client, "_stop_process", stop)
+    monkeypatch.setattr(client, "_join_generation_threads", lambda: None)
+    monkeypatch.setattr(module, "_terminate_process_group", lambda _process: None)
+    monkeypatch.setattr(module, "_force_stop_aborted_process", lambda *args: None)
+    try:
+        client._supervise()
+        assert repeated_aborts == [False]
+        assert client._generation_failures == {}
+        assert client.abort_generation(1) is False
+    finally:
+        client.close()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process-group contract")

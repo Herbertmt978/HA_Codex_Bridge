@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## Unreleased
+
+- Prevents a second cancellation of the same Codex app-server generation while
+  its process is shutting down. Failed generations remain marked until cleanup
+  completes, including after protocol errors.
+
 ## 1.0.1
 
 - Repairs App startup after a Home Assistant cold restore by reconciling
