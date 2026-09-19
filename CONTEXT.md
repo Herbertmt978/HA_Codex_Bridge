@@ -29,10 +29,12 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- App release candidate `1.0.3` uses verified Codex `0.155.1`, Bridge `0.7.8`
-  and paired Integration/panel `1.0.3`. Astra is offered when the runtime
-  catalogue advertises it; the pinned older client omitted it. Signed
-  publication and target deployment remain separate gates.
+- Integration/panel `1.0.4` preserve feature-page controls through unrelated
+  Home Assistant updates. The coordinated App release is `1.0.4`, using verified
+  Codex `0.155.1` and Bridge `0.7.8`. App `1.0.3` and Integration/panel `1.0.3`
+  completed signed publication and bounded target checks on 19 September 2026:
+  Astra discovery, plugin catalogue loading, retained sign-in and existing chat
+  history. Release `1.0.4` publication and target checks are separate gates.
 
 - Latest signed and target-accepted coordinated release: App/Integration/panel
   `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` (`amd64`). It was published

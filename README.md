@@ -46,6 +46,13 @@ App and Bridge remain private to Home Assistant.
 <details>
 <summary><b>Current release and validation details</b></summary>
 
+- **1.0.4 release:** keeps feature-page controls and populated plugin
+  catalogues mounted during unrelated Home Assistant updates, preserving keyboard
+  focus and pointer hover. App, Integration and panel use `1.0.4`; Bridge remains
+  `0.7.8` and Codex remains `0.155.1`. Update the HACS Integration and Supervisor
+  App, then reload the Codex Bridge page.
+  [Release notes](codex_bridge_app/CHANGELOG.md).
+
 - **1.0.3 App release:** upgrades the verified Codex runtime to `0.155.1`,
   enabling Astra discovery for eligible accounts. It includes Bridge `0.7.8`;
   Integration/panel `1.0.3` preserve sidebar hover and focus, load the larger

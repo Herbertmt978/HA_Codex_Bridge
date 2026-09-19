@@ -48,6 +48,50 @@ describe("desktop feature surfaces", () => {
     expect(message).not.toContain("C:\\private");
   });
 
+  it("keeps an unchanged feature surface mounted across HA refreshes", () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._config = { capabilities: [] };
+    panel._activeDestination = "plugins";
+    panel._desktopFeatures.plugins.loaded = true;
+    panel._desktopFeatures.plugins.data = { plugins: [{ id: "p1", name: "Plugin one" }], marketplaces: [] };
+    panel._render(true);
+    const surface = panel.shadowRoot.getElementById("desktop-feature-surface");
+    const install = surface.querySelector('[data-desktop-action="install-plugin"]');
+    install.focus();
+    const mutations = new MutationObserver(() => {});
+    mutations.observe(surface, { childList: true, subtree: true });
+
+    for (let update = 0; update < 5; update += 1) panel.hass = { states: {} };
+
+    expect(surface.querySelector('[data-desktop-action="install-plugin"]')).toBe(install);
+    expect(panel.shadowRoot.activeElement).toBe(install);
+    expect(mutations.takeRecords()).toEqual([]);
+    mutations.disconnect();
+    panel._desktopFeatures.plugins.data.plugins[0].installed = true;
+    panel._render(true);
+    expect(surface.querySelector('[data-desktop-action="uninstall-plugin"]')).not.toBeNull();
+  });
+
+  it("refreshes action handlers and native-tool status without needless rebuilding", () => {
+    const host = document.createElement("div");
+    const state = { data: { plugins: [{ id: "p1", name: "Plugin one" }] } };
+    const firstAction = vi.fn();
+    const nextAction = vi.fn();
+    renderDesktopFeatureSurface(host, { destination: "plugins", state, onAction: firstAction });
+    const install = host.querySelector('[data-desktop-action="install-plugin"]');
+    renderDesktopFeatureSurface(host, { destination: "plugins", state, onAction: nextAction, status: { limits: { remaining: 42 } } });
+    expect(host.querySelector('[data-desktop-action="install-plugin"]')).toBe(install);
+    install.click();
+    expect(firstAction).not.toHaveBeenCalled();
+    expect(nextAction).toHaveBeenCalledOnce();
+    const settings = { destination: "settings", state: { settingsTab: "general", data: {} } };
+    renderDesktopFeatureSurface(host, { ...settings, status: { provider_capabilities: { image_generation: true, namespace_tools: true } } });
+    expect(host.textContent).toContain("Available");
+    renderDesktopFeatureSurface(host, { ...settings, status: { provider_capabilities: { image_generation: false, namespace_tools: true } } });
+    expect(host.textContent).toContain("Unavailable");
+  });
+
   it("renders hostile remote values as text, never markup", () => {
     const host = document.createElement("div");
     renderDesktopFeatureSurface(host, {

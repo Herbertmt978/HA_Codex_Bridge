@@ -23278,10 +23278,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   }
   return section2;
 }
+var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
 function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
-  container.replaceChildren();
   container.onclick = (event) => {
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
@@ -23292,6 +23292,17 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const submit = form?.querySelector('[data-desktop-action^="submit-"]');
     if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
   };
+  const inputs = JSON.stringify({
+    destination,
+    state,
+    timezone,
+    hasActiveProject,
+    activeProjectId,
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null
+  });
+  if (renderedFeatureInputs.get(container) === inputs) return;
+  container.replaceChildren();
+  renderedFeatureInputs.set(container, inputs);
   const heading = documentRef.createElement("div");
   heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
@@ -23328,7 +23339,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.3";
+var PANEL_VERSION = "1.0.4";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
