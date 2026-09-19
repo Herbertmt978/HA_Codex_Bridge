@@ -1215,6 +1215,21 @@ def test_failed_turn_updates_shared_auth_only_for_authentication_failure(
         else:
             assert auth == before
 
+    restarted = _ha_app(tmp_path, _SharedClient())
+    with TestClient(restarted) as http:
+        restored = http.get("/auth/status", headers=headers).json()
+        assert "reauthentication_required" not in restored
+        assert restored["state"] == (
+            "expired" if classification == "unauthorized" else "ok"
+        )
+        if classification == "unauthorized":
+            rejected = http.post(
+                f"/threads/{thread.thread_id}/prompts",
+                headers=headers,
+                json={"prompt": "retry", "client_request_id": "blocked-after-restart"},
+            )
+            assert rejected.status_code == 409
+
 
 def test_auth_required_blocks_new_turn_until_generation_reconciles(
     tmp_path: Path,

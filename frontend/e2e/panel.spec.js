@@ -244,6 +244,17 @@ for (const viewport of [
   expect(scrollContract.transcriptScrollHeight).toBeGreaterThan(scrollContract.transcriptClientHeight);
   expect(scrollContract.transcriptScrollTop).toBeGreaterThan(0);
   expect(scrollContract.composerTopAfter).toBeCloseTo(scrollContract.composerTopBefore, 1);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._scrollMessagesToBottom(true);
+    panel._hass.connection.sendMessagePromise = async () => {
+      throw new Error("Bridge connection lost");
+    };
+    panel._setError("The connection was interrupted.", { retryable: true });
+  });
+  const error = page.locator("codex-bridge-panel").locator("#error-strip");
+  await expect(error).toBeInViewport({ ratio: 1 });
+  await expect(error.getByRole("button", { name: "Retry connection" })).toBeInViewport({ ratio: 1 });
   });
 }
 

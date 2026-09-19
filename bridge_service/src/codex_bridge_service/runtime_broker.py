@@ -2889,6 +2889,20 @@ class RuntimeBroker:
         run.completed_item_ids = []
         self._compact_terminal_state_locked()
         persistence_error: RuntimeStateError | None = None
+        # Persist auth rejection before the terminal event and before releasing
+        # the lease. A restart between the two writes must remain auth-blocked.
+        auth_projection_failed = False
+        if (
+            failure is not None
+            and failure.auth_required
+            and run.generation is not None
+            and self._auth_failure_listener is not None
+        ):
+            try:
+                self._auth_failure_listener(run.generation)
+            except Exception:
+                auth_projection_failed = True
+                self._fatal_error = True
         with self.storage._thread_mutation_lock:
             projection = self._thread_projection_record_locked(run)
             projection_payloads = (
@@ -2913,20 +2927,6 @@ class RuntimeBroker:
                 )
             except RuntimeStateError as exc:
                 persistence_error = exc
-        # Update the shared auth owner before releasing the turn's lease, so a
-        # new login or queued prompt cannot race with this account rejection.
-        auth_projection_failed = False
-        if (
-            failure is not None
-            and failure.auth_required
-            and run.generation is not None
-            and self._auth_failure_listener is not None
-        ):
-            try:
-                self._auth_failure_listener(run.generation)
-            except Exception:
-                auth_projection_failed = True
-                self._fatal_error = True
         # Capacity becomes observable as free before the terminal thread
         # projection is published. Consumers must never see a terminal run
         # while the global gate still counts it as active.

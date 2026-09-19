@@ -26390,6 +26390,7 @@ template.innerHTML = `
 
     .main-top,
     .status-banner,
+    .error-strip,
     .interaction-region,
     .message-list,
     .run-activity-region {
@@ -26397,7 +26398,8 @@ template.innerHTML = `
       margin-inline: auto;
     }
 
-    .status-banner.visible {
+    .status-banner.visible,
+    .error-strip.visible {
       flex: 0 0 auto;
       margin-top: 10px;
     }
@@ -28062,10 +28064,10 @@ template.innerHTML = `
         </div>
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
+      <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
       <div class="conversation-scroll" id="conversation-scroll">
         <div class="main-top">
           <div class="runtime-shell" id="runtime-strip"></div>
-          <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
           <section class="onboarding-shell" id="onboarding-shell">
             <div class="onboarding-heading">
               <strong id="onboarding-title">Home Assistant setup</strong>

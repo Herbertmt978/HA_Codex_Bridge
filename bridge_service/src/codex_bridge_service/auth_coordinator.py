@@ -314,19 +314,20 @@ class CodexAuthCoordinator:
             if (
                 self._closed
                 or generation != self._client.generation
-                or generation != self._observed_generation
                 or self._operation is not None
                 or self._active_login_id is not None
-                or self._status.state != "ok"
+                or self._status.reauthentication_required
             ):
                 return
             # account/read without refreshing credentials can still return the
-            # rejected account. Keep this state until an auth operation or an
-            # account/generation change supplies a new authoritative observation.
+            # rejected account. Keep this rejection through restarts until
+            # sign-in completion or a validated recovery proves credentials work.
+            self._observed_generation = generation
             published = self._set_status_locked(
                 state="expired",
                 busy=False,
                 auth_required=True,
+                reauthentication_required=True,
                 message="Codex sign-in expired. Start a new sign-in from Home Assistant.",
                 **cleared_device_fields(),
             )
@@ -733,9 +734,16 @@ class CodexAuthCoordinator:
 
     def _read_account(self) -> tuple[int, Any]:
         generation = self._client.generation
+        with self._lock:
+            # A recovery poll must validate credentials, not accept the cached
+            # account that the rejected turn already proved unusable.
+            refresh_token = (
+                self._status.reauthentication_required
+                and self._active_login_id is not None
+            )
         response = self._client.request(
             "account/read",
-            _ACCOUNT_READ_PARAMS,
+            {"refreshToken": True} if refresh_token else _ACCOUNT_READ_PARAMS,
             timeout_seconds=self._account_read_timeout_seconds,
         )
         if generation != self._client.generation:
@@ -817,6 +825,12 @@ class CodexAuthCoordinator:
                 self._clear_active_login_locked()
                 if message_override is not None:
                     normalized["message"] = message_override
+                if (
+                    operation[1] == "login_complete" and normalized["state"] == "ok"
+                ) or (
+                    operation[1] == "logout" and normalized["state"] == "logged_out"
+                ):
+                    normalized["reauthentication_required"] = False
                 published = self._set_status_locked(**normalized)
             runtime_lease = self._take_runtime_auth_lease_locked()
         if runtime_lease is not None:
@@ -874,6 +888,20 @@ class CodexAuthCoordinator:
             if normalized["state"] == "logged_out":
                 self._active_login_polling = False
                 return self._copy_status_locked()
+            validate_recovery = (
+                self._status.reauthentication_required and normalized["state"] == "ok"
+            )
+        if validate_recovery:
+            try:
+                # account/read can return cached identity even when its proactive
+                # refresh fails. A provider-backed request must succeed before
+                # polling can recover a login with a missing completion event.
+                self._client.request(
+                    "account/rateLimits/read",
+                    timeout_seconds=self._account_read_timeout_seconds,
+                )
+            except Exception:
+                return self._finish_active_login_poll_failure(login_poll)
         if binding_marker is not None:
             try:
                 self._bind_account_owner(binding_marker)
@@ -912,6 +940,10 @@ class CodexAuthCoordinator:
                 return self._copy_status_locked()
             self._cancel_requested = False
             self._clear_active_login_locked()
+            if normalized["state"] == "ok":
+                # Rejected accounts also passed the provider-backed recovery
+                # check above; cached identity alone never clears the rejection.
+                normalized["reauthentication_required"] = False
             published = self._set_status_locked(**normalized)
             runtime_lease = self._take_runtime_auth_lease_locked()
         if runtime_lease is not None:
@@ -1128,6 +1160,16 @@ class CodexAuthCoordinator:
         self._active_login_last_polled_at = None
 
     def _set_status_locked(self, **updates: Any) -> CodexAuthStatusRecord:
+        if (
+            self._status.reauthentication_required
+            and updates.get("reauthentication_required") is not False
+            and updates.get("state") == "ok"
+        ):
+            updates.update(
+                state="expired",
+                auth_required=True,
+                message="Codex sign-in expired. Start a new sign-in from Home Assistant.",
+            )
         self._revision += 1
         updates["revision"] = self._revision
         updates["updated_at"] = now()

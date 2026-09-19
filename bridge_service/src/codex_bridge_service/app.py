@@ -534,7 +534,10 @@ def create_app(
                     operation_id=f"auth-status:{status.revision}",
                     relative_path=_AUTH_STATE_FILENAME,
                     state_revision=status.revision,
-                    state_payload=payload,
+                    state_payload={
+                        **payload,
+                        "reauthentication_required": status.reauthentication_required,
+                    },
                     event=EventDraft(
                         scope="auth",
                         event_type="auth.status_changed",
