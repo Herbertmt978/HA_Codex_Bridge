@@ -1,3 +1,4 @@
+import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
@@ -26,7 +27,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.0.4";
+const PANEL_VERSION = "1.0.5";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -2729,6 +2730,42 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
+    .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
+    .schedule-title, .schedule-prompt { display: block; min-width: 0; }
+    .schedule-title > span, .schedule-prompt > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .schedule-title input { width: 100%; min-width: 0; padding: 8px 0; border: 0; border-radius: 0; background: transparent; font-size: 22px; }
+    .schedule-prompt textarea { width: 100%; min-height: 112px; padding: 20px; border: 1px solid var(--border-color); border-radius: 22px; background: transparent; line-height: 1.5; resize: vertical; font-size: 16px; }
+    .schedule-group { min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+    .schedule-group legend { margin-bottom: 12px; padding: 0 5px; color: var(--muted-color); font-size: 16px; }
+    .schedule-card { padding: 0 20px; border: 1px solid var(--border-color); border-radius: 22px; }
+    .schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 62px; margin: 0; font-size: 15px; }
+    .schedule-row + .schedule-row { border-top: 1px solid var(--border-color); }
+    .schedule-row[hidden], .schedule-month-note[hidden] { display: none; }
+    .schedule-row-label { flex: 0 0 auto; color: var(--text-color); }
+    .schedule-row-value { text-align: right; color: var(--muted-color); }
+    .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
+    .schedule-row select { text-align-last: right; cursor: pointer; }
+    .schedule-row input[type="number"] { width: 96px; }
+    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: 13px; line-height: 1.5; }
+    .schedule-advanced { min-width: 0; color: var(--muted-color); }
+    .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+    .schedule-advanced .schedule-card { margin-top: 10px; }
+    .schedule-error { margin: 0; color: var(--danger-color); }
+    .schedule-error:empty { display: none; }
+    .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
+    .schedule-submit { background: var(--text-color); color: var(--canvas-bg); }
+    .schedule-editor :is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+    @media (max-width: 540px) {
+      .schedule-editor { gap: 20px; }
+      .schedule-card { padding-inline: 14px; }
+      .schedule-row { gap: 10px; font-size: 14px; }
+      .schedule-row input, .schedule-row select { max-width: 60%; font-size: 14px; }
+      .schedule-advanced .schedule-row { flex-wrap: wrap; gap: 0; padding-block: 8px; }
+      .schedule-advanced .schedule-row input { max-width: 100%; width: 100%; text-align: left; }
+    }
     .desktop-empty,
     .desktop-error,
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
@@ -5815,7 +5852,7 @@ class CodexBridgePanel extends HTMLElement {
       && !event.altKey
       && !event.ctrlKey
       && !event.metaKey
-      && target.tagName !== "TEXTAREA"
+      && !["TEXTAREA", "SELECT"].includes(target.tagName)
       && !target.closest("button")
     ) {
       const form = target.closest("[data-desktop-form]");
@@ -6097,7 +6134,7 @@ class CodexBridgePanel extends HTMLElement {
         state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
           ...item,
           title: item.name || "Untitled automation",
-          schedule: item.next_run_at || "Not scheduled",
+          schedule: item.schedule,
           status: item.last_status || (item.enabled === false ? "paused" : "idle"),
         }));
       } else if (destination === "skills") {
@@ -6161,11 +6198,30 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.value };
+    if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
 
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
+    state.formError = "";
+  }
+
+  _scheduleContext(editing = null) {
+    const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
+    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC" };
+  }
+
+  async _submitScheduledTask(state, target, update) {
+    const form = target?.closest("form");
+    if (!form || !form.reportValidity()) return;
+    try {
+      const context = { ...state.scheduleContext, editing: state.editingAutomation };
+      const values = this._desktopFormValues(target);
+      const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (state.form && state.error) { state.formError = state.error; state.error = ""; }
+    } catch (error) { state.formError = normalizeDesktopError(error); }
   }
 
   _agentsDraftKey(scope, projectId = null) {
@@ -6226,14 +6282,14 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
-    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = "schedule"; }
+    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
     else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp"; }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
     else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
-    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
+    else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
     else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
@@ -6257,6 +6313,8 @@ class CodexBridgePanel extends HTMLElement {
         const automation = await this._callWS("get_automation", { automation_id: dataset.id });
         this._clearDesktopFormDraft(state);
         state.editingAutomation = automation;
+        state.scheduleContext = this._scheduleContext(automation);
+        state.formDraft = scheduleFormValues(automation, state.scheduleContext.timezone);
         state.form = "schedule-edit";
       } catch (error) { state.error = normalizeDesktopError(error); }
       finally { state.loading = false; }

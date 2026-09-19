@@ -1,3 +1,286 @@
+// frontend/src/scheduled-tasks.js
+var WEEKDAYS = [
+  ["MO", "Monday"],
+  ["TU", "Tuesday"],
+  ["WE", "Wednesday"],
+  ["TH", "Thursday"],
+  ["FR", "Friday"],
+  ["SA", "Saturday"],
+  ["SU", "Sunday"]
+];
+var REPEATS = [["daily", "Daily"], ["weekdays", "Weekdays"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["interval", "Every…"], ["once", "Once"]];
+function localParts(instant, timezone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, second: parts.second };
+}
+function scheduleInstant(date, time, timezone) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) {
+    throw new Error("Choose a valid date and time.");
+  }
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  if (!Number.isFinite(wall) || new Date(wall).toISOString().slice(0, 10) !== date) throw new Error("Choose a valid date.");
+  const candidates = /* @__PURE__ */ new Set();
+  for (const hours of [-36, 0, 36]) {
+    const sample = wall + hours * 36e5;
+    const parts = localParts(sample, timezone);
+    const offset = Date.parse(`${parts.date}T${parts.time}:${parts.second}Z`) - sample;
+    const candidate = wall - offset;
+    const resolved = localParts(candidate, timezone);
+    if (resolved.date === date && resolved.time === time) candidates.add(candidate);
+  }
+  if (!candidates.size) throw new Error("That time does not exist when the clocks change. Choose another time.");
+  return new Date(Math.min(...candidates)).toISOString();
+}
+function scheduleFormValues(automation = {}, timezone = "UTC", now = Date.now()) {
+  const schedule = automation.schedule || {};
+  const zone = schedule.timezone || timezone;
+  const local = localParts(schedule.at || schedule.start_at || schedule.anchor_at || now, zone);
+  const date = /* @__PURE__ */ new Date(`${local.date}T12:00:00Z`);
+  const weekday = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][date.getUTCDay()];
+  const values = {
+    title: automation.name || "",
+    prompt: automation.prompt || "",
+    repeat: automation.schedule ? schedule.kind === "rrule" ? "custom" : schedule.kind : "daily",
+    date: local.date,
+    time: automation.schedule ? local.time : "09:00",
+    weekday,
+    month_day: String(date.getUTCDate()),
+    interval_count: "1",
+    interval_unit: "hours",
+    target_kind: automation.target?.kind || "standalone",
+    mode: automation.mode || "observe",
+    model: automation.model || "",
+    thinking: automation.thinking || "",
+    timezone: zone
+  };
+  if (schedule.kind === "interval") {
+    const unit = schedule.seconds % 3600 === 0 ? "hours" : schedule.seconds % 60 === 0 ? "minutes" : "seconds";
+    values.interval_unit = unit;
+    values.interval_count = String(schedule.seconds / { hours: 3600, minutes: 60, seconds: 1 }[unit]);
+  }
+  if (schedule.kind === "rrule") {
+    const rule = schedule.rule || "";
+    const fields = rule.startsWith("RRULE:") ? rule.slice(6).split(";").map((part) => part.split("=")) : [];
+    const pairs = Object.fromEntries(fields);
+    const allowed = /* @__PURE__ */ new Set(["FREQ", "BYDAY", "BYMONTHDAY", "BYHOUR", "BYMINUTE", "BYSECOND"]);
+    const simple = fields.length && fields.every(([key, value]) => allowed.has(key) && value) && new Set(fields.map(([key]) => key)).size === fields.length && (!pairs.BYHOUR || pairs.BYHOUR === String(Number(local.time.slice(0, 2)))) && (!pairs.BYMINUTE || pairs.BYMINUTE === String(Number(local.time.slice(3)))) && (!pairs.BYSECOND || pairs.BYSECOND === "0");
+    if (simple) {
+      if (pairs.FREQ === "DAILY" && !pairs.BYDAY && !pairs.BYMONTHDAY) values.repeat = "daily";
+      if (pairs.FREQ === "WEEKLY" && !pairs.BYMONTHDAY) {
+        if (pairs.BYDAY === "MO,TU,WE,TH,FR") values.repeat = "weekdays";
+        else if (!pairs.BYDAY || WEEKDAYS.some(([day]) => day === pairs.BYDAY)) {
+          values.repeat = "weekly";
+          values.weekday = pairs.BYDAY || weekday;
+        }
+      }
+      if (pairs.FREQ === "MONTHLY" && !pairs.BYDAY && (!pairs.BYMONTHDAY || /^(?:[1-9]|[12]\d|3[01])$/.test(pairs.BYMONTHDAY))) {
+        values.repeat = "monthly";
+        values.month_day = pairs.BYMONTHDAY || values.month_day;
+      }
+    }
+  }
+  return values;
+}
+var SCHEDULE_FIELDS = ["repeat", "date", "time", "weekday", "month_day", "interval_count", "interval_unit"];
+function buildSchedule(values, { editing = null, timezone = "UTC", now = Date.now() } = {}) {
+  const zone = editing?.schedule?.timezone || timezone;
+  if (editing?.schedule) {
+    const original = scheduleFormValues(editing, zone, now);
+    if (SCHEDULE_FIELDS.every((key) => String(values[key] ?? original[key]) === String(original[key]))) return { ...editing.schedule };
+  }
+  if (values.repeat === "custom") {
+    if (!editing?.schedule) throw new Error("Choose a repeat frequency.");
+    return { ...editing.schedule };
+  }
+  const at = scheduleInstant(values.date, values.time, zone);
+  if (values.repeat === "once") {
+    if (Date.parse(at) <= now) throw new Error("Choose a time in the future for a one-off task.");
+    return { kind: "once", at };
+  }
+  if (values.repeat === "interval") {
+    const count = Number(values.interval_count);
+    const seconds = count * ({ hours: 3600, minutes: 60, seconds: 1 }[values.interval_unit] || 0);
+    if (!Number.isInteger(count) || !Number.isInteger(seconds) || seconds < 60 || seconds > 31536e3) throw new Error("Choose an interval from one minute to 365 days.");
+    return { kind: "interval", seconds, anchor_at: at };
+  }
+  let rule;
+  if (values.repeat === "daily") rule = "FREQ=DAILY";
+  else if (values.repeat === "weekdays") rule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
+  else if (values.repeat === "weekly" && WEEKDAYS.some(([day]) => day === values.weekday)) rule = `FREQ=WEEKLY;BYDAY=${values.weekday}`;
+  else if (values.repeat === "monthly" && /^(?:[1-9]|[12]\d|3[01])$/.test(String(values.month_day))) rule = `FREQ=MONTHLY;BYMONTHDAY=${values.month_day}`;
+  else throw new Error("Choose a repeat frequency and its day.");
+  const [hour, minute] = values.time.split(":").map(Number);
+  return { kind: "rrule", rule: `RRULE:${rule};BYHOUR=${hour};BYMINUTE=${minute};BYSECOND=0`, start_at: at, timezone: zone };
+}
+function buildAutomationPayload(values = {}, context = {}) {
+  const name = String(values.title || "").trim();
+  const prompt = String(values.prompt || "").trim();
+  if (!name || !prompt) throw new Error("Add a title and describe what Codex should do.");
+  const { editing, projectId, threadId } = context;
+  const kind = values.target_kind || "standalone";
+  const target = editing?.target?.kind === kind ? { ...editing.target } : kind === "continue_thread" ? { kind, thread_id: threadId } : { kind: "standalone", project_id: projectId };
+  if (!(target.thread_id || target.project_id)) throw new Error("Select a chat or workspace before creating a scheduled task.");
+  return { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+}
+function buildAutomationUpdatePayload(values = {}, context = {}) {
+  if (!Number.isInteger(context.editing?.revision)) throw new Error("Reload this task before saving changes.");
+  return { expected_revision: context.editing.revision, ...buildAutomationPayload(values, context) };
+}
+function scheduleSummary(schedule, timezone = "UTC") {
+  if (!schedule || typeof schedule !== "object") return "Not scheduled";
+  const values = scheduleFormValues({ schedule }, timezone);
+  const zone = values.timezone;
+  if (values.repeat === "custom") return `Custom schedule · ${zone}`;
+  if (values.repeat === "once") return new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "medium", timeStyle: "short" }).format(new Date(schedule.at)) + ` · ${zone}`;
+  if (values.repeat === "interval") return `Every ${values.interval_count} ${values.interval_unit} · ${zone}`;
+  const repeat = values.repeat === "weekly" ? `Every ${WEEKDAYS.find(([day]) => day === values.weekday)?.[1]}` : values.repeat === "monthly" ? `Monthly on day ${values.month_day}` : values.repeat === "weekdays" ? "Every weekday" : "Daily";
+  return `${repeat} at ${values.time} · ${zone}`;
+}
+function element(doc, tag, className, value) {
+  const node = doc.createElement(tag);
+  if (className) node.className = className;
+  if (value !== void 0) node.textContent = value;
+  return node;
+}
+function field(doc, name, label, value, options = null, type = "text") {
+  const row = element(doc, "label", "schedule-row");
+  row.append(element(doc, "span", "schedule-row-label", label));
+  const control = element(doc, options ? "select" : type === "textarea" ? "textarea" : "input");
+  control.name = name;
+  control.dataset.desktopField = name;
+  control.setAttribute("aria-label", label);
+  if (options) for (const [key, title, disabled = false] of options) {
+    const option = element(doc, "option", "", title);
+    option.value = key;
+    option.disabled = disabled;
+    control.append(option);
+  }
+  else if (type !== "textarea") control.type = type;
+  control.value = String(value ?? "");
+  row.append(control);
+  return row;
+}
+function staticRow(doc, label, value) {
+  const row = element(doc, "div", "schedule-row");
+  row.append(element(doc, "span", "schedule-row-label", label), element(doc, "span", "schedule-row-value", value));
+  return row;
+}
+function refreshScheduleForm(form) {
+  const values = Object.fromEntries([...form.querySelectorAll("[data-desktop-field]")].map((control) => [control.name, control.value]));
+  for (const row of form.querySelectorAll("[data-repeat-for]")) {
+    row.hidden = !row.dataset.repeatFor.split(" ").includes(values.repeat);
+    for (const control of row.querySelectorAll("input,select")) control.required = !row.hidden;
+  }
+  const custom = values.repeat === "custom";
+  const time = form.querySelector('[name="time"]');
+  time.closest("label").hidden = custom;
+  const preview = form.querySelector(".schedule-preview");
+  const context = { timezone: form.dataset.timezone };
+  try {
+    preview.textContent = custom ? "The saved custom timing will be kept. Choose another repeat option to replace it." : scheduleSummary(buildSchedule(values, context), context.timezone);
+  } catch (error) {
+    preview.textContent = error.message;
+  }
+  const monthly = form.querySelector(".schedule-month-note");
+  monthly.hidden = values.repeat !== "monthly" || Number(values.month_day) < 29;
+}
+function renderScheduleForm(doc, state, timezone, context = {}) {
+  const editing = state.editingAutomation;
+  const initial = scheduleFormValues(editing || {}, timezone);
+  const values = { ...initial, ...state.formDraft || {} };
+  const form = element(doc, "form", "schedule-editor");
+  form.dataset.desktopForm = "schedule";
+  form.dataset.timezone = initial.timezone;
+  const header = element(doc, "div", "schedule-editor-header");
+  header.append(element(doc, "span", "", editing ? "Edit scheduled task" : "New scheduled task"));
+  const close = element(doc, "button", "schedule-close", "×");
+  close.type = "button";
+  close.dataset.desktopAction = "close-form";
+  close.setAttribute("aria-label", "Close scheduled task");
+  header.append(close);
+  form.append(header);
+  const title = field(doc, "title", "Scheduled task title", values.title);
+  title.className = "schedule-title";
+  const titleControl = title.querySelector("input");
+  titleControl.placeholder = "Scheduled task title";
+  titleControl.required = true;
+  titleControl.maxLength = 160;
+  const prompt = field(doc, "prompt", "Task instructions", values.prompt, null, "textarea");
+  prompt.className = "schedule-prompt";
+  const promptControl = prompt.querySelector("textarea");
+  promptControl.placeholder = "Describe what Codex should do";
+  promptControl.required = true;
+  promptControl.rows = 3;
+  form.append(title, prompt);
+  const addGroup = (label) => {
+    const group = element(doc, "fieldset", "schedule-group");
+    group.append(element(doc, "legend", "", label));
+    const card = element(doc, "div", "schedule-card");
+    group.append(card);
+    form.append(group);
+    return card;
+  };
+  const details = addGroup("Details");
+  details.append(staticRow(doc, "Runs on", "Home Assistant"));
+  const savedThread = editing?.target?.kind === "continue_thread";
+  details.append(field(doc, "target_kind", "Runs in", values.target_kind, [
+    ["standalone", context.projectName ? `New chat · ${context.projectName}` : "New chat for this task", !context.projectId && editing?.target?.kind !== "standalone"],
+    ["continue_thread", savedThread ? "Original chat for this task" : "Current chat", !context.threadId && !savedThread]
+  ]));
+  const frequency = addGroup("Frequency");
+  const repeats = initial.repeat === "custom" ? [...REPEATS, ["custom", "Keep custom schedule"]] : REPEATS;
+  frequency.append(field(doc, "repeat", "Repeat", values.repeat, repeats));
+  const conditional = (row, repeatsFor) => {
+    row.dataset.repeatFor = repeatsFor;
+    frequency.append(row);
+  };
+  conditional(field(doc, "weekday", "Day", values.weekday, WEEKDAYS), "weekly");
+  const month = field(doc, "month_day", "Day of month", values.month_day, null, "number");
+  month.querySelector("input").min = "1";
+  month.querySelector("input").max = "31";
+  conditional(month, "monthly");
+  const interval = field(doc, "interval_count", "Every", values.interval_count, null, "number");
+  interval.querySelector("input").min = "1";
+  interval.querySelector("input").max = "31536000";
+  conditional(interval, "interval");
+  conditional(field(doc, "interval_unit", "Unit", values.interval_unit, [["minutes", "Minutes"], ["hours", "Hours"], ["seconds", "Seconds"]]), "interval");
+  conditional(field(doc, "date", "Date / starts on", values.date, null, "date"), "once interval");
+  frequency.append(field(doc, "time", "Time", values.time, null, "time"));
+  frequency.append(staticRow(doc, "Results", "Chat and run history"));
+  form.append(element(doc, "p", "schedule-preview"));
+  form.append(element(doc, "p", "schedule-month-note", "Months without this date are skipped."));
+  const advanced = element(doc, "details", "schedule-advanced");
+  advanced.append(element(doc, "summary", "", "Advanced"));
+  const advancedCard = element(doc, "div", "schedule-card");
+  advancedCard.append(field(doc, "mode", "Permissions", values.mode, [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto"]]));
+  advancedCard.append(field(doc, "model", "Model (inherit when blank)", values.model), field(doc, "thinking", "Reasoning (inherit when blank)", values.thinking));
+  advanced.append(advancedCard, element(doc, "p", "desktop-note", "Unattended tasks cannot answer approval requests. Observe is the default."));
+  form.append(advanced);
+  const error = element(doc, "p", "schedule-error", state.formError || "");
+  error.setAttribute("role", "alert");
+  form.append(error);
+  const actions = element(doc, "div", "schedule-actions");
+  const cancel = element(doc, "button", "", "Cancel");
+  cancel.type = "button";
+  cancel.dataset.desktopAction = "close-form";
+  const submit = element(doc, "button", "schedule-submit", editing ? "Save changes" : "Create task");
+  submit.type = "button";
+  submit.dataset.desktopAction = editing ? "submit-schedule-update" : "submit-schedule";
+  actions.append(cancel, submit);
+  form.append(actions);
+  refreshScheduleForm(form);
+  return form;
+}
+
 // frontend/src/safe-dom.js
 var RASTER_MIME_TYPES = /* @__PURE__ */ new Set([
   "image/avif",
@@ -22934,15 +23217,6 @@ function normalizeMarketplacesResponse(value) {
   const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
   return marketplaces.filter((marketplace) => marketplace && typeof marketplace === "object").map((marketplace) => ({ name: marketplace.name, plugins: Array.isArray(marketplace.plugins) ? marketplace.plugins : [] }));
 }
-function buildAutomationPayload(values = {}) {
-  const target = values.thread_id ? { kind: "continue_thread", thread_id: values.thread_id } : { kind: "standalone", project_id: values.project_id };
-  const kind = values.schedule_type || "once";
-  const schedule = kind === "interval" ? { kind, seconds: Number(values.interval_seconds), anchor_at: values.anchor_at || values.run_at } : kind === "RRULE" || kind === "rrule" ? { kind: "rrule", rule: values.rrule, start_at: values.start_at || values.run_at, timezone: values.timezone } : { kind: "once", at: values.run_at };
-  return { name: values.name || values.title || "Untitled automation", prompt: values.prompt || "", target, schedule, mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || values.reasoning || null };
-}
-function buildAutomationUpdatePayload(values = {}) {
-  return { expected_revision: Number(values.revision), ...buildAutomationPayload(values) };
-}
 function normalizeDesktopError(error) {
   const record = asRecord(error);
   const candidate = record.body?.message || record.message || record.error || record.detail || error;
@@ -23084,34 +23358,12 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
-  section2.append(toolbar);
+  if (!state.form) section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    const editing = state.editingAutomation || {};
-    const schedule = editing.schedule || {};
-    const form = documentRef.createElement("form");
-    form.className = "desktop-form";
-    form.dataset.desktopForm = "schedule";
-    form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
-    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
-    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
-    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
-    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
-    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
-    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
-    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
-    const actions = documentRef.createElement("div");
-    actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
-    form.append(actions);
-    section2.append(form);
+    section2.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    return section2;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data);
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, schedule: scheduleSummary(row.schedule, defaultTimezone) }));
   section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
@@ -23317,7 +23569,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
-  container.append(heading);
+  if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) {
     container.setAttribute("aria-busy", "true");
     container.append(renderEmpty(documentRef, "Loading…"));
@@ -23348,7 +23600,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.4";
+var PANEL_VERSION = "1.0.5";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -26024,6 +26276,42 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
+    .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
+    .schedule-title, .schedule-prompt { display: block; min-width: 0; }
+    .schedule-title > span, .schedule-prompt > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .schedule-title input { width: 100%; min-width: 0; padding: 8px 0; border: 0; border-radius: 0; background: transparent; font-size: 22px; }
+    .schedule-prompt textarea { width: 100%; min-height: 112px; padding: 20px; border: 1px solid var(--border-color); border-radius: 22px; background: transparent; line-height: 1.5; resize: vertical; font-size: 16px; }
+    .schedule-group { min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+    .schedule-group legend { margin-bottom: 12px; padding: 0 5px; color: var(--muted-color); font-size: 16px; }
+    .schedule-card { padding: 0 20px; border: 1px solid var(--border-color); border-radius: 22px; }
+    .schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 62px; margin: 0; font-size: 15px; }
+    .schedule-row + .schedule-row { border-top: 1px solid var(--border-color); }
+    .schedule-row[hidden], .schedule-month-note[hidden] { display: none; }
+    .schedule-row-label { flex: 0 0 auto; color: var(--text-color); }
+    .schedule-row-value { text-align: right; color: var(--muted-color); }
+    .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
+    .schedule-row select { text-align-last: right; cursor: pointer; }
+    .schedule-row input[type="number"] { width: 96px; }
+    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: 13px; line-height: 1.5; }
+    .schedule-advanced { min-width: 0; color: var(--muted-color); }
+    .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+    .schedule-advanced .schedule-card { margin-top: 10px; }
+    .schedule-error { margin: 0; color: var(--danger-color); }
+    .schedule-error:empty { display: none; }
+    .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
+    .schedule-submit { background: var(--text-color); color: var(--canvas-bg); }
+    .schedule-editor :is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+    @media (max-width: 540px) {
+      .schedule-editor { gap: 20px; }
+      .schedule-card { padding-inline: 14px; }
+      .schedule-row { gap: 10px; font-size: 14px; }
+      .schedule-row input, .schedule-row select { max-width: 60%; font-size: 14px; }
+      .schedule-advanced .schedule-row { flex-wrap: wrap; gap: 0; padding-block: 8px; }
+      .schedule-advanced .schedule-row input { max-width: 100%; width: 100%; text-align: left; }
+    }
     .desktop-empty,
     .desktop-error,
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
@@ -29043,7 +29331,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return;
       }
     }
-    if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "TEXTAREA" && !target.closest("button")) {
+    if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey && !["TEXTAREA", "SELECT"].includes(target.tagName) && !target.closest("button")) {
       const form = target.closest("[data-desktop-form]");
       const submit = form?.querySelector('[data-desktop-action^="submit-"]');
       if (submit) {
@@ -29298,7 +29586,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
           ...item,
           title: item.name || "Untitled automation",
-          schedule: item.next_run_at || "Not scheduled",
+          schedule: item.schedule,
           status: item.last_status || (item.enabled === false ? "paused" : "idle")
         }));
       } else if (destination === "skills") {
@@ -29355,18 +29643,40 @@ var CodexBridgePanel = class extends HTMLElement {
   _desktopFormValues(target) {
     const form = target?.closest("form");
     if (!form) return {};
-    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field2) => [field2.dataset.desktopField, field2.value]));
   }
   _captureDesktopFormDraft(target) {
     const form = target.closest("form[data-desktop-form]");
-    const field = target.dataset.desktopField;
+    const field2 = target.dataset.desktopField;
     const state = this._desktopFeatures[this._activeDestination];
-    if (!form || !field || !state?.form) return;
-    state.formDraft = { ...state.formDraft || {}, [field]: target.value };
+    if (!form || !field2 || !state?.form) return;
+    state.formDraft = { ...state.formDraft || {}, [field2]: target.value };
+    if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
+    state.formError = "";
+  }
+  _scheduleContext(editing = null) {
+    const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
+    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC" };
+  }
+  async _submitScheduledTask(state, target, update) {
+    const form = target?.closest("form");
+    if (!form || !form.reportValidity()) return;
+    try {
+      const context = { ...state.scheduleContext, editing: state.editingAutomation };
+      const values = this._desktopFormValues(target);
+      const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (state.form && state.error) {
+        state.formError = state.error;
+        state.error = "";
+      }
+    } catch (error) {
+      state.formError = normalizeDesktopError(error);
+    }
   }
   _agentsDraftKey(scope, projectId = null) {
     return scope === "project" ? `project:${projectId || ""}` : "global";
@@ -29437,6 +29747,8 @@ var CodexBridgePanel = class extends HTMLElement {
     if (action === "open-schedule-form") {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
+      state.scheduleContext = this._scheduleContext();
+      state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone);
       state.form = "schedule";
     } else if (action === "open-skill-form") {
       this._clearDesktopFormDraft(state);
@@ -29452,8 +29764,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
       state.form = null;
-    } else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    } else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
+    else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
     else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
@@ -29477,6 +29789,8 @@ var CodexBridgePanel = class extends HTMLElement {
         const automation = await this._callWS("get_automation", { automation_id: dataset.id });
         this._clearDesktopFormDraft(state);
         state.editingAutomation = automation;
+        state.scheduleContext = this._scheduleContext(automation);
+        state.formDraft = scheduleFormValues(automation, state.scheduleContext.timezone);
         state.form = "schedule-edit";
       } catch (error) {
         state.error = normalizeDesktopError(error);
@@ -34818,12 +35132,12 @@ var CodexBridgePanel = class extends HTMLElement {
     return changed;
   }
   _textElement(tagName, className, value) {
-    const element = document.createElement(tagName);
+    const element2 = document.createElement(tagName);
     if (className) {
-      element.className = className;
+      element2.className = className;
     }
-    element.textContent = String(value ?? "");
-    return element;
+    element2.textContent = String(value ?? "");
+    return element2;
   }
   _actionButton(className, action, accessibleLabel) {
     const button2 = document.createElement("button");

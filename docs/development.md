@@ -18,87 +18,67 @@ boundary; the Integration and App are distinct components.
 
 ## Local checks
 
-Run the smallest relevant check first, then the applicable broader checks:
+Use the Node and Python versions declared in the repository and CI. Install
+Python test dependencies from `requirements-test.txt` and run `npm ci` before
+frontend checks. Edit `frontend/src/` and regenerate the bundled assets; do
+not edit the generated panel directly.
 
-```powershell
-# Home Assistant Integration (run in Linux, matching CI)
-python -m pytest -q
-
-# Bridge suite (isolated from the Home Assistant pytest plugin)
-$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
-python -m pytest -q bridge_service\tests -p pytest_asyncio.plugin -p pytest_timeout
-
-python -m compileall -q bridge_service\src custom_components
-node --check custom_components\codex_bridge\frontend\codex-bridge-panel.js
+```text
+npm run lint
+npm run test:unit
+npm run build
+npm run test:e2e
+python -m ruff check bridge_service custom_components scripts tests
+python scripts/sync_app_release.py --check
+python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 ```
 
-Local containers and unit tests do not validate protected Home Assistant OS
-behavior. On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback
-works: denial of a fresh `/proc` mount leaves the sandbox namespaces, read-only
-filesystem, AppArmor, and seccomp intact; `/proc` is intentionally empty. App
-`0.6.1`'s fatal readiness cause was a sandbox-self-test contract mismatch: it
-required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
-`workspaceWrite` response includes bounded supplemental roots (`.agents`,
-`.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The proc-less
-probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls, without
-requesting `SYS_ADMIN` or weakening isolation; App `0.7.0` retains canonical
-contained supplemental roots and hardens `lsm_get_self_attr` record parsing.
-The published App/Integration `0.7.0` target run reported Bridge `0.6.0` and
-Codex `0.144.4`, retained ChatGPT Pro, showed dynamic GPT-5.6, rendered the
-five-hour window `Off`, preserved chat/history, and persisted App auto-update
-and MCP opt-in after restart. Management forms lose unsaved values during a
-background rerender; the `0.7.1` candidate contains the fix. Do not claim
-automation, skills, plugins/marketplaces, MCP-server, or `AGENTS.md` mutation
-acceptance until retested. The first unattended App update is proven. External
-blocked-network/Nabu Casa/Cloudflare routing, cold restore, and previous-image
-rollback remain unproven.
+Run the full Home Assistant Integration suite on Linux, matching CI:
 
-The current App release is `1.0.4` (`amd64`), using Bridge `0.7.8` and
-Codex `0.155.1` with Integration and panel `1.0.4`. Update both the Supervisor
-App and the HACS Integration, then restart Home Assistant and refresh the panel.
-This release enables Astra discovery for eligible accounts and preserves sidebar
-hover and keyboard focus during background updates. Preserve
-their independent version authorities when an App-only fix does not change the
-negotiated API or panel. Preserve the panel's immediate composer Send-state
-rendering and the account-neutral local-chat contract: local records remain
-after a ChatGPT account switch while stale private provider-thread continuity
-is detached. Provider-gated native search remains separate from the disabled
-model-controlled shell network.
+```text
+python -m pytest -q
+```
 
-The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
-uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
-`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
-`29633146637`, and immutable image digest
-`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
-Its signature, SBOM, provenance, account-switch behavior, and preserved local
-chat history were verified. PDF list/archive/preview/download, external
-routing, cold restore, arbitrary prior-image rollback, and the secure
-App-owned browser worker remain unproven. Preserve the compact composer and
-canonical-version release tests.
-Its catalogue recovery must remain ordered:
-live app-server discovery first, then a verified last-known-good record, then
-the dynamically read installed Codex bundled catalogue, and static fallback
-last; stale records retry after 15 seconds. Do not add hardcoded model names:
-GPT-5.6 and model-specific Max/Ultra are runtime data. Preserve the typed
-artifact reservation behavior, including prior artifact preservation when the
-selected chat is idle.
+For the Bridge suite, disable automatic loading of the Home Assistant pytest
+plugin, then explicitly load the Bridge's required plugins. In PowerShell:
 
-Capability changes need focused tests for the trust boundary as well as the
-happy path. Automations must remain Home Assistant-scheduled and idempotent;
-skills/plugins/marketplaces must remain workspace/config bounded; `AGENTS.md`
-writes must remain atomic with private backups; and MCP must continue rejecting
-literal/private endpoints, known non-public DNS answers, and bearer-token
-configuration while keeping OAuth URLs one-shot and elicitation decline-only.
-Because Codex owns the eventual connection and DNS may change after validation,
-document the administrator trust requirement. Document any target-system gap
-rather than implying that local tests prove unattended recovery or proxy
-behavior.
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
+python -m pytest -q bridge_service\tests -p pytest_asyncio.plugin -p pytest_timeout
+```
 
-For provider tools, tests and documentation must preserve the gate: advertise
-web search only after a successful provider-capability probe, and advertise
-image generation only when both `imageGeneration` and `namespaceTools` are
-true. Never turn provider-side web search into a shell-network exemption, an
-API-key flow, or a public artifact URL.
+Use an isolated Linux worker for the full Bridge and App build checks. The
+Home Assistant test plugin imports Linux-only modules and cannot run unchanged
+on Windows. A local container test does not prove that the App sandbox works
+on HAOS; verify the built image and startup attestation on the target as well.
+
+This release pairs App, Integration and panel `1.0.5`, with Bridge `0.7.8` and
+Codex `0.155.1`. Keep their version authorities and release projections
+consistent. Do not change runtime dependencies without regenerating the
+hash-locked deployed requirements and testing the resulting App image.
+
+## Behaviour to preserve
+
+- Home Assistant owns scheduling; the Bridge owns definitions, durable claims
+  and run history. The Scheduled editor translates friendly controls into the
+  existing typed API and preserves unchanged saved schedules.
+- Local chats survive ChatGPT account changes. Only stale provider continuity
+  is detached; an unverified account cannot start a new turn.
+- Model discovery prefers the live runtime, then verified cached data, then
+  the installed bundled catalogue. Recovery data is marked stale. Do not add
+  model-specific names to the picker.
+- Keep unchanged UI controls mounted during HA state refreshes. Cover typed
+  drafts, dropdowns, keyboard focus and explicit reset with browser tests.
+- Skills, plugins and project instructions stay within their granted scope.
+  MCP remains an explicit opt-in to trusted HTTPS servers. DNS validation is
+  not connection-time egress enforcement, and OAuth URLs are one-shot.
+- Native search and images depend on runtime support. They do not grant shell
+  networking or enable the separately gated browser worker.
+
+Treat signed publication, target startup, feature behaviour, external proxy
+routes and recovery as separate checks. See the acceptance guides for
+[remote access](acceptance/remote-access.md), [cold restore](acceptance/cold-restore.md)
+and the [disabled browser worker](acceptance/browser-worker.md).
 
 ## Supervisor discovery contract
 
