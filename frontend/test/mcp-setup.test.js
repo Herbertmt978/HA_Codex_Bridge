@@ -46,8 +46,13 @@ describe("MCP setup and access settings", () => {
     expect(action(panel, "submit-mcp").disabled).toBe(true);
     await panel._handleDesktopAction("submit-mcp", {}, url);
     expect(panel._callWS).not.toHaveBeenCalled();
-    panel._callWS = vi.fn(async (method) => method === "get_config" ? { capabilities: ["mcp_admin_v1"] } : {});
+    let advertisedCapabilities = [];
+    panel._callWS = vi.fn(async (method) => {
+      if (method === "get_status") advertisedCapabilities = ["mcp_admin_v1"];
+      return method === "get_config" ? { capabilities: advertisedCapabilities } : {};
+    });
     await panel._handleDesktopAction("refresh-settings-capabilities");
+    expect(panel._callWS.mock.calls.slice(0, 2).map(([method]) => method)).toEqual(["get_status", "get_config"]);
     expect(panel._callWS).toHaveBeenCalledWith("get_config");
     expect(panel._callWS).toHaveBeenCalledWith("list_mcp");
     expect(panel._callWS).not.toHaveBeenCalledWith("host_access");

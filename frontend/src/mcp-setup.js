@@ -7,7 +7,7 @@ const text = (doc, tag, value, className = "") => {
   return node;
 };
 const button = (doc, label, action) => {
-  const node = text(doc, "button", label);
+  const node = text(doc, "button", label, "panel-button");
   node.type = "button";
   node.dataset.desktopAction = action;
   return node;
@@ -83,6 +83,7 @@ export function renderMcpSetup(doc, state, enabled) {
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
   const add = button(doc, "Add server", "submit-mcp");
+  add.classList.add("panel-button-primary");
   add.disabled = !enabled;
   actions.append(add, button(doc, "Cancel", "close-form"));
   form.append(actions);

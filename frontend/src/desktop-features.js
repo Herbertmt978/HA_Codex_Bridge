@@ -130,6 +130,7 @@ const text = (documentRef, tag, value, className = "") => {
 const button = (documentRef, label, action, extra = {}) => {
   const node = documentRef.createElement("button");
   node.type = "button";
+  node.className = "panel-button";
   node.textContent = label;
   node.dataset.desktopAction = action;
   for (const [key, value] of Object.entries(extra)) node.dataset[key] = String(value);

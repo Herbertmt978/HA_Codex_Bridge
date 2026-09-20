@@ -97,6 +97,7 @@ for (const width of [390, 1280]) {
   for (const installed of [false, true]) {
     test(`host access warning is usable at ${width}px with App ${installed ? "ready" : "missing"}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: installed ? "dark" : "light" });
       await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
       const panel = page.locator("codex-bridge-panel");
       await expect(panel.locator("#new-project-button")).toBeVisible();
@@ -127,6 +128,11 @@ for (const width of [390, 1280]) {
       const dialog = panel.getByRole("dialog", { name: "Allow Codex full access to Home Assistant OS?" });
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText("Files and credentials");
+      for (const action of await dialog.getByRole("button").all()) {
+        const size = await action.boundingBox();
+        expect(size.height).toBeGreaterThanOrEqual(40);
+        expect(size.width).toBeGreaterThanOrEqual(40);
+      }
       await expect(mode).not.toHaveValue("haos-full-access");
       const bounds = await dialog.boundingBox();
       expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -134,6 +140,8 @@ for (const width of [390, 1280]) {
       expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
       const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
       expect(accessibility.violations).toEqual([]);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded();
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).focus();
       await page.screenshot({ path: testInfo.outputPath("host-access-warning.png") });
       if (installed) {
         await expect(dialog.getByRole("link")).toHaveCount(0);
@@ -194,6 +202,10 @@ for (const width of [390, 1280]) {
     await panel.getByRole("tab", { name: "Access", exact: true }).click();
     await expect(panel.getByText("Full access · Home Assistant OS", { exact: true })).toBeVisible();
     await expect(panel.getByRole("link", { name: "Update instructions and missing-update checks" })).toBeVisible();
+    const defaults = panel.getByRole("button", { name: "New chat defaults", exact: true });
+    expect((await defaults.boundingBox()).height).toBeGreaterThanOrEqual(40);
+    await defaults.focus();
+    await expect(defaults).toBeFocused();
     await panel.screenshot({ path: testInfo.outputPath("access-settings.png") });
     await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
     await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();

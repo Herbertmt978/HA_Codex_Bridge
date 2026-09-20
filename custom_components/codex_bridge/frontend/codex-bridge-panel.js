@@ -255,7 +255,7 @@ function renderHostAccessDialog(doc, state) {
   }
   const actions = node(doc, "div", "", "confirmation-actions");
   const button3 = (label, action) => {
-    const result = node(doc, "button", label);
+    const result = node(doc, "button", label, "panel-button");
     result.type = "button";
     result.dataset.action = action;
     return result;
@@ -267,6 +267,7 @@ function renderHostAccessDialog(doc, state) {
   if (ready) {
     const enable = button3(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
     enable.id = "confirm-host-access";
+    enable.classList.add("panel-button-primary");
     enable.disabled = !!state.busy || !state.acknowledged || state.context === "schedule" && !state.unattended;
     actions.append(enable);
   } else if (!state.loading) {
@@ -23512,7 +23513,7 @@ var text = (doc, tag, value, className = "") => {
   return node2;
 };
 var button = (doc, label, action) => {
-  const node2 = text(doc, "button", label);
+  const node2 = text(doc, "button", label, "panel-button");
   node2.type = "button";
   node2.dataset.desktopAction = action;
   return node2;
@@ -23586,6 +23587,7 @@ function renderMcpSetup(doc, state, enabled) {
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
   const add = button(doc, "Add server", "submit-mcp");
+  add.classList.add("panel-button-primary");
   add.disabled = !enabled;
   actions.append(add, button(doc, "Cancel", "close-form"));
   form.append(actions);
@@ -23678,6 +23680,7 @@ var text2 = (documentRef, tag, value, className = "") => {
 var button2 = (documentRef, label, action, extra = {}) => {
   const node2 = documentRef.createElement("button");
   node2.type = "button";
+  node2.className = "panel-button";
   node2.textContent = label;
   node2.dataset.desktopAction = action;
   for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
@@ -24379,9 +24382,53 @@ template.innerHTML = `
       transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color) 45%);
       background: color-mix(in srgb, var(--surface-bg) 92%, var(--accent-soft) 8%);
+    }
+
+    /* Text actions share a layout even when rendered inside nested cards. */
+    .panel-button,
+    .text-button,
+    .secondary-button,
+    .banner-action,
+    .panel-form .send-button,
+    .confirmation-actions > button,
+    .auth-actions button,
+    .onboarding-stage button,
+    .decision-actions button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      height: auto;
+      max-width: 100%;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: center;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .panel-button {
+      justify-self: start;
+      color: var(--text-color);
+    }
+
+    .panel-button-primary {
+      background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
+      border-color: transparent;
+      color: white;
+    }
+
+    .panel-button-primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent-color) 54%, black 46%);
+      border-color: transparent;
     }
 
     button:disabled,
@@ -24606,7 +24653,7 @@ template.innerHTML = `
     .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
-    .host-access-settings { padding: 20px; }
+    .schedule-card.host-access-settings { padding: 20px; }
     .host-access-settings + .host-access-settings { margin-top: 16px; }
     .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
@@ -24629,6 +24676,7 @@ template.innerHTML = `
 
     .confirmation-actions {
       display: flex;
+      flex-wrap: wrap;
       justify-content: flex-end;
       gap: 8px;
       margin-top: 4px;
@@ -24977,11 +25025,7 @@ template.innerHTML = `
     }
 
     .text-button {
-      height: 34px;
-      padding: 0 12px;
-      border-radius: 8px;
       color: var(--muted-color);
-      font-size: 13px;
     }
 
     .send-button {
@@ -25359,11 +25403,7 @@ template.innerHTML = `
     }
 
     .onboarding-stage button {
-      min-height: 28px;
-      padding: 0 9px;
-      color: var(--accent-color);
-      font-size: 11px;
-      font-weight: 650;
+      color: var(--text-color);
     }
 
     .auth-card {
@@ -25409,13 +25449,6 @@ template.innerHTML = `
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-    }
-
-    .auth-actions button {
-      min-height: 30px;
-      padding: 0 10px;
-      font-size: 11px;
-      font-weight: 650;
     }
 
     .auth-actions button.primary {
@@ -25474,10 +25507,6 @@ template.innerHTML = `
     }
 
     .banner-action {
-      min-height: 28px;
-      padding: 0 10px;
-      font-size: 12px;
-      font-weight: 600;
       color: inherit;
       background: color-mix(in srgb, var(--surface-bg) 82%, transparent);
     }
@@ -25612,13 +25641,6 @@ template.innerHTML = `
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-    }
-
-    .decision-actions button {
-      min-height: 32px;
-      padding: 0 12px;
-      font-size: 12px;
-      font-weight: 650;
     }
 
     .decision-actions button[data-decision="accept"],
@@ -26722,13 +26744,9 @@ template.innerHTML = `
 
     .desktop-toolbar > button,
     .settings-panel > button {
-      min-height: 34px;
-      padding: 0 12px;
       border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
       background: var(--accent-surface);
       color: var(--text-color);
-      font-size: 12px;
-      font-weight: 650;
     }
 
     .desktop-form-intro {
@@ -26805,10 +26823,7 @@ template.innerHTML = `
     }
 
     .desktop-table td button {
-      margin: 2px 6px 2px 0;
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 11px;
+      margin: 4px 8px 4px 0;
     }
 
     .desktop-form {
@@ -26825,7 +26840,6 @@ template.innerHTML = `
     .desktop-field input,
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
     .mcp-setup { display: grid; gap: 16px; min-width: 0; }
     .mcp-setup button { min-height: 40px; }
     .mcp-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
@@ -26877,6 +26891,8 @@ template.innerHTML = `
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice[role="alert"] { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .desktop-notice[role="alert"] > span { flex-basis: 100%; }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
     .settings-card { margin: 16px 0; }
     .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
@@ -30231,6 +30247,9 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
         if (refreshCapabilities) {
+          const status = await this._callWS("get_status");
+          if (!isCurrentSettingsRequest()) return;
+          this._mergeStatus(status);
           const config = await this._callWS("get_config");
           if (!isCurrentSettingsRequest()) return;
           this._config = config;
