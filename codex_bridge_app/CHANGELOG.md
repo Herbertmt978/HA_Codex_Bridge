@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.1.1
+
+- Updates Uvicorn to `0.53.0` and repairs the locked build dependencies so the
+  App builds with the required setuptools backend.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.0` without changing its Integration API compatibility.
+
 ## 1.1.0
 
 - Adds the optional Codex Host Access App for explicitly authorised root work

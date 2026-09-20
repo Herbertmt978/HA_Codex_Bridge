@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1
+
+- Uses the updated shared App image with Uvicorn `0.53.0` and repaired build
+  dependencies. Host access permissions and acknowledgement are unchanged.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.0` without changing its Integration API compatibility.
+
 ## 1.1.0
 
 - First experimental release for amd64 Home Assistant OS.
