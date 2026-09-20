@@ -12,7 +12,7 @@ export function selection(doc, { name, label, value = "", options = [] }) {
   trigger.setAttribute("role", "combobox"); trigger.setAttribute("aria-label", label);
   trigger.setAttribute("aria-haspopup", "listbox"); trigger.setAttribute("aria-expanded", "false");
   const caption = doc.createElement("span");
-  const arrow = doc.createElement("span"); arrow.className = "selection-arrow"; arrow.textContent = "⌄"; arrow.setAttribute("aria-hidden", "true");
+  const arrow = doc.createElement("span"); arrow.className = "selection-arrow"; arrow.setAttribute("aria-hidden", "true");
   trigger.append(caption, arrow);
   const menu = doc.createElement("div"); menu.className = "selection-menu";
   menu.id = `panel-selection-${++sequence}`; menu.setAttribute("role", "listbox");
@@ -108,12 +108,13 @@ export function selection(doc, { name, label, value = "", options = [] }) {
 
 export const SELECTION_STYLES = `
   .panel-selection { min-width: 0; width: max-content; max-width: 65%; }
-  .selection-trigger { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; background: transparent; color: var(--text-color); font: inherit; font-size: 15px; cursor: pointer; text-align: left; }
+  .selection-trigger { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; background: transparent; color: var(--text-color); font: inherit; font-size: var(--font-body-size, 14px); cursor: pointer; text-align: left; }
   .selection-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .selection-trigger:hover, .selection-trigger[aria-expanded="true"] { background: var(--surface-alt); border-color: var(--border-color); }
   .selection-trigger:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
-  .selection-arrow { flex-shrink: 0; color: var(--muted-color); }
-  .selection-menu { position: fixed; inset: auto; margin: 0; box-sizing: border-box; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); color: var(--text-color); box-shadow: 0 8px 32px #0003; font-size: 15px; z-index: 100; }
+  .selection-arrow { display: grid; place-items: center; width: 16px; height: 16px; flex-shrink: 0; color: var(--muted-color); }
+  .selection-arrow::before { content: ""; width: 6px; height: 6px; border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+  .selection-menu { position: fixed; inset: auto; margin: 0; box-sizing: border-box; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); color: var(--text-color); box-shadow: 0 8px 32px #0003; font-size: var(--font-body-size, 14px); z-index: 100; }
   .selection-menu[hidden] { display: none; }
   .selection-menu [role="option"] { min-height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 7px; cursor: pointer; overflow-wrap: anywhere; }
   .selection-menu [role="option"]::after { content: ""; margin-left: auto; width: 16px; flex-shrink: 0; }

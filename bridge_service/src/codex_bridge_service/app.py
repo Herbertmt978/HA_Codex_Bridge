@@ -69,6 +69,8 @@ from .runtime_gate import (
 )
 from .routes.agents import WorkspaceAgentsManager
 from .storage import BridgeStorage, ProjectMutationError
+from .terminal import WorkspaceTerminal
+from .routes import terminal
 
 
 class _AppServerLifecycle(Protocol):
@@ -221,6 +223,7 @@ def create_app(
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
     resolved_runner: Any = None
     resolved_host_access: HostAccessManager | None = None
+    resolved_terminal: WorkspaceTerminal | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -270,6 +273,8 @@ def create_app(
                 await asyncio.to_thread(resolved_auth_coordinator.start)
             yield
         finally:
+            if resolved_terminal is not None:
+                await asyncio.to_thread(resolved_terminal.close)
             try:
                 try:
                     if resolved_auth_coordinator is not None:
@@ -670,6 +675,19 @@ def create_app(
         if getattr(resolved_app_server, "enable_experimental_api", False) is True:
             feature_capabilities.append("host_access_v1")
     app.state.feature_capabilities = tuple(feature_capabilities)
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        resolved_terminal = WorkspaceTerminal(
+            storage, resolved_runtime_gate,
+            lambda workspace: CodexAppServerClient(
+                codex_command=codex_command, codex_home=codex_home,
+                client_version=resolved_build_info.bridge_version or "0.8.1",
+                callback_workers=1, enable_experimental_api=True,
+                working_directory=Path(workspace),
+            ),
+            lambda: evaluate_readiness(app.state, include_catalogue=False).state != "fatal",
+        )
+        app.state.feature_capabilities += ("workspace_terminal_v1",)
+    app.state.workspace_terminal = resolved_terminal
     app.state.auth_manager = (
         None
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
@@ -866,6 +884,7 @@ def create_app(
         app.include_router(mcp.router)
         app.include_router(uploads.router)
         app.include_router(host_access.router)
+        app.include_router(terminal.router)
     else:
         # The multipart endpoint is the external-v0 rollback adapter. HA uses
         # only bounded resumable chunks so Core never parses a whole file.

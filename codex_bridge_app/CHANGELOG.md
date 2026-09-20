@@ -2,6 +2,29 @@
 
 All notable App changes are recorded here.
 
+## 1.1.2
+
+- Adds an administrator-operated workspace terminal with real interactive input,
+  bounded output and automatic session cleanup. It cannot access sibling chats,
+  private Home Assistant files or the network, even in a host-access chat.
+- Adds desktop-style chat actions, authenticated Share links, panel toggles and
+  a sidebar listing the chat's pull requests, outputs and sources.
+- Puts Stop and Steer beside the composer and adds a context-usage ring based on
+  the runtime's latest report, including reductions after compaction.
+- Adds guided HA-MCP setup alongside the existing custom MCP connection form.
+- Adds a visible Access settings page with host-control warnings and update
+  guidance for older connections. Host access still needs explicit consent.
+- Preserves connection drafts when retrying a failed Settings refresh.
+- Gives action buttons consistent spacing and touch targets across settings,
+  sign-in, skills, plugins and permission dialogs.
+- Aligns typography, navigation icons and composer controls with the desktop
+  Codex style while retaining theme and larger-text preferences.
+- Explains HACS update discovery delays and the legacy HACS update-icon workaround.
+- Pairs with Integration and panel 1.1.2; the App's access permissions are unchanged.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.1` without changing its Integration API compatibility.
+
 ## 1.1.1
 
 - Updates Uvicorn to `0.53.0` and repairs the locked build dependencies so the

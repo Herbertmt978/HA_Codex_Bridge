@@ -221,6 +221,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         "plugins_v1",
         "agents_v1",
         "host_access_v1",
+        "workspace_terminal_v1",
     )
     assert app.state.host_access.status()["enabled"] is False
     paths = _registered_paths(app)

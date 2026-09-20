@@ -84,15 +84,16 @@ describe("Codex desktop parity layout", () => {
     expect(stylesheet).toMatch(/\.composer-shell \.composer\s*\{\s*display:\s*contents;/);
     expect(root.getElementById("attachment-meta").hidden).toBe(true);
     expect([...root.querySelectorAll("#activity-center [data-section]")].map((item) => item.dataset.section)).toEqual([
-      "outputs", "subagents",
+      "pull-requests", "outputs", "sources", "subagents",
     ]);
     expect(root.querySelector('[data-section="outputs"] [data-action="select-side-tab"]')).not.toBeNull();
-    expect(root.querySelector('[data-section="outputs"] .activity-center-summary')?.textContent).toBe("Create a file or site");
+    expect(root.querySelector('[data-section="outputs"] .activity-center-summary')?.textContent).toBe("Files created in this workspace appear here.");
     expect(root.querySelector('[data-section="outputs"] .activity-center-rows')).toBeNull();
   });
 
   it("adds only the activity sections that have current run details", () => {
     const panel = createPanel();
+    panel._activityView = true;
     panel._runActivityForThread = () => ({
       runId: "run-parity",
       state: "running",
@@ -102,7 +103,7 @@ describe("Codex desktop parity layout", () => {
     panel._renderActivityCenter();
 
     expect([...panel.shadowRoot.querySelectorAll("#activity-center [data-section]")].map((item) => item.dataset.section)).toEqual([
-      "outputs", "subagents", "background", "browser",
+      "subagents", "background", "browser",
     ]);
   });
 

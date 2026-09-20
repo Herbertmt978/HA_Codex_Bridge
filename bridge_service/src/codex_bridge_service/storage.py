@@ -28,6 +28,7 @@ from .models import (
     ArtifactRecord,
     ArtifactSource,
     AttachmentRecord,
+    ContextUsageRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
     PathBrowseEntryRecord,
@@ -2361,6 +2362,7 @@ class BridgeStorage:
                         continue
                     record.codex_session_id = None
                     record.codex_thread_id = None
+                    record.context_usage = None
                     record.active_turn_id = None
                     record.active_run_id = None
                     record.pending_prompts.clear()
@@ -2421,6 +2423,28 @@ class BridgeStorage:
             raise ValueError("The Codex account binding is invalid.")
         return marker
 
+    def update_context_usage(
+        self, thread_id: str, codex_thread_id: str, usage: ContextUsageRecord
+    ) -> None:
+        """Commit a correlated context snapshot and its event atomically."""
+        with self._thread_mutation_lock:
+            record = self.load_thread(thread_id)
+            if record.codex_thread_id != codex_thread_id:
+                return
+            previous = record.context_usage
+            if previous and (previous.used_tokens, previous.context_window) == (
+                usage.used_tokens, usage.context_window
+            ):
+                return
+            record.context_usage = usage
+            self._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread", thread_id=thread_id, event_type="context.updated",
+                    payload={"context_usage": usage.model_dump(mode="json")},
+                ),
+            )
+
     def save_thread(self, record: ThreadRecord) -> None:
         with self._thread_mutation_lock:
             self._prepare_thread_for_save_locked(record)
@@ -2458,6 +2482,17 @@ class BridgeStorage:
         )
 
     def _prepare_thread_for_save_locked(self, record: ThreadRecord) -> None:
+        # A rename or runtime projection may have loaded the thread before a
+        # token update. Preserve that newer snapshot for the same provider chat.
+        target = self._thread_path(record.thread_id)
+        if target.exists():
+            persisted = ThreadRecord.model_validate_json(target.read_text(encoding="utf-8"))
+            if (
+                record.codex_thread_id == persisted.codex_thread_id
+                and persisted.context_usage is not None
+                and (record.context_usage is None or persisted.context_usage.updated_at > record.context_usage.updated_at)
+            ):
+                record.context_usage = persisted.context_usage
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             boundary = self._home_assistant_boundary()
             record.workspace_path = boundary.normalize(record.workspace_path)

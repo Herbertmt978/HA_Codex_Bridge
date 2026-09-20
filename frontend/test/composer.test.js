@@ -93,9 +93,13 @@ describe("prompt composer mutation contract", () => {
 
     panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "run-one" };
     panel._renderComposerState(panel._activeThread);
+    expect(send.getAttribute("aria-label")).toBe("Stop");
+    expect(send.disabled).toBe(false);
+    panel._setDraftForThread("thread-alpha", "Use the smaller fix");
+    panel._renderComposerState(panel._activeThread);
     expect(send.textContent).toContain("Steer");
     expect(send.getAttribute("aria-label")).toBe("Steer");
-    expect(send.title).toMatch(/queue steering/i);
+    expect(send.title).toMatch(/steer the running/i);
     expect(send.dataset.tooltip).toBe(send.title);
 
     panel._promptMutation = {
@@ -109,6 +113,56 @@ describe("prompt composer mutation contract", () => {
     expect(send.getAttribute("aria-label")).toBe("Retry");
     expect(send.title).toMatch(/retry this message safely/i);
     expect(send.dataset.tooltip).toBe(send.title);
+  });
+
+  it("offers Stop with an empty running composer, and both Steer and Stop with a draft", async () => {
+    const panel = createPanel();
+    panel._activeThread.status = "running";
+    panel._render(true);
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    const send = panel.shadowRoot.getElementById("send-button");
+    const stop = panel.shadowRoot.getElementById("stop-run-button");
+    const pending = deferred();
+    panel._callWS = vi.fn(() => pending.promise);
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(undefined);
+    expect(send.dataset.action).toBe("stop-run");
+    expect(stop.classList.contains("hidden")).toBe(true);
+    prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(panel._callWS).not.toHaveBeenCalled();
+    prompt.value = "Take a different approach";
+    prompt.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(send.getAttribute("aria-label")).toBe("Steer");
+    expect(stop.classList.contains("hidden")).toBe(false);
+    stop.click();
+    stop.click();
+    expect(panel._callWS).toHaveBeenCalledTimes(1);
+    expect(panel._callWS).toHaveBeenCalledWith("cancel_run", { thread_id: "thread-alpha" });
+    expect(send.disabled).toBe(true);
+    expect(prompt.value).toBe("Take a different approach");
+    pending.resolve({ status: "cancelling" });
+    await Promise.resolve();
+  });
+
+  it("updates the context ring from thread events without confusing account limits", () => {
+    const panel = createPanel();
+    panel._render(true);
+    const button = panel.shadowRoot.getElementById("context-usage-button");
+    expect(button.getAttribute("aria-label")).toMatch(/not reported yet/);
+    for (const [sequence, used] of [[1, 800], [2, 200]]) {
+      panel._handleSubscribedEvent("thread-alpha", {
+        event_id: `context-${sequence}`, thread_id: "thread-alpha", sequence,
+        event_type: "context.updated", payload: { context_usage: { used_tokens: used, context_window: 1000 } },
+      });
+      expect(button.getAttribute("aria-label")).toContain(`${used / 10}% of context used`);
+      expect(button.querySelector(".context-fill").getAttribute("stroke-dasharray")).toBe(`${used / 10} 100`);
+    }
+    button.click();
+    expect(panel._sideTab).toBe("usage");
+    expect(panel.shadowRoot.getElementById("usage-panel").textContent).toContain("200 of 1,000 tokens");
+    panel._activeThread = { ...panel._activeThread, thread_id: "other", context_usage: null };
+    panel._selectedThreadId = "other";
+    panel._render(true);
+    expect(button.getAttribute("aria-label")).toMatch(/not reported yet/);
   });
 
   it("locks the composer before awaiting the Bridge and sends one stable request id", async () => {

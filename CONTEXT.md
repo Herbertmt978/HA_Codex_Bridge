@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.1.1`, Integration and panel `1.1.0`, Bridge `0.8.0` and
+- This release pairs App `1.1.2`, Integration and panel `1.1.2`, Bridge `0.8.1` and
   Codex `0.155.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -74,6 +74,15 @@ to the App or Bridge.
   previous-image rollback require their own target acceptance evidence.
 
 ## Product language
+
+- The workspace terminal is an ephemeral HA administrator session in a dedicated
+  Codex app-server process whose startup directory is the exact chat workspace.
+  A request cwd alone does not narrow command/exec's workspace roots. Keep the
+  managed minimal-read profile, disabled network, runtime/config lease and quota
+  reservation. No host-access grant broadens this terminal. Output stays out of
+  durable chat history; an idle lease and process deadline clean up disconnections.
+- Share currently copies an authenticated Home Assistant chat link. Public
+  snapshots remain planned and need a separate publication/privacy design.
 
 - Keep **Integration** and **App** distinct. HACS installs the Integration;
   Supervisor installs the App from this repository.

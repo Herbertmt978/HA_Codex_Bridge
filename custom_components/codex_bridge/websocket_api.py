@@ -31,6 +31,7 @@ _ARTIFACT_ERROR_MESSAGES = {
     "reservation_conflict": "Workspace files are temporarily unavailable while Codex is working",
 }
 _FEATURE_ERROR_MESSAGES = {
+    "terminal_unavailable": "Terminal unavailable. Close any running terminal or Codex turn, and select an editable chat.",
     "capability_unavailable": "This App version does not support this feature. Update it and try again",
     "host_access_unavailable": "Host access is unavailable or consent changed. Open Settings to review it.",
     "automation_conflict": "The automation is busy or must be paused first",
@@ -115,9 +116,28 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_get_agents,
         ws_update_agents,
         ws_delete_agents,
+        ws_terminal,
     )
     for command in commands:
         websocket_api.async_register_command(hass, websocket_api.require_admin(command))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/terminal",
+    vol.Required("operation"): vol.In({"open", "read", "write", "resize", "close"}),
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("session_id"): vol.All(str, vol.Length(min=32, max=32)),
+    vol.Optional("cols"): vol.All(int, vol.Range(min=20, max=300)),
+    vol.Optional("rows"): vol.All(int, vol.Range(min=2, max=100)),
+    vol.Optional("after"): vol.All(int, vol.Range(min=0, max=9_007_199_254_740_991)),
+    vol.Optional("sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+    vol.Optional("data"): vol.All(str, vol.Length(max=16 * 1024)),
+})
+@websocket_api.async_response
+async def ws_terminal(hass, connection, msg):
+    payload = {key: value for key, value in msg.items() if key not in {"id", "type", "operation"}}
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_terminal(msg["operation"], payload))
 
 
 async def _async_handle(

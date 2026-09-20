@@ -97,6 +97,7 @@ for (const width of [390, 1280]) {
   for (const installed of [false, true]) {
     test(`host access warning is usable at ${width}px with App ${installed ? "ready" : "missing"}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: installed ? "dark" : "light" });
       await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
       const panel = page.locator("codex-bridge-panel");
       await expect(panel.locator("#new-project-button")).toBeVisible();
@@ -127,6 +128,11 @@ for (const width of [390, 1280]) {
       const dialog = panel.getByRole("dialog", { name: "Allow Codex full access to Home Assistant OS?" });
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText("Files and credentials");
+      for (const action of await dialog.getByRole("button").all()) {
+        const size = await action.boundingBox();
+        expect(size.height).toBeGreaterThanOrEqual(40);
+        expect(size.width).toBeGreaterThanOrEqual(40);
+      }
       await expect(mode).not.toHaveValue("haos-full-access");
       const bounds = await dialog.boundingBox();
       expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -134,6 +140,8 @@ for (const width of [390, 1280]) {
       expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
       const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
       expect(accessibility.violations).toEqual([]);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded();
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).focus();
       await page.screenshot({ path: testInfo.outputPath("host-access-warning.png") });
       if (installed) {
         await expect(dialog.getByRole("link")).toHaveCount(0);
@@ -178,6 +186,57 @@ test("settings persist appearance and keep themed menus usable on a narrow scree
   await page.reload();
   await expect(panel).toHaveAttribute("data-panel-theme", "dark");
 });
+
+for (const width of [390, 1280]) {
+  test(`guided HA-MCP and custom connections remain accessible at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [] };
+      element._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "Access", exact: true }).click();
+    await expect(panel.getByText("Full access · Home Assistant OS", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Update instructions and missing-update checks" })).toBeVisible();
+    const defaults = panel.getByRole("button", { name: "New chat defaults", exact: true });
+    expect((await defaults.boundingBox()).height).toBeGreaterThanOrEqual(40);
+    await defaults.focus();
+    await expect(defaults).toBeFocused();
+    await panel.screenshot({ path: testInfo.outputPath("access-settings.png") });
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();
+    await expect(panel.getByRole("button", { name: /^Home Assistant \(HA-MCP\)/ })).toBeFocused();
+    await expect(panel.getByRole("button", { name: /^Other MCP server/ })).toBeVisible();
+    await panel.screenshot({ path: testInfo.outputPath("mcp-choices.png") });
+    await panel.getByRole("button", { name: /^Home Assistant \(HA-MCP\)/ }).press("Enter");
+    await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("home-assistant");
+    await expect(panel.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();
+    await panel.getByLabel("HA-MCP HTTPS connection URL").fill("https://ha.example.org/api/webhook/test-only");
+    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveAttribute("type", "password");
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element.hass = { ...element.hass };
+    });
+    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveValue("https://ha.example.org/api/webhook/test-only");
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
+    const formBounds = await panel.locator('[data-desktop-form="mcp"]').boundingBox();
+    expect(formBounds.x).toBeGreaterThanOrEqual(0);
+    expect(formBounds.x + formBounds.width).toBeLessThanOrEqual(width);
+    await panel.screenshot({ path: testInfo.outputPath("ha-mcp-guide.png") });
+    await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+    await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();
+    await panel.getByRole("button", { name: /^Other MCP server/ }).click();
+    await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("");
+    await panel.getByText("OAuth settings (optional)", { exact: true }).click();
+    await expect(panel.getByLabel("OAuth client ID (public)")).toBeVisible();
+    await expect(panel.getByLabel("OAuth resource")).toBeVisible();
+  });
+}
 
 test("scheduled runtime selections and grouped skills remain readable", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
@@ -719,7 +778,7 @@ test("renders a local PDF on canvas without embeds or off-origin requests", asyn
   const pageErrors = [];
   page.on("request", (request) => requests.push(request.url()));
   page.on("response", (response) => {
-    if (new URL(response.url()).pathname === "/frontend/src/codex-bridge-pdf-worker.js") {
+    if (new URL(response.url()).pathname.endsWith("/codex-bridge-pdf-worker.js")) {
       workerResponses.push(response.status());
     }
   });
@@ -943,11 +1002,14 @@ test("creates a workspace project and first chat at compact widths in both colou
   expect(formLayout.createHeight).toBeLessThanOrEqual(44);
   await panel.locator('button[data-action="save-thread"]').click();
   await expect(panel.locator("#thread-title-label")).toContainText("First Home Assistant chat");
-  const refresh = panel.locator("#refresh-thread-button");
-  await expect(refresh).toHaveAttribute("aria-label", "Refresh");
+  const refresh = panel.locator("#chat-menu-button");
+  await expect(refresh).toHaveAttribute("aria-label", "Chat actions");
   await expect(refresh.locator("svg")).toBeVisible();
   await expect(refresh).toHaveCSS("width", "32px");
   await expect(refresh).toHaveCSS("height", "32px");
+  await refresh.click();
+  await expect(panel.locator('#thread-menu [data-action="refresh-thread"]')).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(panel.locator("#runtime-strip")).toBeHidden();
 
@@ -1634,4 +1696,76 @@ test("passes axe checks with live decisions at desktop and mobile widths", async
       });
     }
   }
+});
+
+
+test("desktop controls show real references, Stop/Steer and context usage", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
+    panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "control-test", context_usage: { used_tokens: 25000, context_window: 100000 } };
+    panel._events = [{ sequence: 1, event_type: "run.started", payload: { run_id: "control-test" } }, { sequence: 2, event_type: "message.completed", payload: { text: "[Login improvement](https://github.com/owner/repo/pull/12)" } }];
+    panel._render(true);
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#send-button")).toHaveAttribute("aria-label", "Stop");
+  await panel.locator("#prompt-input").fill("Use the smaller change");
+  await expect(panel.locator("#send-button")).toHaveAttribute("aria-label", "Steer");
+  await expect(panel.locator("#stop-run-button")).toBeVisible();
+  await expect(panel.locator("#context-usage-button")).toHaveAttribute("aria-label", /25% of context used/);
+  await panel.locator('[data-section="pull-requests"] summary').click();
+  await expect(panel.locator('[data-section="pull-requests"] a')).toHaveAttribute("href", "https://github.com/owner/repo/pull/12");
+  await panel.locator("#toggle-context-button").click();
+  await expect(panel.locator("#context-drawer")).toBeHidden();
+  await panel.locator("#context-usage-button").click();
+  await expect(panel.locator("#side-panel-usage")).toBeVisible();
+  await panel.locator('#side-tab-activity').click();
+  await page.screenshot({ path: testInfo.outputPath("chat-controls.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(panel.locator("#chat-menu-button")).toBeVisible();
+  const overflow = await panel.evaluate((element) => element.shadowRoot.querySelector(".main-header").scrollWidth > element.shadowRoot.querySelector(".main-header").clientWidth);
+  expect(overflow).toBe(false);
+});
+
+test("workspace terminal accepts interactive input and closes when leaving the chat", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
+    panel._config.capabilities = ["workspace_terminal_v1"];
+    panel._activeThread.mode = "edit";
+    const original = panel._callWS.bind(panel);
+    window.terminalCalls = [];
+    let cursor = 1;
+    panel._callWS = async (type, payload) => {
+      if (type !== "terminal") return original(type, payload);
+      window.terminalCalls.push(payload);
+      if (payload.operation === "open") return { session_id: "a".repeat(32), state: "running", chunks: [{ sequence: 1, data: btoa("Workspace terminal\r\n$ ") }], message: "Workspace terminal" };
+      if (payload.operation === "read") return { state: "running", chunks: payload.after < cursor ? [{ sequence: cursor, data: btoa("\r\nterminal input accepted\r\n$ ") }] : [], message: "Workspace terminal" };
+      if (payload.operation === "write") cursor++;
+      return {};
+    };
+    panel._renderChatControls();
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator("#toggle-bottom-button").click();
+  await panel.locator("#bottom-terminal-button").click();
+  await panel.locator("#open-terminal-button").click();
+  await expect(panel.locator(".xterm")).toBeVisible();
+  await panel.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("echo terminal");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.terminalCalls.filter((item) => item.operation === "write").map((item) => item.data).join(""))).toContain("echo terminal\r");
+  await page.keyboard.press("Control+Shift+M");
+  await expect(panel.locator("#close-terminal-button")).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("workspace-terminal.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.evaluate(() => document.querySelector("codex-bridge-panel")._selectDesktopDestination("settings"));
+  await expect.poll(() => page.evaluate(() => window.terminalCalls.some((item) => item.operation === "close"))).toBe(true);
 });

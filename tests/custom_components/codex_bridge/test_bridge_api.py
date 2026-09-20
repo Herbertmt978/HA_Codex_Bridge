@@ -40,6 +40,31 @@ def _fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+@pytest.mark.parametrize("supported", [False, True])
+async def test_terminal_requires_advertised_capability(bridge_server_factory, supported):
+    ready = _fixture("ready_v1.json")
+    if supported:
+        ready["capabilities"].append("workspace_terminal_v1")
+    calls = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        calls.append((request.path, await request.json()))
+        return web.json_response({"state": "running"})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        if supported:
+            assert await client.async_terminal("open", {"thread_id": "chat"}) == {"state": "running"}
+        else:
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_terminal("open", {"thread_id": "chat"})
+    assert calls == ([("/terminal/open", {"thread_id": "chat"})] if supported else [])
+
+
 def test_malformed_endpoint_suppresses_private_validation_details() -> None:
     private_sentinel = "-".join(("private", "endpoint", "sentinel"))
 

@@ -58,12 +58,13 @@ export function renderHostAccessDialog(doc, state) {
   }
   if (state.error) { const error = node(doc, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); dialog.append(error); }
   const actions = node(doc, "div", "", "confirmation-actions");
-  const button = (label, action) => { const result = node(doc, "button", label); result.type = "button"; result.dataset.action = action; return result; };
+  const button = (label, action) => { const result = node(doc, "button", label, "panel-button"); result.type = "button"; result.dataset.action = action; return result; };
   const cancel = button("Cancel", "cancel-host-access"); cancel.id = "cancel-host-access"; cancel.disabled = !!state.busy;
   actions.append(cancel);
   if (ready) {
     const enable = button(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
     enable.id = "confirm-host-access";
+    enable.classList.add("panel-button-primary");
     enable.disabled = !!state.busy || !state.acknowledged || (state.context === "schedule" && !state.unattended);
     actions.append(enable);
   } else if (!state.loading) {

@@ -1149,6 +1149,12 @@ class BridgeApiClient:
         self.require_capability("host_access_v1")
         return await self._async_json("GET", "/host-access")
 
+    async def async_terminal(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("workspace_terminal_v1")
+        if operation not in {"open", "read", "write", "resize", "close"}:
+            raise ValueError("Invalid terminal operation")
+        return await self._async_json("POST", f"/terminal/{operation}", json_body=payload)
+
     async def async_pair_host_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("host_access_v1")
         return await self._async_json("PUT", "/host-access/worker", json_body=payload)

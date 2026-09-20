@@ -62,6 +62,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "image_generation_v1",
         "browser_v1",
         "host_access_v1",
+        "workspace_terminal_v1",
     }
 )
 _KNOWN_PROBLEM_CODES = frozenset(

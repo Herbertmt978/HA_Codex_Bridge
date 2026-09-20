@@ -1,4 +1,7 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
+import { contextUsage } from "./context-usage.js";
+import { authenticatedChatUrl, chatResources } from "./chat-resources.js";
+import { WorkspaceTerminalView, terminalCss } from "./workspace-terminal.js";
 import { SELECTION_STYLES } from "./selection.js";
 import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js";
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
@@ -30,7 +33,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.1.0";
+const PANEL_VERSION = "1.1.2";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -222,6 +225,12 @@ template.innerHTML = `
   <style>
     ${SELECTION_STYLES}
     :host {
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-body-size: 14px;
+      --font-control-size: 13px;
+      --font-caption-size: 12px;
+      --icon-size: 18px;
+      --icon-small-size: 16px;
       --panel-bg: var(--primary-background-color, #f5f7fb);
       --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
       --surface-alt: var(--secondary-background-color, color-mix(in srgb, var(--surface-bg) 94%, var(--panel-bg) 6%));
@@ -252,7 +261,10 @@ template.innerHTML = `
       display: block;
       height: 100%;
       color: var(--text-color);
-      font-family: var(--paper-font-body1_-_font-family, var(--primary-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif));
+      font-family: var(--font-ui);
+      font-size: var(--font-body-size);
+      font-weight: 400;
+      line-height: 1.5;
     }
 
     :host(:fullscreen) {
@@ -321,9 +333,53 @@ template.innerHTML = `
       transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color) 45%);
       background: color-mix(in srgb, var(--surface-bg) 92%, var(--accent-soft) 8%);
+    }
+
+    /* Text actions share a layout even when rendered inside nested cards. */
+    .panel-button,
+    .text-button,
+    .secondary-button,
+    .banner-action,
+    .panel-form .send-button,
+    .confirmation-actions > button,
+    .auth-actions button,
+    .onboarding-stage button,
+    .decision-actions button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      height: auto;
+      max-width: 100%;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: var(--font-control-size);
+      font-weight: 500;
+      line-height: 1.4;
+      text-align: center;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .panel-button {
+      justify-self: start;
+      color: var(--text-color);
+    }
+
+    .panel-button-primary {
+      background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
+      border-color: transparent;
+      color: white;
+    }
+
+    .panel-button-primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent-color) 54%, black 46%);
+      border-color: transparent;
     }
 
     button:disabled,
@@ -424,7 +480,7 @@ template.innerHTML = `
     }
 
     .eyeline {
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       color: var(--muted-color);
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -451,7 +507,7 @@ template.innerHTML = `
       color: color-mix(in srgb, var(--accent-color) 78%, black 22%);
       background: linear-gradient(90deg, color-mix(in srgb, var(--brand-cyan) 13%, white 87%), color-mix(in srgb, var(--brand-blue) 10%, white 90%));
       border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       font-weight: 600;
       line-height: 1.2;
       white-space: nowrap;
@@ -472,7 +528,7 @@ template.innerHTML = `
     .empty-note,
     .timestamp,
     .label-text {
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       color: var(--muted-color);
       line-height: 1.45;
     }
@@ -509,7 +565,7 @@ template.innerHTML = `
       background: color-mix(in srgb, var(--text-color) 94%, #000 6%);
       color: var(--surface-bg);
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
       pointer-events: none;
       text-align: center;
@@ -548,7 +604,9 @@ template.innerHTML = `
     .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
-    .host-access-settings { padding: 20px; }
+    .schedule-card.host-access-settings { padding: 20px; }
+    .host-access-settings + .host-access-settings { margin-top: 16px; }
+    .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
@@ -563,12 +621,13 @@ template.innerHTML = `
 
     .confirmation-dialog p {
       color: var(--muted-color);
-      font-size: 14px;
+      font-size: var(--font-body-size);
       line-height: 1.5;
     }
 
     .confirmation-actions {
       display: flex;
+      flex-wrap: wrap;
       justify-content: flex-end;
       gap: 8px;
       margin-top: 4px;
@@ -624,7 +683,7 @@ template.innerHTML = `
     .information-summary {
       margin: 0;
       color: var(--muted-color);
-      font-size: 14px;
+      font-size: var(--font-body-size);
       line-height: 1.55;
     }
 
@@ -648,7 +707,7 @@ template.innerHTML = `
       border-radius: 9px;
       background: var(--surface-muted);
       color: var(--muted-color);
-      font-size: 13px;
+      font-size: var(--font-control-size);
       line-height: 1.45;
     }
 
@@ -666,7 +725,7 @@ template.innerHTML = `
       background: var(--surface-bg);
       color: var(--text-color);
       font: inherit;
-      font-weight: 650;
+      font-weight: 600;
     }
 
     .information-actions {
@@ -759,7 +818,7 @@ template.innerHTML = `
     }
 
     .download-state-label {
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       font-weight: 600;
       line-height: 1;
       white-space: nowrap;
@@ -781,23 +840,24 @@ template.innerHTML = `
     }
 
     .tool-button svg,
+    .thread-share svg,
     .icon-button svg,
     .copy-button svg,
     .download-button svg,
     .send-button svg,
     .action-button svg {
-      width: 18px;
-      height: 18px;
+      width: var(--icon-size);
+      height: var(--icon-size);
       stroke: currentColor;
       fill: none;
-      stroke-width: 2;
+      stroke-width: 1.75;
       stroke-linecap: round;
       stroke-linejoin: round;
       flex: 0 0 auto;
     }
 
     .tool-button span {
-      font-size: 14px;
+      font-size: var(--font-body-size);
       font-weight: 500;
     }
 
@@ -829,7 +889,7 @@ template.innerHTML = `
       background: transparent;
       padding: 0;
       height: 100%;
-      font-size: 14px;
+      font-size: var(--font-body-size);
       color: var(--text-color);
     }
 
@@ -878,7 +938,7 @@ template.innerHTML = `
     .section-label,
     .setting-label,
     .limit-label {
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       color: var(--muted-color);
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -895,7 +955,7 @@ template.innerHTML = `
       text-align: left;
       padding: 9px 10px;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: var(--font-control-size);
     }
 
     .browser-actions,
@@ -917,11 +977,7 @@ template.innerHTML = `
     }
 
     .text-button {
-      height: 34px;
-      padding: 0 12px;
-      border-radius: 8px;
       color: var(--muted-color);
-      font-size: 13px;
     }
 
     .send-button {
@@ -1007,7 +1063,7 @@ template.innerHTML = `
       height: 16px;
       stroke: currentColor;
       fill: none;
-      stroke-width: 2;
+      stroke-width: 1.75;
       stroke-linecap: round;
       stroke-linejoin: round;
       flex: 0 0 auto;
@@ -1017,7 +1073,7 @@ template.innerHTML = `
     .section-name,
     .project-name,
     .thread-name {
-      font-size: 14px;
+      font-size: var(--font-body-size);
       font-weight: 600;
       min-width: 0;
       overflow: hidden;
@@ -1081,6 +1137,48 @@ template.innerHTML = `
     #refresh-thread-button:focus-visible {
       border-color: var(--border-color);
       background: var(--surface-muted);
+    }
+
+    .thread-controls { position: relative; }
+    .thread-controls > .icon-button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; }
+    .thread-controls > button:hover, .thread-controls > button[aria-pressed="true"] { background: var(--surface-muted); }
+    .thread-share { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0; background: var(--surface-muted); font-size: var(--font-control-size); }
+    .thread-menu { position: absolute; top: 38px; right: 0; z-index: 8; display: grid; min-width: 200px; padding: 6px; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px #0002; }
+    .thread-menu[hidden], .bottom-panel[hidden] { display: none; }
+    .thread-menu button { text-align: left; border: 0; background: transparent; padding: 9px; font-weight: 400; }
+    .thread-menu button:hover { background: var(--surface-muted); }
+    .resource-row { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 6px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-color); font-size: var(--font-body-size); font-weight: 400; text-align: left; text-decoration: none; }
+    .resource-row:hover { background: var(--surface-muted); }
+    .resource-row svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .resource-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resource-details summary { cursor: pointer; list-style: none; }
+    .resource-details summary::-webkit-details-marker { display: none; }
+    .resource-details .resource-chevron { margin-left: auto; color: var(--muted-color); }
+    .resource-details[open] .resource-chevron { transform: rotate(180deg); }
+    .resource-details p { margin: 2px 0 6px 28px; font-size: var(--font-caption-size); color: var(--muted-color); overflow-wrap: anywhere; }
+    .bottom-panel { flex: 0 0 min(35vh, 320px); min-height: 180px; overflow: auto; border-top: 1px solid var(--border-color); background: var(--surface-bg); }
+    .bottom-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; position: sticky; top: 0; background: var(--surface-bg); z-index: 1; }
+    .bottom-panel-header .row-actions > button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
+    .bottom-panel-header button[aria-pressed="true"] { background: var(--surface-muted); color: var(--text-color); }
+    .terminal-tools > button { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; font-size: var(--font-control-size); font-weight: 500; border-radius: 8px; }
+    .terminal-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; }
+    .terminal-note { margin: 0; padding: 4px 14px; font-size: var(--font-caption-size); color: var(--muted-color); }
+    #terminal-host { height: 220px; padding: 8px; background: #171717; }
+    #terminal-host:empty { display: none; }
+    #bottom-preview[hidden], #bottom-terminal[hidden] { display: none; }
+    @media (min-width: 1481px) {
+      .shell.context-hidden { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
+      .shell.context-hidden .side-pane { display: none; }
+    }
+    @media (min-width: 881px) and (max-width: 1120px) {
+      .shell.context-hidden { grid-template-rows: minmax(0, 1fr); }
+      .shell.context-hidden .side-pane { display: none; }
+    }
+    @media (max-width: 1480px) { #toggle-context-button { display: none; } }
+    @media (max-width: 880px) {
+      .thread-share span, #toggle-activity-button { display: none; }
+      .thread-share { padding: 6px; }
+      .thread-controls { gap: 2px; }
     }
 
     .chat-list {
@@ -1194,8 +1292,8 @@ template.innerHTML = `
       border-radius: 999px;
       background: var(--surface-bg);
       color: var(--muted-color);
-      font-size: 11px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.01em;
     }
 
@@ -1220,7 +1318,7 @@ template.innerHTML = `
       border-radius: 8px;
       background: color-mix(in srgb, var(--brand-amber) 7%, var(--surface-bg) 93%);
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
     }
 
@@ -1244,12 +1342,12 @@ template.innerHTML = `
     }
 
     .onboarding-heading strong {
-      font-size: 13px;
+      font-size: var(--font-control-size);
     }
 
     .onboarding-heading span {
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .onboarding-checklist {
@@ -1282,7 +1380,7 @@ template.innerHTML = `
     }
 
     .onboarding-stage strong {
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       overflow-wrap: anywhere;
     }
 
@@ -1299,11 +1397,7 @@ template.innerHTML = `
     }
 
     .onboarding-stage button {
-      min-height: 28px;
-      padding: 0 9px;
-      color: var(--accent-color);
-      font-size: 11px;
-      font-weight: 650;
+      color: var(--text-color);
     }
 
     .auth-card {
@@ -1312,7 +1406,7 @@ template.innerHTML = `
     }
 
     .auth-card > strong {
-      font-size: 13px;
+      font-size: var(--font-control-size);
     }
 
     .auth-plan {
@@ -1321,8 +1415,8 @@ template.innerHTML = `
       border-radius: 999px;
       background: color-mix(in srgb, var(--brand-violet) 10%, var(--surface-bg) 90%);
       color: color-mix(in srgb, var(--brand-violet) 80%, var(--text-color) 20%);
-      font-size: 11px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .auth-code {
@@ -1333,7 +1427,7 @@ template.innerHTML = `
       border-radius: 8px;
       background: var(--surface-alt);
       font-size: 15px;
-      font-weight: 750;
+      font-weight: 600;
       letter-spacing: 0.08em;
       overflow-wrap: anywhere;
     }
@@ -1341,7 +1435,7 @@ template.innerHTML = `
     .auth-card p {
       margin: 0;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.45;
     }
 
@@ -1349,13 +1443,6 @@ template.innerHTML = `
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-    }
-
-    .auth-actions button {
-      min-height: 30px;
-      padding: 0 10px;
-      font-size: 11px;
-      font-weight: 650;
     }
 
     .auth-actions button.primary {
@@ -1373,7 +1460,7 @@ template.innerHTML = `
       border: 1px solid color-mix(in srgb, var(--danger-color) 20%, transparent);
       background: color-mix(in srgb, var(--danger-color) 7%, white 93%);
       color: color-mix(in srgb, var(--danger-color) 88%, black 12%);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.45;
     }
 
@@ -1392,7 +1479,7 @@ template.innerHTML = `
       border: 1px solid color-mix(in srgb, var(--brand-amber) 28%, transparent);
       background: color-mix(in srgb, var(--brand-amber) 9%, white 91%);
       color: color-mix(in srgb, var(--brand-amber) 74%, black 26%);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -1414,10 +1501,6 @@ template.innerHTML = `
     }
 
     .banner-action {
-      min-height: 28px;
-      padding: 0 10px;
-      font-size: 12px;
-      font-weight: 600;
       color: inherit;
       background: color-mix(in srgb, var(--surface-bg) 82%, transparent);
     }
@@ -1498,7 +1581,7 @@ template.innerHTML = `
 
     .approval-card h3,
     .user-input-card h3 {
-      font-size: 14px;
+      font-size: var(--font-body-size);
     }
 
     .approval-card > p,
@@ -1506,7 +1589,7 @@ template.innerHTML = `
     .decision-status,
     .decision-notice {
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
@@ -1514,7 +1597,7 @@ template.innerHTML = `
     .decision-label {
       color: var(--muted-color);
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
@@ -1528,7 +1611,7 @@ template.innerHTML = `
       border-radius: 8px;
       background: var(--surface-alt);
       font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.45;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -1544,7 +1627,7 @@ template.innerHTML = `
       overflow: auto;
       color: var(--muted-color);
       font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       overflow-wrap: anywhere;
     }
 
@@ -1552,13 +1635,6 @@ template.innerHTML = `
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-    }
-
-    .decision-actions button {
-      min-height: 32px;
-      padding: 0 12px;
-      font-size: 12px;
-      font-weight: 650;
     }
 
     .decision-actions button[data-decision="accept"],
@@ -1585,8 +1661,8 @@ template.innerHTML = `
 
     .user-input-card legend {
       padding: 0 4px;
-      font-size: 12px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .user-input-card fieldset > label:not([for$="free-text"]) {
@@ -1624,7 +1700,7 @@ template.innerHTML = `
       border: 1px solid var(--border-color);
       border-radius: 8px;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
       list-style: none;
     }
@@ -1636,7 +1712,7 @@ template.innerHTML = `
     .compact-toolbar {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       min-width: 0;
       padding-top: 6px;
       border-top: 1px solid var(--border-color);
@@ -1653,16 +1729,15 @@ template.innerHTML = `
     .composer-utility {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
       color: var(--muted-color);
-      font-size: 12px;
-      line-height: 1.25;
+      font-size: var(--font-control-size);
+      line-height: 20px;
     }
 
     .composer-utility + .composer-utility {
-      padding-left: 8px;
-      border-left: 1px solid var(--border-color);
+      padding-left: 0;
     }
 
     .composer-utility-label {
@@ -1676,33 +1751,42 @@ template.innerHTML = `
       border-radius: 4px;
       background: transparent;
       color: var(--text-color);
-      font-size: 12px;
-      line-height: 1.25;
-      padding: 4px 2px;
+      min-height: 32px;
+      font-size: var(--font-control-size);
+      line-height: 20px;
+      padding: 6px;
       text-align: left;
       white-space: nowrap;
     }
 
     .composer-limits-button:hover {
       border-color: transparent;
-      background: transparent;
-      color: var(--accent-color);
+      background: var(--surface-muted);
+      color: var(--text-color);
     }
 
     .compact-select {
+      appearance: none;
       width: auto;
       min-width: 0;
-      height: 30px;
-      padding: 0 20px 0 0;
+      height: 32px;
+      max-width: 180px;
+      padding: 6px 28px 6px 8px;
       border: 0;
       border-radius: 4px;
       background: transparent;
-      font-size: 12px;
+      font-size: var(--font-control-size);
+      line-height: 20px;
+      text-overflow: ellipsis;
     }
 
     .compact-select:hover {
-      color: var(--accent-color);
+      background: var(--surface-muted);
+      color: var(--text-color);
     }
+
+    .composer-select { position: relative; display: flex; align-items: center; min-width: 0; }
+    .composer-select > svg { position: absolute; right: 8px; width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.75; fill: none; pointer-events: none; }
 
     .message-list {
       padding: 10px 16px 6px;
@@ -1781,7 +1865,7 @@ template.innerHTML = `
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
-      font-size: 14px;
+      font-size: var(--font-body-size);
       line-height: 1.6;
       background: transparent;
       color: inherit;
@@ -1796,7 +1880,7 @@ template.innerHTML = `
       height: 30px;
       border-radius: 8px;
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       background: color-mix(in srgb, var(--surface-bg) 94%, #f4f8fb 6%);
     }
 
@@ -1818,7 +1902,7 @@ template.innerHTML = `
       padding: 7px 9px;
       border-bottom: 1px solid var(--border-color);
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
@@ -1829,14 +1913,14 @@ template.innerHTML = `
       white-space: pre;
       overflow: auto;
       font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
-      font-size: 13px;
+      font-size: var(--font-control-size);
       line-height: 1.55;
       user-select: text;
       -webkit-user-select: text;
     }
 
     .event-row {
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       color: var(--muted-color);
       padding-left: 38px;
       user-select: text;
@@ -1859,8 +1943,8 @@ template.innerHTML = `
 
     .generated-image-kicker {
       color: var(--muted-color);
-      font-size: 11px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
@@ -1868,8 +1952,8 @@ template.innerHTML = `
     .generated-image-filename {
       overflow: hidden;
       color: var(--text-color);
-      font-size: 14px;
-      font-weight: 650;
+      font-size: var(--font-body-size);
+      font-weight: 600;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -1877,7 +1961,7 @@ template.innerHTML = `
     .generated-image-meta,
     .generated-image-pending {
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -1887,8 +1971,8 @@ template.innerHTML = `
       padding: 0 10px;
       border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color) 68%);
       background: var(--surface-bg);
-      font-size: 12px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .generated-image-actions {
@@ -1902,8 +1986,8 @@ template.innerHTML = `
       padding: 0 10px;
       border-color: var(--border-color);
       background: var(--surface-bg);
-      font-size: 12px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .generated-image-thumbnail {
@@ -1964,7 +2048,7 @@ template.innerHTML = `
       border-radius: 999px;
       background: color-mix(in srgb, var(--surface-bg) 94%, #edf4ff 6%);
       border: 1px solid var(--border-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       color: var(--muted-color);
     }
 
@@ -1993,7 +2077,7 @@ template.innerHTML = `
       min-height: 16px;
       margin: -4px 0 0;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -2130,7 +2214,7 @@ template.innerHTML = `
       border-radius: 8px;
       background: color-mix(in srgb, var(--accent-color) 5%, var(--surface-bg) 95%);
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
     }
 
@@ -2139,7 +2223,7 @@ template.innerHTML = `
     }
 
     .file-name {
-      font-size: 13px;
+      font-size: var(--font-control-size);
       font-weight: 600;
       color: var(--text-color);
       overflow: hidden;
@@ -2182,7 +2266,7 @@ template.innerHTML = `
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.5;
       user-select: text;
       -webkit-user-select: text;
@@ -2257,7 +2341,7 @@ template.innerHTML = `
       min-width: 72px;
       text-align: center;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       font-variant-numeric: tabular-nums;
     }
 
@@ -2266,7 +2350,7 @@ template.innerHTML = `
     .pdf-preview-download {
       gap: 5px;
       white-space: nowrap;
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .preview-actions {
@@ -2334,7 +2418,7 @@ template.innerHTML = `
       border: 1px solid var(--border-color);
       background: color-mix(in srgb, var(--surface-bg) 95%, #eef3fb 5%);
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .tool-chip.available {
@@ -2450,7 +2534,7 @@ template.innerHTML = `
       background: transparent;
       color: var(--text-color);
       text-align: left;
-      font-size: 12px;
+      font-size: var(--font-caption-size);
     }
 
     .app-menu-item:hover,
@@ -2467,7 +2551,7 @@ template.innerHTML = `
     .app-menu-feedback {
       padding: 6px 9px 4px;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -2488,8 +2572,8 @@ template.innerHTML = `
     }
 
     .rail-brand-icon svg {
-      width: 18px;
-      height: 18px;
+      width: var(--icon-size);
+      height: var(--icon-size);
       stroke: currentColor;
       fill: none;
       stroke-width: 1.8;
@@ -2514,13 +2598,13 @@ template.innerHTML = `
     .limit-label,
     .mini-limit-name {
       font-size: 10px;
-      font-weight: 650;
+      font-weight: 600;
       letter-spacing: 0.06em;
     }
 
     .title {
       font-size: 15px;
-      font-weight: 650;
+      font-weight: 600;
     }
 
     .main-header .title {
@@ -2547,7 +2631,7 @@ template.innerHTML = `
       padding: 0;
       border: 0;
       background: transparent;
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -2579,6 +2663,9 @@ template.innerHTML = `
     }
 
     .desktop-destination {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       min-height: 34px;
       padding: 0 10px;
       border: 0;
@@ -2586,7 +2673,7 @@ template.innerHTML = `
       background: transparent;
       color: var(--muted-color);
       text-align: left;
-      font-size: 13px;
+      font-size: var(--font-control-size);
     }
 
     .desktop-destination:hover,
@@ -2597,7 +2684,7 @@ template.innerHTML = `
     }
 
     .desktop-destination[aria-current="page"] {
-      font-weight: 650;
+      font-weight: 500;
     }
 
     .desktop-feature-surface {
@@ -2623,8 +2710,8 @@ template.innerHTML = `
     }
 
     .desktop-feature-title {
-      font-size: clamp(24px, 3vw, 34px);
-      font-weight: 650;
+      font-size: 24px;
+      font-weight: 600;
       letter-spacing: -0.02em;
     }
 
@@ -2635,6 +2722,9 @@ template.innerHTML = `
       color: var(--muted-color);
       line-height: 1.55;
     }
+
+    .desktop-destination svg { width: var(--icon-size); height: var(--icon-size); flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .desktop-feature-surface h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }
 
     .desktop-feature-content {
       display: grid;
@@ -2654,27 +2744,23 @@ template.innerHTML = `
 
     .desktop-section-label {
       color: var(--muted-color);
-      font-size: 11px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
 
     .desktop-toolbar > button,
     .settings-panel > button {
-      min-height: 34px;
-      padding: 0 12px;
       border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
       background: var(--accent-surface);
       color: var(--text-color);
-      font-size: 12px;
-      font-weight: 650;
     }
 
     .desktop-form-intro {
       margin: 0;
       color: var(--muted-color);
-      font-size: 13px;
+      font-size: var(--font-control-size);
       line-height: 1.5;
     }
 
@@ -2691,7 +2777,7 @@ template.innerHTML = `
     .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 78%, var(--text-color) 22%); font-weight: 600; }
     .desktop-table td.is-negative { color: var(--danger-color); font-weight: 600; }
     .desktop-table-actions { min-width: 180px; }
-    .desktop-action-note { color: var(--muted-color); font-size: 11px; }
+    .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
     .native-tools-list {
@@ -2711,21 +2797,21 @@ template.innerHTML = `
 
     .native-tool-row + .native-tool-row { border-top: 1px solid var(--border-color); }
     .native-tool-row dt, .native-tool-row dd { margin: 0; }
-    .native-tool-row dt { color: var(--text-color); font-size: 13px; font-weight: 600; }
-    .native-tool-state { font-size: 12px; font-weight: 650; }
+    .native-tool-row dt { color: var(--text-color); font-size: var(--font-control-size); font-weight: 600; }
+    .native-tool-state { font-size: var(--font-caption-size); font-weight: 600; }
     .native-tool-state.available { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); }
     .native-tool-state.unavailable { color: var(--danger-color); }
     .native-tool-state.checking { color: var(--muted-color); }
 
     .desktop-subheading {
       margin: 18px 0 -6px;
-      font-size: 14px;
+      font-size: var(--font-body-size);
     }
 
     .desktop-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: var(--font-control-size);
     }
 
     .desktop-table th,
@@ -2738,17 +2824,14 @@ template.innerHTML = `
 
     .desktop-table th {
       color: var(--muted-color);
-      font-size: 11px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
     .desktop-table td button {
-      margin: 2px 6px 2px 0;
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 11px;
+      margin: 4px 8px 4px 0;
     }
 
     .desktop-form {
@@ -2761,11 +2844,20 @@ template.innerHTML = `
     }
 
     .desktop-field { display: grid; gap: 5px; }
-    .desktop-field-label { color: var(--muted-color); font-size: 12px; }
+    .desktop-field-label { color: var(--muted-color); font-size: var(--font-caption-size); }
     .desktop-field input,
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .mcp-setup { display: grid; gap: 16px; min-width: 0; }
+    .mcp-setup button { min-height: 40px; }
+    .mcp-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+    .mcp-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; border-radius: 16px; text-align: left; white-space: normal; }
+    .mcp-choice span { font-weight: 400; color: var(--muted-color); line-height: 1.5; }
+    .mcp-steps { margin: 0; padding-left: 24px; max-width: 760px; }
+    .mcp-steps li { padding: 8px 0 16px 8px; line-height: 1.6; }
+    .mcp-steps p { color: var(--muted-color); margin: 8px 0; }
+    .mcp-oauth summary { cursor: pointer; margin-bottom: 12px; }
+    .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
     .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
@@ -2784,7 +2876,7 @@ template.innerHTML = `
     .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
-    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: 13px; line-height: 1.5; }
+    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
     .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
     .schedule-advanced .schedule-card { margin-top: 10px; }
@@ -2797,8 +2889,8 @@ template.innerHTML = `
     @media (max-width: 540px) {
       .schedule-editor { gap: 20px; }
       .schedule-card { padding-inline: 14px; }
-      .schedule-row { gap: 10px; font-size: 14px; }
-      .schedule-row input, .schedule-row select { max-width: 60%; font-size: 14px; }
+      .schedule-row { gap: 10px; font-size: var(--font-body-size); }
+      .schedule-row input, .schedule-row select { max-width: 60%; font-size: var(--font-body-size); }
       .schedule-advanced .schedule-row { flex-wrap: wrap; gap: 0; padding-block: 8px; }
       .schedule-advanced .schedule-row input { max-width: 100%; width: 100%; text-align: left; }
     }
@@ -2807,15 +2899,17 @@ template.innerHTML = `
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice[role="alert"] { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .desktop-notice[role="alert"] > span { flex-basis: 100%; }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
     .settings-card { margin: 16px 0; }
-    .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
+    .preference-save-status { color: var(--muted-color); font-size: var(--font-control-size); min-height: 20px; }
     .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
     .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
-    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: 13px; }
+    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: var(--font-control-size); }
     .skill-group .desktop-table { margin: 0; }
-    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
-    .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
+    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 600; }
 
     .rail-actions .tool-button {
       min-height: 36px;
@@ -2826,7 +2920,7 @@ template.innerHTML = `
     #new-direct-chat-button {
       border-color: transparent;
       background: var(--surface-muted);
-      font-weight: 650;
+      font-weight: 600;
     }
 
     #new-direct-chat-button:hover,
@@ -2861,7 +2955,7 @@ template.innerHTML = `
     }
 
     .search-shell input {
-      font-size: 13px;
+      font-size: var(--font-control-size);
       outline: 0;
     }
 
@@ -2895,15 +2989,15 @@ template.innerHTML = `
     }
 
     .section-name {
-      font-size: 12px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.01em;
     }
 
     .section-count {
       display: inline-flex;
-      min-width: 18px;
-      height: 18px;
+      min-width: var(--icon-size);
+      height: var(--icon-size);
       margin-left: 2px;
       padding: 0 5px;
       align-items: center;
@@ -2912,7 +3006,7 @@ template.innerHTML = `
       background: var(--surface-muted);
       color: var(--muted-color);
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1;
     }
 
@@ -2969,8 +3063,8 @@ template.innerHTML = `
 
     .project-name,
     .thread-name {
-      font-size: 14px;
-      font-weight: 560;
+      font-size: var(--font-body-size);
+      font-weight: 500;
       line-height: 1.25;
     }
 
@@ -3109,8 +3203,8 @@ template.innerHTML = `
       background: transparent;
       color: var(--text-color);
       text-align: left;
-      font-size: 12px;
-      font-weight: 560;
+      font-size: var(--font-caption-size);
+      font-weight: 500;
     }
 
     .rail-menu-item:hover,
@@ -3139,7 +3233,7 @@ template.innerHTML = `
       margin: 2px 8px 6px;
       padding: 7px 8px;
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
     }
 
@@ -3161,7 +3255,7 @@ template.innerHTML = `
 
     .project-head.active .project-name,
     .chat-select.active .thread-name {
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .chat-select.active {
@@ -3188,7 +3282,7 @@ template.innerHTML = `
       border-radius: 6px;
       background: var(--surface-bg);
       font-size: 10px;
-      font-weight: 650;
+      font-weight: 600;
       letter-spacing: 0.02em;
     }
 
@@ -3321,7 +3415,7 @@ template.innerHTML = `
       gap: 9px;
       min-width: 0;
       color: var(--muted-color);
-      font-size: 13px;
+      font-size: var(--font-control-size);
       line-height: 1.45;
     }
 
@@ -3341,13 +3435,13 @@ template.innerHTML = `
     }
 
     .activity-spinner {
-      width: 15px;
-      height: 15px;
+      width: var(--icon-small-size);
+      height: var(--icon-small-size);
     }
 
     .step-spinner {
-      width: 13px;
-      height: 13px;
+      width: var(--icon-small-size);
+      height: var(--icon-small-size);
       border-width: 2px;
     }
 
@@ -3372,9 +3466,8 @@ template.innerHTML = `
     .run-step-wrap {
       position: relative;
       flex: 0 0 auto;
-      justify-self: center;
-      max-width: calc(100% - 34px);
-      transform: translateX(-17px);
+      justify-self: start;
+      max-width: 100%;
     }
 
     .run-step-chip {
@@ -3389,7 +3482,8 @@ template.innerHTML = `
       background: var(--surface-bg);
       color: var(--muted-color);
       box-shadow: var(--shadow-soft);
-      font-size: 12.5px;
+      font-size: var(--font-control-size);
+      line-height: 20px;
       white-space: nowrap;
     }
 
@@ -3429,7 +3523,7 @@ template.innerHTML = `
     .run-step-tooltip {
       position: absolute;
       z-index: 12;
-      right: 0;
+      left: 0;
       bottom: calc(100% + 9px);
       width: min(360px, calc(100vw - 32px));
       max-height: min(480px, calc(100vh - 48px));
@@ -3471,22 +3565,22 @@ template.innerHTML = `
     }
 
     .run-step-tooltip-title {
-      font-size: 12px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .run-step-failure {
       display: block;
       margin-top: 2px;
       color: var(--error-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
     }
 
     .run-step-section-label {
       color: var(--muted-color);
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
@@ -3508,7 +3602,7 @@ template.innerHTML = `
       padding: 3px 5px;
       border-radius: 7px;
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.35;
     }
 
@@ -3528,15 +3622,15 @@ template.innerHTML = `
 
     .run-stage-marker {
       display: grid;
-      width: 18px;
-      height: 18px;
+      width: var(--icon-size);
+      height: var(--icon-size);
       place-items: center;
       border: 1px solid var(--border-color);
       border-radius: 999px;
       background: var(--surface-bg);
       color: var(--muted-color);
       font-size: 9px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .run-stage-item.inProgress .run-stage-marker {
@@ -3560,7 +3654,7 @@ template.innerHTML = `
       border-radius: 8px;
       background: color-mix(in srgb, var(--accent-color) 5%, var(--surface-muted) 95%);
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .run-step-agent-glyph {
@@ -3593,7 +3687,7 @@ template.innerHTML = `
       gap: 8px;
       align-items: start;
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.4;
     }
 
@@ -3671,8 +3765,8 @@ template.innerHTML = `
     }
 
     .bubble-text {
-      font-family: var(--paper-font-body1_-_font-family, var(--primary-font-family, system-ui, sans-serif));
-      font-size: 14px;
+      font-family: var(--font-ui);
+      font-size: var(--font-body-size);
       line-height: 1.6;
     }
 
@@ -3733,10 +3827,28 @@ template.innerHTML = `
       grid-row: 1;
     }
 
+    .composer-actions { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 6px; }
+    .composer-actions .icon-button { width: 32px; min-width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 50%; background: transparent; color: var(--muted-color); }
+    .composer-actions .icon-button:hover:not(:disabled) { background: var(--surface-muted); color: var(--text-color); }
+    .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
+    .context-track { opacity: .2; }
+    .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
+    .context-usage-button[data-level="high"] { color: var(--brand-amber); }
+    .context-usage-button[data-level="full"] { color: var(--danger-color); }
+    .context-usage-button[data-level="unknown"] .context-track { stroke-dasharray: 2 3; }
+    @media (prefers-reduced-motion: reduce) { .context-fill { transition: none; } }
+    :host([data-motion="reduced"]) .context-fill { transition: none; }
+
     .composer-shell .composer .send-button {
-      grid-column: 3;
-      grid-row: 2;
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--text-color);
+      color: var(--surface-bg);
     }
+
+    .composer-shell .composer .send-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text-color) 85%, var(--surface-bg)); transform: none; }
 
     .composer-shell .composer-diagnostics {
       grid-column: 2;
@@ -3767,7 +3879,7 @@ template.innerHTML = `
 
     .composer-shell.retry-ready .composer-status {
       color: color-mix(in srgb, var(--brand-amber) 70%, var(--text-color) 30%);
-      font-weight: 650;
+      font-weight: 600;
     }
 
     .composer textarea {
@@ -3779,6 +3891,9 @@ template.innerHTML = `
       outline: 0;
       background: transparent;
       box-shadow: none;
+      font-size: var(--font-body-size);
+      line-height: 1.5;
+      resize: none;
     }
 
     .composer-status:empty {
@@ -3825,8 +3940,8 @@ template.innerHTML = `
 
     .empty-state-main .empty-state-kicker {
       color: var(--muted-color);
-      font-size: 11px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
@@ -3839,7 +3954,7 @@ template.innerHTML = `
 
     .empty-state-main .empty-note {
       max-width: 360px;
-      font-size: 14px;
+      font-size: var(--font-body-size);
     }
 
     .empty-state-cta {
@@ -3854,15 +3969,15 @@ template.innerHTML = `
       border-radius: 8px;
       color: var(--surface-bg);
       background: color-mix(in srgb, var(--accent-color) 64%, var(--text-color) 36%);
-      font-weight: 650;
+      font-weight: 600;
     }
 
     .empty-state-cta svg {
-      width: 18px;
-      height: 18px;
+      width: var(--icon-size);
+      height: var(--icon-size);
       stroke: currentColor;
       fill: none;
-      stroke-width: 2;
+      stroke-width: 1.75;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
@@ -3886,14 +4001,14 @@ template.innerHTML = `
     }
 
     .interaction-summary strong {
-      font-size: 13px;
-      font-weight: 700;
+      font-size: var(--font-control-size);
+      font-weight: 600;
     }
 
     .interaction-summary-count,
     .interaction-summary-cue {
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .interaction-summary-cue {
@@ -3924,14 +4039,14 @@ template.innerHTML = `
 
     .error-title {
       color: var(--text-color);
-      font-size: 12px;
-      font-weight: 700;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
       line-height: 1.35;
     }
 
     .error-message {
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
@@ -3953,8 +4068,8 @@ template.innerHTML = `
       border-radius: 6px;
       color: var(--text-color);
       background: var(--surface-bg);
-      font-size: 11px;
-      font-weight: 650;
+      font-size: var(--font-caption-size);
+      font-weight: 600;
     }
 
     .error-action.primary {
@@ -3967,7 +4082,7 @@ template.innerHTML = `
       height: 14px;
       stroke: currentColor;
       fill: none;
-      stroke-width: 2;
+      stroke-width: 1.75;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
@@ -4078,14 +4193,14 @@ template.innerHTML = `
     }
 
     .activity-center-heading h3 {
-      font-size: 13px;
-      font-weight: 650;
+      font-size: var(--font-control-size);
+      font-weight: 600;
       letter-spacing: -0.01em;
     }
 
     .activity-center-summary {
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.55;
     }
 
@@ -4105,7 +4220,7 @@ template.innerHTML = `
       gap: 8px;
       min-height: 28px;
       color: var(--text-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
     }
 
     .activity-agent-markers {
@@ -4140,7 +4255,7 @@ template.innerHTML = `
 
     .activity-agent-attention {
       color: var(--danger-color);
-      font-weight: 650;
+      font-weight: 600;
     }
 
     .activity-center-section[data-section="subagents"] .context-row {
@@ -4185,7 +4300,7 @@ template.innerHTML = `
     }
 
     .side-pane .section-label {
-      font-size: 11px;
+      font-size: var(--font-caption-size);
       font-weight: 600;
       letter-spacing: 0.04em;
     }
@@ -4216,7 +4331,7 @@ template.innerHTML = `
       border-radius: 0;
       background: transparent;
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       font-weight: 600;
     }
 
@@ -4266,12 +4381,12 @@ template.innerHTML = `
     .usage-limit-grid .mini-limit-name,
     .usage-limit-grid .limit-subline {
       color: var(--muted-color);
-      font-size: 11px;
+      font-size: var(--font-caption-size);
     }
 
     .usage-limit-grid .limit-value {
-      font-size: 14px;
-      font-weight: 700;
+      font-size: var(--font-body-size);
+      font-weight: 600;
     }
 
     .usage-limit-grid .mini-limit-bar {
@@ -4292,7 +4407,7 @@ template.innerHTML = `
     .usage-note {
       margin: 0;
       color: var(--muted-color);
-      font-size: 12px;
+      font-size: var(--font-caption-size);
       line-height: 1.5;
     }
 
@@ -4388,6 +4503,9 @@ template.innerHTML = `
     }
 
     @media (max-width: 880px) {
+      .composer-shell .composer .send-button,
+      .composer-shell .composer-actions .icon-button,
+      .composer-shell .attachment-toolbar .icon-button { min-width: 44px; width: 44px; height: 44px; }
       .shell.desktop-route { display: block; overflow: hidden; }
       .shell.desktop-route .main-pane { min-height: 100dvh; height: 100dvh; }
       .shell.desktop-route .main-pane { display: flex; }
@@ -4395,7 +4513,7 @@ template.innerHTML = `
       .shell.desktop-route .main-pane > .desktop-feature-surface { order: 1; min-height: 0; }
       .desktop-feature-surface { padding: 24px 16px 40px; }
       .desktop-feature-header { margin-bottom: 22px; }
-      .desktop-feature-title { font-size: 27px; }
+      .desktop-feature-title { font-size: 24px; }
       .desktop-table thead { display: none; }
       .desktop-table,
       .desktop-table tbody,
@@ -4403,7 +4521,7 @@ template.innerHTML = `
       .desktop-table td { display: block; width: 100%; }
       .desktop-table tr { padding: 12px 0; border-bottom: 1px solid var(--border-color); }
       .desktop-table td { display: grid; grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); gap: 12px; padding: 5px 0; border: 0; }
-      .desktop-table td::before { content: attr(data-label); color: var(--muted-color); font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; }
+      .desktop-table td::before { content: attr(data-label); color: var(--muted-color); font-size: var(--font-caption-size); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
       .desktop-table-actions { display: flex !important; flex-wrap: wrap; gap: 6px; padding-top: 9px !important; }
       .desktop-table-actions::before { display: none; }
       .desktop-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
@@ -4552,7 +4670,7 @@ template.innerHTML = `
       .composer-limits-button,
       .compact-select {
         min-height: 44px;
-        font-size: 14px;
+        font-size: var(--font-body-size);
       }
 
       .composer-diagnostics {
@@ -4567,8 +4685,8 @@ template.innerHTML = `
         padding: 0 2px;
         color: var(--muted-color);
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 650;
+        font-size: var(--font-caption-size);
+        font-weight: 600;
         list-style: none;
       }
 
@@ -4580,7 +4698,7 @@ template.innerHTML = `
         content: "Show";
         margin-left: auto;
         color: var(--accent-color);
-        font-size: 11px;
+        font-size: var(--font-caption-size);
       }
 
       .composer-diagnostics[open] > summary::after {
@@ -4809,7 +4927,7 @@ template.innerHTML = `
     }
   </style>
   <div class="shell">
-    <aside class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
+    <div class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
       <div class="rail-header">
         <div class="rail-brand">
           <span class="rail-brand-icon" id="rail-brand-icon" aria-hidden="true"></span>
@@ -4847,7 +4965,7 @@ template.innerHTML = `
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
-    </aside>
+    </div>
 
     <main class="pane main-pane">
       <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite"></section>
@@ -4862,10 +4980,15 @@ template.innerHTML = `
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-context" id="mobile-context-toggle" aria-label="Context" aria-controls="context-drawer" aria-expanded="false"></button>
         </div>
-        <div class="row-actions">
+        <div class="row-actions thread-controls">
           <div class="status-text" id="thread-status-text"></div>
-          <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
-          <button class="icon-button" type="button" data-action="refresh-thread" title="Refresh" aria-label="Refresh" id="refresh-thread-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="thread-menu" id="chat-menu-button"></button>
+          <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-activity" title="Show activity" aria-label="Show activity" aria-pressed="false" id="toggle-activity-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-bottom-panel" title="Toggle bottom panel" aria-label="Toggle bottom panel" aria-controls="bottom-panel" aria-expanded="false" id="toggle-bottom-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-context" title="Toggle side panel" aria-label="Toggle side panel" aria-controls="context-drawer" aria-expanded="true" id="toggle-context-button"></button>
+          <div class="thread-menu" id="thread-menu" hidden></div>
+          <span id="share-status" class="sr-only" role="status"></span>
         </div>
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
@@ -4896,7 +5019,13 @@ template.innerHTML = `
         </div>
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
-          <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
+          <div class="composer-actions">
+            <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
+            </button>
+            <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
+            <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
+          </div>
         </div>
         <details class="composer-diagnostics" id="composer-diagnostics" open>
           <summary>Chat settings and limits</summary>
@@ -4907,6 +5036,16 @@ template.innerHTML = `
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
       </div>
+      <section class="bottom-panel" id="bottom-panel" aria-label="Workspace panel" hidden>
+        <div class="bottom-panel-header"><div class="row-actions"><button type="button" data-action="bottom-preview" aria-pressed="true" id="bottom-preview-button">File preview</button><button type="button" data-action="bottom-terminal" aria-pressed="false" id="bottom-terminal-button">Terminal</button></div><button class="icon-button small" type="button" data-action="toggle-bottom-panel" aria-label="Hide bottom panel">×</button></div>
+        <div id="bottom-preview"></div>
+        <div id="bottom-terminal" hidden>
+          <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
+          <div class="terminal-tools"><button type="button" data-action="open-terminal" id="open-terminal-button">Open terminal</button><button type="button" data-action="close-terminal" id="close-terminal-button" disabled>Close terminal</button><span class="label-text" id="terminal-status" role="status">Terminal closed</span></div>
+          <div id="terminal-host"></div>
+          <p class="terminal-note">Ctrl+C interrupts. Ctrl+Shift+M returns focus to Close terminal. Closing this page or changing chats ends the session; hiding the panel keeps it running. Sessions end after 30 minutes.</p>
+        </div>
+      </section>
     </main>
 
     <button class="mobile-drawer-scrim" type="button" data-action="close-mobile-drawer" id="mobile-drawer-scrim" aria-label="Close panel drawer" hidden></button>
@@ -4936,10 +5075,10 @@ template.innerHTML = `
             </div>
             <div class="artifact-list" id="artifact-list"></div>
           </div>
-          <div class="side-section">
+          <div id="preview-home"><div class="side-section" id="artifact-preview-section">
             <span class="section-label">Preview</span>
             <div class="artifact-preview" id="artifact-preview"></div>
-          </div>
+          </div></div>
         </section>
         <section class="side-panel" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
           <div class="side-section">
@@ -4995,7 +5134,7 @@ const icons = {
   refresh: iconSvg('<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v6h-6"></path>'),
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
   folderUpload: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M12 17V9"></path><path d="m8.5 12.5 3.5-3.5 3.5 3.5"></path>'),
-  send: iconSvg('<path d="m22 2-7 20-4-9-9-4 20-7Z"></path><path d="M22 2 11 13"></path>'),
+  send: iconSvg('<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>'),
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   user: iconSvg('<path d="M20 21a8 8 0 1 0-16 0"></path><circle cx="12" cy="7" r="4"></circle>'),
@@ -5018,6 +5157,14 @@ const icons = {
   package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>'),
   menu: iconSvg('<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>'),
   panelRight: iconSvg('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path>'),
+  panelBottom: iconSvg('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 15h18"></path>'),
+  activity: iconSvg('<circle cx="5" cy="6" r="2"></circle><circle cx="5" cy="18" r="2"></circle><path d="M11 6h9M11 12h9M11 18h9M3 12h4"></path>'),
+  pullRequest: iconSvg('<circle cx="6" cy="5" r="2"></circle><circle cx="6" cy="19" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="M6 7v10M18 17v-7a5 5 0 0 0-5-5h-2m3-3-3 3 3 3"></path>'),
+  file: iconSvg('<path d="M14 3H5v18h14V8Z"></path><path d="M14 3v5h5M8 13h8M8 17h5"></path>'),
+  calendar: iconSvg('<rect x="4" y="5" width="16" height="16" rx="3"></rect><path d="M8 3v4m8-4v4M4 11h16"></path>'),
+  spark: iconSvg('<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"></path>'),
+  puzzle: iconSvg('<path d="M9 3H4v6a3 3 0 1 1 0 6v5h5a3 3 0 1 1 6 0h5v-5a3 3 0 1 0 0-6V4h-5a3 3 0 1 0-6 0"></path>'),
+  settings: iconSvg('<path d="m9 3-.5 3-2 1L4 6l-2 4 2.5 2v2L2 16l2 4 2.5-1 2 1 .5 3h6l.5-3 2-1 2.5 1 2-4-2.5-2v-2L22 10l-2-4-2.5 1-2-1L15 3Z" transform="translate(1 0) scale(.9)"></path><circle cx="12" cy="12" r="3"></circle>'),
 };
 
 class CodexBridgePanel extends HTMLElement {
@@ -5025,6 +5172,19 @@ class CodexBridgePanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
+    const terminalStyle = document.createElement("style");
+    terminalStyle.textContent = terminalCss;
+    this.shadowRoot.append(terminalStyle);
+    this._terminal = new WorkspaceTerminalView(
+      this.shadowRoot.getElementById("terminal-host"),
+      (operation, payload) => this._callWS("terminal", { operation, ...payload }),
+      (message, active) => {
+        this._terminalActive = active;
+        this.shadowRoot.getElementById("terminal-status").textContent = message;
+        this.shadowRoot.getElementById("close-terminal-button").disabled = !active;
+        this._renderTerminalAvailability();
+      },
+    );
     this._hass = null;
     this._preferences = { ...DEFAULT_PREFERENCES };
     this._preferenceKey = null;
@@ -5036,6 +5196,11 @@ class CodexBridgePanel extends HTMLElement {
     this._threads = [];
     this._selectedProjectId = null;
     this._selectedThreadId = null;
+    this._sharedThreadChecked = false;
+    this._chatMenuOpen = false;
+    this._contextVisible = true;
+    this._bottomPanelOpen = false;
+    this._activityView = false;
     this._threadSelectionEpoch = 0;
     this._threadSnapshotEpoch = 0;
     this._threadRefreshGraceUntil = 0;
@@ -5138,6 +5303,7 @@ class CodexBridgePanel extends HTMLElement {
     this._announcedInteractionIds = new Set();
     this._interactionExpiryTimer = null;
     this._promptMutations = new Map();
+    this._cancellingThreads = new Set();
     this._promptMutation = null;
     this._suspendUiRefresh = false;
     this._queuedRender = false;
@@ -5193,6 +5359,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     this._stopPolling();
     this._stopEventSubscription();
@@ -5300,7 +5467,11 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("app-menu-toggle"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("refresh-thread-button"), icons.refresh);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("chat-menu-button"), icons.more);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("share-chat-button"), icons.upload, "Share");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-activity-button"), icons.activity);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-bottom-button"), icons.panelBottom);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-context-button"), icons.panelRight);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.upload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
@@ -5478,6 +5649,10 @@ class CodexBridgePanel extends HTMLElement {
   _handleClick(event) {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
+    if (this._chatMenuOpen && !eventTarget?.closest("#thread-menu, #chat-menu-button")) {
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+    }
     if (
       this._appMenuOpen
       && !eventTarget?.closest("#app-menu, #app-menu-toggle")
@@ -5496,6 +5671,10 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const action = actionTarget.dataset.action;
+    if (actionTarget.closest("#thread-menu")) {
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+    }
     if (
       actionTarget.closest(".rail-pane")
       && !["toggle-project-actions", "toggle-thread-actions"].includes(action)
@@ -5503,6 +5682,27 @@ class CodexBridgePanel extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "toggle-chat-menu":
+        this._chatMenuOpen = !this._chatMenuOpen;
+        this._renderChatControls();
+        if (this._chatMenuOpen) this.shadowRoot.querySelector("#thread-menu button")?.focus();
+        break;
+      case "share-chat": void this._shareChat(); break;
+      case "toggle-context":
+        this._contextVisible = !this._contextVisible;
+        this._renderChatControls();
+        break;
+      case "toggle-activity":
+        this._activityView = !this._activityView;
+        this._showSideTab("activity", actionTarget);
+        this._renderActivityCenter();
+        this._renderChatControls();
+        break;
+      case "toggle-bottom-panel": this._toggleBottomPanel(); break;
+      case "bottom-preview": this._selectBottomTab("preview"); break;
+      case "bottom-terminal": this._selectBottomTab("terminal"); break;
+      case "open-terminal": void this._terminal.open(this._selectedThreadId); break;
+      case "close-terminal": void this._terminal.close(); break;
       case "toggle-app-menu":
         this._appMenuOpen = !this._appMenuOpen;
         this._renderAppMenu();
@@ -5526,14 +5726,10 @@ class CodexBridgePanel extends HTMLElement {
         this._sideTab = ["activity", "files", "usage", "system"].includes(actionTarget.dataset.sideTab)
           ? actionTarget.dataset.sideTab
           : "activity";
-        this._renderSideTabs();
+        this._showSideTab(this._sideTab, actionTarget);
         break;
       case "open-usage":
-        this._sideTab = "usage";
-        this._renderSideTabs();
-        if (this._contextDrawerMedia?.matches) {
-          this._toggleMobileDrawer("context", actionTarget);
-        }
+        this._showSideTab("usage", actionTarget);
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -5545,7 +5741,14 @@ class CodexBridgePanel extends HTMLElement {
         this._openProjectFormForCreate();
         break;
       case "refresh-thread":
+        this._chatMenuOpen = false;
+        this._renderChatControls();
         this._refreshActiveThread();
+        break;
+      case "edit-current-chat":
+        this._chatMenuOpen = false;
+        this._renderChatControls();
+        this._openThreadFormForEdit(this._selectedThreadId);
         break;
       case "retry-error":
         this._retryError();
@@ -6022,6 +6225,13 @@ class CodexBridgePanel extends HTMLElement {
       this._closeAppMenu({ restoreFocus: true });
       return;
     }
+    if (event.key === "Escape" && this._chatMenuOpen) {
+      event.preventDefault();
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+      this.shadowRoot.getElementById("chat-menu-button")?.focus();
+      return;
+    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -6129,7 +6339,7 @@ class CodexBridgePanel extends HTMLElement {
         control.className = "desktop-destination";
         control.dataset.action = "select-desktop-destination";
         control.dataset.destination = destination.id;
-        control.textContent = destination.label;
+        this._setTrustedButtonContent(control, icons[destination.icon], destination.label);
         nav.append(control);
       }
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
@@ -6204,6 +6414,7 @@ class CodexBridgePanel extends HTMLElement {
   _selectDesktopDestination(destination) {
     const allowed = DESTINATIONS.some((item) => item.id === destination);
     this._activeDestination = allowed ? destination : "chats";
+    if (this._activeDestination !== "chats") void this._terminal.close();
     this._closeMobileDrawer({ restoreFocus: false });
     if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
     this._render();
@@ -6218,7 +6429,7 @@ class CodexBridgePanel extends HTMLElement {
     });
   }
 
-  async _loadDesktopDestination(destination, { force = false } = {}) {
+  async _loadDesktopDestination(destination, { force = false, refreshCapabilities = false } = {}) {
     const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
     if ((state.loading && !force) || (!force && state.loaded)) return;
     const requestGeneration = destination === "settings" ? (state.agentsLoadGeneration || 0) + 1 : null;
@@ -6245,6 +6456,15 @@ class CodexBridgePanel extends HTMLElement {
         const catalogue = await this._callWS("list_plugins", workspace);
         state.data.plugins = normalizePluginsResponse(catalogue); state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
+        if (refreshCapabilities) {
+          // Status refreshes the Integration's capability cache before config reads it.
+          const status = await this._callWS("get_status");
+          if (!isCurrentSettingsRequest()) return;
+          this._mergeStatus(status);
+          const config = await this._callWS("get_config");
+          if (!isCurrentSettingsRequest()) return;
+          this._config = config;
+        }
         const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
@@ -6259,6 +6479,7 @@ class CodexBridgePanel extends HTMLElement {
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
         if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
+        else delete state.data.host_access;
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -6399,11 +6620,16 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
-    if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
+    if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
     if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
-    else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp"; }
+    else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp-choice"; }
+    else if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) {
+      this._clearDesktopFormDraft(state);
+      state.form = action === "choose-ha-mcp" ? "mcp-ha" : "mcp";
+      if (state.form === "mcp-ha") state.formDraft = { name: "home-assistant" };
+    }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
     else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
     else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
@@ -6416,11 +6642,18 @@ class CodexBridgePanel extends HTMLElement {
       else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state, { clearFormDraft: true });
     }
     else if (action === "submit-mcp") {
+      if (!this._config?.capabilities?.includes("mcp_admin_v1")) return;
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      const guided = state.form === "mcp-ha";
+      state.formError = "";
       const payload = this._desktopFormValues(target);
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      const saved = await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      if (!saved) { state.formError = state.error; state.error = ""; }
+      else if (guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
     else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -6485,6 +6718,8 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     this._renderDesktopSurface();
+    if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
+    if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
   }
 
   async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {
@@ -6515,7 +6750,7 @@ class CodexBridgePanel extends HTMLElement {
     if (route) {
       const state = this._desktopFeatures[this._activeDestination];
       const activeProjectId = this._activeProject()?.project_id || null;
-      const requestedProjectId = state.agentsRequestProjectId ?? state.agentsProjectId;
+      const requestedProjectId = Object.hasOwn(state, "agentsRequestProjectId") ? state.agentsRequestProjectId : state.agentsProjectId;
       const hasKnownSettingsProject = Object.hasOwn(state, "agentsRequestProjectId") || Object.hasOwn(state, "agentsProjectId");
       if (this._activeDestination === "settings" && !state.loading && hasKnownSettingsProject && requestedProjectId !== activeProjectId) {
         state.loaded = false;
@@ -6608,6 +6843,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderContext();
     this._renderDiagnostics();
     this._renderSideTabs();
+    this._renderChatControls();
     this._renderAppMenu();
     this._renderDesktopNavigation();
     this._renderDesktopSurface();
@@ -6860,10 +7096,7 @@ class CodexBridgePanel extends HTMLElement {
     const activity = this._runActivityForThread(activeThread);
     this.shadowRoot.getElementById("thread-status-text").textContent =
       this._threadStatusLabel(activeThread, activity);
-    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
-      "hidden",
-      !activeThread || !activity.busy
-    );
+
   }
 
   _renderComposerState(activeThread) {
@@ -6875,6 +7108,7 @@ class CodexBridgePanel extends HTMLElement {
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const retryable = mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
+    const cancelling = this._cancellingThreads.has(this._selectedThreadId);
     const locked = Boolean(mutation);
     const draft = retryable ? mutation.prompt : this._draftForThread(this._selectedThreadId);
     if (promptInput.value !== draft) {
@@ -6884,14 +7118,20 @@ class CodexBridgePanel extends HTMLElement {
       ? "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
-    sendButton.disabled = !activeThread || (locked && !retryable) || (!retryable && !promptInput.value.trim());
-    const actionLabel = retryable ? "Retry" : isRunning ? "Steer" : "Send";
-    const actionTitle = retryable
+    const hasDraft = Boolean(promptInput.value.trim());
+    const stop = isRunning && !hasDraft && !mutation;
+    sendButton.disabled = !activeThread || cancelling || (locked && !retryable) || (!stop && !retryable && !hasDraft);
+    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? "Steer" : "Send";
+    const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable
       ? "Retry this message safely"
-      : isRunning
-        ? "Queue steering for this running Codex turn"
-        : "Send message to Codex";
-    this._setTrustedButtonContent(sendButton, icons.send, actionLabel);
+      : stop ? "Stop the running Codex turn"
+        : isRunning ? "Steer the running Codex turn" : "Send message to Codex";
+    sendButton.dataset.action = stop || cancelling ? "stop-run" : "send-prompt";
+    this._setTrustedButtonContent(sendButton, stop || cancelling ? icons.stop : icons.send, actionLabel);
+    const stopButton = this.shadowRoot.getElementById("stop-run-button");
+    stopButton.classList.toggle("hidden", !isRunning || stop);
+    stopButton.disabled = cancelling;
+    this._renderContextUsage();
     sendButton.setAttribute("aria-label", actionLabel);
     sendButton.title = actionTitle;
     sendButton.dataset.tooltip = actionTitle;
@@ -9610,8 +9850,23 @@ class CodexBridgePanel extends HTMLElement {
         source_count: sourceCount,
       },
     });
+    const resources = chatResources(this._events);
+    const key = JSON.stringify([this._selectedThreadId, this._activityView, resources, this._artifacts, this._activeThread?.attachments, model, activity.stages]);
+    if (key === this._resourceRenderKey) return;
+    this._resourceRenderKey = key;
+    const openResources = new Set([...container.querySelectorAll("details[open]")].map((item) => item.dataset.resource));
+    const focusedResource = container.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.dataset.resource : null;
     container.replaceChildren();
-    const visibleSections = new Set(["outputs", "subagents", "background", "browser", "sources"]);
+    if (!this._activityView) this._renderResourceSections(container, resources, openResources);
+    if (this._activityView) {
+      const plan = document.createElement("section");
+      plan.className = "activity-center-section";
+      plan.append(this._textElement("h3", "", "Current activity"));
+      plan.append(this._textElement("p", "activity-center-summary", activity.currentActivity || activity.action || "No active run"));
+      for (const stage of activity.stages || []) plan.append(this._textElement("p", "activity-center-summary", `${stage.status === "completed" ? "✓ " : ""}${stage.label}`));
+      container.append(plan);
+    }
+    const visibleSections = new Set(this._activityView ? ["subagents", "background", "browser"] : ["subagents"]);
     for (const section of model.sections.filter((item) => visibleSections.has(item.id))) {
       const card = document.createElement("section");
       card.className = "activity-center-section";
@@ -9687,6 +9942,166 @@ class CodexBridgePanel extends HTMLElement {
       }
       container.append(card);
     }
+    if (focusedResource) [...container.querySelectorAll("[data-resource]")].find((item) => item.dataset.resource === focusedResource)?.focus();
+  }
+
+  _renderResourceSections(container, resources, openResources) {
+    const section = (id, title, action, label) => {
+      const card = document.createElement("section");
+      card.className = "activity-center-section";
+      card.dataset.section = id;
+      const heading = document.createElement("div");
+      heading.className = "activity-center-heading";
+      heading.append(this._textElement("h3", "", title));
+      if (action) {
+        const add = this._actionButton("icon-button small section-action", action, label);
+        if (action === "select-side-tab") add.dataset.sideTab = "files";
+        this._appendTrustedIcon(add, icons.plus);
+        heading.append(add);
+      }
+      card.append(heading);
+      container.append(card);
+      return card;
+    };
+    const rowContent = (row, icon, label) => {
+      this._appendTrustedIcon(row, icon);
+      row.append(this._textElement("span", "resource-name", label));
+      row.title = label;
+    };
+    const link = (item, icon) => {
+      const row = document.createElement("a");
+      row.className = "resource-row";
+      row.href = item.href;
+      row.target = "_blank";
+      row.rel = "noopener noreferrer";
+      row.dataset.resource = item.href;
+      rowContent(row, icon, item.title);
+      return row;
+    };
+    const prs = section("pull-requests", "Pull requests");
+    for (const item of resources.pullRequests) {
+      const detail = document.createElement("details");
+      detail.className = "resource-details";
+      detail.dataset.resource = item.href;
+      detail.open = openResources.has(item.href);
+      const summary = document.createElement("summary");
+      summary.className = "resource-row";
+      summary.dataset.resource = item.href;
+      rowContent(summary, icons.pullRequest, item.title);
+      const chevron = document.createElement("span");
+      chevron.className = "resource-chevron";
+      this._appendTrustedIcon(chevron, icons.chevronDown);
+      summary.append(chevron);
+      const description = this._textElement("p", "", "Linked in this chat. Open GitHub for the current review and merge status.");
+      detail.append(summary, description, link({ ...item, title: "Open pull request" }, icons.external));
+      prs.append(detail);
+    }
+    if (!resources.pullRequests.length) prs.append(this._textElement("p", "activity-center-summary", "Pull requests linked in this chat appear here."));
+    const outputs = section("outputs", "Outputs", "select-side-tab", "View all workspace files");
+    for (const artifact of this._artifacts.slice(0, 100)) {
+      const row = this._actionButton("resource-row", "open-artifact-preview", `Open ${artifact.filename || "file"}`);
+      row.dataset.artifactId = artifact.artifact_id;
+      row.dataset.resource = artifact.artifact_id;
+      rowContent(row, icons.file, artifact.relative_path || artifact.filename || "File");
+      outputs.append(row);
+    }
+    if (!this._artifacts.length) outputs.append(this._textElement("p", "activity-center-summary", "Files created in this workspace appear here."));
+    const sources = section("sources", "Sources", "upload-file", "Add source files");
+    for (const attachment of (this._activeThread?.attachments || []).slice(0, 100)) {
+      const detail = document.createElement("details");
+      detail.className = "resource-details";
+      detail.dataset.resource = attachment.attachment_id;
+      detail.open = openResources.has(attachment.attachment_id);
+      const summary = document.createElement("summary");
+      summary.className = "resource-row";
+      summary.dataset.resource = attachment.attachment_id;
+      rowContent(summary, icons.file, attachment.relative_path || attachment.filename || "Uploaded file");
+      detail.append(summary, this._textElement("p", "", `Uploaded to this chat${attachment.size_bytes ? ` · ${this._formatBytes(attachment.size_bytes)}` : ""}`));
+      sources.append(detail);
+    }
+    for (const item of resources.sources) sources.append(link(item, icons.external));
+    if (!resources.sources.length && !this._activeThread?.attachments?.length) sources.append(this._textElement("p", "activity-center-summary", "Uploaded files and links from this chat appear here."));
+  }
+
+  _showSideTab(tab, trigger) {
+    this._sideTab = tab;
+    this._contextVisible = true;
+    this._renderSideTabs();
+    this._renderChatControls();
+    if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") this._toggleMobileDrawer("context", trigger);
+  }
+
+  _toggleBottomPanel() {
+    this._bottomPanelOpen = !this._bottomPanelOpen;
+    this.shadowRoot.getElementById("bottom-panel").hidden = !this._bottomPanelOpen;
+    this.shadowRoot.getElementById(this._bottomPanelOpen ? "bottom-preview" : "preview-home").append(this.shadowRoot.getElementById("artifact-preview-section"));
+    this._renderChatControls();
+    if (this._bottomPanelOpen) this._terminal.resize();
+  }
+
+  _selectBottomTab(tab) {
+    for (const name of ["preview", "terminal"]) {
+      this.shadowRoot.getElementById(`bottom-${name}`).hidden = name !== tab;
+      this.shadowRoot.getElementById(`bottom-${name}-button`).setAttribute("aria-pressed", String(name === tab));
+    }
+    if (tab === "terminal") this._terminal.resize();
+  }
+
+  _renderTerminalAvailability() {
+    const button = this.shadowRoot.getElementById("open-terminal-button");
+    const supported = this._config?.capabilities?.includes("workspace_terminal_v1");
+    button.disabled = !supported || !this._activeThread || this._activeThread.mode === "observe" || Boolean(this._activeThread.archived_at) || this._runActivityForThread().busy || this._terminalActive;
+    button.title = !supported ? "Update the App to use the workspace terminal" : this._activeThread?.mode === "observe" ? "Choose Edit workspace or Full auto to use the terminal" : "Open an isolated workspace terminal";
+  }
+
+  _renderChatControls() {
+    this._renderTerminalAvailability();
+    const root = this.shadowRoot;
+    root.querySelector(".shell").classList.toggle("context-hidden", !this._contextVisible);
+    root.getElementById("toggle-context-button").setAttribute("aria-expanded", String(this._contextVisible));
+    root.getElementById("toggle-bottom-button").setAttribute("aria-expanded", String(this._bottomPanelOpen));
+    root.getElementById("toggle-activity-button").setAttribute("aria-pressed", String(this._activityView && this._sideTab === "activity"));
+    root.getElementById("share-chat-button").disabled = !this._selectedThreadId;
+    root.getElementById("chat-menu-button").disabled = !this._selectedThreadId;
+    root.getElementById("chat-menu-button").setAttribute("aria-expanded", String(this._chatMenuOpen));
+    const menu = root.getElementById("thread-menu");
+    menu.hidden = !this._chatMenuOpen;
+    if (!this._chatMenuOpen) return;
+    const menuKey = `${this._selectedThreadId}:${this._activeThread?.archived_at || ""}`;
+    if (this._chatMenuKey === menuKey) return;
+    this._chatMenuKey = menuKey;
+    menu.replaceChildren();
+    for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
+      const button = this._actionButton("", action, label);
+      button.textContent = label;
+      button.dataset.threadId = this._selectedThreadId;
+      menu.append(button);
+    }
+  }
+
+  async _shareChat() {
+    const url = authenticatedChatUrl(window.location, this._selectedThreadId);
+    if (!url) return;
+    try {
+      await this._writeClipboardText(url);
+      this.shadowRoot.getElementById("share-status").textContent = "Chat link copied. Home Assistant sign-in is required.";
+      this._setTooltipTarget(this.shadowRoot.getElementById("share-chat-button"), "Link copied · Home Assistant sign-in required");
+    } catch {
+      this._setError(new Error("Could not copy the chat link. Check your browser's clipboard permission."));
+      this._render();
+    }
+  }
+
+  _renderContextUsage() {
+    const button = this.shadowRoot.getElementById("context-usage-button");
+    if (!button) return;
+    button.hidden = !this._activeThread;
+    const usage = contextUsage(this._activeThread?.context_usage);
+    button.setAttribute("aria-label", `${usage.label}. Open usage details`);
+    button.title = usage.label;
+    this._setTooltipTarget(button, usage.label);
+    button.dataset.level = usage.percent === null ? "unknown" : usage.percent >= 95 ? "full" : usage.percent >= 80 ? "high" : "normal";
+    button.querySelector(".context-fill").setAttribute("stroke-dasharray", `${usage.percent ?? 0} 100`);
   }
 
   _renderUsagePanel() {
@@ -9710,7 +10125,9 @@ class CodexBridgePanel extends HTMLElement {
       ["Weekly window", limits?.secondary ? this._formatPercent(limits.secondary.remaining_percent) : "Unavailable"],
       ["Snapshot", limits?.updated_at ? this._timeAgo(limits.updated_at) : "Unavailable"],
     ], "context-row");
-    container.replaceChildren(grid, summary, details);
+    const context = this._textElement("p", "usage-note context-usage-summary", contextUsage(this._activeThread?.context_usage).label);
+    const contextNote = this._textElement("p", "usage-note", "Last reported context for this chat. Codex may compact earlier conversation as the context fills; this is separate from your account limits.");
+    container.replaceChildren(context, contextNote, grid, summary, details);
   }
 
   _renderSideTabs() {
@@ -9785,6 +10202,17 @@ class CodexBridgePanel extends HTMLElement {
     )
       ? [preserveThread, ...listedThreads]
       : listedThreads;
+    if (!this._sharedThreadChecked) {
+      this._sharedThreadChecked = true;
+      const sharedId = new URL(window.location.href).searchParams.get("thread");
+      const shared = this._threads.find((thread) => thread.thread_id === sharedId);
+      if (shared) {
+        this._setSelectedThreadId(shared.thread_id);
+        this._selectedProjectId = shared.project_id;
+      } else if (sharedId) {
+        throw new Error("This shared chat is no longer available on this Home Assistant.");
+      }
+    }
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
       this._setSelectedThreadId(null);
     }
@@ -10137,6 +10565,10 @@ class CodexBridgePanel extends HTMLElement {
   _setSelectedThreadId(threadId, { force = false } = {}) {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
+      if (nextThreadId !== this._selectedThreadId) {
+        void this._terminal.close();
+        this._chatMenuOpen = false;
+      }
       this._stopPolling();
       this._clearArtifactRefreshRetry();
       this._runActivityDetailsOpen = false;
@@ -10165,6 +10597,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _retireThreadInteractionState(nextThreadId) {
+    if (this._terminal.session?.thread_id !== nextThreadId) void this._terminal.close();
     this._clearInteractionExpiryTimer();
     this._pendingInteractions = [];
     this._interactionMutations.clear();
@@ -10453,15 +10886,21 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _cancelRun() {
-    if (!this._selectedThreadId || this._activeThread?.status !== "running") {
-      return;
-    }
+    const threadId = this._selectedThreadId;
+    if (!threadId || !this._runActivityForThread().busy || this._cancellingThreads.has(threadId)) return;
+    this._cancellingThreads.add(threadId);
+    this._renderComposerState(this._activeThread);
     try {
-      await this._callWS("cancel_run", { thread_id: this._selectedThreadId });
-      this._clearError();
-      await this._refreshActiveThread();
+      await this._callWS("cancel_run", { thread_id: threadId });
+      if (threadId === this._selectedThreadId) {
+        this._clearError();
+        await this._refreshActiveThread();
+      }
     } catch (error) {
-      this._setError(error);
+      if (threadId === this._selectedThreadId) this._setError(error);
+    } finally {
+      this._cancellingThreads.delete(threadId);
+      this._renderComposerState(this._activeThread);
     }
   }
 
@@ -11052,11 +11491,7 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
-    this._sideTab = "files";
-    this._renderSideTabs();
-    if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") {
-      this._toggleMobileDrawer("context", trigger);
-    }
+    this._showSideTab("files", trigger);
 
     if (artifactId !== this._selectedArtifactId) {
       void this._selectArtifact(artifactId);
@@ -11455,8 +11890,9 @@ class CodexBridgePanel extends HTMLElement {
     helper.value = text;
     document.body.appendChild(helper);
     helper.select();
-    document.execCommand("copy");
-    helper.remove();
+    try {
+      if (!document.execCommand("copy")) throw new Error("Clipboard unavailable");
+    } finally { helper.remove(); }
   }
 
   _startPolling() {
@@ -12023,6 +12459,10 @@ class CodexBridgePanel extends HTMLElement {
     }
     const acceptedEvent = result.event;
     this._events = result.state.events;
+    if (acceptedEvent.event_type === "context.updated" && this._activeThread) {
+      this._activeThread = { ...this._activeThread, context_usage: acceptedEvent.payload.context_usage };
+      this._renderUsagePanel();
+    }
     if (
       acceptedEvent.event_type === "message.created" &&
       typeof acceptedEvent.payload?.client_request_id === "string"
@@ -12790,7 +13230,11 @@ class CodexBridgePanel extends HTMLElement {
       control.append(this._textElement("span", "label-text", "Select a chat."));
       return control;
     }
-    control.append(renderControl());
+    const field = document.createElement("span");
+    field.className = "composer-select";
+    field.append(renderControl());
+    this._appendTrustedIcon(field, icons.chevronDown);
+    control.append(field);
     return control;
   }
 
