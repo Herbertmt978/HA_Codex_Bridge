@@ -45,16 +45,18 @@ def test_nested_terminal_resize_interrupt_and_exit(tmp_path):
             if readable:
                 output += os.read(master, 4096)
         assert b"terminal-test> " in output
-        os.write(master, b"printf ready > ready\n")
+        # Redirection creates an empty file before the command writes output.
+        # Publish each result only after its producer has finished successfully.
+        os.write(master, b"printf ready > ready.tmp && mv ready.tmp ready\n")
         assert wait_for_file("ready") == "ready"
         termios.tcsetwinsize(master, (30, 100))
-        os.write(master, b"stty size > size\n")
+        os.write(master, b"stty size > size.tmp && mv size.tmp size\n")
         assert wait_for_file("size").strip() == "30 100"
         os.write(master, b"sleep 120\n")
         time.sleep(0.1)
         os.write(master, b"\x03")
         time.sleep(0.1)
-        os.write(master, b"printf resumed > resumed\n")
+        os.write(master, b"printf resumed > resumed.tmp && mv resumed.tmp resumed\n")
         assert wait_for_file("resumed") == "resumed"
         os.write(master, b"exit 7\n")
         assert process.wait(timeout=5) == 7
