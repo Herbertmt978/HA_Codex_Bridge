@@ -10,6 +10,8 @@ All notable App changes are recorded here.
 - Preserves connection drafts when retrying a failed Settings refresh.
 - Gives action buttons consistent spacing and touch targets across settings,
   sign-in, skills, plugins and permission dialogs.
+- Aligns typography, navigation icons and composer controls with the desktop
+  Codex style while retaining theme and larger-text preferences.
 - Explains HACS update discovery delays and the legacy HACS update-icon workaround.
 - Pairs with Integration and panel 1.1.2; the App's access permissions are unchanged.
 - Bundles the Sigstore-verified Codex runtime `0.155.1`.
