@@ -1651,9 +1651,11 @@ def test_close_during_restart_backoff_prevents_another_process(
 def _pid_is_running(pid: int) -> bool:
     if sys.platform.startswith("linux"):
         status = Path(f"/proc/{pid}/status")
-        if not status.exists():
+        try:
+            text = status.read_text(encoding="utf-8")
+        except (FileNotFoundError, ProcessLookupError):
             return False
-        return "State:\tZ" not in status.read_text(encoding="utf-8")
+        return "State:\tZ" not in text
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -1743,7 +1745,9 @@ def test_home_assistant_lifespan_owns_one_app_server_client(tmp_path: Path) -> N
     with TestClient(app):
         assert managed.start_calls == 1
         assert managed.close_calls == 0
+        assert app.state.host_access._closed is False
     assert managed.close_calls == 1
+    assert app.state.host_access._closed is True
 
 
 def test_external_lifespan_never_constructs_an_app_server_client(

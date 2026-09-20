@@ -32,6 +32,7 @@ _ARTIFACT_ERROR_MESSAGES = {
 }
 _FEATURE_ERROR_MESSAGES = {
     "capability_unavailable": "This App version does not support this feature. Update it and try again",
+    "host_access_unavailable": "Host access is unavailable or consent changed. Open Settings to review it.",
     "automation_conflict": "The automation is busy or must be paused first",
     "automation_invalid": "The automation settings are invalid",
     "automation_not_found": "The automation no longer exists",
@@ -84,6 +85,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_answer_interaction,
         ws_list_artifacts,
         ws_create_workspace_archive,
+        ws_host_access,
+        ws_enable_host_access,
+        ws_revoke_host_access,
         ws_list_automations,
         ws_get_automation,
         ws_create_automation,
@@ -499,8 +503,9 @@ async def ws_get_thread(
         vol.Required("title"): str,
         vol.Optional("project_id"): vol.Any(None, str),
         vol.Optional("mode", default="full-auto"): vol.In(
-            ["observe", "edit", "full-auto"]
+            ["observe", "edit", "full-auto", "haos-full-access"]
         ),
+        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
         vol.Optional("model_override"): vol.Any(None, str),
         vol.Optional("thinking_override"): vol.Any(None, str),
     }
@@ -521,6 +526,7 @@ async def ws_create_thread(
             msg.get("project_id"),
             msg.get("model_override"),
             msg.get("thinking_override"),
+            **({"host_access_grant": msg["host_access_grant"]} if "host_access_grant" in msg else {}),
         ),
     )
 
@@ -530,7 +536,8 @@ async def ws_create_thread(
         vol.Required("type"): f"{DOMAIN}/update_thread",
         vol.Required("thread_id"): str,
         vol.Optional("title"): vol.Any(None, str),
-        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto"]),
+        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto", "haos-full-access"]),
+        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
         vol.Optional("model_override"): vol.Any(None, str),
         vol.Optional("thinking_override"): vol.Any(None, str),
     }
@@ -543,7 +550,7 @@ async def ws_update_thread(
 ) -> None:
     updates = {
         key: msg[key]
-        for key in ("title", "mode", "model_override", "thinking_override")
+        for key in ("title", "mode", "model_override", "thinking_override", "host_access_grant")
         if key in msg
     }
     await _async_handle(
@@ -1163,8 +1170,10 @@ async def ws_get_automation(hass, connection, msg) -> None:
         vol.Required("target"): vol.All(dict, vol.Length(max=16)),
         vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
         vol.Optional("mode", default="observe"): vol.In(
-            ["observe", "edit", "full-auto"]
+            ["observe", "edit", "full-auto", "haos-full-access"]
         ),
+        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
+        vol.Optional("host_unattended_approved"): bool,
         vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
         vol.Optional("thinking"): vol.Any(
             None, vol.All(str, vol.Length(min=1, max=160))
@@ -1175,7 +1184,7 @@ async def ws_get_automation(hass, connection, msg) -> None:
 async def ws_create_automation(hass, connection, msg) -> None:
     payload = {
         key: msg[key]
-        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking")
+        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved")
         if key in msg
     }
     payload.setdefault("mode", "observe")
@@ -1197,7 +1206,9 @@ async def ws_create_automation(hass, connection, msg) -> None:
         vol.Optional("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
         vol.Optional("target"): vol.All(dict, vol.Length(max=16)),
         vol.Optional("schedule"): vol.All(dict, vol.Length(max=16)),
-        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto"]),
+        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto", "haos-full-access"]),
+        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
+        vol.Optional("host_unattended_approved"): bool,
         vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
         vol.Optional("thinking"): vol.Any(
             None, vol.All(str, vol.Length(min=1, max=160))
@@ -1217,6 +1228,8 @@ async def ws_update_automation(hass, connection, msg) -> None:
             "mode",
             "model",
             "thinking",
+            "host_access_grant",
+            "host_unattended_approved",
         )
         if key in msg
     }
@@ -1671,3 +1684,27 @@ async def ws_delete_agents(hass, connection, msg) -> None:
         msg,
         lambda client: client.async_delete_agents(msg.get("project_id")),
     )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/host_access"})
+@websocket_api.async_response
+async def ws_host_access(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_host_access())
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/enable_host_access",
+    vol.Required("scope_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    vol.Required("acknowledged"): bool,
+})
+@websocket_api.async_response
+async def ws_enable_host_access(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_enable_host_access(
+        msg["scope_revision"], msg["acknowledged"],
+    ))
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/revoke_host_access"})
+@websocket_api.async_response
+async def ws_revoke_host_access(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_revoke_host_access())

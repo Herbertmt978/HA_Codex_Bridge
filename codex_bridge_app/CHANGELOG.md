@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.1.0
+
+- Adds the optional Codex Host Access App for explicitly authorised root work
+  on Home Assistant OS. The normal Bridge App keeps its existing permissions.
+- Shows the complete access warning before enablement. A ready companion goes
+  straight to acknowledgement; missing or unavailable Apps get setup guidance.
+- Lets administrators select host access for individual chats and schedules,
+  revoke it, and review the additional unattended warning for scheduled work.
+- Invalidates saved host selections after revocation or an environment change.
+- Recommends the optional HA-MCP server for Home Assistant tasks, with setup
+  links in Settings and installation guidance explaining connection requirements.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.0` without changing its Integration API compatibility.
+
 ## 1.0.6
 
 - Adds optional browser tools for public websites: navigation, page inspection,

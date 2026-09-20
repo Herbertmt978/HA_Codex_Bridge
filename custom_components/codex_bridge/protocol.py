@@ -61,6 +61,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "web_search_v1",
         "image_generation_v1",
         "browser_v1",
+        "host_access_v1",
     }
 )
 _KNOWN_PROBLEM_CODES = frozenset(
@@ -81,6 +82,7 @@ _KNOWN_PROBLEM_CODES = frozenset(
         "automation_not_found",
         "automation_revision_conflict",
         "bad_request",
+        "host_access_unavailable",
         "bridge_problem",
         "capabilities_conflict",
         "capabilities_error",

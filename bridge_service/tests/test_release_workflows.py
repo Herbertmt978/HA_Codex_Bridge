@@ -285,6 +285,26 @@ def test_codex_updater_uses_scoped_app_token_and_guarded_auto_merge() -> None:
     assert "steps.create-update-pr.outputs.pull-request-commits-verified == 'true'" in merge_condition
 
 
+def test_codex_updater_preserves_companion_release_projections() -> None:
+    document, source = _workflow("codex-update")
+    _, policy = _workflow("ci")
+    projections = {"codex_host_access_app/config.yaml", "codex_host_access_app/CHANGELOG.md"}
+    patterns = re.findall(r"allowed='([^']+)'", source + "\n" + policy)
+    assert len(patterns) == 3
+    for pattern in patterns:
+        for path in projections:
+            assert re.fullmatch(pattern, path), path
+        assert not re.fullmatch(pattern, "codex_host_access_app/Dockerfile")
+        assert not re.fullmatch(pattern, "codex_host_access_app/rootfs/start.sh")
+    for job_name, action, key in (
+        ("generate", "actions/upload-artifact@", "path"),
+        ("pull-request", "peter-evans/create-pull-request@", "add-paths"),
+    ):
+        step = next(step for step in document["jobs"][job_name]["steps"]
+                    if str(step.get("uses", "")).startswith(action))
+        assert projections <= set(step["with"][key].splitlines())
+
+
 def test_workflow_policy_rejects_mutated_automation_update_pull_requests() -> None:
     document, _ = _workflow("ci")
     policy_job = document["jobs"]["workflow-policy"]

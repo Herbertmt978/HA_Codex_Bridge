@@ -5,7 +5,7 @@ ARG TARGETARCH
 LABEL \
     io.hass.type="app" \
     io.hass.arch="amd64" \
-    io.hass.version="1.0.6"
+    io.hass.version="1.1.0"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -45,7 +45,7 @@ RUN set -eux; \
     install -d -o root -g root -m 0755 /opt/codex-browser/bin; \
     install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-browser/bin/bwrap; \
     rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
-    chmod 0755 /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
+    chmod 0755 /usr/local/bin/codex-app-entrypoint /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
       /usr/local/bin/bwrap /opt/codex/bin/bwrap; \
     chmod 0444 /usr/local/share/codex-bridge/sandbox-contract.json; \
     chmod 0755 /usr/local/libexec/codex-bridge/*.py; \
@@ -56,8 +56,10 @@ RUN set -eux; \
 
 EXPOSE 8766
 
-ENV CODEX_BRIDGE_APP_VERSION="1.0.6" \
-    CODEX_BRIDGE_VERSION="0.7.9" \
+ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
+
+ENV CODEX_BRIDGE_APP_VERSION="1.1.0" \
+    CODEX_BRIDGE_VERSION="0.8.0" \
     CODEX_BRIDGE_CODEX_VERSION="0.155.1" \
     CODEX_BRIDGE_ARCH="amd64" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="f353f8f2b526927c9de0dc744a1173644003d087e351412b2095c07a0c017aff" \

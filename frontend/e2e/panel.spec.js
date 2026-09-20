@@ -93,6 +93,66 @@ async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
 }
 
+for (const width of [390, 1280]) {
+  for (const installed of [false, true]) {
+    test(`host access warning is usable at ${width}px with App ${installed ? "ready" : "missing"}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      const panel = page.locator("codex-bridge-panel");
+      await expect(panel.locator("#new-project-button")).toBeVisible();
+      await page.evaluate((ready) => {
+        const element = document.querySelector("codex-bridge-panel");
+        element._stopPolling();
+        element._config = { ...element._config, capabilities: ["host_access_v1"] };
+        const original = element._callWS.bind(element);
+        const status = {
+          state: ready ? "ready" : "not_paired", enabled: false,
+          warnings: [
+            ["Commands and services", "Codex can run commands as root on this Home Assistant OS machine, install or run software, manage containers and services, and restart or stop Home Assistant."],
+            ["Files and credentials", "Codex can read, change or delete host files, including Home Assistant configuration, app data, backups and mounted storage. This includes secrets, integration tokens and saved sign-in credentials accessible to root, including Codex sign-in data."],
+            ["Internet and local network", "Codex can use this machine's internet and local-network connections. Stored credentials may allow access to other systems, including Proxmox or another VM, with the permissions those credentials grant."],
+            ["Data sent outside Home Assistant", "File contents and command output returned to Codex can be sent to the model provider. Network commands can send data to other services."],
+            ["Risk to your home", "Incorrect instructions or malicious content encountered during work could delete data, expose credentials or interrupt household automations."],
+            ["Stopping and revoking access", "Stop or revoke blocks further Bridge requests and attempts to stop tracked commands. It cannot undo completed changes. Root commands can change these controls or start work that continues afterwards."],
+          ].map(([title, description]) => ({ title, description })),
+          disclosure: { scope_revision: "a".repeat(64), hostname: "HAOS-DEV", os_version: "18.3" },
+        };
+        element._callWS = async (method, args) => method === "host_access" ? status : method === "enable_host_access" ? { ...status, enabled: true, grant_id: "b".repeat(32) } : original(method, args);
+        element._showThreadForm = true;
+        element._renderedThreadFormKey = "";
+        element._render();
+      }, installed);
+      const mode = panel.locator("#thread-mode-select");
+      await mode.selectOption("haos-full-access");
+      const dialog = panel.getByRole("dialog", { name: "Allow Codex full access to Home Assistant OS?" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText("Files and credentials");
+      await expect(mode).not.toHaveValue("haos-full-access");
+      const bounds = await dialog.boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
+      const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+      expect(accessibility.violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath("host-access-warning.png") });
+      if (installed) {
+        await expect(dialog.getByRole("link")).toHaveCount(0);
+        const enable = dialog.getByRole("button", { name: "Enable host access" });
+        await expect(enable).toBeDisabled();
+        await dialog.getByRole("checkbox").check();
+        await enable.click();
+        await expect(dialog).toBeHidden();
+        await expect(mode).toHaveValue("haos-full-access");
+      } else {
+        await expect(dialog.getByRole("link", { name: "Host Access installation instructions" })).toBeVisible();
+        await expect(dialog.locator("#confirm-host-access")).toHaveCount(0);
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+        await expect(dialog).toBeHidden();
+      }
+    });
+  }
+}
+
 test("settings persist appearance and keep themed menus usable on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

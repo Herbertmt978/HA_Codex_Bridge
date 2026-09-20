@@ -2,6 +2,7 @@ import { renderScheduleForm, scheduleSummary } from "./scheduled-tasks.js";
 import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
+import { HOST_MODE, HOST_LABEL } from "./host-access.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -233,8 +234,8 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     section.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
     return section;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, schedule: scheduleSummary(row.schedule, defaultTimezone) }));
-  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
+  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
@@ -351,6 +352,13 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    const recommendation = documentRef.createElement("section");
+    recommendation.className = "desktop-note";
+    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
+    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
+    recommendation.append(guide); panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource"))); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
@@ -370,7 +378,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents")); panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App, and account credentials remain in its private storage. Full auto allows work inside the selected workspace and enabled tools; it does not grant access to the VM, Home Assistant files or unrestricted networking.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -397,6 +405,16 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
+    if (config?.capabilities?.includes("host_access_v1")) {
+      const host = state.data?.host_access;
+      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
+      card.append(text(documentRef, "h3", HOST_LABEL),
+        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
+        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
+      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
+      panel.append(card);
+    }
   }
   return section;
 }
@@ -430,7 +448,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   // Input handlers sync the draft snapshot because those edits are already in
   // the DOM. Programmatic draft resets must still invalidate the rendered view.
   const inputs = JSON.stringify({
-    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined }, timezone, hasActiveProject, activeProjectId,
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined }, timezone, hasActiveProject, activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,

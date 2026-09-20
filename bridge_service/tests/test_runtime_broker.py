@@ -488,6 +488,7 @@ def _broker(
     image_generation_authority: object | None = None,
     browser_broker: object | None = None,
     browser_dynamic_tools_enabled: bool = False,
+    host_access: object | None = None,
     provider_admission_check: Callable[[], bool] | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
@@ -503,6 +504,7 @@ def _broker(
         image_generation_authority=image_generation_authority,
         browser_broker=browser_broker,
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+        host_access=host_access,
         provider_admission_check=provider_admission_check,
     )
     broker.start()

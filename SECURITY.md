@@ -26,9 +26,28 @@ through to the App or Bridge.
 
 The App uses ChatGPT device login and does not use an OpenAI API key. In App
 mode, keep workspaces under `/config/workspaces`; do not mount Home Assistant
-configuration, host filesystems, or broad shares. The App fails closed when its
+configuration, host filesystems, or broad shares into the normal Bridge App. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
+
+The optional **Codex Host Access** App is a deliberate exception with a separate
+installation and explicit consent. It shares the HAOS PID namespace and, with
+Protection mode disabled, enters the host environment as root. It can access
+host files, mounted storage, credentials, containers, services and the host's
+network. The ordinary Bridge App keeps its existing permissions.
+
+Installing or privately pairing the companion does not enable it. A Home
+Assistant administrator must acknowledge the current machine-specific warning,
+then select host access for each chat or schedule. Scheduled work needs its own
+unattended acknowledgement. A changed environment or revoked grant blocks new
+work; the Bridge never silently substitutes another environment.
+
+Root access is not a containment boundary. Commands can change access controls,
+read Codex and integration credentials, or start work outside the tracked
+process group. Cancellation and revocation prevent new Bridge commands and
+attempt to stop tracked work; they cannot undo changes or guarantee termination
+of independently started work. See the complete
+[disclosure and installation guide](codex_host_access_app/DOCS.md).
 
 ## Capabilities and unattended operation
 

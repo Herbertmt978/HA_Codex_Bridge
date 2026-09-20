@@ -66,6 +66,10 @@ def _fixture(tmp_path: Path) -> Path:
     bridge_project = root / "bridge_service" / "pyproject.toml"
     bridge_project.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "bridge_service" / "pyproject.toml", bridge_project)
+    host = root / "codex_host_access_app"
+    host.mkdir()
+    for name in ("config.yaml", "CHANGELOG.md"):
+        shutil.copyfile(ROOT / "codex_host_access_app" / name, host / name)
     return root
 
 
@@ -107,6 +111,7 @@ def test_bump_patch_updates_only_managed_app_projection_files(tmp_path: Path) ->
     ).read_text(encoding="utf-8")
     changelog = (root / "codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
     assert f'version: "{next_app_version}"' in config
+    assert f'version: "{next_app_version}"' in (root / "codex_host_access_app/config.yaml").read_text(encoding="utf-8")
     assert f'io.hass.version="{next_app_version}"' in dockerfile
     assert f'CODEX_BRIDGE_APP_VERSION="{next_app_version}"' in dockerfile
     assert f"CODEX_BRIDGE_APP_VERSION={next_app_version}" in run
@@ -141,6 +146,7 @@ def test_set_version_updates_all_managed_app_projection_files(tmp_path: Path) ->
     ).read_text(encoding="utf-8")
     changelog = (root / "codex_bridge_app/CHANGELOG.md").read_text(encoding="utf-8")
     assert f'version: "{target_version}"' in config
+    assert f'version: "{target_version}"' in (root / "codex_host_access_app/config.yaml").read_text(encoding="utf-8")
     assert f'io.hass.version="{target_version}"' in dockerfile
     assert f'CODEX_BRIDGE_APP_VERSION="{target_version}"' in dockerfile
     assert f"CODEX_BRIDGE_APP_VERSION={target_version}" in run

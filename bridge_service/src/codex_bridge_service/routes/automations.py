@@ -24,7 +24,9 @@ class CreateAutomationRequest(BaseModel):
     prompt: str
     target: dict[str, Any]
     schedule: dict[str, Any]
-    mode: Literal["observe", "edit", "full-auto"] = "observe"
+    mode: Literal["observe", "edit", "full-auto", "haos-full-access"] = "observe"
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    host_unattended_approved: bool = Field(default=False, strict=True)
     model: str | None = Field(default=None, max_length=160)
     thinking: str | None = Field(default=None, max_length=160)
 
@@ -35,7 +37,9 @@ class UpdateAutomationRequest(BaseModel):
     prompt: str | None = None
     target: dict[str, Any] | None = None
     schedule: dict[str, Any] | None = None
-    mode: Literal["observe", "edit", "full-auto"] | None = None
+    mode: Literal["observe", "edit", "full-auto", "haos-full-access"] | None = None
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    host_unattended_approved: bool | None = Field(default=None, strict=True)
     model: str | None = Field(default=None, max_length=160)
     thinking: str | None = Field(default=None, max_length=160)
 
@@ -70,6 +74,8 @@ def create_router() -> APIRouter:
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         _authorize(request, authorization)
+        from .host_access import validate_host_selection
+        validate_host_selection(request, payload.mode, payload.host_access_grant)
         return _invoke(lambda: _store(request).create(payload.model_dump()))
 
     @router.get("/automations/scheduler")
@@ -97,6 +103,11 @@ def create_router() -> APIRouter:
     ) -> dict[str, Any]:
         _authorize(request, authorization)
         changes = payload.model_dump(exclude={"expected_revision"}, exclude_unset=True)
+        current = _invoke(lambda: _store(request).get(automation_id))
+        candidate = {**current, **changes}
+        if candidate.get("mode") == "haos-full-access":
+            from .host_access import validate_host_selection
+            validate_host_selection(request, candidate["mode"], candidate.get("host_access_grant"))
         return _invoke(
             lambda: _store(request).update(
                 automation_id, changes, expected_revision=payload.expected_revision

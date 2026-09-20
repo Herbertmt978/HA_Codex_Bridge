@@ -45,7 +45,9 @@ def mode_policy(mode: RunMode, workspace: Path) -> RuntimeModePolicy:
     }
     return RuntimeModePolicy(
         thread_sandbox="workspace-write",
-        approval_policy=("never" if mode is RunMode.FULL_AUTO else "on-request"),
+        approval_policy=(
+            "never" if mode in {RunMode.FULL_AUTO, RunMode.HAOS_FULL_ACCESS} else "on-request"
+        ),
         permission_profile="ha_bridge",
         sandbox_policy=writable,
     )

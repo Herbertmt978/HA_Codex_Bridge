@@ -188,6 +188,94 @@ function reasoningChoices(context, model = "", selected = "") {
   return options;
 }
 
+// frontend/src/host-access.js
+var HOST_MODE = "haos-full-access";
+var HOST_LABEL = "Full access · Home Assistant OS";
+var HOST_INSTALLATION_URL = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/codex_host_access_app/DOCS.md";
+var node = (doc, tag, value, className = "") => {
+  const result = doc.createElement(tag);
+  result.textContent = value;
+  if (className) result.className = className;
+  return result;
+};
+function renderHostAccessDialog(doc, state) {
+  const dialog = node(doc, "section", "", "confirmation-dialog host-access-dialog");
+  dialog.id = "host-access-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "host-access-title");
+  dialog.setAttribute("aria-describedby", "host-access-summary");
+  dialog.tabIndex = -1;
+  const title = node(doc, "h2", "Allow Codex full access to Home Assistant OS?");
+  title.id = "host-access-title";
+  const ready = state.status?.state === "ready";
+  const identity = state.status?.disclosure;
+  const summary = node(doc, "p", ready ? `Codex will run commands as root on ${identity?.hostname || "this machine"} (Home Assistant OS ${identity?.os_version || ""}).` : "This optional mode gives Codex root access to the machine running Home Assistant OS.");
+  summary.id = "host-access-summary";
+  dialog.append(title, summary);
+  if (state.loading) {
+    const loading = node(doc, "p", "Checking the Host Access App…");
+    loading.setAttribute("role", "status");
+    dialog.append(loading);
+  }
+  for (const warning of state.status?.warnings || []) {
+    const section2 = doc.createElement("section");
+    section2.append(node(doc, "h3", warning.title), node(doc, "p", warning.description));
+    dialog.append(section2);
+  }
+  if (!state.loading && !ready) {
+    dialog.append(node(doc, "p", state.status?.state === "unavailable" ? "The Host Access App is unavailable. Start it and check its log, then retry. Access remains disabled." : "Install the separate Codex Host Access App to use this mode. Normal Codex Bridge permissions stay unchanged."));
+    const instructions = node(doc, "a", "Host Access installation instructions");
+    instructions.href = HOST_INSTALLATION_URL;
+    instructions.target = "_blank";
+    instructions.rel = "noopener noreferrer";
+    dialog.append(instructions);
+  }
+  const checkbox = (id, label, checked) => {
+    const wrap = doc.createElement("label");
+    wrap.className = "host-access-acknowledgement";
+    const input2 = doc.createElement("input");
+    input2.type = "checkbox";
+    input2.id = id;
+    input2.checked = checked === true;
+    input2.disabled = state.busy === true;
+    wrap.append(input2, node(doc, "span", label));
+    dialog.append(wrap);
+  };
+  if (ready) {
+    checkbox("host-access-acknowledged", identity?.acknowledgement || "I understand that Codex will have root access to this Home Assistant OS machine, its files, credentials and network.", state.acknowledged);
+    if (state.context === "schedule") {
+      checkbox("host-access-unattended", identity?.scheduled_acknowledgement || "I allow this scheduled task to use host access automatically while I am absent.", state.unattended);
+    }
+  }
+  if (state.error) {
+    const error = node(doc, "p", state.error, "desktop-error");
+    error.setAttribute("role", "alert");
+    dialog.append(error);
+  }
+  const actions = node(doc, "div", "", "confirmation-actions");
+  const button2 = (label, action) => {
+    const result = node(doc, "button", label);
+    result.type = "button";
+    result.dataset.action = action;
+    return result;
+  };
+  const cancel = button2("Cancel", "cancel-host-access");
+  cancel.id = "cancel-host-access";
+  cancel.disabled = !!state.busy;
+  actions.append(cancel);
+  if (ready) {
+    const enable = button2(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
+    enable.id = "confirm-host-access";
+    enable.disabled = !!state.busy || !state.acknowledged || state.context === "schedule" && !state.unattended;
+    actions.append(enable);
+  } else if (!state.loading) {
+    actions.append(button2("Check again", "retry-host-access"));
+  }
+  dialog.append(actions);
+  return dialog;
+}
+
 // frontend/src/scheduled-tasks.js
 var WEEKDAYS = [
   ["MO", "Monday"],
@@ -319,7 +407,13 @@ function buildAutomationPayload(values = {}, context = {}) {
   const kind = values.target_kind || "standalone";
   const target = editing?.target?.kind === kind ? { ...editing.target } : kind === "continue_thread" ? { kind, thread_id: threadId } : { kind: "standalone", project_id: projectId };
   if (!(target.thread_id || target.project_id)) throw new Error("Select a chat or workspace before creating a scheduled task.");
-  return { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  const payload = { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  if (payload.mode === HOST_MODE) {
+    if (!context.hostAccessGrant || context.hostUnattendedApproved !== true) throw new Error("Review and acknowledge host access for this scheduled task.");
+    payload.host_access_grant = context.hostAccessGrant;
+    payload.host_unattended_approved = true;
+  }
+  return payload;
 }
 function buildAutomationUpdatePayload(values = {}, context = {}) {
   if (!Number.isInteger(context.editing?.revision)) throw new Error("Reload this task before saving changes.");
@@ -336,10 +430,10 @@ function scheduleSummary(schedule, timezone = "UTC") {
   return `${repeat} at ${values.time} · ${zone}`;
 }
 function element(doc, tag, className, value) {
-  const node = doc.createElement(tag);
-  if (className) node.className = className;
-  if (value !== void 0) node.textContent = value;
-  return node;
+  const node2 = doc.createElement(tag);
+  if (className) node2.className = className;
+  if (value !== void 0) node2.textContent = value;
+  return node2;
 }
 function field(doc, name, label, value, options = null, type = "text") {
   const row = element(doc, options ? "div" : "label", "schedule-row");
@@ -451,7 +545,10 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
   const advanced = element(doc, "details", "schedule-advanced");
   advanced.append(element(doc, "summary", "", "Advanced"));
   const advancedCard = element(doc, "div", "schedule-card");
-  advancedCard.append(field(doc, "mode", "Permissions", values.mode, [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto"]]));
+  const modes = [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]];
+  if (context.hostAccessSupported) modes.push([HOST_MODE, HOST_LABEL]);
+  advancedCard.append(field(doc, "mode", "Permissions", values.mode, modes));
+  if (values.mode === HOST_MODE) advancedCard.append(element(doc, "p", "desktop-note", "This task has host root access, including files, credentials, services and the network."));
   const modelContext = () => ({ ...context, defaultModel: form.querySelector('[name="target_kind"]').value === "continue_thread" ? context.threadModel || context.defaultModel : context.defaultModel });
   const model = field(doc, "model", "Model", values.model, modelChoices(modelContext(), values.model));
   const thinking = field(doc, "thinking", "Reasoning", values.thinking, reasoningChoices(modelContext(), values.model, values.thinking));
@@ -21955,6 +22052,7 @@ var ITEM_LABELS = Object.freeze({
   contextCompaction: "Compacting context",
   collabAgentToolCall: "Delegating to an agent",
   dynamicToolCall: "Calling a tool",
+  haHostCommand: "Running a Home Assistant OS command",
   fileChange: "Applying file changes",
   imageGeneration: "Generating an image",
   imageView: "Viewing an image",
@@ -22087,6 +22185,10 @@ function joinActivityLabels(labels, fallback) {
 }
 function itemLabel(payload = {}) {
   const itemType = payload.item_type;
+  if (itemType === "haHostCommand") {
+    const outcomes = { completed: "completed", failed: "failed", cancelled: "cancelled", timed_out: "timed out", output_limit: "reached its output limit" };
+    return Object.hasOwn(outcomes, payload.host_outcome) ? `Home Assistant OS command ${outcomes[payload.host_outcome]}` : ITEM_LABELS.haHostCommand;
+  }
   if (itemType === "collabAgentToolCall" && Object.hasOwn(COLLAB_OPERATION_LABELS, payload.operation)) {
     return COLLAB_OPERATION_LABELS[payload.operation];
   }
@@ -23477,18 +23579,18 @@ var formValue = (state, name, fallback = "") => {
   return Object.hasOwn(drafts, name) ? drafts[name] : fallback;
 };
 var text = (documentRef, tag, value, className = "") => {
-  const node = documentRef.createElement(tag);
-  if (className) node.className = className;
-  node.textContent = value == null ? "" : String(value);
-  return node;
+  const node2 = documentRef.createElement(tag);
+  if (className) node2.className = className;
+  node2.textContent = value == null ? "" : String(value);
+  return node2;
 };
 var button = (documentRef, label, action, extra = {}) => {
-  const node = documentRef.createElement("button");
-  node.type = "button";
-  node.textContent = label;
-  node.dataset.desktopAction = action;
-  for (const [key, value] of Object.entries(extra)) node.dataset[key] = String(value);
-  return node;
+  const node2 = documentRef.createElement("button");
+  node2.type = "button";
+  node2.textContent = label;
+  node2.dataset.desktopAction = action;
+  for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
+  return node2;
 };
 var input = (documentRef, label, name, value = "", type = "text") => {
   const wrap = documentRef.createElement("label");
@@ -23511,12 +23613,12 @@ var selectField = (documentRef, label, name, options, value = "") => {
   control.name = name;
   control.dataset.desktopField = name;
   for (const option of options) {
-    const node = documentRef.createElement("option");
-    node.value = option.value;
-    node.textContent = option.label;
-    node.selected = option.value === value;
-    node.disabled = Boolean(option.disabled);
-    control.append(node);
+    const node2 = documentRef.createElement("option");
+    node2.value = option.value;
+    node2.textContent = option.label;
+    node2.selected = option.value === value;
+    node2.disabled = Boolean(option.disabled);
+    control.append(node2);
   }
   wrap.append(control);
   return wrap;
@@ -23594,8 +23696,8 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
     section2.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
     return section2;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, schedule: scheduleSummary(row.schedule, defaultTimezone) }));
-  section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
+  section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
@@ -23749,6 +23851,16 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    const recommendation = documentRef.createElement("section");
+    recommendation.className = "desktop-note";
+    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
+    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    guide.target = "_blank";
+    guide.rel = "noopener noreferrer";
+    guide.style.color = "inherit";
+    recommendation.append(guide);
+    panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") {
       const form = documentRef.createElement("form");
@@ -23791,7 +23903,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App, and account credentials remain in its private storage. Full auto allows work inside the selected workspace and enabled tools; it does not grant access to the VM, Home Assistant files or unrestricted networking.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -23821,6 +23933,18 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
+    if (config?.capabilities?.includes("host_access_v1")) {
+      const host = state.data?.host_access;
+      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
+      card.append(
+        text(documentRef, "h3", HOST_LABEL),
+        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
+        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access")
+      );
+      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
+      panel.append(card);
+    }
   }
   return section2;
 }
@@ -23847,7 +23971,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
@@ -23896,7 +24020,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.6";
+var PANEL_VERSION = "1.1.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -23931,7 +24055,8 @@ var MODE_OPTIONS = [
     value: "full-auto",
     label: "Full auto",
     description: "Workspace changes run automatically; network and private host paths remain blocked."
-  }
+  },
+  { value: HOST_MODE, label: HOST_LABEL, description: "Optional root access to HAOS files, credentials, services and the network. Requires the Host Access App and acknowledgement." }
 ];
 var INTERACTION_EVENT_TYPES = /* @__PURE__ */ new Set([
   "interaction.created",
@@ -24379,6 +24504,15 @@ template.innerHTML = `
       background: var(--surface-bg);
       box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
     }
+
+    .host-access-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+    .host-access-dialog h3 { font-size: 15px; margin: 20px 0 6px; }
+    .host-access-dialog a { color: var(--text-color); text-decoration: underline; }
+    .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
+    .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
+    .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
+    .host-access-settings { padding: 20px; }
+    .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
     .confirmation-dialog p {
@@ -28685,6 +28819,7 @@ template.innerHTML = `
           <span class="eyeline" id="thread-project-label">Ready</span>
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
+          <span class="subline" id="thread-host-access-label" hidden></span>
         </div>
         <div class="mobile-header-actions" role="group" aria-label="Panel navigation">
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
@@ -28797,6 +28932,7 @@ template.innerHTML = `
     </aside>
   </div>
   <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="host-access-layer" hidden></div>
   <div class="confirmation-layer" id="confirmation-layer" hidden>
     <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
       <span class="eyeline">Confirm deletion</span>
@@ -28911,6 +29047,7 @@ var CodexBridgePanel = class extends HTMLElement {
       mode: "full-auto",
       projectId: null
     };
+    this._hostAccessDialog = null;
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
@@ -29412,6 +29549,15 @@ var CodexBridgePanel = class extends HTMLElement {
       case "confirm-delete":
         this._confirmDeletion();
         break;
+      case "cancel-host-access":
+        this._closeHostAccess();
+        break;
+      case "confirm-host-access":
+        void this._confirmHostAccess();
+        break;
+      case "retry-host-access":
+        void this._loadHostAccess();
+        break;
       case "toggle-run-activity-details":
         this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
         this._renderRunActivity();
@@ -29565,6 +29711,23 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
+      this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
+      this._renderHostAccess();
+      return;
+    }
+    if (target.dataset.desktopField === "mode" && this._activeDestination === "scheduled") {
+      const state = this._desktopFeatures.scheduled;
+      if (target.value === HOST_MODE) {
+        const previous = state.formDraft.mode || state.editingAutomation?.mode || "observe";
+        target.value = previous;
+        target.closest(".panel-selection")?.setOptions([...target.options].map((option) => [option.value, option.textContent, option.disabled]), previous);
+        void this._openHostAccess("schedule", target.closest(".panel-selection")?.querySelector("button") || target);
+        return;
+      }
+      state.hostAccessGrant = null;
+      state.hostUnattendedApproved = false;
+    }
     if (target.closest("[data-interaction-id]")) {
       this._captureInteractionAnswers(target);
       return;
@@ -29589,7 +29752,13 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (target.id === "thread-mode-select") {
+      if (target.value === HOST_MODE) {
+        target.value = this._threadForm.mode;
+        void this._openHostAccess("new-chat", target);
+        return;
+      }
       this._threadForm.mode = target.value;
+      this._threadForm.hostAccessGrant = null;
       return;
     }
     if (target.dataset.desktopField === "agents_content") {
@@ -29660,6 +29829,13 @@ var CodexBridgePanel = class extends HTMLElement {
   _handleKeyDown(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (this._hostAccessDialog) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this._closeHostAccess();
+      } else if (event.key === "Tab") this._trapDeletionFocus(event, "host-access-dialog");
       return;
     }
     if ((event.metaKey || event.ctrlKey) && !event.altKey) {
@@ -29961,6 +30137,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} };
         state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
+        if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -30007,17 +30184,24 @@ var CodexBridgePanel = class extends HTMLElement {
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
     state.formError = "";
+    state.hostAccessGrant = null;
+    state.hostUnattendedApproved = null;
   }
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
-    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
   async _submitScheduledTask(state, target, update) {
     const form = target?.closest("form");
     if (!form || !form.reportValidity()) return;
     try {
-      const context = { ...state.scheduleContext, editing: state.editingAutomation };
+      const context = {
+        ...state.scheduleContext,
+        editing: state.editingAutomation,
+        hostAccessGrant: state.hostAccessGrant || state.editingAutomation?.host_access_grant,
+        hostUnattendedApproved: state.hostUnattendedApproved ?? state.editingAutomation?.host_unattended_approved
+      };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
@@ -30052,6 +30236,17 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    if (action === "review-host-access") return this._openHostAccess("settings", target);
+    if (action === "use-host-access") return this._openHostAccess("current-chat", target);
+    if (action === "revoke-host-access") {
+      try {
+        await this._callWS("revoke_host_access");
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) {
+        this._setError(normalizeDesktopError(error));
+      }
+      return;
+    }
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
@@ -30277,6 +30472,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
     this.shadowRoot.getElementById("thread-title-label").textContent = activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent = this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
+    const hostLabel = this.shadowRoot.getElementById("thread-host-access-label");
+    hostLabel.hidden = activeThread?.mode !== HOST_MODE;
+    hostLabel.textContent = activeThread?.mode === HOST_MODE ? `${HOST_LABEL} · root` : "";
     this._renderThreadRunState(activeThread);
     const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
     attachmentMeta.textContent = this._pendingUploads ? this._uploadProgressText() : activeThread?.attachments?.length ? `${activeThread.attachments.length} attached` : "";
@@ -30344,13 +30542,122 @@ var CodexBridgePanel = class extends HTMLElement {
     actions.append(dismiss);
     errorStrip.append(copy, actions);
   }
+  _renderHostAccess() {
+    const layer = this.shadowRoot.getElementById("host-access-layer");
+    const state = this._hostAccessDialog;
+    const shell = this.shadowRoot.querySelector(".shell");
+    if (!layer) return;
+    layer.hidden = !state;
+    if (shell) {
+      shell.inert = Boolean(state || this._pendingDeletion);
+      if (shell.inert) shell.setAttribute("aria-hidden", "true");
+      else shell.removeAttribute("aria-hidden");
+    }
+    if (!state) {
+      layer.replaceChildren();
+      return;
+    }
+    const focusedId = layer.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.id : null;
+    layer.replaceChildren(renderHostAccessDialog(this.ownerDocument, state));
+    if (focusedId) this.shadowRoot.getElementById(focusedId)?.focus();
+  }
+  async _openHostAccess(context, trigger) {
+    if (this._hostAccessDialog || this._pendingDeletion) return;
+    this._hostAccessDialog = {
+      context,
+      trigger,
+      threadId: this._selectedThreadId,
+      acknowledged: false,
+      unattended: false,
+      loading: true,
+      busy: false
+    };
+    this._hideTooltip();
+    this._renderHostAccess();
+    queueMicrotask(() => this.shadowRoot.getElementById("host-access-dialog")?.focus());
+    await this._loadHostAccess();
+  }
+  async _loadHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    state.loading = true;
+    state.status = null;
+    state.error = "";
+    state.acknowledged = false;
+    state.unattended = false;
+    this._renderHostAccess();
+    try {
+      const status = await this._callWS("host_access");
+      if (this._hostAccessDialog !== state) return;
+      state.status = status;
+      this._desktopFeatures.settings.data.host_access = status;
+    } catch (error) {
+      if (this._hostAccessDialog === state) state.error = normalizeDesktopError(error);
+    } finally {
+      if (this._hostAccessDialog === state) {
+        state.loading = false;
+        this._renderHostAccess();
+      }
+    }
+  }
+  _closeHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    this._hostAccessDialog = null;
+    this._renderHostAccess();
+    queueMicrotask(() => {
+      if (state.trigger?.isConnected) state.trigger.focus();
+      else if (state.context === "new-chat") this.shadowRoot.getElementById("thread-mode-select")?.focus();
+      else if (state.context === "schedule") this.shadowRoot.querySelector('[data-desktop-field="mode"]')?.closest(".panel-selection")?.querySelector("button")?.focus();
+      else this.shadowRoot.querySelector('[data-desktop-action="review-host-access"]')?.focus();
+    });
+  }
+  async _confirmHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy || state.status?.state !== "ready" || !state.acknowledged || state.context === "schedule" && !state.unattended) return;
+    state.busy = true;
+    state.error = "";
+    this._renderHostAccess();
+    try {
+      const status = state.status.enabled ? await this._callWS("host_access") : await this._callWS("enable_host_access", {
+        scope_revision: state.status.disclosure.scope_revision,
+        acknowledged: true
+      });
+      if (!status.enabled || !status.grant_id || status.disclosure?.scope_revision !== state.status.disclosure.scope_revision) throw new Error("Host access changed. Check again and review the current warning.");
+      this._desktopFeatures.settings.data.host_access = status;
+      if (state.context === "new-chat") {
+        this._threadForm.mode = HOST_MODE;
+        this._threadForm.hostAccessGrant = status.grant_id;
+        this._renderedThreadFormKey = "";
+        this._renderThreadForm();
+      } else if (state.context === "schedule") {
+        const scheduled = this._desktopFeatures.scheduled;
+        scheduled.formDraft = { ...scheduled.formDraft, mode: HOST_MODE };
+        scheduled.hostAccessGrant = status.grant_id;
+        scheduled.hostUnattendedApproved = true;
+        this._renderDesktopSurface();
+      } else if (state.context === "current-chat") {
+        const thread = await this._callWS("update_thread", { thread_id: state.threadId, mode: HOST_MODE, host_access_grant: status.grant_id });
+        if (this._selectedThreadId === state.threadId) this._activeThread = thread;
+        this._syncThreadListStatus();
+        this._render();
+      }
+      state.busy = false;
+      this._closeHostAccess();
+      this._renderDesktopSurface();
+    } catch (error) {
+      state.busy = false;
+      state.error = normalizeDesktopError(error);
+      this._renderHostAccess();
+    }
+  }
   _renderDeletionConfirmation() {
     const layer = this.shadowRoot.getElementById("confirmation-layer");
     const shell = this.shadowRoot.querySelector(".shell");
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell) {
+      if (shell && !this._hostAccessDialog) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -30399,8 +30706,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return this._deleteThread(pending.targetId, null, true);
   }
-  _trapDeletionFocus(event) {
-    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+  _trapDeletionFocus(event, dialogId = "confirmation-dialog") {
+    const dialog = this.shadowRoot.getElementById(dialogId);
     if (!dialog) {
       return;
     }
@@ -31083,13 +31390,13 @@ var CodexBridgePanel = class extends HTMLElement {
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
     modeSelect.setAttribute("aria-describedby", "thread-mode-description");
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option2) => option2.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
     }
     const modeDescription = document.createElement("ul");
     modeDescription.id = "thread-mode-description";
     modeDescription.className = "mode-boundaries";
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option2) => option2.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       const item = document.createElement("li");
       const label = document.createElement("strong");
       label.textContent = `${option.label}: `;
@@ -31913,12 +32220,12 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.replaceChildren();
     }
     for (const event of eventsToRender) {
-      const node = this._renderEvent(event);
-      if (!node) {
+      const node2 = this._renderEvent(event);
+      if (!node2) {
         this._renderedSequence = event.sequence;
         continue;
       }
-      messageList.append(node);
+      messageList.append(node2);
       this._renderedSequence = event.sequence;
     }
     this._syncStreamingMessage(messageList, activity);
@@ -32981,7 +33288,7 @@ var CodexBridgePanel = class extends HTMLElement {
       ["Account plan", normalizePlanType(account?.plan_type)],
       ["Workspace", this._workspaceLabel(thread?.workspace_path || project?.root_path)],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
-      ["Mode", thread?.mode || "full-auto"],
+      ["Mode", thread?.mode === HOST_MODE ? HOST_LABEL : thread?.mode || "full-auto"],
       ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
@@ -33441,7 +33748,8 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       const payload = {
         title,
-        mode: this._threadForm.mode
+        mode: this._threadForm.mode,
+        ...this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}
       };
       if (this._preferences.model) payload.model_override = this._preferences.model;
       if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;

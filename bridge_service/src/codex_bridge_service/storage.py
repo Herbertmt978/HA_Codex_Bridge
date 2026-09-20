@@ -1781,6 +1781,7 @@ class BridgeStorage:
         *,
         title: str,
         mode: RunMode,
+        host_access_grant: str | None = None,
         project_id: str | None = None,
         model_override: str | None = None,
         thinking_override: str | None = None,
@@ -1792,6 +1793,7 @@ class BridgeStorage:
             return self._create_thread_locked(
                 title=title,
                 mode=mode,
+                host_access_grant=host_access_grant,
                 project_id=project_id,
                 model_override=model_override,
                 thinking_override=thinking_override,
@@ -1805,6 +1807,7 @@ class BridgeStorage:
         *,
         title: str,
         mode: RunMode,
+        host_access_grant: str | None = None,
         project_id: str | None = None,
         model_override: str | None = None,
         thinking_override: str | None = None,
@@ -1857,6 +1860,7 @@ class BridgeStorage:
             workspace_path=str(workspace_path),
             status="idle",
             mode=mode,
+            host_access_grant=host_access_grant,
             model_override=normalize_model(model_override) if model_override else None,
             thinking_override=thinking_override,
             created_at=now,
@@ -1891,6 +1895,7 @@ class BridgeStorage:
         *,
         title: str,
         mode: RunMode,
+        host_access_grant: str | None = None,
         model_override: str | None = None,
         thinking_override: str | None = None,
     ) -> Iterator[ThreadViewRecord]:
@@ -1925,6 +1930,7 @@ class BridgeStorage:
                             thread = self._create_thread_locked(
                                 title=title,
                                 mode=mode,
+                                host_access_grant=host_access_grant,
                                 project_id=project_id,
                                 model_override=model_override,
                                 thinking_override=thinking_override,
@@ -1959,6 +1965,7 @@ class BridgeStorage:
                             thread = self._update_thread_record_locked(
                                 record,
                                 mode=mode,
+                                host_access_grant=host_access_grant,
                                 model_override=model_override,
                                 thinking_override=thinking_override,
                             )
@@ -2036,6 +2043,7 @@ class BridgeStorage:
         *,
         title: str | None = None,
         mode: RunMode | None = None,
+        host_access_grant: str | None | object = _UNSET,
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
     ) -> ThreadViewRecord:
@@ -2048,6 +2056,7 @@ class BridgeStorage:
                         record,
                         title=title,
                         mode=mode,
+                        host_access_grant=host_access_grant,
                         model_override=model_override,
                         thinking_override=thinking_override,
                     )
@@ -2058,6 +2067,7 @@ class BridgeStorage:
         *,
         title: str | None = None,
         mode: RunMode | None = None,
+        host_access_grant: str | None | object = _UNSET,
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
     ) -> ThreadViewRecord:
@@ -2065,8 +2075,21 @@ class BridgeStorage:
             if not title.strip():
                 raise ValueError("title must not be blank")
             record.title = title.strip()
-        if mode is not None:
-            record.mode = mode
+        effective_mode = mode if mode is not None else record.mode
+        effective_grant = (
+            record.host_access_grant if host_access_grant is _UNSET else host_access_grant
+        ) if effective_mode is RunMode.HAOS_FULL_ACCESS else None
+        boundary_changed = (
+            effective_mode != record.mode or effective_grant != record.host_access_grant
+        ) and RunMode.HAOS_FULL_ACCESS in {effective_mode, record.mode}
+        if boundary_changed:
+            if record.active_run_id or record.pending_prompts or record.status in {"running", "queued"}:
+                raise ValueError("Stop the active task before changing host access.")
+            record.codex_thread_id = None
+            record.codex_session_id = None
+            record.active_turn_id = None
+        record.mode = effective_mode
+        record.host_access_grant = effective_grant
         if model_override is not _UNSET:
             record.model_override = (
                 normalize_model(model_override) if model_override else None

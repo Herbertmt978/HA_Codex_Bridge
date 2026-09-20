@@ -1,5 +1,6 @@
 import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
+import { HOST_MODE, HOST_LABEL } from "./host-access.js";
 
 const WEEKDAYS = [
   ["MO", "Monday"], ["TU", "Tuesday"], ["WE", "Wednesday"],
@@ -126,7 +127,13 @@ export function buildAutomationPayload(values = {}, context = {}) {
   const target = editing?.target?.kind === kind ? { ...editing.target }
     : kind === "continue_thread" ? { kind, thread_id: threadId } : { kind: "standalone", project_id: projectId };
   if (!(target.thread_id || target.project_id)) throw new Error("Select a chat or workspace before creating a scheduled task.");
-  return { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  const payload = { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  if (payload.mode === HOST_MODE) {
+    if (!context.hostAccessGrant || context.hostUnattendedApproved !== true) throw new Error("Review and acknowledge host access for this scheduled task.");
+    payload.host_access_grant = context.hostAccessGrant;
+    payload.host_unattended_approved = true;
+  }
+  return payload;
 }
 
 export function buildAutomationUpdatePayload(values = {}, context = {}) {
@@ -245,7 +252,10 @@ export function renderScheduleForm(doc, state, timezone, context = {}) {
   const advanced = element(doc, "details", "schedule-advanced");
   advanced.append(element(doc, "summary", "", "Advanced"));
   const advancedCard = element(doc, "div", "schedule-card");
-  advancedCard.append(field(doc, "mode", "Permissions", values.mode, [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto"]]));
+  const modes = [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]];
+  if (context.hostAccessSupported) modes.push([HOST_MODE, HOST_LABEL]);
+  advancedCard.append(field(doc, "mode", "Permissions", values.mode, modes));
+  if (values.mode === HOST_MODE) advancedCard.append(element(doc, "p", "desktop-note", "This task has host root access, including files, credentials, services and the network."));
   const modelContext = () => ({ ...context, defaultModel: form.querySelector('[name="target_kind"]').value === "continue_thread" ? context.threadModel || context.defaultModel : context.defaultModel });
   const model = field(doc, "model", "Model", values.model, modelChoices(modelContext(), values.model));
   const thinking = field(doc, "thinking", "Reasoning", values.thinking, reasoningChoices(modelContext(), values.model, values.thinking));

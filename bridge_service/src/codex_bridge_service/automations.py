@@ -67,7 +67,7 @@ _SKIPPED_STATUSES = {
     "skipped_paused",
 }
 _RUN_STATUSES = _ACTIVE_STATUSES | _TERMINAL_STATUSES | _SKIPPED_STATUSES
-_MODES = {"observe", "edit", "full-auto"}
+_MODES = {"observe", "edit", "full-auto", "haos-full-access"}
 
 
 def _is_pending_runtime_link(run: Mapping[str, Any]) -> bool:
@@ -199,6 +199,8 @@ class AutomationStore:
                 "mode",
                 "model",
                 "thinking",
+                "host_access_grant",
+                "host_unattended_approved",
                 "schedule",
             }
             unknown = set(changes) - allowed
@@ -584,6 +586,18 @@ class AutomationStore:
         mode = payload.get("mode", "observe")
         if mode not in _MODES:
             raise AutomationValidationError("automation mode is invalid")
+        host_grant = payload.get("host_access_grant")
+        host_unattended = payload.get("host_unattended_approved", False)
+        if mode == "haos-full-access":
+            if (
+                not isinstance(host_grant, str) or len(host_grant) != 32
+                or any(char not in "0123456789abcdef" for char in host_grant)
+                or host_unattended is not True
+            ):
+                raise AutomationValidationError("scheduled host access needs explicit unattended acknowledgement")
+        else:
+            host_grant = None
+            host_unattended = False
         target = _normalize_target(payload.get("target"))
         if self._target_validator is not None:
             self._target_validator(target)
@@ -609,6 +623,8 @@ class AutomationStore:
             "mode": mode,
             "model": model,
             "thinking": thinking,
+            "host_access_grant": host_grant,
+            "host_unattended_approved": host_unattended,
             "schedule": schedule,
             "enabled": enabled,
             "created_at": created_at or _iso(now),
@@ -710,6 +726,10 @@ class AutomationStore:
             if isinstance(run, dict):
                 # Older checkpoints predate per-claim search overrides.
                 run.setdefault("web_search", None)
+        for definition in payload["automations"].values():
+            if isinstance(definition, dict):
+                definition.setdefault("host_access_grant", None)
+                definition.setdefault("host_unattended_approved", False)
         return payload
 
     def _save(self) -> None:
@@ -847,6 +867,8 @@ def _public_automation(
             "mode",
             "model",
             "thinking",
+            "host_access_grant",
+            "host_unattended_approved",
             "schedule",
             "enabled",
             "created_at",

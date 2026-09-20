@@ -682,6 +682,7 @@ class BridgeApiClient:
         project_id: str | None = None,
         model_override: str | None = None,
         thinking_override: str | None = None,
+        host_access_grant: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "title": title,
@@ -693,6 +694,9 @@ class BridgeApiClient:
             payload["model_override"] = model_override
         if thinking_override is not None:
             payload["thinking_override"] = thinking_override
+        if mode == "haos-full-access" or host_access_grant is not None:
+            self.require_capability("host_access_v1")
+            payload["host_access_grant"] = host_access_grant
         return _public_thread_payload(
             await self._async_json(
                 "POST",
@@ -705,6 +709,8 @@ class BridgeApiClient:
     async def async_update_thread(
         self, thread_id: str, updates: dict[str, Any]
     ) -> dict[str, Any]:
+        if updates.get("mode") == "haos-full-access" or "host_access_grant" in updates:
+            self.require_capability("host_access_v1")
         return _public_thread_payload(
             await self._async_json(
                 "PATCH",
@@ -1139,6 +1145,24 @@ class BridgeApiClient:
         ) as response:
             yield response
 
+    async def async_host_access(self) -> dict[str, Any]:
+        self.require_capability("host_access_v1")
+        return await self._async_json("GET", "/host-access")
+
+    async def async_pair_host_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("host_access_v1")
+        return await self._async_json("PUT", "/host-access/worker", json_body=payload)
+
+    async def async_enable_host_access(self, revision: str, acknowledged: bool) -> dict[str, Any]:
+        self.require_capability("host_access_v1")
+        return await self._async_json("POST", "/host-access/enable", json_body={
+            "scope_revision": revision, "acknowledged": acknowledged,
+        })
+
+    async def async_revoke_host_access(self) -> dict[str, Any]:
+        self.require_capability("host_access_v1")
+        return await self._async_json("POST", "/host-access/revoke", json_body={})
+
     # Home Assistant-owned Automations -------------------------------------------------
     async def async_list_automations(self) -> list[dict[str, Any]]:
         self.require_capability("automations_v1")
@@ -1152,6 +1176,8 @@ class BridgeApiClient:
 
     async def async_create_automation(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        if payload.get("mode") == "haos-full-access" or payload.get("host_access_grant") is not None:
+            self.require_capability("host_access_v1")
         return await self._async_json(
             "POST",
             "/automations",
@@ -1163,6 +1189,8 @@ class BridgeApiClient:
         self, automation_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        if payload.get("mode") == "haos-full-access" or "host_access_grant" in payload:
+            self.require_capability("host_access_v1")
         return await self._async_json(
             "PATCH",
             f"/automations/{_path_segment(automation_id)}",

@@ -4,7 +4,7 @@
 
 You need both the HACS Integration and the Supervisor App. The Integration
 adds the panel; the App runs Codex. This release pairs App, Integration and
-panel `1.0.6`, with Bridge `0.7.9` and Codex `0.155.1`.
+panel `1.1.0`, with Bridge `0.8.0` and Codex `0.155.1`.
 
 Install versions available on the
 [Releases page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).
@@ -84,6 +84,12 @@ MCP is off by default. To use it, open **Settings → Apps → Codex Bridge →
 Configuration**, enable **Enable MCP**, save and restart the App. Add only
 trusted HTTPS servers. Private addresses and bearer-token settings are not
 supported; see [App documentation](../codex_bridge_app/DOCS.md).
+
+For Home Assistant management, [HA-MCP](https://github.com/homeassistant-ai/ha-mcp)
+is a recommended optional tool server. It offers Home Assistant operations
+without requiring HAOS root access. Follow the
+[Bridge connection guide](home-assistant-mcp.md), including its HTTPS and
+authentication requirements. Install and enable it separately.
 
 ## Update an existing installation
 
