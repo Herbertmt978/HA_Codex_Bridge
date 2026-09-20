@@ -6,6 +6,7 @@ from ..models import PublicThreadRecord, RunMode, RuntimeProfile, ThreadViewReco
 from ..runtime_broker import RuntimeUnavailableError
 from ..storage import ProjectNotFoundError, ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
+from .host_access import validate_host_selection
 
 router = APIRouter()
 
@@ -14,6 +15,7 @@ class CreateThreadRequest(BaseModel):
     title: str
     project_id: str | None = None
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model_override: str | None = None
     thinking_override: str | None = None
 
@@ -35,6 +37,7 @@ class CreateThreadRequest(BaseModel):
 class UpdateThreadRequest(BaseModel):
     title: str | None = None
     mode: RunMode | None = None
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model_override: str | None = None
     thinking_override: str | None = None
 
@@ -153,9 +156,11 @@ def create_thread(
         "title": payload.title,
         "project_id": payload.project_id,
         "mode": payload.mode,
+        "host_access_grant": payload.host_access_grant,
         "model_override": payload.model_override,
         "thinking_override": thinking_override,
     }
+    validate_host_selection(request, payload.mode, payload.host_access_grant)
     if payload.project_id is None and model_catalog is not None:
         create_kwargs.update(
             direct_default_model=model_catalog.default_model,
@@ -232,6 +237,13 @@ def update_thread(
     try:
         current = request.app.state.storage.get_thread(thread_id)
         updates = payload.model_dump(exclude_unset=True)
+        if "mode" in updates or "host_access_grant" in updates:
+            mode = updates.get("mode") or current.mode
+            grant = updates.get("host_access_grant", current.host_access_grant)
+            if mode is not RunMode.HAOS_FULL_ACCESS:
+                grant = None
+            validate_host_selection(request, mode, grant)
+            updates["host_access_grant"] = grant
         if "model_override" in updates or "thinking_override" in updates:
             model_override = (
                 updates["model_override"]

@@ -8,6 +8,7 @@ on:
       - ".github/workflows/release.yml"
       - "bridge_service/**"
       - "codex_bridge_app/**"
+      - "codex_host_access_app/**"
       - "scripts/**"
   workflow_dispatch:
   workflow_call:

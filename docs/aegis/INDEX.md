@@ -2,6 +2,8 @@
 
 | Kind | Date | Status | Artifact |
 |------|------|--------|----------|
+| Work record | 2026-09-20 | Authorised implementation: optional HAOS host access | [Explicit access environments](work/2026-09-20-explicit-access/20-checkpoint.md) |
+| Design spec | 2026-09-20 | Authorised HAOS target; implementation in progress | [Home Assistant OS host access](specs/2026-09-20-haos-host-access.md) |
 | Baseline | 2026-07-14 | Historical implementation snapshot; superseded by bounded `0.7.1` live-acceptance evidence | [HA-native implementation baseline](baseline/2026-07-14-ha-native-implementation-baseline.md) |
 | ADR | 2026-07-14 | Accepted repository decision | [HA App runtime ownership](adr/0001-ha-app-runtime-ownership.md) |
 | ADR | 2026-07-14 | Accepted repository decision | [HA-origin transport and trust](adr/0002-ha-origin-transport-and-trust.md) |

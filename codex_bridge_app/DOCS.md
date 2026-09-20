@@ -74,6 +74,10 @@ before installing it.
 
 ## MCP servers
 
+For Home Assistant control, consider [HA-MCP](https://github.com/homeassistant-ai/ha-mcp).
+It is installed separately and does not require root host access. Read the
+[Bridge setup guide](../docs/home-assistant-mcp.md) before enabling it.
+
 MCP is disabled by default, including saved server configuration. Enable the
 App option and restart before adding a server in **Settings → MCP servers**.
 Disabling MCP and restarting clears the saved native MCP server table; it
@@ -109,7 +113,7 @@ and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.0.6`, with Bridge `0.7.9` and
+This release pairs App, Integration and panel `1.1.0`, with Bridge `0.8.0` and
 Codex `0.155.1`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).

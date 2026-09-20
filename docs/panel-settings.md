@@ -15,8 +15,18 @@ preferences does not alter existing chats or scheduled tasks.
 
 Full auto does not grant access to Home Assistant's configuration, the VM's
 files or unrestricted networking. Native web search, optional browser tools
-and configured MCP tools have their own access rules. Broader access is a
-[planned feature](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/91).
+and configured MCP tools have their own access rules.
+
+**Full access · Home Assistant OS** is a separate, optional mode for a particular
+chat or scheduled task. It requires the Codex Host Access App. If that App is
+ready, selecting the mode shows the warning, an unchecked acknowledgement and
+the enable action. If it is missing or unavailable, the dialog links to the
+[installation instructions](../codex_host_access_app/DOCS.md).
+
+Host access means root commands on HAOS, with access to host files, saved
+credentials, services, the internet and the local network. It is never a
+new-chat default. **Revoke host access** invalidates existing host selections
+and stops new requests; it cannot undo changes already made.
 
 The model and reasoning menus use the installed runtime's catalogue. If a saved
 choice is no longer advertised, it remains visible with an unavailable label;

@@ -216,7 +216,7 @@ jobs:
             echo "Automated updater PR author or event actor does not match CODEX_UPDATER_APP_ACTOR." >&2
             exit 1
           fi
-          allowed='^(codex_bridge_app/(codex-release\.json|config\.yaml|Dockerfile|CHANGELOG\.md|rootfs/etc/s6-overlay/s6-rc\.d/codex-bridge/run)|bridge_service/src/codex_bridge_service/codex_app_server_(contract\.json|protocol\.schema\.json|protocol\.v2\.schema\.json))$'
+          allowed='^(codex_bridge_app/(codex-release\.json|config\.yaml|Dockerfile|CHANGELOG\.md|rootfs/etc/s6-overlay/s6-rc\.d/codex-bridge/run)|codex_host_access_app/(config\.yaml|CHANGELOG\.md)|bridge_service/src/codex_bridge_service/codex_app_server_(contract\.json|protocol\.schema\.json|protocol\.v2\.schema\.json))$'
           changed="$(git diff --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}")"
           test -n "${changed}"
           deleted="$(git diff --diff-filter=D --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}")"

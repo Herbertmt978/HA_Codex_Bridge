@@ -50,6 +50,13 @@ or leave **Inherit** selected to use the target's defaults. Reasoning choices
 follow the selected model. A saved choice that the runtime no longer advertises
 is marked unavailable and kept until you change it.
 
+**Full access · Home Assistant OS** requires the separate Host Access App and
+the current administrator grant. Selecting it shows the root-access warning
+and also asks you to allow this task to use those rights while you are absent.
+Revoking access invalidates the task's saved selection. Enabling access again
+does not restore old scheduled grants: edit the task and acknowledge it again.
+See [Host Access](../codex_host_access_app/DOCS.md) before using this mode.
+
 An unattended task cannot answer approval requests or questions. A run may be
 stopped or skipped if it needs interaction, overlaps another run, exceeds
 capacity or misses its scheduling window. Check **Runs** for the recorded

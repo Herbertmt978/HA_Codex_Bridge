@@ -7,6 +7,8 @@ from typing import Any, Protocol, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
@@ -25,6 +27,7 @@ from .event_store import (
     EventStoreCapacityError,
 )
 from .feature_capabilities import supports_web_search
+from .host_access import HostAccessError, HostAccessManager
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
@@ -47,6 +50,7 @@ from .routes import (
     codex_auth,
     events,
     health,
+    host_access,
     mcp,
     projects,
     prompts,
@@ -202,10 +206,10 @@ def create_app(
                 # One bounded callback worker preserves app-server FIFO order.
                 callback_workers=1,
                 enable_mcp=enable_mcp,
-                # Dynamic tools alter the Codex app-server protocol surface.
-                # The explicit opt-in is coupled to an injected, attested
-                # browser broker rather than merely shipping Chromium bytes.
-                enable_experimental_api=browser_dynamic_tools_enabled,
+                # Negotiate namespace support, but register privileged tools
+                # only for a run with a current explicit host grant. This flag
+                # alone changes no sandbox or App privileges.
+                enable_experimental_api=True,
             )
         )
         # Factory-owned clients must opt into the experimental protocol
@@ -216,6 +220,7 @@ def create_app(
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
     resolved_runner: Any = None
+    resolved_host_access: HostAccessManager | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -223,6 +228,8 @@ def create_app(
             try:
                 yield
             finally:
+                if resolved_host_access is not None:
+                    await asyncio.to_thread(resolved_host_access.close)
                 await asyncio.to_thread(storage.event_store.close)
             return
         try:
@@ -279,9 +286,26 @@ def create_app(
                         finally:
                             await asyncio.to_thread(resolved_app_server.close)
             finally:
-                await asyncio.to_thread(storage.event_store.close)
+                try:
+                    if resolved_host_access is not None:
+                        await asyncio.to_thread(resolved_host_access.close)
+                finally:
+                    await asyncio.to_thread(storage.event_store.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(request, error: RequestValidationError):
+        if request.url.path.startswith("/host-access"):
+            # Pairing errors must not echo the worker credential in input data.
+            return JSONResponse(status_code=422, content={"detail": "Invalid host access request"})
+        return await request_validation_exception_handler(request, error)
+
+    @app.exception_handler(HostAccessError)
+    async def host_access_error_handler(_request, error: HostAccessError):
+        return JSONResponse(status_code=409, content={"detail": {
+            "code": "host_access_unavailable", "message": str(error), "retryable": False,
+        }})
 
     @app.exception_handler(EventStoreCapacityError)
     async def event_store_capacity_handler(
@@ -416,6 +440,9 @@ def create_app(
         workspace_root=workspace_root,
         resource_limits=resolved_resource_limits,
     )
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        resolved_host_access = HostAccessManager(storage.root)
+    app.state.host_access = resolved_host_access
     if browser_dynamic_tools_enabled:
         configure_browser_sink = getattr(browser_broker, "set_artifact_sink", None)
         if not callable(configure_browser_sink):
@@ -640,6 +667,8 @@ def create_app(
             feature_capabilities.append("mcp_admin_v1")
         if browser_dynamic_tools_enabled:
             feature_capabilities.append("browser_v1")
+        if getattr(resolved_app_server, "enable_experimental_api", False) is True:
+            feature_capabilities.append("host_access_v1")
     app.state.feature_capabilities = tuple(feature_capabilities)
     app.state.auth_manager = (
         None
@@ -708,6 +737,7 @@ def create_app(
                 browser_broker if browser_dynamic_tools_enabled else None
             ),
             browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+            host_access=resolved_host_access,
             provider_admission_check=provider_account_admission_ready,
             auth_failure_listener=getattr(
                 resolved_auth_coordinator, "report_auth_failure", None
@@ -747,6 +777,13 @@ def create_app(
         # closed without creating a thread, updating one, or starting Codex.
         validate_automation_target(target)
         mode = RunMode(definition["mode"])
+        if mode is RunMode.HAOS_FULL_ACCESS:
+            if resolved_host_access is None or definition.get("host_unattended_approved") is not True:
+                raise AutomationValidationError("Scheduled host access has not been acknowledged")
+            try:
+                resolved_host_access.validate_selection(definition.get("host_access_grant"))
+            except HostAccessError as error:
+                raise AutomationValidationError(str(error)) from None
         try:
             web_search = claim.get("web_search")
             if web_search is not None and not supports_web_search(app.state):
@@ -760,6 +797,7 @@ def create_app(
                     mode=mode,
                     model_override=definition.get("model"),
                     thinking_override=definition.get("thinking"),
+                    host_access_grant=definition.get("host_access_grant"),
                 ) as thread:
                     submission: dict[str, object] = {
                         "client_request_id": request_id,
@@ -768,6 +806,8 @@ def create_app(
                     }
                     if admission is not None:
                         submission["admission"] = admission
+                    if mode is RunMode.HAOS_FULL_ACCESS:
+                        submission["host_unattended_approved"] = True
                     return resolved_runner.submit_prompt(
                         thread.thread_id,
                         definition["prompt"],
@@ -825,6 +865,7 @@ def create_app(
         app.include_router(capabilities.router)
         app.include_router(mcp.router)
         app.include_router(uploads.router)
+        app.include_router(host_access.router)
     else:
         # The multipart endpoint is the external-v0 rollback adapter. HA uses
         # only bounded resumable chunks so Core never parses a whole file.

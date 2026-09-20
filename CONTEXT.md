@@ -22,6 +22,7 @@ to the App or Bridge.
 | **Workspace** | A deliberately granted project folder; in App mode, it is beneath `/config/workspaces`. | Home Assistant configuration or a generic broad share. |
 | **Project** | A user-visible group of Codex chats with one workspace and defaults. | A workspace or repository. |
 | **External Bridge** | An optional, separately operated private Bridge compatibility path. | A required Windows VM or browser endpoint. |
+| **Host Access App** | An optional, separately installed companion for explicitly acknowledged root commands on the HAOS machine. | Normal workspace access, an MCP server, or permission to use another host. |
 | **Automation** | A durable prompt definition whose due time is scheduled by Home Assistant and claimed idempotently by the Bridge. | A free-running background worker or unrestricted cron job. |
 | **Skill** | A workspace-scoped Codex instruction under `.agents/skills/`. | A global executable or a path outside the workspace. |
 | **MCP server** | An explicitly enabled outbound streamable-HTTP server configured with a trusted HTTPS hostname and optional OAuth metadata. | A public listener for the App, Bridge, or Home Assistant. |
@@ -29,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App, Integration and panel `1.0.6`, Bridge `0.7.9` and
+- This release pairs App, Integration and panel `1.1.0`, Bridge `0.8.0` and
   Codex `0.155.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -55,6 +56,16 @@ to the App or Bridge.
   stay in private Codex storage. MCP is disabled by default and accepts only
   trusted outbound HTTPS servers after explicit enablement and restart.
   DNS validation is not connection-time egress enforcement.
+- The optional Host Access App privately pairs through Supervisor discovery.
+  Pairing never grants access. An administrator must acknowledge the warning,
+  then select host access for each chat or scheduled task. Scheduled work needs
+  its own unattended acknowledgement. Native Codex shell tools retain their
+  workspace sandbox; only the grant-bound host tool sends root commands to the
+  companion. Revocation cannot undo completed changes or contain deliberate
+  host-root actions. Production activation is separate from a Bridge upgrade.
+- HA-MCP is a recommended optional community server for Home Assistant tasks.
+  It is installed separately, uses the existing MCP connection requirements,
+  and does not require or imply a host-access grant.
 - The App-owned browser worker requires the explicit enable_browser option
   and a separate root startup proof under ADR 0006. Only new Codex sessions
   receive its typed tools. Native search and local PDF/image previews do not

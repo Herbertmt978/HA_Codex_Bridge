@@ -1,5 +1,6 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
 import { SELECTION_STYLES } from "./selection.js";
+import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js";
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
@@ -29,7 +30,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.0.6";
+const PANEL_VERSION = "1.1.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -65,6 +66,7 @@ const MODE_OPTIONS = [
     label: "Full auto",
     description: "Workspace changes run automatically; network and private host paths remain blocked.",
   },
+  { value: HOST_MODE, label: HOST_LABEL, description: "Optional root access to HAOS files, credentials, services and the network. Requires the Host Access App and acknowledgement." },
 ];
 
 const INTERACTION_EVENT_TYPES = new Set([
@@ -539,6 +541,15 @@ template.innerHTML = `
       background: var(--surface-bg);
       box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
     }
+
+    .host-access-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+    .host-access-dialog h3 { font-size: 15px; margin: 20px 0 6px; }
+    .host-access-dialog a { color: var(--text-color); text-decoration: underline; }
+    .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
+    .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
+    .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
+    .host-access-settings { padding: 20px; }
+    .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
     .confirmation-dialog p {
@@ -4845,6 +4856,7 @@ template.innerHTML = `
           <span class="eyeline" id="thread-project-label">Ready</span>
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
+          <span class="subline" id="thread-host-access-label" hidden></span>
         </div>
         <div class="mobile-header-actions" role="group" aria-label="Panel navigation">
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
@@ -4957,6 +4969,7 @@ template.innerHTML = `
     </aside>
   </div>
   <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="host-access-layer" hidden></div>
   <div class="confirmation-layer" id="confirmation-layer" hidden>
     <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
       <span class="eyeline">Confirm deletion</span>
@@ -5074,6 +5087,7 @@ class CodexBridgePanel extends HTMLElement {
       mode: "full-auto",
       projectId: null,
     };
+    this._hostAccessDialog = null;
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
@@ -5618,6 +5632,9 @@ class CodexBridgePanel extends HTMLElement {
       case "confirm-delete":
         this._confirmDeletion();
         break;
+      case "cancel-host-access": this._closeHostAccess(); break;
+      case "confirm-host-access": void this._confirmHostAccess(); break;
+      case "retry-host-access": void this._loadHostAccess(); break;
       case "toggle-run-activity-details":
         this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
         this._renderRunActivity();
@@ -5777,6 +5794,23 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
+      this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
+      this._renderHostAccess();
+      return;
+    }
+    if (target.dataset.desktopField === "mode" && this._activeDestination === "scheduled") {
+      const state = this._desktopFeatures.scheduled;
+      if (target.value === HOST_MODE) {
+        const previous = state.formDraft.mode || state.editingAutomation?.mode || "observe";
+        target.value = previous;
+        target.closest(".panel-selection")?.setOptions([...target.options].map((option) => [option.value, option.textContent, option.disabled]), previous);
+        void this._openHostAccess("schedule", target.closest(".panel-selection")?.querySelector("button") || target);
+        return;
+      }
+      state.hostAccessGrant = null;
+      state.hostUnattendedApproved = false;
+    }
     if (target.closest("[data-interaction-id]")) {
       this._captureInteractionAnswers(target);
       return;
@@ -5801,7 +5835,13 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (target.id === "thread-mode-select") {
+      if (target.value === HOST_MODE) {
+        target.value = this._threadForm.mode;
+        void this._openHostAccess("new-chat", target);
+        return;
+      }
       this._threadForm.mode = target.value;
+      this._threadForm.hostAccessGrant = null;
       return;
     }
     if (target.dataset.desktopField === "agents_content") {
@@ -5882,6 +5922,11 @@ class CodexBridgePanel extends HTMLElement {
   _handleKeyDown(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (this._hostAccessDialog) {
+      if (event.key === "Escape") { event.preventDefault(); this._closeHostAccess(); }
+      else if (event.key === "Tab") this._trapDeletionFocus(event, "host-access-dialog");
       return;
     }
     if ((event.metaKey || event.ctrlKey) && !event.altKey) {
@@ -6213,6 +6258,7 @@ class CodexBridgePanel extends HTMLElement {
         state.agentsProjectId = projectId || null;
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
+        if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -6261,19 +6307,25 @@ class CodexBridgePanel extends HTMLElement {
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
     state.formError = "";
+    state.hostAccessGrant = null;
+    state.hostUnattendedApproved = null;
   }
 
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
-    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
   async _submitScheduledTask(state, target, update) {
     const form = target?.closest("form");
     if (!form || !form.reportValidity()) return;
     try {
-      const context = { ...state.scheduleContext, editing: state.editingAutomation };
+      const context = {
+        ...state.scheduleContext, editing: state.editingAutomation,
+        hostAccessGrant: state.hostAccessGrant || state.editingAutomation?.host_access_grant,
+        hostUnattendedApproved: state.hostUnattendedApproved ?? state.editingAutomation?.host_unattended_approved,
+      };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
@@ -6308,6 +6360,15 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    if (action === "review-host-access") return this._openHostAccess("settings", target);
+    if (action === "use-host-access") return this._openHostAccess("current-chat", target);
+    if (action === "revoke-host-access") {
+      try {
+        await this._callWS("revoke_host_access");
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) { this._setError(normalizeDesktopError(error)); }
+      return;
+    }
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
@@ -6504,6 +6565,9 @@ class CodexBridgePanel extends HTMLElement {
       activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent =
       this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
+    const hostLabel = this.shadowRoot.getElementById("thread-host-access-label");
+    hostLabel.hidden = activeThread?.mode !== HOST_MODE;
+    hostLabel.textContent = activeThread?.mode === HOST_MODE ? `${HOST_LABEL} · root` : "";
     this._renderThreadRunState(activeThread);
     const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
     attachmentMeta.textContent = this._pendingUploads
@@ -6581,13 +6645,108 @@ class CodexBridgePanel extends HTMLElement {
     errorStrip.append(copy, actions);
   }
 
+  _renderHostAccess() {
+    const layer = this.shadowRoot.getElementById("host-access-layer");
+    const state = this._hostAccessDialog;
+    const shell = this.shadowRoot.querySelector(".shell");
+    if (!layer) return;
+    layer.hidden = !state;
+    if (shell) {
+      shell.inert = Boolean(state || this._pendingDeletion);
+      if (shell.inert) shell.setAttribute("aria-hidden", "true");
+      else shell.removeAttribute("aria-hidden");
+    }
+    if (!state) { layer.replaceChildren(); return; }
+    const focusedId = layer.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.id : null;
+    layer.replaceChildren(renderHostAccessDialog(this.ownerDocument, state));
+    if (focusedId) this.shadowRoot.getElementById(focusedId)?.focus();
+  }
+
+  async _openHostAccess(context, trigger) {
+    if (this._hostAccessDialog || this._pendingDeletion) return;
+    this._hostAccessDialog = {
+      context, trigger, threadId: this._selectedThreadId,
+      acknowledged: false, unattended: false, loading: true, busy: false,
+    };
+    this._hideTooltip();
+    this._renderHostAccess();
+    queueMicrotask(() => this.shadowRoot.getElementById("host-access-dialog")?.focus());
+    await this._loadHostAccess();
+  }
+
+  async _loadHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    state.loading = true; state.status = null; state.error = ""; state.acknowledged = false; state.unattended = false;
+    this._renderHostAccess();
+    try {
+      const status = await this._callWS("host_access");
+      if (this._hostAccessDialog !== state) return;
+      state.status = status;
+      this._desktopFeatures.settings.data.host_access = status;
+    } catch (error) {
+      if (this._hostAccessDialog === state) state.error = normalizeDesktopError(error);
+    } finally {
+      if (this._hostAccessDialog === state) { state.loading = false; this._renderHostAccess(); }
+    }
+  }
+
+  _closeHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    this._hostAccessDialog = null;
+    this._renderHostAccess();
+    queueMicrotask(() => {
+      if (state.trigger?.isConnected) state.trigger.focus();
+      else if (state.context === "new-chat") this.shadowRoot.getElementById("thread-mode-select")?.focus();
+      else if (state.context === "schedule") this.shadowRoot.querySelector('[data-desktop-field="mode"]')?.closest(".panel-selection")?.querySelector("button")?.focus();
+      else this.shadowRoot.querySelector('[data-desktop-action="review-host-access"]')?.focus();
+    });
+  }
+
+  async _confirmHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy || state.status?.state !== "ready" || !state.acknowledged || (state.context === "schedule" && !state.unattended)) return;
+    state.busy = true; state.error = ""; this._renderHostAccess();
+    try {
+      const status = state.status.enabled ? await this._callWS("host_access") : await this._callWS("enable_host_access", {
+        scope_revision: state.status.disclosure.scope_revision, acknowledged: true,
+      });
+      if (!status.enabled || !status.grant_id || status.disclosure?.scope_revision !== state.status.disclosure.scope_revision) throw new Error("Host access changed. Check again and review the current warning.");
+      this._desktopFeatures.settings.data.host_access = status;
+      if (state.context === "new-chat") {
+        this._threadForm.mode = HOST_MODE;
+        this._threadForm.hostAccessGrant = status.grant_id;
+        this._renderedThreadFormKey = "";
+        this._renderThreadForm();
+      } else if (state.context === "schedule") {
+        const scheduled = this._desktopFeatures.scheduled;
+        scheduled.formDraft = { ...scheduled.formDraft, mode: HOST_MODE };
+        scheduled.hostAccessGrant = status.grant_id;
+        scheduled.hostUnattendedApproved = true;
+        this._renderDesktopSurface();
+      } else if (state.context === "current-chat") {
+        const thread = await this._callWS("update_thread", { thread_id: state.threadId, mode: HOST_MODE, host_access_grant: status.grant_id });
+        if (this._selectedThreadId === state.threadId) this._activeThread = thread;
+        this._syncThreadListStatus();
+        this._render();
+      }
+      state.busy = false;
+      this._closeHostAccess();
+      this._renderDesktopSurface();
+    } catch (error) {
+      state.busy = false; state.error = normalizeDesktopError(error);
+      this._renderHostAccess();
+    }
+  }
+
   _renderDeletionConfirmation() {
     const layer = this.shadowRoot.getElementById("confirmation-layer");
     const shell = this.shadowRoot.querySelector(".shell");
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell) {
+      if (shell && !this._hostAccessDialog) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -6647,8 +6806,8 @@ class CodexBridgePanel extends HTMLElement {
     return this._deleteThread(pending.targetId, null, true);
   }
 
-  _trapDeletionFocus(event) {
-    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+  _trapDeletionFocus(event, dialogId = "confirmation-dialog") {
+    const dialog = this.shadowRoot.getElementById(dialogId);
     if (!dialog) {
       return;
     }
@@ -7438,13 +7597,13 @@ class CodexBridgePanel extends HTMLElement {
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
     modeSelect.setAttribute("aria-describedby", "thread-mode-description");
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option) => option.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
     }
     const modeDescription = document.createElement("ul");
     modeDescription.id = "thread-mode-description";
     modeDescription.className = "mode-boundaries";
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option) => option.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       const item = document.createElement("li");
       const label = document.createElement("strong");
       label.textContent = `${option.label}: `;
@@ -9579,7 +9738,7 @@ class CodexBridgePanel extends HTMLElement {
       ["Account plan", normalizePlanType(account?.plan_type)],
       ["Workspace", this._workspaceLabel(thread?.workspace_path || project?.root_path)],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
-      ["Mode", thread?.mode || "full-auto"],
+      ["Mode", thread?.mode === HOST_MODE ? HOST_LABEL : thread?.mode || "full-auto"],
       ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
@@ -10096,6 +10255,7 @@ class CodexBridgePanel extends HTMLElement {
       const payload = {
         title,
         mode: this._threadForm.mode,
+        ...(this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}),
       };
       if (this._preferences.model) payload.model_override = this._preferences.model;
       if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;

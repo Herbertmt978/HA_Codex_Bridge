@@ -19,6 +19,8 @@ from .codex_app_server import (
 )
 from .browser_broker import BrowserBroker, BrowserInvocationContext
 from .browser_contract import browser_dynamic_tool_spec
+from .host_access import HostAccessError, HostAccessManager, HostLease
+from .host_access_contract import HostResult, host_dynamic_tool_spec
 from .event_store import (
     DurableOperationTooLargeError,
     EventDraft,
@@ -465,6 +467,7 @@ class RuntimeBroker:
         image_generation_authority: _ImageGenerationAuthority | None = None,
         browser_broker: BrowserBroker | None = None,
         browser_dynamic_tools_enabled: bool = False,
+        host_access: HostAccessManager | None = None,
         provider_admission_check: Callable[[], bool] | None = None,
         auth_failure_listener: Callable[[int], None] | None = None,
     ) -> None:
@@ -508,6 +511,11 @@ class RuntimeBroker:
         self._auth_failure_listener = auth_failure_listener
         self._image_generation_authority = image_generation_authority
         self._browser_broker = browser_broker
+        self._host_access = host_access
+        self._host_pending: dict[str, HostLease] = {}
+        self._host_turns: dict[str, tuple[BrowserInvocationContext, HostLease]] = {}
+        self._host_replays: dict[str, dict[str, _BrowserToolReplay]] = {}
+        self._host_thread_grants: dict[str, tuple[int, str]] = {}
         # This has no durable representation. A restored runtime cannot regain
         # access to client-owned tools that were registered on a prior Codex
         # app-server generation.
@@ -716,6 +724,7 @@ class RuntimeBroker:
         *,
         client_request_id: str | None = None,
         unattended: bool = False,
+        host_unattended_approved: bool = False,
         web_search: Literal["live", "disabled"] | None = None,
         admission: PromptAdmission | None = None,
     ) -> RunRecord:
@@ -735,6 +744,12 @@ class RuntimeBroker:
         )
         thread = self.storage.get_thread(thread_id)
         self.storage.resolve_workspace_path(thread.workspace_path)
+        if thread.mode is RunMode.HAOS_FULL_ACCESS:
+            if self._host_access is None:
+                raise HostAccessError("Host Access is unavailable on this Bridge.")
+            if unattended and host_unattended_approved is not True:
+                raise HostAccessError("This scheduled task has no unattended host access acknowledgement.")
+            self._host_access.validate_selection(thread.host_access_grant)
 
         with self._lock:
             self._require_started_locked()
@@ -899,6 +914,7 @@ class RuntimeBroker:
                         prompt=prompt,
                         prompt_fingerprint=_fingerprint(prompt),
                         mode=thread.mode,
+                        host_access_grant=thread.host_access_grant,
                         model=thread.effective_model,
                         effort=thread.effective_thinking_level,
                         workspace_path=thread.workspace_path,
@@ -1084,6 +1100,7 @@ class RuntimeBroker:
                 return _run_record(run)
             self._cancel_queued_for_thread_locked(thread_id, except_run_id=run.run_id)
             run.status = "cancelling"
+            self._revoke_browser_turn_locked(run.run_id)
             run.cancellation_requested_at = _now()
             interaction_events = self._expire_run_interactions_locked(run)
             if not run.codex_thread_id or not run.codex_turn_id:
@@ -1404,7 +1421,7 @@ class RuntimeBroker:
                             else "The Codex turn timed out."
                         ),
                     )
-        except Exception:
+        except Exception as start_error:
             generation_to_abort: int | None = None
             with self._lock:
                 failed = self._state.runs.get(run_id)
@@ -1424,7 +1441,7 @@ class RuntimeBroker:
                 run = self._state.runs.get(run_id)
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     self._terminalize_locked(
-                        run, "failed", "Codex could not start the turn."
+                        run, "failed", str(start_error) if isinstance(start_error, HostAccessError) else "Codex could not start the turn."
                     )
         finally:
             with self._lock:
@@ -1625,6 +1642,20 @@ class RuntimeBroker:
             "approvalsReviewer": "user",
             "config": thread_config,
         }
+        host_lease = None
+        if run.mode is RunMode.HAOS_FULL_ACCESS:
+            if self._host_access is None or getattr(self.app_server, "enable_experimental_api", False) is not True:
+                raise HostAccessError("The runtime cannot provide host access tools.")
+            host_lease = self._host_access.authorise(run.run_id, run.host_access_grant)
+            with self._lock:
+                if run.status in _TERMINAL_RUN_STATES or run.status == "cancelling":
+                    self._host_access.close_run(run.run_id)
+                    return
+                self._host_pending[run.run_id] = host_lease
+                if self._host_thread_grants.get(run.codex_thread_id) != (generation, run.host_access_grant):
+                    # Never revive a provider handle whose tool registration
+                    # and consent this process did not witness.
+                    run.codex_thread_id = None
         browser_tools_advertised = False
         if run.codex_thread_id:
             thread_params["threadId"] = run.codex_thread_id
@@ -1642,6 +1673,8 @@ class RuntimeBroker:
             if not run.unattended and self._browser_tools_ready():
                 thread_params["dynamicTools"] = [browser_dynamic_tool_spec()]
                 browser_tools_advertised = True
+            if host_lease is not None:
+                thread_params.setdefault("dynamicTools", []).append(host_dynamic_tool_spec())
             thread_result = self.app_server.request(
                 "thread/start",
                 thread_params,
@@ -1662,6 +1695,12 @@ class RuntimeBroker:
             if run.codex_thread_id and run.codex_thread_id != codex_thread_id:
                 raise RuntimeProtocolMismatchError()
             run.codex_thread_id = codex_thread_id
+            if host_lease is not None:
+                if not self._host_access.active(host_lease):
+                    raise HostAccessError("Host access was revoked before the task started.")
+                self._host_thread_grants[codex_thread_id] = (generation, host_lease.grant_id)
+                if len(self._host_thread_grants) > 1024:
+                    self._host_thread_grants.pop(next(iter(self._host_thread_grants)))
             if run.status == "cancelling":
                 self._terminalize_locked(
                     run,
@@ -1724,6 +1763,15 @@ class RuntimeBroker:
                 raise RuntimeProtocolMismatchError()
             run.codex_turn_id = turn_id
             self._authorize_browser_turn_locked(run)
+            pending_host = self._host_pending.pop(run.run_id, None)
+            if pending_host is not None and self._host_access.active(pending_host):
+                self._host_turns[run.run_id] = (
+                    BrowserInvocationContext(
+                        run_id=run.run_id, thread_id=run.thread_id,
+                        codex_thread_id=codex_thread_id, turn_id=turn_id, generation=generation,
+                    ), pending_host,
+                )
+                self._host_replays[run.run_id] = {}
             buffered_callbacks = self._pre_response_callbacks.pop(run_id, [])
             if turn_status != "inProgress":
                 items = turn.get("items")
@@ -2435,6 +2483,11 @@ class RuntimeBroker:
         self._browser_tool_replays[run.run_id] = {}
 
     def _revoke_browser_turn_locked(self, run_id: str) -> None:
+        self._host_pending.pop(run_id, None)
+        self._host_turns.pop(run_id, None)
+        self._host_replays.pop(run_id, None)
+        if self._host_access is not None:
+            self._host_access.close_run(run_id)
         self._browser_pending_thread_authorities.pop(run_id, None)
         self._browser_tool_replays.pop(run_id, None)
         authority = self._browser_turn_authorities.pop(run_id, None)
@@ -2462,6 +2515,8 @@ class RuntimeBroker:
         # before the approval parser: a browser callback has no itemId and may
         # never enter the deferred user-interaction state machine.
         if request.method == "item/tool/call":
+            if isinstance(request.params, dict) and request.params.get("namespace") == "ha_host":
+                return self._on_host_tool_call(request)
             return self._on_browser_tool_call(request)
         if request.method in {"execCommandApproval", "applyPatchApproval"}:
             return {"decision": "denied"}
@@ -2516,7 +2571,7 @@ class RuntimeBroker:
                     Literal["accept", "decline", "cancel", "answer"]
                 ] = ["answer"]
             else:
-                if run.mode is RunMode.FULL_AUTO:
+                if run.mode in {RunMode.FULL_AUTO, RunMode.HAOS_FULL_ACCESS}:
                     return _automatic_denial(request.method, params)
                 projected = approval_display(
                     request.method,
@@ -2576,6 +2631,76 @@ class RuntimeBroker:
             interaction.event_id = events[0].scope_sequence
             self._persist_locked()
             return DEFERRED_RESPONSE
+
+    def cancel_host_runs(self) -> None:
+        with self._lock:
+            targets = [run.thread_id for run in self._state.runs.values()
+                       if run.mode is RunMode.HAOS_FULL_ACCESS and run.status not in _TERMINAL_RUN_STATES]
+        for thread_id in targets:
+            try:
+                self.cancel_run(thread_id)
+            except RuntimeBrokerError:
+                continue
+
+    def _on_host_tool_call(self, request: AppServerRequest) -> dict[str, object]:
+        parsed = _dynamic_tool_call_params(
+            request.params, namespace="ha_host", tools={"execute"}, maximum_bytes=160 * 1024,
+        )
+        rejection = {"success": False, "contentItems": [{
+            "type": "inputText", "text": "Host action rejected: access was not granted or is no longer current.",
+        }]}
+        if parsed is None or self._host_access is None:
+            return rejection
+        codex_thread_id, turn_id, call_id, _tool, arguments, fingerprint = parsed
+        with self._lock:
+            run = self._correlated_run_locked(request.generation, codex_thread_id, turn_id)
+            authority = self._host_turns.get(run.run_id) if run is not None else None
+            if (
+                run is None or authority is None or run.status != "running"
+                or run.mode is not RunMode.HAOS_FULL_ACCESS
+                or authority[0].generation != request.generation
+                or authority[0].codex_thread_id != codex_thread_id
+                or authority[0].turn_id != turn_id
+                or not self._host_access.active(authority[1])
+            ):
+                return rejection
+            replays = self._host_replays[run.run_id]
+            replay = replays.get(call_id)
+            if replay is not None:
+                return deepcopy(replay.result) if replay.fingerprint == fingerprint and replay.result else rejection
+            if len(replays) >= _MAX_BROWSER_TOOL_REPLAYS_PER_TURN:
+                return rejection
+            replays[call_id] = _BrowserToolReplay(fingerprint=fingerprint)
+            audit = {"run_id": run.run_id, "item_id": f"host_{uuid4().hex}", "item_type": "haHostCommand"}
+            self._emit_once_locked(run, "item.started", audit, source=audit)
+        started = monotonic()
+        outcome = "failed"
+        try:
+            value = HostResult.model_validate(self._host_access.invoke(authority[1], arguments))
+            outcome = value.status
+            result = {"success": value.status == "completed", "contentItems": [{
+                "type": "inputText", "text": value.model_dump_json(),
+            }]}
+        except Exception:
+            result = rejection
+        with self._lock:
+            current = self._state.runs.get(run.run_id)
+            if current is not None:
+                # Retain the outcome even if Stop/Revoke won the race. Never
+                # copy shell arguments, credentials or output into the journal.
+                completed = {**audit, "host_outcome": outcome, "duration_ms": max(0, int((monotonic() - started) * 1000))}
+                self._emit_once_locked(current, "item.completed", completed, source=completed)
+            if (
+                current is None or current.status != "running"
+                or current.generation != request.generation
+                or self._host_turns.get(run.run_id) != authority
+                or not self._host_access.active(authority[1])
+            ):
+                return rejection
+            replays[call_id].result = deepcopy(result)
+            current.last_activity_at = _now()
+            self._activity[current.run_id] = monotonic()
+        return result
 
     def _on_browser_tool_call(self, request: AppServerRequest) -> dict[str, object]:
         parsed = _browser_tool_call_params(request.params)
@@ -4016,6 +4141,15 @@ def _empty_answers(params: object) -> dict[str, object]:
 def _browser_tool_call_params(
     params: object,
 ) -> tuple[str, str, str, str, dict[str, object], str] | None:
+    return _dynamic_tool_call_params(
+        params, namespace="ha_browser", tools=_BROWSER_DYNAMIC_TOOLS,
+        maximum_bytes=_MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES,
+    )
+
+
+def _dynamic_tool_call_params(
+    params: object, *, namespace: str, tools: set[str] | frozenset[str], maximum_bytes: int,
+) -> tuple[str, str, str, str, dict[str, object], str] | None:
     """Validate the full client-owned browser callback envelope.
 
     ``item/tool/call`` is intentionally not fed through the generic approval
@@ -4035,7 +4169,7 @@ def _browser_tool_call_params(
     thread_id = params.get("threadId")
     turn_id = params.get("turnId")
     call_id = params.get("callId")
-    namespace = params.get("namespace")
+    requested_namespace = params.get("namespace")
     tool = params.get("tool")
     arguments = params.get("arguments")
     identifiers = (thread_id, turn_id, call_id, tool)
@@ -4047,7 +4181,7 @@ def _browser_tool_call_params(
         for value in identifiers
     ):
         return None
-    if namespace != "ha_browser" or tool not in _BROWSER_DYNAMIC_TOOLS:
+    if requested_namespace != namespace or tool not in tools:
         return None
     if not isinstance(arguments, dict) or len(arguments) > 16:
         return None
@@ -4061,7 +4195,7 @@ def _browser_tool_call_params(
         )
     except (TypeError, ValueError):
         return None
-    if len(canonical_arguments.encode("utf-8")) > _MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES:
+    if len(canonical_arguments.encode("utf-8")) > maximum_bytes:
         return None
     fingerprint = hashlib.sha256(
         f"{tool}\0{canonical_arguments}".encode("utf-8")

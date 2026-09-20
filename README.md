@@ -35,6 +35,16 @@ Install both components for the normal Home Assistant OS setup:
 - **HACS Integration:** adds the Codex Bridge panel to Home Assistant.
 - **Supervisor App:** runs Codex and the private Bridge service.
 
+An optional third App, **Codex Host Access**, enables root work on Home Assistant
+OS after an explicit warning and acknowledgement. It can access host files,
+credentials, services and networking. It is not needed for normal use; read the
+[installation and access guide](codex_host_access_app/DOCS.md) before enabling it.
+
+For Home Assistant device and automation management, consider the community
+[HA-MCP server](https://github.com/homeassistant-ai/ha-mcp) as an optional
+companion. Our [connection guide](docs/home-assistant-mcp.md) explains how to
+enable it in Bridge and the current HTTPS requirements.
+
 The App supports **Home Assistant OS on amd64**. You need administrator access,
 HACS and a ChatGPT account with Codex access. Home Assistant Container cannot
 run Supervisor Apps. An existing private external Bridge is an advanced
@@ -95,9 +105,10 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App, Integration and panel **1.0.6**, with Bridge **0.7.9**
-and Codex **0.155.1**. It adds optional browser tools, saved panel preferences,
-grouped Skills and model/reasoning selections for Scheduled tasks. Use the
+This release pairs App, Integration and panel **1.1.0**, with Bridge **0.8.0**
+and Codex **0.155.1**. It adds optional HAOS host access with explicit consent
+and setup guidance for HA-MCP. Browser tools, saved panel preferences, grouped
+Skills and Scheduled model/reasoning selections remain available. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 and [changelog](codex_bridge_app/CHANGELOG.md) to check available versions.
 

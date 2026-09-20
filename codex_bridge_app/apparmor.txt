@@ -40,6 +40,7 @@ profile codex_bridge flags=(attach_disconnected,mediate_deleted) {
   /command/** rix,
 
   /usr/local/bin/ r,
+  /usr/local/bin/codex-app-entrypoint rix,
   /usr/local/bin/python* rix,
   /usr/local/bin/sandbox-self-test rix,
   /usr/local/bin/codex-ha rix,

@@ -84,6 +84,7 @@ class RuntimeRunState(BaseModel):
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
     mode: RunMode
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model: str = Field(min_length=1, max_length=128)
     effort: str = Field(min_length=1, max_length=32)
     workspace_path: str = Field(min_length=1, max_length=512)

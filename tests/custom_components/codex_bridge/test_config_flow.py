@@ -88,6 +88,7 @@ async def test_hassio_discovery_uses_wrapper_identity_and_creates_safe_entry(has
         CONF_BRIDGE_TOKEN: TOKEN,
         CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
         CONF_DISCOVERY_UUID: UUID,
+        "supervisor_slug": "local_codex_bridge",
     }
     assert client.async_ready.await_count == 2
     assert client.async_ready.await_args.kwargs["discovery"].uuid == UUID
@@ -478,3 +479,49 @@ def test_manifest_and_english_localisation_describe_the_supervisor_flow() -> Non
         "app": "Home Assistant App (recommended)",
         "external": "External Bridge (advanced)",
     }
+
+
+@pytest.mark.usefixtures("socket_enabled")
+@pytest.mark.parametrize("case", ["valid", "other_repository", "public_address", "wrong_port", "api_bool", "extra_field", "old_bridge"])
+async def test_host_discovery_pairs_only_the_matching_private_companion(hass, caplog, case):
+    entry = MockConfigEntry(domain=DOMAIN, data={
+        CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+        CONF_BRIDGE_URL: "http://172.30.32.5:8766",
+        CONF_BRIDGE_TOKEN: TOKEN,
+        "supervisor_slug": "local_codex_bridge",
+    })
+    entry.add_to_hass(hass)
+    payload = {"addon": "Codex Host Access", "kind": "host_access", "host": "172.30.32.6", "port": 8767,
+               "token": "h" * 48, "api": {"minimum": 1, "maximum": 1},
+               "companion_id": "c" * 32, "publication_id": "e" * 32}
+    slug = "local_codex_host_access"
+    if case == "other_repository":
+        slug = "other_codex_host_access"
+    elif case == "public_address":
+        payload["host"] = "8.8.8.8"
+    elif case == "wrong_port":
+        payload["port"] = 8766
+    elif case == "api_bool":
+        payload["api"]["minimum"] = True
+    elif case == "extra_field":
+        payload["acknowledged"] = True
+    client = AsyncMock()
+    if case == "old_bridge":
+        from custom_components.codex_bridge.bridge_api import BridgeApiCapabilityError
+        client.async_pair_host_worker.side_effect = BridgeApiCapabilityError()
+    with patch("custom_components.codex_bridge.config_flow.BridgeApiClient", return_value=client):
+        result = await _flow(hass, "hassio").async_step_hassio(HassioServiceInfo(
+            config=payload, name="Codex Host Access", slug=slug, uuid="d" * 32,
+        ))
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == ("host_paired" if case == "valid" else "host_pairing_failed")
+    client.async_enable_host_access.assert_not_called()
+    if case == "valid":
+        assert entry.data["host_access_worker"] == {key: payload[key] for key in ("host", "port", "token", "companion_id")}
+        client.async_pair_host_worker.assert_awaited_once_with(entry.data["host_access_worker"])
+    else:
+        assert "host_access_worker" not in entry.data
+        if case != "old_bridge":
+            client.async_pair_host_worker.assert_not_called()
+    assert payload["token"] not in caplog.text
+    assert TOKEN not in caplog.text
