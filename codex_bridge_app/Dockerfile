@@ -5,7 +5,7 @@ ARG TARGETARCH
 LABEL \
     io.hass.type="app" \
     io.hass.arch="amd64" \
-    io.hass.version="1.0.5"
+    io.hass.version="1.0.6"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -17,11 +17,16 @@ COPY rootfs/ /
 RUN set -eux; \
     test "${TARGETARCH}" = "amd64"; \
     /bin/bash -c 'source /usr/lib/bashio/bashio.sh; declare -F bashio::addon.ip_address >/dev/null'; \
-    # Browser capability remains fail-closed until its separate AppArmor and
-    # connection-time-egress proof exists, but the worker image itself must
-    # use one reproducible Chromium package rather than a moving repository
-    # default.  The exact Alpine 3.24 package is amd64-only by App contract.
-    apk add --no-cache chromium=152.0.7977.82-r0; \
+    # Startup qualifies the explicitly enabled browser against this exact
+    # Chromium package. The App supports amd64 only.
+    wget -q -O /tmp/chromium-152.0.7977.82-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-152.0.7977.82-r0.apk; \
+    echo "01af27a66507b9762ecb86ad0fb74ec08b2613817cb0e9a2e6848221dcde53b0  /tmp/chromium-152.0.7977.82-r0.apk" | sha256sum -c -; \
+    wget -q -O /tmp/chromium-common-152.0.7977.82-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-common-152.0.7977.82-r0.apk; \
+    echo "96cab47f77a18f037f435c20f4a665a495395a57d42909bdefe9a561c5df5d8b  /tmp/chromium-common-152.0.7977.82-r0.apk" | sha256sum -c -; \
+    apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
+    rm /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
     test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
@@ -29,7 +34,7 @@ RUN set -eux; \
     python /usr/local/libexec/codex-bridge/install_locked_assets.py \
       --arch "${TARGETARCH}" \
       --lock /tmp/codex-release.json \
-      --lock-digest 3b6a8b1eae77b624ee87b7da8d32abf4d4d9974a1ba21a53a61f6a0c9f4fdf58 \
+      --lock-digest f353f8f2b526927c9de0dc744a1173644003d087e351412b2095c07a0c017aff \
       --assets-dir /tmp/assets \
       --destination /usr/local/bin; \
     install -d -o root -g root -m 0755 /opt/codex/bin; \
@@ -37,6 +42,8 @@ RUN set -eux; \
     install -o root -g root -m 0755 \
       /usr/local/libexec/codex-bridge/bwrap-wrapper.py \
       /opt/codex/bin/bwrap; \
+    install -d -o root -g root -m 0755 /opt/codex-browser/bin; \
+    install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-browser/bin/bwrap; \
     rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
     chmod 0755 /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
       /usr/local/bin/bwrap /opt/codex/bin/bwrap; \
@@ -49,9 +56,9 @@ RUN set -eux; \
 
 EXPOSE 8766
 
-ENV CODEX_BRIDGE_APP_VERSION="1.0.5" \
-    CODEX_BRIDGE_VERSION="0.7.8" \
+ENV CODEX_BRIDGE_APP_VERSION="1.0.6" \
+    CODEX_BRIDGE_VERSION="0.7.9" \
     CODEX_BRIDGE_CODEX_VERSION="0.155.1" \
     CODEX_BRIDGE_ARCH="amd64" \
-    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="3b6a8b1eae77b624ee87b7da8d32abf4d4d9974a1ba21a53a61f6a0c9f4fdf58" \
+    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="f353f8f2b526927c9de0dc744a1173644003d087e351412b2095c07a0c017aff" \
     CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION="2"

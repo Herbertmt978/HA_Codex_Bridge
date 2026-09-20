@@ -52,7 +52,7 @@ Home Assistant test plugin imports Linux-only modules and cannot run unchanged
 on Windows. A local container test does not prove that the App sandbox works
 on HAOS; verify the built image and startup attestation on the target as well.
 
-This release pairs App, Integration and panel `1.0.5`, with Bridge `0.7.8` and
+This release pairs App, Integration and panel `1.0.6`, with Bridge `0.7.9` and
 Codex `0.155.1`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.
@@ -78,7 +78,7 @@ hash-locked deployed requirements and testing the resulting App image.
 Treat signed publication, target startup, feature behaviour, external proxy
 routes and recovery as separate checks. See the acceptance guides for
 [remote access](acceptance/remote-access.md), [cold restore](acceptance/cold-restore.md)
-and the [disabled browser worker](acceptance/browser-worker.md).
+and the [browser worker](acceptance/browser-worker.md).
 
 ## Supervisor discovery contract
 
@@ -130,6 +130,9 @@ The Codex runtime uses a custom lock with verified archives, signatures and
 protocol schemas, so the daily `Verified Codex update` workflow owns runtime
 updates instead of Dependabot. It checks stable upstream releases, verifies
 the assets, regenerates the contract and opens a narrowly scoped App update.
+The lock includes Codex, its code-mode host and Bubblewrap from the same signed
+release. All three are required in the staged App; a missing companion prevents
+dynamic tools from running even when chat sign-in succeeds.
 
 For unattended updates, the scheduled Codex updater uses a dedicated GitHub App
 installed only on this repository. Grant that App **Contents: read and write**

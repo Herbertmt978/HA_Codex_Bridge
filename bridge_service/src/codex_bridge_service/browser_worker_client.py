@@ -17,6 +17,7 @@ import select
 import stat
 import subprocess
 from threading import RLock
+import time
 from typing import Callable, Protocol
 
 from .browser_contract import BrowserContractError, parse_browser_action
@@ -27,7 +28,7 @@ BROWSER_WORKER_ATTESTATION_PATH = Path(
     "/run/codex-bridge/browser-worker-attestation.json"
 )
 BROWSER_WORKER_PROTOCOL = "browser-worker-v1"
-CHROMIUM_VERSION = "151.0.7922.173"
+CHROMIUM_VERSION = "152.0.7977.82"
 MAX_REQUEST_BYTES = 64 * 1024
 # An 8 MiB PDF may expand to just under 11.2 MiB in base64 plus its JSON shell.
 MAX_RESPONSE_BYTES = 12 * 1024 * 1024
@@ -265,7 +266,7 @@ class BrowserWorkerClient:
             return
         try:
             process.terminate()
-            process.wait(timeout=2)
+            process.wait(timeout=5)
         except (OSError, subprocess.SubprocessError, TimeoutError):
             try:
                 process.kill()
@@ -293,16 +294,22 @@ def _readline_with_timeout(stream: object, timeout_seconds: float) -> bytes:
     """Read one bounded line without allowing a wedged worker to block a turn."""
 
     fileno = getattr(stream, "fileno", None)
-    readline = getattr(stream, "readline", None)
-    if not callable(fileno) or not callable(readline):
+    if not callable(fileno):
         raise BrowserWorkerClientError("browser worker pipes are unavailable")
-    try:
-        ready, _, _ = select.select([fileno()], [], [], timeout_seconds)
-    except (OSError, ValueError) as exc:
-        raise BrowserWorkerClientError("browser worker pipes are unavailable") from exc
-    if not ready:
-        raise BrowserWorkerClientError("browser worker timed out")
-    value = readline(MAX_RESPONSE_BYTES + 2)
-    if not isinstance(value, bytes) or not value.endswith(b"\n") or len(value) > MAX_RESPONSE_BYTES + 1:
-        raise BrowserWorkerClientError("browser worker response is invalid")
-    return value[:-1]
+    deadline = time.monotonic() + timeout_seconds
+    value = bytearray()
+    while True:
+        remaining = deadline - time.monotonic()
+        try:
+            if remaining <= 0 or not select.select([fileno()], [], [], remaining)[0]:
+                raise BrowserWorkerClientError("browser worker timed out")
+            chunk = os.read(fileno(), min(65536, MAX_RESPONSE_BYTES + 2 - len(value)))
+        except (OSError, ValueError) as exc:
+            raise BrowserWorkerClientError("browser worker pipes are unavailable") from exc
+        value.extend(chunk)
+        if not chunk or len(value) > MAX_RESPONSE_BYTES + 1:
+            raise BrowserWorkerClientError("browser worker response is invalid")
+        if b"\n" in value:
+            if not value.endswith(b"\n") or value.count(b"\n") != 1:
+                raise BrowserWorkerClientError("browser worker response is invalid")
+            return bytes(value[:-1])

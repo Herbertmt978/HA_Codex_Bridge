@@ -93,6 +93,63 @@ async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
 }
 
+test("settings persist appearance and keep themed menus usable on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => document.querySelector("codex-bridge-panel")._selectDesktopDestination("settings"));
+  const panel = page.locator("codex-bridge-panel");
+  await panel.getByRole("tab", { name: "Appearance", exact: true }).click();
+  const theme = panel.getByRole("combobox", { name: "Theme", exact: true });
+  await theme.click();
+  const menu = panel.getByRole("listbox", { name: "Theme", exact: true });
+  const bounds = await menu.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await theme.press("End"); await theme.press("Enter");
+  await expect(panel).toHaveAttribute("data-panel-theme", "dark");
+  await expect(theme).toContainText("Dark");
+  await expect(theme).toBeFocused();
+  await page.evaluate(() => { const element = document.querySelector("codex-bridge-panel"); element.hass = { ...element.hass }; });
+  await expect(theme).toBeFocused();
+  await panel.screenshot({ path: test.info().outputPath("settings-dark-mobile.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.reload();
+  await expect(panel).toHaveAttribute("data-panel-theme", "dark");
+});
+
+test("scheduled runtime selections and grouped skills remain readable", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  const form = panel.locator(".schedule-editor");
+  await form.locator("summary").click();
+  const model = form.getByRole("combobox", { name: "Model", exact: true });
+  await model.click();
+  await expect(form.getByRole("option", { name: "GPT-5.6-Sol", exact: true })).toBeVisible();
+  await model.press("Escape");
+  await expect(form.locator('[name="model"]')).toHaveValue("");
+  await form.getByRole("combobox", { name: "Reasoning", exact: true }).click();
+  await expect(form.getByRole("listbox", { name: "Reasoning", exact: true })).toBeVisible();
+  await form.screenshot({ path: test.info().outputPath("scheduled-model-reasoning.png") });
+  await page.evaluate(() => {
+    const element = document.querySelector("codex-bridge-panel");
+    element._desktopFeatures.skills = { loaded: true, data: { skills: [
+      { name: "data-analytics:build-report", scope: "workspace", enabled: true },
+      { name: "data-analytics:design-kpis", scope: "workspace", enabled: true },
+      { name: "aegis:systematic-debugging", scope: "workspace", enabled: false },
+    ] } };
+    element._selectDesktopDestination("skills");
+  });
+  await expect(panel.locator(".skill-group")).toHaveCount(2);
+  await expect(panel.getByRole("heading", { name: "Data analytics 2 skills" })).toBeVisible();
+  await panel.screenshot({ path: test.info().outputPath("skills-grouped.png") });
+});
+
 test("creates and edits a scheduled task using the reference form", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
@@ -109,7 +166,8 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
   await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toBeVisible();
   await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Morning summary");
   await form.getByRole("textbox", { name: "Task instructions" }).fill("Summarise overnight events in Home Assistant.");
-  await form.getByRole("combobox", { name: "Repeat", exact: true }).selectOption("weekdays");
+  await form.getByRole("combobox", { name: "Repeat", exact: true }).click();
+  await form.getByRole("option", { name: "Weekdays", exact: true }).click();
   await form.getByLabel("Time", { exact: true }).fill("09:00");
   await expect(form.locator(".schedule-preview")).toHaveText("Every weekday at 09:00 · Europe/London");
   await expect(form.locator('[name="project_id"], [name="thread_id"], [name="revision"], [name="rrule"]')).toHaveCount(0);
@@ -122,7 +180,7 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
   await repeat.press("Space");
   const stable = await page.evaluate(async () => {
     const panel = document.querySelector("codex-bridge-panel");
-    const select = panel.shadowRoot.querySelector('[name="repeat"]');
+    const select = panel.shadowRoot.querySelector('[role="combobox"][aria-label="Repeat"]');
     const observer = new MutationObserver(() => {});
     observer.observe(select.closest("form"), { childList: true, subtree: true });
     for (let index = 0; index < 12; index += 1) {
@@ -130,7 +188,7 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
       panel._renderDesktopSurface();
       await new Promise(requestAnimationFrame);
     }
-    const result = { same: panel.shadowRoot.querySelector('[name="repeat"]') === select, focus: panel.shadowRoot.activeElement === select, mutations: observer.takeRecords().length };
+    const result = { same: panel.shadowRoot.querySelector('[role="combobox"][aria-label="Repeat"]') === select, focus: panel.shadowRoot.activeElement === select, mutations: observer.takeRecords().length };
     observer.disconnect(); return result;
   });
   await repeat.press("Escape");
@@ -159,7 +217,8 @@ test("keeps a schedule draft after a save error and fits a narrow screen", async
   const form = panel.locator(".schedule-editor");
   await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Check on this chat");
   await form.getByRole("textbox", { name: "Task instructions" }).fill("Check for anything needing attention.");
-  await form.getByRole("combobox", { name: "Runs in", exact: true }).selectOption("continue_thread");
+  await form.getByRole("combobox", { name: "Runs in", exact: true }).click();
+  await form.getByRole("option", { name: "Current chat", exact: true }).click();
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel");
     const send = panel.hass.connection.sendMessagePromise;
@@ -168,7 +227,8 @@ test("keeps a schedule draft after a save error and fits a narrow screen", async
   await form.getByRole("button", { name: "Create task", exact: true }).click();
   await expect(form.getByRole("alert")).toHaveText("Temporary connection failure");
   await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toHaveValue("Check on this chat");
-  await expect(form.getByRole("combobox", { name: "Runs in", exact: true })).toHaveValue("continue_thread");
+  await expect(form.getByRole("combobox", { name: "Runs in", exact: true })).toContainText("Current chat");
+  await expect(form.locator('[name="target_kind"]')).toHaveValue("continue_thread");
   const overflow = await form.evaluate((node) => node.scrollWidth > node.clientWidth || node.getBoundingClientRect().right > window.innerWidth);
   expect(overflow).toBe(false);
   await form.screenshot({ path: test.info().outputPath("scheduled-mobile.png") });

@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
 from codex_bridge_service.automations import AutomationStore
@@ -275,6 +276,13 @@ def test_home_assistant_enables_dynamic_browser_only_for_a_ready_injected_broker
     assert app.state.browser_broker is not None
     assert "browser_v1" in app.state.feature_capabilities
     assert app.state.runner._browser_dynamic_tools_enabled is True
+    # Test the public payload too: a capability in app.state alone is not
+    # usable if the readiness response model rejects its new literal.
+    response = TestClient(app).get("/ready", headers={
+        "Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"
+    })
+    assert response.status_code == 200
+    assert "browser_v1" in response.json()["capabilities"]
 
 
 def test_home_assistant_profile_rejects_legacy_exec_runner_before_composition(

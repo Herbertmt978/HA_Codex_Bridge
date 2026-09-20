@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import struct
 from threading import Event, Thread
 import zlib
@@ -70,7 +71,9 @@ def context(*, run_id: str = "run_1", generation: int = 3, turn_id: str = "turn_
 def open_session(broker: BrowserBroker, owner: BrowserInvocationContext | None = None) -> str:
     result = broker.invoke(owner or context(), "open", {"url": "https://example.com"})
     assert result["success"] is True
-    return broker.session_ids()[0]
+    opened = json.loads(result["contentItems"][0]["text"])
+    assert opened["page"]["title"] == "Example"
+    return opened["session_id"]
 
 
 def test_broker_is_not_ready_and_never_calls_an_unhealthy_worker() -> None:

@@ -327,7 +327,9 @@ def test_apparmor_has_an_exact_bwrap_child_transition() -> None:
         r"(?m)^\s*/usr/local/bin/bwrap\s+[^\n]*x[^\n]*,",
         outer,
     ), "the bundled bwrap must not be directly executable by the parent profile"
-    assert len(re.findall(r"(?m)^\s*profile\s+", profile)) == 2
+    assert re.findall(r"(?m)^\s*profile\s+(\w+)", profile) == [
+        "codex_bridge", "codex_bwrap", "browser_bwrap"
+    ]
 
     bwrap = _apparmor_profile_body("//codex_bwrap")
     assert re.search(r"(?m)^\s*/usr/local/bin/codex\s+ix\s*,", bwrap)

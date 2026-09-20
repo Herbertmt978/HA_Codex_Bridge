@@ -99,14 +99,17 @@ File previews and downloads use Home Assistant's authenticated route. The PDF
 viewer renders validated files locally, with a maximum size of 8 MB and
 scripting disabled. It is not an interactive web browser.
 
-The App-owned browser worker remains disabled pending isolation and network
-attestation. [Issue #43](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/43)
-and the [browser acceptance record](../docs/acceptance/browser-worker.md)
-explain the remaining work. Native web search does not enable this worker.
+To let Codex interact with public websites, turn on **Enable browser tools**
+in this App's Configuration tab, save, and restart the App. Start a new chat
+afterwards. The tools become available only after the App verifies browser
+isolation. Existing chats keep their existing runtime tools. Browser sessions
+are temporary; they cannot use your Chrome login or reach Home Assistant and
+other local devices. See [Browser tools](../docs/browser-tools.md) for examples
+and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.0.5`, with Bridge `0.7.8` and
+This release pairs App, Integration and panel `1.0.6`, with Bridge `0.7.9` and
 Codex `0.155.1`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).

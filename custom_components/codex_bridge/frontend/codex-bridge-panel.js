@@ -1,3 +1,193 @@
+// frontend/src/selection.js
+var sequence = 0;
+function selection(doc, { name, label, value = "", options = [] }) {
+  const root = doc.createElement("div");
+  root.className = "panel-selection";
+  const select = doc.createElement("select");
+  select.name = name;
+  select.hidden = true;
+  select.tabIndex = -1;
+  select.setAttribute("aria-hidden", "true");
+  const trigger = doc.createElement("button");
+  trigger.type = "button";
+  trigger.className = "selection-trigger";
+  trigger.setAttribute("role", "combobox");
+  trigger.setAttribute("aria-label", label);
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  const caption = doc.createElement("span");
+  const arrow = doc.createElement("span");
+  arrow.className = "selection-arrow";
+  arrow.textContent = "⌄";
+  arrow.setAttribute("aria-hidden", "true");
+  trigger.append(caption, arrow);
+  const menu = doc.createElement("div");
+  menu.className = "selection-menu";
+  menu.id = `panel-selection-${++sequence}`;
+  menu.setAttribute("role", "listbox");
+  menu.setAttribute("aria-label", label);
+  menu.setAttribute("popover", "auto");
+  menu.hidden = true;
+  trigger.setAttribute("aria-controls", menu.id);
+  root.append(select, trigger, menu);
+  let active = -1;
+  let search = "";
+  let searchedAt = 0;
+  let openListeners;
+  let removalObserver;
+  const isOpen = () => trigger.getAttribute("aria-expanded") === "true";
+  const activate = (index) => {
+    active = index;
+    [...menu.children].forEach((item, position) => item.classList.toggle("active", position === active));
+    if (menu.children[active]) {
+      trigger.setAttribute("aria-activedescendant", menu.children[active].id);
+      menu.children[active].scrollIntoView?.({ block: "nearest" });
+    }
+  };
+  const close = () => {
+    openListeners?.abort();
+    removalObserver?.disconnect();
+    if (menu.matches(":popover-open")) menu.hidePopover();
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.removeAttribute("aria-activedescendant");
+  };
+  const sync = () => {
+    caption.textContent = select.options[select.selectedIndex]?.textContent || "Choose…";
+    [...menu.children].forEach((item, index) => item.setAttribute("aria-selected", String(index === select.selectedIndex)));
+  };
+  const choose = (index) => {
+    if (!select.options[index] || select.options[index].disabled) return;
+    select.selectedIndex = index;
+    sync();
+    close();
+    trigger.focus();
+    select.dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+  };
+  const open = () => {
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 240), doc.documentElement.clientWidth - 24);
+    const below = doc.defaultView.innerHeight - rect.bottom - 12;
+    const above = rect.top - 12;
+    const upwards = below < 220 && above > below;
+    menu.style.width = `${Math.max(0, width)}px`;
+    menu.style.left = `${Math.max(12, Math.min(rect.right - width, doc.documentElement.clientWidth - width - 12))}px`;
+    menu.style.maxHeight = `${Math.max(44, Math.min(320, upwards ? above : below))}px`;
+    menu.style.top = upwards ? "auto" : `${rect.bottom + 4}px`;
+    menu.style.bottom = upwards ? `${doc.defaultView.innerHeight - rect.top + 4}px` : "auto";
+    menu.hidden = false;
+    menu.showPopover?.();
+    trigger.setAttribute("aria-expanded", "true");
+    openListeners = new doc.defaultView.AbortController();
+    const signal = openListeners.signal;
+    doc.addEventListener("scroll", (event) => {
+      if (event.target !== menu) close();
+    }, { capture: true, signal });
+    doc.defaultView.addEventListener("resize", close, { signal });
+    if (!menu.showPopover) doc.addEventListener("pointerdown", (event) => {
+      if (!event.composedPath().includes(root)) close();
+    }, { signal });
+    removalObserver = new doc.defaultView.MutationObserver(() => {
+      if (!root.isConnected) close();
+    });
+    removalObserver.observe(root.getRootNode(), { childList: true, subtree: true });
+    activate(select.selectedIndex >= 0 && !select.options[select.selectedIndex].disabled ? select.selectedIndex : [...select.options].findIndex((item) => !item.disabled));
+  };
+  trigger.addEventListener("click", () => isOpen() ? close() : open());
+  trigger.addEventListener("keydown", (event) => {
+    const enabled = [...select.options].map((item, index) => item.disabled ? -1 : index).filter((index) => index >= 0);
+    if (["ArrowDown", "ArrowUp", "Home", "End", "Enter", " ", "Escape"].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        close();
+        return;
+      }
+      if (!isOpen()) {
+        open();
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        choose(active);
+        return;
+      }
+      const position = enabled.indexOf(active);
+      activate(event.key === "Home" ? enabled[0] : event.key === "End" ? enabled.at(-1) : enabled[(position + (event.key === "ArrowUp" ? -1 : 1) + enabled.length) % enabled.length]);
+    } else if (event.key === "Tab") close();
+    else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpen()) open();
+      search = Date.now() - searchedAt < 700 ? search + event.key : event.key;
+      searchedAt = Date.now();
+      const match = enabled.find((index) => select.options[index].textContent.toLowerCase().startsWith(search.toLowerCase()));
+      if (match !== void 0) activate(match);
+    }
+  });
+  trigger.addEventListener("blur", () => {
+    if (!menu.matches(":popover-open")) close();
+  });
+  menu.addEventListener("toggle", (event) => {
+    if (event.newState === "closed") close();
+  });
+  menu.addEventListener("pointerdown", (event) => event.preventDefault());
+  select.addEventListener("change", sync);
+  root.setOptions = (choices, selected = select.value) => {
+    close();
+    select.replaceChildren();
+    menu.replaceChildren();
+    choices.forEach(([key, title, disabled = false], index) => {
+      const option = doc.createElement("option");
+      option.value = key;
+      option.textContent = title;
+      option.disabled = disabled;
+      select.append(option);
+      const item = doc.createElement("div");
+      item.id = `${menu.id}-${index}`;
+      item.setAttribute("role", "option");
+      item.setAttribute("aria-disabled", String(disabled));
+      item.textContent = title;
+      item.addEventListener("click", () => choose(index));
+      menu.append(item);
+    });
+    select.value = selected;
+    sync();
+  };
+  root.setOptions(options, value);
+  return root;
+}
+var SELECTION_STYLES = `
+  .panel-selection { min-width: 0; width: max-content; max-width: 65%; }
+  .selection-trigger { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; background: transparent; color: var(--text-color); font: inherit; font-size: 15px; cursor: pointer; text-align: left; }
+  .selection-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .selection-trigger:hover, .selection-trigger[aria-expanded="true"] { background: var(--surface-alt); border-color: var(--border-color); }
+  .selection-trigger:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+  .selection-arrow { flex-shrink: 0; color: var(--muted-color); }
+  .selection-menu { position: fixed; inset: auto; margin: 0; box-sizing: border-box; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); color: var(--text-color); box-shadow: 0 8px 32px #0003; font-size: 15px; z-index: 100; }
+  .selection-menu[hidden] { display: none; }
+  .selection-menu [role="option"] { min-height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 7px; cursor: pointer; overflow-wrap: anywhere; }
+  .selection-menu [role="option"]::after { content: ""; margin-left: auto; width: 16px; flex-shrink: 0; }
+  .selection-menu [aria-selected="true"]::after { content: "✓"; }
+  .selection-menu [role="option"]:hover, .selection-menu .active { background: var(--surface-alt); }
+  .selection-menu [aria-disabled="true"] { opacity: .5; cursor: default; }
+  @media (max-width: 540px) { .panel-selection { max-width: 60%; } .selection-trigger { font-size: 14px; padding-inline: 8px; } }
+`;
+
+// frontend/src/model-choices.js
+function modelChoices(context, selected = "") {
+  const options = [["", context.defaultModel ? `Inherit (${context.defaultModel})` : "Inherit default"]];
+  for (const record of context.models || []) options.push([record.model, record.display_name || record.model]);
+  if (selected && !options.some(([key]) => key === selected)) options.push([selected, `${selected} (saved, unavailable)`]);
+  return options;
+}
+function reasoningChoices(context, model = "", selected = "") {
+  const record = context.models?.find((item) => item.model === (model || context.defaultModel));
+  const options = [["", "Inherit default"]];
+  for (const level of record?.thinking_levels || []) options.push([level, level.charAt(0).toUpperCase() + level.slice(1)]);
+  if (selected && !options.some(([key]) => key === selected)) options.push([selected, `${selected} (saved, unavailable)`]);
+  return options;
+}
+
 // frontend/src/scheduled-tasks.js
 var WEEKDAYS = [
   ["MO", "Monday"],
@@ -152,19 +342,19 @@ function element(doc, tag, className, value) {
   return node;
 }
 function field(doc, name, label, value, options = null, type = "text") {
-  const row = element(doc, "label", "schedule-row");
+  const row = element(doc, options ? "div" : "label", "schedule-row");
   row.append(element(doc, "span", "schedule-row-label", label));
-  const control = element(doc, options ? "select" : type === "textarea" ? "textarea" : "input");
+  if (options) {
+    const picker = selection(doc, { name, label, value, options });
+    picker.querySelector("select").dataset.desktopField = name;
+    row.append(picker);
+    return row;
+  }
+  const control = element(doc, type === "textarea" ? "textarea" : "input");
   control.name = name;
   control.dataset.desktopField = name;
   control.setAttribute("aria-label", label);
-  if (options) for (const [key, title, disabled = false] of options) {
-    const option = element(doc, "option", "", title);
-    option.value = key;
-    option.disabled = disabled;
-    control.append(option);
-  }
-  else if (type !== "textarea") control.type = type;
+  if (type !== "textarea") control.type = type;
   control.value = String(value ?? "");
   row.append(control);
   return row;
@@ -262,7 +452,23 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
   advanced.append(element(doc, "summary", "", "Advanced"));
   const advancedCard = element(doc, "div", "schedule-card");
   advancedCard.append(field(doc, "mode", "Permissions", values.mode, [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto"]]));
-  advancedCard.append(field(doc, "model", "Model (inherit when blank)", values.model), field(doc, "thinking", "Reasoning (inherit when blank)", values.thinking));
+  const modelContext = () => ({ ...context, defaultModel: form.querySelector('[name="target_kind"]').value === "continue_thread" ? context.threadModel || context.defaultModel : context.defaultModel });
+  const model = field(doc, "model", "Model", values.model, modelChoices(modelContext(), values.model));
+  const thinking = field(doc, "thinking", "Reasoning", values.thinking, reasoningChoices(modelContext(), values.model, values.thinking));
+  model.querySelector("select").addEventListener("change", () => {
+    const choices = reasoningChoices(modelContext(), model.querySelector("select").value);
+    const selected = thinking.querySelector("select").value;
+    const supported = choices.some(([key]) => key === selected) ? selected : "";
+    thinking.querySelector(".panel-selection").setOptions(choices, supported);
+    thinking.querySelector("select").dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+  });
+  form.querySelector('[name="target_kind"]').addEventListener("change", () => {
+    const selectedModel = model.querySelector("select").value;
+    const selectedThinking = thinking.querySelector("select").value;
+    model.querySelector(".panel-selection").setOptions(modelChoices(modelContext(), selectedModel), selectedModel);
+    thinking.querySelector(".panel-selection").setOptions(reasoningChoices(modelContext(), selectedModel, selectedThinking), selectedThinking);
+  });
+  advancedCard.append(model, thinking);
   advanced.append(advancedCard, element(doc, "p", "desktop-note", "Unattended tasks cannot answer approval requests. Observe is the default."));
   form.append(advanced);
   const error = element(doc, "p", "schedule-error", state.formError || "");
@@ -279,6 +485,31 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
   form.append(actions);
   refreshScheduleForm(form);
   return form;
+}
+
+// frontend/src/panel-preferences.js
+var DEFAULT_PREFERENCES = Object.freeze({ theme: "ha", textSize: "default", motion: "system", mode: "full-auto", model: "", thinking: "" });
+function normalisePreferences(value = {}) {
+  const result = { ...DEFAULT_PREFERENCES };
+  for (const [key, allowed] of Object.entries({ theme: ["ha", "light", "dark"], textSize: ["default", "large", "larger"], motion: ["system", "reduced"], mode: ["observe", "edit", "full-auto"] })) {
+    if (allowed.includes(value?.[key])) result[key] = value[key];
+  }
+  for (const key of ["model", "thinking"]) {
+    if (typeof value?.[key] === "string" && /^[a-zA-Z0-9._-]{0,100}$/u.test(value[key])) result[key] = value[key];
+  }
+  return result;
+}
+function readPreferences(storage, key) {
+  try {
+    return normalisePreferences(JSON.parse(storage.getItem(key) || "{}"));
+  } catch {
+    return { ...DEFAULT_PREFERENCES };
+  }
+}
+function savePreferences(storage, key, value) {
+  const preferences = normalisePreferences(value);
+  storage.setItem(key, JSON.stringify(preferences));
+  return preferences;
 }
 
 // frontend/src/safe-dom.js
@@ -23395,11 +23626,28 @@ function renderSkills(documentRef, state) {
     section2.append(form);
   }
   const rows = normalizeDesktopList(state.data.skills || state.data);
-  section2.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
-    const id = row.id || row.skill_id || row.name || "";
-    td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-    td.append(button(documentRef, "Delete", "delete-skill", { id }));
-  }));
+  const groups = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const name = String(row.name || "");
+    const category = name.includes(":") ? name.slice(0, name.indexOf(":")) : "General";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(row);
+  }
+  if (!rows.length) section2.append(renderEmpty(documentRef, "No skills found in this workspace."));
+  for (const [category, skills] of [...groups].sort(([a2], [b2]) => a2.localeCompare(b2))) {
+    const group = documentRef.createElement("section");
+    group.className = "skill-group";
+    const heading = text(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
+    const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
+    heading.append(count);
+    group.append(heading);
+    group.append(renderTable(documentRef, [...skills].sort((a2, b2) => String(a2.name).localeCompare(String(b2.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+      const id = row.id || row.skill_id || row.name || "";
+      td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button(documentRef, "Delete", "delete-skill", { id }));
+    }));
+    section2.append(group);
+  }
   return section2;
 }
 function renderPlugins(documentRef, state) {
@@ -23436,14 +23684,14 @@ function renderPlugins(documentRef, state) {
   section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
   return section2;
 }
-function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
   const section2 = documentRef.createElement("div");
   section2.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav");
   tabs.className = "settings-tabs";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) {
     const control = button(documentRef, label, "select-settings-tab", { tab: id });
@@ -23464,6 +23712,42 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   panel.setAttribute("aria-labelledby", `settings-tab-${tab}`);
   section2.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
+  const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
+  const saved = text(documentRef, "p", "", "preference-save-status");
+  saved.setAttribute("role", "status");
+  const pickers = {};
+  const addPreference = (card, key, label, options) => {
+    const row = documentRef.createElement("div");
+    row.className = "schedule-row";
+    const picker = selection(documentRef, { name: key, label, value: preferences[key], options });
+    picker.dataset.preference = key;
+    pickers[key] = picker;
+    row.append(text(documentRef, "span", label, "schedule-row-label"), picker);
+    card.append(row);
+    picker.querySelector("select").addEventListener("change", () => {
+      preferences[key] = picker.querySelector("select").value;
+      if (key === "model") {
+        const choices = reasoningChoices(settings, preferences.model);
+        if (!choices.some(([level]) => level === preferences.thinking)) preferences.thinking = "";
+        pickers.thinking.setOptions(choices, preferences.thinking);
+      }
+      try {
+        settings.onPreferenceChange?.(preferences);
+        saved.textContent = "Saved for this Home Assistant user in this browser.";
+      } catch {
+        saved.textContent = "Applied for this visit. Browser storage is unavailable, so these preferences could not be saved.";
+      }
+    });
+  };
+  if (tab === "appearance") {
+    panel.append(text(documentRef, "h3", "Appearance", "desktop-subheading"));
+    const card = documentRef.createElement("div");
+    card.className = "schedule-card settings-card";
+    addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
+    addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
+    addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
+    panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+  }
   if (tab === "mcp") {
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") {
@@ -23507,7 +23791,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App, and account credentials remain in its private storage. Full auto allows work inside the selected workspace and enabled tools; it does not grant access to the VM, Home Assistant files or unrestricted networking.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -23521,8 +23805,18 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
     addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
     panel.append(
-      text(documentRef, "h3", "General", "desktop-subheading"),
-      text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
+      text(documentRef, "h3", "New chat defaults", "desktop-subheading")
+    );
+    const defaults = documentRef.createElement("div");
+    defaults.className = "schedule-card settings-card";
+    addPreference(defaults, "mode", "Permissions", [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]]);
+    addPreference(defaults, "model", "Model", modelChoices(settings, preferences.model));
+    addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
+    panel.append(
+      defaults,
+      text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
+      text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
+      saved,
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
@@ -23538,7 +23832,7 @@ function syncDesktopFeatureDrafts(container, state) {
   const rendered = renderedFeatureInputs.get(container);
   if (rendered) rendered.drafts = featureDraftInputs(state);
 }
-function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
+function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.onclick = (event) => {
@@ -23557,7 +23851,9 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     timezone,
     hasActiveProject,
     activeProjectId,
-    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
+    settingsModels: destination === "settings" ? settings.models : null,
+    settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null
   });
   const drafts = featureDraftInputs(state);
   const rendered = renderedFeatureInputs.get(container);
@@ -23595,12 +23891,12 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm);
   }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.5";
+var PANEL_VERSION = "1.0.6";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -23762,6 +24058,7 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 var template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${SELECTION_STYLES}
     :host {
       --panel-bg: var(--primary-background-color, #f5f7fb);
       --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
@@ -23799,6 +24096,28 @@ template.innerHTML = `
     :host(:fullscreen) {
       width: 100vw;
       height: 100dvh;
+    }
+
+    :host([data-panel-theme="light"]) {
+      color-scheme: light;
+      --panel-bg: #f5f7fb; --surface-bg: #ffffff; --surface-alt: #f2f4f7;
+      --surface-muted: #eef1f5; --border-color: #d4dae2; --text-color: #151b29;
+      --muted-color: #596579; --accent-color: #087bab;
+    }
+    :host([data-panel-theme="dark"]) {
+      color-scheme: dark;
+      --panel-bg: #15181d; --surface-bg: #1d2128; --surface-alt: #292f38;
+      --surface-muted: #252b34; --border-color: #454e5c; --text-color: #f0f2f6;
+      --muted-color: #b5bfcd; --accent-color: #70c7ee;
+    }
+    :host([data-text-size="large"]) .bubble-text,
+    :host([data-text-size="large"]) .composer textarea { font-size: 18px; }
+    :host([data-text-size="larger"]) .bubble-text,
+    :host([data-text-size="larger"]) .composer textarea { font-size: 20px; }
+    :host([data-motion="reduced"]) *,
+    :host([data-motion="reduced"]) *::before,
+    :host([data-motion="reduced"]) *::after {
+      animation: none !important; transition: none !important; scroll-behavior: auto !important;
     }
 
     :host(:fullscreen) .rail-pane {
@@ -26318,6 +26637,12 @@ template.innerHTML = `
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-card { margin: 16px 0; }
+    .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
+    .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
+    .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
+    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: 13px; }
+    .skill-group .desktop-table { margin: 0; }
     .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
@@ -28525,6 +28850,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
     this._hass = null;
+    this._preferences = { ...DEFAULT_PREFERENCES };
+    this._preferenceKey = null;
     this._panel = null;
     this._staticUiInstalled = false;
     this._config = null;
@@ -28667,6 +28994,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   connectedCallback() {
     this._installStaticUi();
+    this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
@@ -28705,6 +29033,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   set hass(value) {
     this._hass = value;
+    this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
       return;
@@ -28713,6 +29042,27 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   get hass() {
     return this._hass;
+  }
+  _loadPreferences() {
+    const key = `codex-bridge:preferences:${this._hass?.user?.id || "local"}`;
+    if (this._preferenceKey === key) return;
+    this._preferenceKey = key;
+    try {
+      this._preferences = readPreferences(window.localStorage, key);
+    } catch {
+      this._preferences = { ...DEFAULT_PREFERENCES };
+    }
+    this._applyPreferences();
+  }
+  _applyPreferences() {
+    this.dataset.panelTheme = this._preferences.theme;
+    this.dataset.textSize = this._preferences.textSize;
+    this.dataset.motion = this._preferences.motion;
+  }
+  _savePreferences(value) {
+    this._preferences = normalisePreferences(value);
+    this._applyPreferences();
+    savePreferences(window.localStorage, this._preferenceKey || "codex-bridge:preferences:local", this._preferences);
   }
   set panel(value) {
     this._panel = value;
@@ -29660,7 +30010,8 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
-    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC" };
+    const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
+    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
   async _submitScheduledTask(state, target, update) {
     const form = target?.closest("form");
@@ -29889,7 +30240,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     }
   }
   _handleTooltipPointerOver(event) {
@@ -32864,7 +33215,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._showProjectForm = false;
     this._threadForm = {
       title: "",
-      mode: "full-auto",
+      mode: this._preferences.mode,
       projectId
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
@@ -33092,6 +33443,8 @@ var CodexBridgePanel = class extends HTMLElement {
         title,
         mode: this._threadForm.mode
       };
+      if (this._preferences.model) payload.model_override = this._preferences.model;
+      if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;
       if (this._threadForm.projectId) {
         payload.project_id = this._threadForm.projectId;
       }
@@ -34123,8 +34476,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._refreshArtifactDownloadUi();
     }
   }
-  async _copyMessage(sequence) {
-    const numericSequence = Number(sequence);
+  async _copyMessage(sequence2) {
+    const numericSequence = Number(sequence2);
     const event = this._events.find((item) => item.sequence === numericSequence);
     const text2 = event?.payload?.text || "";
     if (!text2) {

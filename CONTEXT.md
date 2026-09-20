@@ -29,7 +29,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App, Integration and panel `1.0.5`, Bridge `0.7.8` and
+- This release pairs App, Integration and panel `1.0.6`, Bridge `0.7.9` and
   Codex `0.155.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -55,8 +55,10 @@ to the App or Bridge.
   stay in private Codex storage. MCP is disabled by default and accepts only
   trusted outbound HTTPS servers after explicit enablement and restart.
   DNS validation is not connection-time egress enforcement.
-- The App-owned browser worker remains disabled under ADR 0006 and issue #43.
-  Native search and local PDF/image previews do not imply browser capability.
+- The App-owned browser worker requires the explicit enable_browser option
+  and a separate root startup proof under ADR 0006. Only new Codex sessions
+  receive its typed tools. Native search and local PDF/image previews do not
+  imply browser capability.
   Full PDF workflows, external proxy routes, cold restores and arbitrary
   previous-image rollback require their own target acceptance evidence.
 
