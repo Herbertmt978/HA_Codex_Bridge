@@ -3,6 +3,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
+import { HA_MCP_GUIDE, renderMcpSetup } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -316,7 +317,7 @@ function renderPlugins(documentRef, state) {
 function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
   const section = documentRef.createElement("div"); section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav"); tabs.className = "settings-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["access", "Access"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) { const control = button(documentRef, label, "select-settings-tab", { tab: id }); control.className = "settings-tab"; control.id = `settings-tab-${id}`; control.dataset.settingsTab = id; control.setAttribute("role", "tab"); control.setAttribute("aria-controls", "settings-panel"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; tabs.append(control); }
   section.append(tabs);
@@ -356,11 +357,12 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     recommendation.className = "desktop-note";
     recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
     const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
-    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    guide.href = HA_MCP_GUIDE;
     guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
     recommendation.append(guide); panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
-    if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource"))); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1")));
+    panel.append(button(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
   }
   if (tab === "instructions") {
@@ -379,6 +381,28 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
   if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
+  if (tab === "access") {
+    panel.append(text(documentRef, "h3", "Choose the access your task needs", "desktop-subheading"));
+    const workspace = text(documentRef, "section", "", "schedule-card host-access-settings");
+    workspace.append(text(documentRef, "h3", "Full auto · workspace"), text(documentRef, "p", "Codex can use enabled tools automatically and edit files inside the selected workspace. It cannot use private host paths or direct network connections. Set your new-chat permission default in General, or change permissions for an individual chat.", "desktop-note"), button(documentRef, "New chat defaults", "select-settings-tab", { tab: "general" }));
+    const mcpCard = text(documentRef, "section", "", "schedule-card host-access-settings");
+    mcpCard.append(text(documentRef, "h3", "Home Assistant devices and automations"), text(documentRef, "p", "Connect HA-MCP to give Codex the Home Assistant tools you choose. This is separate from root host access; revoking one does not revoke the other.", "desktop-note"), button(documentRef, "Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" }));
+    const host = state.data?.host_access;
+    const card = text(documentRef, "section", "", "schedule-card host-access-settings");
+    card.append(text(documentRef, "h3", HOST_LABEL), text(documentRef, "p", "The optional Codex Host Access App lets Codex run commands as root on the HAOS machine. That includes its files, credentials, services, internet and local network. It can change or delete data and interrupt Home Assistant.", "desktop-note"));
+    if (config?.capabilities?.includes("host_access_v1")) {
+      card.append(text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Review the full warning before enabling access. If the companion App is missing, the setup dialog links to its installation instructions.", "desktop-note"), button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
+      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
+    } else {
+      card.append(text(documentRef, "p", "Host access is not available on this connection. Update the Codex Bridge App and HACS Integration, then restart Home Assistant and reload this panel. Updating does not grant host access.", "desktop-note"));
+      const guide = text(documentRef, "a", "Update instructions and missing-update checks");
+      guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/installation.md#update-an-existing-installation";
+      guide.target = "_blank"; guide.rel = "noopener noreferrer";
+      card.append(guide, button(documentRef, "Check connection options again", "refresh-settings-capabilities"));
+    }
+    panel.append(workspace, mcpCard, card);
+  }
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -401,20 +425,11 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(defaults,
       text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
       text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"), saved,
+      button(documentRef, "Access settings and Home Assistant control", "select-settings-tab", { tab: "access" }),
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
-    if (config?.capabilities?.includes("host_access_v1")) {
-      const host = state.data?.host_access;
-      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
-      card.append(text(documentRef, "h3", HOST_LABEL),
-        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
-        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
-      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
-      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
-      panel.append(card);
-    }
   }
   return section;
 }
@@ -451,6 +466,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined }, timezone, hasActiveProject, activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
+    settingsCapabilities: destination === "settings" ? config?.capabilities : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,
   });
   const drafts = featureDraftInputs(state);

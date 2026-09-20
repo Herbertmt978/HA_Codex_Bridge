@@ -105,7 +105,7 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.1.1**, Integration and panel **1.1.0**, with Bridge **0.8.0**
+This release pairs App **1.1.2**, Integration and panel **1.1.2**, with Bridge **0.8.0**
 and Codex **0.155.1**. It adds optional HAOS host access with explicit consent
 and setup guidance for HA-MCP. Browser tools, saved panel preferences, grouped
 Skills and Scheduled model/reasoning selections remain available. Use the

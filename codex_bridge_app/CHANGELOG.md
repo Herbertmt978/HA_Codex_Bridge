@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 1.1.2
+
+- Adds guided HA-MCP setup alongside the existing custom MCP connection form.
+- Adds a visible Access settings page with host-control warnings and update
+  guidance for older connections. Host access still needs explicit consent.
+- Preserves connection drafts when retrying a failed Settings refresh.
+- Explains HACS update discovery delays and the legacy HACS update-icon workaround.
+- Pairs with Integration and panel 1.1.2; the App's access permissions are unchanged.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.0` without changing its Integration API compatibility.
+
 ## 1.1.1
 
 - Updates Uvicorn to `0.53.0` and repairs the locked build dependencies so the

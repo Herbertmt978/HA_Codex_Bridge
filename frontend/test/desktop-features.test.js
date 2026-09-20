@@ -560,6 +560,7 @@ describe("desktop feature surfaces", () => {
 
   it("omits blank optional OAuth fields from MCP create payloads", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._config = { capabilities: ["mcp_admin_v1"] };
     panel._activeDestination = "settings";
     panel._desktopFeatures.settings.loaded = true;
     panel._desktopFeatures.settings.settingsTab = "mcp";
@@ -765,8 +766,8 @@ describe("desktop feature surfaces", () => {
     const general = panel.shadowRoot.querySelector("[data-settings-tab=general]");
     general.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     await Promise.resolve();
-    expect(panel._desktopFeatures.settings.settingsTab).toBe("appearance");
-    expect(panel.shadowRoot.querySelector("[data-settings-tab=appearance]")).toBe(panel.shadowRoot.activeElement);
+    expect(panel._desktopFeatures.settings.settingsTab).toBe("access");
+    expect(panel.shadowRoot.querySelector("[data-settings-tab=access]")).toBe(panel.shadowRoot.activeElement);
   });
 
   it("submits desktop forms with Enter from a single-line field", async () => {

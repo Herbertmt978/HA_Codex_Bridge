@@ -105,15 +105,46 @@ authentication requirements. Install and enable it separately.
 6. Check that the App is running, ChatGPT is connected and existing chats are
    present before resuming scheduled work.
 
-If no update appears, first check the GitHub release exists and its App
-publication workflow succeeded. Refresh the App store/repository and HACS
-repository information separately. Compare their installed versions with the
-release notes: one component may already be current. A hard browser reload
-refreshes the page but does not install an Integration or App update.
+If no Integration update appears, open its HACS repository menu and select
+**Update information**. HACS checks downloaded custom repositories at startup
+and every 48 hours, so a newly published release may not appear immediately.
+This refresh only checks release information; it does not install anything.
+See [HACS update checks](https://www.hacs.xyz/docs/faq/data_sources/).
+
+For a missing App update, check that the App publication workflow succeeded,
+then refresh the App store repository. Compare both installed versions with
+the release notes: one component may already be current. A hard browser reload
+loads the installed panel again but does not install an Integration or App update.
 
 The App's **Auto update** option can install newly published App images. It
 does not replace HACS Integration updates. Codex does not self-update inside a
 running App container.
+
+### Missing icon on the HACS update card
+
+Codex Bridge includes local brand images. HACS 2.0.5 still points its update
+entity at the older public brands service, so that card can have a missing
+icon even when the Integration icon works elsewhere. This does not affect
+update discovery or installation.
+
+Until HACS supports local brand images for its update entity, you can copy
+`custom_components/codex_bridge/brand/icon.png` to
+`www/codex_bridge/icon.png` inside your HA configuration folder, then add an
+[entity customisation](https://www.home-assistant.io/docs/configuration/customizing-devices/)
+for your Codex Bridge update entity:
+
+```yaml
+homeassistant:
+  customize:
+    update.home_assistant_codex_bridge_update:
+      entity_picture: /local/codex_bridge/icon.png
+```
+
+Merge this into any existing `homeassistant` and `customize` sections; do not
+create duplicate keys. Check the actual entity ID in your installation.
+Validate the configuration, reload **Core configuration**, then refresh the
+HACS repository information. The image is public branding and contains no
+credentials. Remove this customisation when HACS provides the local icon itself.
 
 ## After installation
 

@@ -22,11 +22,22 @@ permissions: revoking one does not revoke the other.
    them. Those rights can affect your home even without HAOS root access.
 3. In **Settings → Apps → Codex Bridge → Configuration**, enable **Enable MCP**,
    save and restart Codex Bridge.
-4. Open **Codex Bridge → Settings → MCP servers → Add MCP server**. Give it a
-   name such as **Home Assistant** and enter your own compatible HTTPS MCP URL.
-   Complete **Sign in** if the server advertises OAuth.
-5. Start a new chat and first ask Codex to find or describe an entity. Confirm
+4. Open **Codex Bridge → Settings → MCP servers → Add MCP server →
+   Home Assistant (HA-MCP)**. The guide walks through installation, tool
+   permissions and enabling MCP. Select **Check connection options again**
+   after restarting the App. Keep the suggested name `home-assistant`, or
+   use another name with lowercase letters, numbers, hyphens or underscores.
+5. Configure the **HA-MCP Server** entry under **Settings → Devices & services**
+   and copy its compatible HTTPS connection URL into the Bridge form. The URL
+   is masked because it may include a secret. Add the server and complete
+   **Sign in** if it advertises OAuth; optional public OAuth fields are under
+   **OAuth settings**. **Refresh server status** checks the current state.
+6. Start a new chat and first ask Codex to find or describe an entity. Confirm
    the result before asking it to change a device, automation or configuration.
+
+**Other MCP server** remains available in the same Add menu. It accepts any
+compatible trusted HTTPS MCP server and optional public OAuth settings. The
+HA-MCP guide does not install software or grant additional permissions for you.
 
 ## Connection requirements
 

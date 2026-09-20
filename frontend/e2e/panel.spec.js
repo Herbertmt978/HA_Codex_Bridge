@@ -179,6 +179,53 @@ test("settings persist appearance and keep themed menus usable on a narrow scree
   await expect(panel).toHaveAttribute("data-panel-theme", "dark");
 });
 
+for (const width of [390, 1280]) {
+  test(`guided HA-MCP and custom connections remain accessible at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [] };
+      element._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "Access", exact: true }).click();
+    await expect(panel.getByText("Full access · Home Assistant OS", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Update instructions and missing-update checks" })).toBeVisible();
+    await panel.screenshot({ path: testInfo.outputPath("access-settings.png") });
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();
+    await expect(panel.getByRole("button", { name: /^Home Assistant \(HA-MCP\)/ })).toBeFocused();
+    await expect(panel.getByRole("button", { name: /^Other MCP server/ })).toBeVisible();
+    await panel.screenshot({ path: testInfo.outputPath("mcp-choices.png") });
+    await panel.getByRole("button", { name: /^Home Assistant \(HA-MCP\)/ }).press("Enter");
+    await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("home-assistant");
+    await expect(panel.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();
+    await panel.getByLabel("HA-MCP HTTPS connection URL").fill("https://ha.example.org/api/webhook/test-only");
+    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveAttribute("type", "password");
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element.hass = { ...element.hass };
+    });
+    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveValue("https://ha.example.org/api/webhook/test-only");
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
+    const formBounds = await panel.locator('[data-desktop-form="mcp"]').boundingBox();
+    expect(formBounds.x).toBeGreaterThanOrEqual(0);
+    expect(formBounds.x + formBounds.width).toBeLessThanOrEqual(width);
+    await panel.screenshot({ path: testInfo.outputPath("ha-mcp-guide.png") });
+    await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+    await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();
+    await panel.getByRole("button", { name: /^Other MCP server/ }).click();
+    await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("");
+    await panel.getByText("OAuth settings (optional)", { exact: true }).click();
+    await expect(panel.getByLabel("OAuth client ID (public)")).toBeVisible();
+    await expect(panel.getByLabel("OAuth resource")).toBeVisible();
+  });
+}
+
 test("scheduled runtime selections and grouped skills remain readable", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

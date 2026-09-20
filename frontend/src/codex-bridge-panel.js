@@ -30,7 +30,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.1.0";
+const PANEL_VERSION = "1.1.2";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -549,6 +549,8 @@ template.innerHTML = `
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
     .host-access-settings { padding: 20px; }
+    .host-access-settings + .host-access-settings { margin-top: 16px; }
+    .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
@@ -2766,6 +2768,16 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .mcp-setup { display: grid; gap: 16px; min-width: 0; }
+    .mcp-setup button { min-height: 40px; }
+    .mcp-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+    .mcp-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; border-radius: 16px; text-align: left; white-space: normal; }
+    .mcp-choice span { font-weight: 400; color: var(--muted-color); line-height: 1.5; }
+    .mcp-steps { margin: 0; padding-left: 24px; max-width: 760px; }
+    .mcp-steps li { padding: 8px 0 16px 8px; line-height: 1.6; }
+    .mcp-steps p { color: var(--muted-color); margin: 8px 0; }
+    .mcp-oauth summary { cursor: pointer; margin-bottom: 12px; }
+    .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
     .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
@@ -6218,7 +6230,7 @@ class CodexBridgePanel extends HTMLElement {
     });
   }
 
-  async _loadDesktopDestination(destination, { force = false } = {}) {
+  async _loadDesktopDestination(destination, { force = false, refreshCapabilities = false } = {}) {
     const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
     if ((state.loading && !force) || (!force && state.loaded)) return;
     const requestGeneration = destination === "settings" ? (state.agentsLoadGeneration || 0) + 1 : null;
@@ -6245,6 +6257,11 @@ class CodexBridgePanel extends HTMLElement {
         const catalogue = await this._callWS("list_plugins", workspace);
         state.data.plugins = normalizePluginsResponse(catalogue); state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
+        if (refreshCapabilities) {
+          const config = await this._callWS("get_config");
+          if (!isCurrentSettingsRequest()) return;
+          this._config = config;
+        }
         const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
@@ -6259,6 +6276,7 @@ class CodexBridgePanel extends HTMLElement {
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
         if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
+        else delete state.data.host_access;
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -6399,11 +6417,16 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
-    if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
+    if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
     if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
-    else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp"; }
+    else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp-choice"; }
+    else if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) {
+      this._clearDesktopFormDraft(state);
+      state.form = action === "choose-ha-mcp" ? "mcp-ha" : "mcp";
+      if (state.form === "mcp-ha") state.formDraft = { name: "home-assistant" };
+    }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
     else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
     else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
@@ -6416,11 +6439,18 @@ class CodexBridgePanel extends HTMLElement {
       else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state, { clearFormDraft: true });
     }
     else if (action === "submit-mcp") {
+      if (!this._config?.capabilities?.includes("mcp_admin_v1")) return;
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      const guided = state.form === "mcp-ha";
+      state.formError = "";
       const payload = this._desktopFormValues(target);
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      const saved = await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      if (!saved) { state.formError = state.error; state.error = ""; }
+      else if (guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
     else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -6485,6 +6515,8 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     this._renderDesktopSurface();
+    if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
+    if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
   }
 
   async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {
@@ -6515,7 +6547,7 @@ class CodexBridgePanel extends HTMLElement {
     if (route) {
       const state = this._desktopFeatures[this._activeDestination];
       const activeProjectId = this._activeProject()?.project_id || null;
-      const requestedProjectId = state.agentsRequestProjectId ?? state.agentsProjectId;
+      const requestedProjectId = Object.hasOwn(state, "agentsRequestProjectId") ? state.agentsRequestProjectId : state.agentsProjectId;
       const hasKnownSettingsProject = Object.hasOwn(state, "agentsRequestProjectId") || Object.hasOwn(state, "agentsProjectId");
       if (this._activeDestination === "settings" && !state.loading && hasKnownSettingsProject && requestedProjectId !== activeProjectId) {
         state.loaded = false;

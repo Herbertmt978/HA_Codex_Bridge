@@ -17,6 +17,15 @@ Full auto does not grant access to Home Assistant's configuration, the VM's
 files or unrestricted networking. Native web search, optional browser tools
 and configured MCP tools have their own access rules.
 
+The model and reasoning menus use the installed runtime's catalogue. If a saved
+choice is no longer advertised, it remains visible with an unavailable label;
+choose a currently available model before starting work with it.
+
+## Access
+
+Open **Settings → Access** for workspace permissions, Home Assistant tools and
+host control. **General** also links to this section below the new-chat defaults.
+
 **Full access · Home Assistant OS** is a separate, optional mode for a particular
 chat or scheduled task. It requires the Codex Host Access App. If that App is
 ready, selecting the mode shows the warning, an unchecked acknowledgement and
@@ -28,9 +37,14 @@ credentials, services, the internet and the local network. It is never a
 new-chat default. **Revoke host access** invalidates existing host selections
 and stops new requests; it cannot undo changes already made.
 
-The model and reasoning menus use the installed runtime's catalogue. If a saved
-choice is no longer advertised, it remains visible with an unavailable label;
-choose a currently available model before starting work with it.
+An older App connection shows update guidance instead of hiding host access.
+Update the App and HACS Integration separately, restart Home Assistant and
+reload the panel. **Check connection options again** refreshes capabilities;
+it does not install an update or grant access.
+
+For devices and automations, the Access page links to the optional
+[HA-MCP setup guide](home-assistant-mcp.md). MCP permissions and host access
+are independent.
 
 ## Appearance
 
@@ -46,7 +60,9 @@ will last only for the current visit.
 ## Other settings
 
 **MCP servers** manages trusted HTTPS tools after MCP has been enabled in the
-App. **Instructions** edits global or project instructions. **Keyboard shortcuts**
+App. **Add MCP server** offers guided **Home Assistant (HA-MCP)** setup alongside
+**Other MCP server** for custom connections. **Instructions** edits global or
+project instructions. **Keyboard shortcuts**
 lists the supported shortcuts, and **About / security** explains where Codex
 runs and the access limits. These are the settings supported by Codex Bridge;
 desktop features that depend on a local PC are not implied by these controls.

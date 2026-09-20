@@ -254,23 +254,23 @@ function renderHostAccessDialog(doc, state) {
     dialog.append(error);
   }
   const actions = node(doc, "div", "", "confirmation-actions");
-  const button2 = (label, action) => {
+  const button3 = (label, action) => {
     const result = node(doc, "button", label);
     result.type = "button";
     result.dataset.action = action;
     return result;
   };
-  const cancel = button2("Cancel", "cancel-host-access");
+  const cancel = button3("Cancel", "cancel-host-access");
   cancel.id = "cancel-host-access";
   cancel.disabled = !!state.busy;
   actions.append(cancel);
   if (ready) {
-    const enable = button2(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
+    const enable = button3(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
     enable.id = "confirm-host-access";
     enable.disabled = !!state.busy || !state.acknowledged || state.context === "schedule" && !state.unattended;
     actions.append(enable);
   } else if (!state.loading) {
-    actions.append(button2("Check again", "retry-host-access"));
+    actions.append(button3("Check again", "retry-host-access"));
   }
   dialog.append(actions);
   return dialog;
@@ -653,12 +653,12 @@ function removeControlChars(value) {
   }).join("");
 }
 function sanitizeId(value, fallback = "") {
-  const text2 = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
-  return text2.slice(0, 200) || fallback;
+  const text3 = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
+  return text3.slice(0, 200) || fallback;
 }
 function sanitizeFilename(value, fallback = "download") {
-  const text2 = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
-  return (text2 || fallback).slice(0, 255);
+  const text3 = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
+  return (text3 || fallback).slice(0, 255);
 }
 function sanitizeBlobUrl(value, { origin } = {}) {
   if (typeof value !== "string" || !value.startsWith("blob:")) return null;
@@ -22429,10 +22429,10 @@ function reasoningSummary(events, runId) {
   return safeText(joined, 2e3);
 }
 function addHistory(history, seen, label, kind) {
-  const text2 = safeText(label);
-  if (!text2 || seen.has(`${kind}:${text2}`)) return;
-  seen.add(`${kind}:${text2}`);
-  history.push({ label: text2, kind });
+  const text3 = safeText(label);
+  if (!text3 || seen.has(`${kind}:${text3}`)) return;
+  seen.add(`${kind}:${text3}`);
+  history.push({ label: text3, kind });
   if (history.length > MAX_HISTORY_ITEMS2) history.shift();
 }
 function getRunActivityViewModel(thread = {}, events = []) {
@@ -23112,12 +23112,12 @@ function renderAuth(container, model) {
   const actions = document.createElement("div");
   actions.className = "auth-actions";
   for (const action of model.actions) {
-    const button2 = document.createElement("button");
-    button2.type = "button";
-    button2.dataset.action = action.id;
-    button2.className = action.primary ? "primary" : "";
-    button2.textContent = action.label;
-    actions.append(button2);
+    const button3 = document.createElement("button");
+    button3.type = "button";
+    button3.dataset.action = action.id;
+    button3.className = action.primary ? "primary" : "";
+    button3.textContent = action.label;
+    actions.append(button3);
   }
   card.append(actions);
   container.append(card);
@@ -23226,14 +23226,14 @@ function renderApproval(container, model) {
   const actions = document.createElement("div");
   actions.className = "decision-actions";
   for (const action of model.actions) {
-    const button2 = document.createElement("button");
-    button2.type = "button";
-    button2.dataset.action = `${action.id}-interaction`;
-    button2.dataset.decision = action.id;
-    button2.textContent = action.label;
-    button2.disabled = action.disabled;
-    button2.setAttribute("aria-disabled", String(action.disabled));
-    actions.append(button2);
+    const button3 = document.createElement("button");
+    button3.type = "button";
+    button3.dataset.action = `${action.id}-interaction`;
+    button3.dataset.decision = action.id;
+    button3.textContent = action.label;
+    button3.disabled = action.disabled;
+    button3.setAttribute("aria-disabled", String(action.disabled));
+    actions.append(button3);
   }
   card.append(actions);
   container.append(card);
@@ -23503,6 +23503,97 @@ function collectUserInputAnswers(container, model) {
   return answers;
 }
 
+// frontend/src/mcp-setup.js
+var HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+var text = (doc, tag, value, className = "") => {
+  const node2 = doc.createElement(tag);
+  node2.textContent = value;
+  node2.className = className;
+  return node2;
+};
+var button = (doc, label, action) => {
+  const node2 = text(doc, "button", label);
+  node2.type = "button";
+  node2.dataset.desktopAction = action;
+  return node2;
+};
+var link = (doc, label, href) => {
+  const node2 = text(doc, "a", label);
+  node2.href = href;
+  node2.target = "_blank";
+  node2.rel = "noopener noreferrer";
+  return node2;
+};
+function renderMcpSetup(doc, state, enabled) {
+  const section2 = text(doc, "section", "", "mcp-setup");
+  if (state.form === "mcp-choice") {
+    section2.append(text(doc, "h3", "Choose an MCP server", "desktop-subheading"));
+    const choices = text(doc, "div", "", "mcp-choices");
+    for (const [title, description, action] of [
+      ["Home Assistant (HA-MCP)", "Guided installation and connection for devices, states and automations.", "choose-ha-mcp"],
+      ["Other MCP server", "Add any compatible trusted HTTPS server, with optional OAuth settings.", "choose-custom-mcp"]
+    ]) {
+      const choice = button(doc, "", action);
+      choice.className = "mcp-choice";
+      choice.append(text(doc, "strong", title), text(doc, "span", description));
+      choices.append(choice);
+    }
+    section2.append(choices, button(doc, "Cancel", "close-form"));
+    return section2;
+  }
+  const guided = state.form === "mcp-ha";
+  if (guided) {
+    section2.append(text(doc, "h3", "Connect Home Assistant with HA-MCP", "desktop-subheading"));
+    const steps = text(doc, "ol", "", "mcp-steps");
+    const install = text(doc, "li", "");
+    install.append(text(doc, "strong", "Install HA-MCP once"), text(doc, "p", "In HACS, add homeassistant-ai/ha-mcp-integration as a custom Integration repository, download it and restart Home Assistant. Then go to Settings → Devices & services → Add integration → HA-MCP Custom Component and add HA-MCP Server."), link(doc, "HA-MCP installation instructions", HA_MCP_GUIDE));
+    const connect = text(doc, "li", "");
+    connect.append(text(doc, "strong", "Copy your connection URL"), text(doc, "p", "Configure the HA-MCP Server entry and copy its HTTPS connection URL through Nabu Casa or your existing reverse proxy. If HA-MCP is already installed as an App or another service, use that server instead."), text(doc, "p", "Choose only the tools you need. Device controls and automation edits can affect your home; optional file and YAML tools need their own review. HA-MCP does not require root host access."));
+    const enable = text(doc, "li", "");
+    enable.append(text(doc, "strong", "Enable MCP in Codex Bridge"), text(doc, "p", "Go to Settings → Apps → Codex Bridge → Configuration, turn on Enable MCP, save and restart the App. Return here and check the connection options again."));
+    steps.append(install, connect, enable);
+    section2.append(steps);
+  }
+  section2.append(text(doc, "p", enabled ? "MCP is enabled. You can add a server below." : "MCP is not available on this connection. Enable MCP in the Codex Bridge App and restart it. If the option is missing, update both the App and HACS Integration, then restart Home Assistant.", "desktop-note"), button(doc, "Check connection options again", "refresh-settings-capabilities"));
+  const form = doc.createElement("form");
+  form.className = "desktop-form";
+  form.dataset.desktopForm = "mcp";
+  const field2 = (label, name, type = "text") => {
+    const wrap = text(doc, "label", "", "desktop-field");
+    const control = doc.createElement("input");
+    control.type = type;
+    control.name = name;
+    control.dataset.desktopField = name;
+    control.value = state.formDraft?.[name] ?? "";
+    control.autocomplete = "off";
+    control.spellcheck = false;
+    control.required = ["name", "url"].includes(name);
+    if (name === "name") {
+      control.pattern = "[a-z][a-z0-9_\\-]{0,63}";
+      control.title = "Start with a lowercase letter. Use lowercase letters, numbers, hyphens or underscores, up to 64 characters.";
+    }
+    wrap.append(text(doc, "span", label, "desktop-field-label"), control);
+    return wrap;
+  };
+  form.append(field2("Name", "name"), field2(guided ? "HA-MCP HTTPS connection URL" : "HTTPS URL", "url", "password"), text(doc, "p", "Keep the full URL private: it may contain a secret. Use a public HTTPS hostname. Local addresses, HTTP, query strings and bearer-token settings are not supported.", "desktop-note"));
+  const oauth = text(doc, "details", "", "mcp-oauth");
+  oauth.append(text(doc, "summary", "OAuth settings (optional)"), field2("OAuth client ID (public)", "oauth_client_id"), field2("OAuth resource", "oauth_resource"));
+  form.append(oauth);
+  if (state.formError) {
+    const error = text(doc, "p", state.formError, "desktop-error");
+    error.setAttribute("role", "alert");
+    form.append(error);
+  }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const add = button(doc, "Add server", "submit-mcp");
+  add.disabled = !enabled;
+  actions.append(add, button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  section2.append(form);
+  if (guided) section2.append(text(doc, "h3", "Check it works", "desktop-subheading"), text(doc, "p", "After adding the server, use Sign in if it asks for OAuth. Refresh the server status, then start a new chat and ask Codex to describe an entity without changing it. Confirm the result before allowing changes.", "desktop-note"));
+  return section2;
+}
+
 // frontend/src/desktop-features.js
 var DESTINATIONS = Object.freeze([
   { id: "chats", label: "Chats", icon: "chat" },
@@ -23578,13 +23669,13 @@ var formValue = (state, name, fallback = "") => {
   const drafts = asRecord(state.formDraft);
   return Object.hasOwn(drafts, name) ? drafts[name] : fallback;
 };
-var text = (documentRef, tag, value, className = "") => {
+var text2 = (documentRef, tag, value, className = "") => {
   const node2 = documentRef.createElement(tag);
   if (className) node2.className = className;
   node2.textContent = value == null ? "" : String(value);
   return node2;
 };
-var button = (documentRef, label, action, extra = {}) => {
+var button2 = (documentRef, label, action, extra = {}) => {
   const node2 = documentRef.createElement("button");
   node2.type = "button";
   node2.textContent = label;
@@ -23595,7 +23686,7 @@ var button = (documentRef, label, action, extra = {}) => {
 var input = (documentRef, label, name, value = "", type = "text") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
-  wrap.append(text(documentRef, "span", label, "desktop-field-label"));
+  wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
   const control = documentRef.createElement(type === "textarea" ? "textarea" : "input");
   control.name = name;
   control.value = value == null ? "" : String(value);
@@ -23608,7 +23699,7 @@ var input = (documentRef, label, name, value = "", type = "text") => {
 var selectField = (documentRef, label, name, options, value = "") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
-  wrap.append(text(documentRef, "span", label, "desktop-field-label"));
+  wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
   const control = documentRef.createElement("select");
   control.name = name;
   control.dataset.desktopField = name;
@@ -23648,7 +23739,7 @@ function statusClass(value) {
   return "";
 }
 function renderEmpty(documentRef, message) {
-  const empty = text(documentRef, "p", message, "desktop-empty");
+  const empty = text2(documentRef, "p", message, "desktop-empty");
   empty.setAttribute("role", "status");
   return empty;
 }
@@ -23656,18 +23747,18 @@ function renderTable(documentRef, rows, columns, actions = null) {
   if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
   const table = documentRef.createElement("table");
   table.className = "desktop-table";
-  table.append(text(documentRef, "caption", `${columns.map(([, label]) => label).join(", ")} list`, "sr-only"));
+  table.append(text2(documentRef, "caption", `${columns.map(([, label]) => label).join(", ")} list`, "sr-only"));
   const head = documentRef.createElement("thead");
   const headRow = documentRef.createElement("tr");
-  for (const [, label] of columns) headRow.append(text(documentRef, "th", label));
-  if (actions) headRow.append(text(documentRef, "th", "Actions"));
+  for (const [, label] of columns) headRow.append(text2(documentRef, "th", label));
+  if (actions) headRow.append(text2(documentRef, "th", "Actions"));
   head.append(headRow);
   table.append(head);
   const body = documentRef.createElement("tbody");
   for (const row of rows) {
     const tr = documentRef.createElement("tr");
     for (const [key, label] of columns) {
-      const td = text(documentRef, "td", displayValue(row[key], key));
+      const td = text2(documentRef, "td", displayValue(row[key], key));
       td.dataset.label = label;
       const tone = statusClass(row[key]);
       if (tone) td.classList.add(tone);
@@ -23690,7 +23781,7 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
+  toolbar.append(text2(documentRef, "div", "Automations", "desktop-section-label"), button2(documentRef, "New schedule", "open-schedule-form"));
   if (!state.form) section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
     section2.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
@@ -23700,11 +23791,11 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
-    td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
+    td.append(button2(documentRef, "Run", "run-automation", common), button2(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button2(documentRef, "Runs", "list-automation-runs", common), button2(documentRef, "Update", "update-automation", common), button2(documentRef, "Delete", "delete-automation", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
-    section2.append(text(documentRef, "h3", "Run history", "desktop-subheading"));
+    section2.append(text2(documentRef, "h3", "Run history", "desktop-subheading"));
     section2.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
   }
   return section2;
@@ -23714,7 +23805,7 @@ function renderSkills(documentRef, state) {
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button(documentRef, "Create skill", "open-skill-form"));
+  toolbar.append(text2(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button2(documentRef, "Create skill", "open-skill-form"));
   section2.append(toolbar);
   if (state.form === "skill") {
     const form = documentRef.createElement("form");
@@ -23723,7 +23814,7 @@ function renderSkills(documentRef, state) {
     form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "Description", "description", formValue(state, "description"), "textarea"), input(documentRef, "Instructions", "instructions", formValue(state, "instructions"), "textarea"));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form"));
+    actions.append(button2(documentRef, "Create skill", "submit-skill"), button2(documentRef, "Cancel", "close-form"));
     form.append(actions);
     section2.append(form);
   }
@@ -23739,14 +23830,14 @@ function renderSkills(documentRef, state) {
   for (const [category, skills] of [...groups].sort(([a2], [b2]) => a2.localeCompare(b2))) {
     const group = documentRef.createElement("section");
     group.className = "skill-group";
-    const heading = text(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
-    const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
+    const heading = text2(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
+    const count = text2(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
     heading.append(count);
     group.append(heading);
     group.append(renderTable(documentRef, [...skills].sort((a2, b2) => String(a2.name).localeCompare(String(b2.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
       const id = row.id || row.skill_id || row.name || "";
-      td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-      td.append(button(documentRef, "Delete", "delete-skill", { id }));
+      td.append(button2(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button2(documentRef, "Delete", "delete-skill", { id }));
     }));
     section2.append(group);
   }
@@ -23757,19 +23848,19 @@ function renderPlugins(documentRef, state) {
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text(documentRef, "div", "Plugins", "desktop-section-label"));
+  toolbar.append(text2(documentRef, "div", "Plugins", "desktop-section-label"));
   section2.append(toolbar);
   const rows = normalizeDesktopList(state.data.plugins || state.data);
   section2.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
-    td.append(button(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
+    td.append(button2(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
   const market = normalizeDesktopList(state.data.marketplaces);
-  const marketHeading = text(documentRef, "h3", "Trusted marketplaces", "desktop-subheading");
+  const marketHeading = text2(documentRef, "h3", "Trusted marketplaces", "desktop-subheading");
   section2.append(marketHeading);
   const marketActions = documentRef.createElement("div");
   marketActions.className = "desktop-form-actions";
-  marketActions.append(button(documentRef, "Add marketplace", "open-marketplace-form"));
+  marketActions.append(button2(documentRef, "Add marketplace", "open-marketplace-form"));
   section2.append(marketActions);
   if (state.form === "marketplace") {
     const form = documentRef.createElement("form");
@@ -23778,12 +23869,12 @@ function renderPlugins(documentRef, state) {
     form.append(input(documentRef, "HTTPS source URL", "source", formValue(state, "source"), "url"), input(documentRef, "Ref (optional)", "ref_name", formValue(state, "ref_name")), input(documentRef, "Sparse paths (comma separated)", "sparse_paths", formValue(state, "sparse_paths")));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, "Add marketplace", "submit-marketplace"), button(documentRef, "Cancel", "close-form"));
+    actions.append(button2(documentRef, "Add marketplace", "submit-marketplace"), button2(documentRef, "Cancel", "close-form"));
     form.append(actions);
     section2.append(form);
   }
   const marketRows = market.map((row) => ({ ...row, plugin_count: Array.isArray(row.plugins) ? row.plugins.length : 0 }));
-  section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
+  section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button2(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button2(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
   return section2;
 }
 function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
@@ -23793,10 +23884,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   tabs.className = "settings-tabs";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["access", "Access"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) {
-    const control = button(documentRef, label, "select-settings-tab", { tab: id });
+    const control = button2(documentRef, label, "select-settings-tab", { tab: id });
     control.className = "settings-tab";
     control.id = `settings-tab-${id}`;
     control.dataset.settingsTab = id;
@@ -23815,7 +23906,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   section2.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
   const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
-  const saved = text(documentRef, "p", "", "preference-save-status");
+  const saved = text2(documentRef, "p", "", "preference-save-status");
   saved.setAttribute("role", "status");
   const pickers = {};
   const addPreference = (card, key, label, options) => {
@@ -23824,7 +23915,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const picker = selection(documentRef, { name: key, label, value: preferences[key], options });
     picker.dataset.preference = key;
     pickers[key] = picker;
-    row.append(text(documentRef, "span", label, "schedule-row-label"), picker);
+    row.append(text2(documentRef, "span", label, "schedule-row-label"), picker);
     card.append(row);
     picker.querySelector("select").addEventListener("change", () => {
       preferences[key] = picker.querySelector("select").value;
@@ -23842,47 +23933,38 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     });
   };
   if (tab === "appearance") {
-    panel.append(text(documentRef, "h3", "Appearance", "desktop-subheading"));
+    panel.append(text2(documentRef, "h3", "Appearance", "desktop-subheading"));
     const card = documentRef.createElement("div");
     card.className = "schedule-card settings-card";
     addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
     addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
     addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
-    panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+    panel.append(card, text2(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
-    const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
-    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    recommendation.append(text2(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text2(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    const guide = text2(documentRef, "a", "HA-MCP installation and Bridge connection guide");
+    guide.href = HA_MCP_GUIDE;
     guide.target = "_blank";
     guide.rel = "noopener noreferrer";
     guide.style.color = "inherit";
     recommendation.append(guide);
     panel.append(recommendation);
-    panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
-    if (state.form === "mcp") {
-      const form = documentRef.createElement("form");
-      form.className = "desktop-form";
-      form.dataset.desktopForm = "mcp";
-      form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource")));
-      const actions = documentRef.createElement("div");
-      actions.className = "desktop-form-actions";
-      actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form"));
-      form.append(actions);
-      panel.append(form);
-    }
+    panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1")));
+    panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const id = row.name || "";
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
-      td.append(button(documentRef, "Remove", "remove-mcp", { id }));
-      if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id }));
-      else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note"));
+      td.append(button2(documentRef, "Remove", "remove-mcp", { id }));
+      if (oauth) td.append(button2(documentRef, "Sign in", "login-mcp", { id }));
+      else td.append(text2(documentRef, "span", "No OAuth", "desktop-action-note"));
     }));
   }
   if (tab === "instructions") {
-    panel.append(text(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
+    panel.append(text2(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text2(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
     const selectedScope = hasActiveProject && state.agentsScope !== "global" ? "project" : "global";
     const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope);
     const scopeControl = scope.querySelector('[data-desktop-field="agents_scope"]');
@@ -23899,11 +23981,34 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(contentField);
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents"));
+    actions.append(button2(documentRef, "Save instructions", "save-agents"), button2(documentRef, "Delete instructions", "delete-agents"));
     panel.append(actions);
   }
-  if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
+  if (tab === "shortcuts") panel.append(text2(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text2(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
+  if (tab === "about") panel.append(text2(documentRef, "h3", "About / security", "desktop-subheading"), text2(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
+  if (tab === "access") {
+    panel.append(text2(documentRef, "h3", "Choose the access your task needs", "desktop-subheading"));
+    const workspace = text2(documentRef, "section", "", "schedule-card host-access-settings");
+    workspace.append(text2(documentRef, "h3", "Full auto · workspace"), text2(documentRef, "p", "Codex can use enabled tools automatically and edit files inside the selected workspace. It cannot use private host paths or direct network connections. Set your new-chat permission default in General, or change permissions for an individual chat.", "desktop-note"), button2(documentRef, "New chat defaults", "select-settings-tab", { tab: "general" }));
+    const mcpCard = text2(documentRef, "section", "", "schedule-card host-access-settings");
+    mcpCard.append(text2(documentRef, "h3", "Home Assistant devices and automations"), text2(documentRef, "p", "Connect HA-MCP to give Codex the Home Assistant tools you choose. This is separate from root host access; revoking one does not revoke the other.", "desktop-note"), button2(documentRef, "Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" }));
+    const host = state.data?.host_access;
+    const card = text2(documentRef, "section", "", "schedule-card host-access-settings");
+    card.append(text2(documentRef, "h3", HOST_LABEL), text2(documentRef, "p", "The optional Codex Host Access App lets Codex run commands as root on the HAOS machine. That includes its files, credentials, services, internet and local network. It can change or delete data and interrupt Home Assistant.", "desktop-note"));
+    if (config?.capabilities?.includes("host_access_v1")) {
+      card.append(text2(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Review the full warning before enabling access. If the companion App is missing, the setup dialog links to its installation instructions.", "desktop-note"), button2(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
+      if (host?.enabled) card.append(button2(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button2(documentRef, "Use for current chat", "use-host-access"));
+    } else {
+      card.append(text2(documentRef, "p", "Host access is not available on this connection. Update the Codex Bridge App and HACS Integration, then restart Home Assistant and reload this panel. Updating does not grant host access.", "desktop-note"));
+      const guide = text2(documentRef, "a", "Update instructions and missing-update checks");
+      guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/installation.md#update-an-existing-installation";
+      guide.target = "_blank";
+      guide.rel = "noopener noreferrer";
+      card.append(guide, button2(documentRef, "Check connection options again", "refresh-settings-capabilities"));
+    }
+    panel.append(workspace, mcpCard, card);
+  }
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -23911,13 +24016,13 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const addRow = (label, value, stateName) => {
       const row = documentRef.createElement("div");
       row.className = "native-tool-row";
-      row.append(text(documentRef, "dt", label), text(documentRef, "dd", value, `native-tool-state ${stateName}`));
+      row.append(text2(documentRef, "dt", label), text2(documentRef, "dd", value, `native-tool-state ${stateName}`));
       rows.append(row);
     };
     addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
     addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
     panel.append(
-      text(documentRef, "h3", "New chat defaults", "desktop-subheading")
+      text2(documentRef, "h3", "New chat defaults", "desktop-subheading")
     );
     const defaults = documentRef.createElement("div");
     defaults.className = "schedule-card settings-card";
@@ -23926,25 +24031,14 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
     panel.append(
       defaults,
-      text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
-      text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
+      text2(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
+      text2(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
       saved,
-      text(documentRef, "h3", "Native tools", "desktop-subheading"),
+      button2(documentRef, "Access settings and Home Assistant control", "select-settings-tab", { tab: "access" }),
+      text2(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
-      text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
+      text2(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
-    if (config?.capabilities?.includes("host_access_v1")) {
-      const host = state.data?.host_access;
-      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
-      card.append(
-        text(documentRef, "h3", HOST_LABEL),
-        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
-        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access")
-      );
-      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
-      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
-      panel.append(card);
-    }
   }
   return section2;
 }
@@ -23977,6 +24071,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
+    settingsCapabilities: destination === "settings" ? config?.capabilities : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null
   });
   const drafts = featureDraftInputs(state);
@@ -23987,8 +24082,8 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   const heading = documentRef.createElement("div");
   heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
-  heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
-  heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
+  heading.append(text2(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
+  heading.append(text2(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
   if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) {
     container.setAttribute("aria-busy", "true");
@@ -23997,14 +24092,14 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   }
   container.setAttribute("aria-busy", "false");
   if (state.error) {
-    const error = text(documentRef, "p", state.error, "desktop-error");
+    const error = text2(documentRef, "p", state.error, "desktop-error");
     error.setAttribute("role", "alert");
     container.append(error);
-    container.append(button(documentRef, "Retry", "retry-desktop"));
+    container.append(button2(documentRef, "Retry", "retry-desktop"));
     return;
   }
   if (state.notice) {
-    const notice = text(documentRef, "p", state.notice, "desktop-notice");
+    const notice = text2(documentRef, "p", state.notice, "desktop-notice");
     notice.setAttribute("role", "status");
     container.append(notice);
   }
@@ -24012,7 +24107,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const confirm = documentRef.createElement("div");
     confirm.className = "desktop-notice";
     confirm.setAttribute("role", "alert");
-    confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm"));
+    confirm.append(text2(documentRef, "span", "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm);
   }
   const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
@@ -24020,7 +24115,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.1.0";
+var PANEL_VERSION = "1.1.2";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -24512,6 +24607,8 @@ template.innerHTML = `
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
     .host-access-settings { padding: 20px; }
+    .host-access-settings + .host-access-settings { margin-top: 16px; }
+    .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
@@ -26729,6 +26826,16 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .mcp-setup { display: grid; gap: 16px; min-width: 0; }
+    .mcp-setup button { min-height: 40px; }
+    .mcp-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+    .mcp-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; border-radius: 16px; text-align: left; white-space: normal; }
+    .mcp-choice span { font-weight: 400; color: var(--muted-color); line-height: 1.5; }
+    .mcp-steps { margin: 0; padding-left: 24px; max-width: 760px; }
+    .mcp-steps li { padding: 8px 0 16px 8px; line-height: 1.6; }
+    .mcp-steps p { color: var(--muted-color); margin: 8px 0; }
+    .mcp-oauth summary { cursor: pointer; margin-bottom: 12px; }
+    .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
     .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
@@ -30093,7 +30200,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (this._activeDestination === "settings") void this._loadDesktopDestination("settings", { force: true });
     });
   }
-  async _loadDesktopDestination(destination, { force = false } = {}) {
+  async _loadDesktopDestination(destination, { force = false, refreshCapabilities = false } = {}) {
     const state = this._desktopFeatures[destination] || (this._desktopFeatures[destination] = createDesktopFeatureState());
     if (state.loading && !force || !force && state.loaded) return;
     const requestGeneration = destination === "settings" ? (state.agentsLoadGeneration || 0) + 1 : null;
@@ -30123,6 +30230,11 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.plugins = normalizePluginsResponse(catalogue);
         state.data.marketplaces = normalizeMarketplacesResponse(catalogue);
       } else if (destination === "settings") {
+        if (refreshCapabilities) {
+          const config = await this._callWS("get_config");
+          if (!isCurrentSettingsRequest()) return;
+          this._config = config;
+        }
         const projectId = requestProjectId;
         const globalAgentsCall = this._callWS("get_agents");
         const projectAgentsCall = projectId ? this._callWS("get_agents", { project_id: projectId }) : Promise.resolve(null);
@@ -30138,6 +30250,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
         if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
+        else delete state.data.host_access;
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -30289,7 +30402,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderDesktopSurface();
       return;
     }
-    if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
+    if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
     if (action === "open-schedule-form") {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
@@ -30304,7 +30417,11 @@ var CodexBridgePanel = class extends HTMLElement {
       state.form = "marketplace";
     } else if (action === "open-mcp-form") {
       this._clearDesktopFormDraft(state);
-      state.form = "mcp";
+      state.form = "mcp-choice";
+    } else if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) {
+      this._clearDesktopFormDraft(state);
+      state.form = action === "choose-ha-mcp" ? "mcp-ha" : "mcp";
+      if (state.form === "mcp-ha") state.formDraft = { name: "home-assistant" };
     } else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
     else if (action === "close-form") {
       this._clearDesktopFormDraft(state);
@@ -30320,11 +30437,20 @@ var CodexBridgePanel = class extends HTMLElement {
         state.error = "Marketplace source must use HTTPS.";
       } else await this._desktopMutation("add_marketplace", { source, ref_name: values.ref_name || null, sparse_paths: String(values.sparse_paths || "").split(",").map((item) => item.trim()).filter(Boolean) }, state, { clearFormDraft: true });
     } else if (action === "submit-mcp") {
+      if (!this._config?.capabilities?.includes("mcp_admin_v1")) return;
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      const guided = state.form === "mcp-ha";
+      state.formError = "";
       const payload = this._desktopFormValues(target);
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      const saved = await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      if (!saved) {
+        state.formError = state.error;
+        state.error = "";
+      } else if (guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     } else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -30397,6 +30523,8 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }
     this._renderDesktopSurface();
+    if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
+    if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
   }
   async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {
     const destination = this._activeDestination;
@@ -30429,7 +30557,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (route) {
       const state = this._desktopFeatures[this._activeDestination];
       const activeProjectId = this._activeProject()?.project_id || null;
-      const requestedProjectId = state.agentsRequestProjectId ?? state.agentsProjectId;
+      const requestedProjectId = Object.hasOwn(state, "agentsRequestProjectId") ? state.agentsRequestProjectId : state.agentsProjectId;
       const hasKnownSettingsProject = Object.hasOwn(state, "agentsRequestProjectId") || Object.hasOwn(state, "agentsProjectId");
       if (this._activeDestination === "settings" && !state.loading && hasKnownSettingsProject && requestedProjectId !== activeProjectId) {
         state.loaded = false;
@@ -30849,12 +30977,12 @@ var CodexBridgePanel = class extends HTMLElement {
         const model = getApprovalViewModel(interaction, { pending });
         renderApproval(wrapper, model);
         if (mutation?.state === "retryable") {
-          for (const button2 of wrapper.querySelectorAll("[data-decision]")) {
-            const isOriginalDecision = button2.dataset.decision === mutation.decision;
-            button2.disabled = !isOriginalDecision;
-            button2.setAttribute("aria-disabled", String(!isOriginalDecision));
+          for (const button3 of wrapper.querySelectorAll("[data-decision]")) {
+            const isOriginalDecision = button3.dataset.decision === mutation.decision;
+            button3.disabled = !isOriginalDecision;
+            button3.setAttribute("aria-disabled", String(!isOriginalDecision));
             if (isOriginalDecision) {
-              button2.textContent = `Retry ${button2.textContent.toLowerCase()}`;
+              button3.textContent = `Retry ${button3.textContent.toLowerCase()}`;
             }
           }
         }
@@ -31249,8 +31377,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     renderAuth(container, this._authViewModel());
     if (this._authActionPending) {
-      for (const button2 of container.querySelectorAll("button[data-action]")) {
-        button2.disabled = true;
+      for (const button3 of container.querySelectorAll("button[data-action]")) {
+        button3.disabled = true;
       }
     }
   }
@@ -31312,9 +31440,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const browseActions = document.createElement("div");
       browseActions.className = "browser-actions";
       for (const [action, label] of [["browse-current", "Browse"], ["browse-up", "Up"], ["browse-roots", "Workspace root"]]) {
-        const button2 = this._actionButton("text-button", action);
-        button2.textContent = label;
-        browseActions.append(button2);
+        const button3 = this._actionButton("text-button", action);
+        button3.textContent = label;
+        browseActions.append(button3);
       }
       const browseList = document.createElement("div");
       browseList.className = "browse-list";
@@ -31614,10 +31742,10 @@ var CodexBridgePanel = class extends HTMLElement {
       secondary.setAttribute("aria-label", `Actions for ${project.name || "project"}`);
       secondary.hidden = !expanded;
       for (const [action, label, icon] of secondaryActions) {
-        const button2 = this._actionButton("rail-menu-item", action, label);
-        button2.dataset.projectId = String(project.project_id || "");
-        this._setTrustedButtonContent(button2, icon, label);
-        secondary.append(button2);
+        const button3 = this._actionButton("rail-menu-item", action, label);
+        button3.dataset.projectId = String(project.project_id || "");
+        this._setTrustedButtonContent(button3, icon, label);
+        secondary.append(button3);
       }
       projectHead.append(secondary);
     }
@@ -31897,12 +32025,12 @@ var CodexBridgePanel = class extends HTMLElement {
       const actionContainer = document.createElement("div");
       actionContainer.className = "banner-actions";
       for (const action of actions) {
-        const button2 = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
-        button2.textContent = action.label;
+        const button3 = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
+        button3.textContent = action.label;
         if (this._authActionPending && AUTH_ACTION_IDS.has(action.action)) {
-          button2.disabled = true;
+          button3.disabled = true;
         }
-        actionContainer.append(button2);
+        actionContainer.append(button3);
       }
       content.append(actionContainer);
     }
@@ -32235,17 +32363,17 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
-    const text2 = this._streamingAssistantText(activity);
+    const text3 = this._streamingAssistantText(activity);
     const isStreaming = activity.assistantState === "streaming";
     const isPartial = activity.assistantState === "partial";
-    if (!isStreaming && !isPartial || !text2) {
+    if (!isStreaming && !isPartial || !text3) {
       existing?.remove();
       return;
     }
     messageList.querySelector(".empty-state")?.remove();
     const article = this._renderMessage(
       "assistant",
-      text2,
+      text3,
       isPartial ? "partial" : "streaming",
       false,
       isPartial ? "Partial response" : "Assistant"
@@ -32264,22 +32392,22 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _streamingAssistantText(activity) {
     if (!["streaming", "partial"].includes(activity.assistantState)) return "";
-    let text2 = "";
+    let text3 = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
       const eventRunId2 = typeof payload.run_id === "string" ? payload.run_id : "";
       if (activity.runId && eventRunId2 && eventRunId2 !== activity.runId) continue;
       if (event.event_type === "message.completed") {
-        text2 = "";
+        text3 = "";
         continue;
       }
       if (event.event_type !== "message.delta") continue;
       const chunk = typeof payload.text === "string" ? payload.text : typeof payload.delta === "string" ? payload.delta : "";
       if (!chunk) continue;
-      text2 = chunk.startsWith(text2) && chunk.length > text2.length ? chunk : `${text2}${chunk}`;
-      if (text2.length > 2e5) text2 = text2.slice(-2e5);
+      text3 = chunk.startsWith(text3) && chunk.length > text3.length ? chunk : `${text3}${chunk}`;
+      if (text3.length > 2e5) text3 = text3.slice(-2e5);
     }
-    return text2;
+    return text3;
   }
   _scrollMessagesToBottom() {
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || this.shadowRoot.getElementById("message-list");
@@ -32441,7 +32569,7 @@ var CodexBridgePanel = class extends HTMLElement {
     article.append(avatar, bubble);
     return article;
   }
-  _renderMessage(role, text2, key, canCopy, label = "") {
+  _renderMessage(role, text3, key, canCopy, label = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
@@ -32463,18 +32591,18 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       bubble.append(head);
     }
-    this._renderMessageBody(bubble, String(text2 ?? ""));
+    this._renderMessageBody(bubble, String(text3 ?? ""));
     article.append(bubble);
     return article;
   }
-  _renderMessageBody(container, text2) {
+  _renderMessageBody(container, text3) {
     const fencePattern = /```([^\n`]*)\n([\s\S]*?)```/g;
     let lastIndex = 0;
     let renderedPart = false;
     let match;
-    while ((match = fencePattern.exec(text2)) !== null) {
+    while ((match = fencePattern.exec(text3)) !== null) {
       if (match.index > lastIndex) {
-        container.append(this._textElement("pre", "bubble-text", text2.slice(lastIndex, match.index)));
+        container.append(this._textElement("pre", "bubble-text", text3.slice(lastIndex, match.index)));
       }
       const language = (match[1] || "code").trim() || "code";
       const codeBlock = document.createElement("div");
@@ -32491,8 +32619,8 @@ var CodexBridgePanel = class extends HTMLElement {
       renderedPart = true;
       lastIndex = fencePattern.lastIndex;
     }
-    if (lastIndex < text2.length || !renderedPart) {
-      container.append(this._textElement("pre", "bubble-text", text2.slice(lastIndex)));
+    if (lastIndex < text3.length || !renderedPart) {
+      container.append(this._textElement("pre", "bubble-text", text3.slice(lastIndex)));
     }
   }
   _renderProgress() {
@@ -34676,53 +34804,53 @@ var CodexBridgePanel = class extends HTMLElement {
     return "Download";
   }
   _refreshArtifactDownloadUi() {
-    for (const button2 of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
-      const artifactId = button2.dataset.artifactId || "";
+    for (const button3 of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
+      const artifactId = button3.dataset.artifactId || "";
       const artifact = this._artifacts.find((item) => item.artifact_id === artifactId);
       const filename = artifact?.filename || artifact?.relative_path || "artifact";
-      const generatedImageButton = button2.classList.contains("generated-image-download");
+      const generatedImageButton = button3.classList.contains("generated-image-download");
       const label = this._artifactDownloadActionLabel(
         artifactId,
         filename,
         generatedImageButton ? "generated image" : ""
       );
       const state = this._artifactDownloadState(artifactId);
-      button2.disabled = state === "pending";
-      button2.setAttribute("aria-label", label);
-      button2.title = label;
-      button2.dataset.tooltip = label;
+      button3.disabled = state === "pending";
+      button3.setAttribute("aria-label", label);
+      button3.title = label;
+      button3.dataset.tooltip = label;
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
       if (generatedImageButton) {
-        button2.textContent = visibleLabel;
-      } else if (button2.classList.contains("pdf-preview-download")) {
-        const text2 = button2.querySelector("span");
-        if (text2) text2.textContent = visibleLabel;
-      } else if (button2.classList.contains("download-button")) {
-        const text2 = button2.querySelector(".download-state-label");
-        if (text2) {
-          text2.textContent = visibleLabel;
-          text2.hidden = state === "cached";
+        button3.textContent = visibleLabel;
+      } else if (button3.classList.contains("pdf-preview-download")) {
+        const text3 = button3.querySelector("span");
+        if (text3) text3.textContent = visibleLabel;
+      } else if (button3.classList.contains("download-button")) {
+        const text3 = button3.querySelector(".download-state-label");
+        if (text3) {
+          text3.textContent = visibleLabel;
+          text3.hidden = state === "cached";
         }
-        button2.classList.toggle("has-state-label", state !== "cached");
+        button3.classList.toggle("has-state-label", state !== "cached");
       }
     }
   }
   _handoffBrowserDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.hidden = true;
-    document.body.append(link);
+    const link2 = document.createElement("a");
+    link2.href = url;
+    link2.download = filename;
+    link2.hidden = true;
+    document.body.append(link2);
     try {
-      link.click();
+      link2.click();
     } catch (error) {
-      link.remove();
+      link2.remove();
       URL.revokeObjectURL(url);
       throw error;
     }
     window.setTimeout(() => {
-      link.remove();
+      link2.remove();
       URL.revokeObjectURL(url);
     }, DOWNLOAD_HANDOFF_GRACE_MS);
   }
@@ -34787,37 +34915,37 @@ var CodexBridgePanel = class extends HTMLElement {
   async _copyMessage(sequence2) {
     const numericSequence = Number(sequence2);
     const event = this._events.find((item) => item.sequence === numericSequence);
-    const text2 = event?.payload?.text || "";
-    if (!text2) {
+    const text3 = event?.payload?.text || "";
+    if (!text3) {
       return;
     }
     try {
-      await this._writeClipboardText(text2);
+      await this._writeClipboardText(text3);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
   }
-  async _copyCodeBlock(button2) {
-    const block = button2.closest(".code-block");
-    const text2 = block?.querySelector(".code-text")?.textContent || "";
-    if (!text2) {
+  async _copyCodeBlock(button3) {
+    const block = button3.closest(".code-block");
+    const text3 = block?.querySelector(".code-text")?.textContent || "";
+    if (!text3) {
       return;
     }
     try {
-      await this._writeClipboardText(text2);
+      await this._writeClipboardText(text3);
       this._clearError();
     } catch (error) {
       this._setError(error);
     }
   }
-  async _writeClipboardText(text2) {
+  async _writeClipboardText(text3) {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text2);
+      await navigator.clipboard.writeText(text3);
       return;
     }
     const helper = document.createElement("textarea");
-    helper.value = text2;
+    helper.value = text3;
     document.body.appendChild(helper);
     helper.select();
     document.execCommand("copy");
@@ -35801,31 +35929,31 @@ var CodexBridgePanel = class extends HTMLElement {
     return element2;
   }
   _actionButton(className, action, accessibleLabel) {
-    const button2 = document.createElement("button");
-    button2.type = "button";
-    button2.className = className;
-    button2.dataset.action = action;
+    const button3 = document.createElement("button");
+    button3.type = "button";
+    button3.className = className;
+    button3.dataset.action = action;
     if (accessibleLabel) {
-      button2.title = accessibleLabel;
-      button2.setAttribute("aria-label", accessibleLabel);
-      this._setTooltipTarget(button2, accessibleLabel);
+      button3.title = accessibleLabel;
+      button3.setAttribute("aria-label", accessibleLabel);
+      this._setTooltipTarget(button3, accessibleLabel);
     }
-    return button2;
+    return button3;
   }
   _setTooltipTarget(target, label) {
     if (!(target instanceof HTMLElement)) {
       return;
     }
-    const text2 = Array.from(String(label ?? ""), (character) => {
+    const text3 = Array.from(String(label ?? ""), (character) => {
       const code = character.codePointAt(0);
       return code <= 31 || code === 127 ? " " : character;
     }).join("").replace(/\s+/gu, " ").trim().slice(0, 120);
-    if (!text2) {
+    if (!text3) {
       return;
     }
-    target.dataset.tooltip = text2;
+    target.dataset.tooltip = text3;
     if (!target.getAttribute("title")) {
-      target.title = text2;
+      target.title = text3;
     }
   }
   _showTooltipForTarget(target) {
@@ -35833,14 +35961,14 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
       return;
     }
-    const text2 = trigger.dataset.tooltip;
+    const text3 = trigger.dataset.tooltip;
     const layer = this.shadowRoot.getElementById("tooltip-layer");
-    if (!text2 || !layer) {
+    if (!text3 || !layer) {
       return;
     }
     this._hideTooltip();
     this._tooltipTarget = trigger;
-    layer.textContent = text2;
+    layer.textContent = text3;
     layer.hidden = false;
     const descriptions = (trigger.getAttribute("aria-describedby") || "").split(/\s+/u).filter(Boolean);
     if (!descriptions.includes(layer.id)) {
@@ -35892,11 +36020,11 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return select;
   }
-  _setTrustedButtonContent(button2, iconMarkup, label = "") {
-    button2.replaceChildren();
-    this._appendTrustedIcon(button2, iconMarkup);
+  _setTrustedButtonContent(button3, iconMarkup, label = "") {
+    button3.replaceChildren();
+    this._appendTrustedIcon(button3, iconMarkup);
     if (label) {
-      button2.append(this._textElement("span", "", label));
+      button3.append(this._textElement("span", "", label));
     }
   }
   _sectionTitleLine(chevron, iconMarkup, label) {
