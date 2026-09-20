@@ -34,14 +34,21 @@ describe("panel preferences", () => {
     expect(panel._callWS).not.toHaveBeenCalledWith("update_thread", expect.anything());
   });
 
-  it("groups skills without losing names or action identifiers", () => {
+  it("groups skills on ES2022 clients without losing names or action identifiers", () => {
     const container = document.createElement("div");
-    renderDesktopFeatureSurface(container, { destination: "skills", state: { data: { skills: [
-      { id: "a", name: "data-analytics:build-report", enabled: true },
-      { id: "b", name: "data-analytics:design-kpis", enabled: false },
-      { id: "c", name: "aegis:debug", enabled: true },
-      { id: "d", name: "standalone", enabled: true },
-    ] } } });
+    const sort = Object.getOwnPropertyDescriptor(Array.prototype, "toSorted");
+    Object.defineProperty(Array.prototype, "toSorted", { value: undefined, configurable: true });
+    try {
+      renderDesktopFeatureSurface(container, { destination: "skills", state: { data: { skills: [
+        { id: "a", name: "data-analytics:build-report", enabled: true },
+        { id: "b", name: "data-analytics:design-kpis", enabled: false },
+        { id: "c", name: "aegis:debug", enabled: true },
+        { id: "d", name: "standalone", enabled: true },
+      ] } } });
+    } finally {
+      if (sort) Object.defineProperty(Array.prototype, "toSorted", sort);
+      else delete Array.prototype.toSorted;
+    }
     expect(container.querySelectorAll(".skill-group")).toHaveLength(3);
     const analytics = [...container.querySelectorAll(".skill-group")].find((group) => group.textContent.includes("Data analytics"));
     expect(analytics.querySelectorAll("tbody tr")).toHaveLength(2);

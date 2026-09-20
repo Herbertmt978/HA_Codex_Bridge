@@ -23641,7 +23641,7 @@ function renderSkills(documentRef, state) {
     const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
     heading.append(count);
     group.append(heading);
-    group.append(renderTable(documentRef, skills.toSorted((a2, b2) => String(a2.name).localeCompare(String(b2.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+    group.append(renderTable(documentRef, [...skills].sort((a2, b2) => String(a2.name).localeCompare(String(b2.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
       const id = row.id || row.skill_id || row.name || "";
       td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
       td.append(button(documentRef, "Delete", "delete-skill", { id }));
