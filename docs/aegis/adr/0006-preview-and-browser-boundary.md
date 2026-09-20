@@ -1,9 +1,8 @@
 # ADR 0006: Artifact preview and browser-automation boundary
 
-**Status:** Accepted for document preview. The browser-worker protocol,
-client-owned tool boundary, and inert pinned package scaffold are accepted;
-runtime attestation and capability advertisement remain gated by the
-conditions below.
+**Status:** Accepted. The browser worker is an explicit App opt-in, gated by
+the independent startup proof described below. The 20 September 2026 extension
+implements the previously deferred worker without changing document preview.
 
 ## Decision
 
@@ -19,7 +18,7 @@ and oversized files remain on the safe open/download fallback.
 
 Agent browser automation is a different capability. It must not be implemented
 as an iframe address bar, a panel-to-Chrome connection, an exposed CDP port, or
-a general local MCP endpoint. A future implementation must use a fixed,
+a general local MCP endpoint. The implementation must use a fixed,
 App-owned helper and isolated browser worker; expose only bounded high-level
 actions; keep browser profiles ephemeral; prevent access to Home Assistant,
 Supervisor, App-private state, LAN/private addresses, credentials, arbitrary
@@ -69,13 +68,14 @@ boundary or give a model-controlled page a path to local services.
 - Invalid or unsupported content keeps the safe download fallback.
 - Native web search remains provider-side and is not a browser-network
   exemption.
-- The typed contract and fake-worker broker can land without advertising a
-  browser capability. Chrome/Playwright UI design flows still require a
-  separately reviewed App release, immutable browser assets, HAOS sandbox
-  acceptance, connection-time destination enforcement, and an
-  architecture-aware release track. The current accepted `0.8.3` App does not
-  bundle Chromium. This development slice pins Chromium in the proposed
-  `amd64` image, but deliberately creates no readiness attestation and exposes
-  no capability because packaging is not isolation proof.
-- Issue #43 tracks the secure App-owned browser-worker follow-up; it does not
-  authorize interactive Chromium before these conditions are met.
+- The `amd64` worker uses checksum-pinned Chromium and the verified Bubblewrap
+  asset. Enabling the App option runs an independent root startup proof before
+  any browser capability can be advertised. Failed proof preserves ordinary
+  chats and leaves browser tools unavailable.
+- The separate AppArmor child, namespace/seccomp boundary, private Unix proxy,
+  renderer proof, quotas, cancellation and cleanup are documented in the
+  [acceptance and threat model](../../acceptance/browser-worker.md). HAOS's
+  masked procfs constraint and the sampled aggregate memory bound are explicit
+  limitations. No extra initial-namespace capabilities are granted.
+- Issue #43 requires real HAOS and chat/artifact acceptance in addition to the
+  unit suite. Signed publication and target checks remain release gates.

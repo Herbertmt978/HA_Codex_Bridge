@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.0.6
+
+- Adds optional browser tools for public websites: navigation, page inspection,
+  clicks, text and selections, screenshots and printed PDFs.
+- Requires explicit App enablement and startup checks of Chromium's sandbox,
+  filesystem isolation and enforced network policy. Existing chats keep their
+  current tools; start a new chat after enabling the feature.
+- Discards browser profiles at the end of a turn or cancellation. Browser tools
+  cannot access Home Assistant, local devices, saved logins or workspace files.
+- Pins the Chromium package by checksum and retains the private HA artifact route.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.9` without changing its Integration API compatibility.
+
 ## 1.0.5
 
 - Replaces the technical Scheduled form with title, task instructions, Details

@@ -1,5 +1,5 @@
 name: Codex Bridge
-version: "1.0.5"
+version: "1.0.6"
 slug: codex_bridge
 description: Run the Codex Bridge service privately inside Home Assistant.
 url: https://github.com/Herbertmt978/HA_Codex_Bridge
@@ -15,5 +15,7 @@ discovery:
   - codex_bridge
 options:
   enable_mcp: false
+  enable_browser: false
 schema:
   enable_mcp: bool
+  enable_browser: bool

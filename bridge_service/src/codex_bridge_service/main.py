@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from .account import CodexAccountProbe
 from .app import create_app
 from .build_info import BuildInfo
+from .browser_broker import BrowserBroker
+from .browser_worker_client import BrowserWorkerClient
 from .codex_process import resolve_codex_home
 from .limits import CodexLimitsProbe
 from .model_catalog import CodexModelCatalogProbe
@@ -17,6 +19,9 @@ def build_app() -> FastAPI:
     build_info = BuildInfo.from_environment()
     codex_home = resolve_codex_home(settings.codex_home, settings.codex_wrapper_path)
     external_legacy = settings.runtime_profile is RuntimeProfile.EXTERNAL_LEGACY
+    browser_worker = (
+        BrowserWorkerClient() if settings.enable_browser and not external_legacy else None
+    )
     return create_app(
         root_path=settings.root_path,
         runtime_profile=settings.runtime_profile,
@@ -51,6 +56,11 @@ def build_app() -> FastAPI:
         model_discovery_timeout_seconds=settings.model_discovery_timeout_seconds,
         model_cache_ttl_seconds=settings.model_cache_ttl_seconds,
         enable_mcp=settings.enable_mcp,
+        browser_broker=(
+            BrowserBroker(browser_worker)
+            if browser_worker is not None and browser_worker.ready()
+            else None
+        ),
         runner_factory=(
             (
                 lambda storage: BridgeRunner(

@@ -1,1 +1,7 @@
-{}
+configuration:
+  enable_mcp:
+    name: Enable MCP servers
+    description: Allow trusted outbound HTTPS MCP servers. Restart the App after changing this option.
+  enable_browser:
+    name: Enable browser tools
+    description: Allow Codex to browse public websites in an isolated, temporary browser. Restart the App, then start a new chat. Tools are available only when the startup isolation checks pass.

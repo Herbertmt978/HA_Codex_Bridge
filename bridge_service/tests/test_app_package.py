@@ -51,8 +51,8 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
     assert config["image"] == "ghcr.io/herbertmt978/ha-codex-bridge-app"
     assert config["discovery"] == ["codex_bridge"]
     assert config["map"] == ["app_config:rw"]
-    assert config["options"] == {"enable_mcp": False}
-    assert config["schema"] == {"enable_mcp": "bool"}
+    assert config["options"] == {"enable_mcp": False, "enable_browser": False}
+    assert config["schema"] == {"enable_mcp": "bool", "enable_browser": "bool"}
 
 
 @pytest.mark.parametrize("default_field", ["apparmor", "boot", "startup"])
@@ -130,6 +130,9 @@ def test_app_branding_assets_are_present() -> None:
         assert "<svg" in source.read_text(encoding="utf-8")
 
 
-def test_translation_uses_the_supported_empty_shape() -> None:
+def test_translations_explain_every_app_option() -> None:
     translations = _yaml(APP_ROOT / "translations" / "en.yaml")
-    assert translations == {}
+    configuration = translations['configuration']
+    assert set(configuration) == set(_yaml(APP_ROOT / 'config.yaml')['options'])
+    for value in configuration.values():
+        assert value['name'] and value['description']

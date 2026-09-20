@@ -93,9 +93,9 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App, Integration and panel **1.0.5**, with Bridge **0.7.8**
-and Codex **0.155.1**. It adds the simpler Scheduled form and retains the login,
-plugin catalogue and focus repairs. Use the
+This release pairs App, Integration and panel **1.0.6**, with Bridge **0.7.9**
+and Codex **0.155.1**. It adds optional browser tools and retains the simpler
+Scheduled form, login, plugin catalogue and focus repairs. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 and [changelog](codex_bridge_app/CHANGELOG.md) to check available versions.
 
@@ -121,11 +121,16 @@ Publish Home Assistant only. Nabu Casa, Cloudflare or another HTTPS reverse
 proxy must terminate at Home Assistant; keep the App and Bridge private.
 Read [Remote access](docs/remote-access.md) and [Security](SECURITY.md).
 
-The App-owned interactive browser is still disabled while its isolation
-requirements remain unmet; [issue #43](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/43)
-tracks that work. Native web search and local file previews are separate
-features. External proxy routes, complete PDF workflows and cold restores
-still require the target-specific checks documented in the acceptance guides.
+The optional browser worker can open public websites, interact with pages and
+save screenshots or PDFs to the chat. Enable **Enable browser tools** in the
+App's Configuration tab, restart the App, then start a new chat. Its startup
+checks must pass before Codex receives the tools. It cannot open your Home
+Assistant or other local devices, use your existing browser login, or retain
+a browser session between turns. See [Browser tools](docs/browser-tools.md).
+
+Native web search and local file previews are separate features. External
+proxy routes and cold restores still need the target-specific checks in the
+acceptance guides.
 
 For help, see [Support](SUPPORT.md). For development, see
 [Development](docs/development.md) and [Contributing](CONTRIBUTING.md).

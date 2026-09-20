@@ -483,6 +483,7 @@ class BridgeReadinessRecord(BaseModel):
             "agents_v1",
             "web_search_v1",
             "image_generation_v1",
+            "browser_v1",
         ],
         ...,
     ] = (

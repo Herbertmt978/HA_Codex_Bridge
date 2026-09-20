@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 from threading import Event, Thread
 import time
@@ -16,6 +17,23 @@ from codex_bridge_service.browser_worker_client import (
     BrowserWorkerClient,
     BrowserWorkerClientError,
 )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="selectable process pipes require POSIX")
+def test_partial_response_does_not_defeat_worker_timeout():
+    from codex_bridge_service.browser_worker_client import _readline_with_timeout
+
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b"{")
+        with os.fdopen(read_fd, "rb", buffering=0, closefd=False) as stream:
+            started = time.monotonic()
+            with pytest.raises(BrowserWorkerClientError, match="timed out"):
+                _readline_with_timeout(stream, 0.05)
+            assert time.monotonic() - started < 1
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
 
 
 class _Process:
@@ -65,7 +83,9 @@ def test_unproven_worker_never_starts_even_for_a_valid_open() -> None:
     assert started is False
 
 
-def test_worker_uses_only_private_jsonl_pipes_and_scrubbed_environment(monkeypatch) -> None:
+def test_worker_uses_only_private_jsonl_pipes_and_scrubbed_environment(
+    monkeypatch,
+) -> None:
     process = _Process()
     calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
     responses = iter(
@@ -78,7 +98,9 @@ def test_worker_uses_only_private_jsonl_pipes_and_scrubbed_environment(monkeypat
         calls.append((args, kwargs))
         return process
 
-    monkeypatch.setattr(client_module, "_readline_with_timeout", lambda *_args: next(responses))
+    monkeypatch.setattr(
+        client_module, "_readline_with_timeout", lambda *_args: next(responses)
+    )
     worker = BrowserWorkerClient(
         proof_verifier=lambda _path: True,
         process_factory=factory,
@@ -110,7 +132,12 @@ def test_worker_uses_only_private_jsonl_pipes_and_scrubbed_environment(monkeypat
     requests = process.stdin.getvalue().splitlines()
     assert len(requests) == 1
     assert json.loads(requests[0]) == {
-        "action": {"action": "open", "timeout_ms": 15000, "url": "https://example.com/", "wait_until": "domcontentloaded"},
+        "action": {
+            "action": "open",
+            "timeout_ms": 15000,
+            "url": "https://example.com/",
+            "wait_until": "domcontentloaded",
+        },
         "session_id": "brs_0123456789abcdef",
     }
     # A close interrupts the one private worker process rather than waiting
@@ -133,7 +160,9 @@ def test_private_worker_rejects_invalid_action_before_spawning() -> None:
 
 def test_worker_failure_or_malformed_response_kills_the_helper(monkeypatch) -> None:
     process = _Process()
-    monkeypatch.setattr(client_module, "_readline_with_timeout", lambda *_args: b"not-json\n")
+    monkeypatch.setattr(
+        client_module, "_readline_with_timeout", lambda *_args: b"not-json\n"
+    )
     worker = BrowserWorkerClient(
         proof_verifier=lambda _path: True,
         process_factory=lambda *_args, **_kwargs: process,
@@ -193,7 +222,9 @@ def _capture_failure(failures: list[BaseException], callback) -> None:
         failures.append(exc)
 
 
-def test_attestation_shape_is_exact_and_not_created_by_the_client(tmp_path: Path, monkeypatch) -> None:
+def test_attestation_shape_is_exact_and_not_created_by_the_client(
+    tmp_path: Path, monkeypatch
+) -> None:
     proof = tmp_path / "browser-worker-attestation.json"
     proof.write_text(
         json.dumps(

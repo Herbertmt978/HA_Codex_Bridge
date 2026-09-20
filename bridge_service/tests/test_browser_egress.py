@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import socket
+import sys
+import tempfile
 
 import pytest
 
@@ -11,6 +14,49 @@ from codex_bridge_service.browser_egress import (
     PinnedEndpointConnector,
     validate_resolved_endpoints,
 )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="App uses Unix-domain sockets on Linux")
+def test_unix_proxy_rejects_private_requests_and_closes_idle_clients() -> None:
+    async def scenario() -> None:
+        path = tmp_path / "egress.sock"
+        proxy = BrowserPolicyProxy()
+        await proxy.start_unix(path)
+        reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(b"CONNECT 127.0.0.1:443 HTTP/1.1\r\n\r\n")
+        await writer.drain()
+        assert (await reader.readline()).startswith(b"HTTP/1.1 403")
+        writer.close()
+        await writer.wait_closed()
+        idle_reader, idle_writer = await asyncio.open_unix_connection(path)
+        idle_writer.write(b"CONNECT ")
+        await idle_writer.drain()
+        # The server must have accepted the socket before closing its listener.
+        for _ in range(100):
+            if proxy._clients:
+                break
+            await asyncio.sleep(0.001)
+        assert proxy._clients
+        await proxy.close()
+        assert await asyncio.wait_for(idle_reader.read(), timeout=1) == b""
+        idle_writer.close()
+        await idle_writer.wait_closed()
+        assert not proxy._clients
+    # Keep the socket below the kernel path limit on long test-worker paths.
+    with tempfile.TemporaryDirectory(prefix="cb-proxy-") as directory:
+        tmp_path = Path(directory)
+        asyncio.run(scenario())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="App uses Unix-domain sockets on Linux")
+def test_unix_proxy_does_not_replace_an_existing_socket_path(tmp_path) -> None:
+    async def scenario() -> None:
+        path = tmp_path / "egress.sock"
+        path.write_text("existing state")
+        with pytest.raises(ValueError, match="invalid browser proxy socket"):
+            await BrowserPolicyProxy().start_unix(path)
+        assert path.read_text() == "existing state"
+    asyncio.run(scenario())
 
 
 def _record(address: str, port: int = 443) -> tuple[object, ...]:
@@ -91,6 +137,7 @@ def test_connector_re_resolves_each_connection_and_pins_the_numeric_sockaddr(
         answers = [
             [_record("93.184.216.34")],
             [_record("93.184.216.35")],
+            [_record("127.0.0.1")],
         ]
         resolved: list[tuple[str, int]] = []
         connected: list[tuple[object, ...]] = []
@@ -123,10 +170,13 @@ def test_connector_re_resolves_each_connection_and_pins_the_numeric_sockaddr(
 
         first = await connector.connect("example.com", 443)
         second = await connector.connect("example.com", 443)
+        # A later DNS answer must not reuse an earlier public-host decision.
+        with pytest.raises(BrowserEgressError, match="destination is not allowed"):
+            await connector.connect("example.com", 443)
 
         assert first[0] == "stream"
         assert second[0] == "stream"
-        assert resolved == [("example.com", 443), ("example.com", 443)]
+        assert resolved == [("example.com", 443)] * 3
         assert connected == [("93.184.216.34", 443), ("93.184.216.35", 443)]
 
     asyncio.run(scenario())

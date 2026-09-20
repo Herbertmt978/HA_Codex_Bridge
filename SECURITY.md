@@ -88,8 +88,10 @@ XML, or an unvalidated PDF. Unsupported content keeps the safe open/download
 fallback. This preview is not a Chrome/CDP endpoint and does not grant
 model-controlled networking.
 See [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md) for the
-separate isolation requirements that must be met before App-owned browser
-automation can be enabled.
+separate isolation requirements for App-owned browser automation. The browser
+is disabled by default and needs its own root startup proof after explicit
+enablement. Its public-network policy, process boundary, quotas and failure
+states are documented in the [browser threat model](docs/acceptance/browser-worker.md).
 
 ## Scope notes
 

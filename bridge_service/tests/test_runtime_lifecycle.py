@@ -400,8 +400,28 @@ def test_main_ha_composition_defers_catalogue_and_turns_to_shared_runtime(
     assert captured["account_probe"] is None
     assert captured["runner_factory"] is None
     assert captured["enable_mcp"] is False
+    assert captured['browser_broker'] is None
     assert captured["model_discovery_timeout_seconds"] == 10.0
     assert captured["model_cache_ttl_seconds"] == 600.0
+
+
+@pytest.mark.parametrize(('enabled', 'proven', 'available'), [(False, True, False), (True, False, False), (True, True, True)])
+def test_main_browser_requires_opt_in_and_runtime_proof(tmp_path, monkeypatch, enabled, proven, available):
+    import importlib
+    from types import SimpleNamespace
+    workspace = tmp_path / 'workspaces'
+    workspace.mkdir()
+    monkeypatch.setenv('CODEX_BRIDGE_AUTH_TOKEN', 'x' * 32)
+    monkeypatch.setenv('CODEX_BRIDGE_ROOT_PATH', str(tmp_path / 'data'))
+    monkeypatch.setenv('CODEX_BRIDGE_RUNTIME_PROFILE', 'home_assistant')
+    monkeypatch.setenv('CODEX_BRIDGE_WORKSPACE_ROOT', str(workspace))
+    monkeypatch.setenv('CODEX_BRIDGE_ENABLE_BROWSER', str(enabled).lower())
+    main = importlib.import_module('codex_bridge_service.main')
+    captured = {}
+    monkeypatch.setattr(main, 'create_app', lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(main, 'BrowserWorkerClient', lambda: SimpleNamespace(ready=lambda: proven))
+    main.build_app()
+    assert (captured['browser_broker'] is not None) is available
 
 
 def test_ha_startup_rebinds_only_provider_threads_when_account_changes(

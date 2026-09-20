@@ -12,6 +12,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 import ipaddress
+from pathlib import Path
 import re
 import socket
 from typing import Any, Protocol
@@ -252,6 +253,7 @@ class BrowserPolicyProxy:
         self._max_tunnel_bytes = max_tunnel_bytes
         self._idle_timeout_seconds = float(idle_timeout_seconds)
         self._server: asyncio.AbstractServer | None = None
+        self._clients: set[asyncio.Task] = set()
 
     @property
     def address(self) -> tuple[str, int]:
@@ -279,13 +281,32 @@ class BrowserPolicyProxy:
         if server is None:
             return
         server.close()
+        clients = tuple(self._clients)
+        for client in clients:
+            client.cancel()
+        await asyncio.gather(*clients, return_exceptions=True)
         await server.wait_closed()
+
+    async def start_unix(self, path: Path) -> None:
+        """Expose the same checked transport through a private filesystem socket."""
+        if self._server is not None:
+            raise RuntimeError("browser policy proxy is already running")
+        if not path.is_absolute() or path.exists() or path.is_symlink():
+            raise ValueError("invalid browser proxy socket")
+        self._server = await asyncio.start_unix_server(
+            self._handle_client, path=str(path), limit=self._max_header_bytes + 1,
+        )
 
     async def _handle_client(
         self,
         client_reader: asyncio.StreamReader,
         client_writer: asyncio.StreamWriter,
     ) -> None:
+        task = asyncio.current_task()
+        if len(self._clients) >= 32:
+            client_writer.close()
+            return
+        self._clients.add(task)
         response_started = False
         upstream_writer: asyncio.StreamWriter | None = None
         try:
@@ -346,6 +367,7 @@ class BrowserPolicyProxy:
                 await client_writer.wait_closed()
             except OSError:
                 pass
+            self._clients.discard(task)
 
     async def _forward_http(
         self,

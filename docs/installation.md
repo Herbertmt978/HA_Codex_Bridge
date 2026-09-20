@@ -4,7 +4,7 @@
 
 You need both the HACS Integration and the Supervisor App. The Integration
 adds the panel; the App runs Codex. This release pairs App, Integration and
-panel `1.0.5`, with Bridge `0.7.8` and Codex `0.155.1`.
+panel `1.0.6`, with Bridge `0.7.9` and Codex `0.155.1`.
 
 Install versions available on the
 [Releases page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).

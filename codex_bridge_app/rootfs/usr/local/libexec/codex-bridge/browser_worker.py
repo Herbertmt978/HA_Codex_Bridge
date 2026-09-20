@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import base64
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import resource
 import select
 import shutil
 import signal
@@ -33,7 +33,8 @@ import tempfile
 import time
 from typing import Any, Final
 
-from browser_policy import BrowserPolicyError, LoopbackPolicyProxy
+from browser_policy import BrowserPolicyError, UnixPolicyProxy
+from browser_resources import BrowserResourceGuard
 from codex_bridge_service.browser_contract import (
     BrowserContractError,
     BrowserPageProjection,
@@ -49,14 +50,14 @@ from codex_bridge_service.browser_worker_client import browser_worker_attestatio
 
 
 WORKER_PROTOCOL: Final = "browser-worker-v1"
-CHROMIUM: Final = "/usr/bin/chromium-browser"
+SANDBOX_HELPER: Final = "/usr/local/libexec/codex-bridge/browser_sandbox.py"
 MAX_LINE_BYTES: Final = 64 * 1024
 MAX_PAGE_TEXT_CHARS: Final = 32 * 1024
 MAX_SCREENSHOT_BYTES: Final = 4 * 1024 * 1024
 MAX_PDF_BYTES: Final = 8 * 1024 * 1024
 MAX_ACTIONS: Final = 100
 MAX_SESSION_SECONDS: Final = 300.0
-MAX_BROWSER_MEMORY_BYTES: Final = 1_500 * 1024 * 1024
+MAX_CDP_RESPONSE_BYTES: Final = 12 * 1024 * 1024
 
 
 class WorkerError(RuntimeError):
@@ -119,87 +120,29 @@ def _failure(session_id: str, code: str, *, retryable: bool = False) -> dict[str
     }
 
 
-def chromium_command(*, profile: Path, proxy_port: int) -> list[str]:
-    """Return the exact fixed Chromium launch command.
-
-    ``--remote-debugging-pipe`` provides the only CDP transport and does not
-    bind a TCP port.  All network-capable browser subsystems that could bypass
-    the policy proxy are explicitly disabled.  No caller controls arguments.
-    """
-
-    if not profile.is_absolute() or not 1 <= proxy_port <= 65535:
-        raise WorkerError("invalid browser launch configuration")
-    return [
-        CHROMIUM,
-        "--headless=new",
-        "--remote-debugging-pipe",
-        f"--user-data-dir={profile}",
-        f"--proxy-server=http://127.0.0.1:{proxy_port}",
-        "--proxy-bypass-list=<-loopback>",
-        "--disable-quic",
-        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
-        "--webrtc-ip-handling-policy=disable_non_proxied_udp",
-        "--disable-features=WebRtcHideLocalIpsWithMdns,WebRtcAllowInputVolumeAdjustment,ExtensionsToolbarMenu,DownloadBubble,DownloadBubbleV2",
-        "--disable-extensions",
-        "--disable-component-extensions-with-background-pages",
-        "--disable-background-networking",
-        "--disable-sync",
-        "--disable-default-apps",
-        "--disable-breakpad",
-        "--download-restrictions=3",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "about:blank",
-    ]
-
-
-def _browser_environment(profile: Path) -> dict[str, str]:
-    return {
-        "PATH": "/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "HOME": str(profile),
-        "TMPDIR": str(profile),
-        "XDG_CONFIG_HOME": str(profile / "config"),
-        "XDG_CACHE_HOME": str(profile / "cache"),
-        "LANG": "C.UTF-8",
-    }
-
-
-def _browser_preexec(read_fd: int, write_fd: int) -> None:
-    """Give Chromium only CDP fds 3/4 and strict per-child rlimits."""
-
-    os.dup2(read_fd, 3)
-    os.dup2(write_fd, 4)
-    resource.setrlimit(resource.RLIMIT_AS, (MAX_BROWSER_MEMORY_BYTES, MAX_BROWSER_MEMORY_BYTES))
-    # A worker turn may be active for five minutes, but one Chromium child has
-    # no reason to consume unlimited CPU while the outer worker enforces the
-    # same wall-clock session deadline.
-    resource.setrlimit(resource.RLIMIT_CPU, (360, 360))
-
-
 class CdpPipe:
     """Minimal private CDP-over-pipe client for constant worker operations."""
 
-    def __init__(self, *, profile: Path, proxy_port: int) -> None:
+    def __init__(self, *, socket_path: Path, canary_fd: int | None = None) -> None:
         to_browser_read, to_browser_write = os.pipe()
         from_browser_read, from_browser_write = os.pipe()
         self._write_fd = to_browser_write
         self._read_fd = from_browser_read
         self._buffer = b""
-        self._events: deque[dict[str, object]] = deque()
+        self._events: deque[dict[str, object]] = deque(maxlen=256)
         self._next_id = 1
+        self._session_id = None
+        self._guard = None
         try:
             self._process = subprocess.Popen(
-                chromium_command(profile=profile, proxy_port=proxy_port),
+                [sys.executable, SANDBOX_HELPER, "--socket", str(socket_path), "--read-fd", str(to_browser_read), "--write-fd", str(from_browser_write), *(['--canary-fd', str(canary_fd)] if canary_fd is not None else [])],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                env=_browser_environment(profile),
+                env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"},
                 close_fds=True,
                 pass_fds=(to_browser_read, from_browser_write),
                 start_new_session=True,
-                preexec_fn=lambda: _browser_preexec(to_browser_read, from_browser_write),
             )
         except (OSError, subprocess.SubprocessError) as exc:
             os.close(to_browser_write)
@@ -208,8 +151,18 @@ class CdpPipe:
         finally:
             os.close(to_browser_read)
             os.close(from_browser_write)
+        try:
+            self._guard = BrowserResourceGuard(self._process)
+            target = self.call("Target.createTarget", {"url": "about:blank"})
+            attached = self.call("Target.attachToTarget", {"targetId": target["targetId"], "flatten": True})
+            self._session_id = attached["sessionId"]
+        except BaseException:
+            self.close()
+            raise
 
     def close(self) -> None:
+        if self._guard is not None:
+            self._guard.close()
         for descriptor in (self._write_fd, self._read_fd):
             try:
                 os.close(descriptor)
@@ -223,7 +176,8 @@ class CdpPipe:
             except (OSError, subprocess.SubprocessError, TimeoutError):
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
-                except OSError:
+                    process.wait(timeout=2)
+                except (OSError, subprocess.SubprocessError):
                     pass
 
     def call(self, method: str, params: dict[str, object], *, timeout: float = 15.0) -> dict[str, object]:
@@ -235,12 +189,17 @@ class CdpPipe:
         command_id = self._next_id
         self._next_id += 1
         payload = json.dumps(
-            {"id": command_id, "method": method, "params": params},
+            {"id": command_id, "method": method, "params": params, **({"sessionId": self._session_id} if self._session_id and not method.startswith(("Target.", "Browser.", "SystemInfo.")) else {})},
             separators=(",", ":"),
             ensure_ascii=True,
         ).encode("ascii") + b"\0"
         try:
-            os.write(self._write_fd, payload)
+            view = memoryview(payload)
+            while view:
+                written = os.write(self._write_fd, view)
+                if written <= 0:
+                    raise OSError("closed browser pipe")
+                view = view[written:]
         except OSError as exc:
             raise WorkerError("Chromium control pipe failed") from exc
         deadline = time.monotonic() + timeout
@@ -256,23 +215,32 @@ class CdpPipe:
                 raise CdpError("fixed browser operation returned invalid result")
             return result
 
-    def wait_for_event(self, method: str, *, timeout: float) -> None:
+    def wait_for_event(self, method: str, *, timeout: float, params: dict[str, object] | None = None) -> None:
+        def matches(event: dict[str, object]) -> bool:
+            return (
+                event.get("method") == method
+                and event.get("sessionId") == self._session_id
+                and all(event.get("params", {}).get(key) == value for key, value in (params or {}).items())
+            )
+
         deadline = time.monotonic() + timeout
         retained: deque[dict[str, object]] = deque()
         while self._events:
             event = self._events.popleft()
-            if event.get("method") == method:
+            if matches(event):
                 self._events.extendleft(reversed(retained))
                 return
             retained.append(event)
         self._events.extendleft(reversed(retained))
         while True:
             event = self._next_message(deadline)
-            if event.get("method") == method:
+            if matches(event):
                 return
             self._events.append(event)
 
     def _next_message(self, deadline: float) -> dict[str, object]:
+        if time.monotonic() >= deadline:
+            raise WorkerError("fixed browser operation timed out")
         while b"\0" not in self._buffer:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -284,7 +252,7 @@ class CdpPipe:
             if not chunk:
                 raise WorkerError("Chromium control pipe closed")
             self._buffer += chunk
-            if len(self._buffer) > MAX_LINE_BYTES * 8:
+            if len(self._buffer) > MAX_CDP_RESPONSE_BYTES:
                 raise WorkerError("Chromium control output exceeded its bound")
         raw, self._buffer = self._buffer.split(b"\0", 1)
         try:
@@ -302,10 +270,11 @@ _PAGE_PROJECTION = """(() => ({
   text: String(document.body ? document.body.innerText : '').slice(0, 32768)
 }))()"""
 _CLICK = """(selector => { const element = document.querySelector(selector); if (!element) return false; element.click(); return true; })"""
-_TYPE = """((selector, text, clear, submit) => { const element = document.querySelector(selector); if (!element) return false; if (clear) element.value = ''; element.focus(); element.value = text; element.dispatchEvent(new Event('input', {bubbles: true})); element.dispatchEvent(new Event('change', {bubbles: true})); if (submit) { const form = element.form; if (form) form.requestSubmit(); } return true; })"""
+_TYPE = """((selector, text, clear, submit) => { const element = document.querySelector(selector); if (!element || !('value' in element)) return false; element.focus(); element.value = (clear ? '' : String(element.value)) + text; element.dispatchEvent(new Event('input', {bubbles: true})); element.dispatchEvent(new Event('change', {bubbles: true})); if (submit) { const form = element.form; if (form) form.requestSubmit(); } return true; })"""
 _SELECT = """((selector, value) => { const element = document.querySelector(selector); if (!element || element.tagName !== 'SELECT') return false; element.value = value; element.dispatchEvent(new Event('input', {bubbles: true})); element.dispatchEvent(new Event('change', {bubbles: true})); return element.value === value; })"""
 _HAS_SELECTOR = """(selector => Boolean(document.querySelector(selector)))"""
 _HAS_TEXT = """(text => String(document.body ? document.body.innerText : '').includes(text))"""
+_SELECTED_TEXT = """(selector => { const element = document.querySelector(selector); return element ? String(element.innerText || '').slice(0, 32768) : null; })"""
 
 
 def _runtime_value(cdp: CdpPipe, expression: str, *, timeout: float = 10.0) -> object:
@@ -326,17 +295,28 @@ def _runtime_value(cdp: CdpPipe, expression: str, *, timeout: float = 10.0) -> o
 
 
 def _function_value(cdp: CdpPipe, declaration: str, arguments: list[object], *, timeout: float = 10.0) -> object:
-    result = cdp.call(
-        "Runtime.callFunctionOn",
-        {
-            "functionDeclaration": declaration,
-            "arguments": [{"value": argument} for argument in arguments],
-            "returnByValue": True,
-            "awaitPromise": False,
-            "userGesture": False,
-        },
-        timeout=timeout,
-    )
+    receiver = cdp.call("Runtime.evaluate", {"expression": "globalThis", "returnByValue": False}, timeout=timeout)
+    object_id = receiver.get("result", {}).get("objectId")
+    if not isinstance(object_id, str):
+        raise CdpError("browser execution context is unavailable")
+    try:
+        result = cdp.call(
+            "Runtime.callFunctionOn",
+            {
+                "functionDeclaration": declaration,
+                "objectId": object_id,
+                "arguments": [{"value": argument} for argument in arguments],
+                "returnByValue": True,
+                "awaitPromise": False,
+                "userGesture": False,
+            },
+            timeout=timeout,
+        )
+    finally:
+        # A click can destroy its execution context by navigating. Releasing
+        # that context must not turn a completed action into a false failure.
+        with suppress(CdpError):
+            cdp.call("Runtime.releaseObject", {"objectId": object_id}, timeout=timeout)
     envelope = result.get("result")
     if not isinstance(envelope, dict) or "value" not in envelope:
         raise CdpError("fixed browser operation returned invalid value")
@@ -347,20 +327,22 @@ def _function_value(cdp: CdpPipe, declaration: str, arguments: list[object], *, 
 class Session:
     session_id: str
     profile: Path
-    policy: LoopbackPolicyProxy
+    policy: UnixPolicyProxy
     cdp: CdpPipe
     created_at: float
     actions: int = 0
 
     @classmethod
-    def create(cls, session_id: str) -> "Session":
+    def create(cls, session_id: str, *, canary_fd: int | None = None) -> "Session":
         profile = Path(tempfile.mkdtemp(prefix="codex-bridge-browser-", dir="/tmp"))
         os.chmod(profile, 0o700)
-        policy = LoopbackPolicyProxy()
+        policy = UnixPolicyProxy(profile / "egress.sock")
+        cdp = None
         try:
             policy.start()
-            cdp = CdpPipe(profile=profile, proxy_port=policy.address.port)
+            cdp = CdpPipe(socket_path=policy.socket_path, canary_fd=canary_fd)
             cdp.call("Page.enable", {}, timeout=10)
+            cdp.call("Page.setLifecycleEventsEnabled", {"enabled": True}, timeout=10)
             cdp.call("Runtime.enable", {}, timeout=10)
             return cls(
                 session_id=session_id,
@@ -370,6 +352,8 @@ class Session:
                 created_at=time.monotonic(),
             )
         except BaseException:
+            if cdp is not None:
+                cdp.close()
             policy.close()
             _remove_profile(profile)
             raise
@@ -378,8 +362,10 @@ class Session:
         try:
             self.cdp.close()
         finally:
-            self.policy.close()
-            _remove_profile(self.profile)
+            try:
+                self.policy.close()
+            finally:
+                _remove_profile(self.profile)
 
     def check_limits(self) -> None:
         if self.actions >= MAX_ACTIONS or time.monotonic() - self.created_at > MAX_SESSION_SECONDS:
@@ -424,13 +410,18 @@ class Session:
             raise NavigationBlocked("browser navigation was blocked") from exc
 
     def navigate(self, action: OpenAction | NavigateAction) -> BrowserPageProjection:
-        self.cdp.call(
+        result = self.cdp.call(
             "Page.navigate",
             {"url": action.url},
             timeout=action.timeout_ms / 1000,
         )
-        event = "Page.loadEventFired" if action.wait_until == "load" else "Page.domContentEventFired"
-        self.cdp.wait_for_event(event, timeout=action.timeout_ms / 1000)
+        if result.get("errorText") or result.get("isDownload"):
+            raise NavigationBlocked("browser navigation was blocked")
+        if result.get("loaderId"):
+            self.cdp.wait_for_event(
+                "Page.lifecycleEvent", timeout=action.timeout_ms / 1000,
+                params={"loaderId": result["loaderId"], "name": "load" if action.wait_until == "load" else "DOMContentLoaded"},
+            )
         return self.projection()
 
 
@@ -499,11 +490,11 @@ class BrowserWorker:
         except NavigationBlocked:
             self.close()
             return _failure(session_id, "navigation_blocked")
+        except CdpError:
+            return _failure(session_id, "navigation_failed", retryable=True)
         except WorkerError:
             self.close()
             return _failure(session_id, "worker_failed")
-        except CdpError:
-            return _failure(session_id, "navigation_failed", retryable=True)
 
     def _handle_action(self, session: Session, action: Any) -> dict[str, object]:
         if action.action == "navigate":
@@ -512,9 +503,12 @@ class BrowserWorker:
             projection = session.projection()
             text = projection.text[: action.max_chars]
             if action.selector is not None:
-                value = _function_value(session.cdp, _HAS_SELECTOR, [action.selector])
-                if value is not True:
+                value = _function_value(session.cdp, _SELECTED_TEXT, [action.selector])
+                if value is None:
                     return _failure(session.session_id, "selector_not_found")
+                if not isinstance(value, str):
+                    raise CdpError("selected text response was invalid")
+                text = value[: action.max_chars]
             return _response(
                 session.session_id,
                 page=projection.model_copy(update={"text": text}),
@@ -572,6 +566,7 @@ class BrowserWorker:
             if not data or len(data) > MAX_SCREENSHOT_BYTES:
                 raise CdpError("screenshot response was invalid")
             mime_type = "image/png" if action.format == "png" else "image/jpeg"
+            session.public_main_frame_url()
             return _response(session.session_id, artifact=("screenshot", mime_type, data))
         if isinstance(action, PdfAction):
             session.public_main_frame_url()
@@ -594,6 +589,7 @@ class BrowserWorker:
                 raise CdpError("PDF response was invalid") from exc
             if not data.startswith(b"%PDF-") or len(data) > MAX_PDF_BYTES:
                 raise CdpError("PDF response was invalid")
+            session.public_main_frame_url()
             return _response(session.session_id, artifact=("pdf", "application/pdf", data))
         raise WorkerError("unsupported fixed browser action")
 
@@ -605,8 +601,13 @@ def main() -> int:
     if not browser_worker_attestation_ready():
         return 1
     worker = BrowserWorker()
+
+    def terminate(_number, _frame):
+        raise SystemExit(0)
+
+    previous_handler = signal.signal(signal.SIGTERM, terminate)
     try:
-        for raw_line in sys.stdin.buffer:
+        while raw_line := sys.stdin.buffer.readline(MAX_LINE_BYTES + 2):
             session_id = "brs_0000000000000000"
             try:
                 if len(raw_line) > MAX_LINE_BYTES + 1 or not raw_line.endswith(b"\n"):
@@ -616,7 +617,7 @@ def main() -> int:
                 if isinstance(candidate, str):
                     session_id = candidate
                 response = worker.handle(request)
-            except BaseException:
+            except Exception:
                 worker.close()
                 response = _failure(session_id, "worker_failed")
             encoded = json.dumps(response, separators=(",", ":"), ensure_ascii=True).encode("ascii")
@@ -625,8 +626,13 @@ def main() -> int:
                 encoded = json.dumps(_failure(session_id, "worker_failed"), separators=(",", ":")).encode("ascii")
             sys.stdout.buffer.write(encoded + b"\n")
             sys.stdout.buffer.flush()
+            if len(raw_line) > MAX_LINE_BYTES + 1 or not raw_line.endswith(b"\n"):
+                break
     finally:
-        worker.close()
+        try:
+            worker.close()
+        finally:
+            signal.signal(signal.SIGTERM, previous_handler)
     return 0
 
 
