@@ -7,6 +7,13 @@ function event(sequence, event_type, payload = {}, run_id = "run-1") {
 }
 
 describe("run activity view model", () => {
+  it("identifies commands that run on Home Assistant OS in the activity history", () => {
+    const model = getRunActivityViewModel({ status: "running", active_run_id: "run-1" }, [
+      event(1, "run.started"),
+      event(2, "item.started", { item_id: "host-1", item_type: "haHostCommand" }),
+    ]);
+    expect(model.action).toBe("Running a Home Assistant OS command");
+  });
   it("projects a safe current plan step and bounded patch counts", () => {
     const model = getRunActivityViewModel(
       { status: "running", active_run_id: "run-1" },

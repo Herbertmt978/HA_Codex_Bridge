@@ -87,6 +87,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except BridgeApiError as exc:
         raise ConfigEntryNotReady("bridge service is not ready") from exc
 
+    from .host_access import HOST_WORKER_KEY
+    if (
+        connection_type == CONNECTION_TYPE_SUPERVISOR
+        and "host_access_v1" in getattr(ready, "capabilities", ())
+        and isinstance(entry.data.get(HOST_WORKER_KEY), dict)
+    ):
+        try:
+            await client.async_pair_host_worker(entry.data[HOST_WORKER_KEY])
+        except BridgeApiError:
+            # An optional companion must not stop ordinary chats from loading.
+            # Settings reports its availability; pairing never enables access.
+            pass
+
     runtime = CodexBridgeRuntime(
         entry_id=entry.entry_id,
         title=entry.title,

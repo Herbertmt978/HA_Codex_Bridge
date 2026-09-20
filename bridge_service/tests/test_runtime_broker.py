@@ -190,6 +190,7 @@ def _thread(
         "source": "appServer",
         "turns": turns or [],
         "sessionId": f"session-{thread_id}",
+        "projectId": None,
     }
 
 
@@ -487,6 +488,7 @@ def _broker(
     image_generation_authority: object | None = None,
     browser_broker: object | None = None,
     browser_dynamic_tools_enabled: bool = False,
+    host_access: object | None = None,
     provider_admission_check: Callable[[], bool] | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
@@ -502,6 +504,7 @@ def _broker(
         image_generation_authority=image_generation_authority,
         browser_broker=browser_broker,
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
+        host_access=host_access,
         provider_admission_check=provider_admission_check,
     )
     broker.start()
@@ -2433,6 +2436,7 @@ def test_projection_denies_punctuation_wrapped_absolute_paths(
     assert (
         question_display(
             {
+                "isBlocking": True,
                 "questions": [
                     {
                         "id": "scope",
@@ -4124,6 +4128,7 @@ def test_deleting_terminal_thread_reclaims_idempotency_capacity(
                     "threadId": remote_thread_id,
                     "turnId": turn_id,
                     "itemId": "delete-capacity-question",
+                    "isBlocking": True,
                     "questions": [
                         {
                             "id": "scope",
@@ -5691,6 +5696,7 @@ def test_command_and_file_approvals_defer_then_respond_idempotently(
             "item/tool/requestUserInput",
             {
                 "itemId": "scheduled-question",
+                "isBlocking": True,
                 "questions": [
                     {
                         "id": "scope",
@@ -5880,6 +5886,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
                     "threadId": remote_thread_id,
                     "turnId": turn_id,
                     "itemId": "idle-refresh-question",
+                    "isBlocking": True,
                     "questions": [
                         {
                             "id": "scope",
@@ -5912,6 +5919,61 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
             turn_id=turn_id,
         )
         _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+    finally:
+        broker.close()
+
+
+def test_optional_question_is_declined_without_suspending_idle_timeout(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    limits = ResourceLimits(run_idle_timeout_seconds=0.4)
+    broker = RuntimeBroker(
+        storage=storage,
+        app_server=client,
+        runtime_gate=RuntimeGate(limits=limits),
+        resource_limits=limits,
+        watchdog_interval_seconds=0.01,
+        turn_timeout_seconds=5.0,
+        interaction_timeout_seconds=5.0,
+    )
+    broker.start()
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Continue while asking an optional question",
+            client_request_id="optional-question-run",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        assert client.emit_request(
+            "item/tool/requestUserInput",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "optional-question",
+                "isBlocking": False,
+                "questions": [
+                    {
+                        "id": "scope",
+                        "header": "Scope",
+                        "question": "Any optional preferences?",
+                        "options": [],
+                        "isOther": True,
+                        "isSecret": False,
+                    }
+                ],
+            },
+            request_id="provider-optional-question",
+        ) == {"answers": {"scope": {"answers": []}}}
+        assert broker.pending_interactions(thread_id=thread.thread_id) == ()
+        assert not any(
+            event.event_type == "interaction.created"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+        _wait_until(lambda: client.aborted_generations == [1], timeout=2.0)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "error")
     finally:
         broker.close()
 
@@ -6642,6 +6704,7 @@ def test_thread_delete_waits_for_inflight_interaction_publication(
                         "threadId": remote_thread_id,
                         "turnId": turn_id,
                         "itemId": "delete-question-item",
+                        "isBlocking": True,
                         "questions": [
                             {
                                 "id": "scope",
@@ -6836,6 +6899,7 @@ def test_absolute_path_text_is_not_projected_in_user_question(
                 "threadId": remote_thread_id,
                 "turnId": turn_id,
                 "itemId": "absolute-question-item",
+                "isBlocking": True,
                 "questions": [question],
             },
             request_id="provider-absolute-question",
@@ -6870,6 +6934,7 @@ def test_user_question_deferred_answer_is_exact_and_secret_questions_are_rejecte
             "threadId": remote_thread_id,
             "turnId": turn_id,
             "itemId": "question-item-1",
+            "isBlocking": True,
             "questions": [
                 {
                     "id": "scope",

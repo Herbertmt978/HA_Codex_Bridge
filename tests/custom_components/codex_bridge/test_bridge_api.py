@@ -75,6 +75,42 @@ async def test_authenticated_ready_negotiates_v1_and_sends_api_header(
     assert ready == ReadyRecord.from_payload(_fixture("ready_v1.json"))
 
 
+@pytest.mark.parametrize("supported", [False, True])
+async def test_host_access_requires_advertised_capability_before_any_request(bridge_server_factory, supported):
+    ready = _fixture("ready_v1.json")
+    if supported:
+        ready["capabilities"].append("host_access_v1")
+    calls = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        calls.append((request.method, request.path, await request.json() if request.can_read_body else None))
+        return web.json_response({"state": "ready", "enabled": False})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        operations = [
+            lambda: client.async_host_access(),
+            lambda: client.async_enable_host_access("a" * 64, True),
+            lambda: client.async_revoke_host_access(),
+            lambda: client.async_pair_host_worker({"host": "172.30.32.6"}),
+        ]
+        for operation in operations:
+            if supported:
+                await operation()
+            else:
+                with pytest.raises(BridgeApiCapabilityError):
+                    await operation()
+    if supported:
+        assert [path for _, path, _ in calls] == ["/host-access", "/host-access/enable", "/host-access/revoke", "/host-access/worker"]
+        assert calls[1][2] == {"scope_revision": "a" * 64, "acknowledged": True}
+    else:
+        assert calls == []
+
+
 async def test_start_auth_login_defaults_to_non_destructive_mode(
     bridge_server_factory,
 ) -> None:
@@ -694,7 +730,41 @@ async def test_plugin_catalogue_uses_the_bounded_cold_response_timeout() -> None
 
 
 @pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
-async def test_plugin_catalogue_response_is_limited_to_eight_mebibytes(
+async def test_plugin_catalogue_above_eight_mebibytes_is_accepted(
+    bridge_server_factory, method: str
+) -> None:
+    payload = {
+        "cwd": ".",
+        "marketplaces": [
+            {
+                "name": "official",
+                "plugins": [
+                    {
+                        "id": f"plugin-{index}",
+                        "name": f"Plugin {index}",
+                        "description": "x" * 1024,
+                    }
+                    for index in range(8192)
+                ],
+            }
+        ],
+    }
+    assert len(json.dumps(payload).encode()) > 8 * 1024 * 1024
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        return web.json_response(payload)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        assert await getattr(client, method)(".") == payload
+
+
+@pytest.mark.parametrize("method", ["async_list_plugins", "async_list_marketplaces"])
+async def test_plugin_catalogue_response_size_remains_bounded(
     bridge_server_factory, monkeypatch, method: str
 ) -> None:
     async def handler(request: web.Request) -> web.Response:

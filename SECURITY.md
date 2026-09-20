@@ -26,9 +26,28 @@ through to the App or Bridge.
 
 The App uses ChatGPT device login and does not use an OpenAI API key. In App
 mode, keep workspaces under `/config/workspaces`; do not mount Home Assistant
-configuration, host filesystems, or broad shares. The App fails closed when its
+configuration, host filesystems, or broad shares into the normal Bridge App. The App fails closed when its
 tool-sandbox attestation is unavailable. Do not weaken AppArmor, container
 permissions, or network restrictions to bypass it.
+
+The optional **Codex Host Access** App is a deliberate exception with a separate
+installation and explicit consent. It shares the HAOS PID namespace and, with
+Protection mode disabled, enters the host environment as root. It can access
+host files, mounted storage, credentials, containers, services and the host's
+network. The ordinary Bridge App keeps its existing permissions.
+
+Installing or privately pairing the companion does not enable it. A Home
+Assistant administrator must acknowledge the current machine-specific warning,
+then select host access for each chat or schedule. Scheduled work needs its own
+unattended acknowledgement. A changed environment or revoked grant blocks new
+work; the Bridge never silently substitutes another environment.
+
+Root access is not a containment boundary. Commands can change access controls,
+read Codex and integration credentials, or start work outside the tracked
+process group. Cancellation and revocation prevent new Bridge commands and
+attempt to stop tracked work; they cannot undo changes or guarantee termination
+of independently started work. See the complete
+[disclosure and installation guide](codex_host_access_app/DOCS.md).
 
 ## Capabilities and unattended operation
 
@@ -71,31 +90,12 @@ permissions to make a task continue. Keep a cold backup before App changes,
 and do not claim arbitrary Supervisor image rollback until a prior immutable
 tag and restore procedure have been tested.
 
-The current App recovery release is `1.0.1`, is `amd64` only, and uses Bridge
-`0.7.6` with Codex `0.144.5`; the compatible Integration and panel remain
-`1.0.0` because their API and UI do not change. Verify the App's signed `1.0.1`
-image and immutable publication evidence on GitHub before installing. The App
-repairs only allowlisted restored ownership and fixed private modes before it
-drops privileges. The compatible panel's composer Send-state fix and
-account-neutral local-chat contract are
-presentation and continuity improvements, not expansions of authority. Native
-Live web search remains provider-gated for Supervisor prompts and automations;
-bounded time-sensitive guidance does not relax the blocked model-controlled
-shell network. Image generation remains gated by both `imageGeneration` and
-`namespaceTools`, uses a signed-in ChatGPT account rather than an API key, and
-keeps only bounded private PNG/JPEG/WebP artifacts.
-
-The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
-uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
-`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
-`29633146637`, and immutable image digest
-`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
-Its signature, SBOM, provenance, account-switch behavior, and preserved local
-chat history were verified. Target acceptance remains bounded: the first
-unattended App update is proven, but external blocked-network routing, cold
-restore, arbitrary prior-image selection, and the secure App-owned browser
-worker remain unproven. PDF list/archive/preview/download acceptance is also
-not claimed. Recover with a cold backup or an existing private external Bridge.
+The App is published as a signed, immutable image. Current component versions
+and user-facing changes are recorded in the [release notes](codex_bridge_app/CHANGELOG.md).
+A passing startup sandbox check does not establish browser-worker isolation,
+external proxy behaviour, or a complete restore. Keep those acceptance checks
+separate. Native web search and image generation remain provider-gated and do
+not relax model-controlled shell networking.
 
 Artifact previews remain on the Home Assistant origin. PDFs are fetched only
 through the administrator-authenticated artifact route, checked against an 8 MB
@@ -107,8 +107,10 @@ XML, or an unvalidated PDF. Unsupported content keeps the safe open/download
 fallback. This preview is not a Chrome/CDP endpoint and does not grant
 model-controlled networking.
 See [ADR 0006](docs/aegis/adr/0006-preview-and-browser-boundary.md) for the
-separate isolation requirements that must be met before App-owned browser
-automation can be enabled.
+separate isolation requirements for App-owned browser automation. The browser
+is disabled by default and needs its own root startup proof after explicit
+enablement. Its public-network policy, process boundary, quotas and failure
+states are documented in the [browser threat model](docs/acceptance/browser-worker.md).
 
 ## Scope notes
 

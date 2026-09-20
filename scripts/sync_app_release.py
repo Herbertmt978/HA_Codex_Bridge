@@ -10,7 +10,7 @@ Integration or Bridge package metadata.
 The default operation is a read-only check suitable for CI.  ``--bump-patch``
 (``--update`` is an alias) increments the App patch version, while
 ``--set-version X.Y.Z`` selects an explicit newer stable version.  Both write
-modes validate every input before replacing the four release projections and
+modes validate every input before replacing the managed release projections and
 roll back already-committed replacements if a later commit fails.
 """
 
@@ -386,11 +386,15 @@ def synchronize(
     docker = _read_text(docker_path, "App Dockerfile")
     run = _read_text(run_path, "App service run script")
     changelog = _read_text(changelog_path, "App changelog")
+    host_version, host_config = _app_version_from_config(root / "codex_host_access_app/config.yaml")
+    host_changelog = _read_text(root / "codex_host_access_app/CHANGELOG.md", "Host Access changelog")
     if mode == "check":
         _projected(docker.text, app_version=app_version, bridge_version=bridge_version, codex_version=codex_version, lock_digest=lock_digest, dockerfile=True, check=True)
         _projected(run.text, app_version=app_version, bridge_version=bridge_version, codex_version=codex_version, lock_digest=lock_digest, dockerfile=False, check=True)
         if _changelog_version(changelog.text) != app_version:
             raise ReleaseSyncError("release projection drift in App changelog")
+        if host_version != app_version or _changelog_version(host_changelog.text) != app_version:
+            raise ReleaseSyncError("release projection drift in Host Access App")
         return ReleaseMetadata(app_version, bridge_version, codex_version, lock_digest)
     if mode == "bump-patch":
         match = APP_VERSION_PATTERN.fullmatch(app_version)
@@ -425,6 +429,11 @@ def synchronize(
             docker.path: docker_text.encode("utf-8"),
             run.path: run_text.encode("utf-8"),
             changelog.path: changelog_text.encode("utf-8"),
+            host_config.path: _config_projected(host_config, next_version).encode("utf-8"),
+            host_changelog.path: _changelog_projected(
+                host_changelog, app_version=next_version,
+                bridge_version=bridge_version, codex_version=codex_version,
+            ).encode("utf-8"),
         }
     )
     return ReleaseMetadata(next_version, bridge_version, codex_version, lock_digest)

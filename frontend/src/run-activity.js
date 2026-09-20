@@ -13,6 +13,7 @@ const ITEM_LABELS = Object.freeze({
   contextCompaction: "Compacting context",
   collabAgentToolCall: "Delegating to an agent",
   dynamicToolCall: "Calling a tool",
+  haHostCommand: "Running a Home Assistant OS command",
   fileChange: "Applying file changes",
   imageGeneration: "Generating an image",
   imageView: "Viewing an image",
@@ -184,6 +185,10 @@ function joinActivityLabels(labels, fallback) {
 
 function itemLabel(payload = {}) {
   const itemType = payload.item_type;
+  if (itemType === "haHostCommand") {
+    const outcomes = { completed: "completed", failed: "failed", cancelled: "cancelled", timed_out: "timed out", output_limit: "reached its output limit" };
+    return Object.hasOwn(outcomes, payload.host_outcome) ? `Home Assistant OS command ${outcomes[payload.host_outcome]}` : ITEM_LABELS.haHostCommand;
+  }
   if (itemType === "collabAgentToolCall" && Object.hasOwn(COLLAB_OPERATION_LABELS, payload.operation)) {
     return COLLAB_OPERATION_LABELS[payload.operation];
   }

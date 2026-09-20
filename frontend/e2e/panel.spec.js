@@ -93,6 +93,207 @@ async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
 }
 
+for (const width of [390, 1280]) {
+  for (const installed of [false, true]) {
+    test(`host access warning is usable at ${width}px with App ${installed ? "ready" : "missing"}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      const panel = page.locator("codex-bridge-panel");
+      await expect(panel.locator("#new-project-button")).toBeVisible();
+      await page.evaluate((ready) => {
+        const element = document.querySelector("codex-bridge-panel");
+        element._stopPolling();
+        element._config = { ...element._config, capabilities: ["host_access_v1"] };
+        const original = element._callWS.bind(element);
+        const status = {
+          state: ready ? "ready" : "not_paired", enabled: false,
+          warnings: [
+            ["Commands and services", "Codex can run commands as root on this Home Assistant OS machine, install or run software, manage containers and services, and restart or stop Home Assistant."],
+            ["Files and credentials", "Codex can read, change or delete host files, including Home Assistant configuration, app data, backups and mounted storage. This includes secrets, integration tokens and saved sign-in credentials accessible to root, including Codex sign-in data."],
+            ["Internet and local network", "Codex can use this machine's internet and local-network connections. Stored credentials may allow access to other systems, including Proxmox or another VM, with the permissions those credentials grant."],
+            ["Data sent outside Home Assistant", "File contents and command output returned to Codex can be sent to the model provider. Network commands can send data to other services."],
+            ["Risk to your home", "Incorrect instructions or malicious content encountered during work could delete data, expose credentials or interrupt household automations."],
+            ["Stopping and revoking access", "Stop or revoke blocks further Bridge requests and attempts to stop tracked commands. It cannot undo completed changes. Root commands can change these controls or start work that continues afterwards."],
+          ].map(([title, description]) => ({ title, description })),
+          disclosure: { scope_revision: "a".repeat(64), hostname: "HAOS-DEV", os_version: "18.3" },
+        };
+        element._callWS = async (method, args) => method === "host_access" ? status : method === "enable_host_access" ? { ...status, enabled: true, grant_id: "b".repeat(32) } : original(method, args);
+        element._showThreadForm = true;
+        element._renderedThreadFormKey = "";
+        element._render();
+      }, installed);
+      const mode = panel.locator("#thread-mode-select");
+      await mode.selectOption("haos-full-access");
+      const dialog = panel.getByRole("dialog", { name: "Allow Codex full access to Home Assistant OS?" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText("Files and credentials");
+      await expect(mode).not.toHaveValue("haos-full-access");
+      const bounds = await dialog.boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
+      const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+      expect(accessibility.violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath("host-access-warning.png") });
+      if (installed) {
+        await expect(dialog.getByRole("link")).toHaveCount(0);
+        const enable = dialog.getByRole("button", { name: "Enable host access" });
+        await expect(enable).toBeDisabled();
+        await dialog.getByRole("checkbox").check();
+        await enable.click();
+        await expect(dialog).toBeHidden();
+        await expect(mode).toHaveValue("haos-full-access");
+      } else {
+        await expect(dialog.getByRole("link", { name: "Host Access installation instructions" })).toBeVisible();
+        await expect(dialog.locator("#confirm-host-access")).toHaveCount(0);
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+        await expect(dialog).toBeHidden();
+      }
+    });
+  }
+}
+
+test("settings persist appearance and keep themed menus usable on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => document.querySelector("codex-bridge-panel")._selectDesktopDestination("settings"));
+  const panel = page.locator("codex-bridge-panel");
+  await panel.getByRole("tab", { name: "Appearance", exact: true }).click();
+  const theme = panel.getByRole("combobox", { name: "Theme", exact: true });
+  await theme.click();
+  const menu = panel.getByRole("listbox", { name: "Theme", exact: true });
+  const bounds = await menu.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await theme.press("End"); await theme.press("Enter");
+  await expect(panel).toHaveAttribute("data-panel-theme", "dark");
+  await expect(theme).toContainText("Dark");
+  await expect(theme).toBeFocused();
+  await page.evaluate(() => { const element = document.querySelector("codex-bridge-panel"); element.hass = { ...element.hass }; });
+  await expect(theme).toBeFocused();
+  await panel.screenshot({ path: test.info().outputPath("settings-dark-mobile.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.reload();
+  await expect(panel).toHaveAttribute("data-panel-theme", "dark");
+});
+
+test("scheduled runtime selections and grouped skills remain readable", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  const form = panel.locator(".schedule-editor");
+  await form.locator("summary").click();
+  const model = form.getByRole("combobox", { name: "Model", exact: true });
+  await model.click();
+  await expect(form.getByRole("option", { name: "GPT-5.6-Sol", exact: true })).toBeVisible();
+  await model.press("Escape");
+  await expect(form.locator('[name="model"]')).toHaveValue("");
+  await form.getByRole("combobox", { name: "Reasoning", exact: true }).click();
+  await expect(form.getByRole("listbox", { name: "Reasoning", exact: true })).toBeVisible();
+  await form.screenshot({ path: test.info().outputPath("scheduled-model-reasoning.png") });
+  await page.evaluate(() => {
+    const element = document.querySelector("codex-bridge-panel");
+    element._desktopFeatures.skills = { loaded: true, data: { skills: [
+      { name: "data-analytics:build-report", scope: "workspace", enabled: true },
+      { name: "data-analytics:design-kpis", scope: "workspace", enabled: true },
+      { name: "aegis:systematic-debugging", scope: "workspace", enabled: false },
+    ] } };
+    element._selectDesktopDestination("skills");
+  });
+  await expect(panel.locator(".skill-group")).toHaveCount(2);
+  await expect(panel.getByRole("heading", { name: "Data analytics 2 skills" })).toBeVisible();
+  await panel.screenshot({ path: test.info().outputPath("skills-grouped.png") });
+});
+
+test("creates and edits a scheduled task using the reference form", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  const form = panel.locator(".schedule-editor");
+  await expect(form.getByText("Home Assistant", { exact: true })).toBeVisible();
+  await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toBeVisible();
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Morning summary");
+  await form.getByRole("textbox", { name: "Task instructions" }).fill("Summarise overnight events in Home Assistant.");
+  await form.getByRole("combobox", { name: "Repeat", exact: true }).click();
+  await form.getByRole("option", { name: "Weekdays", exact: true }).click();
+  await form.getByLabel("Time", { exact: true }).fill("09:00");
+  await expect(form.locator(".schedule-preview")).toHaveText("Every weekday at 09:00 · Europe/London");
+  await expect(form.locator('[name="project_id"], [name="thread_id"], [name="revision"], [name="rrule"]')).toHaveCount(0);
+  await form.screenshot({ path: test.info().outputPath("scheduled-desktop.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  const repeat = form.getByRole("combobox", { name: "Repeat", exact: true });
+  await repeat.focus();
+  await repeat.press("Space");
+  const stable = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const select = panel.shadowRoot.querySelector('[role="combobox"][aria-label="Repeat"]');
+    const observer = new MutationObserver(() => {});
+    observer.observe(select.closest("form"), { childList: true, subtree: true });
+    for (let index = 0; index < 12; index += 1) {
+      panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
+      panel._renderDesktopSurface();
+      await new Promise(requestAnimationFrame);
+    }
+    const result = { same: panel.shadowRoot.querySelector('[role="combobox"][aria-label="Repeat"]') === select, focus: panel.shadowRoot.activeElement === select, mutations: observer.takeRecords().length };
+    observer.disconnect(); return result;
+  });
+  await repeat.press("Escape");
+  expect(stable).toEqual({ same: true, focus: true, mutations: 0 });
+  expect(await websocketCalls(page, "codex_bridge/create_automation")).toHaveLength(0);
+
+  await form.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(panel.getByRole("cell", { name: "Morning summary", exact: true })).toBeVisible();
+  const created = (await websocketCalls(page, "codex_bridge/create_automation"))[0].payload;
+  expect(created).toMatchObject({ name: "Morning summary", target: { kind: "standalone", project_id: "prj_vba" }, schedule: { kind: "rrule", rule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0;BYSECOND=0", timezone: "Europe/London" }, mode: "observe" });
+  await panel.getByRole("button", { name: "Update", exact: true }).click();
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Renamed summary");
+  await form.getByRole("button", { name: "Save changes", exact: true }).click();
+  const updated = (await websocketCalls(page, "codex_bridge/update_automation"))[0].payload;
+  expect(updated).toMatchObject({ name: "Renamed summary", expected_revision: 1, target: created.target, schedule: created.schedule });
+});
+
+test("keeps a schedule draft after a save error and fits a narrow screen", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-destination="scheduled"]').click();
+  await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const form = panel.locator(".schedule-editor");
+  await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Check on this chat");
+  await form.getByRole("textbox", { name: "Task instructions" }).fill("Check for anything needing attention.");
+  await form.getByRole("combobox", { name: "Runs in", exact: true }).click();
+  await form.getByRole("option", { name: "Current chat", exact: true }).click();
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const send = panel.hass.connection.sendMessagePromise;
+    panel.hass.connection.sendMessagePromise = (request) => request.type === "codex_bridge/create_automation" ? Promise.reject(new Error("Temporary connection failure")) : send(request);
+  });
+  await form.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(form.getByRole("alert")).toHaveText("Temporary connection failure");
+  await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toHaveValue("Check on this chat");
+  await expect(form.getByRole("combobox", { name: "Runs in", exact: true })).toContainText("Current chat");
+  await expect(form.locator('[name="target_kind"]')).toHaveValue("continue_thread");
+  const overflow = await form.evaluate((node) => node.scrollWidth > node.clientWidth || node.getBoundingClientRect().right > window.innerWidth);
+  expect(overflow).toBe(false);
+  await form.screenshot({ path: test.info().outputPath("scheduled-mobile.png") });
+});
+
 async function seedRunStageActivity(page) {
   await page.evaluate(() => {
     const harness = window.__codexHarness;
@@ -130,6 +331,87 @@ async function seedRunStageActivity(page) {
   });
   await expect(page.locator("codex-bridge-panel").locator("#run-step-chip")).toBeVisible();
 }
+
+test("keeps sidebar hover and keyboard focus stable during HA updates", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const plugins = page.locator('codex-bridge-panel [data-destination="plugins"]');
+  await plugins.focus();
+  await plugins.hover();
+  const samples = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const control = panel.shadowRoot.querySelector('[data-destination="plugins"]');
+    await Promise.all(control.getAnimations().map((animation) => animation.finished));
+    const results = [];
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      await new Promise(requestAnimationFrame);
+      results.push({
+        connected: control.isConnected,
+        hovered: control.matches(":hover"),
+        focused: panel.shadowRoot.activeElement === control,
+        background: getComputedStyle(control).backgroundColor,
+      });
+    }
+    return results;
+  });
+  expect(samples.every((sample) => sample.connected && sample.hovered && sample.focused)).toBe(true);
+  expect(new Set(samples.map((sample) => sample.background)).size).toBe(1);
+});
+
+test("keeps a populated plugin catalogue stable through frequent HA refreshes", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#thread-model-select")).toBeVisible();
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._activeDestination = "plugins";
+    panel._desktopFeatures.plugins.loaded = true;
+    panel._desktopFeatures.plugins.data = {
+      plugins: Array.from({ length: 4294 }, (_, index) => ({ id: `plugin-${index}`, name: `Plugin ${index}`, description: "Catalogue description" })),
+      marketplaces: [],
+    };
+    panel._render(true);
+  });
+  const install = panel.locator('[data-desktop-action="install-plugin"]').first();
+  await install.focus();
+  await install.hover();
+  const result = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const surface = panel.shadowRoot.getElementById("desktop-feature-surface");
+    const control = surface.querySelector('[data-desktop-action="install-plugin"]');
+    const table = surface.querySelector("table");
+    let changes = 0;
+    const observer = new MutationObserver((records) => { changes += records.length; });
+    observer.observe(surface, { childList: true, subtree: true });
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      await new Promise(requestAnimationFrame);
+    }
+    observer.disconnect();
+    return { changes, sameTable: surface.querySelector("table") === table, focused: panel.shadowRoot.activeElement === control, hovered: control.matches(":hover"), count: surface.querySelectorAll('[data-desktop-action="install-plugin"]').length };
+  });
+  expect(result).toEqual({ changes: 0, sameTable: true, focused: true, hovered: true, count: 4294 });
+  await panel.locator('[data-desktop-action="open-marketplace-form"]').click();
+  const ref = panel.locator('[data-desktop-field="ref_name"]');
+  await ref.fill("working draft");
+  const draftResult = await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    const control = panel.shadowRoot.querySelector('[data-desktop-field="ref_name"]');
+    control.setSelectionRange(2, 5);
+    for (let update = 0; update < 12; update += 1) {
+      panel.hass = { ...panel._hass, states: { ...panel._hass.states } };
+      panel._renderDesktopSurface();
+    }
+    return { sameControl: panel.shadowRoot.querySelector('[data-desktop-field="ref_name"]') === control, focused: panel.shadowRoot.activeElement === control, selection: [control.selectionStart, control.selectionEnd] };
+  });
+  expect(draftResult).toEqual({ sameControl: true, focused: true, selection: [2, 5] });
+  await expect(ref).toHaveValue("working draft");
+  await panel.locator('[data-desktop-action="close-form"]').click();
+  await panel.locator('[data-desktop-action="open-marketplace-form"]').click();
+  await expect(ref).toHaveValue("");
+  await panel.getByRole("button", { name: "Chats", exact: true }).click();
+  await expect(panel.locator("#prompt-input")).toBeVisible();
+});
 
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
   const requests = [];
@@ -244,6 +526,17 @@ for (const viewport of [
   expect(scrollContract.transcriptScrollHeight).toBeGreaterThan(scrollContract.transcriptClientHeight);
   expect(scrollContract.transcriptScrollTop).toBeGreaterThan(0);
   expect(scrollContract.composerTopAfter).toBeCloseTo(scrollContract.composerTopBefore, 1);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._scrollMessagesToBottom(true);
+    panel._hass.connection.sendMessagePromise = async () => {
+      throw new Error("Bridge connection lost");
+    };
+    panel._setError("The connection was interrupted.", { retryable: true });
+  });
+  const error = page.locator("codex-bridge-panel").locator("#error-strip");
+  await expect(error).toBeInViewport({ ratio: 1 });
+  await expect(error.getByRole("button", { name: "Retry connection" })).toBeInViewport({ ratio: 1 });
   });
 }
 
@@ -566,6 +859,47 @@ test("runs the Home Assistant first-run and ChatGPT device sign-in flow without 
     expect(renderedText).not.toContain(privateFragment);
   }
 });
+
+for (const viewport of [{ width: 1755, height: 850 }, { width: 1024, height: 600 }, { width: 390, height: 844 }]) {
+  test(`keeps expired sign-in status and recovery controls visible at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      window.__codexHarness.updateThread("thr_vba_1", {
+        status: "error",
+        last_error: "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+      });
+      window.__codexHarness.emitThreadEvent("thr_vba_1", "run.failed", {
+        run_id: "expired-run", failure_type: "auth.expired", auth_required: true,
+        error: "Codex sign-in expired. Start a new sign-in from Home Assistant.",
+      });
+      window.__codexHarness.expireLogin();
+    });
+    const banner = panel.locator("#status-banner");
+    await expect(panel.locator("#account-pill")).toHaveText("ChatGPT not connected");
+    await expect(banner).toContainText("Your ChatGPT sign-in expired");
+    const signIn = banner.getByRole("button", { name: "Sign in with ChatGPT", exact: true });
+    await expect(signIn).toBeInViewport({ ratio: 1 });
+    if (viewport.width < 600) {
+      expect((await signIn.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    }
+    const geometry = await banner.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const scroll = element.parentElement.querySelector("#conversation-scroll").getBoundingClientRect();
+      return { height: element.clientHeight, contentHeight: element.scrollHeight, bottom: rect.bottom, scrollTop: scroll.top };
+    });
+    expect(geometry.contentHeight).toBeLessThanOrEqual(geometry.height + 1);
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.scrollTop + 1);
+    await page.screenshot({ path: testInfo.outputPath("expired-sign-in.png"), fullPage: true });
+    await signIn.click();
+    await expect(banner.getByRole("button", { name: "Open ChatGPT", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.evaluate(() => window.__codexHarness.completeLogin());
+    await expect(panel.locator("#account-pill")).toHaveText("ChatGPT Pro");
+    await expect(banner).toBeHidden();
+  });
+}
 
 test("creates a workspace project and first chat at compact widths in both colour schemes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });

@@ -33,6 +33,7 @@ class RunMode(StrEnum):
     OBSERVE = "observe"
     EDIT = "edit"
     FULL_AUTO = "full-auto"
+    HAOS_FULL_ACCESS = "haos-full-access"
 
 
 class ProjectKind(StrEnum):
@@ -178,6 +179,7 @@ class ThreadRecord(BaseModel):
     workspace_path: str
     status: str
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     # ``codex_session_id`` belongs to the deprecated ``codex exec`` adapter.
     # The app-server thread identifier is deliberately separate so a fresh HA
     # runtime can never import or resume a legacy VM session by accident.
@@ -220,6 +222,7 @@ class PublicThreadRecord(BaseModel):
     workspace_path: str
     status: str
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     last_error: str | None = None
     attachments: list[AttachmentRecord] = Field(default_factory=list)
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
@@ -289,6 +292,8 @@ class CodexAccountRecord(BaseModel):
 
 
 class CodexAuthStatusRecord(BaseModel):
+    # Durable coordinator metadata, excluded from browser/API projections.
+    reauthentication_required: bool = Field(default=False, exclude=True)
     revision: int = Field(default=0, ge=0)
     state: str = "unknown"
     busy: bool = False
@@ -481,6 +486,8 @@ class BridgeReadinessRecord(BaseModel):
             "agents_v1",
             "web_search_v1",
             "image_generation_v1",
+            "browser_v1",
+            "host_access_v1",
         ],
         ...,
     ] = (

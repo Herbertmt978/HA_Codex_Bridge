@@ -51,8 +51,8 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
     assert config["image"] == "ghcr.io/herbertmt978/ha-codex-bridge-app"
     assert config["discovery"] == ["codex_bridge"]
     assert config["map"] == ["app_config:rw"]
-    assert config["options"] == {"enable_mcp": False}
-    assert config["schema"] == {"enable_mcp": "bool"}
+    assert config["options"] == {"enable_mcp": False, "enable_browser": False}
+    assert config["schema"] == {"enable_mcp": "bool", "enable_browser": "bool"}
 
 
 @pytest.mark.parametrize("default_field", ["apparmor", "boot", "startup"])
@@ -94,6 +94,28 @@ def test_app_does_not_request_broad_supervisor_capabilities(forbidden: str) -> N
     assert forbidden not in config
 
 
+def test_host_companion_is_separate_explicit_and_private() -> None:
+    normal = _yaml(APP_ROOT / "config.yaml")
+    host = _yaml(ROOT / "codex_host_access_app/config.yaml")
+    assert host["image"] == normal["image"]
+    assert host["version"] == normal["version"]
+    assert host["arch"] == ["amd64"]
+    assert host["boot"] == "manual" and host["stage"] == "experimental"
+    assert host["host_pid"] is True and host["full_access"] is True
+    assert set(host["privileged"]) == {"SYS_ADMIN", "SYS_PTRACE", "DAC_READ_SEARCH"}
+    assert host["apparmor"] is False and host["init"] is False
+    assert host["environment"] == {"CODEX_BRIDGE_ROLE": "host_access"}
+    assert host["options"] == host["schema"] == {}
+    assert "CODEX_BRIDGE_ROLE" not in normal.get("environment", {})
+    for field in ("ports", "ingress", "host_network", "docker_api", "map"):
+        assert field not in host
+
+
+def test_normal_apparmor_allows_the_fixed_role_entrypoint() -> None:
+    profile = (APP_ROOT / "apparmor.txt").read_text(encoding="utf-8")
+    assert "/usr/local/bin/codex-app-entrypoint rix," in profile
+
+
 def test_app_package_has_no_legacy_build_file_and_contains_required_docs() -> None:
     assert not (APP_ROOT / "build.yaml").exists()
     for filename in ("README.md", "DOCS.md", "CHANGELOG.md", "apparmor.txt"):
@@ -130,6 +152,9 @@ def test_app_branding_assets_are_present() -> None:
         assert "<svg" in source.read_text(encoding="utf-8")
 
 
-def test_translation_uses_the_supported_empty_shape() -> None:
+def test_translations_explain_every_app_option() -> None:
     translations = _yaml(APP_ROOT / "translations" / "en.yaml")
-    assert translations == {}
+    configuration = translations['configuration']
+    assert set(configuration) == set(_yaml(APP_ROOT / 'config.yaml')['options'])
+    for value in configuration.values():
+        assert value['name'] and value['description']

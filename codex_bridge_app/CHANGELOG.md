@@ -2,11 +2,101 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.1.0
+
+- Adds the optional Codex Host Access App for explicitly authorised root work
+  on Home Assistant OS. The normal Bridge App keeps its existing permissions.
+- Shows the complete access warning before enablement. A ready companion goes
+  straight to acknowledgement; missing or unavailable Apps get setup guidance.
+- Lets administrators select host access for individual chats and schedules,
+  revoke it, and review the additional unattended warning for scheduled work.
+- Invalidates saved host selections after revocation or an environment change.
+- Recommends the optional HA-MCP server for Home Assistant tasks, with setup
+  links in Settings and installation guidance explaining connection requirements.
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.8.0` without changing its Integration API compatibility.
+
+## 1.0.6
+
+- Adds optional browser tools for public websites: navigation, page inspection,
+  clicks, text and selections, screenshots and printed PDFs.
+- Requires explicit App enablement and startup checks of Chromium's sandbox,
+  filesystem isolation and enforced network policy. Existing chats keep their
+  current tools; start a new chat after enabling the feature.
+- Discards browser profiles at the end of a turn or cancellation. Browser tools
+  cannot access Home Assistant, local devices, saved logins or workspace files.
+- Pins the Chromium package by checksum and retains the private HA artifact route.
+- Includes the signed Codex code-mode companion needed to execute dynamic tools.
+- Adds saved panel appearance and new-chat defaults, including automatic work
+  within the selected workspace and enabled tools.
+- Replaces Scheduled's model and reasoning text fields with runtime selections,
+  improves dropdown menus and groups Skills into labelled containers.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.9` without changing its Integration API compatibility.
+
+## 1.0.5
+
+- Replaces the technical Scheduled form with title, task instructions, Details
+  and Frequency cards. Supports new or current chats, familiar repeat choices
+  and a preview in Home Assistant's time zone.
+- Keeps saved schedule timing and permissions when editing existing tasks.
+- Keeps dropdowns mounted during background updates and stops Enter in a
+  dropdown from submitting the form.
+- Updates setup, usage and troubleshooting instructions to match the current
+  App and panel, including separate HACS and App updates.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+
+## 1.0.4
+
+- Updates the paired Integration and panel to `1.0.4`, preserving keyboard focus
+  and pointer hover on feature-page controls during unrelated Home Assistant updates.
+- Avoids rebuilding populated plugin catalogues until their displayed data changes.
+- Keeps action handlers and Settings capability availability current when their
+  inputs change.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+
+## 1.0.3
+
+- Accommodates the growing, unpaginated plugin catalogue within bounded runtime
+  and Integration response limits, fixing the Plugins unavailable error and
+  retaining every plugin in the current catalogue.
+
+- Declines optional background questions without blocking the compatible panel or
+  suspending idle timeouts; blocking questions continue to request an answer.
+
+- Bundles the Sigstore-verified Codex runtime `0.155.1`.
+- Makes GPT-6 Astra available in the model picker when the signed-in account's
+  runtime catalogue advertises it; the previous client version omitted Astra.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.8` without changing its Integration API compatibility.
+- Updates Integration and panel to `1.0.3`, preserving sidebar hover and keyboard
+  focus during Home Assistant background refreshes.
+- Reports a blocked automatic runtime update as a failed workflow when updater
+  credentials are missing, rather than silently skipping the pull request.
+
+## 1.0.2
+
+- Keep the account status and sign-in controls consistent when a Codex run reports expired authentication, and keep the sign-in warning fully visible above the conversation on desktop and mobile.
+- Preserve rejected authentication through restarts until sign-in or a validated credential refresh succeeds. Keep connection-error retry controls visible above long conversations.
 
 - Prevents a second cancellation of the same Codex app-server generation while
   its process is shutting down. Failed generations remain marked until cleanup
   completes, including after protocol errors.
+
+- Updates the paired Integration and panel to `1.0.2`, refreshes the tested dependencies and Home Assistant image builder, and pins Chromium `152.0.7977.82-r0`.
+
+- Bundles the Sigstore-verified Codex runtime `0.144.5`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.7.7` without changing its Integration API compatibility.
 
 ## 1.0.1
 

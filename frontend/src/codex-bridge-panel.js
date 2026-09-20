@@ -1,3 +1,7 @@
+import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
+import { SELECTION_STYLES } from "./selection.js";
+import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js";
+import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
@@ -24,9 +28,9 @@ import { getApprovalViewModel, renderApproval } from "./views/approval.js";
 import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js";
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
-import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface } from "./desktop-features.js";
+import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.0.0";
+const PANEL_VERSION = "1.1.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -62,6 +66,7 @@ const MODE_OPTIONS = [
     label: "Full auto",
     description: "Workspace changes run automatically; network and private host paths remain blocked.",
   },
+  { value: HOST_MODE, label: HOST_LABEL, description: "Optional root access to HAOS files, credentials, services and the network. Requires the Host Access App and acknowledgement." },
 ];
 
 const INTERACTION_EVENT_TYPES = new Set([
@@ -215,6 +220,7 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 const template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${SELECTION_STYLES}
     :host {
       --panel-bg: var(--primary-background-color, #f5f7fb);
       --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
@@ -252,6 +258,28 @@ template.innerHTML = `
     :host(:fullscreen) {
       width: 100vw;
       height: 100dvh;
+    }
+
+    :host([data-panel-theme="light"]) {
+      color-scheme: light;
+      --panel-bg: #f5f7fb; --surface-bg: #ffffff; --surface-alt: #f2f4f7;
+      --surface-muted: #eef1f5; --border-color: #d4dae2; --text-color: #151b29;
+      --muted-color: #596579; --accent-color: #087bab;
+    }
+    :host([data-panel-theme="dark"]) {
+      color-scheme: dark;
+      --panel-bg: #15181d; --surface-bg: #1d2128; --surface-alt: #292f38;
+      --surface-muted: #252b34; --border-color: #454e5c; --text-color: #f0f2f6;
+      --muted-color: #b5bfcd; --accent-color: #70c7ee;
+    }
+    :host([data-text-size="large"]) .bubble-text,
+    :host([data-text-size="large"]) .composer textarea { font-size: 18px; }
+    :host([data-text-size="larger"]) .bubble-text,
+    :host([data-text-size="larger"]) .composer textarea { font-size: 20px; }
+    :host([data-motion="reduced"]) *,
+    :host([data-motion="reduced"]) *::before,
+    :host([data-motion="reduced"]) *::after {
+      animation: none !important; transition: none !important; scroll-behavior: auto !important;
     }
 
     :host(:fullscreen) .rail-pane {
@@ -513,6 +541,15 @@ template.innerHTML = `
       background: var(--surface-bg);
       box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
     }
+
+    .host-access-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+    .host-access-dialog h3 { font-size: 15px; margin: 20px 0 6px; }
+    .host-access-dialog a { color: var(--text-color); text-decoration: underline; }
+    .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
+    .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
+    .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
+    .host-access-settings { padding: 20px; }
+    .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
     .confirmation-dialog p {
@@ -2729,12 +2766,54 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
+    .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
+    .schedule-title, .schedule-prompt { display: block; min-width: 0; }
+    .schedule-title > span, .schedule-prompt > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .schedule-title input { width: 100%; min-width: 0; padding: 8px 0; border: 0; border-radius: 0; background: transparent; font-size: 22px; }
+    .schedule-prompt textarea { width: 100%; min-height: 112px; padding: 20px; border: 1px solid var(--border-color); border-radius: 22px; background: transparent; line-height: 1.5; resize: vertical; font-size: 16px; }
+    .schedule-group { min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+    .schedule-group legend { margin-bottom: 12px; padding: 0 5px; color: var(--muted-color); font-size: 16px; }
+    .schedule-card { padding: 0 20px; border: 1px solid var(--border-color); border-radius: 22px; }
+    .schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 62px; margin: 0; font-size: 15px; }
+    .schedule-row + .schedule-row { border-top: 1px solid var(--border-color); }
+    .schedule-row[hidden], .schedule-month-note[hidden] { display: none; }
+    .schedule-row-label { flex: 0 0 auto; color: var(--text-color); }
+    .schedule-row-value { text-align: right; color: var(--muted-color); }
+    .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
+    .schedule-row select { text-align-last: right; cursor: pointer; }
+    .schedule-row input[type="number"] { width: 96px; }
+    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: 13px; line-height: 1.5; }
+    .schedule-advanced { min-width: 0; color: var(--muted-color); }
+    .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+    .schedule-advanced .schedule-card { margin-top: 10px; }
+    .schedule-error { margin: 0; color: var(--danger-color); }
+    .schedule-error:empty { display: none; }
+    .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
+    .schedule-submit { background: var(--text-color); color: var(--canvas-bg); }
+    .schedule-editor :is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+    @media (max-width: 540px) {
+      .schedule-editor { gap: 20px; }
+      .schedule-card { padding-inline: 14px; }
+      .schedule-row { gap: 10px; font-size: 14px; }
+      .schedule-row input, .schedule-row select { max-width: 60%; font-size: 14px; }
+      .schedule-advanced .schedule-row { flex-wrap: wrap; gap: 0; padding-block: 8px; }
+      .schedule-advanced .schedule-row input { max-width: 100%; width: 100%; text-align: left; }
+    }
     .desktop-empty,
     .desktop-error,
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-card { margin: 16px 0; }
+    .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
+    .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
+    .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
+    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: 13px; }
+    .skill-group .desktop-table { margin: 0; }
     .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
@@ -3114,6 +3193,8 @@ template.innerHTML = `
     }
 
     .main-top,
+    .status-banner,
+    .error-strip,
     .interaction-region,
     .message-list,
     .run-activity-region {
@@ -3121,9 +3202,18 @@ template.innerHTML = `
       margin-inline: auto;
     }
 
+    .status-banner.visible,
+    .error-strip.visible {
+      flex: 0 0 auto;
+      margin-top: 10px;
+    }
+
     .main-top {
-      max-height: min(25vh, 220px);
+      flex: 0 0 auto;
+      grid-auto-rows: max-content;
+      max-height: none;
       padding: 10px 0 0;
+      overflow: visible;
     }
 
     .runtime-item {
@@ -4584,6 +4674,12 @@ template.innerHTML = `
         overflow: visible;
       }
 
+      .banner-action,
+      .banner-dismiss {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
       .message-list {
         flex: 0 0 auto;
         min-height: 0;
@@ -4760,6 +4856,7 @@ template.innerHTML = `
           <span class="eyeline" id="thread-project-label">Ready</span>
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
+          <span class="subline" id="thread-host-access-label" hidden></span>
         </div>
         <div class="mobile-header-actions" role="group" aria-label="Panel navigation">
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
@@ -4771,19 +4868,19 @@ template.innerHTML = `
           <button class="icon-button" type="button" data-action="refresh-thread" title="Refresh" aria-label="Refresh" id="refresh-thread-button"></button>
         </div>
       </div>
-      <div class="main-top">
-        <div class="runtime-shell" id="runtime-strip"></div>
-        <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
-        <section class="onboarding-shell" id="onboarding-shell">
-          <div class="onboarding-heading">
-            <strong id="onboarding-title">Home Assistant setup</strong>
-            <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
-          </div>
-          <div id="onboarding"></div>
-        </section>
-        <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
-      </div>
+      <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
+      <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
       <div class="conversation-scroll" id="conversation-scroll">
+        <div class="main-top">
+          <div class="runtime-shell" id="runtime-strip"></div>
+          <section class="onboarding-shell" id="onboarding-shell">
+            <div class="onboarding-heading">
+              <strong id="onboarding-title">Home Assistant setup</strong>
+              <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
+            </div>
+            <div id="onboarding"></div>
+          </section>
+        </div>
         <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
@@ -4872,6 +4969,7 @@ template.innerHTML = `
     </aside>
   </div>
   <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="host-access-layer" hidden></div>
   <div class="confirmation-layer" id="confirmation-layer" hidden>
     <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
       <span class="eyeline">Confirm deletion</span>
@@ -4928,6 +5026,8 @@ class CodexBridgePanel extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
     this._hass = null;
+    this._preferences = { ...DEFAULT_PREFERENCES };
+    this._preferenceKey = null;
     this._panel = null;
     this._staticUiInstalled = false;
     this._config = null;
@@ -4987,6 +5087,7 @@ class CodexBridgePanel extends HTMLElement {
       mode: "full-auto",
       projectId: null,
     };
+    this._hostAccessDialog = null;
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
@@ -5071,6 +5172,7 @@ class CodexBridgePanel extends HTMLElement {
 
   connectedCallback() {
     this._installStaticUi();
+    this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
@@ -5111,6 +5213,7 @@ class CodexBridgePanel extends HTMLElement {
 
   set hass(value) {
     this._hass = value;
+    this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
       return;
@@ -5120,6 +5223,27 @@ class CodexBridgePanel extends HTMLElement {
 
   get hass() {
     return this._hass;
+  }
+
+  _loadPreferences() {
+    const key = `codex-bridge:preferences:${this._hass?.user?.id || "local"}`;
+    if (this._preferenceKey === key) return;
+    this._preferenceKey = key;
+    try { this._preferences = readPreferences(window.localStorage, key); }
+    catch { this._preferences = { ...DEFAULT_PREFERENCES }; }
+    this._applyPreferences();
+  }
+
+  _applyPreferences() {
+    this.dataset.panelTheme = this._preferences.theme;
+    this.dataset.textSize = this._preferences.textSize;
+    this.dataset.motion = this._preferences.motion;
+  }
+
+  _savePreferences(value) {
+    this._preferences = normalisePreferences(value);
+    this._applyPreferences();
+    savePreferences(window.localStorage, this._preferenceKey || "codex-bridge:preferences:local", this._preferences);
   }
 
   set panel(value) {
@@ -5508,6 +5632,9 @@ class CodexBridgePanel extends HTMLElement {
       case "confirm-delete":
         this._confirmDeletion();
         break;
+      case "cancel-host-access": this._closeHostAccess(); break;
+      case "confirm-host-access": void this._confirmHostAccess(); break;
+      case "retry-host-access": void this._loadHostAccess(); break;
       case "toggle-run-activity-details":
         this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
         this._renderRunActivity();
@@ -5626,6 +5753,7 @@ class CodexBridgePanel extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
 
@@ -5666,6 +5794,23 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
+      this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
+      this._renderHostAccess();
+      return;
+    }
+    if (target.dataset.desktopField === "mode" && this._activeDestination === "scheduled") {
+      const state = this._desktopFeatures.scheduled;
+      if (target.value === HOST_MODE) {
+        const previous = state.formDraft.mode || state.editingAutomation?.mode || "observe";
+        target.value = previous;
+        target.closest(".panel-selection")?.setOptions([...target.options].map((option) => [option.value, option.textContent, option.disabled]), previous);
+        void this._openHostAccess("schedule", target.closest(".panel-selection")?.querySelector("button") || target);
+        return;
+      }
+      state.hostAccessGrant = null;
+      state.hostUnattendedApproved = false;
+    }
     if (target.closest("[data-interaction-id]")) {
       this._captureInteractionAnswers(target);
       return;
@@ -5690,7 +5835,13 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (target.id === "thread-mode-select") {
+      if (target.value === HOST_MODE) {
+        target.value = this._threadForm.mode;
+        void this._openHostAccess("new-chat", target);
+        return;
+      }
       this._threadForm.mode = target.value;
+      this._threadForm.hostAccessGrant = null;
       return;
     }
     if (target.dataset.desktopField === "agents_content") {
@@ -5698,6 +5849,7 @@ class CodexBridgePanel extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...(state.agentsDrafts || {}), [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     if (target.dataset.desktopField === "agents_scope") {
@@ -5772,6 +5924,11 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (this._hostAccessDialog) {
+      if (event.key === "Escape") { event.preventDefault(); this._closeHostAccess(); }
+      else if (event.key === "Tab") this._trapDeletionFocus(event, "host-access-dialog");
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && !event.altKey) {
       const shortcut = event.key.toLowerCase();
       if (shortcut === "n") {
@@ -5796,7 +5953,7 @@ class CodexBridgePanel extends HTMLElement {
       && !event.altKey
       && !event.ctrlKey
       && !event.metaKey
-      && target.tagName !== "TEXTAREA"
+      && !["TEXTAREA", "SELECT"].includes(target.tagName)
       && !target.closest("button")
     ) {
       const form = target.closest("[data-desktop-form]");
@@ -5964,16 +6121,18 @@ class CodexBridgePanel extends HTMLElement {
   _renderDesktopNavigation() {
     const nav = this.shadowRoot.getElementById("desktop-destinations");
     if (!nav) return;
-    nav.replaceChildren();
-    for (const destination of DESTINATIONS) {
-      const control = document.createElement("button");
-      control.type = "button";
-      control.className = "desktop-destination";
-      control.dataset.action = "select-desktop-destination";
-      control.dataset.destination = destination.id;
-      control.textContent = destination.label;
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      let control = nav.children[index];
+      if (!control) {
+        control = document.createElement("button");
+        control.type = "button";
+        control.className = "desktop-destination";
+        control.dataset.action = "select-desktop-destination";
+        control.dataset.destination = destination.id;
+        control.textContent = destination.label;
+        nav.append(control);
+      }
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
-      nav.append(control);
     }
   }
 
@@ -6076,7 +6235,7 @@ class CodexBridgePanel extends HTMLElement {
         state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
           ...item,
           title: item.name || "Untitled automation",
-          schedule: item.next_run_at || "Not scheduled",
+          schedule: item.schedule,
           status: item.last_status || (item.enabled === false ? "paused" : "idle"),
         }));
       } else if (destination === "skills") {
@@ -6099,6 +6258,7 @@ class CodexBridgePanel extends HTMLElement {
         state.agentsProjectId = projectId || null;
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} }; state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
+        if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -6140,10 +6300,37 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.value };
+    if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
+    syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
 
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
+    state.formError = "";
+    state.hostAccessGrant = null;
+    state.hostUnattendedApproved = null;
+  }
+
+  _scheduleContext(editing = null) {
+    const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
+    const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+  }
+
+  async _submitScheduledTask(state, target, update) {
+    const form = target?.closest("form");
+    if (!form || !form.reportValidity()) return;
+    try {
+      const context = {
+        ...state.scheduleContext, editing: state.editingAutomation,
+        hostAccessGrant: state.hostAccessGrant || state.editingAutomation?.host_access_grant,
+        hostUnattendedApproved: state.hostUnattendedApproved ?? state.editingAutomation?.host_unattended_approved,
+      };
+      const values = this._desktopFormValues(target);
+      const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (state.form && state.error) { state.formError = state.error; state.error = ""; }
+    } catch (error) { state.formError = normalizeDesktopError(error); }
   }
 
   _agentsDraftKey(scope, projectId = null) {
@@ -6173,6 +6360,15 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    if (action === "review-host-access") return this._openHostAccess("settings", target);
+    if (action === "use-host-access") return this._openHostAccess("current-chat", target);
+    if (action === "revoke-host-access") {
+      try {
+        await this._callWS("revoke_host_access");
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) { this._setError(normalizeDesktopError(error)); }
+      return;
+    }
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
@@ -6204,14 +6400,14 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop") return this._loadDesktopDestination(destination, { force: true });
-    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = "schedule"; }
+    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
     else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp"; }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
     else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
-    else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
+    else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
     else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
@@ -6235,6 +6431,8 @@ class CodexBridgePanel extends HTMLElement {
         const automation = await this._callWS("get_automation", { automation_id: dataset.id });
         this._clearDesktopFormDraft(state);
         state.editingAutomation = automation;
+        state.scheduleContext = this._scheduleContext(automation);
+        state.formDraft = scheduleFormValues(automation, state.scheduleContext.timezone);
         state.form = "schedule-edit";
       } catch (error) { state.error = normalizeDesktopError(error); }
       finally { state.loading = false; }
@@ -6323,7 +6521,7 @@ class CodexBridgePanel extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     }
   }
 
@@ -6367,6 +6565,9 @@ class CodexBridgePanel extends HTMLElement {
       activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent =
       this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
+    const hostLabel = this.shadowRoot.getElementById("thread-host-access-label");
+    hostLabel.hidden = activeThread?.mode !== HOST_MODE;
+    hostLabel.textContent = activeThread?.mode === HOST_MODE ? `${HOST_LABEL} · root` : "";
     this._renderThreadRunState(activeThread);
     const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
     attachmentMeta.textContent = this._pendingUploads
@@ -6444,13 +6645,108 @@ class CodexBridgePanel extends HTMLElement {
     errorStrip.append(copy, actions);
   }
 
+  _renderHostAccess() {
+    const layer = this.shadowRoot.getElementById("host-access-layer");
+    const state = this._hostAccessDialog;
+    const shell = this.shadowRoot.querySelector(".shell");
+    if (!layer) return;
+    layer.hidden = !state;
+    if (shell) {
+      shell.inert = Boolean(state || this._pendingDeletion);
+      if (shell.inert) shell.setAttribute("aria-hidden", "true");
+      else shell.removeAttribute("aria-hidden");
+    }
+    if (!state) { layer.replaceChildren(); return; }
+    const focusedId = layer.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.id : null;
+    layer.replaceChildren(renderHostAccessDialog(this.ownerDocument, state));
+    if (focusedId) this.shadowRoot.getElementById(focusedId)?.focus();
+  }
+
+  async _openHostAccess(context, trigger) {
+    if (this._hostAccessDialog || this._pendingDeletion) return;
+    this._hostAccessDialog = {
+      context, trigger, threadId: this._selectedThreadId,
+      acknowledged: false, unattended: false, loading: true, busy: false,
+    };
+    this._hideTooltip();
+    this._renderHostAccess();
+    queueMicrotask(() => this.shadowRoot.getElementById("host-access-dialog")?.focus());
+    await this._loadHostAccess();
+  }
+
+  async _loadHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    state.loading = true; state.status = null; state.error = ""; state.acknowledged = false; state.unattended = false;
+    this._renderHostAccess();
+    try {
+      const status = await this._callWS("host_access");
+      if (this._hostAccessDialog !== state) return;
+      state.status = status;
+      this._desktopFeatures.settings.data.host_access = status;
+    } catch (error) {
+      if (this._hostAccessDialog === state) state.error = normalizeDesktopError(error);
+    } finally {
+      if (this._hostAccessDialog === state) { state.loading = false; this._renderHostAccess(); }
+    }
+  }
+
+  _closeHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    this._hostAccessDialog = null;
+    this._renderHostAccess();
+    queueMicrotask(() => {
+      if (state.trigger?.isConnected) state.trigger.focus();
+      else if (state.context === "new-chat") this.shadowRoot.getElementById("thread-mode-select")?.focus();
+      else if (state.context === "schedule") this.shadowRoot.querySelector('[data-desktop-field="mode"]')?.closest(".panel-selection")?.querySelector("button")?.focus();
+      else this.shadowRoot.querySelector('[data-desktop-action="review-host-access"]')?.focus();
+    });
+  }
+
+  async _confirmHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy || state.status?.state !== "ready" || !state.acknowledged || (state.context === "schedule" && !state.unattended)) return;
+    state.busy = true; state.error = ""; this._renderHostAccess();
+    try {
+      const status = state.status.enabled ? await this._callWS("host_access") : await this._callWS("enable_host_access", {
+        scope_revision: state.status.disclosure.scope_revision, acknowledged: true,
+      });
+      if (!status.enabled || !status.grant_id || status.disclosure?.scope_revision !== state.status.disclosure.scope_revision) throw new Error("Host access changed. Check again and review the current warning.");
+      this._desktopFeatures.settings.data.host_access = status;
+      if (state.context === "new-chat") {
+        this._threadForm.mode = HOST_MODE;
+        this._threadForm.hostAccessGrant = status.grant_id;
+        this._renderedThreadFormKey = "";
+        this._renderThreadForm();
+      } else if (state.context === "schedule") {
+        const scheduled = this._desktopFeatures.scheduled;
+        scheduled.formDraft = { ...scheduled.formDraft, mode: HOST_MODE };
+        scheduled.hostAccessGrant = status.grant_id;
+        scheduled.hostUnattendedApproved = true;
+        this._renderDesktopSurface();
+      } else if (state.context === "current-chat") {
+        const thread = await this._callWS("update_thread", { thread_id: state.threadId, mode: HOST_MODE, host_access_grant: status.grant_id });
+        if (this._selectedThreadId === state.threadId) this._activeThread = thread;
+        this._syncThreadListStatus();
+        this._render();
+      }
+      state.busy = false;
+      this._closeHostAccess();
+      this._renderDesktopSurface();
+    } catch (error) {
+      state.busy = false; state.error = normalizeDesktopError(error);
+      this._renderHostAccess();
+    }
+  }
+
   _renderDeletionConfirmation() {
     const layer = this.shadowRoot.getElementById("confirmation-layer");
     const shell = this.shadowRoot.querySelector(".shell");
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell) {
+      if (shell && !this._hostAccessDialog) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -6510,8 +6806,8 @@ class CodexBridgePanel extends HTMLElement {
     return this._deleteThread(pending.targetId, null, true);
   }
 
-  _trapDeletionFocus(event) {
-    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+  _trapDeletionFocus(event, dialogId = "confirmation-dialog") {
+    const dialog = this.shadowRoot.getElementById(dialogId);
     if (!dialog) {
       return;
     }
@@ -7301,13 +7597,13 @@ class CodexBridgePanel extends HTMLElement {
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
     modeSelect.setAttribute("aria-describedby", "thread-mode-description");
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option) => option.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
     }
     const modeDescription = document.createElement("ul");
     modeDescription.id = "thread-mode-description";
     modeDescription.className = "mode-boundaries";
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option) => option.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       const item = document.createElement("li");
       const label = document.createElement("strong");
       label.textContent = `${option.label}: `;
@@ -7959,6 +8255,7 @@ class CodexBridgePanel extends HTMLElement {
     const lowered = String(message || "").toLowerCase();
     return (
       lowered.includes("codex login expired") ||
+      lowered.includes("codex sign-in expired") ||
       lowered.includes("401 unauthorized") ||
       lowered.includes("refresh token")
     );
@@ -9441,7 +9738,7 @@ class CodexBridgePanel extends HTMLElement {
       ["Account plan", normalizePlanType(account?.plan_type)],
       ["Workspace", this._workspaceLabel(thread?.workspace_path || project?.root_path)],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
-      ["Mode", thread?.mode || "full-auto"],
+      ["Mode", thread?.mode === HOST_MODE ? HOST_LABEL : thread?.mode || "full-auto"],
       ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
@@ -9703,7 +10000,7 @@ class CodexBridgePanel extends HTMLElement {
     this._showProjectForm = false;
     this._threadForm = {
       title: "",
-      mode: "full-auto",
+      mode: this._preferences.mode,
       projectId,
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
@@ -9958,7 +10255,10 @@ class CodexBridgePanel extends HTMLElement {
       const payload = {
         title,
         mode: this._threadForm.mode,
+        ...(this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}),
       };
+      if (this._preferences.model) payload.model_override = this._preferences.model;
+      if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;
       if (this._threadForm.projectId) {
         payload.project_id = this._threadForm.projectId;
       }

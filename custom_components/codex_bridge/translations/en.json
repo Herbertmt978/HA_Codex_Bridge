@@ -41,7 +41,10 @@
       "cannot_connect": "Home Assistant could not reach the App.",
       "incompatible_api": "The App API is not compatible with this integration.",
       "unknown": "The App could not be validated safely.",
-      "reconfigure_successful": "The App connection was updated."
+      "reconfigure_successful": "The App connection was updated.",
+      "host_bridge_required": "Set up the normal Codex Bridge App first, then restart Codex Host Access.",
+      "host_pairing_failed": "Host Access could not pair. Update and restart Codex Bridge, then restart the Host Access App.",
+      "host_paired": "Host Access is paired. Review the warning in Codex Bridge to enable it; pairing alone grants no access."
     }
   },
   "options": {

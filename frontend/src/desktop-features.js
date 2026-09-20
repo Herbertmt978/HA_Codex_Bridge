@@ -1,3 +1,10 @@
+import { renderScheduleForm, scheduleSummary } from "./scheduled-tasks.js";
+import { selection } from "./selection.js";
+import { modelChoices, reasoningChoices } from "./model-choices.js";
+import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
+import { HOST_MODE, HOST_LABEL } from "./host-access.js";
+export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
+
 const DESTINATIONS = Object.freeze([
   { id: "chats", label: "Chats", icon: "chat" },
   { id: "scheduled", label: "Scheduled", icon: "calendar" },
@@ -68,21 +75,6 @@ export function normalizeMarketplacesResponse(value) {
   const record = asRecord(value);
   const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
   return marketplaces.filter((marketplace) => marketplace && typeof marketplace === "object").map((marketplace) => ({ name: marketplace.name, plugins: Array.isArray(marketplace.plugins) ? marketplace.plugins : [] }));
-}
-
-export function buildAutomationPayload(values = {}) {
-  const target = values.thread_id ? { kind: "continue_thread", thread_id: values.thread_id } : { kind: "standalone", project_id: values.project_id };
-  const kind = values.schedule_type || "once";
-  const schedule = kind === "interval"
-    ? { kind, seconds: Number(values.interval_seconds), anchor_at: values.anchor_at || values.run_at }
-    : kind === "RRULE" || kind === "rrule"
-      ? { kind: "rrule", rule: values.rrule, start_at: values.start_at || values.run_at, timezone: values.timezone }
-      : { kind: "once", at: values.run_at };
-  return { name: values.name || values.title || "Untitled automation", prompt: values.prompt || "", target, schedule, mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || values.reasoning || null };
-}
-
-export function buildAutomationUpdatePayload(values = {}) {
-  return { expected_revision: Number(values.revision), ...buildAutomationPayload(values) };
 }
 
 export function normalizeDesktopError(error) {
@@ -237,35 +229,13 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
-  section.append(toolbar);
+  if (!state.form) section.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    const editing = state.editingAutomation || {};
-    const schedule = editing.schedule || {};
-    const form = documentRef.createElement("form");
-    form.className = "desktop-form";
-    form.dataset.desktopForm = "schedule";
-    form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
-    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
-    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
-    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
-    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
-    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
-    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
-    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
-    const actions = documentRef.createElement("div");
-    actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
-    form.append(actions);
-    section.append(form);
+    section.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    return section;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data);
-  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
+  section.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
@@ -294,11 +264,26 @@ function renderSkills(documentRef, state) {
     actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form")); form.append(actions); section.append(form);
   }
   const rows = normalizeDesktopList(state.data.skills || state.data);
-  section.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
-    const id = row.id || row.skill_id || row.name || "";
-    td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-    td.append(button(documentRef, "Delete", "delete-skill", { id }));
-  }));
+  const groups = new Map();
+  for (const row of rows) {
+    const name = String(row.name || "");
+    const category = name.includes(":") ? name.slice(0, name.indexOf(":")) : "General";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(row);
+  }
+  if (!rows.length) section.append(renderEmpty(documentRef, "No skills found in this workspace."));
+  for (const [category, skills] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+    const group = documentRef.createElement("section"); group.className = "skill-group";
+    const heading = text(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
+    const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
+    heading.append(count); group.append(heading);
+    group.append(renderTable(documentRef, [...skills].sort((a, b) => String(a.name).localeCompare(String(b.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+      const id = row.id || row.skill_id || row.name || "";
+      td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button(documentRef, "Delete", "delete-skill", { id }));
+    }));
+    section.append(group);
+  }
   return section;
 }
 
@@ -328,16 +313,52 @@ function renderPlugins(documentRef, state) {
   return section;
 }
 
-function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
   const section = documentRef.createElement("div"); section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav"); tabs.className = "settings-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) { const control = button(documentRef, label, "select-settings-tab", { tab: id }); control.className = "settings-tab"; control.id = `settings-tab-${id}`; control.dataset.settingsTab = id; control.setAttribute("role", "tab"); control.setAttribute("aria-controls", "settings-panel"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; tabs.append(control); }
   section.append(tabs);
   const panel = documentRef.createElement("section"); panel.id = "settings-panel"; panel.className = "settings-panel"; panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `settings-tab-${tab}`); section.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
+  const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
+  const saved = text(documentRef, "p", "", "preference-save-status"); saved.setAttribute("role", "status");
+  const pickers = {};
+  const addPreference = (card, key, label, options) => {
+    const row = documentRef.createElement("div"); row.className = "schedule-row";
+    const picker = selection(documentRef, { name: key, label, value: preferences[key], options });
+    picker.dataset.preference = key; pickers[key] = picker;
+    row.append(text(documentRef, "span", label, "schedule-row-label"), picker); card.append(row);
+    picker.querySelector("select").addEventListener("change", () => {
+      preferences[key] = picker.querySelector("select").value;
+      if (key === "model") {
+        const choices = reasoningChoices(settings, preferences.model);
+        if (!choices.some(([level]) => level === preferences.thinking)) preferences.thinking = "";
+        pickers.thinking.setOptions(choices, preferences.thinking);
+      }
+      try {
+        settings.onPreferenceChange?.(preferences);
+        saved.textContent = "Saved for this Home Assistant user in this browser.";
+      } catch { saved.textContent = "Applied for this visit. Browser storage is unavailable, so these preferences could not be saved."; }
+    });
+  };
+  if (tab === "appearance") {
+    panel.append(text(documentRef, "h3", "Appearance", "desktop-subheading"));
+    const card = documentRef.createElement("div"); card.className = "schedule-card settings-card";
+    addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
+    addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
+    addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
+    panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+  }
   if (tab === "mcp") {
+    const recommendation = documentRef.createElement("section");
+    recommendation.className = "desktop-note";
+    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
+    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
+    recommendation.append(guide); panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource"))); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
@@ -357,7 +378,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents")); panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -371,20 +392,47 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
     addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
     panel.append(
-      text(documentRef, "h3", "General", "desktop-subheading"),
-      text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
+      text(documentRef, "h3", "New chat defaults", "desktop-subheading")
+    );
+    const defaults = documentRef.createElement("div"); defaults.className = "schedule-card settings-card";
+    addPreference(defaults, "mode", "Permissions", [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]]);
+    addPreference(defaults, "model", "Model", modelChoices(settings, preferences.model));
+    addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
+    panel.append(defaults,
+      text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
+      text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"), saved,
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
+    if (config?.capabilities?.includes("host_access_v1")) {
+      const host = state.data?.host_access;
+      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
+      card.append(text(documentRef, "h3", HOST_LABEL),
+        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
+        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
+      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
+      panel.append(card);
+    }
   }
   return section;
 }
 
-export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
+const renderedFeatureInputs = new WeakMap();
+
+function featureDraftInputs(state) {
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+}
+
+export function syncDesktopFeatureDrafts(container, state) {
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered) rendered.drafts = featureDraftInputs(state);
+}
+
+export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
-  container.replaceChildren();
   container.onclick = (event) => {
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
@@ -395,17 +443,32 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     const submit = form?.querySelector('[data-desktop-action^="submit-"]');
     if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
   };
+  // HA pushes unrelated state changes frequently. Keep the existing controls
+  // and large catalogues mounted until an input used by this view changes.
+  // Input handlers sync the draft snapshot because those edits are already in
+  // the DOM. Programmatic draft resets must still invalidate the rendered view.
+  const inputs = JSON.stringify({
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined }, timezone, hasActiveProject, activeProjectId,
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
+    settingsModels: destination === "settings" ? settings.models : null,
+    settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,
+  });
+  const drafts = featureDraftInputs(state);
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered?.inputs === inputs && rendered.drafts === drafts) return;
+  container.replaceChildren();
+  renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div"); heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
-  container.append(heading);
+  if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) { container.setAttribute("aria-busy", "true"); container.append(renderEmpty(documentRef, "Loading…")); return; }
   container.setAttribute("aria-busy", "false");
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 

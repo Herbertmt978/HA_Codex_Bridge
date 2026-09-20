@@ -1,5 +1,7 @@
 import voluptuous as vol
 
+from .host_access import HOST_WORKER_KEY, SUPERVISOR_SLUG_KEY, validate_host_discovery
+
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
@@ -178,6 +180,8 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_hassio(self, discovery_info: HassioServiceInfo):
         """Validate Supervisor discovery, then establish a v1-only App entry."""
 
+        if discovery_info.config.get("kind") == "host_access":
+            return await self._async_host_discovery(discovery_info)
         self._hassio_error = None
         self._hassio_replaced_entry = None
         payload = dict(discovery_info.config)
@@ -206,8 +210,11 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             discovery_uuid=discovery.uuid,
         )
         title = _safe_title(discovery_info.name)
+        data[SUPERVISOR_SLUG_KEY] = discovery.slug
         existing_entry = await self.async_set_unique_id(discovery.uuid)
         if existing_entry is not None and error is None:
+            if HOST_WORKER_KEY in existing_entry.data:
+                data[HOST_WORKER_KEY] = existing_entry.data[HOST_WORKER_KEY]
             return self.async_update_reload_and_abort(
                 existing_entry,
                 title=title,
@@ -235,6 +242,28 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._hassio_error = error
         self._set_confirm_only()
         return await self.async_step_hassio_confirm()
+
+    async def _async_host_discovery(self, info: HassioServiceInfo):
+        entries = self._async_current_entries()
+        if len(entries) != 1 or entries[0].data.get(CONF_CONNECTION_TYPE) != CONNECTION_TYPE_SUPERVISOR:
+            return self.async_abort(reason="host_bridge_required")
+        entry = entries[0]
+        try:
+            pairing = validate_host_discovery(info, entry)
+            client = BridgeApiClient(
+                async_get_clientsession(self.hass),
+                entry.data[CONF_BRIDGE_URL], entry.data[CONF_BRIDGE_TOKEN],
+            )
+            await client.async_ready()
+            await client.async_pair_host_worker(pairing)
+        except (EndpointError, BridgeApiError):
+            return self.async_abort(reason="host_pairing_failed")
+        # Pairing records a private endpoint only; it never acknowledges or
+        # enables host access. That separate administrator action is in the UI.
+        self.hass.config_entries.async_update_entry(
+            entry, data={**entry.data, HOST_WORKER_KEY: pairing},
+        )
+        return self.async_abort(reason="host_paired")
 
     async def async_step_hassio_confirm(self, user_input=None):
         """Require an administrator to confirm a newly discovered App."""
@@ -272,7 +301,10 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             connection_type=CONNECTION_TYPE_SUPERVISOR,
             discovery_uuid=discovery.uuid,
         )
+        data[SUPERVISOR_SLUG_KEY] = discovery.slug
         if self._hassio_replaced_entry is not None:
+            if self._hassio_replaced_entry.unique_id == discovery.uuid and HOST_WORKER_KEY in self._hassio_replaced_entry.data:
+                data[HOST_WORKER_KEY] = self._hassio_replaced_entry.data[HOST_WORKER_KEY]
             return self.async_update_reload_and_abort(
                 self._hassio_replaced_entry,
                 unique_id=discovery.uuid,

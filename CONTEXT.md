@@ -22,6 +22,7 @@ to the App or Bridge.
 | **Workspace** | A deliberately granted project folder; in App mode, it is beneath `/config/workspaces`. | Home Assistant configuration or a generic broad share. |
 | **Project** | A user-visible group of Codex chats with one workspace and defaults. | A workspace or repository. |
 | **External Bridge** | An optional, separately operated private Bridge compatibility path. | A required Windows VM or browser endpoint. |
+| **Host Access App** | An optional, separately installed companion for explicitly acknowledged root commands on the HAOS machine. | Normal workspace access, an MCP server, or permission to use another host. |
 | **Automation** | A durable prompt definition whose due time is scheduled by Home Assistant and claimed idempotently by the Bridge. | A free-running background worker or unrestricted cron job. |
 | **Skill** | A workspace-scoped Codex instruction under `.agents/skills/`. | A global executable or a path outside the workspace. |
 | **MCP server** | An explicitly enabled outbound streamable-HTTP server configured with a trusted HTTPS hostname and optional OAuth metadata. | A public listener for the App, Bridge, or Home Assistant. |
@@ -29,134 +30,48 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- Latest signed and target-accepted coordinated release: App/Integration/panel
-  `0.8.11`, Bridge `0.7.6`, and Codex `0.144.5` (`amd64`). It was published
-  from exact main commit `5387a2abcdeac3a5a3c01fe96876634af56542ad` by signed
-  App publication `29633146637`; the immutable image digest is
-  `sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
-  The paired Integration release, signature, SBOM, and provenance checks
-  passed. Target Home Assistant retained the existing **Test** chat history and
-  accepted account-neutral chat continuity across the signed-in ChatGPT account.
-  This is bounded evidence, not a claim that every optional capability has been
-  accepted.
-- The signed stable `1.0.0` App/Integration/panel release uses Bridge `0.7.6`
-  with Codex `0.144.5` and retains the regression-tested immediate composer
-  Send-state update after typed input.
-- App `1.0.1` is the bounded cold-restore recovery release. The compatible
-  Integration and panel remain `1.0.0` because the App bootstrap repair does
-  not change their API or UI. Signed publication and target acceptance must be
-  verified independently before the restore gate is closed.
-- The account-neutral contract introduced in `0.8.11` makes local chats static
-  across ChatGPT account changes. Projects, chat IDs, transcripts, files,
-  workspace settings, archive state, and automation targets remain static.
-  A private HMAC owner marker detaches only the stale provider-thread/runtime
-  projection, so the next prompt in the same chat starts through the currently
-  connected account. Pre-0.8.11 unowned handles detach once. No email, Bridge
-  secret, or marker is projected into browser APIs, events, diagnostics, or
-  logs. Account-update hints are authoritatively re-read; identity-less reads
-  detach provider continuity and auth-block UI/automation turns until verified.
-  A newer hint invalidates any account read already in flight, and queued
-  prompts recheck admission before making a provider request.
-  Signed publication and target-HA account-switch acceptance completed for
-  `0.8.11`; the same release discipline remains required for App `1.0.1`.
-- The typed PDF Files `409` has a locally covered repair, but real target
-  list/archive/preview/download acceptance remains pending. Real Nabu
-  Casa/Cloudflare remote-path acceptance, cold restore and arbitrary
-  previous-image rollback, and the secure App-owned browser worker remain
-  explicitly unaccepted.
-- The 0.8.1 target exercise proved installation/pairing, ChatGPT Pro and
-  history, version reporting, GPT-5.6 models, Max/Ultra, five-hour `Off`,
-  native web-search source/stage history, and subagent stage history. Its PDF
-  acceptance failed: the aggregate workspace root contained stale
-  sandbox-test debris, including root-owned unreadable entries, and `0.8.1`
-  misreported that operational scan failure as HTTP 400 unsafe content in the
-  selected chat. That historical target gate remains failed; the local repair
-  is covered, while target PDF indexing, archive, preview, and download remain
-  pending.
-- Secure browser-worker follow-up is issue #43. Per ADR 0006, interactive
-  Chromium remains deferred pending its separate App-owned isolation and
-  enforced egress boundary.
-- Target Home Assistant `192.168.50.20` completed the bounded `0.8.3` smoke on
-  2026-07-16.
-  ChatGPT Pro remained connected; a fresh direct chat defaulted to
-  `gpt-5.6-sol` with `low` thinking. The runtime catalogue exposed Sol, Terra,
-  and Luna plus Low, Medium, High, XHigh, Max, and Ultra where advertised. The
-  compact composer rendered five-hour `Off` and Week `60%`.
-- Earlier signed release evidence remains in `codex_bridge_app/CHANGELOG.md`
-  and the repository Releases page. Target-Home-Assistant acceptance is always
-  bounded to the recorded checks rather than every capability mutation.
-- The `0.6.5` matrix remains live-accepted only within the historical
-  boundaries recorded in `90-evidence.md`; no historical claim supersedes the
-  current bounded `0.7.5` evidence above.
-- Supervisor discovery advertises a validated private App IP, retains its
-  stable Supervisor UUID, and changes a bounded non-secret marker on every
-  start so Home Assistant re-delivers otherwise unchanged discovery. The
-  Integration keeps a valid-but-temporarily-unreachable discovery visible for
-  retry and never persists it before authenticated readiness succeeds.
-- Device-login recovery uses bounded authoritative account checks; account
-  entitlement changes invalidate the signed-out model catalogue before project
-  defaults are reconciled. Model and reasoning choices stay runtime-discovered.
-  If live app-server discovery fails, the current App uses the installed
-  Codex bundled catalogue dynamically, retries stale data after 15 seconds,
-  prefers a verified last-known-good record, and uses a static fallback only as
-  the final recovery layer. GPT-5.6 and per-model Max/Ultra options appear only
-  when the runtime advertises them.
-- Usage windows are classified by advertised duration, and a successful chat
-  creation remains usable while secondary snapshots retry.
-- A typed, temporary artifact-scan reservation preserves the previous artifact
-  snapshot and does not turn a healthy chat or completed response into a false
-  connection failure, even where the selected chat is idle.
-- The current panel keeps one continuous transcript surface at a bounded
-  840-pixel reading width with a Codex-style left navigation tree, title-first
-  chat rows, one action menu, correct archive collapse/search and search icon,
-  44px mobile targets, transcript-adjacent decisions, a compact footer
-  composer, and a floating information card. It retains theme-derived contrast
-  and accessible disclosure, selection, progress, retry, reduced-motion, and
-  viewport-safe run-stage state.
-- On target HAOS, pinned Codex `0.144.4`'s official `--no-proc` fallback works:
-  denial of a fresh `/proc` mount leaves user, PID, and network namespaces, the
-  read-only filesystem, AppArmor, and seccomp enforced; `/proc` is intentionally
-  empty.
-- App `0.6.1`'s fatal readiness cause was a sandbox-self-test contract mismatch:
-  it required `writableRoots` exactly `[workspace]`, while the real `ha_bridge`
-  `workspaceWrite` response includes bounded supplemental roots (`.agents`,
-  `.codex`, `.cursor`, `.git`, and `.vscode`) beneath the workspace. The
-  proc-less probe already used direct `capget`/`prctl`/`lsm_get_self_attr` calls,
-  without requesting `SYS_ADMIN` or weakening isolation; App `0.6.2` validates
-  canonical contained supplemental roots and hardens `lsm_get_self_attr` record
-  parsing.
-- On target HA, App and Integration `0.7.1` were installed and running with
-  Bridge `0.6.0` and Codex `0.144.4`; ChatGPT Pro remained signed in,
-  GPT-5.6 was visible from dynamic runtime discovery, the five-hour window
-  rendered `Off`, and existing chats/history were preserved. The Scheduled form
-  draft survived background rerenders; the Skills form draft survived and
-  create/list/delete passed; the MCP form draft survived and cancellation
-  passed. A one-time Observe automation was claimed exactly at
-  `2026-07-16T09:09:30Z`, completed at `09:09:35Z`, then paused and deleted.
-  The historical `0.7.1` Plugins/marketplaces list returned
-  `capabilities_unavailable` (HTTP 503); do not claim `0.7.1` plugin or
-  marketplace list/mutation acceptance. The first unattended App
-  auto-update remains proven, and this manual update kept the prior-version
-  backup. External blocked-network/Nabu Casa/Cloudflare routing, cold restore,
-  and arbitrary previous-image rollback remain unproven.
-- Target-HA acceptance on `192.168.50.20` on 2026-07-16 confirmed coordinated
-  App/Integration/panel `0.7.5`, Bridge `0.6.3`, and Codex `0.144.5`. ChatGPT
-  Pro remained connected; a fresh direct chat defaulted to `gpt-5.6-sol`/`low`.
-  The runtime catalogue showed Sol, Terra, and Luna and the advertised
-  Low/Medium/High/XHigh/Max/Ultra thinking levels; the compact composer showed
-  five-hour `Off` and Week `60%`. The natural prompt `what is the weather in
-  Malta like today` recorded `Searching the web` and returned current live
-  conditions. This acceptance does not cover image generation, plugins,
-  marketplaces, MCP, external blocked-network/Nabu Casa/Cloudflare routing,
-  cold restore, or arbitrary previous-image rollback.
-- The App includes administrator-only capability surfaces for durable
-  automations, workspace skills, global/project `AGENTS.md`, plugins and
-  marketplaces, and outbound MCP configuration. Automations are persisted in
-  the Bridge while Home Assistant owns wall-clock scheduling. MCP is disabled
-  by default and requires an explicit App option plus restart. When enabled it
-  accepts only trusted HTTPS hostnames, rejects known non-public DNS answers,
-  does not expose bearer-token configuration, and offers an explicit one-shot
-  OAuth login response; MCP elicitation is declined by design.
+- This release pairs App, Integration and panel `1.1.0`, Bridge `0.8.0` and
+  Codex `0.155.1`. App images support `amd64` Home Assistant OS. Historical
+  release evidence remains in the changelog and GitHub Releases.
+- App/Integration/panel `1.0.3` completed signed publication and bounded DEV
+  and production checks on 19 September 2026: retained sign-in and chat history,
+  Astra discovery and the larger plugin catalogue. Publication and target
+  checks for later releases must be recorded separately.
+- The panel preserves unchanged controls across Home Assistant state updates.
+  Scheduled task forms accept a title, instructions, chat destination and
+  frequency in HA's time zone; the panel translates this into the existing
+  once/interval/RRULE API. Revisions and target IDs are internal details.
+- Home Assistant owns automation timing. The Bridge owns durable definitions,
+  claims, run history, admission and unattended execution. Preserve exact saved
+  timing when editing unrelated fields. Do not add a browser-owned timer.
+- Local chats, files, projects and automation targets survive ChatGPT account
+  changes. The previous account's provider handle is detached; earlier local
+  messages are not automatically replayed to the newly connected account.
+  Unverified identity blocks new prompts and unattended turns.
+- Model and reasoning choices come from runtime discovery. Recovery catalogues
+  are marked stale and must not silently change an existing selection.
+- The browser communicates only with Home Assistant. App discovery supplies
+  the private Supervisor connection; users do not copy endpoints or tokens.
+- Skills and project instructions remain workspace-scoped. Global instructions
+  stay in private Codex storage. MCP is disabled by default and accepts only
+  trusted outbound HTTPS servers after explicit enablement and restart.
+  DNS validation is not connection-time egress enforcement.
+- The optional Host Access App privately pairs through Supervisor discovery.
+  Pairing never grants access. An administrator must acknowledge the warning,
+  then select host access for each chat or scheduled task. Scheduled work needs
+  its own unattended acknowledgement. Native Codex shell tools retain their
+  workspace sandbox; only the grant-bound host tool sends root commands to the
+  companion. Revocation cannot undo completed changes or contain deliberate
+  host-root actions. Production activation is separate from a Bridge upgrade.
+- HA-MCP is a recommended optional community server for Home Assistant tasks.
+  It is installed separately, uses the existing MCP connection requirements,
+  and does not require or imply a host-access grant.
+- The App-owned browser worker requires the explicit enable_browser option
+  and a separate root startup proof under ADR 0006. Only new Codex sessions
+  receive its typed tools. Native search and local PDF/image previews do not
+  imply browser capability.
+  Full PDF workflows, external proxy routes, cold restores and arbitrary
+  previous-image rollback require their own target acceptance evidence.
 
 ## Product language
 

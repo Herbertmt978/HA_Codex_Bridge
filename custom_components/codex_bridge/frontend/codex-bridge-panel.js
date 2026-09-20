@@ -1,3 +1,614 @@
+// frontend/src/selection.js
+var sequence = 0;
+function selection(doc, { name, label, value = "", options = [] }) {
+  const root = doc.createElement("div");
+  root.className = "panel-selection";
+  const select = doc.createElement("select");
+  select.name = name;
+  select.hidden = true;
+  select.tabIndex = -1;
+  select.setAttribute("aria-hidden", "true");
+  const trigger = doc.createElement("button");
+  trigger.type = "button";
+  trigger.className = "selection-trigger";
+  trigger.setAttribute("role", "combobox");
+  trigger.setAttribute("aria-label", label);
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  const caption = doc.createElement("span");
+  const arrow = doc.createElement("span");
+  arrow.className = "selection-arrow";
+  arrow.textContent = "⌄";
+  arrow.setAttribute("aria-hidden", "true");
+  trigger.append(caption, arrow);
+  const menu = doc.createElement("div");
+  menu.className = "selection-menu";
+  menu.id = `panel-selection-${++sequence}`;
+  menu.setAttribute("role", "listbox");
+  menu.setAttribute("aria-label", label);
+  menu.setAttribute("popover", "auto");
+  menu.hidden = true;
+  trigger.setAttribute("aria-controls", menu.id);
+  root.append(select, trigger, menu);
+  let active = -1;
+  let search = "";
+  let searchedAt = 0;
+  let openListeners;
+  let removalObserver;
+  const isOpen = () => trigger.getAttribute("aria-expanded") === "true";
+  const activate = (index) => {
+    active = index;
+    [...menu.children].forEach((item, position) => item.classList.toggle("active", position === active));
+    if (menu.children[active]) {
+      trigger.setAttribute("aria-activedescendant", menu.children[active].id);
+      menu.children[active].scrollIntoView?.({ block: "nearest" });
+    }
+  };
+  const close = () => {
+    openListeners?.abort();
+    removalObserver?.disconnect();
+    if (menu.matches(":popover-open")) menu.hidePopover();
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.removeAttribute("aria-activedescendant");
+  };
+  const sync = () => {
+    caption.textContent = select.options[select.selectedIndex]?.textContent || "Choose…";
+    [...menu.children].forEach((item, index) => item.setAttribute("aria-selected", String(index === select.selectedIndex)));
+  };
+  const choose = (index) => {
+    if (!select.options[index] || select.options[index].disabled) return;
+    select.selectedIndex = index;
+    sync();
+    close();
+    trigger.focus();
+    select.dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+  };
+  const open = () => {
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 240), doc.documentElement.clientWidth - 24);
+    const below = doc.defaultView.innerHeight - rect.bottom - 12;
+    const above = rect.top - 12;
+    const upwards = below < 220 && above > below;
+    menu.style.width = `${Math.max(0, width)}px`;
+    menu.style.left = `${Math.max(12, Math.min(rect.right - width, doc.documentElement.clientWidth - width - 12))}px`;
+    menu.style.maxHeight = `${Math.max(44, Math.min(320, upwards ? above : below))}px`;
+    menu.style.top = upwards ? "auto" : `${rect.bottom + 4}px`;
+    menu.style.bottom = upwards ? `${doc.defaultView.innerHeight - rect.top + 4}px` : "auto";
+    menu.hidden = false;
+    menu.showPopover?.();
+    trigger.setAttribute("aria-expanded", "true");
+    openListeners = new doc.defaultView.AbortController();
+    const signal = openListeners.signal;
+    doc.addEventListener("scroll", (event) => {
+      if (event.target !== menu) close();
+    }, { capture: true, signal });
+    doc.defaultView.addEventListener("resize", close, { signal });
+    if (!menu.showPopover) doc.addEventListener("pointerdown", (event) => {
+      if (!event.composedPath().includes(root)) close();
+    }, { signal });
+    removalObserver = new doc.defaultView.MutationObserver(() => {
+      if (!root.isConnected) close();
+    });
+    removalObserver.observe(root.getRootNode(), { childList: true, subtree: true });
+    activate(select.selectedIndex >= 0 && !select.options[select.selectedIndex].disabled ? select.selectedIndex : [...select.options].findIndex((item) => !item.disabled));
+  };
+  trigger.addEventListener("click", () => isOpen() ? close() : open());
+  trigger.addEventListener("keydown", (event) => {
+    const enabled = [...select.options].map((item, index) => item.disabled ? -1 : index).filter((index) => index >= 0);
+    if (["ArrowDown", "ArrowUp", "Home", "End", "Enter", " ", "Escape"].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        close();
+        return;
+      }
+      if (!isOpen()) {
+        open();
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        choose(active);
+        return;
+      }
+      const position = enabled.indexOf(active);
+      activate(event.key === "Home" ? enabled[0] : event.key === "End" ? enabled.at(-1) : enabled[(position + (event.key === "ArrowUp" ? -1 : 1) + enabled.length) % enabled.length]);
+    } else if (event.key === "Tab") close();
+    else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpen()) open();
+      search = Date.now() - searchedAt < 700 ? search + event.key : event.key;
+      searchedAt = Date.now();
+      const match = enabled.find((index) => select.options[index].textContent.toLowerCase().startsWith(search.toLowerCase()));
+      if (match !== void 0) activate(match);
+    }
+  });
+  trigger.addEventListener("blur", () => {
+    if (!menu.matches(":popover-open")) close();
+  });
+  menu.addEventListener("toggle", (event) => {
+    if (event.newState === "closed") close();
+  });
+  menu.addEventListener("pointerdown", (event) => event.preventDefault());
+  select.addEventListener("change", sync);
+  root.setOptions = (choices, selected = select.value) => {
+    close();
+    select.replaceChildren();
+    menu.replaceChildren();
+    choices.forEach(([key, title, disabled = false], index) => {
+      const option = doc.createElement("option");
+      option.value = key;
+      option.textContent = title;
+      option.disabled = disabled;
+      select.append(option);
+      const item = doc.createElement("div");
+      item.id = `${menu.id}-${index}`;
+      item.setAttribute("role", "option");
+      item.setAttribute("aria-disabled", String(disabled));
+      item.textContent = title;
+      item.addEventListener("click", () => choose(index));
+      menu.append(item);
+    });
+    select.value = selected;
+    sync();
+  };
+  root.setOptions(options, value);
+  return root;
+}
+var SELECTION_STYLES = `
+  .panel-selection { min-width: 0; width: max-content; max-width: 65%; }
+  .selection-trigger { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; background: transparent; color: var(--text-color); font: inherit; font-size: 15px; cursor: pointer; text-align: left; }
+  .selection-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .selection-trigger:hover, .selection-trigger[aria-expanded="true"] { background: var(--surface-alt); border-color: var(--border-color); }
+  .selection-trigger:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+  .selection-arrow { flex-shrink: 0; color: var(--muted-color); }
+  .selection-menu { position: fixed; inset: auto; margin: 0; box-sizing: border-box; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); color: var(--text-color); box-shadow: 0 8px 32px #0003; font-size: 15px; z-index: 100; }
+  .selection-menu[hidden] { display: none; }
+  .selection-menu [role="option"] { min-height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 7px; cursor: pointer; overflow-wrap: anywhere; }
+  .selection-menu [role="option"]::after { content: ""; margin-left: auto; width: 16px; flex-shrink: 0; }
+  .selection-menu [aria-selected="true"]::after { content: "✓"; }
+  .selection-menu [role="option"]:hover, .selection-menu .active { background: var(--surface-alt); }
+  .selection-menu [aria-disabled="true"] { opacity: .5; cursor: default; }
+  @media (max-width: 540px) { .panel-selection { max-width: 60%; } .selection-trigger { font-size: 14px; padding-inline: 8px; } }
+`;
+
+// frontend/src/model-choices.js
+function modelChoices(context, selected = "") {
+  const options = [["", context.defaultModel ? `Inherit (${context.defaultModel})` : "Inherit default"]];
+  for (const record of context.models || []) options.push([record.model, record.display_name || record.model]);
+  if (selected && !options.some(([key]) => key === selected)) options.push([selected, `${selected} (saved, unavailable)`]);
+  return options;
+}
+function reasoningChoices(context, model = "", selected = "") {
+  const record = context.models?.find((item) => item.model === (model || context.defaultModel));
+  const options = [["", "Inherit default"]];
+  for (const level of record?.thinking_levels || []) options.push([level, level.charAt(0).toUpperCase() + level.slice(1)]);
+  if (selected && !options.some(([key]) => key === selected)) options.push([selected, `${selected} (saved, unavailable)`]);
+  return options;
+}
+
+// frontend/src/host-access.js
+var HOST_MODE = "haos-full-access";
+var HOST_LABEL = "Full access · Home Assistant OS";
+var HOST_INSTALLATION_URL = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/codex_host_access_app/DOCS.md";
+var node = (doc, tag, value, className = "") => {
+  const result = doc.createElement(tag);
+  result.textContent = value;
+  if (className) result.className = className;
+  return result;
+};
+function renderHostAccessDialog(doc, state) {
+  const dialog = node(doc, "section", "", "confirmation-dialog host-access-dialog");
+  dialog.id = "host-access-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "host-access-title");
+  dialog.setAttribute("aria-describedby", "host-access-summary");
+  dialog.tabIndex = -1;
+  const title = node(doc, "h2", "Allow Codex full access to Home Assistant OS?");
+  title.id = "host-access-title";
+  const ready = state.status?.state === "ready";
+  const identity = state.status?.disclosure;
+  const summary = node(doc, "p", ready ? `Codex will run commands as root on ${identity?.hostname || "this machine"} (Home Assistant OS ${identity?.os_version || ""}).` : "This optional mode gives Codex root access to the machine running Home Assistant OS.");
+  summary.id = "host-access-summary";
+  dialog.append(title, summary);
+  if (state.loading) {
+    const loading = node(doc, "p", "Checking the Host Access App…");
+    loading.setAttribute("role", "status");
+    dialog.append(loading);
+  }
+  for (const warning of state.status?.warnings || []) {
+    const section2 = doc.createElement("section");
+    section2.append(node(doc, "h3", warning.title), node(doc, "p", warning.description));
+    dialog.append(section2);
+  }
+  if (!state.loading && !ready) {
+    dialog.append(node(doc, "p", state.status?.state === "unavailable" ? "The Host Access App is unavailable. Start it and check its log, then retry. Access remains disabled." : "Install the separate Codex Host Access App to use this mode. Normal Codex Bridge permissions stay unchanged."));
+    const instructions = node(doc, "a", "Host Access installation instructions");
+    instructions.href = HOST_INSTALLATION_URL;
+    instructions.target = "_blank";
+    instructions.rel = "noopener noreferrer";
+    dialog.append(instructions);
+  }
+  const checkbox = (id, label, checked) => {
+    const wrap = doc.createElement("label");
+    wrap.className = "host-access-acknowledgement";
+    const input2 = doc.createElement("input");
+    input2.type = "checkbox";
+    input2.id = id;
+    input2.checked = checked === true;
+    input2.disabled = state.busy === true;
+    wrap.append(input2, node(doc, "span", label));
+    dialog.append(wrap);
+  };
+  if (ready) {
+    checkbox("host-access-acknowledged", identity?.acknowledgement || "I understand that Codex will have root access to this Home Assistant OS machine, its files, credentials and network.", state.acknowledged);
+    if (state.context === "schedule") {
+      checkbox("host-access-unattended", identity?.scheduled_acknowledgement || "I allow this scheduled task to use host access automatically while I am absent.", state.unattended);
+    }
+  }
+  if (state.error) {
+    const error = node(doc, "p", state.error, "desktop-error");
+    error.setAttribute("role", "alert");
+    dialog.append(error);
+  }
+  const actions = node(doc, "div", "", "confirmation-actions");
+  const button2 = (label, action) => {
+    const result = node(doc, "button", label);
+    result.type = "button";
+    result.dataset.action = action;
+    return result;
+  };
+  const cancel = button2("Cancel", "cancel-host-access");
+  cancel.id = "cancel-host-access";
+  cancel.disabled = !!state.busy;
+  actions.append(cancel);
+  if (ready) {
+    const enable = button2(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
+    enable.id = "confirm-host-access";
+    enable.disabled = !!state.busy || !state.acknowledged || state.context === "schedule" && !state.unattended;
+    actions.append(enable);
+  } else if (!state.loading) {
+    actions.append(button2("Check again", "retry-host-access"));
+  }
+  dialog.append(actions);
+  return dialog;
+}
+
+// frontend/src/scheduled-tasks.js
+var WEEKDAYS = [
+  ["MO", "Monday"],
+  ["TU", "Tuesday"],
+  ["WE", "Wednesday"],
+  ["TH", "Thursday"],
+  ["FR", "Friday"],
+  ["SA", "Saturday"],
+  ["SU", "Sunday"]
+];
+var REPEATS = [["daily", "Daily"], ["weekdays", "Weekdays"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["interval", "Every…"], ["once", "Once"]];
+function localParts(instant, timezone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, second: parts.second };
+}
+function scheduleInstant(date, time, timezone) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) {
+    throw new Error("Choose a valid date and time.");
+  }
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  if (!Number.isFinite(wall) || new Date(wall).toISOString().slice(0, 10) !== date) throw new Error("Choose a valid date.");
+  const candidates = /* @__PURE__ */ new Set();
+  for (const hours of [-36, 0, 36]) {
+    const sample = wall + hours * 36e5;
+    const parts = localParts(sample, timezone);
+    const offset = Date.parse(`${parts.date}T${parts.time}:${parts.second}Z`) - sample;
+    const candidate = wall - offset;
+    const resolved = localParts(candidate, timezone);
+    if (resolved.date === date && resolved.time === time) candidates.add(candidate);
+  }
+  if (!candidates.size) throw new Error("That time does not exist when the clocks change. Choose another time.");
+  return new Date(Math.min(...candidates)).toISOString();
+}
+function scheduleFormValues(automation = {}, timezone = "UTC", now = Date.now()) {
+  const schedule = automation.schedule || {};
+  const zone = schedule.timezone || timezone;
+  const local = localParts(schedule.at || schedule.start_at || schedule.anchor_at || now, zone);
+  const date = /* @__PURE__ */ new Date(`${local.date}T12:00:00Z`);
+  const weekday = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][date.getUTCDay()];
+  const values = {
+    title: automation.name || "",
+    prompt: automation.prompt || "",
+    repeat: automation.schedule ? schedule.kind === "rrule" ? "custom" : schedule.kind : "daily",
+    date: local.date,
+    time: automation.schedule ? local.time : "09:00",
+    weekday,
+    month_day: String(date.getUTCDate()),
+    interval_count: "1",
+    interval_unit: "hours",
+    target_kind: automation.target?.kind || "standalone",
+    mode: automation.mode || "observe",
+    model: automation.model || "",
+    thinking: automation.thinking || "",
+    timezone: zone
+  };
+  if (schedule.kind === "interval") {
+    const unit = schedule.seconds % 3600 === 0 ? "hours" : schedule.seconds % 60 === 0 ? "minutes" : "seconds";
+    values.interval_unit = unit;
+    values.interval_count = String(schedule.seconds / { hours: 3600, minutes: 60, seconds: 1 }[unit]);
+  }
+  if (schedule.kind === "rrule") {
+    const rule = schedule.rule || "";
+    const fields = rule.startsWith("RRULE:") ? rule.slice(6).split(";").map((part) => part.split("=")) : [];
+    const pairs = Object.fromEntries(fields);
+    const allowed = /* @__PURE__ */ new Set(["FREQ", "BYDAY", "BYMONTHDAY", "BYHOUR", "BYMINUTE", "BYSECOND"]);
+    const simple = fields.length && fields.every(([key, value]) => allowed.has(key) && value) && new Set(fields.map(([key]) => key)).size === fields.length && (!pairs.BYHOUR || pairs.BYHOUR === String(Number(local.time.slice(0, 2)))) && (!pairs.BYMINUTE || pairs.BYMINUTE === String(Number(local.time.slice(3)))) && (!pairs.BYSECOND || pairs.BYSECOND === "0");
+    if (simple) {
+      if (pairs.FREQ === "DAILY" && !pairs.BYDAY && !pairs.BYMONTHDAY) values.repeat = "daily";
+      if (pairs.FREQ === "WEEKLY" && !pairs.BYMONTHDAY) {
+        if (pairs.BYDAY === "MO,TU,WE,TH,FR") values.repeat = "weekdays";
+        else if (!pairs.BYDAY || WEEKDAYS.some(([day]) => day === pairs.BYDAY)) {
+          values.repeat = "weekly";
+          values.weekday = pairs.BYDAY || weekday;
+        }
+      }
+      if (pairs.FREQ === "MONTHLY" && !pairs.BYDAY && (!pairs.BYMONTHDAY || /^(?:[1-9]|[12]\d|3[01])$/.test(pairs.BYMONTHDAY))) {
+        values.repeat = "monthly";
+        values.month_day = pairs.BYMONTHDAY || values.month_day;
+      }
+    }
+  }
+  return values;
+}
+var SCHEDULE_FIELDS = ["repeat", "date", "time", "weekday", "month_day", "interval_count", "interval_unit"];
+function buildSchedule(values, { editing = null, timezone = "UTC", now = Date.now() } = {}) {
+  const zone = editing?.schedule?.timezone || timezone;
+  if (editing?.schedule) {
+    const original = scheduleFormValues(editing, zone, now);
+    if (SCHEDULE_FIELDS.every((key) => String(values[key] ?? original[key]) === String(original[key]))) return { ...editing.schedule };
+  }
+  if (values.repeat === "custom") {
+    if (!editing?.schedule) throw new Error("Choose a repeat frequency.");
+    return { ...editing.schedule };
+  }
+  const at = scheduleInstant(values.date, values.time, zone);
+  if (values.repeat === "once") {
+    if (Date.parse(at) <= now) throw new Error("Choose a time in the future for a one-off task.");
+    return { kind: "once", at };
+  }
+  if (values.repeat === "interval") {
+    const count = Number(values.interval_count);
+    const seconds = count * ({ hours: 3600, minutes: 60, seconds: 1 }[values.interval_unit] || 0);
+    if (!Number.isInteger(count) || !Number.isInteger(seconds) || seconds < 60 || seconds > 31536e3) throw new Error("Choose an interval from one minute to 365 days.");
+    return { kind: "interval", seconds, anchor_at: at };
+  }
+  let rule;
+  if (values.repeat === "daily") rule = "FREQ=DAILY";
+  else if (values.repeat === "weekdays") rule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
+  else if (values.repeat === "weekly" && WEEKDAYS.some(([day]) => day === values.weekday)) rule = `FREQ=WEEKLY;BYDAY=${values.weekday}`;
+  else if (values.repeat === "monthly" && /^(?:[1-9]|[12]\d|3[01])$/.test(String(values.month_day))) rule = `FREQ=MONTHLY;BYMONTHDAY=${values.month_day}`;
+  else throw new Error("Choose a repeat frequency and its day.");
+  const [hour, minute] = values.time.split(":").map(Number);
+  return { kind: "rrule", rule: `RRULE:${rule};BYHOUR=${hour};BYMINUTE=${minute};BYSECOND=0`, start_at: at, timezone: zone };
+}
+function buildAutomationPayload(values = {}, context = {}) {
+  const name = String(values.title || "").trim();
+  const prompt = String(values.prompt || "").trim();
+  if (!name || !prompt) throw new Error("Add a title and describe what Codex should do.");
+  const { editing, projectId, threadId } = context;
+  const kind = values.target_kind || "standalone";
+  const target = editing?.target?.kind === kind ? { ...editing.target } : kind === "continue_thread" ? { kind, thread_id: threadId } : { kind: "standalone", project_id: projectId };
+  if (!(target.thread_id || target.project_id)) throw new Error("Select a chat or workspace before creating a scheduled task.");
+  const payload = { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  if (payload.mode === HOST_MODE) {
+    if (!context.hostAccessGrant || context.hostUnattendedApproved !== true) throw new Error("Review and acknowledge host access for this scheduled task.");
+    payload.host_access_grant = context.hostAccessGrant;
+    payload.host_unattended_approved = true;
+  }
+  return payload;
+}
+function buildAutomationUpdatePayload(values = {}, context = {}) {
+  if (!Number.isInteger(context.editing?.revision)) throw new Error("Reload this task before saving changes.");
+  return { expected_revision: context.editing.revision, ...buildAutomationPayload(values, context) };
+}
+function scheduleSummary(schedule, timezone = "UTC") {
+  if (!schedule || typeof schedule !== "object") return "Not scheduled";
+  const values = scheduleFormValues({ schedule }, timezone);
+  const zone = values.timezone;
+  if (values.repeat === "custom") return `Custom schedule · ${zone}`;
+  if (values.repeat === "once") return new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "medium", timeStyle: "short" }).format(new Date(schedule.at)) + ` · ${zone}`;
+  if (values.repeat === "interval") return `Every ${values.interval_count} ${values.interval_unit} · ${zone}`;
+  const repeat = values.repeat === "weekly" ? `Every ${WEEKDAYS.find(([day]) => day === values.weekday)?.[1]}` : values.repeat === "monthly" ? `Monthly on day ${values.month_day}` : values.repeat === "weekdays" ? "Every weekday" : "Daily";
+  return `${repeat} at ${values.time} · ${zone}`;
+}
+function element(doc, tag, className, value) {
+  const node2 = doc.createElement(tag);
+  if (className) node2.className = className;
+  if (value !== void 0) node2.textContent = value;
+  return node2;
+}
+function field(doc, name, label, value, options = null, type = "text") {
+  const row = element(doc, options ? "div" : "label", "schedule-row");
+  row.append(element(doc, "span", "schedule-row-label", label));
+  if (options) {
+    const picker = selection(doc, { name, label, value, options });
+    picker.querySelector("select").dataset.desktopField = name;
+    row.append(picker);
+    return row;
+  }
+  const control = element(doc, type === "textarea" ? "textarea" : "input");
+  control.name = name;
+  control.dataset.desktopField = name;
+  control.setAttribute("aria-label", label);
+  if (type !== "textarea") control.type = type;
+  control.value = String(value ?? "");
+  row.append(control);
+  return row;
+}
+function staticRow(doc, label, value) {
+  const row = element(doc, "div", "schedule-row");
+  row.append(element(doc, "span", "schedule-row-label", label), element(doc, "span", "schedule-row-value", value));
+  return row;
+}
+function refreshScheduleForm(form) {
+  const values = Object.fromEntries([...form.querySelectorAll("[data-desktop-field]")].map((control) => [control.name, control.value]));
+  for (const row of form.querySelectorAll("[data-repeat-for]")) {
+    row.hidden = !row.dataset.repeatFor.split(" ").includes(values.repeat);
+    for (const control of row.querySelectorAll("input,select")) control.required = !row.hidden;
+  }
+  const custom = values.repeat === "custom";
+  const time = form.querySelector('[name="time"]');
+  time.closest("label").hidden = custom;
+  const preview = form.querySelector(".schedule-preview");
+  const context = { timezone: form.dataset.timezone };
+  try {
+    preview.textContent = custom ? "The saved custom timing will be kept. Choose another repeat option to replace it." : scheduleSummary(buildSchedule(values, context), context.timezone);
+  } catch (error) {
+    preview.textContent = error.message;
+  }
+  const monthly = form.querySelector(".schedule-month-note");
+  monthly.hidden = values.repeat !== "monthly" || Number(values.month_day) < 29;
+}
+function renderScheduleForm(doc, state, timezone, context = {}) {
+  const editing = state.editingAutomation;
+  const initial = scheduleFormValues(editing || {}, timezone);
+  const values = { ...initial, ...state.formDraft || {} };
+  const form = element(doc, "form", "schedule-editor");
+  form.dataset.desktopForm = "schedule";
+  form.dataset.timezone = initial.timezone;
+  const header = element(doc, "div", "schedule-editor-header");
+  header.append(element(doc, "span", "", editing ? "Edit scheduled task" : "New scheduled task"));
+  const close = element(doc, "button", "schedule-close", "×");
+  close.type = "button";
+  close.dataset.desktopAction = "close-form";
+  close.setAttribute("aria-label", "Close scheduled task");
+  header.append(close);
+  form.append(header);
+  const title = field(doc, "title", "Scheduled task title", values.title);
+  title.className = "schedule-title";
+  const titleControl = title.querySelector("input");
+  titleControl.placeholder = "Scheduled task title";
+  titleControl.required = true;
+  titleControl.maxLength = 160;
+  const prompt = field(doc, "prompt", "Task instructions", values.prompt, null, "textarea");
+  prompt.className = "schedule-prompt";
+  const promptControl = prompt.querySelector("textarea");
+  promptControl.placeholder = "Describe what Codex should do";
+  promptControl.required = true;
+  promptControl.rows = 3;
+  form.append(title, prompt);
+  const addGroup = (label) => {
+    const group = element(doc, "fieldset", "schedule-group");
+    group.append(element(doc, "legend", "", label));
+    const card = element(doc, "div", "schedule-card");
+    group.append(card);
+    form.append(group);
+    return card;
+  };
+  const details = addGroup("Details");
+  details.append(staticRow(doc, "Runs on", "Home Assistant"));
+  const savedThread = editing?.target?.kind === "continue_thread";
+  details.append(field(doc, "target_kind", "Runs in", values.target_kind, [
+    ["standalone", context.projectName ? `New chat · ${context.projectName}` : "New chat for this task", !context.projectId && editing?.target?.kind !== "standalone"],
+    ["continue_thread", savedThread ? "Original chat for this task" : "Current chat", !context.threadId && !savedThread]
+  ]));
+  const frequency = addGroup("Frequency");
+  const repeats = initial.repeat === "custom" ? [...REPEATS, ["custom", "Keep custom schedule"]] : REPEATS;
+  frequency.append(field(doc, "repeat", "Repeat", values.repeat, repeats));
+  const conditional = (row, repeatsFor) => {
+    row.dataset.repeatFor = repeatsFor;
+    frequency.append(row);
+  };
+  conditional(field(doc, "weekday", "Day", values.weekday, WEEKDAYS), "weekly");
+  const month = field(doc, "month_day", "Day of month", values.month_day, null, "number");
+  month.querySelector("input").min = "1";
+  month.querySelector("input").max = "31";
+  conditional(month, "monthly");
+  const interval = field(doc, "interval_count", "Every", values.interval_count, null, "number");
+  interval.querySelector("input").min = "1";
+  interval.querySelector("input").max = "31536000";
+  conditional(interval, "interval");
+  conditional(field(doc, "interval_unit", "Unit", values.interval_unit, [["minutes", "Minutes"], ["hours", "Hours"], ["seconds", "Seconds"]]), "interval");
+  conditional(field(doc, "date", "Date / starts on", values.date, null, "date"), "once interval");
+  frequency.append(field(doc, "time", "Time", values.time, null, "time"));
+  frequency.append(staticRow(doc, "Results", "Chat and run history"));
+  form.append(element(doc, "p", "schedule-preview"));
+  form.append(element(doc, "p", "schedule-month-note", "Months without this date are skipped."));
+  const advanced = element(doc, "details", "schedule-advanced");
+  advanced.append(element(doc, "summary", "", "Advanced"));
+  const advancedCard = element(doc, "div", "schedule-card");
+  const modes = [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]];
+  if (context.hostAccessSupported) modes.push([HOST_MODE, HOST_LABEL]);
+  advancedCard.append(field(doc, "mode", "Permissions", values.mode, modes));
+  if (values.mode === HOST_MODE) advancedCard.append(element(doc, "p", "desktop-note", "This task has host root access, including files, credentials, services and the network."));
+  const modelContext = () => ({ ...context, defaultModel: form.querySelector('[name="target_kind"]').value === "continue_thread" ? context.threadModel || context.defaultModel : context.defaultModel });
+  const model = field(doc, "model", "Model", values.model, modelChoices(modelContext(), values.model));
+  const thinking = field(doc, "thinking", "Reasoning", values.thinking, reasoningChoices(modelContext(), values.model, values.thinking));
+  model.querySelector("select").addEventListener("change", () => {
+    const choices = reasoningChoices(modelContext(), model.querySelector("select").value);
+    const selected = thinking.querySelector("select").value;
+    const supported = choices.some(([key]) => key === selected) ? selected : "";
+    thinking.querySelector(".panel-selection").setOptions(choices, supported);
+    thinking.querySelector("select").dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+  });
+  form.querySelector('[name="target_kind"]').addEventListener("change", () => {
+    const selectedModel = model.querySelector("select").value;
+    const selectedThinking = thinking.querySelector("select").value;
+    model.querySelector(".panel-selection").setOptions(modelChoices(modelContext(), selectedModel), selectedModel);
+    thinking.querySelector(".panel-selection").setOptions(reasoningChoices(modelContext(), selectedModel, selectedThinking), selectedThinking);
+  });
+  advancedCard.append(model, thinking);
+  advanced.append(advancedCard, element(doc, "p", "desktop-note", "Unattended tasks cannot answer approval requests. Observe is the default."));
+  form.append(advanced);
+  const error = element(doc, "p", "schedule-error", state.formError || "");
+  error.setAttribute("role", "alert");
+  form.append(error);
+  const actions = element(doc, "div", "schedule-actions");
+  const cancel = element(doc, "button", "", "Cancel");
+  cancel.type = "button";
+  cancel.dataset.desktopAction = "close-form";
+  const submit = element(doc, "button", "schedule-submit", editing ? "Save changes" : "Create task");
+  submit.type = "button";
+  submit.dataset.desktopAction = editing ? "submit-schedule-update" : "submit-schedule";
+  actions.append(cancel, submit);
+  form.append(actions);
+  refreshScheduleForm(form);
+  return form;
+}
+
+// frontend/src/panel-preferences.js
+var DEFAULT_PREFERENCES = Object.freeze({ theme: "ha", textSize: "default", motion: "system", mode: "full-auto", model: "", thinking: "" });
+function normalisePreferences(value = {}) {
+  const result = { ...DEFAULT_PREFERENCES };
+  for (const [key, allowed] of Object.entries({ theme: ["ha", "light", "dark"], textSize: ["default", "large", "larger"], motion: ["system", "reduced"], mode: ["observe", "edit", "full-auto"] })) {
+    if (allowed.includes(value?.[key])) result[key] = value[key];
+  }
+  for (const key of ["model", "thinking"]) {
+    if (typeof value?.[key] === "string" && /^[a-zA-Z0-9._-]{0,100}$/u.test(value[key])) result[key] = value[key];
+  }
+  return result;
+}
+function readPreferences(storage, key) {
+  try {
+    return normalisePreferences(JSON.parse(storage.getItem(key) || "{}"));
+  } catch {
+    return { ...DEFAULT_PREFERENCES };
+  }
+}
+function savePreferences(storage, key, value) {
+  const preferences = normalisePreferences(value);
+  storage.setItem(key, JSON.stringify(preferences));
+  return preferences;
+}
+
 // frontend/src/safe-dom.js
 var RASTER_MIME_TYPES = /* @__PURE__ */ new Set([
   "image/avif",
@@ -21441,6 +22052,7 @@ var ITEM_LABELS = Object.freeze({
   contextCompaction: "Compacting context",
   collabAgentToolCall: "Delegating to an agent",
   dynamicToolCall: "Calling a tool",
+  haHostCommand: "Running a Home Assistant OS command",
   fileChange: "Applying file changes",
   imageGeneration: "Generating an image",
   imageView: "Viewing an image",
@@ -21573,6 +22185,10 @@ function joinActivityLabels(labels, fallback) {
 }
 function itemLabel(payload = {}) {
   const itemType = payload.item_type;
+  if (itemType === "haHostCommand") {
+    const outcomes = { completed: "completed", failed: "failed", cancelled: "cancelled", timed_out: "timed out", output_limit: "reached its output limit" };
+    return Object.hasOwn(outcomes, payload.host_outcome) ? `Home Assistant OS command ${outcomes[payload.host_outcome]}` : ITEM_LABELS.haHostCommand;
+  }
   if (itemType === "collabAgentToolCall" && Object.hasOwn(COLLAB_OPERATION_LABELS, payload.operation)) {
     return COLLAB_OPERATION_LABELS[payload.operation];
   }
@@ -22934,15 +23550,6 @@ function normalizeMarketplacesResponse(value) {
   const marketplaces = Array.isArray(record.marketplaces) ? record.marketplaces : Array.isArray(record.data) ? record.data : normalizeDesktopList(value);
   return marketplaces.filter((marketplace) => marketplace && typeof marketplace === "object").map((marketplace) => ({ name: marketplace.name, plugins: Array.isArray(marketplace.plugins) ? marketplace.plugins : [] }));
 }
-function buildAutomationPayload(values = {}) {
-  const target = values.thread_id ? { kind: "continue_thread", thread_id: values.thread_id } : { kind: "standalone", project_id: values.project_id };
-  const kind = values.schedule_type || "once";
-  const schedule = kind === "interval" ? { kind, seconds: Number(values.interval_seconds), anchor_at: values.anchor_at || values.run_at } : kind === "RRULE" || kind === "rrule" ? { kind: "rrule", rule: values.rrule, start_at: values.start_at || values.run_at, timezone: values.timezone } : { kind: "once", at: values.run_at };
-  return { name: values.name || values.title || "Untitled automation", prompt: values.prompt || "", target, schedule, mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || values.reasoning || null };
-}
-function buildAutomationUpdatePayload(values = {}) {
-  return { expected_revision: Number(values.revision), ...buildAutomationPayload(values) };
-}
 function normalizeDesktopError(error) {
   const record = asRecord(error);
   const candidate = record.body?.message || record.message || record.error || record.detail || error;
@@ -22972,18 +23579,18 @@ var formValue = (state, name, fallback = "") => {
   return Object.hasOwn(drafts, name) ? drafts[name] : fallback;
 };
 var text = (documentRef, tag, value, className = "") => {
-  const node = documentRef.createElement(tag);
-  if (className) node.className = className;
-  node.textContent = value == null ? "" : String(value);
-  return node;
+  const node2 = documentRef.createElement(tag);
+  if (className) node2.className = className;
+  node2.textContent = value == null ? "" : String(value);
+  return node2;
 };
 var button = (documentRef, label, action, extra = {}) => {
-  const node = documentRef.createElement("button");
-  node.type = "button";
-  node.textContent = label;
-  node.dataset.desktopAction = action;
-  for (const [key, value] of Object.entries(extra)) node.dataset[key] = String(value);
-  return node;
+  const node2 = documentRef.createElement("button");
+  node2.type = "button";
+  node2.textContent = label;
+  node2.dataset.desktopAction = action;
+  for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
+  return node2;
 };
 var input = (documentRef, label, name, value = "", type = "text") => {
   const wrap = documentRef.createElement("label");
@@ -23006,12 +23613,12 @@ var selectField = (documentRef, label, name, options, value = "") => {
   control.name = name;
   control.dataset.desktopField = name;
   for (const option of options) {
-    const node = documentRef.createElement("option");
-    node.value = option.value;
-    node.textContent = option.label;
-    node.selected = option.value === value;
-    node.disabled = Boolean(option.disabled);
-    control.append(node);
+    const node2 = documentRef.createElement("option");
+    node2.value = option.value;
+    node2.textContent = option.label;
+    node2.selected = option.value === value;
+    node2.disabled = Boolean(option.disabled);
+    control.append(node2);
   }
   wrap.append(control);
   return wrap;
@@ -23084,35 +23691,13 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
-  section2.append(toolbar);
+  if (!state.form) section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    const editing = state.editingAutomation || {};
-    const schedule = editing.schedule || {};
-    const form = documentRef.createElement("form");
-    form.className = "desktop-form";
-    form.dataset.desktopForm = "schedule";
-    form.append(text(documentRef, "p", state.form === "schedule-edit" ? "Update the automation and keep its revision current." : "Create a bounded task that runs in this workspace.", "desktop-form-intro"));
-    form.append(input(documentRef, "Title", "title", formValue(state, "title", editing.name || "")));
-    form.append(input(documentRef, "Project ID", "project_id", formValue(state, "project_id", editing.target?.project_id || "")));
-    form.append(input(documentRef, "Thread ID", "thread_id", formValue(state, "thread_id", editing.target?.thread_id || "")));
-    form.append(input(documentRef, "Prompt", "prompt", formValue(state, "prompt", editing.prompt || ""), "textarea"));
-    form.append(selectField(documentRef, "Schedule", "schedule_type", [{ value: "once", label: "One time" }, { value: "interval", label: "Interval" }, { value: "rrule", label: "RRULE" }], formValue(state, "schedule_type", schedule.kind === "rrule" ? "rrule" : schedule.kind || "once")));
-    form.append(input(documentRef, "Run at (ISO)", "run_at", formValue(state, "run_at", schedule.at || schedule.start_at || schedule.anchor_at || "")));
-    form.append(input(documentRef, "Interval seconds", "interval_seconds", formValue(state, "interval_seconds", schedule.seconds || "")));
-    form.append(input(documentRef, "RRULE", "rrule", formValue(state, "rrule", schedule.rule || "")));
-    form.append(input(documentRef, "Home Assistant timezone", "timezone", formValue(state, "timezone", schedule.timezone || defaultTimezone)));
-    form.append(input(documentRef, "Model", "model", formValue(state, "model", editing.model || "")));
-    form.append(input(documentRef, "Reasoning", "thinking", formValue(state, "thinking", editing.thinking || "")));
-    form.append(selectField(documentRef, "Mode", "mode", [{ value: "observe", label: "Observe" }, { value: "edit", label: "Edit" }, { value: "full-auto", label: "Full auto" }], formValue(state, "mode", editing.mode || "observe")));
-    form.append(input(documentRef, "Revision", "revision", formValue(state, "revision", editing.revision || "")));
-    const actions = documentRef.createElement("div");
-    actions.className = "desktop-form-actions";
-    actions.append(button(documentRef, state.form === "schedule-edit" ? "Save schedule" : "Create schedule", state.form === "schedule-edit" ? "submit-schedule-update" : "submit-schedule"), button(documentRef, "Cancel", "close-form"));
-    form.append(actions);
-    section2.append(form);
+    section2.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    return section2;
   }
-  const rows = normalizeDesktopList(state.data.automations || state.data);
-  section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["status", "Status"]], (row, td) => {
+  const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
+  section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
@@ -23143,11 +23728,28 @@ function renderSkills(documentRef, state) {
     section2.append(form);
   }
   const rows = normalizeDesktopList(state.data.skills || state.data);
-  section2.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
-    const id = row.id || row.skill_id || row.name || "";
-    td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-    td.append(button(documentRef, "Delete", "delete-skill", { id }));
-  }));
+  const groups = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const name = String(row.name || "");
+    const category = name.includes(":") ? name.slice(0, name.indexOf(":")) : "General";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(row);
+  }
+  if (!rows.length) section2.append(renderEmpty(documentRef, "No skills found in this workspace."));
+  for (const [category, skills] of [...groups].sort(([a2], [b2]) => a2.localeCompare(b2))) {
+    const group = documentRef.createElement("section");
+    group.className = "skill-group";
+    const heading = text(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
+    const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
+    heading.append(count);
+    group.append(heading);
+    group.append(renderTable(documentRef, [...skills].sort((a2, b2) => String(a2.name).localeCompare(String(b2.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+      const id = row.id || row.skill_id || row.name || "";
+      td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button(documentRef, "Delete", "delete-skill", { id }));
+    }));
+    section2.append(group);
+  }
   return section2;
 }
 function renderPlugins(documentRef, state) {
@@ -23184,14 +23786,14 @@ function renderPlugins(documentRef, state) {
   section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
   return section2;
 }
-function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
   const section2 = documentRef.createElement("div");
   section2.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav");
   tabs.className = "settings-tabs";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) {
     const control = button(documentRef, label, "select-settings-tab", { tab: id });
@@ -23212,7 +23814,53 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   panel.setAttribute("aria-labelledby", `settings-tab-${tab}`);
   section2.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
+  const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
+  const saved = text(documentRef, "p", "", "preference-save-status");
+  saved.setAttribute("role", "status");
+  const pickers = {};
+  const addPreference = (card, key, label, options) => {
+    const row = documentRef.createElement("div");
+    row.className = "schedule-row";
+    const picker = selection(documentRef, { name: key, label, value: preferences[key], options });
+    picker.dataset.preference = key;
+    pickers[key] = picker;
+    row.append(text(documentRef, "span", label, "schedule-row-label"), picker);
+    card.append(row);
+    picker.querySelector("select").addEventListener("change", () => {
+      preferences[key] = picker.querySelector("select").value;
+      if (key === "model") {
+        const choices = reasoningChoices(settings, preferences.model);
+        if (!choices.some(([level]) => level === preferences.thinking)) preferences.thinking = "";
+        pickers.thinking.setOptions(choices, preferences.thinking);
+      }
+      try {
+        settings.onPreferenceChange?.(preferences);
+        saved.textContent = "Saved for this Home Assistant user in this browser.";
+      } catch {
+        saved.textContent = "Applied for this visit. Browser storage is unavailable, so these preferences could not be saved.";
+      }
+    });
+  };
+  if (tab === "appearance") {
+    panel.append(text(documentRef, "h3", "Appearance", "desktop-subheading"));
+    const card = documentRef.createElement("div");
+    card.className = "schedule-card settings-card";
+    addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
+    addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
+    addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
+    panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+  }
   if (tab === "mcp") {
+    const recommendation = documentRef.createElement("section");
+    recommendation.className = "desktop-note";
+    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
+    guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+    guide.target = "_blank";
+    guide.rel = "noopener noreferrer";
+    guide.style.color = "inherit";
+    recommendation.append(guide);
+    panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") {
       const form = documentRef.createElement("form");
@@ -23255,7 +23903,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -23269,19 +23917,48 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
     addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
     panel.append(
-      text(documentRef, "h3", "General", "desktop-subheading"),
-      text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
+      text(documentRef, "h3", "New chat defaults", "desktop-subheading")
+    );
+    const defaults = documentRef.createElement("div");
+    defaults.className = "schedule-card settings-card";
+    addPreference(defaults, "mode", "Permissions", [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]]);
+    addPreference(defaults, "model", "Model", modelChoices(settings, preferences.model));
+    addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
+    panel.append(
+      defaults,
+      text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
+      text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
+      saved,
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
     );
+    if (config?.capabilities?.includes("host_access_v1")) {
+      const host = state.data?.host_access;
+      const card = text(documentRef, "section", "", "schedule-card host-access-settings");
+      card.append(
+        text(documentRef, "h3", HOST_LABEL),
+        text(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Optional root access through the separate Codex Host Access App. Review the warning before enabling it.", "desktop-note"),
+        button(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access")
+      );
+      if (host?.enabled) card.append(button(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button(documentRef, "Use for current chat", "use-host-access"));
+      panel.append(card);
+    }
   }
   return section2;
 }
-function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
+var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
+function featureDraftInputs(state) {
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+}
+function syncDesktopFeatureDrafts(container, state) {
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered) rendered.drafts = featureDraftInputs(state);
+}
+function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
-  container.replaceChildren();
   container.onclick = (event) => {
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
@@ -23292,12 +23969,27 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const submit = form?.querySelector('[data-desktop-action^="submit-"]');
     if (submit) onAction?.(submit.dataset.desktopAction, submit.dataset, submit);
   };
+  const inputs = JSON.stringify({
+    destination,
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0 },
+    timezone,
+    hasActiveProject,
+    activeProjectId,
+    nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
+    settingsModels: destination === "settings" ? settings.models : null,
+    settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null
+  });
+  const drafts = featureDraftInputs(state);
+  const rendered = renderedFeatureInputs.get(container);
+  if (rendered?.inputs === inputs && rendered.drafts === drafts) return;
+  container.replaceChildren();
+  renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div");
   heading.className = "desktop-feature-header";
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
-  container.append(heading);
+  if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) {
     container.setAttribute("aria-busy", "true");
     container.append(renderEmpty(documentRef, "Loading…"));
@@ -23323,12 +24015,12 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm);
   }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.0.0";
+var PANEL_VERSION = "1.1.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -23363,7 +24055,8 @@ var MODE_OPTIONS = [
     value: "full-auto",
     label: "Full auto",
     description: "Workspace changes run automatically; network and private host paths remain blocked."
-  }
+  },
+  { value: HOST_MODE, label: HOST_LABEL, description: "Optional root access to HAOS files, credentials, services and the network. Requires the Host Access App and acknowledgement." }
 ];
 var INTERACTION_EVENT_TYPES = /* @__PURE__ */ new Set([
   "interaction.created",
@@ -23490,6 +24183,7 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 var template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${SELECTION_STYLES}
     :host {
       --panel-bg: var(--primary-background-color, #f5f7fb);
       --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
@@ -23527,6 +24221,28 @@ template.innerHTML = `
     :host(:fullscreen) {
       width: 100vw;
       height: 100dvh;
+    }
+
+    :host([data-panel-theme="light"]) {
+      color-scheme: light;
+      --panel-bg: #f5f7fb; --surface-bg: #ffffff; --surface-alt: #f2f4f7;
+      --surface-muted: #eef1f5; --border-color: #d4dae2; --text-color: #151b29;
+      --muted-color: #596579; --accent-color: #087bab;
+    }
+    :host([data-panel-theme="dark"]) {
+      color-scheme: dark;
+      --panel-bg: #15181d; --surface-bg: #1d2128; --surface-alt: #292f38;
+      --surface-muted: #252b34; --border-color: #454e5c; --text-color: #f0f2f6;
+      --muted-color: #b5bfcd; --accent-color: #70c7ee;
+    }
+    :host([data-text-size="large"]) .bubble-text,
+    :host([data-text-size="large"]) .composer textarea { font-size: 18px; }
+    :host([data-text-size="larger"]) .bubble-text,
+    :host([data-text-size="larger"]) .composer textarea { font-size: 20px; }
+    :host([data-motion="reduced"]) *,
+    :host([data-motion="reduced"]) *::before,
+    :host([data-motion="reduced"]) *::after {
+      animation: none !important; transition: none !important; scroll-behavior: auto !important;
     }
 
     :host(:fullscreen) .rail-pane {
@@ -23788,6 +24504,15 @@ template.innerHTML = `
       background: var(--surface-bg);
       box-shadow: 0 20px 54px rgba(15, 23, 42, 0.28);
     }
+
+    .host-access-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+    .host-access-dialog h3 { font-size: 15px; margin: 20px 0 6px; }
+    .host-access-dialog a { color: var(--text-color); text-decoration: underline; }
+    .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
+    .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
+    .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
+    .host-access-settings { padding: 20px; }
+    .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
     .confirmation-dialog p {
@@ -26004,12 +26729,54 @@ template.innerHTML = `
     .desktop-field textarea { width: 100%; padding: 9px 10px; border-radius: 6px; }
     .desktop-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .desktop-form-actions button { min-height: 32px; padding: 0 11px; }
+    .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
+    .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
+    .schedule-title, .schedule-prompt { display: block; min-width: 0; }
+    .schedule-title > span, .schedule-prompt > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .schedule-title input { width: 100%; min-width: 0; padding: 8px 0; border: 0; border-radius: 0; background: transparent; font-size: 22px; }
+    .schedule-prompt textarea { width: 100%; min-height: 112px; padding: 20px; border: 1px solid var(--border-color); border-radius: 22px; background: transparent; line-height: 1.5; resize: vertical; font-size: 16px; }
+    .schedule-group { min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+    .schedule-group legend { margin-bottom: 12px; padding: 0 5px; color: var(--muted-color); font-size: 16px; }
+    .schedule-card { padding: 0 20px; border: 1px solid var(--border-color); border-radius: 22px; }
+    .schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 62px; margin: 0; font-size: 15px; }
+    .schedule-row + .schedule-row { border-top: 1px solid var(--border-color); }
+    .schedule-row[hidden], .schedule-month-note[hidden] { display: none; }
+    .schedule-row-label { flex: 0 0 auto; color: var(--text-color); }
+    .schedule-row-value { text-align: right; color: var(--muted-color); }
+    .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
+    .schedule-row select { text-align-last: right; cursor: pointer; }
+    .schedule-row input[type="number"] { width: 96px; }
+    .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: 13px; line-height: 1.5; }
+    .schedule-advanced { min-width: 0; color: var(--muted-color); }
+    .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+    .schedule-advanced .schedule-card { margin-top: 10px; }
+    .schedule-error { margin: 0; color: var(--danger-color); }
+    .schedule-error:empty { display: none; }
+    .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
+    .schedule-submit { background: var(--text-color); color: var(--canvas-bg); }
+    .schedule-editor :is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+    @media (max-width: 540px) {
+      .schedule-editor { gap: 20px; }
+      .schedule-card { padding-inline: 14px; }
+      .schedule-row { gap: 10px; font-size: 14px; }
+      .schedule-row input, .schedule-row select { max-width: 60%; font-size: 14px; }
+      .schedule-advanced .schedule-row { flex-wrap: wrap; gap: 0; padding-block: 8px; }
+      .schedule-advanced .schedule-row input { max-width: 100%; width: 100%; text-align: left; }
+    }
     .desktop-empty,
     .desktop-error,
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-card { margin: 16px 0; }
+    .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
+    .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
+    .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
+    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: 13px; }
+    .skill-group .desktop-table { margin: 0; }
     .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
@@ -26389,6 +27156,8 @@ template.innerHTML = `
     }
 
     .main-top,
+    .status-banner,
+    .error-strip,
     .interaction-region,
     .message-list,
     .run-activity-region {
@@ -26396,9 +27165,18 @@ template.innerHTML = `
       margin-inline: auto;
     }
 
+    .status-banner.visible,
+    .error-strip.visible {
+      flex: 0 0 auto;
+      margin-top: 10px;
+    }
+
     .main-top {
-      max-height: min(25vh, 220px);
+      flex: 0 0 auto;
+      grid-auto-rows: max-content;
+      max-height: none;
       padding: 10px 0 0;
+      overflow: visible;
     }
 
     .runtime-item {
@@ -27859,6 +28637,12 @@ template.innerHTML = `
         overflow: visible;
       }
 
+      .banner-action,
+      .banner-dismiss {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
       .message-list {
         flex: 0 0 auto;
         min-height: 0;
@@ -28035,6 +28819,7 @@ template.innerHTML = `
           <span class="eyeline" id="thread-project-label">Ready</span>
           <span class="title" id="thread-title-label">Select a chat</span>
           <span class="subline" id="thread-path-label"></span>
+          <span class="subline" id="thread-host-access-label" hidden></span>
         </div>
         <div class="mobile-header-actions" role="group" aria-label="Panel navigation">
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
@@ -28046,19 +28831,19 @@ template.innerHTML = `
           <button class="icon-button" type="button" data-action="refresh-thread" title="Refresh" aria-label="Refresh" id="refresh-thread-button"></button>
         </div>
       </div>
-      <div class="main-top">
-        <div class="runtime-shell" id="runtime-strip"></div>
-        <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
-        <section class="onboarding-shell" id="onboarding-shell">
-          <div class="onboarding-heading">
-            <strong id="onboarding-title">Home Assistant setup</strong>
-            <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
-          </div>
-          <div id="onboarding"></div>
-        </section>
-        <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
-      </div>
+      <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
+      <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
       <div class="conversation-scroll" id="conversation-scroll">
+        <div class="main-top">
+          <div class="runtime-shell" id="runtime-strip"></div>
+          <section class="onboarding-shell" id="onboarding-shell">
+            <div class="onboarding-heading">
+              <strong id="onboarding-title">Home Assistant setup</strong>
+              <span id="onboarding-summary">Everything stays behind your Home Assistant sign-in.</span>
+            </div>
+            <div id="onboarding"></div>
+          </section>
+        </div>
         <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
@@ -28147,6 +28932,7 @@ template.innerHTML = `
     </aside>
   </div>
   <div class="tooltip-layer" id="tooltip-layer" role="tooltip" hidden></div>
+  <div class="confirmation-layer" id="host-access-layer" hidden></div>
   <div class="confirmation-layer" id="confirmation-layer" hidden>
     <section class="confirmation-dialog" id="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description" tabindex="-1">
       <span class="eyeline">Confirm deletion</span>
@@ -28200,6 +28986,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
     this._hass = null;
+    this._preferences = { ...DEFAULT_PREFERENCES };
+    this._preferenceKey = null;
     this._panel = null;
     this._staticUiInstalled = false;
     this._config = null;
@@ -28259,6 +29047,7 @@ var CodexBridgePanel = class extends HTMLElement {
       mode: "full-auto",
       projectId: null
     };
+    this._hostAccessDialog = null;
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
@@ -28342,6 +29131,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   connectedCallback() {
     this._installStaticUi();
+    this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
@@ -28380,6 +29170,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   set hass(value) {
     this._hass = value;
+    this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
       return;
@@ -28388,6 +29179,27 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   get hass() {
     return this._hass;
+  }
+  _loadPreferences() {
+    const key = `codex-bridge:preferences:${this._hass?.user?.id || "local"}`;
+    if (this._preferenceKey === key) return;
+    this._preferenceKey = key;
+    try {
+      this._preferences = readPreferences(window.localStorage, key);
+    } catch {
+      this._preferences = { ...DEFAULT_PREFERENCES };
+    }
+    this._applyPreferences();
+  }
+  _applyPreferences() {
+    this.dataset.panelTheme = this._preferences.theme;
+    this.dataset.textSize = this._preferences.textSize;
+    this.dataset.motion = this._preferences.motion;
+  }
+  _savePreferences(value) {
+    this._preferences = normalisePreferences(value);
+    this._applyPreferences();
+    savePreferences(window.localStorage, this._preferenceKey || "codex-bridge:preferences:local", this._preferences);
   }
   set panel(value) {
     this._panel = value;
@@ -28737,6 +29549,15 @@ var CodexBridgePanel = class extends HTMLElement {
       case "confirm-delete":
         this._confirmDeletion();
         break;
+      case "cancel-host-access":
+        this._closeHostAccess();
+        break;
+      case "confirm-host-access":
+        void this._confirmHostAccess();
+        break;
+      case "retry-host-access":
+        void this._loadHostAccess();
+        break;
       case "toggle-run-activity-details":
         this._runActivityDetailsOpen = !this._runActivityDetailsOpen;
         this._renderRunActivity();
@@ -28852,6 +29673,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     this._captureDesktopFormDraft(target);
@@ -28889,6 +29711,23 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
+      this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
+      this._renderHostAccess();
+      return;
+    }
+    if (target.dataset.desktopField === "mode" && this._activeDestination === "scheduled") {
+      const state = this._desktopFeatures.scheduled;
+      if (target.value === HOST_MODE) {
+        const previous = state.formDraft.mode || state.editingAutomation?.mode || "observe";
+        target.value = previous;
+        target.closest(".panel-selection")?.setOptions([...target.options].map((option) => [option.value, option.textContent, option.disabled]), previous);
+        void this._openHostAccess("schedule", target.closest(".panel-selection")?.querySelector("button") || target);
+        return;
+      }
+      state.hostAccessGrant = null;
+      state.hostUnattendedApproved = false;
+    }
     if (target.closest("[data-interaction-id]")) {
       this._captureInteractionAnswers(target);
       return;
@@ -28913,7 +29752,13 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (target.id === "thread-mode-select") {
+      if (target.value === HOST_MODE) {
+        target.value = this._threadForm.mode;
+        void this._openHostAccess("new-chat", target);
+        return;
+      }
       this._threadForm.mode = target.value;
+      this._threadForm.hostAccessGrant = null;
       return;
     }
     if (target.dataset.desktopField === "agents_content") {
@@ -28921,6 +29766,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const scope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value || state.agentsScope || "global";
       const projectId = target.dataset.agentsProjectId || state.agentsProjectId || this._activeProject()?.project_id || null;
       state.agentsDrafts = { ...state.agentsDrafts || {}, [this._agentsDraftKey(scope, projectId)]: target.value };
+      syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
       return;
     }
     if (target.dataset.desktopField === "agents_scope") {
@@ -28985,6 +29831,13 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (this._hostAccessDialog) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this._closeHostAccess();
+      } else if (event.key === "Tab") this._trapDeletionFocus(event, "host-access-dialog");
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && !event.altKey) {
       const shortcut = event.key.toLowerCase();
       if (shortcut === "n") {
@@ -29004,7 +29857,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return;
       }
     }
-    if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "TEXTAREA" && !target.closest("button")) {
+    if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey && !["TEXTAREA", "SELECT"].includes(target.tagName) && !target.closest("button")) {
       const form = target.closest("[data-desktop-form]");
       const submit = form?.querySelector('[data-desktop-action^="submit-"]');
       if (submit) {
@@ -29150,16 +30003,18 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderDesktopNavigation() {
     const nav = this.shadowRoot.getElementById("desktop-destinations");
     if (!nav) return;
-    nav.replaceChildren();
-    for (const destination of DESTINATIONS) {
-      const control = document.createElement("button");
-      control.type = "button";
-      control.className = "desktop-destination";
-      control.dataset.action = "select-desktop-destination";
-      control.dataset.destination = destination.id;
-      control.textContent = destination.label;
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      let control = nav.children[index];
+      if (!control) {
+        control = document.createElement("button");
+        control.type = "button";
+        control.className = "desktop-destination";
+        control.dataset.action = "select-desktop-destination";
+        control.dataset.destination = destination.id;
+        control.textContent = destination.label;
+        nav.append(control);
+      }
       control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
-      nav.append(control);
     }
   }
   _renderAppMenu() {
@@ -29257,7 +30112,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.automations = normalizeDesktopList(await this._callWS("list_automations")).map((item) => ({
           ...item,
           title: item.name || "Untitled automation",
-          schedule: item.next_run_at || "Not scheduled",
+          schedule: item.schedule,
           status: item.last_status || (item.enabled === false ? "paused" : "idle")
         }));
       } else if (destination === "skills") {
@@ -29282,6 +30137,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.data.agentsScopes = { global: globalAgents || {}, project: projectAgents || {} };
         state.data.agents = state.data.agentsScopes[state.agentsScope || "project"];
         const capabilities = Array.isArray(this._config?.capabilities) ? this._config.capabilities : [];
+        if (capabilities.includes("host_access_v1")) state.data.host_access = await this._callWS("host_access");
         if (capabilities.includes("mcp_admin_v1")) {
           state.data.mcp_servers = normalizeDesktopList(await this._callWS("list_mcp"));
         } else {
@@ -29314,17 +30170,48 @@ var CodexBridgePanel = class extends HTMLElement {
   _desktopFormValues(target) {
     const form = target?.closest("form");
     if (!form) return {};
-    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field2) => [field2.dataset.desktopField, field2.value]));
   }
   _captureDesktopFormDraft(target) {
     const form = target.closest("form[data-desktop-form]");
-    const field = target.dataset.desktopField;
+    const field2 = target.dataset.desktopField;
     const state = this._desktopFeatures[this._activeDestination];
-    if (!form || !field || !state?.form) return;
-    state.formDraft = { ...state.formDraft || {}, [field]: target.value };
+    if (!form || !field2 || !state?.form) return;
+    state.formDraft = { ...state.formDraft || {}, [field2]: target.value };
+    if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
+    syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
   _clearDesktopFormDraft(state) {
     state.formDraft = {};
+    state.formError = "";
+    state.hostAccessGrant = null;
+    state.hostUnattendedApproved = null;
+  }
+  _scheduleContext(editing = null) {
+    const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
+    const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+  }
+  async _submitScheduledTask(state, target, update) {
+    const form = target?.closest("form");
+    if (!form || !form.reportValidity()) return;
+    try {
+      const context = {
+        ...state.scheduleContext,
+        editing: state.editingAutomation,
+        hostAccessGrant: state.hostAccessGrant || state.editingAutomation?.host_access_grant,
+        hostUnattendedApproved: state.hostUnattendedApproved ?? state.editingAutomation?.host_unattended_approved
+      };
+      const values = this._desktopFormValues(target);
+      const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (state.form && state.error) {
+        state.formError = state.error;
+        state.error = "";
+      }
+    } catch (error) {
+      state.formError = normalizeDesktopError(error);
+    }
   }
   _agentsDraftKey(scope, projectId = null) {
     return scope === "project" ? `project:${projectId || ""}` : "global";
@@ -29349,6 +30236,17 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   async _handleDesktopAction(action, dataset = {}, target, { confirmed = false } = {}) {
+    if (action === "review-host-access") return this._openHostAccess("settings", target);
+    if (action === "use-host-access") return this._openHostAccess("current-chat", target);
+    if (action === "revoke-host-access") {
+      try {
+        await this._callWS("revoke_host_access");
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) {
+        this._setError(normalizeDesktopError(error));
+      }
+      return;
+    }
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
@@ -29395,6 +30293,8 @@ var CodexBridgePanel = class extends HTMLElement {
     if (action === "open-schedule-form") {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
+      state.scheduleContext = this._scheduleContext();
+      state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone);
       state.form = "schedule";
     } else if (action === "open-skill-form") {
       this._clearDesktopFormDraft(state);
@@ -29410,8 +30310,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
       state.form = null;
-    } else if (action === "submit-schedule") await this._desktopMutation("create_automation", buildAutomationPayload(this._desktopFormValues(target)), state, { clearFormDraft: true });
-    else if (action === "submit-schedule-update") await this._desktopMutation("update_automation", { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(this._desktopFormValues(target)) }, state, { clearFormDraft: true });
+    } else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
+    else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
     else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
     else if (action === "submit-marketplace") {
       const values = this._desktopFormValues(target);
@@ -29435,6 +30335,8 @@ var CodexBridgePanel = class extends HTMLElement {
         const automation = await this._callWS("get_automation", { automation_id: dataset.id });
         this._clearDesktopFormDraft(state);
         state.editingAutomation = automation;
+        state.scheduleContext = this._scheduleContext(automation);
+        state.formDraft = scheduleFormValues(automation, state.scheduleContext.timezone);
         state.form = "schedule-edit";
       } catch (error) {
         state.error = normalizeDesktopError(error);
@@ -29533,7 +30435,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     }
   }
   _handleTooltipPointerOver(event) {
@@ -29570,6 +30472,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.getElementById("thread-project-label").textContent = contextName;
     this.shadowRoot.getElementById("thread-title-label").textContent = activeThread?.title || (activeProject?.kind === "direct" ? "Select a chat" : activeProject?.name || "Select a chat");
     this.shadowRoot.getElementById("thread-path-label").textContent = this._workspaceLabel(activeThread?.workspace_path || activeProject?.root_path, "");
+    const hostLabel = this.shadowRoot.getElementById("thread-host-access-label");
+    hostLabel.hidden = activeThread?.mode !== HOST_MODE;
+    hostLabel.textContent = activeThread?.mode === HOST_MODE ? `${HOST_LABEL} · root` : "";
     this._renderThreadRunState(activeThread);
     const attachmentMeta = this.shadowRoot.getElementById("attachment-meta");
     attachmentMeta.textContent = this._pendingUploads ? this._uploadProgressText() : activeThread?.attachments?.length ? `${activeThread.attachments.length} attached` : "";
@@ -29637,13 +30542,122 @@ var CodexBridgePanel = class extends HTMLElement {
     actions.append(dismiss);
     errorStrip.append(copy, actions);
   }
+  _renderHostAccess() {
+    const layer = this.shadowRoot.getElementById("host-access-layer");
+    const state = this._hostAccessDialog;
+    const shell = this.shadowRoot.querySelector(".shell");
+    if (!layer) return;
+    layer.hidden = !state;
+    if (shell) {
+      shell.inert = Boolean(state || this._pendingDeletion);
+      if (shell.inert) shell.setAttribute("aria-hidden", "true");
+      else shell.removeAttribute("aria-hidden");
+    }
+    if (!state) {
+      layer.replaceChildren();
+      return;
+    }
+    const focusedId = layer.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.id : null;
+    layer.replaceChildren(renderHostAccessDialog(this.ownerDocument, state));
+    if (focusedId) this.shadowRoot.getElementById(focusedId)?.focus();
+  }
+  async _openHostAccess(context, trigger) {
+    if (this._hostAccessDialog || this._pendingDeletion) return;
+    this._hostAccessDialog = {
+      context,
+      trigger,
+      threadId: this._selectedThreadId,
+      acknowledged: false,
+      unattended: false,
+      loading: true,
+      busy: false
+    };
+    this._hideTooltip();
+    this._renderHostAccess();
+    queueMicrotask(() => this.shadowRoot.getElementById("host-access-dialog")?.focus());
+    await this._loadHostAccess();
+  }
+  async _loadHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    state.loading = true;
+    state.status = null;
+    state.error = "";
+    state.acknowledged = false;
+    state.unattended = false;
+    this._renderHostAccess();
+    try {
+      const status = await this._callWS("host_access");
+      if (this._hostAccessDialog !== state) return;
+      state.status = status;
+      this._desktopFeatures.settings.data.host_access = status;
+    } catch (error) {
+      if (this._hostAccessDialog === state) state.error = normalizeDesktopError(error);
+    } finally {
+      if (this._hostAccessDialog === state) {
+        state.loading = false;
+        this._renderHostAccess();
+      }
+    }
+  }
+  _closeHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy) return;
+    this._hostAccessDialog = null;
+    this._renderHostAccess();
+    queueMicrotask(() => {
+      if (state.trigger?.isConnected) state.trigger.focus();
+      else if (state.context === "new-chat") this.shadowRoot.getElementById("thread-mode-select")?.focus();
+      else if (state.context === "schedule") this.shadowRoot.querySelector('[data-desktop-field="mode"]')?.closest(".panel-selection")?.querySelector("button")?.focus();
+      else this.shadowRoot.querySelector('[data-desktop-action="review-host-access"]')?.focus();
+    });
+  }
+  async _confirmHostAccess() {
+    const state = this._hostAccessDialog;
+    if (!state || state.busy || state.status?.state !== "ready" || !state.acknowledged || state.context === "schedule" && !state.unattended) return;
+    state.busy = true;
+    state.error = "";
+    this._renderHostAccess();
+    try {
+      const status = state.status.enabled ? await this._callWS("host_access") : await this._callWS("enable_host_access", {
+        scope_revision: state.status.disclosure.scope_revision,
+        acknowledged: true
+      });
+      if (!status.enabled || !status.grant_id || status.disclosure?.scope_revision !== state.status.disclosure.scope_revision) throw new Error("Host access changed. Check again and review the current warning.");
+      this._desktopFeatures.settings.data.host_access = status;
+      if (state.context === "new-chat") {
+        this._threadForm.mode = HOST_MODE;
+        this._threadForm.hostAccessGrant = status.grant_id;
+        this._renderedThreadFormKey = "";
+        this._renderThreadForm();
+      } else if (state.context === "schedule") {
+        const scheduled = this._desktopFeatures.scheduled;
+        scheduled.formDraft = { ...scheduled.formDraft, mode: HOST_MODE };
+        scheduled.hostAccessGrant = status.grant_id;
+        scheduled.hostUnattendedApproved = true;
+        this._renderDesktopSurface();
+      } else if (state.context === "current-chat") {
+        const thread = await this._callWS("update_thread", { thread_id: state.threadId, mode: HOST_MODE, host_access_grant: status.grant_id });
+        if (this._selectedThreadId === state.threadId) this._activeThread = thread;
+        this._syncThreadListStatus();
+        this._render();
+      }
+      state.busy = false;
+      this._closeHostAccess();
+      this._renderDesktopSurface();
+    } catch (error) {
+      state.busy = false;
+      state.error = normalizeDesktopError(error);
+      this._renderHostAccess();
+    }
+  }
   _renderDeletionConfirmation() {
     const layer = this.shadowRoot.getElementById("confirmation-layer");
     const shell = this.shadowRoot.querySelector(".shell");
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell) {
+      if (shell && !this._hostAccessDialog) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -29692,8 +30706,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return this._deleteThread(pending.targetId, null, true);
   }
-  _trapDeletionFocus(event) {
-    const dialog = this.shadowRoot.getElementById("confirmation-dialog");
+  _trapDeletionFocus(event, dialogId = "confirmation-dialog") {
+    const dialog = this.shadowRoot.getElementById(dialogId);
     if (!dialog) {
       return;
     }
@@ -30376,13 +31390,13 @@ var CodexBridgePanel = class extends HTMLElement {
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
     modeSelect.setAttribute("aria-describedby", "thread-mode-description");
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option2) => option2.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       this._appendOption(modeSelect, option.value, option.label, option.value === this._threadForm.mode);
     }
     const modeDescription = document.createElement("ul");
     modeDescription.id = "thread-mode-description";
     modeDescription.className = "mode-boundaries";
-    for (const option of MODE_OPTIONS) {
+    for (const option of MODE_OPTIONS.filter((option2) => option2.value !== HOST_MODE || this._config?.capabilities?.includes("host_access_v1"))) {
       const item = document.createElement("li");
       const label = document.createElement("strong");
       label.textContent = `${option.label}: `;
@@ -30975,7 +31989,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return false;
     }
     const lowered = String(message || "").toLowerCase();
-    return lowered.includes("codex login expired") || lowered.includes("401 unauthorized") || lowered.includes("refresh token");
+    return lowered.includes("codex login expired") || lowered.includes("codex sign-in expired") || lowered.includes("401 unauthorized") || lowered.includes("refresh token");
   }
   _authLooksRecovered() {
     const auth = this._status?.auth;
@@ -31206,12 +32220,12 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.replaceChildren();
     }
     for (const event of eventsToRender) {
-      const node = this._renderEvent(event);
-      if (!node) {
+      const node2 = this._renderEvent(event);
+      if (!node2) {
         this._renderedSequence = event.sequence;
         continue;
       }
-      messageList.append(node);
+      messageList.append(node2);
       this._renderedSequence = event.sequence;
     }
     this._syncStreamingMessage(messageList, activity);
@@ -32274,7 +33288,7 @@ var CodexBridgePanel = class extends HTMLElement {
       ["Account plan", normalizePlanType(account?.plan_type)],
       ["Workspace", this._workspaceLabel(thread?.workspace_path || project?.root_path)],
       ["Context", project?.kind === "direct" ? "Direct chats" : project?.name || "Not selected"],
-      ["Mode", thread?.mode || "full-auto"],
+      ["Mode", thread?.mode === HOST_MODE ? HOST_LABEL : thread?.mode || "full-auto"],
       ["Model", thread?.effective_model || project?.default_model || this._defaultModel()],
       ["Thinking", thread?.effective_thinking_level || project?.default_thinking_level || "medium"],
       ["Uploads", String(thread?.attachments?.length || 0)],
@@ -32508,7 +33522,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._showProjectForm = false;
     this._threadForm = {
       title: "",
-      mode: "full-auto",
+      mode: this._preferences.mode,
       projectId
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
@@ -32734,8 +33748,11 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       const payload = {
         title,
-        mode: this._threadForm.mode
+        mode: this._threadForm.mode,
+        ...this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}
       };
+      if (this._preferences.model) payload.model_override = this._preferences.model;
+      if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;
       if (this._threadForm.projectId) {
         payload.project_id = this._threadForm.projectId;
       }
@@ -33767,8 +34784,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._refreshArtifactDownloadUi();
     }
   }
-  async _copyMessage(sequence) {
-    const numericSequence = Number(sequence);
+  async _copyMessage(sequence2) {
+    const numericSequence = Number(sequence2);
     const event = this._events.find((item) => item.sequence === numericSequence);
     const text2 = event?.payload?.text || "";
     if (!text2) {
@@ -34776,12 +35793,12 @@ var CodexBridgePanel = class extends HTMLElement {
     return changed;
   }
   _textElement(tagName, className, value) {
-    const element = document.createElement(tagName);
+    const element2 = document.createElement(tagName);
     if (className) {
-      element.className = className;
+      element2.className = className;
     }
-    element.textContent = String(value ?? "");
-    return element;
+    element2.textContent = String(value ?? "");
+    return element2;
   }
   _actionButton(className, action, accessibleLabel) {
     const button2 = document.createElement("button");

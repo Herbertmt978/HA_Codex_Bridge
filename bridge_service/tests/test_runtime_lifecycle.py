@@ -202,6 +202,7 @@ class _SharedClient:
                     "source": "appServer",
                     "turns": [],
                     "sessionId": f"session-{thread_id}",
+                    "projectId": None,
                 },
                 "model": params["model"],
                 "modelProvider": "openai",
@@ -399,8 +400,28 @@ def test_main_ha_composition_defers_catalogue_and_turns_to_shared_runtime(
     assert captured["account_probe"] is None
     assert captured["runner_factory"] is None
     assert captured["enable_mcp"] is False
+    assert captured['browser_broker'] is None
     assert captured["model_discovery_timeout_seconds"] == 10.0
     assert captured["model_cache_ttl_seconds"] == 600.0
+
+
+@pytest.mark.parametrize(('enabled', 'proven', 'available'), [(False, True, False), (True, False, False), (True, True, True)])
+def test_main_browser_requires_opt_in_and_runtime_proof(tmp_path, monkeypatch, enabled, proven, available):
+    import importlib
+    from types import SimpleNamespace
+    workspace = tmp_path / 'workspaces'
+    workspace.mkdir()
+    monkeypatch.setenv('CODEX_BRIDGE_AUTH_TOKEN', 'x' * 32)
+    monkeypatch.setenv('CODEX_BRIDGE_ROOT_PATH', str(tmp_path / 'data'))
+    monkeypatch.setenv('CODEX_BRIDGE_RUNTIME_PROFILE', 'home_assistant')
+    monkeypatch.setenv('CODEX_BRIDGE_WORKSPACE_ROOT', str(workspace))
+    monkeypatch.setenv('CODEX_BRIDGE_ENABLE_BROWSER', str(enabled).lower())
+    main = importlib.import_module('codex_bridge_service.main')
+    captured = {}
+    monkeypatch.setattr(main, 'create_app', lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(main, 'BrowserWorkerClient', lambda: SimpleNamespace(ready=lambda: proven))
+    main.build_app()
+    assert (captured['browser_broker'] is not None) is available
 
 
 def test_ha_startup_rebinds_only_provider_threads_when_account_changes(
@@ -1156,6 +1177,79 @@ def test_initial_app_server_failure_keeps_authenticated_fatal_readiness_alive(
     }
     assert app.state.runtime_startup_failed is True
     assert client.calls == ["start", "close"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="workspace turns require POSIX dir_fd")
+@pytest.mark.parametrize("classification", ["unauthorized", "serverOverloaded"])
+def test_failed_turn_updates_shared_auth_only_for_authentication_failure(
+    tmp_path: Path, classification: str
+) -> None:
+    client = _SharedClient()
+    client.turn_in_progress = True
+    app = _ha_app(tmp_path, client)
+    thread = _seed_blocked_thread(app, name="Expired sign-in")
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    with TestClient(app) as http:
+        before = http.get("/auth/status", headers=headers).json()
+        submitted = http.post(
+            f"/threads/{thread.thread_id}/prompts",
+            headers=headers,
+            json={"prompt": "hello", "client_request_id": "expires-during-turn"},
+        )
+        assert submitted.status_code == 202
+        _wait_until(lambda: "turn/start" in client.calls)
+        client.notification_handlers["turn/completed"](
+            AppServerNotification(
+                method="turn/completed",
+                generation=client.generation,
+                params={
+                    "threadId": "codex-thread-1",
+                    "turn": {
+                        "id": "codex-turn-1",
+                        "items": [],
+                        "status": "failed",
+                        "error": {
+                            "message": "private provider detail",
+                            "codexErrorInfo": classification,
+                            "additionalDetails": None,
+                        },
+                    },
+                },
+            )
+        )
+        _wait_until(
+            lambda: app.state.storage.load_thread(thread.thread_id).status == "error"
+        )
+        auth = http.get("/auth/status", headers=headers).json()
+        assert http.get("/status", headers=headers).json()["auth"] == auth
+        if classification == "unauthorized":
+            assert auth["state"] == "expired"
+            assert auth["auth_required"] is True
+            assert auth["revision"] > before["revision"]
+            rejected = http.post(
+                f"/threads/{thread.thread_id}/prompts",
+                headers=headers,
+                json={"prompt": "retry", "client_request_id": "blocked-until-login"},
+            )
+            assert rejected.status_code == 409
+            assert client.calls.count("turn/start") == 1
+        else:
+            assert auth == before
+
+    restarted = _ha_app(tmp_path, _SharedClient())
+    with TestClient(restarted) as http:
+        restored = http.get("/auth/status", headers=headers).json()
+        assert "reauthentication_required" not in restored
+        assert restored["state"] == (
+            "expired" if classification == "unauthorized" else "ok"
+        )
+        if classification == "unauthorized":
+            rejected = http.post(
+                f"/threads/{thread.thread_id}/prompts",
+                headers=headers,
+                json={"prompt": "retry", "client_request_id": "blocked-after-restart"},
+            )
+            assert rejected.status_code == 409
 
 
 def test_auth_required_blocks_new_turn_until_generation_reconciles(

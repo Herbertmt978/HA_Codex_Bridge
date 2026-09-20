@@ -127,7 +127,8 @@ def test_metadata_rejects_untrusted_release_shapes(fixture: str) -> None:
         )
 
 
-def test_metadata_rejects_missing_and_duplicate_target_assets() -> None:
+@pytest.mark.parametrize("missing", ["bwrap-aarch64-unknown-linux-musl.sigstore", "codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz", "codex-code-mode-host-aarch64-unknown-linux-musl.sigstore"])
+def test_metadata_rejects_missing_and_duplicate_target_assets(missing: str) -> None:
     updater = _updater()
     metadata = _fixture("stable.json")
     assets = metadata["assets"]
@@ -135,7 +136,7 @@ def test_metadata_rejects_missing_and_duplicate_target_assets() -> None:
     metadata["assets"] = [
         asset
         for asset in assets
-        if asset["name"] != "bwrap-aarch64-unknown-linux-musl.sigstore"
+        if asset["name"] != missing
     ]
     with pytest.raises(updater.ReleaseLockError, match="missing"):
         updater.build_lock_from_metadata(

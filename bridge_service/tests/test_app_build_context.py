@@ -216,7 +216,7 @@ def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path) -> N
 
     selected = lock["assets"]["amd64"]
     assert isinstance(selected, dict)
-    for tool in ("codex", "bwrap"):
+    for tool in ("codex", "bwrap", "codex-code-mode-host"):
         asset = selected[tool]
         assert isinstance(asset, dict)
         assert re.fullmatch(r"[0-9a-f]{64}", asset["sha256"])

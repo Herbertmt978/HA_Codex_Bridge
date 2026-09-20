@@ -75,6 +75,6 @@ from being submitted twice, but it does not make an unreviewed workspace safe.
    select **Sign in with ChatGPT** again rather than copying credentials.
 6. Inspect the restored workspace before asking Codex to change it.
 
-Removing the Integration or App intentionally does not remove workspace files.
-Review and back up `/config/workspaces` before cleanup. For switching from an
+Before removing the Integration or App, back up its workspace and private data.
+Do not assume uninstalling the App will retain its files. For switching from an
 existing private Bridge, see [external-Bridge migration](migration-from-windows.md).

@@ -2,64 +2,40 @@
 
 ## Where to ask
 
-Use GitHub issues for reproducible bugs, feature requests, and setup questions.
-Read the [README](README.md), [App documentation](codex_bridge_app/DOCS.md), and
-[CONTRIBUTING.md](CONTRIBUTING.md) first. For suspected vulnerabilities, follow
-[SECURITY.md](SECURITY.md) instead of creating a public issue.
+Use [GitHub issues](https://github.com/Herbertmt978/HA_Codex_Bridge/issues) for
+bugs, feature requests and setup questions. Check the
+[installation guide](docs/installation.md) and the quick checks below first.
+For a suspected vulnerability, use [private security reporting](SECURITY.md).
 
 ## Include this information
 
-- Home Assistant version and installation type.
-- Integration/Bridge version and App version, if installed.
-- Processor architecture (`amd64` is the current App target).
-- Whether the report concerns the stable, `amd64`-only Supervisor App or an
-  optional external Bridge.
-- A minimal reproduction and redacted App/Integration diagnostics.
+Tell us your Home Assistant version and installation type, the App and HACS
+Integration versions, and whether you use the Supervisor App or an external
+Bridge. Describe the steps, what you expected and what happened. Include a
+screenshot or short redacted log excerpt when useful.
 
-Never include device codes, bearer tokens, cookies, credentials, full private
-workspace paths, or workspace secrets.
+Do not include tokens, device codes, cookies, credentials, private workspace
+contents or complete private paths.
 
 ## Fast checks
 
-- Confirm the browser reaches the Home Assistant URL, not a direct Bridge or App
-  address.
-- If readiness reports `sandbox_unavailable`, do not loosen the sandbox; collect
-  redacted logs and report the failure.
-- Confirm Home Assistant and ChatGPT sessions separately. Use **Sign in with
-  ChatGPT** for initial sign-in or re-authentication, **Cancel** only for a
-  pending sign-in, and **Sign out** to remove an established session.
-- Ensure the user network can reach the approved ChatGPT device-auth page for
-  initial sign-in and re-authentication. Normal panel use remains on Home
-  Assistant after connection.
-- For a missing model or reasoning level, check the panel catalogue status.
-  Runtime discovery may show marked recovery data rather than a current list.
-- For current facts such as live weather, check the run activity for
-  **Searching the web** or **Opening a web page**. On a Supervisor connection,
-  `0.7.5` defaults provider-advertised native search to Live for prompts and
-  automations, re-negotiates it after device login, and guides time-sensitive
-  requests toward the native tool. The intentionally blocked shell-command
-  network is separate from provider-side web search. Do not treat a plausible
-  answer without web-search activity as a live result.
+| Problem | What to check |
+| --- | --- |
+| No update appears | Check the GitHub release has been published. Refresh HACS and the App store separately. The panel needs a HACS update; Codex needs an App update. See [update steps](docs/installation.md#update-an-existing-installation). |
+| The old UI is still visible | Restart Home Assistant after updating the Integration, then reload open panel tabs. A page refresh alone does not install an update. |
+| Sign-in expired | Start **Sign in with ChatGPT** again in the panel. Home Assistant login does not renew the separate ChatGPT session. |
+| Astra or another model is missing | Update the App, confirm ChatGPT is connected and let the catalogue refresh. Available models and reasoning levels depend on the installed runtime and account. |
+| Plugins are unavailable | Update both components and retry after Codex is ready. The larger catalogue fix is included from `1.0.3`. If it persists, provide the versions and redacted error. |
+| Menus close or hover repeatedly flashes | Update the HACS Integration to `1.0.4` or newer and reload the panel. `1.0.5` also prevents Enter in a schedule dropdown from submitting the form. |
+| A scheduled task did not run | Check **Runs**, the task's paused state, Home Assistant and App availability, and ChatGPT login. Overlaps, missed windows, capacity limits or an approval request can prevent a run. |
+| A schedule runs at the wrong time | Check Home Assistant's time zone and the form preview. Fixed intervals measure elapsed time; daily and weekly schedules follow local time. |
+| App reports `sandbox_unavailable` | Keep the failure intact and collect redacted logs. Do not weaken the sandbox or add broad mounts. |
+| Browser automation is unavailable | This is expected. The App-owned browser worker is disabled pending the isolation work in [issue #43](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/43). |
 
-The stable `1.0.0` App/Integration/panel release retains the
-`amd64`-only Supervisor scope, Bridge `0.7.6`, and Codex `0.144.5`. It fixes a
-panel-only composer defect: **Send** now enables or disables immediately as a
-prompt is typed, without needing a refresh. The local chat contract is account
-neutral: chats, projects, transcripts, files, workspace settings, archive
-state, and automation targets remain available across a ChatGPT account
-change; only stale private provider-thread continuity is detached. Verify the
-signed `1.0.0` release and immutable-image evidence on GitHub before installing.
+Use Home Assistant's URL, not a direct App or Bridge address. Initial ChatGPT
+sign-in requires browser access to the approved ChatGPT page. For current facts,
+check run activity for an actual web search; a plausible answer alone does not
+prove it used live information.
 
-The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
-uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
-`5387a2abcdeac3a5a3c01fe96876634af56542ad`, publication workflow
-`29633146637`, and immutable image digest
-`sha256:1e69b2db3b223f3e60bc00ce463ae9c5a941d9492c5149ff95eaa1f890deab85`.
-Its signature, SBOM, provenance, account-switch behavior, and preserved local
-chat history were verified. Target acceptance remains deliberately bounded:
-PDF list/archive/preview/download, external Nabu Casa/Cloudflare routing, cold
-restore, arbitrary App-image rollback, and the secure App-owned browser worker
-are not yet accepted. Issue #43 tracks the browser-worker follow-up; interactive
-Chromium remains deferred under ADR 0006. The historical `0.7.1` live list
-returned `capabilities_unavailable` (HTTP 503); that is not a current result.
-For recovery, use a cold backup or an existing private external Bridge.
+See [App documentation](codex_bridge_app/DOCS.md), [Scheduled tasks](docs/scheduled-tasks.md)
+and [Backup and recovery](docs/backup-restore.md) for more detail.

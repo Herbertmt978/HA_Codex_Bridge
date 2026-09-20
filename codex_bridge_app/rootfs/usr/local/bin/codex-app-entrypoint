@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+# Host PID is incompatible with S6. Only the separately installed companion
+# selects this fixed role; normal Bridge options cannot change it.
+case "${CODEX_BRIDGE_ROLE:-bridge}" in
+    bridge) exec /init "$@" ;;
+    host_access) exec python -m codex_bridge_service.host_bootstrap ;;
+    *) echo 'Unknown Codex App role.' >&2; exit 1 ;;
+esac

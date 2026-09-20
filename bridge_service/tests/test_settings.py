@@ -56,6 +56,17 @@ def test_mcp_is_disabled_by_default_and_requires_an_explicit_boolean_opt_in(
         Settings()
 
 
+def test_browser_requires_explicit_valid_opt_in(monkeypatch) -> None:
+    monkeypatch.setenv('CODEX_BRIDGE_AUTH_TOKEN', 'a' * 43)
+    monkeypatch.delenv('CODEX_BRIDGE_ENABLE_BROWSER', raising=False)
+    assert Settings().enable_browser is False
+    monkeypatch.setenv('CODEX_BRIDGE_ENABLE_BROWSER', 'true')
+    assert Settings().enable_browser is True
+    monkeypatch.setenv('CODEX_BRIDGE_ENABLE_BROWSER', 'invalid')
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [

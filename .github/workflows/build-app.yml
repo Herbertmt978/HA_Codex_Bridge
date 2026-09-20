@@ -8,6 +8,7 @@ on:
       - ".github/workflows/release.yml"
       - "bridge_service/**"
       - "codex_bridge_app/**"
+      - "codex_host_access_app/**"
       - "scripts/**"
   workflow_dispatch:
   workflow_call:
@@ -82,7 +83,7 @@ jobs:
         run: python scripts/stage_app_context.py --arch amd64
 
       - name: Build with the official Home Assistant builder
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: amd64
           container-registry-password: not-used-with-push-disabled
@@ -181,7 +182,7 @@ jobs:
 
       - name: Build, publish, and keylessly sign the amd64 image
         id: build
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: amd64
           container-registry-password: ${{ github.token }}
@@ -211,7 +212,7 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Publish and keylessly sign the generic amd64 manifest
-        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           architectures: '["amd64"]'
           container-registry-password: ${{ github.token }}

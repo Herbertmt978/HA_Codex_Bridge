@@ -579,7 +579,7 @@ def test_list_plugins_installed_only_uses_installed_endpoint(tmp_path: Path) -> 
     assert result["marketplaces"][0]["plugins"][0]["installed"] is True
 
 
-def test_list_plugins_does_not_truncate_current_catalogue_above_512(
+def test_list_plugins_does_not_truncate_current_catalogue_above_4096(
     tmp_path: Path,
 ) -> None:
     storage = Storage(tmp_path)
@@ -591,7 +591,7 @@ def test_list_plugins_does_not_truncate_current_catalogue_above_512(
                 "name": "official",
                 "plugins": [
                     {"id": f"plugin-{index}", "name": f"Plugin {index}"}
-                    for index in range(1_916)
+                    for index in range(4_293)
                 ],
             }
         ]
@@ -600,9 +600,9 @@ def test_list_plugins_does_not_truncate_current_catalogue_above_512(
     result = CapabilitiesManager(storage, server).list_plugins("project")
     plugins = result["marketplaces"][0]["plugins"]
 
-    assert len(plugins) == 1_916
+    assert len(plugins) == 4_293
     assert plugins[0]["id"] == "plugin-0"
-    assert plugins[-1]["id"] == "plugin-1915"
+    assert plugins[-1]["id"] == "plugin-4292"
 
 
 def test_list_plugins_enforces_total_projection_cap_across_marketplaces(
@@ -637,7 +637,7 @@ def test_list_plugins_enforces_total_projection_cap_across_marketplaces(
     result = CapabilitiesManager(storage, server).list_plugins("project")
     marketplaces = result["marketplaces"]
 
-    assert capabilities_module._MAX_PLUGINS >= 1_916
+    assert capabilities_module._MAX_PLUGINS >= 4_293
     assert [marketplace["name"] for marketplace in marketplaces] == [
         "first",
         "second",
