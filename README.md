@@ -79,6 +79,8 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
 - **MCP servers:** optional and disabled by default. Enable **Enable MCP** in
   the App configuration and restart it before adding a trusted HTTPS server.
   See [App documentation](codex_bridge_app/DOCS.md) for restrictions.
+- **Settings:** save a light or dark appearance, chat text size, reduced motion
+  and defaults for new chats. See [Panel settings](docs/panel-settings.md).
 
 Scheduled work runs through Home Assistant, so your PC and browser do not need
 to stay open. Home Assistant, the App and the ChatGPT session must remain
@@ -94,8 +96,8 @@ it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
 This release pairs App, Integration and panel **1.0.6**, with Bridge **0.7.9**
-and Codex **0.155.1**. It adds optional browser tools and retains the simpler
-Scheduled form, login, plugin catalogue and focus repairs. Use the
+and Codex **0.155.1**. It adds optional browser tools, saved panel preferences,
+grouped Skills and model/reasoning selections for Scheduled tasks. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 and [changelog](codex_bridge_app/CHANGELOG.md) to check available versions.
 

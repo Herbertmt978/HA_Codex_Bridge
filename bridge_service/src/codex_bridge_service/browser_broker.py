@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import re
@@ -342,7 +343,14 @@ class BrowserBroker:
                     }
                 )
         elif response.page is not None:
-            if tool == "inspect" and response.page.text:
+            if tool == "open":
+                # Dynamic app-server tools expose contentItems to code mode.
+                # Return the handle there so later calls can address the session.
+                text = json.dumps({
+                    "session_id": response.session_id,
+                    "page": response.page.model_dump(mode="json"),
+                }, ensure_ascii=True, separators=(",", ":"))
+            elif tool == "inspect" and response.page.text:
                 text = f"{response.page.title}\n\n{response.page.text}".strip()
             else:
                 text = f"Browser page ready: {response.page.title}."

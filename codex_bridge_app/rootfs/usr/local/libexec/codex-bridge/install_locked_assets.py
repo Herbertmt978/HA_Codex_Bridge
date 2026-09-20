@@ -13,7 +13,7 @@ from typing import Any
 
 
 TARGETS = {"amd64": ("x86_64", 62), "aarch64": ("aarch64", 183)}
-COMPONENTS = ("codex", "bwrap")
+COMPONENTS = ("codex", "bwrap", "codex-code-mode-host")
 MAX_BINARY_BYTES = 512 * 1024 * 1024
 
 

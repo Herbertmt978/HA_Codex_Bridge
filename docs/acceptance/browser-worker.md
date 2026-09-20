@@ -75,7 +75,8 @@ remote URL or browser profile. Published artifacts follow chat retention rules.
   stale callback, artifact, DNS rebinding, redirect, subresource, proxy bypass,
   malformed IPC and failure coverage.
 - Build the actual App context. The Dockerfile checks the exact Chromium APK
-  checksum; the existing verified asset lock supplies Bubblewrap and Codex.
+  checksum; the verified asset lock supplies Bubblewrap, Codex and its code-mode
+  host. The host is required for dynamic tool calls through the app server.
 - On HAOS-DEV, run root browser attestation with the App's production AppArmor
   policy. Confirm the renderer sandbox and every negative check, not just a
   successful page load.
@@ -92,5 +93,9 @@ remote URL or browser profile. Published artifacts follow chat retention rules.
   evidence. Test disabled and failed-proof startup as well as enabled startup.
 
 Local native action and isolation checks passed during development on
-20 September 2026. Final packaged App, chat-flow and signed-release acceptance
-must be recorded separately before declaring issue #43 complete.
+20 September 2026. A fresh authenticated HA chat using the packaged candidate
+opened Example Domain and created a PNG screenshot and PDF. Both artifacts
+were available through authenticated HA requests and rejected unauthenticated
+requests. The disposable chat was removed without changing the existing chat.
+Signed-image publication and Supervisor installation acceptance must still be
+recorded separately before declaring issue #43 complete.

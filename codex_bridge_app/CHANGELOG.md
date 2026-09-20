@@ -12,6 +12,11 @@ All notable App changes are recorded here.
 - Discards browser profiles at the end of a turn or cancellation. Browser tools
   cannot access Home Assistant, local devices, saved logins or workspace files.
 - Pins the Chromium package by checksum and retains the private HA artifact route.
+- Includes the signed Codex code-mode companion needed to execute dynamic tools.
+- Adds saved panel appearance and new-chat defaults, including automatic work
+  within the selected workspace and enabled tools.
+- Replaces Scheduled's model and reasoning text fields with runtime selections,
+  improves dropdown menus and groups Skills into labelled containers.
 
 - Bundles the Sigstore-verified Codex runtime `0.155.1`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.

@@ -3,7 +3,7 @@
 
 The updater intentionally never installs a release.  It accepts only a stable
 ``openai/codex`` rust-release tag, verifies every Linux musl archive and its
-Sigstore bundle, and writes the lock only after all eight assets have passed.
+Sigstore bundle, and writes the lock only after all required assets have passed.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 COMMIT_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 ARCHITECTURES = {"amd64": "x86_64", "aarch64": "aarch64"}
 ELF_MACHINES = {"amd64": 62, "aarch64": 183}
-COMPONENTS = ("codex", "bwrap")
+COMPONENTS = ("codex", "bwrap", "codex-code-mode-host")
 
 
 class ReleaseLockError(ValueError):
@@ -322,7 +322,7 @@ def validate_lock(lock: Mapping[str, Any]) -> None:
     for arch, target in ARCHITECTURES.items():
         by_component = _mapping(assets[arch], f"assets.{arch}")
         if set(by_component) != set(COMPONENTS):
-            raise ReleaseLockError(f"lock must contain codex and bwrap for {arch}")
+            raise ReleaseLockError(f"lock must contain {', '.join(COMPONENTS)} for {arch}")
         for component in COMPONENTS:
             asset = _mapping(by_component[component], f"assets.{arch}.{component}")
             archive_name = _asset_name(component, target, ".tar.gz")

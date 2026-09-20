@@ -130,6 +130,9 @@ The Codex runtime uses a custom lock with verified archives, signatures and
 protocol schemas, so the daily `Verified Codex update` workflow owns runtime
 updates instead of Dependabot. It checks stable upstream releases, verifies
 the assets, regenerates the contract and opens a narrowly scoped App update.
+The lock includes Codex, its code-mode host and Bubblewrap from the same signed
+release. All three are required in the staged App; a missing companion prevents
+dynamic tools from running even when chat sign-in succeeds.
 
 For unattended updates, the scheduled Codex updater uses a dedicated GitHub App
 installed only on this repository. Grant that App **Contents: read and write**

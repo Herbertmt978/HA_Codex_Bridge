@@ -1,4 +1,7 @@
 import { renderScheduleForm, scheduleSummary } from "./scheduled-tasks.js";
+import { selection } from "./selection.js";
+import { modelChoices, reasoningChoices } from "./model-choices.js";
+import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -260,11 +263,26 @@ function renderSkills(documentRef, state) {
     actions.append(button(documentRef, "Create skill", "submit-skill"), button(documentRef, "Cancel", "close-form")); form.append(actions); section.append(form);
   }
   const rows = normalizeDesktopList(state.data.skills || state.data);
-  section.append(renderTable(documentRef, rows, [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
-    const id = row.id || row.skill_id || row.name || "";
-    td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-    td.append(button(documentRef, "Delete", "delete-skill", { id }));
-  }));
+  const groups = new Map();
+  for (const row of rows) {
+    const name = String(row.name || "");
+    const category = name.includes(":") ? name.slice(0, name.indexOf(":")) : "General";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(row);
+  }
+  if (!rows.length) section.append(renderEmpty(documentRef, "No skills found in this workspace."));
+  for (const [category, skills] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+    const group = documentRef.createElement("section"); group.className = "skill-group";
+    const heading = text(documentRef, "h3", category.replace(/[-_]/gu, " ").replace(/^./u, (letter) => letter.toUpperCase()), "skill-group-heading");
+    const count = text(documentRef, "span", `${skills.length} ${skills.length === 1 ? "skill" : "skills"}`, "skill-group-count");
+    heading.append(count); group.append(heading);
+    group.append(renderTable(documentRef, skills.toSorted((a, b) => String(a.name).localeCompare(String(b.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
+      const id = row.id || row.skill_id || row.name || "";
+      td.append(button(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button(documentRef, "Delete", "delete-skill", { id }));
+    }));
+    section.append(group);
+  }
   return section;
 }
 
@@ -294,15 +312,44 @@ function renderPlugins(documentRef, state) {
   return section;
 }
 
-function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}) {
+function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
   const section = documentRef.createElement("div"); section.className = "desktop-feature-content settings-content";
   const tabs = documentRef.createElement("nav"); tabs.className = "settings-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Settings sections");
-  const tabItems = [["general", "General"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
+  const tabItems = [["general", "General"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) { const control = button(documentRef, label, "select-settings-tab", { tab: id }); control.className = "settings-tab"; control.id = `settings-tab-${id}`; control.dataset.settingsTab = id; control.setAttribute("role", "tab"); control.setAttribute("aria-controls", "settings-panel"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; tabs.append(control); }
   section.append(tabs);
   const panel = documentRef.createElement("section"); panel.id = "settings-panel"; panel.className = "settings-panel"; panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `settings-tab-${tab}`); section.append(panel);
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
+  const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
+  const saved = text(documentRef, "p", "", "preference-save-status"); saved.setAttribute("role", "status");
+  const pickers = {};
+  const addPreference = (card, key, label, options) => {
+    const row = documentRef.createElement("div"); row.className = "schedule-row";
+    const picker = selection(documentRef, { name: key, label, value: preferences[key], options });
+    picker.dataset.preference = key; pickers[key] = picker;
+    row.append(text(documentRef, "span", label, "schedule-row-label"), picker); card.append(row);
+    picker.querySelector("select").addEventListener("change", () => {
+      preferences[key] = picker.querySelector("select").value;
+      if (key === "model") {
+        const choices = reasoningChoices(settings, preferences.model);
+        if (!choices.some(([level]) => level === preferences.thinking)) preferences.thinking = "";
+        pickers.thinking.setOptions(choices, preferences.thinking);
+      }
+      try {
+        settings.onPreferenceChange?.(preferences);
+        saved.textContent = "Saved for this Home Assistant user in this browser.";
+      } catch { saved.textContent = "Applied for this visit. Browser storage is unavailable, so these preferences could not be saved."; }
+    });
+  };
+  if (tab === "appearance") {
+    panel.append(text(documentRef, "h3", "Appearance", "desktop-subheading"));
+    const card = documentRef.createElement("div"); card.className = "schedule-card settings-card";
+    addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
+    addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
+    addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
+    panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+  }
   if (tab === "mcp") {
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     if (state.form === "mcp") { const form = documentRef.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp"; form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "HTTPS URL", "url", formValue(state, "url"), "url"), input(documentRef, "OAuth client ID (public)", "oauth_client_id", formValue(state, "oauth_client_id")), input(documentRef, "OAuth resource", "oauth_resource", formValue(state, "oauth_resource"))); const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Add server", "submit-mcp"), button(documentRef, "Cancel", "close-form")); form.append(actions); panel.append(form); }
@@ -323,7 +370,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const actions = documentRef.createElement("div"); actions.className = "desktop-form-actions"; actions.append(button(documentRef, "Save instructions", "save-agents"), button(documentRef, "Delete instructions", "delete-agents")); panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "Credentials stay in Home Assistant. Remote values are rendered as plain text and external OAuth links are restricted to HTTPS.", "desktop-note"));
+  if (tab === "about") panel.append(text(documentRef, "h3", "About / security", "desktop-subheading"), text(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App, and account credentials remain in its private storage. Full auto allows work inside the selected workspace and enabled tools; it does not grant access to the VM, Home Assistant files or unrestricted networking.", "desktop-note"));
   if (tab === "general") {
     const nativeTools = getNativeToolsViewModel(status, config);
     const rows = documentRef.createElement("dl");
@@ -337,8 +384,15 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addRow("Web search", nativeTools.webSearch.label, nativeTools.webSearch.state);
     addRow("Image generation", nativeTools.imageGeneration.label, nativeTools.imageGeneration.state);
     panel.append(
-      text(documentRef, "h3", "General", "desktop-subheading"),
-      text(documentRef, "p", "Use the sidebar to move between chats, scheduled tasks, skills, plugins, and settings. Chat-only controls stay hidden on feature surfaces.", "desktop-note"),
+      text(documentRef, "h3", "New chat defaults", "desktop-subheading")
+    );
+    const defaults = documentRef.createElement("div"); defaults.className = "schedule-card settings-card";
+    addPreference(defaults, "mode", "Permissions", [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]]);
+    addPreference(defaults, "model", "Model", modelChoices(settings, preferences.model));
+    addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
+    panel.append(defaults,
+      text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
+      text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"), saved,
       text(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
@@ -358,7 +412,7 @@ export function syncDesktopFeatureDrafts(container, state) {
   if (rendered) rendered.drafts = featureDraftInputs(state);
 }
 
-export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {} } = {}) {
+export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.onclick = (event) => {
@@ -378,6 +432,8 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   const inputs = JSON.stringify({
     destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined }, timezone, hasActiveProject, activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
+    settingsModels: destination === "settings" ? settings.models : null,
+    settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,
   });
   const drafts = featureDraftInputs(state);
   const rendered = renderedFeatureInputs.get(container);
@@ -394,7 +450,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 

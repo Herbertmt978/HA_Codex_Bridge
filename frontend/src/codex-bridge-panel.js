@@ -1,4 +1,6 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
+import { SELECTION_STYLES } from "./selection.js";
+import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
 import { parseEvents } from "./protocol.js";
@@ -216,6 +218,7 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 const template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${SELECTION_STYLES}
     :host {
       --panel-bg: var(--primary-background-color, #f5f7fb);
       --surface-bg: var(--ha-card-background, var(--card-background-color, var(--primary-background-color, #ffffff)));
@@ -253,6 +256,28 @@ template.innerHTML = `
     :host(:fullscreen) {
       width: 100vw;
       height: 100dvh;
+    }
+
+    :host([data-panel-theme="light"]) {
+      color-scheme: light;
+      --panel-bg: #f5f7fb; --surface-bg: #ffffff; --surface-alt: #f2f4f7;
+      --surface-muted: #eef1f5; --border-color: #d4dae2; --text-color: #151b29;
+      --muted-color: #596579; --accent-color: #087bab;
+    }
+    :host([data-panel-theme="dark"]) {
+      color-scheme: dark;
+      --panel-bg: #15181d; --surface-bg: #1d2128; --surface-alt: #292f38;
+      --surface-muted: #252b34; --border-color: #454e5c; --text-color: #f0f2f6;
+      --muted-color: #b5bfcd; --accent-color: #70c7ee;
+    }
+    :host([data-text-size="large"]) .bubble-text,
+    :host([data-text-size="large"]) .composer textarea { font-size: 18px; }
+    :host([data-text-size="larger"]) .bubble-text,
+    :host([data-text-size="larger"]) .composer textarea { font-size: 20px; }
+    :host([data-motion="reduced"]) *,
+    :host([data-motion="reduced"]) *::before,
+    :host([data-motion="reduced"]) *::after {
+      animation: none !important; transition: none !important; scroll-behavior: auto !important;
     }
 
     :host(:fullscreen) .rail-pane {
@@ -2772,6 +2797,12 @@ template.innerHTML = `
     .desktop-error { color: var(--danger-color); }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-card { margin: 16px 0; }
+    .preference-save-status { color: var(--muted-color); font-size: 13px; min-height: 20px; }
+    .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
+    .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
+    .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: 13px; }
+    .skill-group .desktop-table { margin: 0; }
     .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: 12px; }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 650; }
 
@@ -4982,6 +5013,8 @@ class CodexBridgePanel extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
     this._hass = null;
+    this._preferences = { ...DEFAULT_PREFERENCES };
+    this._preferenceKey = null;
     this._panel = null;
     this._staticUiInstalled = false;
     this._config = null;
@@ -5125,6 +5158,7 @@ class CodexBridgePanel extends HTMLElement {
 
   connectedCallback() {
     this._installStaticUi();
+    this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
@@ -5165,6 +5199,7 @@ class CodexBridgePanel extends HTMLElement {
 
   set hass(value) {
     this._hass = value;
+    this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
       return;
@@ -5174,6 +5209,27 @@ class CodexBridgePanel extends HTMLElement {
 
   get hass() {
     return this._hass;
+  }
+
+  _loadPreferences() {
+    const key = `codex-bridge:preferences:${this._hass?.user?.id || "local"}`;
+    if (this._preferenceKey === key) return;
+    this._preferenceKey = key;
+    try { this._preferences = readPreferences(window.localStorage, key); }
+    catch { this._preferences = { ...DEFAULT_PREFERENCES }; }
+    this._applyPreferences();
+  }
+
+  _applyPreferences() {
+    this.dataset.panelTheme = this._preferences.theme;
+    this.dataset.textSize = this._preferences.textSize;
+    this.dataset.motion = this._preferences.motion;
+  }
+
+  _savePreferences(value) {
+    this._preferences = normalisePreferences(value);
+    this._applyPreferences();
+    savePreferences(window.localStorage, this._preferenceKey || "codex-bridge:preferences:local", this._preferences);
   }
 
   set panel(value) {
@@ -6209,7 +6265,8 @@ class CodexBridgePanel extends HTMLElement {
 
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
-    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC" };
+    const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
+    return { projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
   async _submitScheduledTask(state, target, update) {
@@ -6403,7 +6460,7 @@ class CodexBridgePanel extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     }
   }
 
@@ -9784,7 +9841,7 @@ class CodexBridgePanel extends HTMLElement {
     this._showProjectForm = false;
     this._threadForm = {
       title: "",
-      mode: "full-auto",
+      mode: this._preferences.mode,
       projectId,
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
@@ -10040,6 +10097,8 @@ class CodexBridgePanel extends HTMLElement {
         title,
         mode: this._threadForm.mode,
       };
+      if (this._preferences.model) payload.model_override = this._preferences.model;
+      if (this._preferences.thinking) payload.thinking_override = this._preferences.thinking;
       if (this._threadForm.projectId) {
         payload.project_id = this._threadForm.projectId;
       }

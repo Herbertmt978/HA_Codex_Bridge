@@ -34,7 +34,7 @@ ARCHITECTURES = {
     "amd64": "x86_64-unknown-linux-musl",
     "aarch64": "aarch64-unknown-linux-musl",
 }
-COMPONENTS = ("codex", "bwrap")
+COMPONENTS = ("codex", "bwrap", "codex-code-mode-host")
 SOURCE_DATE_EPOCH = "315532800"  # 1980-01-01, the first ZIP timestamp.
 SANDBOX_CONTRACT_VERSION = 2
 

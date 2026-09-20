@@ -45,8 +45,10 @@ their timing. The form preserves saved time zones and exact interval anchors.
 **Advanced** contains permissions, model and reasoning overrides. Observe is
 the default and keeps the workspace read-only. Edit and Full auto allow
 workspace changes; Full auto changes approval handling, not the App's file or
-network restrictions. Blank model and reasoning values inherit the target's
-defaults.
+network restrictions. Choose a model and reasoning level from the dropdowns,
+or leave **Inherit** selected to use the target's defaults. Reasoning choices
+follow the selected model. A saved choice that the runtime no longer advertises
+is marked unavailable and kept until you change it.
 
 An unattended task cannot answer approval requests or questions. A run may be
 stopped or skipped if it needs interaction, overlaps another run, exceeds

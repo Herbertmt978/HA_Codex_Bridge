@@ -409,7 +409,12 @@ def browser_dynamic_tool_spec() -> dict[str, object]:
     """Return the locked client-owned Codex namespace tool projection."""
 
     descriptions: Mapping[str, str] = {
-        "open": "Open one public HTTP(S) page in a new ephemeral browser session.",
+        "open": (
+            "Open one public HTTP(S) page in a new ephemeral browser session. "
+            "On success returns JSON text containing session_id and page. "
+            "Parse that text with JSON.parse and use session_id in subsequent "
+            "ha_browser calls; close the session when finished."
+        ),
         "navigate": "Navigate an existing ephemeral session to a public HTTP(S) page.",
         "inspect": "Read a bounded plain-text projection of the current page.",
         "click": "Click one element selected by a bounded CSS selector.",

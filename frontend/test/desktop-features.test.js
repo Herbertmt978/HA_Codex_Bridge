@@ -765,8 +765,8 @@ describe("desktop feature surfaces", () => {
     const general = panel.shadowRoot.querySelector("[data-settings-tab=general]");
     general.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     await Promise.resolve();
-    expect(panel._desktopFeatures.settings.settingsTab).toBe("mcp");
-    expect(panel.shadowRoot.querySelector("[data-settings-tab=mcp]")).toBe(panel.shadowRoot.activeElement);
+    expect(panel._desktopFeatures.settings.settingsTab).toBe("appearance");
+    expect(panel.shadowRoot.querySelector("[data-settings-tab=appearance]")).toBe(panel.shadowRoot.activeElement);
   });
 
   it("submits desktop forms with Enter from a single-line field", async () => {

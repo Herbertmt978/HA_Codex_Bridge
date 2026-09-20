@@ -1,3 +1,6 @@
+import { selection } from "./selection.js";
+import { modelChoices, reasoningChoices } from "./model-choices.js";
+
 const WEEKDAYS = [
   ["MO", "Monday"], ["TU", "Tuesday"], ["WE", "Wednesday"],
   ["TH", "Thursday"], ["FR", "Friday"], ["SA", "Saturday"], ["SU", "Sunday"],
@@ -152,17 +155,19 @@ function element(doc, tag, className, value) {
 }
 
 function field(doc, name, label, value, options = null, type = "text") {
-  const row = element(doc, "label", "schedule-row");
+  const row = element(doc, options ? "div" : "label", "schedule-row");
   row.append(element(doc, "span", "schedule-row-label", label));
-  const control = element(doc, options ? "select" : type === "textarea" ? "textarea" : "input");
+  if (options) {
+    const picker = selection(doc, { name, label, value, options });
+    picker.querySelector("select").dataset.desktopField = name;
+    row.append(picker);
+    return row;
+  }
+  const control = element(doc, type === "textarea" ? "textarea" : "input");
   control.name = name;
   control.dataset.desktopField = name;
   control.setAttribute("aria-label", label);
-  if (options) for (const [key, title, disabled = false] of options) {
-    const option = element(doc, "option", "", title);
-    option.value = key; option.disabled = disabled; control.append(option);
-  }
-  else if (type !== "textarea") control.type = type;
+  if (type !== "textarea") control.type = type;
   control.value = String(value ?? "");
   row.append(control);
   return row;
@@ -241,7 +246,23 @@ export function renderScheduleForm(doc, state, timezone, context = {}) {
   advanced.append(element(doc, "summary", "", "Advanced"));
   const advancedCard = element(doc, "div", "schedule-card");
   advancedCard.append(field(doc, "mode", "Permissions", values.mode, [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto"]]));
-  advancedCard.append(field(doc, "model", "Model (inherit when blank)", values.model), field(doc, "thinking", "Reasoning (inherit when blank)", values.thinking));
+  const modelContext = () => ({ ...context, defaultModel: form.querySelector('[name="target_kind"]').value === "continue_thread" ? context.threadModel || context.defaultModel : context.defaultModel });
+  const model = field(doc, "model", "Model", values.model, modelChoices(modelContext(), values.model));
+  const thinking = field(doc, "thinking", "Reasoning", values.thinking, reasoningChoices(modelContext(), values.model, values.thinking));
+  model.querySelector("select").addEventListener("change", () => {
+    const choices = reasoningChoices(modelContext(), model.querySelector("select").value);
+    const selected = thinking.querySelector("select").value;
+    const supported = choices.some(([key]) => key === selected) ? selected : "";
+    thinking.querySelector(".panel-selection").setOptions(choices, supported);
+    thinking.querySelector("select").dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+  });
+  form.querySelector('[name="target_kind"]').addEventListener("change", () => {
+    const selectedModel = model.querySelector("select").value;
+    const selectedThinking = thinking.querySelector("select").value;
+    model.querySelector(".panel-selection").setOptions(modelChoices(modelContext(), selectedModel), selectedModel);
+    thinking.querySelector(".panel-selection").setOptions(reasoningChoices(modelContext(), selectedModel, selectedThinking), selectedThinking);
+  });
+  advancedCard.append(model, thinking);
   advanced.append(advancedCard, element(doc, "p", "desktop-note", "Unattended tasks cannot answer approval requests. Observe is the default.")); form.append(advanced);
   const error = element(doc, "p", "schedule-error", state.formError || ""); error.setAttribute("role", "alert"); form.append(error);
   const actions = element(doc, "div", "schedule-actions");

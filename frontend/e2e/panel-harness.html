@@ -738,6 +738,10 @@
                 return clone({ ...statusPayload, auth: harnessState.auth });
               case "codex_bridge/list_projects":
                 return clone(projects);
+              case "codex_bridge/get_agents":
+                return { content: "", exists: false };
+              case "codex_bridge/list_mcp":
+                return { items: [] };
               case "codex_bridge/list_automations":
                 return clone(harnessState.automations || []);
               case "codex_bridge/create_automation": {
