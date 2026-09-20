@@ -52,10 +52,22 @@ Home Assistant test plugin imports Linux-only modules and cannot run unchanged
 on Windows. A local container test does not prove that the App sandbox works
 on HAOS; verify the built image and startup attestation on the target as well.
 
-This release pairs App, Integration and panel `1.1.0`, with Bridge `0.8.0` and
+This release pairs App `1.1.1`, Integration and panel `1.1.0`, with Bridge `0.8.0` and
 Codex `0.155.1`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.
+
+For dependency updates, regenerate the affected lock from its source manifest:
+
+```text
+uv pip compile codex_bridge_app/requirements-build.in --generate-hashes --no-annotate --python-version 3.14 --output-file codex_bridge_app/requirements-build.txt
+uv pip compile bridge_service/pyproject.toml --no-annotate --generate-hashes --python-version 3.14 --output-file codex_bridge_app/requirements-runtime.txt
+```
+
+Review the resulting diff. The build lock must retain setuptools, even if a
+dependency bot removes it, and the runtime lock must meet every Bridge
+dependency requirement. A deployed dependency change needs a new App patch
+version through `python scripts/sync_app_release.py --bump-patch`.
 
 ## Behaviour to preserve
 
