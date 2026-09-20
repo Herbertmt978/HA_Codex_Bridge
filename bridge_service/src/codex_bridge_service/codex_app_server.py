@@ -341,11 +341,15 @@ class CodexAppServerClient:
         stderr_diagnostic_sink: Callable[[str], None] | None = None,
         enable_mcp: bool = False,
         enable_experimental_api: bool = False,
+        working_directory: Path | None = None,
         protocol_contract: AppServerProtocolContract
         | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
         self.codex_command = codex_command
         self.codex_home = resolve_codex_home(codex_home, codex_command)
+        # Standalone command/exec resolves permission-profile workspace roots
+        # at process startup. A later request cwd does not narrow those roots.
+        self.working_directory = working_directory
         self.client_name = _validate_client_info(client_name, "client name")
         self.client_title = _validate_client_info(client_title, "client title")
         self.client_version = _validate_client_info(client_version, "client version")
@@ -972,6 +976,8 @@ class CodexAppServerClient:
             "env": codex_subprocess_environment(self.codex_home),
             "bufsize": 0,
         }
+        if self.working_directory is not None:
+            kwargs["cwd"] = str(self.working_directory)
         if os.name == "posix":
             kwargs["start_new_session"] = True
         elif os.name == "nt":

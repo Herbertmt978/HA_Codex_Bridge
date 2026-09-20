@@ -5,11 +5,12 @@ see [Support](../SUPPORT.md). This page explains the App's settings and limits.
 
 ## Configuration
 
-The App has one configuration option:
+The App has two optional capabilities:
 
 | Option | Default | What it does |
 | --- | --- | --- |
 | Enable MCP (`enable_mcp`) | Off | Allows configuration of trusted outbound HTTPS MCP servers. Save and restart the App after changing it. |
+| Enable browser (`enable_browser`) | Off | Starts the isolated interactive browser worker. Save and restart the App; new chats then receive its tools. |
 
 ChatGPT login is completed in the Codex Bridge panel. Do not enter account
 credentials, device codes or API keys in App configuration.
@@ -30,6 +31,11 @@ OpenAI for login and responses.
 The App checks its sandbox at startup. If readiness reports
 `sandbox_unavailable`, collect redacted logs and use [Support](../SUPPORT.md).
 Do not disable AppArmor, add container privileges or broaden mounts.
+
+The panel's workspace terminal uses the same file and network boundary. It is
+administrator-only and temporarily excludes Codex runs and other workspace
+mutations. It never becomes a host shell, including in a host-access chat. See
+[Chat controls and terminal](../docs/chat-controls.md) for session limits.
 
 ## Authentication and models
 

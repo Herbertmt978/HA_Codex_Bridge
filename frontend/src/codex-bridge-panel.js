@@ -1,4 +1,7 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
+import { contextUsage } from "./context-usage.js";
+import { authenticatedChatUrl, chatResources } from "./chat-resources.js";
+import { WorkspaceTerminalView, terminalCss } from "./workspace-terminal.js";
 import { SELECTION_STYLES } from "./selection.js";
 import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js";
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
@@ -837,6 +840,7 @@ template.innerHTML = `
     }
 
     .tool-button svg,
+    .thread-share svg,
     .icon-button svg,
     .copy-button svg,
     .download-button svg,
@@ -1133,6 +1137,48 @@ template.innerHTML = `
     #refresh-thread-button:focus-visible {
       border-color: var(--border-color);
       background: var(--surface-muted);
+    }
+
+    .thread-controls { position: relative; }
+    .thread-controls > .icon-button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; }
+    .thread-controls > button:hover, .thread-controls > button[aria-pressed="true"] { background: var(--surface-muted); }
+    .thread-share { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0; background: var(--surface-muted); font-size: var(--font-control-size); }
+    .thread-menu { position: absolute; top: 38px; right: 0; z-index: 8; display: grid; min-width: 200px; padding: 6px; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px #0002; }
+    .thread-menu[hidden], .bottom-panel[hidden] { display: none; }
+    .thread-menu button { text-align: left; border: 0; background: transparent; padding: 9px; font-weight: 400; }
+    .thread-menu button:hover { background: var(--surface-muted); }
+    .resource-row { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 6px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-color); font-size: var(--font-body-size); font-weight: 400; text-align: left; text-decoration: none; }
+    .resource-row:hover { background: var(--surface-muted); }
+    .resource-row svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .resource-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resource-details summary { cursor: pointer; list-style: none; }
+    .resource-details summary::-webkit-details-marker { display: none; }
+    .resource-details .resource-chevron { margin-left: auto; color: var(--muted-color); }
+    .resource-details[open] .resource-chevron { transform: rotate(180deg); }
+    .resource-details p { margin: 2px 0 6px 28px; font-size: var(--font-caption-size); color: var(--muted-color); overflow-wrap: anywhere; }
+    .bottom-panel { flex: 0 0 min(35vh, 320px); min-height: 180px; overflow: auto; border-top: 1px solid var(--border-color); background: var(--surface-bg); }
+    .bottom-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; position: sticky; top: 0; background: var(--surface-bg); z-index: 1; }
+    .bottom-panel-header .row-actions > button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
+    .bottom-panel-header button[aria-pressed="true"] { background: var(--surface-muted); color: var(--text-color); }
+    .terminal-tools > button { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; font-size: var(--font-control-size); font-weight: 500; border-radius: 8px; }
+    .terminal-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; }
+    .terminal-note { margin: 0; padding: 4px 14px; font-size: var(--font-caption-size); color: var(--muted-color); }
+    #terminal-host { height: 220px; padding: 8px; background: #171717; }
+    #terminal-host:empty { display: none; }
+    #bottom-preview[hidden], #bottom-terminal[hidden] { display: none; }
+    @media (min-width: 1481px) {
+      .shell.context-hidden { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
+      .shell.context-hidden .side-pane { display: none; }
+    }
+    @media (min-width: 881px) and (max-width: 1120px) {
+      .shell.context-hidden { grid-template-rows: minmax(0, 1fr); }
+      .shell.context-hidden .side-pane { display: none; }
+    }
+    @media (max-width: 1480px) { #toggle-context-button { display: none; } }
+    @media (max-width: 880px) {
+      .thread-share span, #toggle-activity-button { display: none; }
+      .thread-share { padding: 6px; }
+      .thread-controls { gap: 2px; }
     }
 
     .chat-list {
@@ -3781,9 +3827,19 @@ template.innerHTML = `
       grid-row: 1;
     }
 
+    .composer-actions { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 6px; }
+    .composer-actions .icon-button { width: 32px; min-width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 50%; background: transparent; color: var(--muted-color); }
+    .composer-actions .icon-button:hover:not(:disabled) { background: var(--surface-muted); color: var(--text-color); }
+    .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
+    .context-track { opacity: .2; }
+    .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
+    .context-usage-button[data-level="high"] { color: var(--brand-amber); }
+    .context-usage-button[data-level="full"] { color: var(--danger-color); }
+    .context-usage-button[data-level="unknown"] .context-track { stroke-dasharray: 2 3; }
+    @media (prefers-reduced-motion: reduce) { .context-fill { transition: none; } }
+    :host([data-motion="reduced"]) .context-fill { transition: none; }
+
     .composer-shell .composer .send-button {
-      grid-column: 3;
-      grid-row: 2;
       width: 32px;
       min-width: 32px;
       height: 32px;
@@ -4448,6 +4504,7 @@ template.innerHTML = `
 
     @media (max-width: 880px) {
       .composer-shell .composer .send-button,
+      .composer-shell .composer-actions .icon-button,
       .composer-shell .attachment-toolbar .icon-button { min-width: 44px; width: 44px; height: 44px; }
       .shell.desktop-route { display: block; overflow: hidden; }
       .shell.desktop-route .main-pane { min-height: 100dvh; height: 100dvh; }
@@ -4870,7 +4927,7 @@ template.innerHTML = `
     }
   </style>
   <div class="shell">
-    <aside class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
+    <div class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
       <div class="rail-header">
         <div class="rail-brand">
           <span class="rail-brand-icon" id="rail-brand-icon" aria-hidden="true"></span>
@@ -4908,7 +4965,7 @@ template.innerHTML = `
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
-    </aside>
+    </div>
 
     <main class="pane main-pane">
       <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite"></section>
@@ -4923,10 +4980,15 @@ template.innerHTML = `
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-nav" id="mobile-nav-toggle" aria-label="Chats" aria-controls="workspace-drawer" aria-expanded="false"></button>
           <button class="icon-button mobile-drawer-toggle" type="button" data-action="toggle-mobile-context" id="mobile-context-toggle" aria-label="Context" aria-controls="context-drawer" aria-expanded="false"></button>
         </div>
-        <div class="row-actions">
+        <div class="row-actions thread-controls">
           <div class="status-text" id="thread-status-text"></div>
-          <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
-          <button class="icon-button" type="button" data-action="refresh-thread" title="Refresh" aria-label="Refresh" id="refresh-thread-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="thread-menu" id="chat-menu-button"></button>
+          <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-activity" title="Show activity" aria-label="Show activity" aria-pressed="false" id="toggle-activity-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-bottom-panel" title="Toggle bottom panel" aria-label="Toggle bottom panel" aria-controls="bottom-panel" aria-expanded="false" id="toggle-bottom-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-context" title="Toggle side panel" aria-label="Toggle side panel" aria-controls="context-drawer" aria-expanded="true" id="toggle-context-button"></button>
+          <div class="thread-menu" id="thread-menu" hidden></div>
+          <span id="share-status" class="sr-only" role="status"></span>
         </div>
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
@@ -4957,7 +5019,13 @@ template.innerHTML = `
         </div>
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
-          <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
+          <div class="composer-actions">
+            <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
+            </button>
+            <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
+            <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
+          </div>
         </div>
         <details class="composer-diagnostics" id="composer-diagnostics" open>
           <summary>Chat settings and limits</summary>
@@ -4968,6 +5036,16 @@ template.innerHTML = `
         <input id="file-input" type="file" multiple class="hidden" />
         <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden" />
       </div>
+      <section class="bottom-panel" id="bottom-panel" aria-label="Workspace panel" hidden>
+        <div class="bottom-panel-header"><div class="row-actions"><button type="button" data-action="bottom-preview" aria-pressed="true" id="bottom-preview-button">File preview</button><button type="button" data-action="bottom-terminal" aria-pressed="false" id="bottom-terminal-button">Terminal</button></div><button class="icon-button small" type="button" data-action="toggle-bottom-panel" aria-label="Hide bottom panel">×</button></div>
+        <div id="bottom-preview"></div>
+        <div id="bottom-terminal" hidden>
+          <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
+          <div class="terminal-tools"><button type="button" data-action="open-terminal" id="open-terminal-button">Open terminal</button><button type="button" data-action="close-terminal" id="close-terminal-button" disabled>Close terminal</button><span class="label-text" id="terminal-status" role="status">Terminal closed</span></div>
+          <div id="terminal-host"></div>
+          <p class="terminal-note">Ctrl+C interrupts. Ctrl+Shift+M returns focus to Close terminal. Closing this page or changing chats ends the session; hiding the panel keeps it running. Sessions end after 30 minutes.</p>
+        </div>
+      </section>
     </main>
 
     <button class="mobile-drawer-scrim" type="button" data-action="close-mobile-drawer" id="mobile-drawer-scrim" aria-label="Close panel drawer" hidden></button>
@@ -4997,10 +5075,10 @@ template.innerHTML = `
             </div>
             <div class="artifact-list" id="artifact-list"></div>
           </div>
-          <div class="side-section">
+          <div id="preview-home"><div class="side-section" id="artifact-preview-section">
             <span class="section-label">Preview</span>
             <div class="artifact-preview" id="artifact-preview"></div>
-          </div>
+          </div></div>
         </section>
         <section class="side-panel" id="side-panel-usage" role="tabpanel" aria-labelledby="side-tab-usage" data-side-tab-panel="usage" hidden>
           <div class="side-section">
@@ -5079,6 +5157,10 @@ const icons = {
   package: iconSvg('<path d="m3 8.5 9-4.5 9 4.5"></path><path d="M21 8.5v7L12 20l-9-4.5v-7"></path><path d="M12 4v16"></path>'),
   menu: iconSvg('<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>'),
   panelRight: iconSvg('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path>'),
+  panelBottom: iconSvg('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 15h18"></path>'),
+  activity: iconSvg('<circle cx="5" cy="6" r="2"></circle><circle cx="5" cy="18" r="2"></circle><path d="M11 6h9M11 12h9M11 18h9M3 12h4"></path>'),
+  pullRequest: iconSvg('<circle cx="6" cy="5" r="2"></circle><circle cx="6" cy="19" r="2"></circle><circle cx="18" cy="19" r="2"></circle><path d="M6 7v10M18 17v-7a5 5 0 0 0-5-5h-2m3-3-3 3 3 3"></path>'),
+  file: iconSvg('<path d="M14 3H5v18h14V8Z"></path><path d="M14 3v5h5M8 13h8M8 17h5"></path>'),
   calendar: iconSvg('<rect x="4" y="5" width="16" height="16" rx="3"></rect><path d="M8 3v4m8-4v4M4 11h16"></path>'),
   spark: iconSvg('<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"></path>'),
   puzzle: iconSvg('<path d="M9 3H4v6a3 3 0 1 1 0 6v5h5a3 3 0 1 1 6 0h5v-5a3 3 0 1 0 0-6V4h-5a3 3 0 1 0-6 0"></path>'),
@@ -5090,6 +5172,19 @@ class CodexBridgePanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
+    const terminalStyle = document.createElement("style");
+    terminalStyle.textContent = terminalCss;
+    this.shadowRoot.append(terminalStyle);
+    this._terminal = new WorkspaceTerminalView(
+      this.shadowRoot.getElementById("terminal-host"),
+      (operation, payload) => this._callWS("terminal", { operation, ...payload }),
+      (message, active) => {
+        this._terminalActive = active;
+        this.shadowRoot.getElementById("terminal-status").textContent = message;
+        this.shadowRoot.getElementById("close-terminal-button").disabled = !active;
+        this._renderTerminalAvailability();
+      },
+    );
     this._hass = null;
     this._preferences = { ...DEFAULT_PREFERENCES };
     this._preferenceKey = null;
@@ -5101,6 +5196,11 @@ class CodexBridgePanel extends HTMLElement {
     this._threads = [];
     this._selectedProjectId = null;
     this._selectedThreadId = null;
+    this._sharedThreadChecked = false;
+    this._chatMenuOpen = false;
+    this._contextVisible = true;
+    this._bottomPanelOpen = false;
+    this._activityView = false;
     this._threadSelectionEpoch = 0;
     this._threadSnapshotEpoch = 0;
     this._threadRefreshGraceUntil = 0;
@@ -5203,6 +5303,7 @@ class CodexBridgePanel extends HTMLElement {
     this._announcedInteractionIds = new Set();
     this._interactionExpiryTimer = null;
     this._promptMutations = new Map();
+    this._cancellingThreads = new Set();
     this._promptMutation = null;
     this._suspendUiRefresh = false;
     this._queuedRender = false;
@@ -5258,6 +5359,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     this._stopPolling();
     this._stopEventSubscription();
@@ -5365,7 +5467,11 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("app-menu-toggle"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("refresh-thread-button"), icons.refresh);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("chat-menu-button"), icons.more);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("share-chat-button"), icons.upload, "Share");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-activity-button"), icons.activity);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-bottom-button"), icons.panelBottom);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-context-button"), icons.panelRight);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.upload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
@@ -5543,6 +5649,10 @@ class CodexBridgePanel extends HTMLElement {
   _handleClick(event) {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
+    if (this._chatMenuOpen && !eventTarget?.closest("#thread-menu, #chat-menu-button")) {
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+    }
     if (
       this._appMenuOpen
       && !eventTarget?.closest("#app-menu, #app-menu-toggle")
@@ -5561,6 +5671,10 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const action = actionTarget.dataset.action;
+    if (actionTarget.closest("#thread-menu")) {
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+    }
     if (
       actionTarget.closest(".rail-pane")
       && !["toggle-project-actions", "toggle-thread-actions"].includes(action)
@@ -5568,6 +5682,27 @@ class CodexBridgePanel extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "toggle-chat-menu":
+        this._chatMenuOpen = !this._chatMenuOpen;
+        this._renderChatControls();
+        if (this._chatMenuOpen) this.shadowRoot.querySelector("#thread-menu button")?.focus();
+        break;
+      case "share-chat": void this._shareChat(); break;
+      case "toggle-context":
+        this._contextVisible = !this._contextVisible;
+        this._renderChatControls();
+        break;
+      case "toggle-activity":
+        this._activityView = !this._activityView;
+        this._showSideTab("activity", actionTarget);
+        this._renderActivityCenter();
+        this._renderChatControls();
+        break;
+      case "toggle-bottom-panel": this._toggleBottomPanel(); break;
+      case "bottom-preview": this._selectBottomTab("preview"); break;
+      case "bottom-terminal": this._selectBottomTab("terminal"); break;
+      case "open-terminal": void this._terminal.open(this._selectedThreadId); break;
+      case "close-terminal": void this._terminal.close(); break;
       case "toggle-app-menu":
         this._appMenuOpen = !this._appMenuOpen;
         this._renderAppMenu();
@@ -5591,14 +5726,10 @@ class CodexBridgePanel extends HTMLElement {
         this._sideTab = ["activity", "files", "usage", "system"].includes(actionTarget.dataset.sideTab)
           ? actionTarget.dataset.sideTab
           : "activity";
-        this._renderSideTabs();
+        this._showSideTab(this._sideTab, actionTarget);
         break;
       case "open-usage":
-        this._sideTab = "usage";
-        this._renderSideTabs();
-        if (this._contextDrawerMedia?.matches) {
-          this._toggleMobileDrawer("context", actionTarget);
-        }
+        this._showSideTab("usage", actionTarget);
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -5610,7 +5741,14 @@ class CodexBridgePanel extends HTMLElement {
         this._openProjectFormForCreate();
         break;
       case "refresh-thread":
+        this._chatMenuOpen = false;
+        this._renderChatControls();
         this._refreshActiveThread();
+        break;
+      case "edit-current-chat":
+        this._chatMenuOpen = false;
+        this._renderChatControls();
+        this._openThreadFormForEdit(this._selectedThreadId);
         break;
       case "retry-error":
         this._retryError();
@@ -6087,6 +6225,13 @@ class CodexBridgePanel extends HTMLElement {
       this._closeAppMenu({ restoreFocus: true });
       return;
     }
+    if (event.key === "Escape" && this._chatMenuOpen) {
+      event.preventDefault();
+      this._chatMenuOpen = false;
+      this._renderChatControls();
+      this.shadowRoot.getElementById("chat-menu-button")?.focus();
+      return;
+    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -6269,6 +6414,7 @@ class CodexBridgePanel extends HTMLElement {
   _selectDesktopDestination(destination) {
     const allowed = DESTINATIONS.some((item) => item.id === destination);
     this._activeDestination = allowed ? destination : "chats";
+    if (this._activeDestination !== "chats") void this._terminal.close();
     this._closeMobileDrawer({ restoreFocus: false });
     if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
     this._render();
@@ -6697,6 +6843,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderContext();
     this._renderDiagnostics();
     this._renderSideTabs();
+    this._renderChatControls();
     this._renderAppMenu();
     this._renderDesktopNavigation();
     this._renderDesktopSurface();
@@ -6949,10 +7096,7 @@ class CodexBridgePanel extends HTMLElement {
     const activity = this._runActivityForThread(activeThread);
     this.shadowRoot.getElementById("thread-status-text").textContent =
       this._threadStatusLabel(activeThread, activity);
-    this.shadowRoot.getElementById("stop-run-button").classList.toggle(
-      "hidden",
-      !activeThread || !activity.busy
-    );
+
   }
 
   _renderComposerState(activeThread) {
@@ -6964,6 +7108,7 @@ class CodexBridgePanel extends HTMLElement {
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const retryable = mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
+    const cancelling = this._cancellingThreads.has(this._selectedThreadId);
     const locked = Boolean(mutation);
     const draft = retryable ? mutation.prompt : this._draftForThread(this._selectedThreadId);
     if (promptInput.value !== draft) {
@@ -6973,14 +7118,20 @@ class CodexBridgePanel extends HTMLElement {
       ? "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
-    sendButton.disabled = !activeThread || (locked && !retryable) || (!retryable && !promptInput.value.trim());
-    const actionLabel = retryable ? "Retry" : isRunning ? "Steer" : "Send";
-    const actionTitle = retryable
+    const hasDraft = Boolean(promptInput.value.trim());
+    const stop = isRunning && !hasDraft && !mutation;
+    sendButton.disabled = !activeThread || cancelling || (locked && !retryable) || (!stop && !retryable && !hasDraft);
+    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? "Steer" : "Send";
+    const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable
       ? "Retry this message safely"
-      : isRunning
-        ? "Queue steering for this running Codex turn"
-        : "Send message to Codex";
-    this._setTrustedButtonContent(sendButton, icons.send, actionLabel);
+      : stop ? "Stop the running Codex turn"
+        : isRunning ? "Steer the running Codex turn" : "Send message to Codex";
+    sendButton.dataset.action = stop || cancelling ? "stop-run" : "send-prompt";
+    this._setTrustedButtonContent(sendButton, stop || cancelling ? icons.stop : icons.send, actionLabel);
+    const stopButton = this.shadowRoot.getElementById("stop-run-button");
+    stopButton.classList.toggle("hidden", !isRunning || stop);
+    stopButton.disabled = cancelling;
+    this._renderContextUsage();
     sendButton.setAttribute("aria-label", actionLabel);
     sendButton.title = actionTitle;
     sendButton.dataset.tooltip = actionTitle;
@@ -9699,8 +9850,23 @@ class CodexBridgePanel extends HTMLElement {
         source_count: sourceCount,
       },
     });
+    const resources = chatResources(this._events);
+    const key = JSON.stringify([this._selectedThreadId, this._activityView, resources, this._artifacts, this._activeThread?.attachments, model, activity.stages]);
+    if (key === this._resourceRenderKey) return;
+    this._resourceRenderKey = key;
+    const openResources = new Set([...container.querySelectorAll("details[open]")].map((item) => item.dataset.resource));
+    const focusedResource = container.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.dataset.resource : null;
     container.replaceChildren();
-    const visibleSections = new Set(["outputs", "subagents", "background", "browser", "sources"]);
+    if (!this._activityView) this._renderResourceSections(container, resources, openResources);
+    if (this._activityView) {
+      const plan = document.createElement("section");
+      plan.className = "activity-center-section";
+      plan.append(this._textElement("h3", "", "Current activity"));
+      plan.append(this._textElement("p", "activity-center-summary", activity.currentActivity || activity.action || "No active run"));
+      for (const stage of activity.stages || []) plan.append(this._textElement("p", "activity-center-summary", `${stage.status === "completed" ? "✓ " : ""}${stage.label}`));
+      container.append(plan);
+    }
+    const visibleSections = new Set(this._activityView ? ["subagents", "background", "browser"] : ["subagents"]);
     for (const section of model.sections.filter((item) => visibleSections.has(item.id))) {
       const card = document.createElement("section");
       card.className = "activity-center-section";
@@ -9776,6 +9942,166 @@ class CodexBridgePanel extends HTMLElement {
       }
       container.append(card);
     }
+    if (focusedResource) [...container.querySelectorAll("[data-resource]")].find((item) => item.dataset.resource === focusedResource)?.focus();
+  }
+
+  _renderResourceSections(container, resources, openResources) {
+    const section = (id, title, action, label) => {
+      const card = document.createElement("section");
+      card.className = "activity-center-section";
+      card.dataset.section = id;
+      const heading = document.createElement("div");
+      heading.className = "activity-center-heading";
+      heading.append(this._textElement("h3", "", title));
+      if (action) {
+        const add = this._actionButton("icon-button small section-action", action, label);
+        if (action === "select-side-tab") add.dataset.sideTab = "files";
+        this._appendTrustedIcon(add, icons.plus);
+        heading.append(add);
+      }
+      card.append(heading);
+      container.append(card);
+      return card;
+    };
+    const rowContent = (row, icon, label) => {
+      this._appendTrustedIcon(row, icon);
+      row.append(this._textElement("span", "resource-name", label));
+      row.title = label;
+    };
+    const link = (item, icon) => {
+      const row = document.createElement("a");
+      row.className = "resource-row";
+      row.href = item.href;
+      row.target = "_blank";
+      row.rel = "noopener noreferrer";
+      row.dataset.resource = item.href;
+      rowContent(row, icon, item.title);
+      return row;
+    };
+    const prs = section("pull-requests", "Pull requests");
+    for (const item of resources.pullRequests) {
+      const detail = document.createElement("details");
+      detail.className = "resource-details";
+      detail.dataset.resource = item.href;
+      detail.open = openResources.has(item.href);
+      const summary = document.createElement("summary");
+      summary.className = "resource-row";
+      summary.dataset.resource = item.href;
+      rowContent(summary, icons.pullRequest, item.title);
+      const chevron = document.createElement("span");
+      chevron.className = "resource-chevron";
+      this._appendTrustedIcon(chevron, icons.chevronDown);
+      summary.append(chevron);
+      const description = this._textElement("p", "", "Linked in this chat. Open GitHub for the current review and merge status.");
+      detail.append(summary, description, link({ ...item, title: "Open pull request" }, icons.external));
+      prs.append(detail);
+    }
+    if (!resources.pullRequests.length) prs.append(this._textElement("p", "activity-center-summary", "Pull requests linked in this chat appear here."));
+    const outputs = section("outputs", "Outputs", "select-side-tab", "View all workspace files");
+    for (const artifact of this._artifacts.slice(0, 100)) {
+      const row = this._actionButton("resource-row", "open-artifact-preview", `Open ${artifact.filename || "file"}`);
+      row.dataset.artifactId = artifact.artifact_id;
+      row.dataset.resource = artifact.artifact_id;
+      rowContent(row, icons.file, artifact.relative_path || artifact.filename || "File");
+      outputs.append(row);
+    }
+    if (!this._artifacts.length) outputs.append(this._textElement("p", "activity-center-summary", "Files created in this workspace appear here."));
+    const sources = section("sources", "Sources", "upload-file", "Add source files");
+    for (const attachment of (this._activeThread?.attachments || []).slice(0, 100)) {
+      const detail = document.createElement("details");
+      detail.className = "resource-details";
+      detail.dataset.resource = attachment.attachment_id;
+      detail.open = openResources.has(attachment.attachment_id);
+      const summary = document.createElement("summary");
+      summary.className = "resource-row";
+      summary.dataset.resource = attachment.attachment_id;
+      rowContent(summary, icons.file, attachment.relative_path || attachment.filename || "Uploaded file");
+      detail.append(summary, this._textElement("p", "", `Uploaded to this chat${attachment.size_bytes ? ` · ${this._formatBytes(attachment.size_bytes)}` : ""}`));
+      sources.append(detail);
+    }
+    for (const item of resources.sources) sources.append(link(item, icons.external));
+    if (!resources.sources.length && !this._activeThread?.attachments?.length) sources.append(this._textElement("p", "activity-center-summary", "Uploaded files and links from this chat appear here."));
+  }
+
+  _showSideTab(tab, trigger) {
+    this._sideTab = tab;
+    this._contextVisible = true;
+    this._renderSideTabs();
+    this._renderChatControls();
+    if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") this._toggleMobileDrawer("context", trigger);
+  }
+
+  _toggleBottomPanel() {
+    this._bottomPanelOpen = !this._bottomPanelOpen;
+    this.shadowRoot.getElementById("bottom-panel").hidden = !this._bottomPanelOpen;
+    this.shadowRoot.getElementById(this._bottomPanelOpen ? "bottom-preview" : "preview-home").append(this.shadowRoot.getElementById("artifact-preview-section"));
+    this._renderChatControls();
+    if (this._bottomPanelOpen) this._terminal.resize();
+  }
+
+  _selectBottomTab(tab) {
+    for (const name of ["preview", "terminal"]) {
+      this.shadowRoot.getElementById(`bottom-${name}`).hidden = name !== tab;
+      this.shadowRoot.getElementById(`bottom-${name}-button`).setAttribute("aria-pressed", String(name === tab));
+    }
+    if (tab === "terminal") this._terminal.resize();
+  }
+
+  _renderTerminalAvailability() {
+    const button = this.shadowRoot.getElementById("open-terminal-button");
+    const supported = this._config?.capabilities?.includes("workspace_terminal_v1");
+    button.disabled = !supported || !this._activeThread || this._activeThread.mode === "observe" || Boolean(this._activeThread.archived_at) || this._runActivityForThread().busy || this._terminalActive;
+    button.title = !supported ? "Update the App to use the workspace terminal" : this._activeThread?.mode === "observe" ? "Choose Edit workspace or Full auto to use the terminal" : "Open an isolated workspace terminal";
+  }
+
+  _renderChatControls() {
+    this._renderTerminalAvailability();
+    const root = this.shadowRoot;
+    root.querySelector(".shell").classList.toggle("context-hidden", !this._contextVisible);
+    root.getElementById("toggle-context-button").setAttribute("aria-expanded", String(this._contextVisible));
+    root.getElementById("toggle-bottom-button").setAttribute("aria-expanded", String(this._bottomPanelOpen));
+    root.getElementById("toggle-activity-button").setAttribute("aria-pressed", String(this._activityView && this._sideTab === "activity"));
+    root.getElementById("share-chat-button").disabled = !this._selectedThreadId;
+    root.getElementById("chat-menu-button").disabled = !this._selectedThreadId;
+    root.getElementById("chat-menu-button").setAttribute("aria-expanded", String(this._chatMenuOpen));
+    const menu = root.getElementById("thread-menu");
+    menu.hidden = !this._chatMenuOpen;
+    if (!this._chatMenuOpen) return;
+    const menuKey = `${this._selectedThreadId}:${this._activeThread?.archived_at || ""}`;
+    if (this._chatMenuKey === menuKey) return;
+    this._chatMenuKey = menuKey;
+    menu.replaceChildren();
+    for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
+      const button = this._actionButton("", action, label);
+      button.textContent = label;
+      button.dataset.threadId = this._selectedThreadId;
+      menu.append(button);
+    }
+  }
+
+  async _shareChat() {
+    const url = authenticatedChatUrl(window.location, this._selectedThreadId);
+    if (!url) return;
+    try {
+      await this._writeClipboardText(url);
+      this.shadowRoot.getElementById("share-status").textContent = "Chat link copied. Home Assistant sign-in is required.";
+      this._setTooltipTarget(this.shadowRoot.getElementById("share-chat-button"), "Link copied · Home Assistant sign-in required");
+    } catch {
+      this._setError(new Error("Could not copy the chat link. Check your browser's clipboard permission."));
+      this._render();
+    }
+  }
+
+  _renderContextUsage() {
+    const button = this.shadowRoot.getElementById("context-usage-button");
+    if (!button) return;
+    button.hidden = !this._activeThread;
+    const usage = contextUsage(this._activeThread?.context_usage);
+    button.setAttribute("aria-label", `${usage.label}. Open usage details`);
+    button.title = usage.label;
+    this._setTooltipTarget(button, usage.label);
+    button.dataset.level = usage.percent === null ? "unknown" : usage.percent >= 95 ? "full" : usage.percent >= 80 ? "high" : "normal";
+    button.querySelector(".context-fill").setAttribute("stroke-dasharray", `${usage.percent ?? 0} 100`);
   }
 
   _renderUsagePanel() {
@@ -9799,7 +10125,9 @@ class CodexBridgePanel extends HTMLElement {
       ["Weekly window", limits?.secondary ? this._formatPercent(limits.secondary.remaining_percent) : "Unavailable"],
       ["Snapshot", limits?.updated_at ? this._timeAgo(limits.updated_at) : "Unavailable"],
     ], "context-row");
-    container.replaceChildren(grid, summary, details);
+    const context = this._textElement("p", "usage-note context-usage-summary", contextUsage(this._activeThread?.context_usage).label);
+    const contextNote = this._textElement("p", "usage-note", "Last reported context for this chat. Codex may compact earlier conversation as the context fills; this is separate from your account limits.");
+    container.replaceChildren(context, contextNote, grid, summary, details);
   }
 
   _renderSideTabs() {
@@ -9874,6 +10202,17 @@ class CodexBridgePanel extends HTMLElement {
     )
       ? [preserveThread, ...listedThreads]
       : listedThreads;
+    if (!this._sharedThreadChecked) {
+      this._sharedThreadChecked = true;
+      const sharedId = new URL(window.location.href).searchParams.get("thread");
+      const shared = this._threads.find((thread) => thread.thread_id === sharedId);
+      if (shared) {
+        this._setSelectedThreadId(shared.thread_id);
+        this._selectedProjectId = shared.project_id;
+      } else if (sharedId) {
+        throw new Error("This shared chat is no longer available on this Home Assistant.");
+      }
+    }
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
       this._setSelectedThreadId(null);
     }
@@ -10226,6 +10565,10 @@ class CodexBridgePanel extends HTMLElement {
   _setSelectedThreadId(threadId, { force = false } = {}) {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
+      if (nextThreadId !== this._selectedThreadId) {
+        void this._terminal.close();
+        this._chatMenuOpen = false;
+      }
       this._stopPolling();
       this._clearArtifactRefreshRetry();
       this._runActivityDetailsOpen = false;
@@ -10254,6 +10597,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _retireThreadInteractionState(nextThreadId) {
+    if (this._terminal.session?.thread_id !== nextThreadId) void this._terminal.close();
     this._clearInteractionExpiryTimer();
     this._pendingInteractions = [];
     this._interactionMutations.clear();
@@ -10542,15 +10886,21 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _cancelRun() {
-    if (!this._selectedThreadId || this._activeThread?.status !== "running") {
-      return;
-    }
+    const threadId = this._selectedThreadId;
+    if (!threadId || !this._runActivityForThread().busy || this._cancellingThreads.has(threadId)) return;
+    this._cancellingThreads.add(threadId);
+    this._renderComposerState(this._activeThread);
     try {
-      await this._callWS("cancel_run", { thread_id: this._selectedThreadId });
-      this._clearError();
-      await this._refreshActiveThread();
+      await this._callWS("cancel_run", { thread_id: threadId });
+      if (threadId === this._selectedThreadId) {
+        this._clearError();
+        await this._refreshActiveThread();
+      }
     } catch (error) {
-      this._setError(error);
+      if (threadId === this._selectedThreadId) this._setError(error);
+    } finally {
+      this._cancellingThreads.delete(threadId);
+      this._renderComposerState(this._activeThread);
     }
   }
 
@@ -11141,11 +11491,7 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
-    this._sideTab = "files";
-    this._renderSideTabs();
-    if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") {
-      this._toggleMobileDrawer("context", trigger);
-    }
+    this._showSideTab("files", trigger);
 
     if (artifactId !== this._selectedArtifactId) {
       void this._selectArtifact(artifactId);
@@ -11544,8 +11890,9 @@ class CodexBridgePanel extends HTMLElement {
     helper.value = text;
     document.body.appendChild(helper);
     helper.select();
-    document.execCommand("copy");
-    helper.remove();
+    try {
+      if (!document.execCommand("copy")) throw new Error("Clipboard unavailable");
+    } finally { helper.remove(); }
   }
 
   _startPolling() {
@@ -12112,6 +12459,10 @@ class CodexBridgePanel extends HTMLElement {
     }
     const acceptedEvent = result.event;
     this._events = result.state.events;
+    if (acceptedEvent.event_type === "context.updated" && this._activeThread) {
+      this._activeThread = { ...this._activeThread, context_usage: acceptedEvent.payload.context_usage };
+      this._renderUsagePanel();
+    }
     if (
       acceptedEvent.event_type === "message.created" &&
       typeof acceptedEvent.payload?.client_request_id === "string"

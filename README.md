@@ -91,6 +91,10 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
   See [App documentation](codex_bridge_app/DOCS.md) for restrictions.
 - **Settings:** save a light or dark appearance, chat text size, reduced motion
   and defaults for new chats. See [Panel settings](docs/panel-settings.md).
+- **Chat controls:** stop or steer a running turn from the composer, check its
+  context usage, and open files or links from the sidebar. Share copies a chat
+  link that requires Home Assistant sign-in. The bottom panel includes an
+  interactive workspace terminal. See [Chat controls](docs/chat-controls.md).
 
 Scheduled work runs through Home Assistant, so your PC and browser do not need
 to stay open. Home Assistant, the App and the ChatGPT session must remain
@@ -105,10 +109,10 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.1.2**, Integration and panel **1.1.2**, with Bridge **0.8.0**
-and Codex **0.155.1**. It adds optional HAOS host access with explicit consent
-and setup guidance for HA-MCP. Browser tools, saved panel preferences, grouped
-Skills and Scheduled model/reasoning selections remain available. Use the
+This release pairs App **1.1.2**, Integration and panel **1.1.2**, with Bridge **0.8.1**
+and Codex **0.155.1**. It adds a workspace terminal, Stop/Steer controls, context
+usage, sidebar resources and guided HA-MCP setup. Optional HAOS host access still
+requires its separate App and explicit consent. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 and [changelog](codex_bridge_app/CHANGELOG.md) to check available versions.
 

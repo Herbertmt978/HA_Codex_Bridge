@@ -32,6 +32,7 @@ from .event_store import (
 )
 from .generated_images import validate_generated_image_result
 from .models import (
+    ContextUsageRecord,
     ArtifactRecord,
     InteractionResultRecord,
     PendingInteractionRecord,
@@ -333,6 +334,7 @@ _MAX_BROWSER_DYNAMIC_IMAGE_URL_BYTES = 6 * 1024 * 1024
 _MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES = 32 * 1024
 _MAX_BROWSER_TOOL_REPLAYS_PER_TURN = 128
 _NOTIFICATIONS = (
+    "thread/tokenUsage/updated",
     "turn/started",
     "item/agentMessage/delta",
     "item/reasoning/summaryPartAdded",
@@ -2359,6 +2361,22 @@ class RuntimeBroker:
         method: str,
         params: dict[str, Any],
     ) -> None:
+        if method == "thread/tokenUsage/updated":
+            usage = params.get("tokenUsage")
+            last = usage.get("last") if isinstance(usage, dict) else None
+            used = last.get("totalTokens") if isinstance(last, dict) else None
+            window = usage.get("modelContextWindow") if isinstance(usage, dict) else None
+            maximum = 9_007_199_254_740_991
+            if type(used) is not int or not 0 <= used <= maximum:
+                return
+            if window is not None and (type(window) is not int or not 0 < window <= maximum):
+                return
+            assert run.codex_thread_id is not None
+            self.storage.update_context_usage(
+                run.thread_id, run.codex_thread_id,
+                ContextUsageRecord(used_tokens=used, context_window=window, updated_at=_now()),
+            )
+            return
         mapping = {
             "item/agentMessage/delta": ("message.delta", "delta", False),
             "item/reasoning/summaryPartAdded": (
@@ -3187,6 +3205,8 @@ class RuntimeBroker:
             record = self.storage.load_thread(run.thread_id)
         except (ThreadNotFoundError, WorkspaceBoundaryError):
             return None
+        if record.codex_thread_id != run.codex_thread_id:
+            record.context_usage = None
         record.codex_thread_id = run.codex_thread_id
         record.active_turn_id = (
             run.codex_turn_id if run.status not in _TERMINAL_RUN_STATES else None

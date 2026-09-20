@@ -262,6 +262,7 @@ describe("panel run activity integration", () => {
 
   it("refreshes the Activity card for every accepted streamed run event", () => {
     const panel = createPanel({ events: [] });
+    panel._activityView = true;
     panel._render(true);
     const activitySpy = vi.spyOn(panel, "_renderActivityCenter");
 
@@ -298,7 +299,7 @@ describe("panel run activity integration", () => {
     expect(panel.shadowRoot.textContent).not.toContain("private runtime detail");
   });
 
-  it("counts sources only for the run currently represented by Activity", () => {
+  it("retains real source links from earlier runs in the chat sidebar", () => {
     const panel = createPanel({ events: [
       event(1, "web_search.completed", {
         run_id: "run-previous",
@@ -312,8 +313,9 @@ describe("panel run activity integration", () => {
     panel._render(true);
 
     const sources = panel.shadowRoot.querySelector('[data-section="sources"]');
-    expect(sources?.textContent).toContain("1 source reported for this run");
-    expect(sources?.textContent).not.toContain("3 sources");
+    expect([...sources.querySelectorAll("a")].map((link) => link.href)).toEqual([
+      "https://old.example/1", "https://old.example/2", "https://current.example/1",
+    ]);
   });
 
   it("keeps reduced-motion and mobile layout fallbacks in the activity stylesheet", () => {

@@ -34,6 +34,10 @@ _DIRECTION_FILES: dict[str, str] = {
     "serverNotifications": "ServerNotification.json",
 }
 _CLIENT_RESPONSE_TYPES = {
+    "command/exec": "CommandExecResponse",
+    "command/exec/write": "CommandExecWriteResponse",
+    "command/exec/resize": "CommandExecResizeResponse",
+    "command/exec/terminate": "CommandExecTerminateResponse",
     "initialize": "InitializeResponse",
     "account/read": "GetAccountResponse",
     "account/login/start": "LoginAccountResponse",

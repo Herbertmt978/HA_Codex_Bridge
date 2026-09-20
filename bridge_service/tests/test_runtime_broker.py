@@ -2645,6 +2645,67 @@ def test_active_thread_steers_and_cancel_interrupts_with_exact_preconditions(
         broker.close()
 
 
+def test_context_usage_tracks_last_request_and_survives_reloads_and_stale_writers(
+    tmp_path: Path,
+) -> None:
+    from codex_bridge_service.models import PublicThreadRecord
+
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(thread.thread_id, "Start", client_request_id="context-start")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _, remote_thread, turn = _active_ids(storage, thread.thread_id)
+        stale = storage.load_thread(thread.thread_id)
+        for count in (800, 200):
+            breakdown = {
+                "totalTokens": count, "inputTokens": count - 10, "outputTokens": 10,
+                "cachedInputTokens": 0, "reasoningOutputTokens": 0,
+            }
+            client.emit_notification("thread/tokenUsage/updated", {
+                "threadId": remote_thread, "turnId": turn,
+                "tokenUsage": {"last": breakdown, "total": {**breakdown, "totalTokens": 99999}, "modelContextWindow": 1000},
+            })
+            public = PublicThreadRecord.from_thread_view(storage.get_thread(thread.thread_id))
+            assert public.context_usage.used_tokens == count
+            assert public.context_usage.context_window == 1000
+            event = storage.list_thread_events(thread.thread_id)[-1]
+            assert event.event_type == "context.updated"
+            assert event.payload["context_usage"]["used_tokens"] == count
+            assert remote_thread not in json.dumps(event.payload)
+
+        stale.title = "Renamed while context changed"
+        storage.save_thread(stale)
+        reloaded = BridgeStorage(root_path=storage.root).load_thread(thread.thread_id)
+        assert reloaded.title == stale.title
+        assert reloaded.context_usage.used_tokens == 200
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("case", ["other-turn", "old-generation", "negative", "boolean", "oversized", "bad-window"])
+def test_context_usage_rejects_uncorrelated_or_invalid_readings(tmp_path: Path, case: str) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(thread.thread_id, "Start", client_request_id="context-invalid")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _, remote_thread, turn = _active_ids(storage, thread.thread_id)
+        used = {"negative": -1, "boolean": True, "oversized": 2**60}.get(case, 200)
+        broker._on_notification(AppServerNotification(
+            method="thread/tokenUsage/updated",
+            generation=client.generation - 1 if case == "old-generation" else client.generation,
+            params={"threadId": remote_thread, "turnId": "wrong" if case == "other-turn" else turn,
+                    "tokenUsage": {"last": {"totalTokens": used}, "modelContextWindow": 0 if case == "bad-window" else 1000}},
+        ))
+        assert storage.load_thread(thread.thread_id).context_usage is None
+        assert not any(e.event_type == "context.updated" for e in storage.list_thread_events(thread.thread_id))
+    finally:
+        broker.close()
+
+
 def test_live_web_search_guidance_applies_to_steering_without_polluting_transcript(
     tmp_path: Path,
 ) -> None:

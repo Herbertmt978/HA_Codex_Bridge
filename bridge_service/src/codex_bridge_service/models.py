@@ -171,6 +171,14 @@ class PendingPromptRecord(BaseModel):
     created_at: str
 
 
+class ContextUsageRecord(BaseModel):
+    """Last provider-reported context size, distinct from billed token totals."""
+
+    used_tokens: int = Field(strict=True, ge=0, le=9_007_199_254_740_991)
+    context_window: int | None = Field(default=None, strict=True, gt=0, le=9_007_199_254_740_991)
+    updated_at: str
+
+
 class ThreadRecord(BaseModel):
     thread_id: str
     project_id: str | None = None
@@ -187,6 +195,7 @@ class ThreadRecord(BaseModel):
     codex_thread_id: str | None = None
     active_turn_id: str | None = None
     active_run_id: str | None = None
+    context_usage: ContextUsageRecord | None = None
     last_error: str | None = None
     pending_prompts: list[PendingPromptRecord] = Field(default_factory=list)
     attachments: list[AttachmentRecord] = Field(default_factory=list)
@@ -224,6 +233,7 @@ class PublicThreadRecord(BaseModel):
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     last_error: str | None = None
+    context_usage: ContextUsageRecord | None = None
     attachments: list[AttachmentRecord] = Field(default_factory=list)
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
     model_override: str | None = None
@@ -488,6 +498,7 @@ class BridgeReadinessRecord(BaseModel):
             "image_generation_v1",
             "browser_v1",
             "host_access_v1",
+            "workspace_terminal_v1",
         ],
         ...,
     ] = (
