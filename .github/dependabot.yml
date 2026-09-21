@@ -32,11 +32,6 @@ updates:
     patterns:
       - "*"
     multi-ecosystem-group: weekly-maintenance
-    ignore:
-      # The pinned Home Assistant test fixture requires pytest==9.0.3.
-      - dependency-name: "pytest"
-        versions:
-          - ">=9.1.0"
 
   - package-ecosystem: pip
     directory: "/bridge_service"
