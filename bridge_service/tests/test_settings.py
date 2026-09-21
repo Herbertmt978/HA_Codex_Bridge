@@ -56,6 +56,18 @@ def test_mcp_is_disabled_by_default_and_requires_an_explicit_boolean_opt_in(
         Settings()
 
 
+def test_local_mcp_requires_separate_explicit_opt_in(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BRIDGE_AUTH_TOKEN", "a" * 43)
+    monkeypatch.setenv("CODEX_BRIDGE_ENABLE_MCP", "true")
+    monkeypatch.delenv("CODEX_BRIDGE_ENABLE_LOCAL_MCP", raising=False)
+    assert Settings().enable_local_mcp is False
+    monkeypatch.setenv("CODEX_BRIDGE_ENABLE_LOCAL_MCP", "true")
+    assert Settings().enable_local_mcp is True
+    monkeypatch.setenv("CODEX_BRIDGE_ENABLE_LOCAL_MCP", "invalid")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 def test_browser_requires_explicit_valid_opt_in(monkeypatch) -> None:
     monkeypatch.setenv('CODEX_BRIDGE_AUTH_TOKEN', 'a' * 43)
     monkeypatch.delenv('CODEX_BRIDGE_ENABLE_BROWSER', raising=False)

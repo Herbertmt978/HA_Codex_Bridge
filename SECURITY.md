@@ -66,17 +66,36 @@ input before enabling them.
 
 MCP is disabled by default and requires the administrator to enable **Enable
 MCP** in the App configuration and restart it. When disabled, the App starts
-Codex with an empty MCP override and removes the saved native MCP server table;
-cleanup failure keeps readiness unavailable. This does not alter skills,
+Codex with explicit disabled overrides for saved servers. Before accepting
+requests it checks that the effective configuration contains no enabled server,
+then removes the saved native MCP server table; cleanup failure keeps readiness
+unavailable. An empty table alone is insufficient because Codex merges tables. This does not alter skills,
 plugins, marketplaces, or instructions.
 
-When enabled, MCP configuration is deliberately narrow: only outbound
+Public MCP configuration is deliberately narrow: only outbound
 streamable-HTTP servers using HTTPS hostnames are accepted. Literal IPs and
 local/internal names are rejected, and available DNS answers are checked for
 non-public addresses before a server is saved. DNS checks are best effort, do
 not create a connection-time IP allowlist, and cannot prevent a trusted name's
 ownership or answers changing later. An administrator must still trust every
 configured provider.
+The local MCP option is a deliberate exception to the public-destination rule.
+It is disabled by default and requires separate acknowledgement for each LAN or
+HA App endpoint. Local connections use an authenticated loopback relay, never a
+direct native upstream URL. A private registry records the selected URL and
+approved RFC1918/ULA addresses. Every request resolves and checks the complete
+answer set against those addresses, then dials an approved IP directly with the
+original HTTP Host and verified TLS hostname. Redirects, environment proxies,
+loopback/link-local/metadata destinations and Supervisor access are rejected.
+A DNS address change requires removing and re-adding the connection. HTTP sends
+MCP data and any URL-path secret without encryption; the UI warns before consent.
+Only the fixed saved endpoint receives MCP protocol headers and bodies. The
+relay's generated capability header never reaches the upstream server. Request,
+stream and concurrency limits bound resource use. Disabling local access removes
+its native bindings and prevents their restoration without a new connection.
+Local OAuth is not supported in this release. Existing public HTTPS/OAuth
+behaviour is unchanged, including its best-effort DNS limitation.
+
 Bearer-token configuration is not supported by this surface. OAuth login is
 explicit and returns a one-shot authorization URL
 with `no-store` handling; do not log, cache, or paste it. MCP elicitation is

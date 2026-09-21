@@ -356,13 +356,13 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   if (tab === "mcp") {
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App, then follow the connection guide."));
     const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
     recommendation.append(guide); panel.append(recommendation);
-    panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
-    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1")));
+    panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1")));
     panel.append(button(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
   }

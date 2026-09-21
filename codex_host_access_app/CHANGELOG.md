@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- Uses the shared image paired with App and Integration 1.2.0. Host access
+  permissions and acknowledgement requirements are unchanged. Local MCP is
+  configured separately in Codex Bridge and does not require this companion.
+
 ## 1.1.2
 
 - Uses the shared image paired with Integration and panel 1.1.2. Host access

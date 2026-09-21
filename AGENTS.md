@@ -24,10 +24,15 @@ changing product language or architecture.
   hidden interaction state, record terminal outcomes, and recover durable
   claims after restart.
 - Keep MCP disabled by default and capability-gated behind the explicit App
-  option. Constrain enabled MCP configuration to trusted HTTPS hostnames,
-  reject credentials and known non-public addresses, never expose bearer-token
-  settings, document that DNS validation is not connection-time enforcement,
-  and keep OAuth authorization URLs one-shot and uncached.
+  option. Public connections retain trusted HTTPS hostnames and OAuth; their
+  DNS screen is best effort. Local LAN/App connections require the separate
+  default-disabled option, per-endpoint consent and the private local MCP relay.
+  The relay pins approved private addresses at connection time, verifies TLS,
+  rejects redirects and never forwards its private capability header upstream.
+  Never pass a local upstream URL directly to Codex or accept user-supplied
+  headers, bearer credentials, stdio commands or local OAuth settings. Keep
+  OAuth authorisation URLs one-shot and uncached. This local exception does
+  not change browser, shell or Host Access permissions.
 - Confine skills and project instructions to the selected workspace. Global
   instructions stay in the fixed private Codex home. Writes must be bounded,
   atomic, no-follow, and privately backed up where the implementation promises.

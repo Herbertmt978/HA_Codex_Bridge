@@ -256,6 +256,29 @@ async def test_missing_mcp_capability_reports_the_app_option_instead_of_an_updat
     assert observed_paths == ["/ready"]
 
 
+@pytest.mark.parametrize("local_supported", [False, True])
+async def test_local_mcp_requires_its_own_capability(bridge_server_factory, local_supported):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1"] + (["mcp_local_v1"] if local_supported else [])
+    observed = []
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        observed.append(await request.json())
+        return web.json_response({"name": "home"}, status=201)
+    server = await bridge_server_factory(handler)
+    payload = {"name": "home", "url": "http://ha.local/mcp", "local": True, "local_acknowledged": True}
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        if local_supported:
+            assert await client.async_add_mcp(payload) == {"name": "home"}
+        else:
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_add_mcp(payload)
+    assert observed == ([payload] if local_supported else [])
+
+
 async def test_automation_and_mcp_client_routes_preserve_boundaries(
     bridge_server_factory,
 ) -> None:

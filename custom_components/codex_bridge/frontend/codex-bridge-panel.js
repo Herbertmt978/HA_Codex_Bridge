@@ -33171,14 +33171,14 @@ var link = (doc, label, href) => {
   node2.rel = "noopener noreferrer";
   return node2;
 };
-function renderMcpSetup(doc, state, enabled) {
+function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   const section2 = text(doc, "section", "", "mcp-setup");
   if (state.form === "mcp-choice") {
     section2.append(text(doc, "h3", "Choose an MCP server", "desktop-subheading"));
     const choices = text(doc, "div", "", "mcp-choices");
     for (const [title, description, action] of [
       ["Home Assistant (HA-MCP)", "Guided installation and connection for devices, states and automations.", "choose-ha-mcp"],
-      ["Other MCP server", "Add any compatible trusted HTTPS server, with optional OAuth settings.", "choose-custom-mcp"]
+      ["Other MCP server", "Connect a compatible public HTTPS server or an explicitly enabled local server.", "choose-custom-mcp"]
     ]) {
       const choice = button(doc, "", action);
       choice.className = "mcp-choice";
@@ -33195,7 +33195,7 @@ function renderMcpSetup(doc, state, enabled) {
     const install = text(doc, "li", "");
     install.append(text(doc, "strong", "Install HA-MCP once"), text(doc, "p", "In HACS, add homeassistant-ai/ha-mcp-integration as a custom Integration repository, download it and restart Home Assistant. Then go to Settings → Devices & services → Add integration → HA-MCP Custom Component and add HA-MCP Server."), link(doc, "HA-MCP installation instructions", HA_MCP_GUIDE));
     const connect = text(doc, "li", "");
-    connect.append(text(doc, "strong", "Copy your connection URL"), text(doc, "p", "Configure the HA-MCP Server entry and copy its HTTPS connection URL through Nabu Casa or your existing reverse proxy. If HA-MCP is already installed as an App or another service, use that server instead."), text(doc, "p", "Choose only the tools you need. Device controls and automation edits can affect your home; optional file and YAML tools need their own review. HA-MCP does not require root host access."));
+    connect.append(text(doc, "strong", "Copy your connection URL"), text(doc, "p", "Configure the HA-MCP Server entry and copy its connection URL. Use public HTTPS through Nabu Casa or your existing reverse proxy, or enable local MCP below to connect directly over your home network. If HA-MCP is already installed as an App or another service, use that server instead."), text(doc, "p", "Choose only the tools you need. Device controls and automation edits can affect your home; optional file and YAML tools need their own review. HA-MCP does not require root host access."));
     const enable = text(doc, "li", "");
     enable.append(text(doc, "strong", "Enable MCP in Codex Bridge"), text(doc, "p", "Go to Settings → Apps → Codex Bridge → Configuration, turn on Enable MCP, save and restart the App. Return here and check the connection options again."));
     steps.append(install, connect, enable);
@@ -33205,6 +33205,7 @@ function renderMcpSetup(doc, state, enabled) {
   const form = doc.createElement("form");
   form.className = "desktop-form";
   form.dataset.desktopForm = "mcp";
+  const local = localEnabled && state.formDraft?.local === true;
   const field2 = (label, name, type = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const control = doc.createElement("input");
@@ -33222,10 +33223,29 @@ function renderMcpSetup(doc, state, enabled) {
     wrap.append(text(doc, "span", label, "desktop-field-label"), control);
     return wrap;
   };
-  form.append(field2("Name", "name"), field2(guided ? "HA-MCP HTTPS connection URL" : "HTTPS URL", "url", "password"), text(doc, "p", "Keep the full URL private: it may contain a secret. Use a public HTTPS hostname. Local addresses, HTTP, query strings and bearer-token settings are not supported.", "desktop-note"));
+  const checkbox = (label, name, required = false) => {
+    const wrap = text(doc, "label", "", "mcp-consent");
+    const control = doc.createElement("input");
+    control.type = "checkbox";
+    control.dataset.desktopField = name;
+    control.name = name;
+    control.checked = state.formDraft?.[name] === true;
+    control.required = required;
+    wrap.append(control, text(doc, "span", label));
+    return wrap;
+  };
+  form.append(field2("Name", "name"));
+  if (localEnabled) form.append(checkbox("Connect to a local network or Home Assistant App server", "local"));
+  else form.append(text(doc, "p", "For local servers, enable both Enable MCP and Enable local MCP connections in the Codex Bridge App configuration, save and restart. Update the App and Integration if that option is missing.", "desktop-note"));
+  form.append(field2(guided ? "HA-MCP connection URL" : local ? "Local HTTP or HTTPS URL" : "Public HTTPS URL", "url", "password"), text(doc, "p", local ? "Use the server’s private network address or App hostname, not localhost. HTTPS must have a trusted certificate. If the server’s IP address changes, remove it and add it again." : "Use a public HTTPS hostname. Keep the full URL private: it may contain a secret.", "desktop-note"));
+  if (local) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    warning.append(text(doc, "strong", "Allow access to this local MCP server?"), text(doc, "p", "Codex will be able to use the tools this server exposes, including any device controls or file changes it permits. HTTP sends requests, responses and any secret in the URL without encryption across your local network. This does not grant shell or root host access."), checkbox("I trust this server and understand the access and connection risks", "local_acknowledged", true));
+    form.append(warning, text(doc, "p", "Local OAuth, bearer tokens, query strings and custom authentication headers are not supported yet. A server with a private connection path can use that full URL.", "desktop-note"));
+  }
   const oauth = text(doc, "details", "", "mcp-oauth");
   oauth.append(text(doc, "summary", "OAuth settings (optional)"), field2("OAuth client ID (public)", "oauth_client_id"), field2("OAuth resource", "oauth_resource"));
-  form.append(oauth);
+  if (!local) form.append(oauth);
   if (state.formError) {
     const error = text(doc, "p", state.formError, "desktop-error");
     error.setAttribute("role", "alert");
@@ -33593,7 +33613,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   if (tab === "mcp") {
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text2(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text2(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App and use a supported HTTPS connection."));
+    recommendation.append(text2(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text2(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App, then follow the connection guide."));
     const guide = text2(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank";
@@ -33601,8 +33621,8 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     guide.style.color = "inherit";
     recommendation.append(guide);
     panel.append(recommendation);
-    panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect trusted HTTPS tools. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
-    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1")));
+    panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1")));
     panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const id = row.name || "";
@@ -33764,7 +33784,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.1.2";
+var PANEL_VERSION = "1.2.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -36561,6 +36581,10 @@ template.innerHTML = `
     .mcp-steps li { padding: 8px 0 16px 8px; line-height: 1.6; }
     .mcp-steps p { color: var(--muted-color); margin: 8px 0; }
     .mcp-oauth summary { cursor: pointer; margin-bottom: 12px; }
+    .mcp-consent { display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; cursor: pointer; }
+    .mcp-consent input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent-color); }
+    .mcp-local-warning { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; line-height: 1.5; }
+    .mcp-local-warning p { color: var(--muted-color); }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
@@ -40143,14 +40167,23 @@ var CodexBridgePanel = class extends HTMLElement {
   _desktopFormValues(target) {
     const form = target?.closest("form");
     if (!form) return {};
-    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field2) => [field2.dataset.desktopField, field2.value]));
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field2) => [field2.dataset.desktopField, field2.type === "checkbox" ? field2.checked : field2.value]));
   }
   _captureDesktopFormDraft(target) {
     const form = target.closest("form[data-desktop-form]");
     const field2 = target.dataset.desktopField;
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field2 || !state?.form) return;
-    state.formDraft = { ...state.formDraft || {}, [field2]: target.value };
+    state.formDraft = { ...state.formDraft || {}, [field2]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "mcp" && ["local", "url"].includes(field2)) {
+      state.formDraft.local_acknowledged = false;
+      const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
+      if (consent) consent.checked = false;
+      if (field2 === "local") {
+        this._renderDesktopSurface();
+        return;
+      }
+    }
     if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
@@ -40303,6 +40336,14 @@ var CodexBridgePanel = class extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      if (payload.local) {
+        if (!this._config?.capabilities?.includes("mcp_local_v1") || payload.local_acknowledged !== true) return;
+        delete payload.oauth_client_id;
+        delete payload.oauth_resource;
+      } else {
+        delete payload.local;
+        delete payload.local_acknowledged;
+      }
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }

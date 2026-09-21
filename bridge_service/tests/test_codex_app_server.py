@@ -497,11 +497,10 @@ def test_notification_handler_failure_restarts_generation_for_reconciliation(
     fake_server: FakeAppServer,
 ) -> None:
     module = _load_module()
-    fake_server.configure(
-        on_initialized=[
-            {"kind": "notification", "method": "account/updated", "params": {}}
-        ]
-    )
+    fake_server.configure(responses={"emit/failure": {
+        "mode": "notifications_then_echo",
+        "notifications": [{"method": "account/updated", "params": {}}],
+    }})
     client = _client(module, fake_server, callback_workers=1)
 
     def fail_durable_projection(_notification: Any) -> None:
@@ -510,6 +509,10 @@ def test_notification_handler_failure_restarts_generation_for_reconciliation(
     client.register_notification_handler("account/updated", fail_durable_projection)
     client.start()
     try:
+        try:
+            client.request("emit/failure")
+        except module.AppServerProtocolError:
+            pass
         _wait_until(lambda: client.ready and client.generation == 2)
         assert client.request("ping", {"generation": 2}) == {"echo": {"generation": 2}}
     finally:
@@ -1066,7 +1069,7 @@ def test_failed_generation_cannot_be_aborted_again_during_supervisor_teardown(
     monkeypatch.setattr(
         client,
         "_request_for_generation",
-        lambda *args, **kwargs: {
+        lambda *args, **kwargs: {"config": {}, "origins": {}} if args[1] == "config/read" else {
             "codexHome": str(fake_server.codex_home.resolve()),
             "platformFamily": "windows" if os.name == "nt" else "unix",
             "platformOs": "windows" if os.name == "nt" else "linux",
@@ -1484,11 +1487,7 @@ def test_locked_inbound_method_and_payload_violations_restart_generation(
     message: dict[str, Any],
 ) -> None:
     module = _load_module()
-    action = {
-        "kind": "request" if "id" in message else "notification",
-        **message,
-    }
-    fake_server.configure(1, on_initialized=[action])
+    fake_server.configure(1, responses={"model/list": {"mode": "emit_message", "message": message}})
     fake_server.configure(2)
     client = _client(
         module,
@@ -1498,6 +1497,8 @@ def test_locked_inbound_method_and_payload_violations_restart_generation(
 
     client.start()
     try:
+        with pytest.raises(module.AppServerProtocolError):
+            client.request("model/list", {})
         _wait_until(lambda: client.ready and client.generation == 2)
     finally:
         client.close()
@@ -1789,3 +1790,59 @@ def test_failed_home_assistant_startup_closes_partial_app_server(
 
     assert managed.start_calls == 1
     assert managed.close_calls == 1
+
+
+@pytest.mark.parametrize("servers", [
+    {"saved": {"url": "https://mcp.example/stream"}},
+    {"saved": {"enabled": True, "command": "sh"}},
+    {"saved": {"enabled": 0}},
+    [],
+])
+def test_bootstrap_refuses_any_unmasked_server_before_ready(fake_server, servers):
+    module = _load_module()
+    fake_server.configure(bootstrap_config={"config": {"mcp_servers": servers}, "origins": {}})
+    client = _client(module, fake_server)
+    with pytest.raises(module.AppServerUnavailableError):
+        client.start()
+    assert not client.ready
+    assert not any(message.get("method", "").startswith("thread/") for message in fake_server.client_messages())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="private file reads require descriptor-relative no-follow operations")
+def test_saved_servers_receive_explicit_disabled_transport_overrides(fake_server):
+    module = _load_module()
+    (fake_server.codex_home / "config.toml").write_text(
+        '[mcp_servers.local]\nurl="http://192.168.1.2/private-path"\n'
+        '[mcp_servers.unsafe]\ncommand="untrusted-command"\n', encoding="utf-8")
+    fake_server.configure(bootstrap_config={"config": {"mcp_servers": {
+        "local": {"enabled": False}, "unsafe": {"enabled": False},
+    }}, "origins": {}})
+    client = _client(module, fake_server)
+    try:
+        client.start()
+        args = fake_server.process()["argv"]
+        assert 'mcp_servers.local={enabled=false,url="https://disabled.invalid/mcp"}' in args
+        assert 'mcp_servers.unsafe={enabled=false,command="false"}' in args
+        assert "private-path" not in str(args)
+        assert "untrusted-command" not in str(args)
+    finally:
+        client.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires no-follow filesystem operations")
+@pytest.mark.parametrize("kind", ["symlink", "oversize", "unsafe_name"])
+def test_bootstrap_rejects_unsafe_private_config_without_spawning(fake_server, kind):
+    module = _load_module()
+    path = fake_server.codex_home / "config.toml"
+    if kind == "symlink":
+        target = fake_server.codex_home / "elsewhere.toml"
+        target.write_text("[mcp_servers.saved]\ncommand='sh'\n")
+        path.symlink_to(target)
+    elif kind == "oversize":
+        path.write_bytes(b"#" * (1024 * 1024 + 1))
+    else:
+        path.write_text('[mcp_servers."unsafe.name"]\ncommand="sh"\n')
+    client = _client(module, fake_server)
+    with pytest.raises(module.AppServerUnavailableError):
+        client.start()
+    assert not (fake_server.sidecars / "process-1.json").exists()

@@ -1,6 +1,6 @@
 # MCP-01: Local MCP connections
 
-Status: Planned. Version and date: unassigned.
+Status: Implemented for 1.2.0. See the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases) for publication status.
 
 Tracking issue: [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97).
 
@@ -12,13 +12,13 @@ explicit local-network option while retaining public HTTPS as the default.
 
 ## Required security-contract review
 
-This is a conditional proposal to change the current public-HTTPS-only MCP
-boundary. Before implementing local connections, approve a destination and egress
-policy and deliberately revise [AGENTS.md](../../AGENTS.md),
-[CONTEXT.md](../../CONTEXT.md) and [SECURITY.md](../../SECURITY.md) to describe it.
-Administrator acknowledgement alone does not satisfy that prerequisite. Until
-that review is complete, the existing non-public-address and HTTP restrictions
-remain in force; this plan does not override them.
+The owner authorised implementation after the roadmap review. The chosen
+destination policy uses a private relay, approved private IP addresses,
+connection-time checks, normal TLS verification and no redirects. The explicit
+local exception is recorded in [AGENTS.md](../../AGENTS.md),
+[CONTEXT.md](../../CONTEXT.md), [SECURITY.md](../../SECURITY.md) and
+[ADR-0007](../aegis/adr/0007-local-mcp-relay.md). Endpoint acknowledgement does
+not replace those controls.
 
 ## Scope
 

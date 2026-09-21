@@ -165,6 +165,9 @@ class ScriptedPeer:
 
     def _handle_request(self, request: dict[str, Any]) -> None:
         method = str(request["method"])
+        if method == "config/read" and request.get("params") == {"includeLayers": False}:
+            self._send({"id": request["id"], "result": self.scenario.get("bootstrap_config", {"config": {}, "origins": {}})})
+            return
         configured = self.scenario.get("responses", {}).get(method, {})
         action = configured if isinstance(configured, dict) else {}
         mode = action.get("mode", "echo")
@@ -206,6 +209,8 @@ class ScriptedPeer:
                     }
                 )
             self._send_result(request, action)
+        elif mode == "emit_message":
+            self._send(action["message"])
         elif mode == "crash":
             os._exit(int(action.get("exit_code", 23)))
         else:
@@ -260,9 +265,8 @@ class ScriptedPeer:
 
 
 def main() -> int:
-    if sys.argv[1:] not in (
-        ["app-server", "--stdio"],
-        ["-c", "mcp_servers={}", "app-server", "--stdio"],
+    if sys.argv[-2:] != ["app-server", "--stdio"] or any(
+        value != "-c" for value in sys.argv[1:-2:2]
     ):
         raise SystemExit(f"unexpected argv: {sys.argv[1:]!r}")
     return ScriptedPeer().run()

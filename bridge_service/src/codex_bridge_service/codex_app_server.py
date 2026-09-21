@@ -7,6 +7,7 @@ import re
 import signal
 import subprocess
 import threading
+import tomllib
 from collections import deque
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
@@ -27,6 +28,8 @@ from .codex_process import (
     codex_subprocess_environment,
     resolve_codex_home,
 )
+
+from .workspace import WorkspaceBoundary, WorkspaceNotFoundError
 
 JsonValue = Any
 RequestId = str | int
@@ -702,10 +705,10 @@ class CodexAppServerClient:
     def activate_validated_mcp_config(self) -> None:
         """Restart into the validated MCP configuration after a safe bootstrap.
 
-        The first generation is always launched with an empty session override.
+        The first generation explicitly disables persisted MCP entries.
         Only the MCP manager may call this after it atomically replaces and
         reloads the persisted MCP configuration.  A failed activation restores
-        the empty override before another generation can be launched.
+        the disabled overrides before another generation can be launched.
         """
 
         if not self.enable_mcp:
@@ -886,6 +889,14 @@ class CodexAppServerClient:
                     except ProtocolContractError:
                         raise AppServerProtocolError() from None
                 self._write_message(generation, initialized_message)
+                if self._mcp_startup_state == "masked":
+                    config = self._request_for_generation(
+                        generation, "config/read", {"includeLayers": False},
+                        timeout_seconds=self.initialize_timeout_seconds,
+                        require_ready=False,
+                    )
+                    if not isinstance(config, Mapping) or not mcp_config_is_disabled(config.get("config")):
+                        raise AppServerUnavailableError()
                 with self._state_lock:
                     if (
                         self._generation != generation
@@ -959,15 +970,50 @@ class CodexAppServerClient:
             )
             self._closing.wait(delay)
 
+    def _mcp_bootstrap_overrides(self) -> list[str]:
+        boundary = None
+        try:
+            # Missing configuration is valid on first launch. Existing files
+            # use the same no-follow, bounded read as other private state.
+            if not (self.codex_home / "config.toml").exists():
+                return ["-c", "mcp_servers={}"]
+            boundary = WorkspaceBoundary(self.codex_home)
+            try:
+                with boundary.open_regular_file("config.toml") as source:
+                    raw = source.read(1024 * 1024 + 1)
+            except WorkspaceNotFoundError:
+                return ["-c", "mcp_servers={}"]
+            if len(raw) > 1024 * 1024:
+                raise ValueError()
+            config = tomllib.loads(raw.decode("utf-8"))
+            servers = config.get("mcp_servers", {})
+            if not isinstance(servers, dict) or len(servers) > 32:
+                raise ValueError()
+            overrides = ["-c", "mcp_servers={}"]
+            for name in sorted(servers):
+                if re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name, re.ASCII) is None:
+                    raise ValueError()
+                value = servers[name]
+                if not isinstance(value, dict):
+                    raise ValueError()
+                transport = 'command="false"' if "command" in value else 'url="https://disabled.invalid/mcp"'
+                overrides.extend(("-c", f"mcp_servers.{name}={{enabled=false,{transport}}}"))
+            return overrides
+        except Exception:
+            raise AppServerUnavailableError() from None
+        finally:
+            if boundary is not None:
+                boundary.close()
+
     def _spawn_generation(self) -> tuple[int, subprocess.Popen[bytes]]:
         command = [*codex_command_prefix(self.codex_command)]
         with self._state_lock:
             mcp_masked = self._mcp_startup_state == "masked"
         if mcp_masked:
-            # This command-line layer is applied before Codex reads persisted
-            # MCP configuration.  It remains in place unless the manager's
-            # sanitized bootstrap completes and explicitly activates MCP.
-            command.extend(("-c", "mcp_servers={}"))
+            # Codex deep-merges tables: an empty root does not clear persisted
+            # servers. Disable each saved entry, then verify the effective
+            # config before exposing this generation to any application call.
+            command.extend(self._mcp_bootstrap_overrides())
         command.extend(("app-server", "--stdio"))
         kwargs: dict[str, Any] = {
             "stdin": subprocess.PIPE,
@@ -1816,3 +1862,15 @@ def _send_posix_group_signal(process_group_id: int, sig: signal.Signals) -> None
         kill_process_group(process_group_id, sig)
     except OSError:
         pass
+
+
+def mcp_config_is_disabled(config: object) -> bool:
+    """Verify a bootstrap config without trusting an empty-table override."""
+    if not isinstance(config, Mapping):
+        return False
+    servers = config.get("mcp_servers")
+    return servers is None or (
+        isinstance(servers, Mapping)
+        and len(servers) <= 32
+        and all(isinstance(server, Mapping) and server.get("enabled") is False for server in servers.values())
+    )

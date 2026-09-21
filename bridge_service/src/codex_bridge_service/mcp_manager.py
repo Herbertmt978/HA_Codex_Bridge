@@ -1,9 +1,9 @@
 """Safe, native app-server management for Home Assistant MCP connections.
 
-The manager deliberately supports only streamable HTTPS servers authenticated by
-native OAuth.  It is not a generic Codex configuration editor: stdio commands,
-environment variables, bearer-token variables, headers, and arbitrary config
-keys would cross the Bridge's trusted-process boundary and are rejected.
+Public streamable HTTPS servers support native OAuth. Explicitly approved local
+servers use the confined relay. This is not a generic Codex configuration editor:
+stdio commands, environment variables, user-supplied authentication headers and
+arbitrary config keys are rejected.
 """
 
 from __future__ import annotations
@@ -16,6 +16,10 @@ import socket
 from threading import RLock
 from typing import Callable, Protocol
 from urllib.parse import SplitResult, urlsplit, urlunsplit
+
+from .codex_app_server import mcp_config_is_disabled
+from .mcp_local_policy import LocalMcpError
+from .mcp_local_relay import LocalMcpRelay
 
 
 _MAX_SERVERS = 32
@@ -82,6 +86,11 @@ class McpDisabledError(McpUnavailableError):
     """MCP administration is disabled by the Home Assistant App option."""
 
     code = "mcp_disabled"
+    retryable = False
+
+
+class McpLocalDisabledError(McpUnavailableError):
+    code = "mcp_local_disabled"
     retryable = False
 
 
@@ -152,8 +161,12 @@ class McpServerDefinition:
     url: str
     oauth_client_id: str | None = None
     oauth_resource: str | None = None
+    local: bool = False
 
     def config_value(self) -> dict[str, str]:
+        if self.local:
+            # Local upstream URLs must never become native Codex destinations.
+            raise McpValidationError()
         value = {"url": self.url}
         if self.oauth_client_id is not None:
             value["oauth_client_id"] = self.oauth_client_id
@@ -173,6 +186,7 @@ class McpManager:
         request_timeout_seconds: float = 30.0,
         resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
         enabled: bool = False,
+        local_relay: LocalMcpRelay | None = None,
     ) -> None:
         if request_timeout_seconds <= 0:
             raise ValueError("MCP request timeout must be positive")
@@ -183,6 +197,7 @@ class McpManager:
         self._request_timeout_seconds = float(request_timeout_seconds)
         self._resolver = resolver
         self._enabled = enabled
+        self._local_relay = local_relay
         self._lock = RLock()
         self._startup: dict[str, tuple[str, str | None]] = {}
         self._oauth_completion: dict[str, bool] = {}
@@ -226,8 +241,9 @@ class McpManager:
                 view: dict[str, object] = {
                     "name": definition.name,
                     "transport": "streamable_http",
-                    "endpoint": _endpoint_display(definition.url),
-                    "auth": _auth_display(auth_status),
+                    "network": "local" if definition.local else "public",
+                    "endpoint": _endpoint_display(definition.url, private_path=definition.local),
+                    "auth": "none" if definition.local else _auth_display(auth_status),
                     "startup": startup,
                     "tool_count": _bounded_collection_size(tools),
                     "resource_count": _bounded_collection_size(resources)
@@ -253,25 +269,58 @@ class McpManager:
         url: object,
         oauth_client_id: object = None,
         oauth_resource: object = None,
+        local: bool = False,
+        local_acknowledged: bool = False,
     ) -> dict[str, object]:
         self._require_enabled()
         self._require_elicitation_handler()
-        definition = McpServerDefinition(
-            name=_validate_name(name),
-            url=_validate_https_url(url, resolver=self._resolver),
-            oauth_client_id=_validate_public_field(oauth_client_id),
-            oauth_resource=_validate_public_field(oauth_resource),
-        )
+        normalized_name = _validate_name(name)
+        if type(local) is not bool or type(local_acknowledged) is not bool:
+            raise McpValidationError()
+        if local:
+            if self._local_relay is None:
+                raise McpLocalDisabledError()
+            if not local_acknowledged or oauth_client_id is not None or oauth_resource is not None:
+                raise McpValidationError()
+            definition = None
+        else:
+            if local_acknowledged:
+                raise McpValidationError()
+            definition = McpServerDefinition(
+                name=normalized_name,
+                url=_validate_https_url(url, resolver=self._resolver),
+                oauth_client_id=_validate_public_field(oauth_client_id),
+                oauth_resource=_validate_public_field(oauth_resource),
+            )
         with self._mutation_lease():
             with self._lock:
                 definitions, version = self._read_definitions()
-                if definition.name in definitions:
+                if normalized_name in definitions:
                     raise McpConflictError()
-                self._write_config_value(
-                    key_path=f"mcp_servers.{definition.name}",
-                    value=definition.config_value(),
-                    version=version,
-                )
+                if len(definitions) >= _MAX_SERVERS:
+                    raise McpValidationError()
+                if local:
+                    try:
+                        canonical = self._local_relay.add(normalized_name, url)
+                    except LocalMcpError:
+                        raise McpValidationError() from None
+                    except Exception:
+                        raise McpUnavailableError() from None
+                    definition = McpServerDefinition(normalized_name, canonical, local=True)
+                assert definition is not None
+                try:
+                    self._write_config_value(
+                        key_path=f"mcp_servers.{definition.name}",
+                        value=self._native_value(definition),
+                        version=version,
+                    )
+                except McpManagerError:
+                    if local:
+                        try:
+                            self._local_relay.remove(normalized_name)
+                        except Exception:
+                            raise McpUnavailableError() from None
+                    raise
                 self._reload()
         return self._view_for_created(definition)
 
@@ -291,6 +340,11 @@ class McpManager:
                     value=None,
                     version=version,
                 )
+                if definitions[normalized_name].local:
+                    try:
+                        self._local_relay.remove(normalized_name)
+                    except Exception:
+                        raise McpUnavailableError() from None
                 self._reload()
                 self._startup.pop(normalized_name, None)
                 self._oauth_completion.pop(normalized_name, None)
@@ -304,6 +358,8 @@ class McpManager:
                 definitions, _version = self._read_definitions()
                 if normalized_name not in definitions:
                     raise McpNotFoundError()
+                if definitions[normalized_name].local:
+                    raise McpValidationError()
                 result = self._request(
                     "mcpServer/oauth/login",
                     {"name": normalized_name, "timeoutSecs": 300},
@@ -320,8 +376,8 @@ class McpManager:
     def disable_all_servers(self) -> None:
         """Delete only native MCP configuration while disabled.
 
-        The production app-server also starts with an empty MCP config
-        override. This native write removes stale user configuration without
+        The production app-server starts with explicit disabled server
+        overrides and verifies them before exposing application requests. This native write removes stale user configuration without
         parsing or rewriting unrelated plugin, skill, or instruction settings.
         """
 
@@ -333,7 +389,7 @@ class McpManager:
                 if not isinstance(result, Mapping):
                     raise McpProtocolError()
                 config = result.get("config")
-                if not isinstance(config, Mapping):
+                if not mcp_config_is_disabled(config):
                     raise McpProtocolError()
                 version = _optional_user_config_version(result.get("layers"))
                 if version is None:
@@ -354,8 +410,8 @@ class McpManager:
 
         The app server always starts with a session override that masks native
         MCP configuration.  When MCP is enabled, replace the user-layer root
-        with exactly the entries that pass this manager's public HTTPS/OAuth
-        validation, then reload it.  Nothing can unmask that generation until
+        with exactly the entries that pass public HTTPS/OAuth or approved
+        local relay validation, then reload it.  Nothing can unmask that generation until
         both operations succeed.
         """
 
@@ -369,11 +425,17 @@ class McpManager:
                 definitions, version = _validated_user_definitions(
                     result,
                     resolver=self._resolver,
+                    local_relay=self._local_relay,
                 )
+                if self._local_relay is not None:
+                    try:
+                        self._local_relay.retain({name for name, item in definitions.items() if item.local})
+                    except Exception:
+                        raise McpUnavailableError() from None
                 self._write_config_value(
                     key_path="mcp_servers",
                     value={
-                        definition.name: definition.config_value()
+                        definition.name: self._native_value(definition)
                         for definition in definitions.values()
                     },
                     version=version,
@@ -411,12 +473,23 @@ class McpManager:
         return {
             "name": definition.name,
             "transport": "streamable_http",
-            "endpoint": _endpoint_display(definition.url),
+            "endpoint": _endpoint_display(definition.url, private_path=definition.local),
             "auth": "oauth" if definition.oauth_client_id else "none",
             "startup": "starting",
             "tool_count": 0,
             "resource_count": 0,
+            "network": "local" if definition.local else "public",
         }
+
+    def _native_value(self, definition: McpServerDefinition) -> dict[str, object]:
+        if definition.local:
+            if self._local_relay is None:
+                raise McpLocalDisabledError()
+            try:
+                return self._local_relay.native_config(definition.name)
+            except Exception:
+                raise McpUnavailableError() from None
+        return definition.config_value()
 
     def _register_callbacks(self) -> None:
         register_notification = getattr(
@@ -495,7 +568,9 @@ class McpManager:
         definitions: dict[str, McpServerDefinition] = {}
         for raw_name, raw_value in raw_servers.items():
             try:
-                definition = _definition_from_config(raw_name, raw_value)
+                definition = _definition_from_config(
+                    raw_name, raw_value, local_relay=self._local_relay, effective=True,
+                )
             except McpValidationError:
                 # Unsafe existing native config is never reflected back into HA.
                 continue
@@ -613,8 +688,20 @@ def _definition_from_config(
     value: object,
     *,
     resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
+    local_relay: LocalMcpRelay | None = None,
+    effective: bool = False,
 ) -> McpServerDefinition:
     normalized_name = _validate_name(name)
+    if local_relay is not None:
+        original = local_relay.original_url(normalized_name, value, effective=effective)
+        if original is not None:
+            return McpServerDefinition(normalized_name, original, local=True)
+    if effective and isinstance(value, Mapping):
+        defaults = {"enabled": True, "environment_id": "local", "tool_timeout_sec": None}
+        for key, expected in defaults.items():
+            if key in value and (type(value[key]) is not type(expected) or value[key] != expected):
+                raise McpValidationError()
+        value = {key: item for key, item in value.items() if key not in defaults}
     if not isinstance(value, Mapping) or set(value) - {
         "url",
         "oauth_client_id",
@@ -793,17 +880,16 @@ def _validated_user_definitions(
     result: object,
     *,
     resolver: Callable[[str], tuple[str, ...]],
+    local_relay: LocalMcpRelay | None = None,
 ) -> tuple[dict[str, McpServerDefinition], str]:
     """Return only safe servers from the raw user layer behind a session mask."""
 
     if not isinstance(result, Mapping):
         raise McpProtocolError()
     effective_config = result.get("config")
-    if not isinstance(effective_config, Mapping) or not _mcp_root_is_empty(
-        effective_config.get("mcp_servers")
-    ):
+    if not mcp_config_is_disabled(effective_config):
         # The only reason it is safe to inspect persisted layers is that the
-        # bootstrap process has already masked their effective MCP root.
+        # bootstrap process has already disabled every effective MCP entry.
         raise McpProtocolError()
     layers = result.get("layers")
     if not isinstance(layers, list) or len(layers) > 32:
@@ -818,6 +904,17 @@ def _validated_user_definitions(
         if not isinstance(source, Mapping) or not isinstance(config, Mapping):
             raise McpProtocolError()
         source_type = source.get("type")
+        if source_type == "sessionFlags":
+            servers = config.get("mcp_servers", {})
+            if not isinstance(servers, Mapping) or any(
+                not _valid_name(name) or value not in (
+                    {"enabled": False, "url": "https://disabled.invalid/mcp"},
+                    {"enabled": False, "command": "false"},
+                )
+                for name, value in servers.items()
+            ):
+                raise McpProtocolError()
+            continue
         if source_type != "user":
             if not _mcp_root_is_empty(config.get("mcp_servers")):
                 # The session mask blocks these layers in the bootstrap process,
@@ -855,6 +952,7 @@ def _validated_user_definitions(
                     name,
                     value,
                     resolver=resolver,
+                    local_relay=local_relay,
                 )
             except McpValidationError:
                 continue
@@ -912,7 +1010,9 @@ def _safe_display_text(value: object, maximum: int) -> str | None:
     return value
 
 
-def _endpoint_display(url: str) -> str:
+def _endpoint_display(url: str, *, private_path: bool = False) -> str:
     parsed = urlsplit(url)
+    if private_path:
+        return f"{parsed.scheme}://{parsed.netloc}"
     path = parsed.path if parsed.path and parsed.path != "/" else ""
     return f"https://{parsed.netloc}{path}"

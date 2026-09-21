@@ -5,3 +5,6 @@ configuration:
   enable_browser:
     name: Enable browser tools
     description: Allow Codex to browse public websites in an isolated, temporary browser. Restart the App, then start a new chat. Tools are available only when the startup isolation checks pass.
+  enable_local_mcp:
+    name: Enable local MCP connections
+    description: Allow separately approved LAN and HA App MCP endpoints through the private relay. Enable MCP must also be on. HTTP is unencrypted. Restart after changing this option. Turning it off removes local connections; add them again to re-enable them.

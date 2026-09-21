@@ -33,7 +33,7 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 
-const PANEL_VERSION = "1.1.2";
+const PANEL_VERSION = "1.2.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -2857,6 +2857,10 @@ template.innerHTML = `
     .mcp-steps li { padding: 8px 0 16px 8px; line-height: 1.6; }
     .mcp-steps p { color: var(--muted-color); margin: 8px 0; }
     .mcp-oauth summary { cursor: pointer; margin-bottom: 12px; }
+    .mcp-consent { display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; cursor: pointer; }
+    .mcp-consent input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent-color); }
+    .mcp-local-warning { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; line-height: 1.5; }
+    .mcp-local-warning p { color: var(--muted-color); }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
@@ -6512,7 +6516,7 @@ class CodexBridgePanel extends HTMLElement {
   _desktopFormValues(target) {
     const form = target?.closest("form");
     if (!form) return {};
-    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.value]));
+    return Object.fromEntries(Array.from(form.querySelectorAll("[data-desktop-field]")).map((field) => [field.dataset.desktopField, field.type === "checkbox" ? field.checked : field.value]));
   }
 
   _captureDesktopFormDraft(target) {
@@ -6520,7 +6524,16 @@ class CodexBridgePanel extends HTMLElement {
     const field = target.dataset.desktopField;
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
-    state.formDraft = { ...(state.formDraft || {}), [field]: target.value };
+    state.formDraft = { ...(state.formDraft || {}), [field]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "mcp" && ["local", "url"].includes(field)) {
+      state.formDraft.local_acknowledged = false;
+      const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
+      if (consent) consent.checked = false;
+      if (field === "local") {
+        this._renderDesktopSurface();
+        return;
+      }
+    }
     if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
@@ -6648,6 +6661,14 @@ class CodexBridgePanel extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      if (payload.local) {
+        if (!this._config?.capabilities?.includes("mcp_local_v1") || payload.local_acknowledged !== true) return;
+        delete payload.oauth_client_id;
+        delete payload.oauth_resource;
+      } else {
+        delete payload.local;
+        delete payload.local_acknowledged;
+      }
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
