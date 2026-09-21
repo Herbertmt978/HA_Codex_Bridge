@@ -622,9 +622,9 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         "dependency-name": "pytest",
         "versions": [">=9.1.0"],
     }
-    assert root_pip.get("ignore") == [
-        expected_pytest_ignore,
-    ], "Home Assistant and its test fixture must be allowed to update together"
+    assert not root_pip.get("ignore"), (
+        "the root test fixture owns its dependency pins and must remain updatable"
+    )
 
     assert not any(
         isinstance(item, dict)

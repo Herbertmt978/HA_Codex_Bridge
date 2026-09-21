@@ -23,6 +23,15 @@ Python test dependencies from `requirements-test.txt` and run `npm ci` before
 frontend checks. Edit `frontend/src/` and regenerate the bundled assets; do
 not edit the generated panel directly.
 
+The exact `pytest-homeassistant-custom-component` pin is the single authority
+for the Home Assistant test version and its pytest dependencies. The fixture's
+package metadata pins those versions together; do not add separate pins for
+them to `requirements-test.txt`. Dependabot updates the fixture in the weekly
+group, so a new Home Assistant release waits for a matching fixture instead of
+creating an incompatible pair. The environment regression tests require a
+stable Home Assistant release and verify it matches the fixture's exact pin.
+This changes test tooling only, not the installed App or Home Assistant version.
+
 ```text
 npm run lint
 npm run test:unit
