@@ -18,6 +18,39 @@ const action = (panel, name) => panel.shadowRoot.querySelector(`[data-desktop-ac
 describe("MCP setup and access settings", () => {
   beforeEach(() => document.body.replaceChildren());
 
+  it("requires fresh endpoint consent for local MCP and keeps public payloads compatible", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_local_v1"]);
+    await panel._handleDesktopAction("choose-ha-mcp");
+    field(panel, "url").value = "http://homeassistant.local:8123/private-test";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    field(panel, "local").click();
+    expect(field(panel, "oauth_client_id")).toBeNull();
+    expect(panel.shadowRoot.querySelector(".mcp-local-warning").textContent).toContain("without encryption");
+    await panel._handleDesktopAction("submit-mcp", {}, field(panel, "url"));
+    expect(panel._callWS).not.toHaveBeenCalled();
+    field(panel, "local_acknowledged").click();
+    field(panel, "url").value = "http://homeassistant.local:8123/new-path";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(field(panel, "local_acknowledged").checked).toBe(false);
+    field(panel, "local_acknowledged").click();
+    await panel._handleDesktopAction("submit-mcp", {}, field(panel, "url"));
+    expect(panel._callWS).toHaveBeenCalledWith("add_mcp", {
+      name: "home-assistant", url: "http://homeassistant.local:8123/new-path", local: true, local_acknowledged: true,
+    });
+    await panel._handleDesktopAction("choose-ha-mcp");
+    field(panel, "url").value = "https://ha.example.org/mcp";
+    await panel._handleDesktopAction("submit-mcp", {}, field(panel, "url"));
+    expect(panel._callWS).toHaveBeenCalledWith("add_mcp", { name: "home-assistant", url: "https://ha.example.org/mcp" });
+  });
+
+  it("offers guidance rather than local controls when the App lacks local capability", async () => {
+    const panel = setup(["mcp_admin_v1"]);
+    await panel._handleDesktopAction("choose-custom-mcp");
+    expect(field(panel, "local")).toBeNull();
+    expect(field(panel, "oauth_client_id")).toBeTruthy();
+    expect(panel.shadowRoot.querySelector(".mcp-setup").textContent).toContain("Enable local MCP connections");
+  });
+
   it("offers HA guidance alongside the custom-server form without granting access", async () => {
     const panel = setup(["mcp_admin_v1"]);
     await panel._handleDesktopAction("open-mcp-form");

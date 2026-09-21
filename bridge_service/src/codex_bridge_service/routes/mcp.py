@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictBool
 
 from ..auth import require_bridge_token
 from ..mcp_manager import (
@@ -28,6 +28,8 @@ class CreateMcpServerRequest(BaseModel):
     url: str
     oauth_client_id: str | None = None
     oauth_resource: str | None = None
+    local: StrictBool = False
+    local_acknowledged: StrictBool = False
 
 
 class McpOAuthLoginResponse(BaseModel):
@@ -81,6 +83,8 @@ def create_mcp_server(
             url=payload.url,
             oauth_client_id=payload.oauth_client_id,
             oauth_resource=payload.oauth_resource,
+            local=payload.local,
+            local_acknowledged=payload.local_acknowledged,
         )
     except McpManagerError as error:
         raise _problem(error) from None

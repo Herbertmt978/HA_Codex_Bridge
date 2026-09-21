@@ -56,6 +56,7 @@ def build_app() -> FastAPI:
         model_discovery_timeout_seconds=settings.model_discovery_timeout_seconds,
         model_cache_ttl_seconds=settings.model_cache_ttl_seconds,
         enable_mcp=settings.enable_mcp,
+        enable_local_mcp=settings.enable_local_mcp,
         browser_broker=(
             BrowserBroker(browser_worker)
             if browser_worker is not None and browser_worker.ready()

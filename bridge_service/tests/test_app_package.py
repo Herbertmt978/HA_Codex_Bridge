@@ -51,8 +51,8 @@ def test_app_metadata_is_immutable_and_discovered_by_the_integration() -> None:
     assert config["image"] == "ghcr.io/herbertmt978/ha-codex-bridge-app"
     assert config["discovery"] == ["codex_bridge"]
     assert config["map"] == ["app_config:rw"]
-    assert config["options"] == {"enable_mcp": False, "enable_browser": False}
-    assert config["schema"] == {"enable_mcp": "bool", "enable_browser": "bool"}
+    assert config["options"] == {"enable_mcp": False, "enable_local_mcp": False, "enable_browser": False}
+    assert config["schema"] == {"enable_mcp": "bool", "enable_local_mcp": "bool", "enable_browser": "bool"}
 
 
 @pytest.mark.parametrize("default_field", ["apparmor", "boot", "startup"])

@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 1.2.0
+
+- Adds optional local HTTP/HTTPS MCP connections for HA-MCP and other servers
+  on the LAN or Home Assistant App network. Both MCP options remain off by default.
+- Adds an endpoint warning and acknowledgement to guided HA-MCP and custom-server
+  setup. HTTP is unencrypted; HTTPS certificates must validate normally.
+- Routes local requests through a private relay, pins approved private addresses
+  and rejects redirects, public destinations, loopback and Supervisor access.
+- Keeps private local URL paths out of the server list and native MCP diagnostics.
+- Removes local connections after disabling the option and restarting, while
+  preserving valid public HTTPS/OAuth connections.
+- Fixes startup handling of saved MCP settings: servers stay disabled until
+  validated, including after a restart or when MCP is switched off.
+- Pairs App, Integration and panel 1.2.0 with Bridge 0.9.0 and Codex 0.155.1.
+  Local bearer tokens, OAuth, custom headers and stdio remain planned features.
+
 ## 1.1.2
 
 - Adds an administrator-operated workspace terminal with real interactive input,

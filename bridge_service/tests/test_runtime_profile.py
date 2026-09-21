@@ -243,6 +243,22 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
     )
     assert opted_in.state.mcp_manager.enabled is True
     assert "mcp_admin_v1" in opted_in.state.feature_capabilities
+    assert "mcp_local_v1" not in opted_in.state.feature_capabilities
+    local = create_app(
+        root_path=tmp_path / "local-state", auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT, workspace_root=workspace_root,
+        codex_home=codex_home, enable_mcp=True, enable_local_mcp=True,
+    )
+    assert "mcp_local_v1" in local.state.feature_capabilities
+    from codex_bridge_service.models import BridgeReadinessRecord, ComponentVersionRecord
+    record = BridgeReadinessRecord(bridge=ComponentVersionRecord(version="0.9.0"), capabilities=local.state.feature_capabilities)
+    assert "mcp_local_v1" in record.capabilities
+    local_only = create_app(
+        root_path=tmp_path / "local-only-state", auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT, workspace_root=workspace_root,
+        codex_home=codex_home, enable_local_mcp=True,
+    )
+    assert "mcp_local_v1" not in local_only.state.feature_capabilities
 
     external = create_app(root_path=tmp_path / "external", auth_token="secret")
     external_paths = _registered_paths(external)

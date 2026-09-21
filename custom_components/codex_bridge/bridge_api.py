@@ -1406,6 +1406,8 @@ class BridgeApiClient:
 
     async def async_add_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
+        if payload.get("local"):
+            self.require_capability("mcp_local_v1")
         return await self._async_json(
             "POST",
             "/mcp/servers",

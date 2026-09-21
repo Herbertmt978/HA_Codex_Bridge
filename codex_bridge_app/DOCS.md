@@ -89,10 +89,17 @@ App option and restart before adding a server in **Settings → MCP servers**.
 Disabling MCP and restarting clears the saved native MCP server table; it
 leaves skills, plugins, marketplaces and instructions alone.
 
-Only outbound streamable-HTTP servers at trusted HTTPS hostnames are allowed.
-Literal IPs, local/internal names and known non-public DNS answers are rejected.
-DNS checks happen during validation, not on every connection, so you must
-still trust the provider. Bearer-token settings are not supported.
+Public streamable-HTTP servers use trusted HTTPS hostnames and optional OAuth.
+Their DNS check is a validation-time screen, so you must still trust the provider.
+Local HTTP/HTTPS servers require the separate **Enable local MCP connections**
+option, a restart and acknowledgement in the connection form. Local requests
+use a private relay that pins approved private addresses and rejects redirects.
+HTTP is unencrypted; HTTPS certificates must validate normally. Turning the
+local option off and restarting removes local bindings without removing valid
+public connections. See the [setup guide](../docs/home-assistant-mcp.md) for
+allowed destinations and how to reconnect after an IP change.
+
+Local OAuth, bearer-token settings, custom headers and stdio are not supported.
 
 OAuth sign-in is an explicit, one-time flow. Do not save or share its temporary
 URL. MCP requests that require elicitation are declined. Enabling MCP does not

@@ -18,3 +18,6 @@
 | Implementation plan | 2026-07-17 | Active account-rebinding repair | [Account-agnostic Home Assistant chats](plans/2026-07-17-account-agnostic-chats.md) |
 | Work record | 2026-07-18 | `1.0.0` stable-promotion source work; `0.8.11` is the last signed and target-accepted release | [Home Assistant-native Codex execution](work/2026-07-12-home-assistant-native-codex/20-checkpoint.md) |
 | Release evidence | 2026-07-18 | Signed and target-accepted `0.8.11`; bounded `1.0.0` stable-promotion evidence remains pre-publication | [Home Assistant-native Codex execution evidence](work/2026-07-12-home-assistant-native-codex/90-evidence.md) |
+| Work record | 2026-09-21 | Local qualification complete; publication pending | [Local MCP connections](work/2026-09-21-local-mcp/20-checkpoint.md) |
+| Release evidence | 2026-09-21 | 1.2.0 candidate | [Local MCP qualification](work/2026-09-21-local-mcp/90-evidence.md) |
+| ADR | 2026-09-21 | Accepted and implemented | [Local MCP relay](adr/0007-local-mcp-relay.md) |

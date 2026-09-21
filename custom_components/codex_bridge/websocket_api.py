@@ -49,6 +49,7 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_runtime_invalid": "Codex returned an invalid MCP response",
     "mcp_server_not_found": "The MCP server no longer exists",
     "mcp_unavailable": "MCP configuration is temporarily unavailable",
+    "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
 }
 
 
@@ -1602,6 +1603,8 @@ async def ws_list_mcp(hass, connection, msg) -> None:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/add_mcp",
+        vol.Optional("local"): bool,
+        vol.Optional("local_acknowledged"): bool,
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
         vol.Required("url"): vol.All(str, vol.Length(min=1, max=2048)),
         vol.Optional("oauth_client_id"): vol.Any(
@@ -1621,7 +1624,7 @@ async def ws_add_mcp(hass, connection, msg) -> None:
         lambda client: client.async_add_mcp(
             {
                 key: msg[key]
-                for key in ("name", "url", "oauth_client_id", "oauth_resource")
+                for key in ("name", "url", "oauth_client_id", "oauth_resource", "local", "local_acknowledged")
                 if key in msg
             }
         ),

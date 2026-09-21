@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
+import os
 from threading import Event, Thread
 from types import SimpleNamespace
 import pytest
@@ -17,6 +18,7 @@ from codex_bridge_service.mcp_manager import (
     McpValidationError,
 )
 from codex_bridge_service.routes.mcp import router
+from codex_bridge_service.mcp_local_relay import LocalMcpRelay
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +142,10 @@ class StartupSanitizingAppServer(AppServerDouble):
         if method == "config/read":
             effective = deepcopy(self.user_config)
             if self.override_mcp:
-                effective["mcp_servers"] = {}
+                # Match native Codex's recursive table merge, not a fictitious
+                # empty-root replacement.
+                for value in effective["mcp_servers"].values():
+                    value["enabled"] = False
             layers: list[dict[str, object]] = [
                 {
                     "name": {
@@ -287,6 +292,7 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
     assert result == {
         "name": "vendor_mcp",
         "transport": "streamable_http",
+        "network": "public",
         "endpoint": "https://mcp.vendor.example/stream",
         "auth": "oauth",
         "startup": "starting",
@@ -316,6 +322,83 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
         ("config/mcpServer/reload", None),
     ]
     assert len(gate.leases) == 1 and gate.leases[0].released is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
+async def test_local_create_list_remove_and_oauth_boundary(tmp_path):
+    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    await relay.start()
+    try:
+        manager, client, gate = _manager(_config(), {"status": "ok", "version": "user-v2"}, {})
+        manager._local_relay = relay
+        result = manager.create_server(name="home", url="http://ha.local/private-secret", local=True, local_acknowledged=True)
+        assert result["endpoint"] == "http://ha.local"
+        assert result["network"] == "local"
+        binding = client.calls[1].params["edits"][0]["value"]
+        assert "private-secret" not in str(client.calls)
+        assert binding["url"].startswith("http://127.0.0.1:")
+        effective = {**binding, "enabled": True, "environment_id": "local", "tool_timeout_sec": None}
+        client.responses.extend([_config({"home": effective}), {"data": [{"name": "home", "authStatus": "oAuth"}]}])
+        view = manager.list_servers()[0]
+        assert view["auth"] == "none" and view["endpoint"] == "http://ha.local"
+        client.responses.append(_config({"home": binding}))
+        with pytest.raises(McpValidationError):
+            manager.start_oauth_login("home")
+        client.responses.extend([_config({"home": binding}), {"status": "ok", "version": "user-v2"}, {}])
+        manager.remove_server("home")
+        assert relay.original_url("home", binding) is None
+        assert all(lease.released for lease in gate.leases)
+    finally:
+        await relay.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
+async def test_local_consent_and_write_failure_never_leave_active_binding(tmp_path):
+    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    await relay.start()
+    try:
+        manager, client, _ = _manager(_config(), RuntimeError("private failure"))
+        manager._local_relay = relay
+        for fields in [{}, {"local_acknowledged": "true"}, {"local_acknowledged": True, "oauth_client_id": "client"}]:
+            with pytest.raises(McpValidationError):
+                manager.create_server(name="home", url="http://ha.local/mcp", local=True, **fields)
+        assert not client.calls
+        with pytest.raises(McpConflictError):
+            manager.create_server(name="home", url="http://ha.local/mcp", local=True, local_acknowledged=True)
+        assert not relay._active and not relay._records
+    finally:
+        await relay.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
+@pytest.mark.parametrize("local_enabled", [False, True])
+async def test_startup_retains_only_approved_bindings_and_option_revokes_them(tmp_path, local_enabled):
+    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    await relay.start()
+    try:
+        relay.add("home", "http://ha.local/private-secret")
+        binding = relay.native_config("home")
+        binding["url"] = "http://127.0.0.1:1/mcp/home"  # persisted previous listener
+        relay.add("orphan", "http://other.local/private-secret")
+        config = _config()
+        config["layers"][0]["config"] = {"mcp_servers": {
+            "home": binding, "direct": {"url": "http://ha.local/mcp"},
+            "tampered": {**binding, "http_headers": {"X-Codex-Local-Mcp": "wrong"}},
+        }}
+        manager, client, _ = _manager(config, {"status": "ok", "version": "user-v2"}, {})
+        manager._local_relay = relay if local_enabled else None
+        manager.sanitize_startup_servers()
+        saved = client.calls[1].params["edits"][0]["value"]
+        assert set(saved) == ({"home"} if local_enabled else set())
+        if local_enabled:
+            assert saved["home"] == relay.native_config("home")
+            assert set(relay._records) == {"home"}
+        assert "private-secret" not in str(client.calls)
+    finally:
+        await relay.close()
 
 
 def test_remove_uses_same_cas_write_reload_boundary() -> None:
@@ -438,6 +521,7 @@ def test_existing_stdio_bearer_and_environment_config_are_never_reflected() -> N
         {
             "name": "safe",
             "transport": "streamable_http",
+        "network": "public",
             "endpoint": "https://mcp.vendor.example/path",
             "auth": "oauth",
             "startup": "unknown",
@@ -601,7 +685,7 @@ def test_disabled_manager_blocks_authenticated_create_and_oauth_without_native_c
 
 def test_disabled_manager_removes_only_native_mcp_root_config() -> None:
     manager, client, gate = _manager(
-        _config({"vendor": {"url": "https://mcp.vendor.example"}}),
+        _config({"vendor": {"url": "https://mcp.vendor.example", "enabled": False}}),
         {
             "status": "ok",
             "version": "user-v2",
@@ -690,6 +774,7 @@ def test_enabled_startup_replaces_unsafe_user_mcp_before_activation() -> None:
         {
             "name": "safe",
             "transport": "streamable_http",
+        "network": "public",
             "endpoint": "https://mcp.vendor.example/stream",
             "auth": "unknown",
             "startup": "unknown",
@@ -860,3 +945,19 @@ def test_oauth_route_is_no_store_and_exposes_url_only_in_direct_response() -> No
     assert response.headers["Cache-Control"] == "no-store"
     assert response.json() == {"authorization_url": raw_url}
     assert raw_url not in repr(manager.__dict__)
+
+
+def test_effective_public_defaults_do_not_hide_an_existing_server():
+    manager, client, _gate = _manager(
+        _config({"vendor": {"url": "https://mcp.vendor.example/stream", "enabled": True,
+                            "environment_id": "local", "tool_timeout_sec": None}}),
+        {"data": []},
+    )
+    assert manager.list_servers()[0]["name"] == "vendor"
+
+
+def test_disabled_manager_refuses_an_unmasked_effective_server():
+    manager, client, _gate = _manager(_config({"vendor": {"url": "https://mcp.vendor.example"}}), enabled=False)
+    with pytest.raises(McpProtocolError):
+        manager.disable_all_servers()
+    assert len(client.calls) == 1

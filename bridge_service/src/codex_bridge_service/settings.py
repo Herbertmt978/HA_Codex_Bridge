@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     bypass_sandbox: bool = False
     ignore_user_config: bool = False
     enable_mcp: bool = False
+    enable_local_mcp: bool = False
     enable_browser: bool = False
     run_idle_timeout_seconds: float | None = 1800.0
     model_discovery_timeout_seconds: float = Field(

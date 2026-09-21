@@ -215,19 +215,34 @@ for (const width of [390, 1280]) {
     await panel.getByRole("button", { name: /^Home Assistant \(HA-MCP\)/ }).press("Enter");
     await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("home-assistant");
     await expect(panel.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();
-    await panel.getByLabel("HA-MCP HTTPS connection URL").fill("https://ha.example.org/api/webhook/test-only");
-    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveAttribute("type", "password");
+    await panel.getByLabel("HA-MCP connection URL").fill("https://ha.example.org/api/webhook/test-only");
+    await expect(panel.getByLabel("HA-MCP connection URL")).toHaveAttribute("type", "password");
     await page.evaluate(() => {
       const element = document.querySelector("codex-bridge-panel");
       element.hass = { ...element.hass };
     });
-    await expect(panel.getByLabel("HA-MCP HTTPS connection URL")).toHaveValue("https://ha.example.org/api/webhook/test-only");
+    await expect(panel.getByLabel("HA-MCP connection URL")).toHaveValue("https://ha.example.org/api/webhook/test-only");
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
     const formBounds = await panel.locator('[data-desktop-form="mcp"]').boundingBox();
     expect(formBounds.x).toBeGreaterThanOrEqual(0);
     expect(formBounds.x + formBounds.width).toBeLessThanOrEqual(width);
     await panel.screenshot({ path: testInfo.outputPath("ha-mcp-guide.png") });
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._config.capabilities = ["mcp_admin_v1", "mcp_local_v1"];
+      element._renderDesktopSurface();
+    });
+    await panel.getByLabel("Connect to a local network or Home Assistant App server").check();
+    await panel.getByLabel("HA-MCP connection URL").fill("http://ha.local:8123/private-test");
+    const consent = panel.getByLabel("I trust this server and understand the access and connection risks");
+    await expect(consent).not.toBeChecked();
+    await expect(panel.getByText("OAuth settings (optional)", { exact: true })).toHaveCount(0);
+    await consent.check();
+    await panel.getByLabel("HA-MCP connection URL").fill("http://ha.local:8123/changed-test");
+    await expect(consent).not.toBeChecked();
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({ path: testInfo.outputPath("local-mcp-warning.png") });
     await panel.getByRole("button", { name: "Cancel", exact: true }).click();
     await panel.getByRole("button", { name: "Add MCP server", exact: true }).click();
     await panel.getByRole("button", { name: /^Other MCP server/ }).click();
