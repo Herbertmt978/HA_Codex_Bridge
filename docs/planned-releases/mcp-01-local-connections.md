@@ -10,6 +10,16 @@ The current Bridge rejects local names, private IP addresses and HTTP MCP URLs.
 Users cannot connect directly to HA-MCP on the same installation. Add an
 explicit local-network option while retaining public HTTPS as the default.
 
+## Required security-contract review
+
+This is a conditional proposal to change the current public-HTTPS-only MCP
+boundary. Before implementing local connections, approve a destination and egress
+policy and deliberately revise [AGENTS.md](../../AGENTS.md),
+[CONTEXT.md](../../CONTEXT.md) and [SECURITY.md](../../SECURITY.md) to describe it.
+Administrator acknowledgement alone does not satisfy that prerequisite. Until
+that review is complete, the existing non-public-address and HTTP restrictions
+remain in force; this plan does not override them.
+
 ## Scope
 
 - Support trusted LAN and HA App-network HTTP/HTTPS endpoints through the

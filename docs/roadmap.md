@@ -15,6 +15,11 @@ permissions without the administrator's choice.
 
 ## MCP compatibility
 
+MCP-01, MCP-02 and MCP-03 are conditional proposals to change the current MCP
+security contract. Each requires an approved design and explicit updates to the
+governing architecture and security documents before implementation. The current
+HTTPS-only, no-credential configuration rules remain in force in the meantime.
+
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
 | [MCP-01: Local MCP connections](planned-releases/mcp-01-local-connections.md) | Connect to HA-MCP and other servers on the LAN or HA App network. | Explicit network permission and destination controls | [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97) |

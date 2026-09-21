@@ -9,6 +9,16 @@ Tracking issue: [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98)
 OAuth-only configuration excludes servers that use bearer tokens or API-key
 headers. Add write-only authentication settings for compatible HTTP MCP servers.
 
+## Required security-contract review
+
+The current MCP contract rejects credentials and forbids bearer-token settings.
+This proposal is conditional on reviewing and approving a different credential
+boundary, then deliberately revising [AGENTS.md](../../AGENTS.md),
+[CONTEXT.md](../../CONTEXT.md) and [SECURITY.md](../../SECURITY.md) before
+implementation. Private storage and write-only controls are proposed safeguards,
+not an exception to the existing prohibition. The current contract remains in
+force until it is explicitly revised.
+
 ## Scope
 
 - Offer OAuth, bearer token and explicitly named authentication headers.
