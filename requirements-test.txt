@@ -1,5 +1,5 @@
 # Keep Home Assistant and its version-matched test fixture in sync.
-homeassistant==2026.9.2
+homeassistant==2026.9.3
 pytest-homeassistant-custom-component==0.13.365
 pytest==9.0.3
 pytest-asyncio==1.4.0
