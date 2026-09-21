@@ -1,0 +1,91 @@
+# Planned releases
+
+These are separate feature-release plans, based on the gaps reviewed on
+21 September 2026. They are not shipped features, release tags or promised
+delivery dates. Version numbers will be assigned when each change is ready.
+The current baseline is App and Integration 1.1.2.
+
+Each plan has its own issue, scope, dependencies and acceptance criteria. Use the
+linked issues for implementation progress and update this roadmap when a feature
+ships. Complete the relevant local, CI and native Home Assistant checks before
+marking it released.
+
+An upgrade must not activate new MCP connections, messaging channels or host
+permissions without the administrator's choice.
+
+## MCP compatibility
+
+MCP-01, MCP-02 and MCP-03 are conditional proposals to change the current MCP
+security contract. Each requires an approved design and explicit updates to the
+governing architecture and security documents before implementation. The current
+HTTPS-only, no-credential configuration rules remain in force in the meantime.
+
+| Plan | Outcome | Dependencies | Issue |
+| --- | --- | --- | --- |
+| [MCP-01: Local MCP connections](planned-releases/mcp-01-local-connections.md) | Connect to HA-MCP and other servers on the LAN or HA App network. | Explicit network permission and destination controls | [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97) |
+| [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Connect servers that require a bearer token or authentication header. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
+| [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Run approved MCP server processes with bounded access. | Separate process isolation design | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
+| [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
+| [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
+| [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Inspect server tools and choose which Codex may use. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
+
+## Home Assistant integration
+
+| Plan | Outcome | Dependencies | Issue |
+| --- | --- | --- | --- |
+| [HA-01: Task actions and result events](planned-releases/ha-01-actions-events.md) | Start and continue tasks from HA scripts and automations. | Idempotent admission and permission policy | [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103) |
+| [HA-02: Completion notifications](planned-releases/ha-02-notifications.md) | Choose when and where task outcomes are announced. | HA-01 result delivery | [#104](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/104) |
+| [HA-03: Assist delegation](planned-releases/ha-03-assist.md) | Ask Assist to delegate a bounded task to Codex. | HA-01 and explicit exposure policy | [#105](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/105) |
+| [HA-04: Status and usage entities](planned-releases/ha-04-status-entities.md) | Use account limits, connection health and task state in HA dashboards. | Stable entity and privacy contracts | [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106) |
+| [HA-05: Scoped configuration access](planned-releases/ha-05-config-workspace.md) | Review and edit selected HA configuration without a root-host grant. | Reviewed storage boundary and recovery workflow | [#107](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/107) |
+
+## Platforms and task experience
+
+| Plan | Outcome | Dependencies | Issue |
+| --- | --- | --- | --- |
+| [PLATFORM-01: ARM64 support](planned-releases/platform-01-arm64.md) | Install on supported aarch64 HAOS hardware. | Verified runtime assets and native ARM64 qualification | [#111](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/111) |
+| [TASK-01: Scheduling through chat](planned-releases/task-01-conversational-scheduling.md) | Describe a task and its frequency, then confirm the interpreted schedule. | Existing scheduler and explicit schedule confirmation | [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112) |
+| [SHARE-01: Public snapshots](planned-releases/share-01-public-snapshots.md) | Publish a selected, fixed, read-only copy of a chat. | Hosting and privacy design; existing proposal | [#95](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/95) |
+
+## Optional messaging channels
+
+| Plan | Outcome | Dependencies | Issue |
+| --- | --- | --- | --- |
+| [CHANNEL-01: Telegram](planned-releases/channel-01-telegram.md) | Use a privately authorised Telegram bot to talk to Codex. | HA-01 and channel identity policy | [#108](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/108) |
+| [CHANNEL-02: Discord](planned-releases/channel-02-discord.md) | Use Codex from explicitly allowed Discord users and channels. | HA-01 and channel identity policy | [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109) |
+| [CHANNEL-03: WhatsApp](planned-releases/channel-03-whatsapp.md) | Connect an approved WhatsApp provider to bounded Codex tasks. | HA-01, provider choice and webhook authentication | [#110](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/110) |
+
+The initial priority is MCP-01 and MCP-02, followed by MCP-05 and MCP-06.
+Interactive requests and stdio need their own security and lifecycle work.
+The remaining plans are independently trackable; this ordering does not set a
+delivery date or commit to a provider's costs.
+
+## Comparison evidence and reuse
+
+- [Codex for Home Assistant](https://github.com/moryoav/home-assistant-codex)
+  documents HA actions, task-result events, notifications, status entities,
+  configuration access and aarch64 images.
+- [Codex App](https://github.com/kecksdigital/codex-hass) documents direct file
+  access and optional HA MCP integration.
+- [Amira](https://github.com/Bobsilvio/ha-claude) documents MCP management,
+  scheduled work and Telegram, Discord and WhatsApp connections. Its advertised
+  Codex provider does not establish equivalence to the native Codex agent.
+- [Codex MCP documentation](https://developers.openai.com/codex/mcp/) describes
+  native transport, authentication and tool-filtering options. Check the pinned
+  runtime's actual contract before relying on a newly documented option.
+
+These comparisons come from documentation, not installation or security audits
+of the other projects. Their features do not prove compatibility with Bridge's
+sandbox or Home Assistant authentication model. No implementation has been
+copied for this roadmap. Any later reuse must preserve the source licence and
+required attribution; Amira's noncommercial code must not be imported into our
+MIT distribution as though it were MIT-licensed. Implement its useful feature
+ideas independently unless suitable permission is obtained.
+
+## Already available
+
+The graphical chat UI, saved chats/projects, scheduled-task editor, Stop/Steer,
+context usage, workspace terminal, file previews, skills/plugins, appearance
+settings, public-site browser worker and optional HAOS Host Access App are
+already available, with the limits described in the user guides. Full desktop parity and unrestricted MCP support are not
+claims of the current release.
