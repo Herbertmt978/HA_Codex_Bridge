@@ -1800,36 +1800,13 @@ template.innerHTML = `
 
     .message {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 10px;
       align-items: start;
     }
 
-    .message.user {
-      grid-template-columns: minmax(0, 1fr) 28px;
-    }
-
-    .message.user .avatar {
-      order: 2;
-      justify-self: end;
-    }
-
     .message.user .bubble {
-      order: 1;
       justify-self: end;
-    }
-
-    .avatar {
-      width: 28px;
-      height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      color: color-mix(in srgb, var(--accent-color) 88%, black 12%);
-      background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 13%, white 87%), color-mix(in srgb, var(--brand-cyan) 12%, white 88%));
-      border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
-      box-shadow: 0 7px 16px rgba(15, 23, 42, 0.06);
     }
 
     .bubble {
@@ -1842,22 +1819,30 @@ template.innerHTML = `
       box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
     }
 
-    .message.user .avatar {
-      color: color-mix(in srgb, var(--brand-violet) 72%, black 28%);
-      background: linear-gradient(135deg, color-mix(in srgb, var(--brand-violet) 15%, white 85%), color-mix(in srgb, var(--brand-blue) 13%, white 87%));
-      border-color: color-mix(in srgb, var(--brand-violet) 24%, var(--border-color) 76%);
-    }
-
     .message.user .bubble {
       background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 66%, white 34%), color-mix(in srgb, var(--surface-bg) 94%, #eff8ff 6%));
       border-color: color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
     }
 
-    .message-head {
+    .message-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
+      margin-top: 8px;
+    }
+
+    .message-actions .copy-button {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .message-actions .copy-button:hover {
+      background: var(--surface-muted);
+    }
+
+    .message-state {
+      display: block;
       margin-bottom: 8px;
     }
 
@@ -1869,7 +1854,7 @@ template.innerHTML = `
       font-size: var(--font-body-size);
       line-height: 1.6;
       background: transparent;
-      color: inherit;
+      color: var(--text-color);
       user-select: text;
       -webkit-user-select: text;
     }
@@ -1923,7 +1908,7 @@ template.innerHTML = `
     .event-row {
       font-size: var(--font-caption-size);
       color: var(--muted-color);
-      padding-left: 38px;
+      padding-left: 0;
       user-select: text;
       -webkit-user-select: text;
     }
@@ -3412,7 +3397,7 @@ template.innerHTML = `
       gap: 8px;
       min-height: 42px;
       margin: 0 auto;
-      padding: 2px 0 8px 34px;
+      padding: 2px 0 8px;
     }
 
     .run-activity-region:empty,
@@ -3725,37 +3710,6 @@ template.innerHTML = `
 
     .message.streaming .bubble {
       opacity: 0.9;
-    }
-
-    .message.streaming .row-meta::after {
-      content: " \\00B7 responding";
-      color: var(--muted-color);
-      font-weight: 400;
-    }
-
-    .message {
-      grid-template-columns: 24px minmax(0, 1fr);
-      gap: 10px;
-    }
-
-    .message.user {
-      grid-template-columns: minmax(0, 1fr) 24px;
-    }
-
-    .avatar {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      background: var(--surface-muted);
-      border-color: var(--border-color);
-      box-shadow: none;
-      color: var(--muted-color);
-    }
-
-    .message.user .avatar {
-      background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-bg) 88%);
-      border-color: color-mix(in srgb, var(--accent-color) 26%, var(--border-color) 74%);
-      color: var(--accent-color);
     }
 
     .bubble,
@@ -4122,7 +4076,6 @@ template.innerHTML = `
     }
 
     .status-pill.running,
-    .message.user .avatar,
     .progress-dot.active {
       background: var(--accent-surface);
     }
@@ -5148,8 +5101,6 @@ const icons = {
   send: iconSvg('<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>'),
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
-  user: iconSvg('<path d="M20 21a8 8 0 1 0-16 0"></path><circle cx="12" cy="7" r="4"></circle>'),
-  bot: iconSvg('<rect x="5" y="7" width="14" height="10" rx="4"></rect><path d="M12 3v4"></path><circle cx="10" cy="12" r="1"></circle><circle cx="14" cy="12" r="1"></circle>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
   edit: iconSvg('<path d="M12 20h9"></path><path d="m16.5 3.5 4 4L8 20H4v-4Z"></path>'),
   chat: iconSvg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path>'),
@@ -8636,6 +8587,7 @@ class CodexBridgePanel extends HTMLElement {
     const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
     const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
     const hasStepDetails = Boolean(activity.step || history.length || files.changed);
+    const showDetails = Boolean(hasStepDetails || activity.busy || activity.attentionMessage);
     const showActivityCopy = Boolean(
       activity.action
       && (activity.terminal || activity.busy)
@@ -8649,7 +8601,7 @@ class CodexBridgePanel extends HTMLElement {
 
     region.hidden = false;
     region.setAttribute("aria-busy", String(activity.busy));
-    if (showActivityCopy) {
+    if (showActivityCopy && !(activity.terminal && showDetails)) {
       const copy = document.createElement("div");
       copy.className = "run-activity-copy";
       const indicator = document.createElement("span");
@@ -8660,7 +8612,7 @@ class CodexBridgePanel extends HTMLElement {
       region.append(copy);
     }
 
-    if (hasStepDetails || activity.busy || activity.attentionMessage) {
+    if (showDetails) {
       const wrap = document.createElement("div");
       wrap.className = `run-step-wrap${this._runActivityDetailsOpen ? " open" : ""}`;
       wrap.dataset.state = activity.state;
@@ -8686,7 +8638,7 @@ class CodexBridgePanel extends HTMLElement {
       stepIndicator.setAttribute("aria-hidden", "true");
       chip.append(stepIndicator);
 
-      const stepText = activity.step
+      const stepText = activity.step && !activity.terminal
         ? `Step ${activity.step.index} / ${activity.step.total}`
         : activity.busy
           ? "Working"
@@ -8696,7 +8648,7 @@ class CodexBridgePanel extends HTMLElement {
               ? "Run interrupted"
               : activity.state === "cancelled"
                 ? "Run cancelled"
-                : "Run complete";
+                : "Run completed";
       chip.append(this._textElement("span", "run-step-label", stepText));
       if (files.changed) {
         chip.append(
@@ -8883,7 +8835,7 @@ class CodexBridgePanel extends HTMLElement {
       text,
       isPartial ? "partial" : "streaming",
       false,
-      isPartial ? "Partial response" : "Assistant"
+      isPartial ? "Partial response" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -9016,8 +8968,6 @@ class CodexBridgePanel extends HTMLElement {
     article.dataset.sequence = String(event?.sequence ?? "generated-image-failed");
     article.setAttribute("role", "status");
     article.setAttribute("aria-label", "Image generation failed");
-    const avatar = this._textElement("span", "avatar", "");
-    this._appendTrustedIcon(avatar, icons.bot);
     const bubble = document.createElement("div");
     bubble.className = "bubble generated-image-card";
     bubble.append(
@@ -9028,7 +8978,7 @@ class CodexBridgePanel extends HTMLElement {
         "Codex could not publish the generated image safely. Retry the prompt."
       )
     );
-    article.append(avatar, bubble);
+    article.append(bubble);
     return article;
   }
 
@@ -9040,8 +8990,6 @@ class CodexBridgePanel extends HTMLElement {
     article.className = "message assistant generated-image-message";
     article.dataset.sequence = String(event?.sequence ?? "generated-image");
     article.setAttribute("aria-label", `Generated image: ${filename}`);
-    const avatar = this._textElement("span", "avatar", "");
-    this._appendTrustedIcon(avatar, icons.bot);
     const bubble = document.createElement("div");
     bubble.className = "bubble generated-image-card";
     const heading = document.createElement("div");
@@ -9101,7 +9049,7 @@ class CodexBridgePanel extends HTMLElement {
     } else {
       bubble.append(this._textElement("span", "generated-image-pending", "Available in Files"));
     }
-    article.append(avatar, bubble);
+    article.append(bubble);
     return article;
   }
 
@@ -9110,26 +9058,21 @@ class CodexBridgePanel extends HTMLElement {
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
 
-    const avatar = this._textElement("span", "avatar", "");
-    this._appendTrustedIcon(avatar, role === "user" ? icons.user : icons.bot);
-    article.append(avatar);
+    article.setAttribute("aria-label", role === "user" ? "Your message" : "Assistant response");
 
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    if (canCopy || label) {
-      const head = document.createElement("div");
-      head.className = "message-head";
-      head.append(this._textElement("span", "row-meta", canCopy ? "Assistant" : label));
-      if (canCopy) {
-        const copyButton = this._actionButton("copy-button", "copy-message", "Copy response");
-        copyButton.dataset.sequence = String(key);
-        this._appendTrustedIcon(copyButton, icons.copy);
-        copyButton.append(this._textElement("span", "", "Copy"));
-        head.append(copyButton);
-      }
-      bubble.append(head);
-    }
+    if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
     this._renderMessageBody(bubble, String(text ?? ""));
+    if (canCopy) {
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+      const copyButton = this._actionButton("copy-button", "copy-message", "Copy response");
+      copyButton.dataset.sequence = String(key);
+      this._appendTrustedIcon(copyButton, icons.copy);
+      actions.append(copyButton);
+      bubble.append(actions);
+    }
     article.append(bubble);
     return article;
   }

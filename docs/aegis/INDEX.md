@@ -2,6 +2,7 @@
 
 | Kind | Date | Status | Artifact |
 |------|------|--------|----------|
+| Work record | 2026-09-22 | Local chat presentation checks | [Chat presentation](work/2026-09-22-chat-presentation/20-checkpoint.md) |
 | Work record | 2026-09-20 | Authorised implementation: optional HAOS host access | [Explicit access environments](work/2026-09-20-explicit-access/20-checkpoint.md) |
 | Design spec | 2026-09-20 | Authorised HAOS target; implementation in progress | [Home Assistant OS host access](specs/2026-09-20-haos-host-access.md) |
 | Baseline | 2026-07-14 | Historical implementation snapshot; superseded by bounded `0.7.1` live-acceptance evidence | [HA-native implementation baseline](baseline/2026-07-14-ha-native-implementation-baseline.md) |

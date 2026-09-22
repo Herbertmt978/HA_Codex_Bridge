@@ -48,6 +48,12 @@ are independent.
 
 ## Appearance
 
+Chat responses use plain text on the conversation background, with Copy below
+each completed response. Messages have no avatars or repeated assistant headings;
+screen readers still identify who sent each message. A partial response keeps its
+label if a run stops before finishing. Each run has one completion indicator.
+Select it to open run details when steps or activity history are available.
+
 - **Theme:** follow Home Assistant, or choose Light or Dark for this panel.
 - **Chat text size:** choose Default, Large or Larger for messages and the composer.
 - **Motion:** follow your device preference or reduce animations in the panel.

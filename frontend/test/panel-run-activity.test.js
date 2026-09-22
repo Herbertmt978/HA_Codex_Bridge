@@ -121,9 +121,7 @@ describe("panel run activity integration", () => {
     let messageList = panel.shadowRoot.getElementById("message-list");
     expect(messageList?.getAttribute("aria-busy")).toBe("true");
     expect(messageList?.querySelector("article.message.assistant.streaming")?.textContent).toContain("Partial answer");
-    const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
-    expect(stylesheet).toContain("\\00B7 responding");
-    expect(stylesheet).not.toContain("Â·");
+    expect(messageList?.querySelector(".message-state")).toBeNull();
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-activity-copy")?.textContent).toContain("Generating a response");
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-step-chip")).toBeTruthy();
 
@@ -139,6 +137,42 @@ describe("panel run activity integration", () => {
     expect(messageList?.querySelector("article.message.assistant.streaming")).toBeNull();
     expect(messageList?.textContent).toContain("Final answer");
     expect(messageList?.textContent).not.toContain("Partial answer");
+  });
+
+  it.each([false, true])("shows one completed indicator with details=%s", (withDetails) => {
+    const events = [event(1, "run.started", { run_id: "run-activity" })];
+    if (withDetails) events.push(event(2, "plan.updated", {
+      run_id: "run-activity", plan: [{ step: "Check files", status: "completed" }],
+    }));
+    events.push(event(3, "run.completed", { run_id: "run-activity" }));
+    const panel = createPanel({ status: "idle", activeRunId: null, events });
+    panel._render(true);
+    const activity = panel.shadowRoot.getElementById("run-activity");
+    expect(activity.querySelectorAll(".run-activity-copy, .run-step-chip")).toHaveLength(1);
+    expect(activity.querySelector(".run-activity-copy, .run-step-chip").textContent).toContain("Run completed");
+    if (withDetails) {
+      activity.querySelector(".run-step-chip").click();
+      expect(activity.querySelector(".run-step-chip").getAttribute("aria-expanded")).toBe("true");
+      expect(activity.querySelector(".run-step-tooltip").textContent).toContain("Check files");
+    }
+  });
+
+  it("keeps message roles accessible without avatars or repeated headings, and copies the response", async () => {
+    const panel = createPanel({ events: [event(1, "message.completed", { text: "Hello from Codex" })] });
+    const copy = vi.spyOn(panel, "_writeClipboardText").mockResolvedValue();
+    panel._render(true);
+    const response = panel.shadowRoot.querySelector(".message.assistant");
+    expect(response.getAttribute("aria-label")).toBe("Assistant response");
+    expect(response.querySelector(".avatar, .message-head")).toBeNull();
+    expect(response.querySelector(".bubble").firstElementChild.textContent).toBe("Hello from Codex");
+    const button = response.querySelector('[data-action="copy-message"]');
+    expect(button.getAttribute("aria-label")).toBe("Copy response");
+    button.click();
+    await Promise.resolve();
+    expect(copy).toHaveBeenCalledWith("Hello from Codex");
+    const user = panel._renderMessage("user", "Say hello", 2, false);
+    expect(user.getAttribute("aria-label")).toBe("Your message");
+    expect(user.querySelector(".avatar")).toBeNull();
   });
 
   it("keeps a partial response and the safe failure reason visible after a failed run", () => {
