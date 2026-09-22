@@ -111,9 +111,11 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.3.0**, Integration and panel **1.3.0**, with Bridge **0.10.0**
-and Codex **0.155.1**. It adds write-only bearer tokens and API-key headers for
-MCP servers, alongside public OAuth and opt-in local HA-MCP connections.
+This release pairs App **1.3.1**, Integration and panel **1.3.1**, with Bridge **0.10.0**
+and Codex **0.155.1**. It prepares ARM64 development builds; published images
+remain **amd64-only** until native hardware qualification. It retains write-only
+bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local
+HA-MCP connections. [ARM64 development status](docs/arm64-development.md).
 Optional HAOS host access still
 requires its separate App and explicit consent. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)

@@ -35,9 +35,17 @@ env:
 
 jobs:
   verify:
-    name: Build amd64 App without publishing
+    name: Build ${{ matrix.arch }} App without publishing
     if: inputs.publish != true
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
     steps:
@@ -79,17 +87,19 @@ jobs:
           python scripts/sync_app_release.py --check
           python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 
-      - name: Stage reproducible amd64 context
-        run: python scripts/stage_app_context.py --arch amd64
+      - name: Stage reproducible target context
+        env:
+          APP_ARCH: ${{ matrix.arch }}
+        run: python scripts/stage_app_context.py --arch "${APP_ARCH}"
 
       - name: Build with the official Home Assistant builder
         uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
-          arch: amd64
+          arch: ${{ matrix.arch }}
           container-registry-password: not-used-with-push-disabled
           context: ./.build/app-context
           cosign: "false"
-          image: ${{ env.PER_ARCH_IMAGE }}
+          image: ghcr.io/herbertmt978/${{ matrix.arch }}-ha-codex-bridge-app
           image-tags: ${{ steps.config_version.outputs.version }}
           labels: |
             io.hass.type=app

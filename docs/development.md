@@ -16,6 +16,9 @@
 Use [CONTEXT.md](../CONTEXT.md): Home Assistant, not the App, is the browser
 boundary; the Integration and App are distinct components.
 
+For architecture work, follow [ARM64 development and qualification](arm64-development.md).
+Development image builds do not change the stable App's supported hardware.
+
 ## Local checks
 
 Use the Node and Python versions declared in the repository and CI. Install
@@ -61,7 +64,7 @@ Home Assistant test plugin imports Linux-only modules and cannot run unchanged
 on Windows. A local container test does not prove that the App sandbox works
 on HAOS; verify the built image and startup attestation on the target as well.
 
-This release pairs App `1.3.0`, Integration and panel `1.3.0`, with Bridge `0.10.0` and
+This release pairs App `1.3.1`, Integration and panel `1.3.1`, with Bridge `0.10.0` and
 Codex `0.155.1`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.

@@ -162,6 +162,25 @@ def test_app_publish_is_main_only_and_uses_exact_config_version_manifest() -> No
     assert re.search(r"(?:config.yaml|config_version)[^\n]{0,160}version", normalized)
 
 
+def test_arm64_build_verification_does_not_enable_unqualified_publication() -> None:
+    document, _ = _workflow("build-app")
+    verify = document["jobs"]["verify"]
+    assert verify["strategy"]["matrix"]["include"] == [
+        {"arch": "amd64", "runner": "ubuntu-24.04"},
+        {"arch": "aarch64", "runner": "ubuntu-24.04-arm"},
+    ]
+    builder = next(step for step in verify["steps"] if "build-image@" in step.get("uses", ""))
+    assert builder["with"]["arch"] == "${{ matrix.arch }}"
+    assert builder["with"]["push"] == "false"
+    publish = document["jobs"]["publish"]
+    assert "strategy" not in publish
+    builder = next(step for step in publish["steps"] if "build-image@" in step.get("uses", ""))
+    assert builder["with"]["arch"] == "amd64"
+    manifest = document["jobs"]["manifest"]
+    publisher = next(step for step in manifest["steps"] if "publish-multi-arch-manifest@" in step.get("uses", ""))
+    assert publisher["with"]["architectures"] == '["amd64"]'
+
+
 def test_app_publish_signs_attests_sbom_and_verifies_published_digest() -> None:
     _, source = _workflow("build-app")
     normalized = source.lower()

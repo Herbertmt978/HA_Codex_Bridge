@@ -24,3 +24,5 @@
 | Work record | 2026-09-22 | Qualified for 1.3.0 | [MCP authentication](work/2026-09-22-mcp-authentication/20-checkpoint.md) |
 | Verification evidence | 2026-09-22 | Development qualification | [MCP authentication checks](work/2026-09-22-mcp-authentication/90-evidence.md) |
 | ADR | 2026-09-22 | Accepted and implemented | [Private MCP credentials](adr/0008-mcp-credentials.md) |
+| Work record | 2026-09-22 | Build preparation verified; native ARM64 hardware unavailable | [ARM64 qualification](work/2026-09-22-arm64/20-checkpoint.md) |
+| Verification evidence | 2026-09-22 | Emulated ARM64 and native amd64 development checks | [ARM64 build evidence](work/2026-09-22-arm64/90-evidence.md) |
