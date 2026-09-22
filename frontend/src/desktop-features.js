@@ -3,7 +3,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
-import { HA_MCP_GUIDE, renderMcpSetup } from "./mcp-setup.js";
+import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -362,9 +362,19 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
     recommendation.append(guide); panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
-    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1")));
+    const credentials = config?.capabilities?.includes("mcp_credentials_v1");
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
+    if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     panel.append(button(documentRef, "Refresh server status", "refresh-settings-capabilities"));
-    panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => { const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth"; td.append(button(documentRef, "Remove", "remove-mcp", { id })); if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id })); else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note")); }));
+    panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+      const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth";
+      td.append(button(documentRef, "Remove server", "remove-mcp", { id }));
+      if (credentials && ["bearer", "headers"].includes(row.auth)) {
+        td.append(text(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
+        if (row.credential_configured) td.append(button(documentRef, "Remove credential", "remove-mcp-credential", { id }));
+      } else if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id }));
+      else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note"));
+    }));
   }
   if (tab === "instructions") {
     panel.append(text(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));

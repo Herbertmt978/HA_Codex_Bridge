@@ -1784,3 +1784,55 @@ test("workspace terminal accepts interactive input and closes when leaving the c
   await page.evaluate(() => document.querySelector("codex-bridge-panel")._selectDesktopDestination("settings"));
   await expect.poll(() => page.evaluate(() => window.terminalCalls.some((item) => item.operation === "close"))).toBe(true);
 });
+
+
+for (const width of [1440, 390]) {
+  test(`MCP credentials stay write-only with accessible controls at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.addInitScript(() => { window.nativeCredentialFetch = window.fetch.bind(window); });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      const fixtureFetch = window.fetch;
+      window.fetch = (url, options) => url === "/api/codex_bridge/mcp/credentials" ? window.nativeCredentialFetch(url, options) : fixtureFetch(url, options);
+      panel._config.capabilities = ["mcp_admin_v1", "mcp_local_v1", "mcp_credentials_v1"];
+      panel._accessToken = () => "synthetic-ha-token";
+      panel._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name:"MCP servers", exact:true }).click();
+    await panel.getByRole("button", { name:"Add MCP server", exact:true }).click();
+    await panel.getByRole("button", { name:/^Other MCP server/ }).click();
+    await panel.getByLabel("Name", { exact:true }).fill("secured");
+    await panel.getByLabel("Public HTTPS URL", { exact:true }).fill("https://mcp.example.com");
+    const auth = panel.getByRole("combobox", {name:"Authentication", exact:true});
+    await auth.click();
+    await panel.getByRole("option", {name:"Bearer token", exact:true}).click();
+    await panel.getByLabel("Bearer token", {exact:true}).fill("synthetic-private-token");
+    await expect(panel.getByLabel("Bearer token", {exact:true})).toHaveAttribute("type", "password");
+    await panel.getByLabel("I trust this destination and understand credential transport and backup exposure").check();
+    await page.route("**/api/codex_bridge/mcp/credentials", async (route) => {
+      expect(route.request().postDataJSON().authentication).toEqual({mode:"bearer",token:"synthetic-private-token"});
+      await route.fulfill({ status:400, contentType:"application/json", body:'{"code":"mcp_request_invalid"}' });
+    });
+    await panel.getByRole("button", {name:"Add server", exact:true}).click();
+    await expect(panel.getByLabel("Bearer token", {exact:true})).toHaveValue("");
+    await expect(panel.getByRole("alert").filter({hasText:"re-enter"})).toBeVisible();
+    await auth.click();
+    await panel.getByRole("option", {name:"API-key headers", exact:true}).click();
+    await panel.getByLabel("Header name", {exact:true}).fill("X-Api-Key");
+    await panel.getByLabel("API-key value", {exact:true}).fill("synthetic-key");
+    await panel.getByRole("button", {name:"Add another header", exact:true}).click();
+    await expect(panel.getByLabel("Header name", {exact:true})).toHaveCount(2);
+    const bounds = await panel.locator(".mcp-authentication").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({page}).include("codex-bridge-panel").withTags(["wcag2a","wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({path:testInfo.outputPath("mcp-credentials.png")});
+    expect(await page.evaluate(() => JSON.stringify(document.querySelector("codex-bridge-panel")._desktopFeatures))).not.toContain("synthetic-key");
+    await panel.getByRole("button", {name:"Cancel", exact:true}).click();
+    await expect(panel.locator("[data-mcp-header-value]")).toHaveCount(0);
+  });
+}

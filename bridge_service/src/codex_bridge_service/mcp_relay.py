@@ -1,7 +1,7 @@
-"""Private, bounded streamable-HTTP relay for approved local MCP endpoints.
+"""Private, bounded relay for local and statically authenticated MCP endpoints.
 
 Native Codex receives only a loopback URL and generated capability header. The
-original URL (which may contain a secret path) never enters native diagnostics.
+Original URLs and upstream credentials never enter native diagnostics.
 """
 
 from __future__ import annotations
@@ -24,8 +24,9 @@ import httpx
 import uvicorn
 
 from .mcp_local_policy import (
-    LocalMcpError, canonical_local_url, checked_addresses, pinned_address, resolve_private,
+    LocalMcpError, canonical_local_url, checked_addresses, pinned_address, resolve_addresses,
 )
+from .mcp_credentials import CredentialRedactor, McpCredential, parse_credential
 from .workspace import WorkspaceBoundary, WorkspaceNotFoundError
 
 RELAY_HEADER = "X-Codex-Local-Mcp"
@@ -33,24 +34,27 @@ _NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z", re.ASCII)
 _TOKEN = re.compile(r"[a-f0-9]{64}\Z", re.ASCII)
 _MAX_BODY = 1024 * 1024
 _MAX_RESPONSE = 8 * 1024 * 1024
-_MAX_REGISTRY = 128 * 1024
+_MAX_REGISTRY = 512 * 1024
 _REQUEST_HEADERS = {"accept", "content-type", "mcp-session-id", "mcp-protocol-version", "last-event-id"}
 _RESPONSE_HEADERS = {b"content-type", b"mcp-session-id", b"mcp-protocol-version"}
 
 
 @dataclass(frozen=True)
-class LocalMcpRecord:
+class McpRecord:
     url: str = field(repr=False)
     addresses: tuple[str, ...]
     token: str = field(repr=False)
+    local: bool = True
+    credential: McpCredential = field(default_factory=McpCredential, repr=False)
 
 
-class LocalMcpRelay:
-    def __init__(self, root: Path, *, resolver: Callable[[str], tuple[str, ...]] = resolve_private) -> None:
+class McpRelay:
+    def __init__(self, root: Path, *, resolver: Callable[[str], tuple[str, ...]] = resolve_addresses, local_enabled: bool = True) -> None:
         self._root = root
         self._resolver = resolver
+        self.local_enabled = local_enabled
         self._boundary: WorkspaceBoundary | None = None
-        self._records: dict[str, LocalMcpRecord] = {}
+        self._records: dict[str, McpRecord] = {}
         self._active: set[str] = set()
         self._lock = RLock()
         self._tasks: dict[str, set[asyncio.Task]] = {}
@@ -123,6 +127,7 @@ class LocalMcpRelay:
 
     def _load(self) -> None:
         assert self._boundary is not None
+        self._records = {}
         try:
             with self._boundary.open_regular_file("servers.json") as source:
                 raw = source.read(_MAX_REGISTRY + 1)
@@ -131,25 +136,29 @@ class LocalMcpRelay:
         if len(raw) > _MAX_REGISTRY:
             raise LocalMcpError()
         value = json.loads(raw)
-        if not isinstance(value, dict) or set(value) != {"version", "servers"} or value["version"] != 1:
+        if not isinstance(value, dict) or set(value) != {"version", "servers"} or type(value["version"]) is not int or value["version"] not in {1, 2}:
             raise LocalMcpError()
         records = value["servers"]
         if not isinstance(records, dict) or len(records) > 32:
             raise LocalMcpError()
         for name, item in records.items():
             if (not _NAME.fullmatch(name) or not isinstance(item, dict)
-                    or set(item) != {"url", "addresses", "token"}
+                    or set(item) != ({"url", "addresses", "token"} if value["version"] == 1 else {"url", "addresses", "token", "local", "credential"})
                     or not isinstance(item["token"], str) or not _TOKEN.fullmatch(item["token"])):
                 raise LocalMcpError()
-            self._records[name] = LocalMcpRecord(
-                canonical_local_url(item["url"]), checked_addresses(item["addresses"]), item["token"],
-            )
+            local = item.get("local", True)
+            if type(local) is not bool:
+                raise LocalMcpError()
+            credential = parse_credential(item["credential"], stored=True) if value["version"] == 2 else McpCredential()
+            if not local and credential.mode == "none":
+                raise LocalMcpError()
+            self._records[name] = McpRecord(canonical_local_url(item["url"], local=local), checked_addresses(item["addresses"], local=local), item["token"], local, credential)
 
-    def _save(self, records: Mapping[str, LocalMcpRecord]) -> None:
+    def _save(self, records: Mapping[str, McpRecord]) -> None:
         if self._boundary is None:
             raise LocalMcpError()
-        payload = {"version": 1, "servers": {
-            name: {"url": item.url, "addresses": item.addresses, "token": item.token}
+        payload = {"version": 2, "servers": {
+            name: {"url": item.url, "addresses": item.addresses, "token": item.token, "local": item.local, "credential": item.credential.stored()}
             for name, item in records.items()
         }}
         raw = json.dumps(payload, ensure_ascii=True).encode()
@@ -157,22 +166,45 @@ class LocalMcpRelay:
             raise LocalMcpError()
         self._boundary.atomic_write_bytes("servers.json", raw)
 
-    def add(self, name: str, url: object) -> str:
+    def add(self, name: str, url: object, *, local: bool = True, credential: McpCredential = McpCredential()) -> str:
         if not _NAME.fullmatch(name) or not self.port:
             raise LocalMcpError()
-        canonical = canonical_local_url(url)
+        if (local and not self.local_enabled) or (not local and credential.mode == "none"):
+            raise LocalMcpError()
+        canonical = canonical_local_url(url, local=local)
         try:
-            addresses = checked_addresses(self._resolve(urlsplit(canonical).hostname or "").result(timeout=5))
+            addresses = checked_addresses(self._resolve(urlsplit(canonical).hostname or "").result(timeout=5), local=local)
         except Exception:
             raise LocalMcpError() from None
         with self._lock:
             if name in self._records or len(self._records) >= 32:
                 raise LocalMcpError()
-            item = LocalMcpRecord(canonical, addresses, secrets.token_hex(32))
+            item = McpRecord(canonical, addresses, secrets.token_hex(32), local, credential)
             updated = {**self._records, name: item}
             self._save(updated)
             self._records = updated
         return canonical
+
+    def metadata(self, name: str) -> dict[str, object]:
+        with self._lock:
+            record = self._records[name]
+            return {"local": record.local, "auth": record.credential.mode,
+                    "credential_configured": record.credential.configured}
+
+    def replace_credential(self, name: str, credential: McpCredential | None) -> None:
+        with self._lock:
+            old = self._records[name]
+            if old.credential.mode == "none":
+                raise LocalMcpError()
+            self._active.discard(name)
+            if self._loop is not None:
+                for task in tuple(self._tasks.get(name, ())):
+                    self._loop.call_soon_threadsafe(task.cancel)
+            updated = {**self._records, name: McpRecord(old.url, old.addresses, old.token, old.local,
+                credential if credential is not None else McpCredential(old.credential.mode))}
+            # Persistence failure leaves this connection revoked in memory.
+            self._save(updated)
+            self._records = updated
 
     def _resolve(self, host: str):
         # Timed-out OS DNS calls cannot be killed. Keep their slots occupied
@@ -191,6 +223,8 @@ class LocalMcpRelay:
         with self._lock:
             if not self.port or name not in self._records:
                 raise LocalMcpError()
+            if self._records[name].local and not self.local_enabled:
+                raise LocalMcpError()
             self._active.add(name)
             return {"url": f"http://127.0.0.1:{self.port}/mcp/{name}",
                     "http_headers": {RELAY_HEADER: self._records[name].token}}
@@ -206,6 +240,8 @@ class LocalMcpRelay:
             value = {key: item for key, item in value.items() if key not in defaults}
         with self._lock:
             record = self._records.get(name)
+            if record is not None and record.local and not self.local_enabled:
+                return None
             if record is None or not isinstance(value, Mapping) or set(value) != {"url", "http_headers"}:
                 return None
             if not isinstance(value["url"], str) or value["http_headers"] != {RELAY_HEADER: record.token}:
@@ -272,6 +308,9 @@ class LocalMcpRelay:
             if not admitted:
                 await _error(send, 429)
                 return
+            if record.credential.mode != "none" and not record.credential.configured:
+                await _error(send, 401)
+                return
             if scope["method"] not in {"POST", "GET", "DELETE"}:
                 await _error(send, 405)
                 return
@@ -293,9 +332,10 @@ class LocalMcpRelay:
                 disconnected = asyncio.create_task(_watch_disconnect(receive, task))
                 target = httpx.URL(record.url)
                 answers = await asyncio.wait_for(asyncio.wrap_future(self._resolve(target.host)), timeout=5)
-                address = pinned_address(answers, record.addresses)
+                address = pinned_address(answers, record.addresses, local=record.local)
                 upstream_headers = {key: value for key, value in headers.items() if key.lower() in _REQUEST_HEADERS}
                 upstream_headers["host"] = target.netloc.decode("ascii")
+                upstream_headers.update(record.credential.headers)
                 request = httpx.Request(
                     scope["method"], target.copy_with(host=address),
                     headers=upstream_headers, content=bytes(body),
@@ -309,7 +349,8 @@ class LocalMcpRelay:
                 if not 200 <= response.status_code < 300:
                     # MCP uses 404 to expire a session and trigger a fresh
                     # initialise request. Authentication challenges stay blocked.
-                    await _error(send, response.status_code if response.status_code in {404, 405} else 502)
+                    allowed = {404, 405} | ({401, 403} if record.credential.mode != "none" else set())
+                    await _error(send, response.status_code if response.status_code in allowed else 502)
                     return
                 content_type = response.headers.get("content-type", "").split(";")[0]
                 if response.status_code not in {202, 204} and content_type not in {"application/json", "text/event-stream"}:
@@ -317,19 +358,24 @@ class LocalMcpRelay:
                 length = response.headers.get("content-length")
                 if length is not None and (not length.isdigit() or int(length) > _MAX_RESPONSE):
                     raise LocalMcpError()
+                redactor = CredentialRedactor(record.credential)
+                safe_headers = [(key, CredentialRedactor(record.credential).feed(value, final=True))
+                                for key, value in response.headers.raw if key.lower() in _RESPONSE_HEADERS]
                 await send({"type": "http.response.start", "status": response.status_code,
-                            "headers": [(key, value) for key, value in response.headers.raw
-                                        if key.lower() in _RESPONSE_HEADERS]})
+                            "headers": safe_headers})
                 started = True
                 size = 0
                 async for chunk in response.aiter_raw():
                     size += len(chunk)
                     if size > _MAX_RESPONSE:
                         raise LocalMcpError()
-                    await send({"type": "http.response.body", "body": chunk, "more_body": True})
-                await send({"type": "http.response.body", "body": b"", "more_body": False})
+                    await send({"type": "http.response.body", "body": redactor.feed(chunk), "more_body": True})
+                await send({"type": "http.response.body", "body": redactor.feed(b"", final=True), "more_body": False})
         except asyncio.CancelledError:
-            raise
+            # Revocation and client disconnect are expected lifecycle events.
+            # Keep incomplete streams incomplete without logging a traceback.
+            if not started:
+                await _error(send, 502)
         except Exception:
             if not started:
                 await _error(send, 502)
@@ -340,7 +386,7 @@ class LocalMcpRelay:
                 disconnected.cancel()
                 await asyncio.gather(disconnected, return_exceptions=True)
             if response is not None:
-                with suppress(Exception):
+                with suppress(Exception, asyncio.CancelledError):
                     await response.aclose()
             if admitted:
                 with self._lock:

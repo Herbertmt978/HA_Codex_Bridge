@@ -2,6 +2,9 @@
 # shellcheck shell=bash
 set -Eeuo pipefail
 
+# Device-login and MCP credentials must not be included in process core dumps.
+ulimit -c 0
+
 # Supervisor validates this as a boolean, and this second check keeps malformed
 # restored option state fail-closed before it reaches the Bridge process.
 source /usr/lib/bashio/bashio.sh
@@ -54,8 +57,8 @@ exec s6-setuidgid codexbridge env -i \
     CODEX_BRIDGE_ENABLE_LOCAL_MCP="${enable_local_mcp}" \
     CODEX_BRIDGE_ENABLE_BROWSER="${enable_browser}" \
     CODEX_BRIDGE_CODEX_WRAPPER_PATH=/usr/local/bin/codex-ha \
-    CODEX_BRIDGE_APP_VERSION=1.2.0 \
-    CODEX_BRIDGE_VERSION=0.9.0 \
+    CODEX_BRIDGE_APP_VERSION=1.3.0 \
+    CODEX_BRIDGE_VERSION=0.10.0 \
     CODEX_BRIDGE_CODEX_VERSION=0.155.1 \
     CODEX_BRIDGE_ARCH=amd64 \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST=f353f8f2b526927c9de0dc744a1173644003d087e351412b2095c07a0c017aff \

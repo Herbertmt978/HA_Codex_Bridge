@@ -142,3 +142,102 @@ describe("MCP setup and access settings", () => {
     expect([...panel.shadowRoot.querySelector('[data-preference="mode"] select').options].some((option) => option.value === "haos-full-access")).toBe(false);
   });
 });
+
+
+describe("MCP write-only credentials", () => {
+  const capabilities = ["mcp_admin_v1", "mcp_local_v1", "mcp_credentials_v1"];
+  async function credentialForm(mode = "bearer") {
+    const panel = setup(capabilities);
+    await panel._handleDesktopAction("choose-custom-mcp");
+    const state = panel._desktopFeatures.settings;
+    state.formDraft = { name: "secured", url: "https://mcp.example.com", auth_mode: mode };
+    panel._renderDesktopSurface();
+    panel._accessToken = () => "synthetic-ha-token";
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue();
+    return panel;
+  }
+
+  it("keeps secret controls out of generic drafts and browser persistence", async () => {
+    const panel = await credentialForm();
+    const input = panel.shadowRoot.querySelector("[data-mcp-token]");
+    input.value = "synthetic-private-token";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(input.type).toBe("password");
+    expect(input.dataset.desktopField).toBeUndefined();
+    expect(JSON.stringify(panel._desktopFeatures)).not.toContain(input.value);
+    expect(JSON.stringify(localStorage)).not.toContain(input.value);
+    expect(JSON.stringify(sessionStorage)).not.toContain(input.value);
+    expect(field(panel, "oauth_client_id")).toBeNull();
+    expect(panel.shadowRoot.querySelector(".mcp-authentication").textContent).toContain("App backups");
+  });
+
+  it("submits the credential through authenticated HTTP and immediately clears it", async () => {
+    const panel = await credentialForm();
+    const input = panel.shadowRoot.querySelector("[data-mcp-token]");
+    input.value = "synthetic-private-token";
+    field(panel, "auth_acknowledged").checked = true;
+    let captured;
+    vi.stubGlobal("fetch", vi.fn(async (url, options) => { captured = { url, options }; return { ok: true }; }));
+    try {
+      await panel._handleDesktopAction("submit-mcp", {}, input);
+      expect(captured.url).toBe("/api/codex_bridge/mcp/credentials");
+      expect(captured.options.cache).toBe("no-store");
+      expect(captured.options.redirect).toBe("error");
+      expect(JSON.parse(captured.options.body)).toEqual({ operation:"create", name:"secured", url:"https://mcp.example.com", authentication:{mode:"bearer",token:"synthetic-private-token"}, auth_acknowledged:true });
+      expect(input.value).toBe("");
+      expect(JSON.stringify(panel._desktopFeatures)).not.toContain("synthetic-private-token");
+      expect(panel._callWS).not.toHaveBeenCalledWith("add_mcp", expect.anything());
+      expect(panel._desktopFeatures.settings.form).toBeNull();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("clears submitted secrets and displays a fixed error on failure", async () => {
+    const panel = await credentialForm();
+    const input = panel.shadowRoot.querySelector("[data-mcp-token]");
+    input.value = "synthetic-private-token";
+    field(panel, "auth_acknowledged").checked = true;
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("synthetic-private-token")));
+    try {
+      await panel._handleDesktopAction("submit-mcp", {}, input);
+      expect(input.value).toBe("");
+      expect(panel.shadowRoot.querySelector("[data-mcp-token]").value).toBe("");
+      expect(panel._desktopFeatures.settings.formError).toContain("re-enter");
+      expect(panel.shadowRoot.textContent).not.toContain("synthetic-private-token");
+      expect(JSON.stringify(panel._desktopFeatures)).not.toContain("synthetic-private-token");
+      expect(field(panel, "auth_acknowledged").checked).toBe(false);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("requires new consent and clears secrets when the destination changes", async () => {
+    const panel = await credentialForm();
+    const input = panel.shadowRoot.querySelector("[data-mcp-token]"); input.value = "synthetic-private-token";
+    field(panel, "auth_acknowledged").checked = true;
+    field(panel, "url").value = "https://different.example.com";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(input.value).toBe("");
+    expect(field(panel, "auth_acknowledged").checked).toBe(false);
+  });
+
+  it("offers replacement without reading an existing credential", async () => {
+    const panel = setup(capabilities);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name:"secured", endpoint:"https://mcp.example.com", auth:"headers", credential_configured:true, network:"public" }];
+    await panel._handleDesktopAction("edit-mcp-credential", { id:"secured" });
+    expect(panel.shadowRoot.querySelector("[data-mcp-header-value]").value).toBe("");
+    expect(panel._callWS).not.toHaveBeenCalled();
+    expect(field(panel, "url")).toBeNull();
+    expect(panel.shadowRoot.querySelector("form").textContent).toContain("remove and add the server again");
+  });
+
+  it("preserves custom named headers as separate write-only values", async () => {
+    const panel = await credentialForm("headers");
+    panel.shadowRoot.querySelector("[data-mcp-header-name]").value = "X-Api-Key";
+    panel.shadowRoot.querySelector("[data-mcp-header-value]").value = "synthetic-key";
+    field(panel, "auth_acknowledged").checked = true;
+    let payload;
+    vi.stubGlobal("fetch", vi.fn(async (_, options) => { payload = JSON.parse(options.body); return { ok:true }; }));
+    try {
+      await panel._handleDesktopAction("submit-mcp", {}, action(panel,"submit-mcp"));
+      expect(payload.authentication).toEqual({mode:"headers",headers:[{name:"X-Api-Key",value:"synthetic-key"}]});
+    } finally { vi.unstubAllGlobals(); }
+  });
+});

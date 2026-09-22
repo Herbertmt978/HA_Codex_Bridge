@@ -1286,3 +1286,32 @@ async def test_streaming_response_closes_when_the_consumer_is_cancelled(
 
         assert response.closed is True
         finish_stream.set()
+
+
+@pytest.mark.parametrize("supported", [False, True])
+async def test_mcp_credentials_require_capability_before_sending_secret(bridge_server_factory, supported):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1"] + (["mcp_credentials_v1"] if supported else [])
+    observed = []
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        observed.append(request.method)
+        return web.json_response({"name":"secured"}, status=201 if request.method == "POST" else 200)
+    server = await bridge_server_factory(handler)
+    payload = {"name":"secured", "url":"https://mcp.example.com", "authentication":{"mode":"bearer", "token":"synthetic-token"}, "auth_acknowledged":True}
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        if supported:
+            await client.async_add_mcp(payload)
+            await client.async_replace_mcp_credential("secured", {"authentication":payload["authentication"], "auth_acknowledged":True})
+            await client.async_replace_mcp_credential("secured", None)
+        else:
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_add_mcp(payload)
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_replace_mcp_credential("secured", {})
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_replace_mcp_credential("secured", None)
+    assert observed == (["POST", "PUT", "DELETE"] if supported else [])

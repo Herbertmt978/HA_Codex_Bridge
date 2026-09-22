@@ -1072,3 +1072,55 @@ def test_invalid_upstream_range_metadata_fails_closed(status, headers) -> None:
         safe_download_headers(status, headers)
 
     assert error.value.status == 502
+
+
+async def test_mcp_credentials_require_admin_and_do_not_reflect_provider_data(hass, hass_client, hass_client_no_auth, hass_read_only_access_token, caplog):
+    from unittest.mock import Mock
+    secret = "synthetic-private-credential"
+    bridge = SimpleNamespace(require_capability=Mock(), async_add_mcp=AsyncMock(return_value={"unexpected":secret}), async_replace_mcp_credential=AsyncMock(return_value={"unexpected":secret}))
+    await _install_runtime(hass, bridge)
+    path = "/api/codex_bridge/mcp/credentials"
+    payload = {"operation":"create", "name":"secured", "url":"https://mcp.example.com", "authentication":{"mode":"bearer", "token":secret}, "auth_acknowledged":True}
+    anonymous = await hass_client_no_auth()
+    readonly = await hass_client(hass_read_only_access_token)
+    assert (await anonymous.post(path, json=payload)).status == 401
+    assert (await readonly.post(path, json=payload)).status in {401,403}
+    bridge.async_add_mcp.assert_not_called()
+    client = await hass_client()
+    response = await client.post(path, json=payload)
+    assert response.status == 200
+    assert await response.json() == {"saved":True}
+    assert response.headers["Cache-Control"] == "no-store"
+    bridge.require_capability.assert_called_with("mcp_credentials_v1")
+    bridge.async_add_mcp.assert_awaited_once_with({key:value for key,value in payload.items() if key != "operation"})
+    response = await client.post(path, json={"operation":"replace", "name":"secured", "authentication":{"mode":"bearer", "token":secret}, "auth_acknowledged":True})
+    assert response.status == 200
+    response = await client.post(path, json={"operation":"remove", "name":"secured"})
+    assert response.status == 200
+    bridge.async_replace_mcp_credential.assert_awaited_with("secured", None)
+    assert secret not in caplog.text
+
+
+@pytest.mark.parametrize("payload", [[], {"operation":"create", "name":"secured", "authentication":{"mode":"bearer", "token":"synthetic-secret"}, "unknown":"synthetic-secret"}, {"operation":"replace", "name":"secured", "url":"https://different.example.com", "authentication":{}}, {"operation":"remove", "name":"secured", "token":"synthetic-secret"}, {"operation":[], "name":"secured"}])
+async def test_mcp_credential_http_errors_are_fixed(hass, hass_client, payload, caplog):
+    from unittest.mock import Mock
+    bridge = SimpleNamespace(require_capability=Mock(), async_add_mcp=AsyncMock(), async_replace_mcp_credential=AsyncMock())
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    response = await client.post("/api/codex_bridge/mcp/credentials", json=payload)
+    assert response.status == 400
+    assert await response.json() == {"code":"mcp_request_invalid"}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "synthetic-secret" not in caplog.text
+    bridge.async_add_mcp.assert_not_called()
+    bridge.async_replace_mcp_credential.assert_not_called()
+
+
+async def test_mcp_credential_body_is_bounded_before_json_parsing(hass, hass_client):
+    from unittest.mock import Mock
+    bridge = SimpleNamespace(require_capability=Mock(), async_add_mcp=AsyncMock())
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    response = await client.post("/api/codex_bridge/mcp/credentials", data=b"x" * (24*1024+1), headers={"Content-Type":"application/json"})
+    assert response.status == 400
+    bridge.async_add_mcp.assert_not_called()

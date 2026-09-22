@@ -1408,6 +1408,8 @@ class BridgeApiClient:
         self._require_mcp_capability()
         if payload.get("local"):
             self.require_capability("mcp_local_v1")
+        if "authentication" in payload or "auth_acknowledged" in payload:
+            self.require_capability("mcp_credentials_v1")
         return await self._async_json(
             "POST",
             "/mcp/servers",
@@ -1419,6 +1421,15 @@ class BridgeApiClient:
         self._require_mcp_capability()
         await self._async_no_content(
             "DELETE", f"/mcp/servers/{_path_segment(name)}", expected_status={204}
+        )
+
+    async def async_replace_mcp_credential(self, name: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_credentials_v1")
+        return await self._async_json(
+            "DELETE" if payload is None else "PUT",
+            f"/mcp/servers/{_path_segment(name)}/credential",
+            json_body=_bounded_mapping(payload) if payload is not None else None,
         )
 
     async def async_login_mcp(self, name: str) -> dict[str, Any]:

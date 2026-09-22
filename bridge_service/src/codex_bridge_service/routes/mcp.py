@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import BaseModel, ConfigDict, StrictBool, Field
 
 from ..auth import require_bridge_token
 from ..mcp_manager import (
@@ -30,6 +30,14 @@ class CreateMcpServerRequest(BaseModel):
     oauth_resource: str | None = None
     local: StrictBool = False
     local_acknowledged: StrictBool = False
+    authentication: object = Field(default=None, repr=False)
+    auth_acknowledged: StrictBool = False
+
+
+class McpCredentialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    authentication: object = Field(repr=False)
+    auth_acknowledged: StrictBool = False
 
 
 class McpOAuthLoginResponse(BaseModel):
@@ -85,7 +93,31 @@ def create_mcp_server(
             oauth_resource=payload.oauth_resource,
             local=payload.local,
             local_acknowledged=payload.local_acknowledged,
+            authentication=payload.authentication,
+            auth_acknowledged=payload.auth_acknowledged,
         )
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.put("/mcp/servers/{name}/credential")
+def replace_mcp_credential(name: str, payload: McpCredentialRequest, request: Request, response: Response,
+                           authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).replace_credential(name, payload.authentication, acknowledged=payload.auth_acknowledged)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.delete("/mcp/servers/{name}/credential")
+def remove_mcp_credential(name: str, request: Request, response: Response,
+                          authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).replace_credential(name, remove=True)
     except McpManagerError as error:
         raise _problem(error) from None
 

@@ -33171,7 +33171,7 @@ var link = (doc, label, href) => {
   node2.rel = "noopener noreferrer";
   return node2;
 };
-function renderMcpSetup(doc, state, enabled, localEnabled = false) {
+function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEnabled = false) {
   const section2 = text(doc, "section", "", "mcp-setup");
   if (state.form === "mcp-choice") {
     section2.append(text(doc, "h3", "Choose an MCP server", "desktop-subheading"));
@@ -33206,6 +33206,7 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   form.className = "desktop-form";
   form.dataset.desktopForm = "mcp";
   const local = localEnabled && state.formDraft?.local === true;
+  const staticAuth = credentialsEnabled && ["bearer", "headers"].includes(state.formDraft?.auth_mode);
   const field2 = (label, name, type = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const control = doc.createElement("input");
@@ -33241,11 +33242,12 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   if (local) {
     const warning = text(doc, "div", "", "mcp-local-warning");
     warning.append(text(doc, "strong", "Allow access to this local MCP server?"), text(doc, "p", "Codex will be able to use the tools this server exposes, including any device controls or file changes it permits. HTTP sends requests, responses and any secret in the URL without encryption across your local network. This does not grant shell or root host access."), checkbox("I trust this server and understand the access and connection risks", "local_acknowledged", true));
-    form.append(warning, text(doc, "p", "Local OAuth, bearer tokens, query strings and custom authentication headers are not supported yet. A server with a private connection path can use that full URL.", "desktop-note"));
+    form.append(warning, text(doc, "p", "Local OAuth and query strings are not supported. A server with a private connection path can use that full URL.", "desktop-note"));
   }
+  if (credentialsEnabled) form.append(renderMcpAuthentication(doc, state, { local }));
   const oauth = text(doc, "details", "", "mcp-oauth");
   oauth.append(text(doc, "summary", "OAuth settings (optional)"), field2("OAuth client ID (public)", "oauth_client_id"), field2("OAuth resource", "oauth_resource"));
-  if (!local) form.append(oauth);
+  if (!local && !staticAuth) form.append(oauth);
   if (state.formError) {
     const error = text(doc, "p", state.formError, "desktop-error");
     error.setAttribute("role", "alert");
@@ -33260,6 +33262,98 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   section2.append(form);
   if (guided) section2.append(text(doc, "h3", "Check it works", "desktop-subheading"), text(doc, "p", "After adding the server, use Sign in if it asks for OAuth. Refresh the server status, then start a new chat and ask Codex to describe an entity without changing it. Confirm the result before allowing changes.", "desktop-note"));
   return section2;
+}
+function renderMcpAuthentication(doc, state, { local = false, replacing = false } = {}) {
+  const section2 = text(doc, "section", "", "mcp-authentication");
+  const mode = state.formDraft?.auth_mode || (replacing ? state.editingMcp?.auth : "none") || "none";
+  const options = [["bearer", "Bearer token"], ["headers", "API-key headers"]];
+  if (!replacing) options.unshift(["none", local ? "No authentication header" : "None or OAuth"]);
+  const choice = selection(doc, { name: "auth_mode", label: "Authentication", value: mode, options });
+  choice.querySelector("select").dataset.desktopField = "auth_mode";
+  section2.append(text(doc, "span", "Authentication", "desktop-field-label"), choice);
+  const secretInput = (label, attr, type = "password") => {
+    const wrap = text(doc, "label", "", "desktop-field");
+    const input2 = doc.createElement("input");
+    input2.type = type;
+    input2.setAttribute(attr, "");
+    input2.autocomplete = "off";
+    input2.spellcheck = false;
+    input2.required = true;
+    input2.maxLength = type === "password" ? 4096 : 64;
+    if (type === "password") input2.minLength = 8;
+    wrap.append(text(doc, "span", label, "desktop-field-label"), input2);
+    return wrap;
+  };
+  if (mode === "bearer") section2.append(secretInput("Bearer token", "data-mcp-token"));
+  if (mode === "headers") {
+    const rows = text(doc, "div", "", "mcp-header-rows");
+    const add = button(doc, "Add another header", "");
+    delete add.dataset.desktopAction;
+    const addRow = () => {
+      const row = text(doc, "div", "", "mcp-header-row");
+      row.append(secretInput("Header name", "data-mcp-header-name", "text"), secretInput("API-key value", "data-mcp-header-value"));
+      const remove = button(doc, "Remove header", "");
+      delete remove.dataset.desktopAction;
+      remove.onclick = () => {
+        row.remove();
+        add.disabled = false;
+      };
+      row.append(remove);
+      rows.append(row);
+      add.disabled = rows.children.length >= 8;
+    };
+    add.onclick = addRow;
+    addRow();
+    section2.append(rows, add);
+    section2.append(text(doc, "p", "Use the authentication header named by your server, such as X-API-Key. Do not enter Host, Cookie, routing or MCP protocol headers.", "desktop-note"));
+  }
+  if (["bearer", "headers"].includes(mode)) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    warning.append(text(doc, "strong", "Share this credential with this server?"), text(doc, "p", "Codex can use the tools this credential permits. It is stored privately in the App and included in App backups, without separate encryption. Protect those backups. Saved values cannot be displayed; you can replace or remove them."));
+    if (local) warning.append(text(doc, "p", "Local HTTP also sends the credential without encryption. Use HTTPS where possible and trust the network between Home Assistant and the server."));
+    const label = text(doc, "label", "", "mcp-consent");
+    const check = doc.createElement("input");
+    check.type = "checkbox";
+    check.required = true;
+    check.dataset.desktopField = "auth_acknowledged";
+    check.name = "auth_acknowledged";
+    check.checked = state.formDraft?.auth_acknowledged === true;
+    label.append(check, text(doc, "span", "I trust this destination and understand credential transport and backup exposure"));
+    warning.append(label);
+    section2.append(warning);
+    section2.append(text(doc, "p", "Tokens and API-key values must be 8–4,096 characters. Shorter values are unsupported because response redaction could alter ordinary MCP messages. Use a secure connection to Home Assistant when entering credentials. Submitted values are cleared, including if saving fails.", "desktop-note"));
+  }
+  return section2;
+}
+function readMcpCredential(form) {
+  const mode = form.querySelector('[data-desktop-field="auth_mode"]')?.value;
+  if (mode === "bearer") return { mode, token: form.querySelector("[data-mcp-token]")?.value || "" };
+  if (mode === "headers") return { mode, headers: [...form.querySelectorAll(".mcp-header-row")].map((row) => ({ name: row.querySelector("[data-mcp-header-name]").value, value: row.querySelector("[data-mcp-header-value]").value })) };
+  return null;
+}
+function clearMcpSecrets(form) {
+  form?.querySelectorAll("[data-mcp-token], [data-mcp-header-value]").forEach((input2) => {
+    input2.value = "";
+  });
+}
+function renderMcpCredentialForm(doc, state) {
+  const form = doc.createElement("form");
+  form.className = "desktop-form";
+  form.dataset.desktopForm = "mcp";
+  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. To change the destination, remove and add the server again.`, "desktop-note"));
+  form.append(renderMcpAuthentication(doc, state, { local: state.editingMcp?.network === "local", replacing: true }));
+  if (state.formError) {
+    const error = text(doc, "p", state.formError, "desktop-error");
+    error.setAttribute("role", "alert");
+    form.append(error);
+  }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const save = button(doc, "Save credential", "submit-mcp-credential");
+  save.disabled = state.loading;
+  save.classList.add("panel-button-primary");
+  actions.append(save, button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  return form;
 }
 
 // frontend/src/desktop-features.js
@@ -33622,13 +33716,18 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     recommendation.append(guide);
     panel.append(recommendation);
     panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
-    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1")));
+    const credentials = config?.capabilities?.includes("mcp_credentials_v1");
+    if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
+    if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const id = row.name || "";
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
-      td.append(button2(documentRef, "Remove", "remove-mcp", { id }));
-      if (oauth) td.append(button2(documentRef, "Sign in", "login-mcp", { id }));
+      td.append(button2(documentRef, "Remove server", "remove-mcp", { id }));
+      if (credentials && ["bearer", "headers"].includes(row.auth)) {
+        td.append(text2(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button2(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
+        if (row.credential_configured) td.append(button2(documentRef, "Remove credential", "remove-mcp-credential", { id }));
+      } else if (oauth) td.append(button2(documentRef, "Sign in", "login-mcp", { id }));
       else td.append(text2(documentRef, "span", "No OAuth", "desktop-action-note"));
     }));
   }
@@ -33784,7 +33883,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.2.0";
+var PANEL_VERSION = "1.3.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -36585,6 +36684,12 @@ template.innerHTML = `
     .mcp-consent input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent-color); }
     .mcp-local-warning { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; line-height: 1.5; }
     .mcp-local-warning p { color: var(--muted-color); }
+    .mcp-authentication { display: grid; gap: 14px; }
+    .desktop-form .desktop-error { color: color-mix(in srgb, var(--danger-color) 55%, var(--text-color) 45%); }
+    .mcp-header-rows { display: grid; gap: 16px; }
+    .mcp-header-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 12px; align-items: end; }
+    .mcp-header-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+    @media (max-width: 640px) { .mcp-header-row { grid-template-columns: minmax(0, 1fr); } .mcp-authentication .panel-selection { max-width: 100%; } }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
@@ -40175,11 +40280,15 @@ var CodexBridgePanel = class extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field2 || !state?.form) return;
     state.formDraft = { ...state.formDraft || {}, [field2]: target.type === "checkbox" ? target.checked : target.value };
-    if (form.dataset.desktopForm === "mcp" && ["local", "url"].includes(field2)) {
+    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode"].includes(field2)) {
       state.formDraft.local_acknowledged = false;
+      state.formDraft.auth_acknowledged = false;
+      clearMcpSecrets(form);
+      const authConsent = form.querySelector('[data-desktop-field="auth_acknowledged"]');
+      if (authConsent) authConsent.checked = false;
       const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
       if (consent) consent.checked = false;
-      if (field2 === "local") {
+      if (["local", "auth_mode"].includes(field2)) {
         this._renderDesktopSurface();
         return;
       }
@@ -40279,7 +40388,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (scope === "project") dataset.projectId = projectId;
       dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
-    const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
+    const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "delete-agents"]);
     if (action === "confirm-desktop") {
       const pending = state.confirmAction;
       state.confirmAction = null;
@@ -40336,6 +40445,8 @@ var CodexBridgePanel = class extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      const authentication = readMcpCredential(form);
+      delete payload.auth_mode;
       if (payload.local) {
         if (!this._config?.capabilities?.includes("mcp_local_v1") || payload.local_acknowledged !== true) return;
         delete payload.oauth_client_id;
@@ -40347,12 +40458,33 @@ var CodexBridgePanel = class extends HTMLElement {
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      const saved = await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
-      if (!saved) {
+      if (authentication) {
+        delete payload.oauth_client_id;
+        delete payload.oauth_resource;
+      } else delete payload.auth_acknowledged;
+      const saved = authentication ? await this._mcpCredentialMutation({ operation: "create", ...payload, authentication }, state, form) : await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      if (!saved && state.error) {
         state.formError = state.error;
         state.error = "";
-      } else if (guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
-    } else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
+      } else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+    } else if (action === "edit-mcp-credential") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_credentials_v1")) return;
+      this._clearDesktopFormDraft(state);
+      state.editingMcp = server;
+      state.formDraft = { auth_mode: server.auth };
+      state.form = "mcp-credential";
+    } else if (action === "submit-mcp-credential") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      await this._mcpCredentialMutation({
+        operation: "replace",
+        name: state.editingMcp?.name,
+        authentication: readMcpCredential(form),
+        auth_acknowledged: this._desktopFormValues(target).auth_acknowledged
+      }, state, form);
+    } else if (action === "remove-mcp-credential") await this._mcpCredentialMutation({ operation: "remove", name: dataset.id }, state);
+    else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "update-automation") {
@@ -40448,6 +40580,43 @@ var CodexBridgePanel = class extends HTMLElement {
       state.loading = false;
     }
     return mutationSucceeded;
+  }
+  async _mcpCredentialMutation(payload, state, form) {
+    if (!this._config?.capabilities?.includes("mcp_credentials_v1") || state.loading) return false;
+    clearMcpSecrets(form);
+    if (state.formDraft) state.formDraft.auth_acknowledged = false;
+    state.loading = true;
+    state.error = "";
+    state.formError = "";
+    this._renderDesktopSurface();
+    try {
+      const token = this._accessToken();
+      if (!token) throw new Error("Sign in to Home Assistant");
+      const response = await fetch("/api/codex_bridge/mcp/credentials", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(12e4)
+      });
+      if (!response.ok) throw new Error("Credential operation failed");
+      this._clearDesktopFormDraft(state);
+      state.form = null;
+      state.editingMcp = null;
+      state.notice = payload.operation === "remove" ? "Credential removed. This connection is blocked until you set a new credential. Revoke the old token at its provider if needed." : "Credential saved. Refresh server status to check authentication.";
+      state.loaded = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.formError = "Could not save the credential change. Check the server settings and connection, then re-enter the credential if needed.";
+      state.error = state.form ? "" : state.formError;
+      return false;
+    } finally {
+      payload.authentication = null;
+      state.loading = false;
+      this._renderDesktopSurface();
+    }
   }
   _renderDesktopSurface() {
     const container = this.shadowRoot.getElementById("desktop-feature-surface");

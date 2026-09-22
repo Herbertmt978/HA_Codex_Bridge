@@ -37,7 +37,7 @@ def private_address(value: str) -> str:
     return str(address)
 
 
-def canonical_local_url(value: object) -> str:
+def canonical_local_url(value: object, *, local: bool = True) -> str:
     if (not isinstance(value, str) or not value or value != value.strip()
             or len(value) > 2048 or "\\" in value
             or any(ord(char) <= 32 or ord(char) == 127 for char in value)):
@@ -55,6 +55,9 @@ def canonical_local_url(value: object) -> str:
                 or host in _RESERVED or host.endswith(".localhost")
                 or port == 0):
             raise LocalMcpError()
+        if not local and (parsed.scheme != "https" or "." not in host
+                          or host.endswith((".local", ".internal", ".home.arpa", ".lan", ".test", ".invalid"))):
+            raise LocalMcpError()
         try:
             ipaddress.ip_address(host)
         except ValueError:
@@ -62,6 +65,8 @@ def canonical_local_url(value: object) -> str:
                 raise LocalMcpError() from None
             authority = host
         else:
+            if not local:
+                raise LocalMcpError()
             address = private_address(host)
             authority = f"[{address}]" if ":" in address else address
         if port is not None:
@@ -72,6 +77,10 @@ def canonical_local_url(value: object) -> str:
 
 
 def resolve_private(host: str) -> tuple[str, ...]:
+    return checked_addresses(resolve_addresses(host))
+
+
+def resolve_addresses(host: str) -> tuple[str, ...]:
     try:
         ipaddress.ip_address(host)
     except ValueError:
@@ -82,19 +91,28 @@ def resolve_private(host: str) -> tuple[str, ...]:
         answers = tuple(dict.fromkeys(record[4][0] for record in records))
     else:
         answers = (host,)
-    return checked_addresses(answers)
+    return answers
 
 
-def checked_addresses(answers: object) -> tuple[str, ...]:
+def checked_addresses(answers: object, *, local: bool = True) -> tuple[str, ...]:
     if not isinstance(answers, (tuple, list)) or not 1 <= len(answers) <= 16:
         raise LocalMcpError()
     if not all(isinstance(value, str) for value in answers):
         raise LocalMcpError()
-    return tuple(sorted(set(private_address(value) for value in answers)))
+    if local:
+        return tuple(dict.fromkeys(private_address(value) for value in answers))
+    try:
+        addresses = [ipaddress.ip_address(value) for value in answers]
+        if any("%" in value for value in answers) or any(not address.is_global or address.is_multicast or getattr(address, "ipv4_mapped", None) for address in addresses):
+            raise LocalMcpError()
+        # Preserve getaddrinfo's route preference while validating every answer.
+        return tuple(dict.fromkeys(str(address) for address in addresses))
+    except ValueError:
+        raise LocalMcpError() from None
 
 
-def pinned_address(answers: object, approved: tuple[str, ...]) -> str:
-    current = checked_addresses(answers)
+def pinned_address(answers: object, approved: tuple[str, ...], *, local: bool = True) -> str:
+    current = checked_addresses(answers, local=local)
     if not set(current).issubset(approved):
         raise LocalMcpError()
     return current[0]
