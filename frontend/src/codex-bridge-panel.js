@@ -8751,6 +8751,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _runStepAccessibleLabel(activity) {
     const parts = [];
+    if (activity.terminal && activity.step) parts.push(activity.action || "Run finished");
     if (activity.step) {
       parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
     } else {
