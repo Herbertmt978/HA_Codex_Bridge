@@ -33,8 +33,8 @@ describe("Codex desktop parity layout", () => {
     const root = panel.shadowRoot;
     const stylesheet = [...root.querySelectorAll("style")].map((style) => style.textContent).join("\n");
 
-    expect(stylesheet).toMatch(/--conversation-width:\s*840px/);
-    expect(stylesheet).toMatch(/grid-template-columns:\s*clamp\(300px,\s*20vw,\s*330px\)\s+minmax\(0,\s*1fr\)\s+clamp\(342px,\s*calc\(22vw \+ 12px\),\s*372px\)/);
+    expect(stylesheet).toMatch(/--conversation-width:\s*960px/);
+    expect(stylesheet).toMatch(/grid-template-columns:\s*clamp\(255px,\s*17vw,\s*280\.5px\)\s+minmax\(0,\s*1fr\)\s+clamp\(290\.7px,\s*calc\(18\.7vw \+ 10\.2px\),\s*316\.2px\)/);
     expect(stylesheet).toMatch(/\.main-header\s*\{[^}]*calc\(\(100% - var\(--conversation-width\)\) \/ 2\)/s);
     expect(stylesheet).toMatch(/\.side-pane\s*\{[^}]*margin:\s*64px 12px 12px 0;[^}]*border-radius:\s*18px;/s);
     expect(stylesheet).toMatch(/\.shell\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*overflow:\s*hidden;/s);

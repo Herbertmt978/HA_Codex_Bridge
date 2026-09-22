@@ -7,6 +7,28 @@ function event(sequence, event_type, payload = {}, run_id = "run-1") {
 }
 
 describe("run activity view model", () => {
+  it("truncates command previews without splitting Unicode characters", () => {
+    const command = `echo ${"😀".repeat(2000)}`;
+    const model = getRunActivityViewModel({ status: "running", active_run_id: "run-1" }, [
+      event(1, "item.started", { item_type: "commandExecution", item_id: "cmd", command_preview: command }),
+    ]);
+    expect(model.commandPreviews).toEqual([`echo ${"😀".repeat(1994)}…`]);
+    expect([...model.commandPreviews[0]]).toHaveLength(2000);
+  });
+
+  it("keeps bounded command previews and counts completed image views once", () => {
+    const model = getRunActivityViewModel({ status: "running", active_run_id: "run-1" }, [
+      event(1, "item.started", { item_type: "commandExecution", item_id: "cmd", command_preview: "git diff --stat", command: "private raw command" }),
+      event(2, "item.completed", { item_type: "commandExecution", item_id: "cmd", command_preview: "git diff --stat" }),
+      event(3, "item.completed", { item_type: "imageView", item_id: "img-a", path: "/private/image.png" }),
+      event(4, "item.completed", { item_type: "imageView", item_id: "img-a" }),
+      event(5, "item.completed", { item_type: "imageView", item_id: "img-b" }),
+      event(6, "item.completed", { item_type: "imageView", item_id: "img-fail", status: "failed" }),
+    ]);
+    expect(model.commandPreviews).toEqual(["git diff --stat"]);
+    expect(model.viewedImageCount).toBe(2);
+    expect(JSON.stringify(model)).not.toContain("private");
+  });
   it("identifies commands that run on Home Assistant OS in the activity history", () => {
     const model = getRunActivityViewModel({ status: "running", active_run_id: "run-1" }, [
       event(1, "run.started"),

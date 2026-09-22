@@ -85,7 +85,8 @@ function safeText(value, maximum = MAX_ACTION_TEXT) {
   const normalized = withoutControls
     .replace(/\s+/gu, " ")
     .trim();
-  return normalized.length > maximum ? `${normalized.slice(0, maximum - 1)}…` : normalized;
+  const characters = [...normalized];
+  return characters.length > maximum ? `${characters.slice(0, maximum - 1).join("")}…` : normalized;
 }
 
 function safeChunk(value, maximum = 320) {
@@ -504,6 +505,18 @@ export function getRunActivityViewModel(thread = {}, events = []) {
   const reasoningText = reasoningSummary(scopedEvents, runId);
   const startedItem = latestItemStart(scopedEvents, runId);
   const files = patchCounts(scopedEvents, runId);
+  const commands = new Map();
+  const viewedImages = new Set();
+  for (const event of scopedEvents) {
+    const payload = eventPayload(event);
+    if (!["item.started", "item.completed"].includes(event.event_type)) continue;
+    if (payload.item_type === "commandExecution" && typeof payload.command_preview === "string") {
+      commands.set(payload.item_id || event.sequence, safeText(payload.command_preview, 2000));
+      if (commands.size > 8) commands.delete(commands.keys().next().value);
+    }
+    if (event.event_type === "item.completed" && payload.item_type === "imageView"
+        && payload.status !== "failed" && typeof payload.item_id === "string") viewedImages.add(payload.item_id);
+  }
   const history = [];
   const seenHistory = new Set();
   for (const event of scopedEvents) {
@@ -561,10 +574,16 @@ export function getRunActivityViewModel(thread = {}, events = []) {
     runId,
     action: safeText(action),
     currentActivity: safeText(action),
+    liveAction: state === "queued" ? "Waiting in queue" : state !== "running" ? ""
+      : startedItem?.itemType === "reasoning" ? "Thinking"
+        : startedItem ? startedItem.label
+          : assistant === "streaming" ? "Generating a response" : "Working",
     step: activeStep,
     stages: plan.steps.map((step, index) => ({ ...step, index: index + 1 })),
     actionHistory: history,
     files,
+    commandPreviews: [...commands.values()],
+    viewedImageCount: viewedImages.size,
     subagents,
     assistant,
     assistantState: assistant,

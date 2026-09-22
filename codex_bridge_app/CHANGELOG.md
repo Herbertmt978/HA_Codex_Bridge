@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.5.0
+
+- Gives user messages black bubbles with white text in both themes. Copy remains
+  on fenced code blocks, preserving indentation and line breaks.
+- Shows one working/completion indicator, with live Thinking/tool activity,
+  changed-file totals and completed image-view counts.
+- Adds expandable command previews to administrator chat activity. Commands
+  matching recognised credential patterns are omitted before storage. This is
+  a best-effort filter: unrecognised secrets could remain in saved activity.
+  Output, environment values and image paths are not added to activity events.
+- Makes both desktop side columns 15% narrower and gives the transcript more
+  space. Mobile drawer dimensions are unchanged.
+- Pairs App, Integration and panel 1.5.0 with Bridge 0.12.0 and the unchanged
+  verified Codex 0.155.1 runtime. Stable App images remain amd64-only.
+
 ## 1.4.0
 
 - Adds Pause, Resume and Edit connection to MCP settings. Paused servers retain

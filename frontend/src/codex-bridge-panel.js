@@ -34,7 +34,7 @@ import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from 
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 
-const PANEL_VERSION = "1.4.0";
+const PANEL_VERSION = "1.5.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -256,7 +256,7 @@ template.innerHTML = `
       --danger-surface: color-mix(in srgb, var(--danger-color) 11%, var(--surface-bg) 89%);
       --warning-surface: color-mix(in srgb, var(--brand-amber) 10%, var(--surface-bg) 90%);
       --success-surface: color-mix(in srgb, var(--brand-emerald) 10%, var(--surface-bg) 90%);
-      --conversation-width: 840px;
+      --conversation-width: 960px;
       --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06);
       --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
@@ -1168,7 +1168,7 @@ template.innerHTML = `
     #terminal-host:empty { display: none; }
     #bottom-preview[hidden], #bottom-terminal[hidden] { display: none; }
     @media (min-width: 1481px) {
-      .shell.context-hidden { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
+      .shell.context-hidden { grid-template-columns: clamp(255px, 17vw, 280.5px) minmax(0, 1fr); }
       .shell.context-hidden .side-pane { display: none; }
     }
     @media (min-width: 881px) and (max-width: 1120px) {
@@ -1824,23 +1824,6 @@ template.innerHTML = `
       border-color: color-mix(in srgb, var(--accent-color) 22%, var(--border-color) 78%);
     }
 
-    .message-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .message-actions .copy-button {
-      border: 0;
-      background: transparent;
-      box-shadow: none;
-    }
-
-    .message-actions .copy-button:hover {
-      background: var(--surface-muted);
-    }
-
     .message-state {
       display: block;
       margin-bottom: 8px;
@@ -2423,7 +2406,7 @@ template.innerHTML = `
      * These rules sit near the responsive rules so stateful controls above retain their
      * existing selectors and behaviour while sharing one visual language. */
     .shell {
-      grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr) clamp(342px, calc(22vw + 12px), 372px);
+      grid-template-columns: clamp(255px, 17vw, 280.5px) minmax(0, 1fr) clamp(290.7px, calc(18.7vw + 10.2px), 316.2px);
       gap: 0;
       padding: 0;
       background: var(--canvas-bg);
@@ -2686,7 +2669,7 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
-    .shell.desktop-route { grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr); }
+    .shell.desktop-route { grid-template-columns: clamp(255px, 17vw, 280.5px) minmax(0, 1fr); }
     .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
     .shell.desktop-route .side-pane { display: none !important; }
 
@@ -3470,6 +3453,7 @@ template.innerHTML = `
 
     .run-step-chip {
       display: inline-flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
       min-height: 32px;
@@ -3716,7 +3700,7 @@ template.innerHTML = `
 
     .bubble,
     .message.user .bubble {
-      max-width: min(760px, 100%);
+      max-width: min(880px, 100%);
       padding: 8px 0;
       border: 0;
       border-radius: 0;
@@ -3726,9 +3710,15 @@ template.innerHTML = `
 
     .message.user .bubble {
       padding: 10px 12px;
-      border: 1px solid var(--border-color);
+      border: 1px solid #000;
       border-radius: 10px;
-      background: var(--surface-muted);
+      background: #000;
+      color: #fff;
+    }
+
+    .message.user .bubble-text,
+    .message.user .message-state {
+      color: inherit;
     }
 
     .bubble-text {
@@ -4384,7 +4374,7 @@ template.innerHTML = `
 
     @media (min-width: 1121px) and (max-width: 1480px) {
       .shell {
-        grid-template-columns: clamp(300px, 20vw, 330px) minmax(0, 1fr);
+        grid-template-columns: clamp(255px, 17vw, 280.5px) minmax(0, 1fr);
       }
 
       .side-pane {
@@ -4393,7 +4383,7 @@ template.innerHTML = `
         top: 12px;
         right: 12px;
         bottom: 12px;
-        width: min(92vw, 360px);
+        width: min(92vw, 306px);
         height: auto;
         margin: 0;
         border-radius: 18px;
@@ -4450,7 +4440,7 @@ template.innerHTML = `
 
     @media (max-width: 1120px) {
       .shell {
-        grid-template-columns: minmax(236px, 256px) minmax(0, 1fr);
+        grid-template-columns: minmax(200.6px, 217.6px) minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) clamp(260px, 34vh, 340px);
       }
 
@@ -5864,9 +5854,6 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "create-workspace-archive":
         this._createWorkspaceArchive();
-        break;
-      case "copy-message":
-        this._copyMessage(actionTarget.dataset.sequence || "");
         break;
       case "copy-code-block":
         this._copyCodeBlock(actionTarget);
@@ -8658,7 +8645,7 @@ class CodexBridgePanel extends HTMLElement {
 
     region.hidden = false;
     region.setAttribute("aria-busy", String(activity.busy));
-    if (showActivityCopy && !(activity.terminal && showDetails)) {
+    if (showActivityCopy && !showDetails) {
       const copy = document.createElement("div");
       copy.className = "run-activity-copy";
       const indicator = document.createElement("span");
@@ -8695,10 +8682,8 @@ class CodexBridgePanel extends HTMLElement {
       stepIndicator.setAttribute("aria-hidden", "true");
       chip.append(stepIndicator);
 
-      const stepText = activity.step && !activity.terminal
-        ? `Step ${activity.step.index} / ${activity.step.total}`
-        : activity.busy
-          ? "Working"
+      const stepText = activity.busy
+          ? activity.liveAction || "Working"
           : activity.state === "failed"
             ? "Run failed"
             : activity.state === "interrupted"
@@ -8715,6 +8700,10 @@ class CodexBridgePanel extends HTMLElement {
       }
       if (files.additions) chip.append(this._textElement("span", "run-step-additions", `+${files.additions}`));
       if (files.deletions) chip.append(this._textElement("span", "run-step-deletions", `-${files.deletions}`));
+      if (activity.viewedImageCount) chip.append(
+        this._textElement("span", "run-step-separator", "·"),
+        this._textElement("span", "run-step-images", `Viewed ${activity.viewedImageCount} image${activity.viewedImageCount === 1 ? "" : "s"}`)
+      );
       if (activity.subagents?.total) {
         const count = activity.subagents.active || activity.subagents.total;
         chip.append(
@@ -8732,6 +8721,13 @@ class CodexBridgePanel extends HTMLElement {
       const tooltipTitle = this._textElement("strong", "run-step-tooltip-title", activity.step?.label || activity.action || "Run activity");
       tooltipTitle.id = `${tooltipId}-title`;
       tooltip.append(tooltipTitle);
+      for (const command of activity.commandPreviews || []) {
+        const details = document.createElement("details");
+        details.className = "run-command-details";
+        details.append(this._textElement("summary", "", "Command details"));
+        details.append(this._textElement("pre", "bubble-text", command));
+        tooltip.append(details);
+      }
       if (activity.attentionMessage) {
         tooltip.append(this._textElement("span", "run-step-failure", activity.attentionMessage));
       }
@@ -8808,7 +8804,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _runStepAccessibleLabel(activity) {
     const parts = [];
-    if (activity.terminal && activity.step) parts.push(activity.action || "Run finished");
+    if (activity.step) parts.push(activity.busy ? activity.liveAction || activity.action : activity.action || "Run finished");
     if (activity.step) {
       parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
     } else {
@@ -8892,7 +8888,6 @@ class CodexBridgePanel extends HTMLElement {
       "assistant",
       text,
       isPartial ? "partial" : "streaming",
-      false,
       isPartial ? "Partial response" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
@@ -8946,12 +8941,11 @@ class CodexBridgePanel extends HTMLElement {
         "user",
         payload.text,
         event.sequence,
-        false,
         payload.queued ? "Queued steer" : ""
       );
     }
     if (event.event_type === "message.completed") {
-      return this._renderMessage("assistant", payload.text, event.sequence, true);
+      return this._renderMessage("assistant", payload.text, event.sequence);
     }
     if (
       event.event_type === "item.completed"
@@ -9111,7 +9105,7 @@ class CodexBridgePanel extends HTMLElement {
     return article;
   }
 
-  _renderMessage(role, text, key, canCopy, label = "") {
+  _renderMessage(role, text, key, label = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
@@ -9122,15 +9116,6 @@ class CodexBridgePanel extends HTMLElement {
     bubble.className = "bubble";
     if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
     this._renderMessageBody(bubble, String(text ?? ""));
-    if (canCopy) {
-      const actions = document.createElement("div");
-      actions.className = "message-actions";
-      const copyButton = this._actionButton("copy-button", "copy-message", "Copy response");
-      copyButton.dataset.sequence = String(key);
-      this._appendTrustedIcon(copyButton, icons.copy);
-      actions.append(copyButton);
-      bubble.append(actions);
-    }
     article.append(bubble);
     return article;
   }
@@ -11931,21 +11916,6 @@ class CodexBridgePanel extends HTMLElement {
         this._artifactDownloadPendingId = null;
       }
       this._refreshArtifactDownloadUi();
-    }
-  }
-
-  async _copyMessage(sequence) {
-    const numericSequence = Number(sequence);
-    const event = this._events.find((item) => item.sequence === numericSequence);
-    const text = event?.payload?.text || "";
-    if (!text) {
-      return;
-    }
-    try {
-      await this._writeClipboardText(text);
-      this._clearError();
-    } catch (error) {
-      this._setError(error);
     }
   }
 
