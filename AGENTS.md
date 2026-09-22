@@ -29,8 +29,13 @@ changing product language or architecture.
   default-disabled option, per-endpoint consent and the private local MCP relay.
   The relay pins approved private addresses at connection time, verifies TLS,
   rejects redirects and never forwards its private capability header upstream.
-  Never pass a local upstream URL directly to Codex or accept user-supplied
-  headers, bearer credentials, stdio commands or local OAuth settings. Keep
+  Never pass a local upstream URL or upstream credential directly to Codex.
+  MCP-02 permits write-only bearer tokens and named authentication headers
+  through the private relay, bound to one approved endpoint. Reject routing,
+  protocol and reserved headers. Submit credentials through bounded administrator
+  HTTP views, never WebSocket commands, prompts or browser persistence. Keep
+  private credentials out of responses, logs and native configuration; redact
+  reflected secrets in relay responses. Stdio and local OAuth remain unsupported. Keep
   OAuth authorisation URLs one-shot and uncached. This local exception does
   not change browser, shell or Host Access permissions.
 - Confine skills and project instructions to the selected workspace. Global

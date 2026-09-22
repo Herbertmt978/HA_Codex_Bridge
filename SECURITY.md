@@ -72,7 +72,7 @@ then removes the saved native MCP server table; cleanup failure keeps readiness
 unavailable. An empty table alone is insufficient because Codex merges tables. This does not alter skills,
 plugins, marketplaces, or instructions.
 
-Public MCP configuration is deliberately narrow: only outbound
+Public MCP configuration without static credentials is deliberately narrow: only outbound
 streamable-HTTP servers using HTTPS hostnames are accepted. Literal IPs and
 local/internal names are rejected, and available DNS answers are checked for
 non-public addresses before a server is saved. DNS checks are best effort, do
@@ -96,7 +96,27 @@ its native bindings and prevents their restoration without a new connection.
 Local OAuth is not supported in this release. Existing public HTTPS/OAuth
 behaviour is unchanged, including its best-effort DNS limitation.
 
-Bearer-token configuration is not supported by this surface. OAuth login is
+MCP-02 permits administrator-supplied bearer tokens and explicitly named
+authentication headers. The private relay stores them in the App's restricted
+private registry and injects them only for the saved destination. Credentials
+are not encrypted separately from App storage: protect App backups, which
+include them, and revoke old credentials at their provider after restoring an
+old backup. They are never written to Codex configuration or workspace files.
+Credential requests use bounded, administrator-authenticated HTTP routes with
+fixed errors and no-store responses, avoiding WebSocket debug-message logging.
+The UI never reads saved values and clears submitted secrets even on failure.
+Public credential endpoints require HTTPS and connection-time public IP pinning;
+local HTTP also requires the existing unencrypted-transport acknowledgement.
+Removal blocks new upstream requests and cancels active relay requests without
+falling back to unauthenticated access. It cannot undo accepted server actions
+or revoke credentials at their provider. Destination changes require removing
+and recreating the connection.
+Routing/protocol headers, cookies, duplicate headers and control characters are
+rejected. The relay redacts literal and JSON-escaped reflected credentials across
+response chunks. A trusted server receives its credential and can misuse or
+transform it; redaction cannot make an untrusted provider safe.
+
+OAuth login is
 explicit and returns a one-shot authorization URL
 with `no-store` handling; do not log, cache, or paste it. MCP elicitation is
 declined until a separately reviewed consent flow exists. These controls do

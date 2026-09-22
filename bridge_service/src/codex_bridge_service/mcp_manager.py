@@ -1,9 +1,9 @@
 """Safe, native app-server management for Home Assistant MCP connections.
 
-Public streamable HTTPS servers support native OAuth. Explicitly approved local
-servers use the confined relay. This is not a generic Codex configuration editor:
-stdio commands, environment variables, user-supplied authentication headers and
-arbitrary config keys are rejected.
+Public streamable HTTPS servers support native OAuth. Approved local endpoints
+and static credentials use the confined relay. This is not a generic Codex
+configuration editor: stdio commands, environment variables, routing headers
+and arbitrary config keys are rejected.
 """
 
 from __future__ import annotations
@@ -19,7 +19,8 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from .codex_app_server import mcp_config_is_disabled
 from .mcp_local_policy import LocalMcpError
-from .mcp_local_relay import LocalMcpRelay
+from .mcp_relay import McpRelay
+from .mcp_credentials import parse_credential
 
 
 _MAX_SERVERS = 32
@@ -162,9 +163,12 @@ class McpServerDefinition:
     oauth_client_id: str | None = None
     oauth_resource: str | None = None
     local: bool = False
+    relayed: bool = False
+    auth_mode: str = "none"
+    credential_configured: bool = False
 
     def config_value(self) -> dict[str, str]:
-        if self.local:
+        if self.local or self.relayed:
             # Local upstream URLs must never become native Codex destinations.
             raise McpValidationError()
         value = {"url": self.url}
@@ -186,7 +190,7 @@ class McpManager:
         request_timeout_seconds: float = 30.0,
         resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
         enabled: bool = False,
-        local_relay: LocalMcpRelay | None = None,
+        relay: McpRelay | None = None,
     ) -> None:
         if request_timeout_seconds <= 0:
             raise ValueError("MCP request timeout must be positive")
@@ -197,7 +201,7 @@ class McpManager:
         self._request_timeout_seconds = float(request_timeout_seconds)
         self._resolver = resolver
         self._enabled = enabled
-        self._local_relay = local_relay
+        self._relay = relay
         self._lock = RLock()
         self._startup: dict[str, tuple[str, str | None]] = {}
         self._oauth_completion: dict[str, bool] = {}
@@ -242,13 +246,15 @@ class McpManager:
                     "name": definition.name,
                     "transport": "streamable_http",
                     "network": "local" if definition.local else "public",
-                    "endpoint": _endpoint_display(definition.url, private_path=definition.local),
-                    "auth": "none" if definition.local else _auth_display(auth_status),
+                    "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
+                    "auth": definition.auth_mode if definition.relayed else _auth_display(auth_status),
                     "startup": startup,
                     "tool_count": _bounded_collection_size(tools),
                     "resource_count": _bounded_collection_size(resources)
                     + _bounded_collection_size(templates),
                 }
+                if definition.auth_mode != "none":
+                    view["credential_configured"] = definition.credential_configured
                 title = _safe_display_text(info.get("title"), 160)
                 version = _safe_display_text(info.get("version"), 64)
                 if title is not None:
@@ -271,14 +277,26 @@ class McpManager:
         oauth_resource: object = None,
         local: bool = False,
         local_acknowledged: bool = False,
+        authentication: object = None,
+        auth_acknowledged: bool = False,
     ) -> dict[str, object]:
         self._require_enabled()
         self._require_elicitation_handler()
         normalized_name = _validate_name(name)
+        try:
+            credential = parse_credential(authentication)
+        except LocalMcpError:
+            raise McpValidationError() from None
+        static_auth = credential.mode != "none"
+        if (type(auth_acknowledged) is not bool or auth_acknowledged != static_auth
+                or (static_auth and (oauth_client_id is not None or oauth_resource is not None))):
+            raise McpValidationError()
+        if static_auth and self._relay is None:
+            raise McpUnavailableError()
         if type(local) is not bool or type(local_acknowledged) is not bool:
             raise McpValidationError()
         if local:
-            if self._local_relay is None:
+            if self._relay is None or not self._relay.local_enabled:
                 raise McpLocalDisabledError()
             if not local_acknowledged or oauth_client_id is not None or oauth_resource is not None:
                 raise McpValidationError()
@@ -299,14 +317,15 @@ class McpManager:
                     raise McpConflictError()
                 if len(definitions) >= _MAX_SERVERS:
                     raise McpValidationError()
-                if local:
+                if local or static_auth:
                     try:
-                        canonical = self._local_relay.add(normalized_name, url)
+                        canonical = self._relay.add(normalized_name, url, local=local, credential=credential)
                     except LocalMcpError:
                         raise McpValidationError() from None
                     except Exception:
                         raise McpUnavailableError() from None
-                    definition = McpServerDefinition(normalized_name, canonical, local=True)
+                    definition = McpServerDefinition(normalized_name, canonical, local=local, relayed=True,
+                                                     auth_mode=credential.mode, credential_configured=credential.configured)
                 assert definition is not None
                 try:
                     self._write_config_value(
@@ -315,9 +334,9 @@ class McpManager:
                         version=version,
                     )
                 except McpManagerError:
-                    if local:
+                    if definition.relayed:
                         try:
-                            self._local_relay.remove(normalized_name)
+                            self._relay.remove(normalized_name)
                         except Exception:
                             raise McpUnavailableError() from None
                     raise
@@ -340,9 +359,9 @@ class McpManager:
                     value=None,
                     version=version,
                 )
-                if definitions[normalized_name].local:
+                if definitions[normalized_name].relayed:
                     try:
-                        self._local_relay.remove(normalized_name)
+                        self._relay.remove(normalized_name)
                     except Exception:
                         raise McpUnavailableError() from None
                 self._reload()
@@ -358,7 +377,7 @@ class McpManager:
                 definitions, _version = self._read_definitions()
                 if normalized_name not in definitions:
                     raise McpNotFoundError()
-                if definitions[normalized_name].local:
+                if definitions[normalized_name].relayed:
                     raise McpValidationError()
                 result = self._request(
                     "mcpServer/oauth/login",
@@ -425,11 +444,11 @@ class McpManager:
                 definitions, version = _validated_user_definitions(
                     result,
                     resolver=self._resolver,
-                    local_relay=self._local_relay,
+                    relay=self._relay,
                 )
-                if self._local_relay is not None:
+                if self._relay is not None:
                     try:
-                        self._local_relay.retain({name for name, item in definitions.items() if item.local})
+                        self._relay.retain({name for name, item in definitions.items() if item.relayed})
                     except Exception:
                         raise McpUnavailableError() from None
                 self._write_config_value(
@@ -470,23 +489,53 @@ class McpManager:
             raise McpElicitationUnavailableError()
 
     def _view_for_created(self, definition: McpServerDefinition) -> dict[str, object]:
-        return {
+        view = {
             "name": definition.name,
             "transport": "streamable_http",
-            "endpoint": _endpoint_display(definition.url, private_path=definition.local),
-            "auth": "oauth" if definition.oauth_client_id else "none",
+            "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
+            "auth": definition.auth_mode if definition.relayed else "oauth" if definition.oauth_client_id else "none",
             "startup": "starting",
             "tool_count": 0,
             "resource_count": 0,
             "network": "local" if definition.local else "public",
         }
+        if definition.auth_mode != "none":
+            view["credential_configured"] = definition.credential_configured
+        return view
+
+    def replace_credential(self, name: object, authentication: object = None, *, acknowledged: bool = False, remove: bool = False) -> dict[str, object]:
+        self._require_enabled()
+        normalized = _validate_name(name)
+        try:
+            credential = None if remove else parse_credential(authentication)
+        except LocalMcpError:
+            raise McpValidationError() from None
+        if not remove and (acknowledged is not True or credential.mode == "none"):
+            raise McpValidationError()
+        with self._mutation_lease():
+            with self._lock:
+                definitions, _version = self._read_definitions()
+                definition = definitions.get(normalized)
+                if definition is None:
+                    raise McpNotFoundError()
+                if not definition.relayed or definition.auth_mode == "none" or self._relay is None:
+                    raise McpValidationError()
+                try:
+                    self._relay.replace_credential(normalized, credential)
+                    self._relay.native_config(normalized)
+                except Exception:
+                    raise McpUnavailableError() from None
+                self._reload()
+                self._startup.pop(normalized, None)
+        return {"name": normalized, "auth": credential.mode if credential else definition.auth_mode,
+                "credential_configured": credential is not None}
 
     def _native_value(self, definition: McpServerDefinition) -> dict[str, object]:
-        if definition.local:
-            if self._local_relay is None:
+        if definition.relayed:
+            if self._relay is None:
                 raise McpLocalDisabledError()
             try:
-                return self._local_relay.native_config(definition.name)
+                return self._relay.native_config(definition.name)
             except Exception:
                 raise McpUnavailableError() from None
         return definition.config_value()
@@ -569,7 +618,7 @@ class McpManager:
         for raw_name, raw_value in raw_servers.items():
             try:
                 definition = _definition_from_config(
-                    raw_name, raw_value, local_relay=self._local_relay, effective=True,
+                    raw_name, raw_value, relay=self._relay, effective=True,
                 )
             except McpValidationError:
                 # Unsafe existing native config is never reflected back into HA.
@@ -688,14 +737,16 @@ def _definition_from_config(
     value: object,
     *,
     resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
-    local_relay: LocalMcpRelay | None = None,
+    relay: McpRelay | None = None,
     effective: bool = False,
 ) -> McpServerDefinition:
     normalized_name = _validate_name(name)
-    if local_relay is not None:
-        original = local_relay.original_url(normalized_name, value, effective=effective)
+    if relay is not None:
+        original = relay.original_url(normalized_name, value, effective=effective)
         if original is not None:
-            return McpServerDefinition(normalized_name, original, local=True)
+            metadata = relay.metadata(normalized_name)
+            return McpServerDefinition(normalized_name, original, local=metadata["local"], relayed=True,
+                                       auth_mode=metadata["auth"], credential_configured=metadata["credential_configured"])
     if effective and isinstance(value, Mapping):
         defaults = {"enabled": True, "environment_id": "local", "tool_timeout_sec": None}
         for key, expected in defaults.items():
@@ -880,7 +931,7 @@ def _validated_user_definitions(
     result: object,
     *,
     resolver: Callable[[str], tuple[str, ...]],
-    local_relay: LocalMcpRelay | None = None,
+    relay: McpRelay | None = None,
 ) -> tuple[dict[str, McpServerDefinition], str]:
     """Return only safe servers from the raw user layer behind a session mask."""
 
@@ -952,7 +1003,7 @@ def _validated_user_definitions(
                     name,
                     value,
                     resolver=resolver,
-                    local_relay=local_relay,
+                    relay=relay,
                 )
             except McpValidationError:
                 continue

@@ -1,3 +1,5 @@
+import { selection } from "./selection.js";
+
 export const HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
 
 const text = (doc, tag, value, className = "") => {
@@ -21,7 +23,7 @@ const link = (doc, label, href) => {
 };
 
 /** Guided HA setup and the existing custom-server form share the same MCP API. */
-export function renderMcpSetup(doc, state, enabled, localEnabled = false) {
+export function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEnabled = false) {
   const section = text(doc, "section", "", "mcp-setup");
   if (state.form === "mcp-choice") {
     section.append(text(doc, "h3", "Choose an MCP server", "desktop-subheading"));
@@ -56,6 +58,7 @@ export function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   form.className = "desktop-form";
   form.dataset.desktopForm = "mcp";
   const local = localEnabled && state.formDraft?.local === true;
+  const staticAuth = credentialsEnabled && ["bearer", "headers"].includes(state.formDraft?.auth_mode);
   const field = (label, name, type = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const control = doc.createElement("input");
@@ -91,11 +94,12 @@ export function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   if (local) {
     const warning = text(doc, "div", "", "mcp-local-warning");
     warning.append(text(doc, "strong", "Allow access to this local MCP server?"), text(doc, "p", "Codex will be able to use the tools this server exposes, including any device controls or file changes it permits. HTTP sends requests, responses and any secret in the URL without encryption across your local network. This does not grant shell or root host access."), checkbox("I trust this server and understand the access and connection risks", "local_acknowledged", true));
-    form.append(warning, text(doc, "p", "Local OAuth, bearer tokens, query strings and custom authentication headers are not supported yet. A server with a private connection path can use that full URL.", "desktop-note"));
+    form.append(warning, text(doc, "p", "Local OAuth and query strings are not supported. A server with a private connection path can use that full URL.", "desktop-note"));
   }
+  if (credentialsEnabled) form.append(renderMcpAuthentication(doc, state, { local }));
   const oauth = text(doc, "details", "", "mcp-oauth");
   oauth.append(text(doc, "summary", "OAuth settings (optional)"), field("OAuth client ID (public)", "oauth_client_id"), field("OAuth resource", "oauth_resource"));
-  if (!local) form.append(oauth);
+  if (!local && !staticAuth) form.append(oauth);
   if (state.formError) {
     const error = text(doc, "p", state.formError, "desktop-error");
     error.setAttribute("role", "alert");
@@ -110,4 +114,73 @@ export function renderMcpSetup(doc, state, enabled, localEnabled = false) {
   section.append(form);
   if (guided) section.append(text(doc, "h3", "Check it works", "desktop-subheading"), text(doc, "p", "After adding the server, use Sign in if it asks for OAuth. Refresh the server status, then start a new chat and ask Codex to describe an entity without changing it. Confirm the result before allowing changes.", "desktop-note"));
   return section;
+}
+
+/** Secrets live only in these inputs; generic form drafts never capture them. */
+export function renderMcpAuthentication(doc, state, { local = false, replacing = false } = {}) {
+  const section = text(doc, "section", "", "mcp-authentication");
+  const mode = state.formDraft?.auth_mode || (replacing ? state.editingMcp?.auth : "none") || "none";
+  const options = [["bearer", "Bearer token"], ["headers", "API-key headers"]];
+  if (!replacing) options.unshift(["none", local ? "No authentication header" : "None or OAuth"]);
+  const choice = selection(doc, { name: "auth_mode", label: "Authentication", value: mode, options });
+  choice.querySelector("select").dataset.desktopField = "auth_mode";
+  section.append(text(doc, "span", "Authentication", "desktop-field-label"), choice);
+  const secretInput = (label, attr, type = "password") => {
+    const wrap = text(doc, "label", "", "desktop-field");
+    const input = doc.createElement("input");
+    input.type = type; input.setAttribute(attr, ""); input.autocomplete = "off";
+    input.spellcheck = false; input.required = true; input.maxLength = type === "password" ? 4096 : 64;
+    wrap.append(text(doc, "span", label, "desktop-field-label"), input);
+    return wrap;
+  };
+  if (mode === "bearer") section.append(secretInput("Bearer token", "data-mcp-token"));
+  if (mode === "headers") {
+    const rows = text(doc, "div", "", "mcp-header-rows");
+    const add = button(doc, "Add another header", "");
+    delete add.dataset.desktopAction;
+    const addRow = () => {
+      const row = text(doc, "div", "", "mcp-header-row");
+      row.append(secretInput("Header name", "data-mcp-header-name", "text"), secretInput("API-key value", "data-mcp-header-value"));
+      const remove = button(doc, "Remove header", ""); delete remove.dataset.desktopAction;
+      remove.onclick = () => { row.remove(); add.disabled = false; };
+      row.append(remove); rows.append(row); add.disabled = rows.children.length >= 8;
+    };
+    add.onclick = addRow; addRow(); section.append(rows, add);
+    section.append(text(doc, "p", "Use the authentication header named by your server, such as X-API-Key. Do not enter Host, Cookie, routing or MCP protocol headers.", "desktop-note"));
+  }
+  if (["bearer", "headers"].includes(mode)) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    warning.append(text(doc, "strong", "Share this credential with this server?"), text(doc, "p", "Codex can use the tools this credential permits. It is stored privately in the App and included in App backups, without separate encryption. Protect those backups. Saved values cannot be displayed; you can replace or remove them."));
+    if (local) warning.append(text(doc, "p", "Local HTTP also sends the credential without encryption. Use HTTPS where possible and trust the network between Home Assistant and the server."));
+    const label = text(doc, "label", "", "mcp-consent");
+    const check = doc.createElement("input"); check.type = "checkbox"; check.required = true;
+    check.dataset.desktopField = "auth_acknowledged"; check.name = "auth_acknowledged";
+    check.checked = state.formDraft?.auth_acknowledged === true;
+    label.append(check, text(doc, "span", "I trust this destination and understand credential transport and backup exposure"));
+    warning.append(label); section.append(warning);
+    section.append(text(doc, "p", "Use a secure connection to Home Assistant when entering credentials. Submitted values are cleared, including if saving fails.", "desktop-note"));
+  }
+  return section;
+}
+
+export function readMcpCredential(form) {
+  const mode = form.querySelector('[data-desktop-field="auth_mode"]')?.value;
+  if (mode === "bearer") return { mode, token: form.querySelector("[data-mcp-token]")?.value || "" };
+  if (mode === "headers") return { mode, headers: [...form.querySelectorAll(".mcp-header-row")].map((row) => ({ name: row.querySelector("[data-mcp-header-name]").value, value: row.querySelector("[data-mcp-header-value]").value })) };
+  return null;
+}
+
+export function clearMcpSecrets(form) {
+  form?.querySelectorAll("[data-mcp-token], [data-mcp-header-value]").forEach((input) => { input.value = ""; });
+}
+
+export function renderMcpCredentialForm(doc, state) {
+  const form = doc.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp";
+  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. To change the destination, remove and add the server again.`, "desktop-note"));
+  form.append(renderMcpAuthentication(doc, state, { local: state.editingMcp?.network === "local", replacing: true }));
+  if (state.formError) { const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error); }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const save = button(doc, "Save credential", "submit-mcp-credential"); save.disabled = state.loading; save.classList.add("panel-button-primary");
+  actions.append(save, button(doc, "Cancel", "close-form")); form.append(actions);
+  return form;
 }

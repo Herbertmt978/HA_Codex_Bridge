@@ -2,6 +2,9 @@
 # shellcheck shell=bash
 set -Eeuo pipefail
 
+# Device-login and MCP credentials must not be included in process core dumps.
+ulimit -c 0
+
 # Supervisor validates this as a boolean, and this second check keeps malformed
 # restored option state fail-closed before it reaches the Bridge process.
 source /usr/lib/bashio/bashio.sh

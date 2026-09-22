@@ -59,9 +59,13 @@ will last only for the current visit.
 
 ## Other settings
 
-**MCP servers** manages trusted HTTPS tools after MCP has been enabled in the
+**MCP servers** manages trusted public HTTPS tools and explicitly approved local
+connections after MCP has been enabled in the
 App. **Add MCP server** offers guided **Home Assistant (HA-MCP)** setup alongside
-**Other MCP server** for custom connections. **Instructions** edits global or
+**Other MCP server** for custom connections. The development version also offers
+write-only bearer tokens and API-key headers; this is not in published 1.2.0.
+See the [MCP guide](home-assistant-mcp.md) for permission, transport and backup
+warnings. **Instructions** edits global or
 project instructions. **Keyboard shortcuts**
 lists the supported shortcuts, and **About / security** explains where Codex
 runs and the access limits. These are the settings supported by Codex Bridge;

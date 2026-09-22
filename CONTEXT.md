@@ -77,6 +77,13 @@ to the App or Bridge.
 
 ## Product language
 
+- MCP-02 adds write-only bearer tokens and named authentication headers. The
+  private relay owns their storage and injection for one approved destination;
+  neither Codex configuration nor the browser can read a saved credential.
+  Replacement and removal revoke active requests. Public credential connections
+  require HTTPS and connection-time public-address validation. Existing public
+  OAuth retains its native path. See ADR 0008 for the credential boundary.
+
 - The workspace terminal is an ephemeral HA administrator session in a dedicated
   Codex app-server process whose startup directory is the exact chat workspace.
   A request cwd alone does not narrow command/exec's workspace roots. Keep the

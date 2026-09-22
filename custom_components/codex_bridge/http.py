@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import asyncio
+import json
+import re
 
 from aiohttp import web
 
@@ -303,7 +306,68 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
             return _runtime_unavailable_response()
 
 
+class CodexBridgeMcpCredentialView(HomeAssistantView):
+    """Write-only credential operations outside WebSocket payload logging."""
+
+    url = "/api/codex_bridge/mcp/credentials"
+    name = "api:codex_bridge:mcp_credentials"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        headers = {"Cache-Control": "no-store"}
+        try:
+            if request.content_type != "application/json":
+                raise ValueError()
+            body = bytearray()
+            async with asyncio.timeout(15):
+                async for chunk in request.content.iter_chunked(4096):
+                    body.extend(chunk)
+                    if len(body) > 24 * 1024:
+                        raise ValueError()
+            payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise ValueError()
+            operation = payload.pop("operation", None)
+            if operation not in {"create", "replace", "remove"}:
+                raise ValueError()
+            name = payload.get("name")
+            if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name):
+                raise ValueError()
+            runtime = async_get_runtime(self.hass)
+            runtime.client.require_capability("mcp_credentials_v1")
+            if operation == "create":
+                allowed = {"name", "url", "local", "local_acknowledged", "authentication", "auth_acknowledged"}
+                if set(payload) - allowed or "authentication" not in payload:
+                    raise ValueError()
+                await runtime.client.async_add_mcp(payload)
+            elif operation == "replace":
+                if set(payload) != {"name", "authentication", "auth_acknowledged"}:
+                    raise ValueError()
+                await runtime.client.async_replace_mcp_credential(name, {key: value for key, value in payload.items() if key != "name"})
+            else:
+                if set(payload) != {"name"}:
+                    raise ValueError()
+                await runtime.client.async_replace_mcp_credential(name, None)
+            # Never reflect even an unexpected provider response.
+            return web.json_response({"saved": True}, headers=headers)
+        except (ValueError, TypeError, UnicodeError, asyncio.TimeoutError):
+            return web.json_response({"code": "mcp_request_invalid"}, status=400, headers=headers)
+        except BridgeApiError as error:
+            response = bridge_error_response(error)
+            response.headers.update(headers)
+            return response
+        except RuntimeError:
+            response = _runtime_unavailable_response()
+            response.headers.update(headers)
+            return response
+
+
 def async_register_http_views(hass: HomeAssistant) -> None:
+    hass.http.register_view(CodexBridgeMcpCredentialView(hass))
     hass.http.register_view(CodexBridgeAttachmentUploadView(hass))
     hass.http.register_view(CodexBridgeUploadCreateView(hass))
     hass.http.register_view(CodexBridgeUploadSessionView(hass))

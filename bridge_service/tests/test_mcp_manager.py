@@ -18,7 +18,7 @@ from codex_bridge_service.mcp_manager import (
     McpValidationError,
 )
 from codex_bridge_service.routes.mcp import router
-from codex_bridge_service.mcp_local_relay import LocalMcpRelay
+from codex_bridge_service.mcp_relay import McpRelay
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,11 +327,11 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
 async def test_local_create_list_remove_and_oauth_boundary(tmp_path):
-    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
     await relay.start()
     try:
         manager, client, gate = _manager(_config(), {"status": "ok", "version": "user-v2"}, {})
-        manager._local_relay = relay
+        manager._relay = relay
         result = manager.create_server(name="home", url="http://ha.local/private-secret", local=True, local_acknowledged=True)
         assert result["endpoint"] == "http://ha.local"
         assert result["network"] == "local"
@@ -356,11 +356,11 @@ async def test_local_create_list_remove_and_oauth_boundary(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
 async def test_local_consent_and_write_failure_never_leave_active_binding(tmp_path):
-    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
     await relay.start()
     try:
         manager, client, _ = _manager(_config(), RuntimeError("private failure"))
-        manager._local_relay = relay
+        manager._relay = relay
         for fields in [{}, {"local_acknowledged": "true"}, {"local_acknowledged": True, "oauth_client_id": "client"}]:
             with pytest.raises(McpValidationError):
                 manager.create_server(name="home", url="http://ha.local/mcp", local=True, **fields)
@@ -376,7 +376,7 @@ async def test_local_consent_and_write_failure_never_leave_active_binding(tmp_pa
 @pytest.mark.skipif(os.name != "posix", reason="Private local MCP storage requires Linux")
 @pytest.mark.parametrize("local_enabled", [False, True])
 async def test_startup_retains_only_approved_bindings_and_option_revokes_them(tmp_path, local_enabled):
-    relay = LocalMcpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.2",))
     await relay.start()
     try:
         relay.add("home", "http://ha.local/private-secret")
@@ -389,7 +389,7 @@ async def test_startup_retains_only_approved_bindings_and_option_revokes_them(tm
             "tampered": {**binding, "http_headers": {"X-Codex-Local-Mcp": "wrong"}},
         }}
         manager, client, _ = _manager(config, {"status": "ok", "version": "user-v2"}, {})
-        manager._local_relay = relay if local_enabled else None
+        manager._relay = relay if local_enabled else None
         manager.sanitize_startup_servers()
         saved = client.calls[1].params["edits"][0]["value"]
         assert set(saved) == ({"home"} if local_enabled else set())
@@ -961,3 +961,48 @@ def test_disabled_manager_refuses_an_unmasked_effective_server():
     with pytest.raises(McpProtocolError):
         manager.disable_all_servers()
     assert len(client.calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="Private credential storage requires Linux")
+async def test_static_credentials_never_enter_native_config_or_projection(tmp_path):
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("8.8.8.8",), local_enabled=False)
+    await relay.start()
+    secret = "synthetic-static-token"
+    try:
+        manager, client, gate = _manager(_config(), {"status":"ok", "version":"user-v2"}, {})
+        manager._relay = relay
+        created = manager.create_server(name="vendor", url="https://mcp.example.com/private-path", authentication={"mode":"bearer", "token":secret}, auth_acknowledged=True)
+        assert created["auth"] == "bearer" and created["credential_configured"] is True
+        assert created["network"] == "public" and created["endpoint"] == "https://mcp.example.com"
+        assert secret not in str(created) and secret not in str(client.calls)
+        binding = client.calls[1].params["edits"][0]["value"]
+        assert "private-path" not in str(binding)
+        effective = {**binding, "enabled":True, "environment_id":"local", "tool_timeout_sec":None}
+        client.responses.extend([_config({"vendor":effective}), {"data":[]}])
+        assert manager.list_servers()[0]["auth"] == "bearer"
+        client.responses.append(_config({"vendor":effective}))
+        with pytest.raises(McpValidationError):
+            manager.start_oauth_login("vendor")
+        client.responses.extend([_config({"vendor":effective}), {}])
+        assert manager.replace_credential("vendor", {"mode":"headers", "headers":[{"name":"X-Api-Key", "value":"synthetic-replacement"}]}, acknowledged=True) == {"name":"vendor", "auth":"headers", "credential_configured":True}
+        assert secret not in str(client.calls) and "synthetic-replacement" not in str(client.calls)
+        client.responses.extend([_config({"vendor":effective}), {}])
+        assert manager.replace_credential("vendor", remove=True)["credential_configured"] is False
+        assert not relay.metadata("vendor")["credential_configured"]
+        assert all(lease.released for lease in gate.leases)
+    finally:
+        await relay.close()
+
+
+@pytest.mark.parametrize("fields", [
+    {"authentication":{"mode":"bearer", "token":"synthetic-secret"}},
+    {"authentication":{"mode":"bearer", "token":"synthetic-secret"}, "auth_acknowledged":True, "oauth_client_id":"client"},
+    {"authentication":{"mode":"headers", "headers":[]}, "auth_acknowledged":True},
+    {"auth_acknowledged":True},
+])
+def test_authentication_requires_explicit_nonconflicting_choice(fields):
+    manager, client, _ = _manager()
+    with pytest.raises(McpValidationError):
+        manager.create_server(name="vendor", url="https://mcp.example.com", **fields)
+    assert not client.calls

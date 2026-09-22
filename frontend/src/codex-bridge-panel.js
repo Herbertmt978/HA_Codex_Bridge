@@ -32,6 +32,7 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
+import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 
 const PANEL_VERSION = "1.2.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
@@ -2861,6 +2862,12 @@ template.innerHTML = `
     .mcp-consent input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent-color); }
     .mcp-local-warning { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; line-height: 1.5; }
     .mcp-local-warning p { color: var(--muted-color); }
+    .mcp-authentication { display: grid; gap: 14px; }
+    .desktop-form .desktop-error { color: color-mix(in srgb, var(--danger-color) 55%, var(--text-color) 45%); }
+    .mcp-header-rows { display: grid; gap: 16px; }
+    .mcp-header-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 12px; align-items: end; }
+    .mcp-header-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+    @media (max-width: 640px) { .mcp-header-row { grid-template-columns: minmax(0, 1fr); } .mcp-authentication .panel-selection { max-width: 100%; } }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
@@ -6525,11 +6532,15 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.type === "checkbox" ? target.checked : target.value };
-    if (form.dataset.desktopForm === "mcp" && ["local", "url"].includes(field)) {
+    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode"].includes(field)) {
       state.formDraft.local_acknowledged = false;
+      state.formDraft.auth_acknowledged = false;
+      clearMcpSecrets(form);
+      const authConsent = form.querySelector('[data-desktop-field="auth_acknowledged"]');
+      if (authConsent) authConsent.checked = false;
       const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
       if (consent) consent.checked = false;
-      if (field === "local") {
+      if (["local", "auth_mode"].includes(field)) {
         this._renderDesktopSurface();
         return;
       }
@@ -6629,7 +6640,7 @@ class CodexBridgePanel extends HTMLElement {
       if (scope === "project") dataset.projectId = projectId;
       dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
-    const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "delete-agents"]);
+    const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "delete-agents"]);
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
@@ -6661,6 +6672,8 @@ class CodexBridgePanel extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      const authentication = readMcpCredential(form);
+      delete payload.auth_mode;
       if (payload.local) {
         if (!this._config?.capabilities?.includes("mcp_local_v1") || payload.local_acknowledged !== true) return;
         delete payload.oauth_client_id;
@@ -6672,10 +6685,28 @@ class CodexBridgePanel extends HTMLElement {
       for (const key of ["oauth_client_id", "oauth_resource"]) {
         if (!String(payload[key] || "").trim()) delete payload[key];
       }
-      const saved = await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
-      if (!saved) { state.formError = state.error; state.error = ""; }
-      else if (guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+      if (authentication) {
+        delete payload.oauth_client_id; delete payload.oauth_resource;
+      } else delete payload.auth_acknowledged;
+      const saved = authentication
+        ? await this._mcpCredentialMutation({ operation: "create", ...payload, authentication }, state, form)
+        : await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
+      if (!saved && state.error) { state.formError = state.error; state.error = ""; }
+      else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
+    else if (action === "edit-mcp-credential") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_credentials_v1")) return;
+      this._clearDesktopFormDraft(state); state.editingMcp = server;
+      state.formDraft = { auth_mode: server.auth }; state.form = "mcp-credential";
+    }
+    else if (action === "submit-mcp-credential") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      await this._mcpCredentialMutation({ operation: "replace", name: state.editingMcp?.name,
+        authentication: readMcpCredential(form), auth_acknowledged: this._desktopFormValues(target).auth_acknowledged }, state, form);
+    }
+    else if (action === "remove-mcp-credential") await this._mcpCredentialMutation({ operation: "remove", name: dataset.id }, state);
     else if (action === "run-automation") await this._desktopMutation("run_automation", { automation_id: dataset.id }, state);
     else if (action === "pause-automation") await this._desktopMutation("pause_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "resume-automation") await this._desktopMutation("resume_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
@@ -6760,6 +6791,35 @@ class CodexBridgePanel extends HTMLElement {
     catch (error) { state.error = normalizeDesktopError(error); }
     finally { state.loading = false; }
     return mutationSucceeded;
+  }
+
+  async _mcpCredentialMutation(payload, state, form) {
+    if (!this._config?.capabilities?.includes("mcp_credentials_v1") || state.loading) return false;
+    clearMcpSecrets(form);
+    if (state.formDraft) state.formDraft.auth_acknowledged = false;
+    state.loading = true; state.error = ""; state.formError = ""; this._renderDesktopSurface();
+    try {
+      const token = this._accessToken();
+      if (!token) throw new Error("Sign in to Home Assistant");
+      const response = await fetch("/api/codex_bridge/mcp/credentials", {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(120000),
+      });
+      if (!response.ok) throw new Error("Credential operation failed");
+      this._clearDesktopFormDraft(state); state.form = null; state.editingMcp = null;
+      state.notice = payload.operation === "remove" ? "Credential removed. This connection is blocked until you set a new credential. Revoke the old token at its provider if needed." : "Credential saved. Refresh server status to check authentication.";
+      state.loaded = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.formError = "Could not save the credential change. Check the server settings and connection, then re-enter the credential if needed.";
+      state.error = state.form ? "" : state.formError;
+      return false;
+    } finally {
+      payload.authentication = null;
+      state.loading = false;
+      this._renderDesktopSurface();
+    }
   }
 
   _renderDesktopSurface() {

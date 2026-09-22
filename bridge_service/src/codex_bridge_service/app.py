@@ -33,7 +33,8 @@ from .limits import AppServerLimitsProbe, CodexLimitsProbe
 from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
 from .mcp_manager import McpManager, McpManagerError
 from .mcp_local_policy import LocalMcpError
-from .mcp_local_relay import LocalMcpRelay
+from .mcp_relay import McpRelay
+from .mcp_http import McpHttpBoundary
 from .models import CodexAuthStatusRecord, RunMode, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
@@ -229,7 +230,7 @@ def create_app(
     resolved_runner: Any = None
     resolved_host_access: HostAccessManager | None = None
     resolved_terminal: WorkspaceTerminal | None = None
-    resolved_local_mcp: LocalMcpRelay | None = None
+    resolved_local_mcp: McpRelay | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -308,6 +309,7 @@ def create_app(
                     await asyncio.to_thread(storage.event_store.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
+    app.add_middleware(McpHttpBoundary)
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request, error: RequestValidationError):
@@ -523,13 +525,13 @@ def create_app(
             private_backup_root=storage.root / "agent-backups",
             codex_home=codex_home,
         )
-        if enable_mcp and enable_local_mcp:
-            resolved_local_mcp = LocalMcpRelay(storage.root / "mcp-local")
+        if enable_mcp:
+            resolved_local_mcp = McpRelay(storage.root / "mcp-local", local_enabled=enable_local_mcp)
         resolved_mcp_manager = McpManager(
             cast(Any, resolved_app_server),
             resolved_runtime_gate,
             enabled=enable_mcp,
-            local_relay=resolved_local_mcp,
+            relay=resolved_local_mcp,
         )
     if resolved_app_server is not None:
         if auth_coordinator_factory is not None:
@@ -688,7 +690,9 @@ def create_app(
         ):
             feature_capabilities.append("mcp_admin_v1")
             if resolved_local_mcp is not None:
-                feature_capabilities.append("mcp_local_v1")
+                feature_capabilities.append("mcp_credentials_v1")
+                if resolved_local_mcp.local_enabled:
+                    feature_capabilities.append("mcp_local_v1")
         if browser_dynamic_tools_enabled:
             feature_capabilities.append("browser_v1")
         if getattr(resolved_app_server, "enable_experimental_api", False) is True:

@@ -15,7 +15,8 @@ import pytest
 import pytest_asyncio
 
 from codex_bridge_service.mcp_local_policy import LocalMcpError, private_address
-from codex_bridge_service.mcp_local_relay import LocalMcpRelay, RELAY_HEADER
+from codex_bridge_service.mcp_relay import McpRelay, RELAY_HEADER
+from codex_bridge_service.mcp_credentials import parse_credential
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(os.name != "posix", reason="Private no-follow storage requires Linux")]
 
@@ -30,12 +31,13 @@ def lan_address():
 
 
 @contextmanager
-def upstream(address, *, tls=None, status=200, body=b'{"result":"ok"}', content_type="application/json"):
+def upstream(address, *, tls=None, status=200, body=b'{"result":"ok"}', content_type="application/json", required_headers=None):
     calls = []
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             calls.append((self.path, dict(self.headers), self.rfile.read(int(self.headers.get("Content-Length", 0)))))
-            self.send_response(status)
+            authorised = all(self.headers.get(key) == value for key, value in (required_headers or {}).items())
+            self.send_response(status if authorised else 401)
             self.send_header("Content-Type", content_type)
             self.send_header("Location", "http://169.254.169.254/metadata")
             self.send_header("Set-Cookie", "private=secret")
@@ -61,7 +63,7 @@ def upstream(address, *, tls=None, status=200, body=b'{"result":"ok"}', content_
 
 @pytest_asyncio.fixture
 async def relay(tmp_path, lan_address):
-    instance = LocalMcpRelay(tmp_path / "private", resolver=lambda _: (lan_address,))
+    instance = McpRelay(tmp_path / "private", resolver=lambda _: (lan_address,))
     await instance.start()
     try:
         yield instance
@@ -148,7 +150,7 @@ async def test_unavailable_endpoint_returns_only_fixed_error(relay, lan_address)
 
 
 async def test_stream_limit_terminates_incomplete_response(relay, monkeypatch):
-    import codex_bridge_service.mcp_local_relay as module
+    import codex_bridge_service.mcp_relay as module
     monkeypatch.setattr(module, "_MAX_RESPONSE", 16)
     class OversizedStream(httpx.AsyncByteStream):
         async def __aiter__(self):
@@ -185,13 +187,13 @@ async def test_unauthorised_and_removed_bindings_cannot_connect(relay, lan_addre
 
 async def test_private_registry_restart_requires_matching_native_binding(tmp_path, lan_address):
     root = tmp_path / "private"
-    first = LocalMcpRelay(root, resolver=lambda _: (lan_address,))
+    first = McpRelay(root, resolver=lambda _: (lan_address,))
     await first.start()
     first.add("home", "http://ha.local/secret-path")
     binding = first.native_config("home")
     await first.close()
     assert (root / "servers.json").stat().st_mode & 0o777 == 0o600
-    second = LocalMcpRelay(root, resolver=lambda _: (lan_address,))
+    second = McpRelay(root, resolver=lambda _: (lan_address,))
     await second.start()
     try:
         assert second.original_url("home", binding) == "http://ha.local/secret-path"
@@ -220,17 +222,17 @@ async def test_registry_symlink_and_invalid_content_fail_closed(tmp_path):
     registry = root / "servers.json"
     registry.symlink_to(outside)
     with pytest.raises(LocalMcpError):
-        await LocalMcpRelay(root).start()
+        await McpRelay(root).start()
     registry.unlink()
     registry.write_text("private-invalid-data")
     with pytest.raises(LocalMcpError) as error:
-        await LocalMcpRelay(root).start()
+        await McpRelay(root).start()
     assert "private-invalid-data" not in str(error.value)
     assert outside.read_text() == '{"version":1,"servers":{}}'
 
 
 async def test_body_response_limits_and_mime(relay, lan_address, monkeypatch):
-    import codex_bridge_service.mcp_local_relay as module
+    import codex_bridge_service.mcp_relay as module
     monkeypatch.setattr(module, "_MAX_BODY", 16)
     monkeypatch.setattr(module, "_MAX_RESPONSE", 16)
     with upstream(lan_address, body=b"x" * 17) as (port, calls):
@@ -290,3 +292,150 @@ async def test_removal_cancels_inflight_and_releases_slots(relay, lan_address):
     result = await asyncio.gather(request, return_exceptions=True)
     assert isinstance(result[0], httpx.HTTPError) or result[0].status_code >= 400
     assert not relay._tasks.get("home")
+
+
+@pytest.mark.parametrize("mode", ["bearer", "headers"])
+async def test_credential_authentication_rotation_removal_and_restart(tmp_path, lan_address, mode, caplog):
+    def credential(secret):
+        return parse_credential({"mode": mode, "token": secret} if mode == "bearer" else {"mode": mode, "headers": [{"name": "X-Api-Key", "value": secret}]})
+    key = "Authorization" if mode == "bearer" else "X-Api-Key"
+    expected = {key: ("Bearer " if mode == "bearer" else "") + "synthetic-first"}
+    instance = McpRelay(tmp_path / "credentials", resolver=lambda _: (lan_address,))
+    await instance.start()
+    try:
+        with upstream(lan_address, required_headers=expected) as (port, calls):
+            instance.add("secured", f"http://ha.local:{port}/mcp", credential=credential("synthetic-first"))
+            binding = instance.native_config("secured")
+            assert "synthetic-first" not in json.dumps(binding)
+            assert (await post(binding)).status_code == 200
+            assert (tmp_path / "credentials" / "servers.json").stat().st_mode & 0o777 == 0o600
+            instance.replace_credential("secured", credential("synthetic-wrong"))
+            assert (await post(binding)).status_code == 403  # revoked until explicitly activated
+            binding = instance.native_config("secured")
+            assert (await post(binding)).status_code == 401
+            instance.replace_credential("secured", credential("synthetic-next"))
+            expected[key] = ("Bearer " if mode == "bearer" else "") + "synthetic-next"
+            binding = instance.native_config("secured")
+            assert (await post(binding)).status_code == 200
+            await instance.close()
+            instance = McpRelay(tmp_path / "credentials", resolver=lambda _: (lan_address,))
+            await instance.start()
+            binding = instance.native_config("secured")
+            assert (await post(binding)).status_code == 200
+            count = len(calls)
+            instance.replace_credential("secured", None)
+            binding = instance.native_config("secured")
+            assert (await post(binding)).status_code == 401
+            assert len(calls) == count
+            assert not instance.metadata("secured")["credential_configured"]
+            assert "synthetic-next" not in (tmp_path / "credentials" / "servers.json").read_text()
+            await instance.close()
+            instance = McpRelay(tmp_path / "credentials", resolver=lambda _: (lan_address,))
+            await instance.start()
+            assert (await post(instance.native_config("secured"))).status_code == 401
+            assert len(calls) == count
+        assert "synthetic-first" not in caplog.text and "synthetic-next" not in caplog.text
+    finally:
+        await instance.close()
+
+
+async def test_credential_response_reflection_is_removed(relay, lan_address):
+    credential = parse_credential({"mode": "bearer", "token": "synthetic-echo"})
+    with upstream(lan_address, body=b'{"echo":"Bearer synthetic-echo","token":"synthetic-echo"}') as (port, _):
+        relay.add("secured", f"http://ha.local:{port}/mcp", credential=credential)
+        response = await post(relay.native_config("secured"))
+        assert response.status_code == 200
+        assert response.json() == {"echo":"[redacted]", "token":"[redacted]"}
+
+
+async def test_public_credentials_cannot_dial_private_answers_or_follow_redirects(tmp_path):
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("8.8.8.8",), local_enabled=False)
+    await relay.start()
+    credential = parse_credential({"mode":"bearer", "token":"synthetic-public"})
+    class Transport:
+        def __init__(self): self.calls = []
+        async def handle_async_request(self, request):
+            self.calls.append(request)
+            return httpx.Response(302, headers={"Location":"https://other.example/mcp"})
+        async def aclose(self): pass
+    transport = Transport()
+    try:
+        await relay._transport.aclose()
+        relay._transport = transport
+        relay.add("public", "https://api.example.com/private", local=False, credential=credential)
+        binding = relay.native_config("public")
+        assert relay.metadata("public")["local"] is False
+        assert (await post(binding)).status_code == 502
+        request = transport.calls[0]
+        assert request.url.host == "8.8.8.8"
+        assert request.headers["Host"] == "api.example.com"
+        assert request.extensions["sni_hostname"] == "api.example.com"
+        assert request.headers["Authorization"] == "Bearer synthetic-public"
+        assert RELAY_HEADER not in request.headers
+        relay._resolver = lambda _: ("8.8.8.8", "192.168.1.2")
+        assert (await post(binding)).status_code == 502
+        assert len(transport.calls) == 1
+        with pytest.raises(LocalMcpError):
+            relay.add("local", "http://ha.local/mcp", credential=credential)
+    finally:
+        await relay.close()
+
+
+async def test_version_one_registry_migrates_without_losing_local_binding(tmp_path, lan_address):
+    root = tmp_path / "registry"
+    root.mkdir()
+    token = "a" * 64
+    (root / "servers.json").write_text(json.dumps({"version": 1, "servers": {
+        "legacy": {"url": "http://ha.local/mcp", "addresses": [lan_address], "token": token},
+    }}))
+    relay = McpRelay(root, resolver=lambda _: (lan_address,))
+    await relay.start()
+    try:
+        assert relay.metadata("legacy") == {"local": True, "auth": "none", "credential_configured": False}
+        assert relay.native_config("legacy")["http_headers"][RELAY_HEADER] == token
+        relay.add("secured", "http://ha.local/secured", credential=parse_credential({"mode": "bearer", "token": "synthetic-migration"}))
+        stored = json.loads((root / "servers.json").read_text())
+        assert stored["version"] == 2
+        assert stored["servers"]["legacy"]["token"] == token
+    finally:
+        await relay.close()
+
+
+async def test_failed_credential_write_revokes_current_binding(relay, monkeypatch):
+    credential = parse_credential({"mode": "bearer", "token": "synthetic-before"})
+    relay.add("secured", "http://ha.local/mcp", credential=credential)
+    binding = relay.native_config("secured")
+
+    def fail(_records):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(relay, "_save", fail)
+    with pytest.raises(OSError):
+        relay.replace_credential("secured", None)
+    assert (await post(binding)).status_code == 403
+
+
+async def test_rotation_cancels_inflight_without_exception_log(relay, caplog):
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+
+    class WaitingTransport:
+        async def handle_async_request(self, request):
+            entered.set()
+            try:
+                await asyncio.Future()
+            finally:
+                cancelled.set()
+
+        async def aclose(self):
+            pass
+
+    await relay._transport.aclose()
+    relay._transport = WaitingTransport()
+    relay.add("secured", "http://ha.local/mcp", credential=parse_credential({"mode": "bearer", "token": "synthetic-before"}))
+    request = asyncio.create_task(post(relay.native_config("secured")))
+    await asyncio.wait_for(entered.wait(), 2)
+    relay.replace_credential("secured", parse_credential({"mode": "bearer", "token": "synthetic-after"}))
+    await asyncio.wait_for(cancelled.wait(), 2)
+    assert (await request).status_code == 502
+    assert not relay._tasks.get("secured")
+    assert "Exception in ASGI application" not in caplog.text

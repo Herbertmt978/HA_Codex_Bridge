@@ -21,3 +21,6 @@
 | Work record | 2026-09-21 | Local qualification complete; publication pending | [Local MCP connections](work/2026-09-21-local-mcp/20-checkpoint.md) |
 | Release evidence | 2026-09-21 | 1.2.0 candidate | [Local MCP qualification](work/2026-09-21-local-mcp/90-evidence.md) |
 | ADR | 2026-09-21 | Accepted and implemented | [Local MCP relay](adr/0007-local-mcp-relay.md) |
+| Work record | 2026-09-22 | Implemented in development; not released | [MCP authentication](work/2026-09-22-mcp-authentication/20-checkpoint.md) |
+| Verification evidence | 2026-09-22 | Development qualification | [MCP authentication checks](work/2026-09-22-mcp-authentication/90-evidence.md) |
+| ADR | 2026-09-22 | Accepted and implemented | [Private MCP credentials](adr/0008-mcp-credentials.md) |

@@ -82,10 +82,52 @@ of prompts, screenshots, issue reports and shared instructions. Local connection
 paths are stored privately in the App and omitted from the server list and
 native connection diagnostics.
 
-Local OAuth, bearer/API tokens, custom authentication headers, query strings,
-stdio servers and interactive MCP questions are not supported by this release.
-Servers requiring those options need a later compatibility release. Do not
-remove authentication from a server to work around this restriction.
+The published 1.2.0 release does not accept bearer tokens or authentication
+headers. The next development enhancement adds these options as described below;
+it has not been released. Local OAuth, query strings, stdio servers and
+interactive MCP questions remain unsupported. Do not remove authentication from
+a server to work around a compatibility restriction.
+
+## Tokens and API keys (development, not yet released)
+
+The updated App and Integration offer an **Authentication** selector in both the
+HA-MCP guide and **Other MCP server**. Older Apps keep the existing OAuth form.
+Use the authentication method documented by the server:
+
+1. Select **Bearer token** and enter the token itself, without the `Bearer`
+   prefix; or select **API-key headers** and enter the exact header name and key,
+   such as `X-Api-Key`. Up to eight headers are supported. Routing, cookie and
+   protocol headers are rejected. Choose **None or OAuth** for
+   the existing public OAuth connection flow.
+2. Read and acknowledge the credential warning, then add the server. Use a
+   trusted HTTPS connection to Home Assistant when entering credentials. A local
+   HTTP MCP endpoint also sends its token unencrypted across your network.
+3. Check the server status. A saved credential means it was stored; it does not
+   prove the server accepted it. Incorrect credentials leave the server unable
+   to connect.
+
+Saved values cannot be viewed or copied back from the Bridge. **Replace
+credential** lets you supply a new token or header set for the same endpoint.
+**Remove credential** clears the saved value and blocks that connection until a
+replacement is supplied. It never retries anonymously. Changing the endpoint
+requires removing and adding the server again, with fresh consent and credentials.
+
+Credentials stay in the App's private storage with restricted file access. They
+are not encrypted there, and App backups include them. Protect those backups and
+use the least powerful token the server allows. Native Codex receives a private
+relay binding, not the upstream credential. The panel clears secret fields after
+submission and does not save them in browser storage, prompts or chat history.
+Literal and JSON-escaped credential echoes in MCP responses are redacted, but a
+malicious server can still disclose a transformed secret it has received: only
+connect servers you trust.
+
+Public token-authenticated servers require HTTPS and globally routable addresses.
+The relay pins approved addresses, verifies certificates and refuses redirects.
+An address change requires adding the server again. Local endpoints keep the
+separate option and consent described above. Replacing or removing a credential
+cancels current relay requests; it cannot undo a server action already accepted
+or revoke the token at its provider. Revoke compromised tokens with the provider
+and consider copies retained in older backups.
 
 ## Remove or disable local access
 
