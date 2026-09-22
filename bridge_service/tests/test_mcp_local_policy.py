@@ -7,6 +7,7 @@ from codex_bridge_service.mcp_local_policy import (
     canonical_local_url,
     checked_addresses,
     pinned_address,
+    resolve_addresses,
     resolve_private,
 )
 
@@ -55,6 +56,23 @@ def test_rebinding_requires_fresh_approval():
     assert pinned_address(("192.168.1.2",), approved) == "192.168.1.2"
     with pytest.raises(LocalMcpError):
         pinned_address(("192.168.1.3",), approved)
+
+
+@pytest.mark.parametrize("local,addresses", [
+    (False, ("8.8.8.8", "2606:4700:4700::1111")),
+    (True, ("192.168.1.2", "fd12::2")),
+])
+def test_pinning_preserves_resolver_preference_and_validates_every_answer(monkeypatch, local, addresses):
+    import socket
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
+        (None, None, None, None, (value, 0)) for value in (*addresses, addresses[0])
+    ])
+    answers = resolve_addresses("mcp.example.com")
+    assert checked_addresses(answers, local=local) == addresses
+    assert pinned_address(answers, addresses, local=local) == addresses[0]
+    assert pinned_address(tuple(reversed(answers)), addresses, local=local) == addresses[1]
+    with pytest.raises(LocalMcpError):
+        pinned_address((*answers, "127.0.0.1"), addresses, local=local)
 
 
 def test_resolution_uses_every_answer_and_fails_closed(monkeypatch):

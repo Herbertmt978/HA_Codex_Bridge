@@ -34,7 +34,8 @@ class McpCredential:
 
 
 def _secret(value: object) -> str:
-    if (not isinstance(value, str) or not 1 <= len(value) <= 4096
+    # Short values would redact common protocol text as well as reflected secrets.
+    if (not isinstance(value, str) or not 8 <= len(value) <= 4096
             or value != value.strip() or any(not 32 <= ord(c) <= 126 for c in value)):
         raise LocalMcpError()
     return value

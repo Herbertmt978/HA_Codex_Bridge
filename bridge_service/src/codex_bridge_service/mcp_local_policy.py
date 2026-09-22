@@ -100,12 +100,13 @@ def checked_addresses(answers: object, *, local: bool = True) -> tuple[str, ...]
     if not all(isinstance(value, str) for value in answers):
         raise LocalMcpError()
     if local:
-        return tuple(sorted(set(private_address(value) for value in answers)))
+        return tuple(dict.fromkeys(private_address(value) for value in answers))
     try:
         addresses = [ipaddress.ip_address(value) for value in answers]
         if any("%" in value for value in answers) or any(not address.is_global or address.is_multicast or getattr(address, "ipv4_mapped", None) for address in addresses):
             raise LocalMcpError()
-        return tuple(sorted(set(str(address) for address in addresses)))
+        # Preserve getaddrinfo's route preference while validating every answer.
+        return tuple(dict.fromkeys(str(address) for address in addresses))
     except ValueError:
         raise LocalMcpError() from None
 

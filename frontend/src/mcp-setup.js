@@ -130,6 +130,7 @@ export function renderMcpAuthentication(doc, state, { local = false, replacing =
     const input = doc.createElement("input");
     input.type = type; input.setAttribute(attr, ""); input.autocomplete = "off";
     input.spellcheck = false; input.required = true; input.maxLength = type === "password" ? 4096 : 64;
+    if (type === "password") input.minLength = 8;
     wrap.append(text(doc, "span", label, "desktop-field-label"), input);
     return wrap;
   };
@@ -158,7 +159,7 @@ export function renderMcpAuthentication(doc, state, { local = false, replacing =
     check.checked = state.formDraft?.auth_acknowledged === true;
     label.append(check, text(doc, "span", "I trust this destination and understand credential transport and backup exposure"));
     warning.append(label); section.append(warning);
-    section.append(text(doc, "p", "Use a secure connection to Home Assistant when entering credentials. Submitted values are cleared, including if saving fails.", "desktop-note"));
+    section.append(text(doc, "p", "Tokens and API-key values must be 8–4,096 characters. Shorter values are unsupported because response redaction could alter ordinary MCP messages. Use a secure connection to Home Assistant when entering credentials. Submitted values are cleared, including if saving fails.", "desktop-note"));
   }
   return section;
 }

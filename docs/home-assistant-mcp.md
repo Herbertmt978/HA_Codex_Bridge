@@ -89,6 +89,9 @@ a server to work around a compatibility restriction.
 
 ## Tokens and API keys
 
+Tokens and API-key values must be 8–4,096 characters. Shorter credentials are
+unsupported because literal response redaction could alter ordinary MCP messages.
+
 Update both the App and HACS Integration to 1.3.0, restart Home Assistant and
 reload the panel. Keep a pre-upgrade App backup for recovery: the private MCP
 registry is upgraded when changed, and returning to 1.2.0 requires restoring

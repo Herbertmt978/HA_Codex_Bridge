@@ -88,3 +88,16 @@ checks on HAOS-DEV. No production deployment was performed.
 Publication requires final PR CI, signed image/provenance verification and a
 published-image native check. Those results are recorded by the release workflow
 and the task's external evidence, not inferred from these pre-publication tests.
+
+## PR review corrections
+
+PR #116 identified short-secret redaction collisions, loss of DNS resolver
+preference and an outdated compatibility statement. Tokens/header values now
+require at least eight characters, disclosed in the form and guide. Address
+validation preserves resolver order while still checking every answer and
+rejecting unapproved destinations. CONTEXT.md now matches the paired release.
+
+All 390 frontend, 41 browser, 351 Integration and 1,975 Bridge tests pass, with
+27 platform skips and eight root restore checks. Ruff, compilation, release
+projection and Codex lock checks pass. The corrected amd64 image builds and its
+native bearer/header lifecycle checks pass on HAOS-DEV using synthetic secrets.

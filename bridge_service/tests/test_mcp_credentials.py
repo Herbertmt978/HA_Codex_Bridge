@@ -63,4 +63,22 @@ def test_public_credential_addresses_fail_closed(addresses):
 
 
 def test_public_credential_addresses_allow_public_v4_v6():
-    assert checked_addresses(["8.8.8.8", "2606:4700:4700::1111"], local=False) == ("2606:4700:4700::1111", "8.8.8.8")
+    assert checked_addresses(["8.8.8.8", "2606:4700:4700::1111"], local=False) == ("8.8.8.8", "2606:4700:4700::1111")
+
+
+@pytest.mark.parametrize("mode", ["bearer", "headers"])
+@pytest.mark.parametrize("value", ["a", "1234567"])
+def test_short_credentials_are_rejected_before_response_redaction(mode, value):
+    payload = {"mode": mode, "token": value} if mode == "bearer" else {"mode": mode, "headers": [{"name": "X-Api-Key", "value": value}]}
+    with pytest.raises(LocalMcpError):
+        parse_credential(payload)
+
+
+@pytest.mark.parametrize("mode", ["bearer", "headers"])
+def test_minimum_credential_preserves_protocol_and_redacts_echo(mode):
+    payload = {"mode": mode, "token": "aB3dE6gH"} if mode == "bearer" else {"mode": mode, "headers": [{"name": "X-Api-Key", "value": "aB3dE6gH"}]}
+    redactor = CredentialRedactor(parse_credential(payload))
+    body = b'{"jsonrpc":"2.0","id":1,"result":{"data":"available","echo":"aB3dE6gH"}}'
+    assert json.loads(redactor.feed(body, final=True)) == {
+        "jsonrpc": "2.0", "id": 1, "result": {"data": "available", "echo": "[redacted]"},
+    }
