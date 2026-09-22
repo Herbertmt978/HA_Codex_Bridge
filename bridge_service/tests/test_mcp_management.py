@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from codex_bridge_service.mcp_manager import (
     McpConflictError, McpManager, McpRecoveryRequiredError, McpValidationError,
-    McpUnavailableError,
+    McpUnavailableError, McpServerDefinition,
 )
 from codex_bridge_service.runtime_gate import RuntimeGate
 from codex_bridge_service.resource_limits import ResourceLimits
@@ -236,3 +236,20 @@ def test_connection_routes_require_auth_and_preserve_paused_state():
     assert saved.status_code == 200 and saved.headers["Cache-Control"] == "no-store"
     assert saved.json()["enabled"] is False
     assert native.servers["vendor"]["url"] == edit["url"]
+
+
+def test_failed_credential_reload_invalidates_destination_forms(monkeypatch):
+    client = NativeConfig(enabled=False)
+    manager, _ = manager_for(client)
+    definition = McpServerDefinition("vendor", "https://mcp.vendor.example/stream",
+        relayed=True, auth_mode="bearer", credential_configured=True, enabled=False)
+    monkeypatch.setattr(manager, "_read_definitions", lambda: ({"vendor": definition}, "v1"))
+    manager._relay = SimpleNamespace(replace_credential=lambda *_: None,
+                                    native_config=lambda *_args, **_kwargs: {})
+    revision = manager._revision("vendor", "v1")
+    client.reload_failures = 1
+    with pytest.raises(McpUnavailableError):
+        manager.replace_credential("vendor", {"mode": "bearer", "token": "synthetic-new-token"}, acknowledged=True)
+    with pytest.raises(McpConflictError):
+        manager.edit_server("vendor", url="https://new.example/tools", revision=revision,
+                            endpoint_acknowledged=True, credential_action="keep")

@@ -675,13 +675,15 @@ class McpManager:
                     raise McpNotFoundError()
                 if not definition.relayed or definition.auth_mode == "none" or self._relay is None:
                     raise McpValidationError()
+                # Rotation may persist before reload fails. Invalidate open
+                # destination forms even when its final outcome is uncertain.
+                self._mutation_serial += 1
                 try:
                     self._relay.replace_credential(normalized, credential)
                     self._native_value(definition)
                 except Exception:
                     raise McpUnavailableError() from None
                 self._reload()
-                self._mutation_serial += 1
                 self._startup.pop(normalized, None)
         return {"name": normalized, "auth": credential.mode if credential else definition.auth_mode,
                 "credential_configured": credential is not None}

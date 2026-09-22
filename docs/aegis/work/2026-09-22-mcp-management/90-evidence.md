@@ -9,6 +9,9 @@ These are local and development-target results, not publication acceptance.
   screenshots were inspected.
 - Linux: 1,999 Bridge tests, 356 Integration tests and eight root restore
   checks passed. Bridge reports 27 platform skips and two dependency warnings.
+  Final review added a failed-credential-reload regression; the affected Linux
+  suites then passed 94 MCP and 140 Integration HTTP/client tests, with 13
+  connection-management tests also passing on Windows.
 - Ruff, compileall, release/lock consistency, HACS, hassfest, reverse-proxy
   transport, workflow policy and ten Windows updater checks passed.
 - Fresh amd64 and emulated ARM64 development images built successfully. The
