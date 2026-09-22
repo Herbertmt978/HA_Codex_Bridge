@@ -1,6 +1,7 @@
 # ARM64 development and qualification
 
 ARM64 image development is underway for [issue #111](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/111).
+Release 1.3.1 includes the development build preparation described here.
 The stable App still supports **amd64 only**. An ARM64 image building or running
 under emulation does not establish support for a Raspberry Pi, Green, Yellow
 or another ARM64 Home Assistant OS device.

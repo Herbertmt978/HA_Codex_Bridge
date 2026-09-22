@@ -44,7 +44,7 @@ MCP-03 still requires a separate isolation design before implementation.
 
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
-| [PLATFORM-01: ARM64 support](planned-releases/platform-01-arm64.md) | In development: ARM64 build path checked; stable App remains amd64-only. | Native ARM64 HAOS hardware and qualification outstanding | [#111](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/111) |
+| [PLATFORM-01: ARM64 support](planned-releases/platform-01-arm64.md) | Build preparation included in 1.3.1; stable App remains amd64-only. | Native ARM64 HAOS hardware and qualification outstanding | [#111](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/111) |
 | [TASK-01: Scheduling through chat](planned-releases/task-01-conversational-scheduling.md) | Describe a task and its frequency, then confirm the interpreted schedule. | Existing scheduler and explicit schedule confirmation | [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112) |
 | [SHARE-01: Public snapshots](planned-releases/share-01-public-snapshots.md) | Publish a selected, fixed, read-only copy of a chat. | Hosting and privacy design; existing proposal | [#95](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/95) |
 

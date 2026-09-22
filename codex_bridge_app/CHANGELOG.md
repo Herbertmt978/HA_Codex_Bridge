@@ -2,6 +2,19 @@
 
 All notable App changes are recorded here.
 
+## 1.3.1
+
+- Prepares ARM64 development images with verified runtime binaries, matching
+  Python packages and architecture-aware startup checks.
+- Adds separate amd64 and ARM64 build verification. Published App images remain
+  amd64-only: native ARM64 Home Assistant OS testing is still required.
+- Keeps interactive browser tools unavailable in ARM64 development images and
+  leaves the optional Host Access App amd64-only.
+- Documents the remaining hardware and sandbox checks for issue #111. This
+  release does not enable installation on Raspberry Pi, Green or Yellow.
+- Pairs App, Integration and panel 1.3.1 with Bridge 0.10.0 and Codex 0.155.1.
+  Existing amd64 features and default permissions are unchanged.
+
 ## 1.3.0
 
 - Adds bearer-token and API-key header authentication to guided HA-MCP setup

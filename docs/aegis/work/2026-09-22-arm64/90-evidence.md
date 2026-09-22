@@ -39,3 +39,22 @@ frontend test run. The new GitHub ARM build job has not run remotely.
 No ARM image was published. Published-image signatures, inventories, provenance
 and multi-architecture manifest selection remain future release gates. Stable
 metadata and release workflows continue to advertise and publish amd64 only.
+
+## Versioned 1.3.1 release checks
+
+The owner authorised publication after the development handoff. The 1.3.1
+package passed 1,983 Bridge tests, 351 Integration tests, eight root-restoration
+tests and ten Windows updater tests. Frontend lint, 390 unit tests, generated
+build and 41 browser tests passed. HACS, hassfest, proxy transport, actionlint,
+zizmor, Ruff and release/lock checks also passed.
+
+Both versioned images built. Final inspection confirmed their labels and runtime
+environment match the selected architecture; the amd64 configuration is identical
+to the candidate that passed native DEV startup, sandbox and MCP credential
+checks. The final packaging/security slice passed 43 tests with one skip.
+
+The initial versioned suite caught a stale panel version, which was corrected
+in source and regenerated before the successful rerun. Release changes do not
+alter dependencies, feature permissions or the native ARM64 acceptance gap.
+GitHub CI, review and published-artifact verification follow publication;
+these local results do not claim those later checks have passed.

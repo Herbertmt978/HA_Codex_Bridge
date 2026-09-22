@@ -1,6 +1,7 @@
 # PLATFORM-01: ARM64 Home Assistant OS support
 
-Status: In development; native qualification required. Version and date: unassigned.
+Status: Build preparation included in 1.3.1; native qualification required.
+Full ARM64 support version and date: unassigned.
 
 Architecture-aware staging, image construction and runtime reporting are being
 qualified. Stable publication remains amd64-only. See the

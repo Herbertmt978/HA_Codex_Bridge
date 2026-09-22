@@ -36,3 +36,22 @@ Access support require their own native qualification.
 
 Drift: hardware availability is now confirmed absent. Scope and security
 boundaries are unchanged; full platform support is not claimed.
+
+## Release follow-up
+
+The owner subsequently authorised publication and a GitHub enhancement update.
+Release 1.3.1 packages the verified build preparation, while leaving advertised
+hardware and published images amd64-only. App/Integration/panel versions move
+together; Bridge 0.10.0 and Codex 0.155.1 are unchanged. Host Access remains
+optional and amd64-only. Issue #111 stays open for native acceptance.
+
+Release work uses the same branch in the temporary checkout
+`D:/CodexWork/ha-bridge-arm64-release-20260922`, because the main checkout still
+contains unrelated edits. Remove this clean checkout after the release and
+preserve the branch until integration is verified. Fresh release evidence is
+under `D:/CodexWork/ha-bridge-arm64-release-evidence-20260922`.
+
+Publication must follow successful versioned local checks, PR checks and review,
+then verify the signed published image, SBOM, exact-source provenance and paired
+Integration release. The existing native ARM64 hardware blocker does not block
+this amd64 maintenance release and must not be described as resolved.
