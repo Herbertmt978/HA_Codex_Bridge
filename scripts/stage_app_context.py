@@ -524,11 +524,8 @@ def _verify_manifest(root: Path) -> None:
 def stage(*, arch: str, output: Path) -> Path:
     if arch not in ARCHITECTURES:
         raise StageError(f"unsupported App architecture: {arch}")
-    # The published App metadata advertises amd64 only.  Keeping aarch64 in
-    # the release lock supports future review, but must not produce an image
-    # users cannot install today.
-    if arch != "amd64":
-        raise StageError("the Codex Bridge App currently publishes amd64 only")
+    # Building an architecture does not qualify it for publication. Supervisor
+    # metadata remains limited to architectures with native HAOS acceptance.
 
     lock_path = APP_ROOT / "codex-release.json"
     lock, release_module = _load_release_lock(lock_path)

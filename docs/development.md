@@ -16,6 +16,9 @@
 Use [CONTEXT.md](../CONTEXT.md): Home Assistant, not the App, is the browser
 boundary; the Integration and App are distinct components.
 
+For architecture work, follow [ARM64 development and qualification](arm64-development.md).
+Development image builds do not change the stable App's supported hardware.
+
 ## Local checks
 
 Use the Node and Python versions declared in the repository and CI. Install

@@ -162,6 +162,8 @@ def attest() -> None:
         and not parent.st_mode & 0o022
     )
     target.unlink(missing_ok=True)
+    if os.uname().machine != "x86_64":
+        raise RuntimeError("Browser tools are not qualified for this architecture")
     profile = Path("/proc/self/attr/current").read_text().strip()
     assert profile.endswith(" (enforce)") and "//" not in profile
     profile = profile.removesuffix(" (enforce)")

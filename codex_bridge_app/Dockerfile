@@ -1,10 +1,11 @@
 FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24@sha256:fb41585796deece71afd5a965e9a8aa1b5c2ceb4f020389d998fbe578dbbde6a
 
 ARG TARGETARCH
+ARG BUILD_ARCH=amd64
 
 LABEL \
     io.hass.type="app" \
-    io.hass.arch="amd64" \
+    io.hass.arch="${BUILD_ARCH}" \
     io.hass.version="1.3.0"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
@@ -15,10 +16,12 @@ COPY assets/ /tmp/assets/
 COPY rootfs/ /
 
 RUN set -eux; \
-    test "${TARGETARCH}" = "amd64"; \
+    case "${BUILD_ARCH}:${TARGETARCH}" in amd64:amd64|aarch64:arm64) ;; *) exit 1 ;; esac; \
     /bin/bash -c 'source /usr/lib/bashio/bashio.sh; declare -F bashio::addon.ip_address >/dev/null'; \
     # Startup qualifies the explicitly enabled browser against this exact
-    # Chromium package. The App supports amd64 only.
+    # Chromium package. ARM64 browser isolation is not yet qualified, so its
+    # development image omits Chromium and cannot advertise browser tools.
+    if [ "${BUILD_ARCH}" = "amd64" ]; then \
     wget -q -O /tmp/chromium-152.0.7977.82-r0.apk \
       https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-152.0.7977.82-r0.apk; \
     echo "01af27a66507b9762ecb86ad0fb74ec08b2613817cb0e9a2e6848221dcde53b0  /tmp/chromium-152.0.7977.82-r0.apk" | sha256sum -c -; \
@@ -28,11 +31,12 @@ RUN set -eux; \
     apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
     rm /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
     test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"; \
+    fi; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
     python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \
     python /usr/local/libexec/codex-bridge/install_locked_assets.py \
-      --arch "${TARGETARCH}" \
+      --arch "${BUILD_ARCH}" \
       --lock /tmp/codex-release.json \
       --lock-digest f353f8f2b526927c9de0dc744a1173644003d087e351412b2095c07a0c017aff \
       --assets-dir /tmp/assets \

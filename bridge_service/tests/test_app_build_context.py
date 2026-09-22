@@ -203,18 +203,19 @@ def test_bundled_app_server_contract_matches_the_locked_codex_version() -> None:
     )
 
 
-def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path) -> None:
+@pytest.mark.parametrize("architecture,machine", [("amd64", 62), ("aarch64", 183)])
+def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path, architecture: str, machine: int) -> None:
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
     assert isinstance(lock, dict)
-    context = _stage(tmp_path / "context", "amd64")
+    context = _stage(tmp_path / "context", architecture)
     manifest = _manifest(context)
-    assert manifest.get("architecture") == "amd64"
+    assert manifest.get("architecture") == architecture
 
     staged_lock = context / "codex-release.json"
     assert staged_lock.is_file(), "Task 19 lock must be copied into the context"
     assert json.loads(staged_lock.read_text(encoding="utf-8")) == lock
 
-    selected = lock["assets"]["amd64"]
+    selected = lock["assets"][architecture]
     assert isinstance(selected, dict)
     for tool in ("codex", "bwrap", "codex-code-mode-host"):
         asset = selected[tool]
@@ -228,7 +229,7 @@ def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path) -> N
         assert _sha256(staged_binary) == asset["decompressed_sha256"]
         header = _elf_header(staged_binary)
         assert header[:7] == b"\x7fELF\x02\x01\x01"
-        assert int.from_bytes(header[18:20], "little") == 62
+        assert int.from_bytes(header[18:20], "little") == machine
 
     assert not list((context / "assets").glob("*.tar.gz")), (
         "the final context must contain only strict-parser-verified raw binaries"
@@ -238,7 +239,7 @@ def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path) -> N
     for extension in native_extensions:
         header = _elf_header(extension)
         assert header[:7] == b"\x7fELF\x02\x01\x01"
-        assert int.from_bytes(header[18:20], "little") == 62
+        assert int.from_bytes(header[18:20], "little") == machine
 
 
 def test_image_installer_never_uses_a_permissive_archive_parser() -> None:
