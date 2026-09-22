@@ -487,6 +487,56 @@ test("keeps a populated plugin catalogue stable through frequent HA refreshes", 
   await expect(panel.locator("#prompt-input")).toBeVisible();
 });
 
+test("keeps chat prose plain and completion singular across themes and widths", async ({ page }, testInfo) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._activeThread = { ...panel._activeThread, status: "idle", active_run_id: null };
+    panel._pendingInteractions = [];
+    panel._events = [
+      ["message.created", { text: "Say hello" }],
+      ["run.started", { run_id: "run-style" }],
+      ["plan.updated", { run_id: "run-style", plan: [{ step: "Reply", status: "completed" }] }],
+      ["message.completed", { run_id: "run-style", text: "Hello. This response uses plain, readable text.\n\nThe Copy action sits below the response." }],
+      ["run.completed", { run_id: "run-style" }],
+    ].map(([event_type, payload], index) => ({ event_id: `style-${index}`, thread_id: panel._selectedThreadId, sequence: 20000 + index, event_type, payload }));
+    panel._forceMessageRebuild = true;
+    panel._render(true);
+    panel._renderInteractions();
+  });
+  const panel = page.locator("codex-bridge-panel");
+  for (const theme of ["light", "dark"]) {
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+      if (width === 390) {
+        await expect.poll(() => panel.locator("#workspace-drawer").evaluate((node) => node.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
+      }
+      await expect(panel.locator(".message .avatar, .message-head")).toHaveCount(0);
+      await expect(panel.getByRole("article", { name: "Your message" })).toHaveText("Say hello");
+      const prose = panel.locator(".message.assistant .bubble-text");
+      await expect(prose).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      const appearance = await prose.evaluate((node) => {
+        const style = getComputedStyle(node);
+        const message = node.closest(".message").getBoundingClientRect();
+        const copy = node.parentElement.querySelector(".message-actions").getBoundingClientRect();
+        return { color: style.color, font: style.fontFamily, copyBelow: copy.top >= node.getBoundingClientRect().bottom, fits: message.left >= 0 && message.right <= innerWidth };
+      });
+      expect(appearance.font).not.toMatch(/monospace|consolas|courier/i);
+      expect(appearance.color).toBe(theme === "light" ? "rgb(21, 27, 41)" : "rgb(240, 242, 246)");
+      expect(appearance.copyBelow).toBe(true);
+      expect(appearance.fits).toBe(true);
+      await expect(panel.locator("#run-activity .run-activity-copy, #run-activity .run-step-chip")).toHaveCount(1);
+      await expect(panel.locator("#run-step-chip")).toContainText("Run completed");
+      await panel.getByRole("button", { name: "Copy response", exact: true }).focus();
+      await expect(panel.getByRole("button", { name: "Copy response", exact: true })).toBeFocused();
+      await panel.locator("#prompt-input").focus();
+      await page.screenshot({ path: testInfo.outputPath(`chat-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
   const requests = [];
   const pageErrors = [];

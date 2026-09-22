@@ -2,6 +2,13 @@
 
 All notable App changes are recorded here.
 
+## Unreleased
+
+- Simplifies the chat transcript: removes user and assistant avatars and the
+  repeated Assistant heading, and moves Copy below each response. Prose uses
+  the panel's text colour with a transparent background in light and dark themes.
+- Shows one run-completion indicator while keeping run details available.
+
 ## 1.3.1
 
 - Prepares ARM64 development images with verified runtime binaries, matching
