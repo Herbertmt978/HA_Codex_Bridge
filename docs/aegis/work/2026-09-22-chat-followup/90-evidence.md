@@ -23,3 +23,14 @@ command and verifies schema-backed command/image projection. Image notifications
 are deterministic fixtures; this does not claim a paid model viewed an image.
 ARM64 has development build coverage only; native hardware qualification remains
 open. Production and installed DEV versions remain unchanged.
+
+PR review identified attached short-option values bypassing the credential
+filter. Six regression cases reproduced the problem before correction,
+including quoted options and combined short flags. The filter now suppresses
+those commands before persistence; generic activity remains available. All
+30 focused activity tests pass. Both corrected image builds and the native
+probe pass, including attached credential-value suppression in the installed
+wheel. The full Linux rerun covers 2,027 Bridge tests, 356 Integration tests and
+eight root restore tests. A mixed-newline error in the local Host Access
+changelog transfer was normalised; all 11 release-projection tests passed after
+that correction. The committed changelog content is unchanged.

@@ -18,6 +18,12 @@ def test_readable_command_preview(command):
 @pytest.mark.parametrize("command", [
     "curl -H 'Authorization: Bearer abc' https://example.com",
     "curl -u me:abc https://example.com",
+    "curl -uadmin:s3cr3t https://example.com",
+    "curl -dopaquevalue https://example.com",
+    "curl -HX-Example:opaquevalue https://example.com",
+    "curl '-uadmin:s3cr3t' https://example.com",
+    'curl "-uadmin:s3cr3t" https://example.com',
+    "curl -suadmin:s3cr3t https://example.com",
     "curl https://me:abc@example.com",
     "curl https://example.com/?key=abc",
     "TOKEN=abc npm test", "$env:KEY='abc'; npm test",

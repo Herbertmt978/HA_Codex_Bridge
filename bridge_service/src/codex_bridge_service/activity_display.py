@@ -14,7 +14,9 @@ _SENSITIVE_COMMAND = re.compile(
     r"\b(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9_-]+|"
     r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"
     r"https?://[^\s]+[@?]|"
-    r"(?:--?password|--?passwd|--?user|-u|-H|--header|--data|-d)\b|"
+    r"(?:--?password|--?passwd|--?user|--header|--data)\b|"
+    # Short flags can carry attached values and appear in option clusters.
+    r"(?:^|[\s'\";|&()])-[A-Za-z]*[uHd]|"
     r"\b[A-Z_][A-Z0-9_]*\s*=|\$env:|\bset(?:x)?\s+|"
     r"[A-Za-z0-9+/=_-]{80,}",
     re.IGNORECASE,
