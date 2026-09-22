@@ -1057,7 +1057,40 @@ def test_terminal_artifact_reservation_conflict_preserves_chat_for_retry(
         broker.close()
 
 
-def test_item_activity_metadata_is_enum_only_and_redacts_provider_content(
+def test_command_preview_and_image_activity_survive_event_storage(tmp_path: Path) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(thread.thread_id, "Show activity", client_request_id="visible-activity")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        for method, item in [
+            ("item/started", {"id": "visible-command", "type": "commandExecution", "status": "inProgress",
+                              "command": "git diff --stat", "cwd": "/private/workspace", "commandActions": []}),
+            ("item/completed", {"id": "visible-command", "type": "commandExecution", "status": "completed",
+                                "command": "git diff --stat", "cwd": "/private/workspace", "commandActions": [],
+                                "aggregatedOutput": "private output"}),
+            ("item/completed", {"id": "viewed-image", "type": "imageView", "path": "/private/photo.png"}),
+        ]:
+            timestamp_key = "startedAtMs" if method == "item/started" else "completedAtMs"
+            client.emit_notification(method, {"threadId": remote_thread_id, "turnId": turn_id,
+                                              "item": item, timestamp_key: 1_783_936_800_000})
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: storage.load_thread(thread.thread_id).status == "idle")
+    finally:
+        broker.close()
+    restored = BridgeStorage(root_path=tmp_path / "state")
+    events = restored.list_thread_events(thread.thread_id)
+    commands = [event.payload for event in events if event.payload.get("item_id") == "visible-command"]
+    assert len(commands) == 2
+    assert all(payload["command_preview"] == "git diff --stat" for payload in commands)
+    assert any(event.event_type == "item.completed" and event.payload.get("item_type") == "imageView" for event in events)
+    assert "/private/" not in json.dumps([event.payload for event in events])
+    assert "private output" not in json.dumps([event.payload for event in events])
+
+
+def test_sensitive_item_activity_redacts_provider_content(
     tmp_path: Path,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)

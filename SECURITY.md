@@ -49,6 +49,16 @@ attempt to stop tracked work; they cannot undo changes or guarantee termination
 of independently started work. See the complete
 [disclosure and installation guide](codex_host_access_app/DOCS.md).
 
+## Command activity
+
+Administrator chat activity can include bounded command previews. The Bridge
+omits commands with recognised credential patterns before saving activity, but
+this filter cannot identify every secret. Unrecognised credentials in command
+arguments may remain in private chat history and its backups. Avoid placing
+credentials in command arguments. Output, environment values and image paths
+are not added to these events. See [chat activity](docs/chat-activity.md) for
+display limits and compatibility behaviour.
+
 ## Capabilities and unattended operation
 
 Automations are administrator-created records. Home Assistant owns the clock;

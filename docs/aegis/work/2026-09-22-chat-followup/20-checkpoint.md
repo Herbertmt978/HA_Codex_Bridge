@@ -31,12 +31,26 @@ Documentation explicitly covers the risk of unrecognised secrets being retained
 in chat activity. Browser checks preceded the Unicode-only correction; the full
 unit suite and build were rerun after it.
 
-Version metadata remains 1.4.0: these changes are not published or installed.
-Remaining release work: qualify the App image/native event projection, prepare a versioned release,
-finish all applicable local gates, then push/PR/review/merge with the user's
-GitHub action intervals. Do not reuse an immutable published version.
+Resumed for 1.5.0 publication: App, Integration and panel are 1.5.0; Bridge is
+0.12.0 with the unchanged Codex 0.155.1 lock. Both development image builds pass.
+The native amd64 candidate starts with the existing sandbox on HAOS-DEV, runs a
+confined command and validates command/image metadata against the pinned schema.
+No paid model turn was exercised. The event-store restart regression also passes.
 
-Production and DEV installations were not changed. CT105 was started from
-stopped solely for Linux checks and verified stopped again afterwards. DEV103 was not started.
+Final verification: 405 frontend unit tests, 45 browser tests, 356 Integration
+tests, 2,021 Bridge tests (27 skips) and eight root restore checks. The full
+Bridge run found three release-metadata failures; all 16 tests in the affected
+files passed after correcting the changelog heading and panel version. HACS,
+hassfest, Windows updater (10 tests), three transport profiles, workflow policy,
+Ruff, compilation and release/lock checks pass.
+
+Remaining: commit release metadata, publish the PR, inspect final CI/reviews,
+merge and verify the signed published image, provenance, SBOM, Integration
+archive and DEV acceptance. Observe the user's GitHub action intervals.
+
+Production and DEV installations were not changed. CT105 and DEV103 were both
+stopped when this continuation began; both were started for verification and
+must be restored afterwards. Native tests use disposable containers/volumes.
+Three existing DEV backups are retained; no new backups were created.
 Preserve the original checkout's unrelated edits. Never redeem a reset credit
 without explicit permission for that credit.
