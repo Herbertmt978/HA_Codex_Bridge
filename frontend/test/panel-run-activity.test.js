@@ -157,6 +157,18 @@ describe("panel run activity integration", () => {
     }
   });
 
+  it.each(["completed", "failed", "cancelled", "interrupted"])("announces %s before the final plan step", (state) => {
+    const panel = createPanel({ status: "idle", activeRunId: null, events: [
+      event(1, "run.started", { run_id: "run-activity" }),
+      event(2, "plan.updated", { run_id: "run-activity", plan: [{ step: "Check files", status: "completed" }] }),
+      event(3, `run.${state}`, { run_id: "run-activity" }),
+    ] });
+    panel._render(true);
+    const chip = panel.shadowRoot.getElementById("run-step-chip");
+    expect(chip.getAttribute("aria-label")).toMatch(new RegExp(`^Run ${state}\\. Step 1 of 1`));
+    expect(chip.getAttribute("aria-label")).toContain("Check files");
+  });
+
   it("keeps message roles accessible without avatars or repeated headings, and copies the response", async () => {
     const panel = createPanel({ events: [event(1, "message.completed", { text: "Hello from Codex" })] });
     const copy = vi.spyOn(panel, "_writeClipboardText").mockResolvedValue();

@@ -15,7 +15,7 @@ import pytest
 import pytest_asyncio
 
 from codex_bridge_service.mcp_local_policy import LocalMcpError, private_address
-from codex_bridge_service.mcp_relay import McpRelay, RELAY_HEADER
+from codex_bridge_service.mcp_relay import McpRelay, McpRelayRecoveryError, RELAY_HEADER
 from codex_bridge_service.mcp_credentials import parse_credential
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(os.name != "posix", reason="Private no-follow storage requires Linux")]
@@ -74,6 +74,80 @@ async def relay(tmp_path, lan_address):
 async def post(binding, **kwargs):
     async with httpx.AsyncClient(trust_env=False, timeout=5) as client:
         return await client.post(binding["url"], headers=binding["http_headers"], json={"test": True}, **kwargs)
+
+
+async def test_paused_destination_edits_keep_binding_and_require_explicit_credential_decision(relay, lan_address):
+    secret = "synthetic-endpoint-secret"
+    with upstream(lan_address) as (old_port, old_calls), upstream(lan_address) as (new_port, new_calls):
+        relay.add("home", f"http://old.local:{old_port}/mcp", credential=parse_credential({"mode": "bearer", "token": secret}))
+        binding = relay.native_config("home")
+        assert (await post(binding)).status_code == 200
+        with pytest.raises(LocalMcpError):
+            relay.edit_paused_endpoint("home", f"http://new.local:{new_port}/mcp", credential_action="keep")
+        relay.native_config("home", active=False)
+        relay.edit_paused_endpoint("home", f"http://new.local:{new_port}/mcp", credential_action="remove")
+        assert (await post(binding)).status_code == 403
+        assert not new_calls
+        assert relay.native_config("home") == binding
+        assert (await post(binding)).status_code == 401
+        assert not new_calls and len(old_calls) == 1
+        relay.native_config("home", active=False)
+        relay.edit_paused_endpoint("home", f"http://new.local:{new_port}/mcp", credential_action="replace", credential=parse_credential({"mode": "bearer", "token": secret}))
+        assert (await post(relay.native_config("home"))).status_code == 200
+        assert {key.lower(): value for key, value in new_calls[0][1].items()}["authorization"] == f"Bearer {secret}"
+
+
+async def test_failed_private_edit_restores_old_record_even_after_rename(relay, monkeypatch):
+    relay.add("home", "http://old.local/mcp")
+    binding = relay.native_config("home", active=False)
+    write = relay._boundary.atomic_write_bytes
+    failed = False
+
+    def write_then_fail(relative, content):
+        nonlocal failed
+        write(relative, content)
+        if relative == "servers.json" and not failed:
+            failed = True
+            raise OSError("directory sync failed after rename")
+
+    monkeypatch.setattr(relay._boundary, "atomic_write_bytes", write_then_fail)
+    with pytest.raises(LocalMcpError):
+        relay.edit_paused_endpoint("home", "http://new.local/mcp", credential_action="keep")
+    assert relay.original_url("home", binding) == "http://old.local/mcp"
+    relay._load()
+    assert relay.original_url("home", binding) == "http://old.local/mcp"
+
+
+async def test_startup_recovers_an_interrupted_private_edit(relay):
+    from dataclasses import replace
+    relay.add("home", "http://old.local/mcp")
+    binding = relay.native_config("home", active=False)
+    relay._save(relay._records, filename="servers.pending.json")
+    relay._save({"home": replace(relay._records["home"], url="http://new.local/mcp")})
+    relay._load()
+    assert relay.original_url("home", binding) == "http://old.local/mcp"
+    assert not relay._active
+    with relay._boundary.open_regular_file("servers.pending.json") as pending:
+        assert pending.read() == b"null"
+
+
+async def test_failed_edit_and_rollback_retains_recovery_journal(relay, monkeypatch):
+    relay.add("home", "http://old.local/mcp")
+    binding = relay.native_config("home", active=False)
+    write = relay._boundary.atomic_write_bytes
+
+    def fail_current(relative, content):
+        if relative == "servers.json":
+            raise OSError("disk unavailable")
+        return write(relative, content)
+
+    monkeypatch.setattr(relay._boundary, "atomic_write_bytes", fail_current)
+    with pytest.raises(McpRelayRecoveryError):
+        relay.edit_paused_endpoint("home", "http://new.local/mcp", credential_action="keep")
+    assert not relay._active
+    monkeypatch.setattr(relay._boundary, "atomic_write_bytes", write)
+    relay._load()
+    assert relay.original_url("home", binding) == "http://old.local/mcp"
 
 
 async def test_exact_destination_header_isolation_and_no_url_logs(relay, lan_address, caplog, monkeypatch):

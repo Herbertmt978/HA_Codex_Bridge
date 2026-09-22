@@ -33336,11 +33336,67 @@ function clearMcpSecrets(form) {
     input2.value = "";
   });
 }
+function renderMcpConnectionForm(doc, state) {
+  const server = state.editingMcp || {};
+  const form = doc.createElement("form");
+  form.className = "desktop-form";
+  form.dataset.desktopForm = "mcp";
+  form.append(
+    text(doc, "h3", `Edit ${server.name || "connection"}`, "desktop-subheading"),
+    text(doc, "p", "This server stays paused after saving. Resume it when you are ready to let existing chats, new chats and scheduled tasks use its tools.", "desktop-note")
+  );
+  const wrap = text(doc, "label", "", "desktop-field");
+  const url = doc.createElement("input");
+  url.type = "url";
+  url.name = "url";
+  url.dataset.desktopField = "url";
+  url.required = true;
+  url.maxLength = 2048;
+  url.autocomplete = "off";
+  url.spellcheck = false;
+  url.value = state.formDraft?.url || "";
+  wrap.append(text(doc, "span", "New connection URL", "desktop-field-label"), url);
+  form.append(wrap, text(doc, "p", `Current destination: ${server.endpoint || server.name}. Saved URLs and credentials are not filled into this form. The connection remains ${server.network === "local" ? "local" : "public HTTPS"}; create a new server to change its network type.`, "desktop-note"));
+  const relayed = server.network === "local" || ["bearer", "headers"].includes(server.auth);
+  const options = [["", "Choose what to do with authentication"], ["keep", "Keep existing authentication"]];
+  if (relayed) options.push(["replace", "Use a new credential"], ["remove", "Remove saved credential"]);
+  const action = state.formDraft?.credential_action || "";
+  const choice = selection(doc, { name: "credential_action", label: "Authentication when changing destination", value: action, options });
+  const control = choice.querySelector("select");
+  control.required = true;
+  control.dataset.desktopField = "credential_action";
+  form.append(text(doc, "span", "Authentication when changing destination", "desktop-field-label"), choice);
+  if (action === "replace") {
+    const replacement = { ...state, formDraft: { ...state.formDraft, auth_mode: state.formDraft?.auth_mode || (["bearer", "headers"].includes(server.auth) ? server.auth : "bearer") } };
+    form.append(renderMcpAuthentication(doc, replacement, { local: server.network === "local", replacing: true }));
+  }
+  const warning = text(doc, "div", "", "mcp-local-warning");
+  warning.append(text(doc, "strong", "Trust the new destination before saving"), text(doc, "p", "Keeping authentication allows the new destination to receive the saved credential. Native OAuth remains bound to its server URL and may require sign-in again. Removing a saved credential blocks an authenticated relay until you set a new one. HTTP sends local requests and credentials without encryption. Tool access does not grant shell or root host access."));
+  const consent = text(doc, "label", "", "mcp-consent");
+  const checkbox = doc.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.required = true;
+  checkbox.name = "endpoint_acknowledged";
+  checkbox.dataset.desktopField = "endpoint_acknowledged";
+  checkbox.checked = state.formDraft?.endpoint_acknowledged === true;
+  consent.append(checkbox, text(doc, "span", "I trust this destination and approve the authentication choice above"));
+  warning.append(consent);
+  form.append(warning);
+  if (state.formError) {
+    const error = text(doc, "p", state.formError, "desktop-error");
+    error.setAttribute("role", "alert");
+    form.append(error);
+  }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  actions.append(button(doc, "Save paused connection", "submit-mcp-connection"), button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  return form;
+}
 function renderMcpCredentialForm(doc, state) {
   const form = doc.createElement("form");
   form.className = "desktop-form";
   form.dataset.desktopForm = "mcp";
-  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. To change the destination, remove and add the server again.`, "desktop-note"));
+  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. This form changes only its credential. To change the destination, use Edit connection after pausing, or remove and add the server again on older Apps.`, "desktop-note"));
   form.append(renderMcpAuthentication(doc, state, { local: state.editingMcp?.network === "local", replacing: true }));
   if (state.formError) {
     const error = text(doc, "p", state.formError, "desktop-error");
@@ -33498,7 +33554,7 @@ function statusClass(value) {
   const normalized = String(value || "").toLowerCase();
   if (["ready", "enabled", "connected", "completed", "success", "idle"].includes(normalized)) return "is-positive";
   if (["failed", "error", "unsupported", "disabled"].includes(normalized)) return "is-negative";
-  if (["starting", "running", "paused", "oauth_required", "pending"].includes(normalized)) return "is-attention";
+  if (["starting", "running", "oauth_required", "pending"].includes(normalized)) return "is-attention";
   return "";
 }
 function renderEmpty(documentRef, message) {
@@ -33717,18 +33773,32 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(recommendation);
     panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
+    const management = config?.capabilities?.includes("mcp_management_v1");
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
+    if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
+    panel.append(text2(documentRef, "p", management ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats." : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
     panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+      const controls = text2(documentRef, "div", "", "mcp-connection-actions");
+      td.append(controls);
       const id = row.name || "";
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
-      td.append(button2(documentRef, "Remove server", "remove-mcp", { id }));
+      if (management) {
+        const paused = row.enabled === false;
+        controls.append(button2(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
+        const edit = button2(documentRef, "Edit connection", "edit-mcp-connection", { id });
+        edit.disabled = !paused;
+        edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
+        controls.append(edit, text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (row.failure) controls.append(text2(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
+      }
+      controls.append(button2(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
-        td.append(text2(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button2(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
-        if (row.credential_configured) td.append(button2(documentRef, "Remove credential", "remove-mcp-credential", { id }));
-      } else if (oauth) td.append(button2(documentRef, "Sign in", "login-mcp", { id }));
-      else td.append(text2(documentRef, "span", "No OAuth", "desktop-action-note"));
+        controls.append(text2(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button2(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
+        if (row.credential_configured) controls.append(button2(documentRef, "Remove credential", "remove-mcp-credential", { id }));
+      } else if (oauth) controls.append(button2(documentRef, "Sign in", "login-mcp", { id }));
+      else controls.append(text2(documentRef, "span", "No OAuth", "desktop-action-note"));
     }));
   }
   if (tab === "instructions") {
@@ -33883,7 +33953,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.3.1";
+var PANEL_VERSION = "1.4.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -36582,9 +36652,11 @@ template.innerHTML = `
     }
 
     .desktop-table td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); font-weight: 600; }
-    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 78%, var(--text-color) 22%); font-weight: 600; }
+    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 42%, var(--text-color) 58%); font-weight: 600; }
     .desktop-table td.is-negative { color: var(--danger-color); font-weight: 600; }
     .desktop-table-actions { min-width: 180px; }
+    .mcp-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .mcp-connection-actions .desktop-action-note { flex-basis: 100%; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -40231,15 +40303,18 @@ var CodexBridgePanel = class extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field2 || !state?.form) return;
     state.formDraft = { ...state.formDraft || {}, [field2]: target.type === "checkbox" ? target.checked : target.value };
-    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode"].includes(field2)) {
+    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field2)) {
       state.formDraft.local_acknowledged = false;
       state.formDraft.auth_acknowledged = false;
+      state.formDraft.endpoint_acknowledged = false;
       clearMcpSecrets(form);
       const authConsent = form.querySelector('[data-desktop-field="auth_acknowledged"]');
       if (authConsent) authConsent.checked = false;
       const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
       if (consent) consent.checked = false;
-      if (["local", "auth_mode"].includes(field2)) {
+      const endpointConsent = form.querySelector('[data-desktop-field="endpoint_acknowledged"]');
+      if (endpointConsent) endpointConsent.checked = false;
+      if (["local", "auth_mode", "credential_action"].includes(field2)) {
         this._renderDesktopSurface();
         return;
       }
@@ -40418,6 +40493,30 @@ var CodexBridgePanel = class extends HTMLElement {
         state.formError = state.error;
         state.error = "";
       } else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+    } else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_management_v1")) return;
+      if (action === "edit-mcp-connection") {
+        if (server.enabled !== false) return;
+        this._clearDesktopFormDraft(state);
+        state.editingMcp = server;
+        state.form = "mcp-edit";
+      } else {
+        await this._mcpConnectionMutation({ operation: "state", name: server.name, revision: server.revision, enabled: action === "resume-mcp" }, state);
+      }
+    } else if (action === "submit-mcp-connection") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      const values = this._desktopFormValues(target);
+      await this._mcpConnectionMutation({
+        operation: "edit",
+        name: state.editingMcp?.name,
+        revision: state.editingMcp?.revision,
+        url: values.url,
+        endpoint_acknowledged: values.endpoint_acknowledged,
+        credential_action: values.credential_action,
+        authentication: values.credential_action === "replace" ? readMcpCredential(form) : null
+      }, state, form);
     } else if (action === "edit-mcp-credential") {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
       if (!server || !this._config?.capabilities?.includes("mcp_credentials_v1")) return;
@@ -40565,6 +40664,54 @@ var CodexBridgePanel = class extends HTMLElement {
       return false;
     } finally {
       payload.authentication = null;
+      state.loading = false;
+      this._renderDesktopSurface();
+    }
+  }
+  async _mcpConnectionMutation(payload, state, form) {
+    if (!this._config?.capabilities?.includes("mcp_management_v1") || state.loading) return false;
+    clearMcpSecrets(form);
+    if (state.formDraft) {
+      state.formDraft.url = "";
+      state.formDraft.endpoint_acknowledged = false;
+      state.formDraft.auth_acknowledged = false;
+    }
+    state.loading = true;
+    state.error = "";
+    state.formError = "";
+    this._renderDesktopSurface();
+    let message = "Could not confirm the connection change. Refresh server status and check the settings before retrying.";
+    try {
+      const token = this._accessToken();
+      if (!token) throw new Error("Home Assistant sign-in required");
+      const response = await fetch("/api/codex_bridge/mcp/connections", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(25e4)
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        if (result.code === "mcp_restart_required") message = "The connection could not be restored safely. Restart the Codex Bridge App before continuing.";
+        else if (response.status === 409) message = "Codex is busy or the connection changed. Wait for current work to finish, close this form and refresh server status before retrying.";
+        throw new Error("MCP connection change failed");
+      }
+      this._clearDesktopFormDraft(state);
+      state.form = null;
+      state.editingMcp = null;
+      state.notice = payload.operation === "edit" ? "Connection saved and still paused. Resume it when ready." : payload.enabled ? "Connection resumed for subsequent turns in existing and new chats and scheduled tasks." : "Connection paused. Its tools are blocked in all chats and scheduled tasks; saved settings are retained.";
+      state.loaded = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.formError = message;
+      state.error = state.form ? "" : message;
+      return false;
+    } finally {
+      payload.authentication = null;
+      payload.url = "";
       state.loading = false;
       this._renderDesktopSurface();
     }
@@ -42332,6 +42479,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _runStepAccessibleLabel(activity) {
     const parts = [];
+    if (activity.terminal && activity.step) parts.push(activity.action || "Run finished");
     if (activity.step) {
       parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
     } else {

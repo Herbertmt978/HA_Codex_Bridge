@@ -291,6 +291,7 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
 
     assert result == {
         "name": "vendor_mcp",
+        "enabled": True,
         "transport": "streamable_http",
         "network": "public",
         "endpoint": "https://mcp.vendor.example/stream",
@@ -517,9 +518,11 @@ def test_existing_stdio_bearer_and_environment_config_are_never_reflected() -> N
 
     views = manager.list_servers()
 
+    assert len(views[0].pop("revision")) == 64
     assert views == [
         {
             "name": "safe",
+            "enabled": True,
             "transport": "streamable_http",
         "network": "public",
             "endpoint": "https://mcp.vendor.example/path",
@@ -770,12 +773,15 @@ def test_enabled_startup_replaces_unsafe_user_mcp_before_activation() -> None:
     manager.activate_validated_mcp_config()
 
     assert client.activation_calls == 1
-    assert manager.list_servers() == [
+    views = manager.list_servers()
+    assert len(views[0].pop("revision")) == 64
+    assert views == [
         {
             "name": "safe",
             "transport": "streamable_http",
         "network": "public",
             "endpoint": "https://mcp.vendor.example/stream",
+            "enabled": True,
             "auth": "unknown",
             "startup": "unknown",
             "tool_count": 0,

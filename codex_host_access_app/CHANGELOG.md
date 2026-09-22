@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0
+
+- Keeps the optional Host Access App version aligned with Codex Bridge 1.4.0.
+- Host Access behaviour and amd64-only support are unchanged.
+
 ## 1.3.1
 
 - Keeps the optional Host Access App version aligned with Codex Bridge 1.3.1.

@@ -1124,3 +1124,43 @@ async def test_mcp_credential_body_is_bounded_before_json_parsing(hass, hass_cli
     response = await client.post("/api/codex_bridge/mcp/credentials", data=b"x" * (24*1024+1), headers={"Content-Type":"application/json"})
     assert response.status == 400
     bridge.async_add_mcp.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["state", "edit"])
+async def test_mcp_connections_require_admin_and_do_not_reflect_private_data(hass, hass_client, hass_client_no_auth, hass_read_only_access_token, operation, caplog):
+    from unittest.mock import Mock
+    secret = "synthetic-management-secret"
+    bridge = SimpleNamespace(require_capability=Mock(), async_manage_mcp=AsyncMock(return_value={"unexpected": secret}))
+    await _install_runtime(hass, bridge)
+    path = "/api/codex_bridge/mcp/connections"
+    change = {"enabled": False, "revision": "a" * 64} if operation == "state" else {
+        "url": f"https://mcp.example.com/{secret}", "revision": "a" * 64,
+        "endpoint_acknowledged": True, "credential_action": "replace",
+        "authentication": {"mode": "bearer", "token": secret},
+    }
+    payload = {"operation": operation, "name": "secured", **change}
+    anonymous = await hass_client_no_auth()
+    readonly = await hass_client(hass_read_only_access_token)
+    assert (await anonymous.post(path, json=payload)).status == 401
+    assert (await readonly.post(path, json=payload)).status in {401, 403}
+    bridge.async_manage_mcp.assert_not_called()
+    client = await hass_client()
+    response = await client.post(path, json=payload)
+    assert response.status == 200
+    assert await response.json() == {"saved": True}
+    assert response.headers["Cache-Control"] == "no-store"
+    bridge.require_capability.assert_called_with("mcp_management_v1")
+    bridge.async_manage_mcp.assert_awaited_once_with("secured", change, state=operation == "state")
+    assert secret not in caplog.text
+
+
+async def test_mcp_connections_preserve_fixed_restart_guidance(hass, hass_client):
+    from unittest.mock import Mock
+    from custom_components.codex_bridge.bridge_api import BridgeApiError
+    bridge = SimpleNamespace(require_capability=Mock(), async_manage_mcp=AsyncMock(side_effect=BridgeApiError(code="mcp_restart_required", status=503)))
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    response = await client.post("/api/codex_bridge/mcp/connections", json={"operation": "state", "name": "secured", "enabled": False, "revision": "a" * 64})
+    assert response.status == 503
+    assert await response.json() == {"code": "mcp_restart_required"}
+    assert response.headers["Cache-Control"] == "no-store"

@@ -3,7 +3,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
-import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm } from "./mcp-setup.js";
+import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -181,7 +181,7 @@ function statusClass(value) {
   const normalized = String(value || "").toLowerCase();
   if (["ready", "enabled", "connected", "completed", "success", "idle"].includes(normalized)) return "is-positive";
   if (["failed", "error", "unsupported", "disabled"].includes(normalized)) return "is-negative";
-  if (["starting", "running", "paused", "oauth_required", "pending"].includes(normalized)) return "is-attention";
+  if (["starting", "running", "oauth_required", "pending"].includes(normalized)) return "is-attention";
   return "";
 }
 
@@ -363,17 +363,32 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     recommendation.append(guide); panel.append(recommendation);
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
+    const management = config?.capabilities?.includes("mcp_management_v1");
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
+    if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
+    panel.append(text(documentRef, "p", management
+      ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats."
+      : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
     panel.append(button(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+      const controls = text(documentRef, "div", "", "mcp-connection-actions");
+      td.append(controls);
       const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth";
-      td.append(button(documentRef, "Remove server", "remove-mcp", { id }));
+      if (management) {
+        const paused = row.enabled === false;
+        controls.append(button(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
+        const edit = button(documentRef, "Edit connection", "edit-mcp-connection", { id });
+        edit.disabled = !paused; edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
+        controls.append(edit, text(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (row.failure) controls.append(text(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
+      }
+      controls.append(button(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
-        td.append(text(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
-        if (row.credential_configured) td.append(button(documentRef, "Remove credential", "remove-mcp-credential", { id }));
-      } else if (oauth) td.append(button(documentRef, "Sign in", "login-mcp", { id }));
-      else td.append(text(documentRef, "span", "No OAuth", "desktop-action-note"));
+        controls.append(text(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
+        if (row.credential_configured) controls.append(button(documentRef, "Remove credential", "remove-mcp-credential", { id }));
+      } else if (oauth) controls.append(button(documentRef, "Sign in", "login-mcp", { id }));
+      else controls.append(text(documentRef, "span", "No OAuth", "desktop-action-note"));
     }));
   }
   if (tab === "instructions") {

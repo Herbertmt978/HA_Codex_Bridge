@@ -1,6 +1,6 @@
 # MCP-05: Connection management
 
-Status: Planned. Version and date: unassigned.
+Status: Implemented for 1.4.0.
 
 Tracking issue: [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101).
 

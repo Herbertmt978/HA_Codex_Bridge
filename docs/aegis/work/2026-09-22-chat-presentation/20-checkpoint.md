@@ -9,9 +9,12 @@ available to screen readers. Copy sits below completed responses. Partial and
 queued messages keep their meaningful labels. Completed activity uses one
 indicator, with the existing details popover when there is history to inspect.
 
-Verification: 393 frontend unit tests and 42 browser tests passed. Browser checks
+Verification: 397 frontend unit tests and 42 browser tests passed. Browser checks
 cover light/dark, desktop/mobile, keyboard access, copy placement, transparent
 prose and a single completion indicator. Final screenshots were inspected.
+Review caught a missing terminal outcome in the accessible name when a final plan
+step exists. The indicator now announces the outcome before the step; regression
+checks cover completion, failure, cancellation and interruption.
 The Windows helper did not expose the Codex app window, so the owner's supplied
 desktop screenshots were the visual reference. Exact desktop parity is not claimed.
 

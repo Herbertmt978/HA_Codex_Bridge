@@ -2,12 +2,24 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.4.0
+
+- Adds Pause, Resume and Edit connection to MCP settings. Paused servers retain
+  their private configuration and stay blocked in existing and new chats after
+  restart. Changes wait until no work is running or queued.
+- Requires a deliberate authentication choice when editing a destination.
+  Failed saves restore the previous settings; uncertain recovery blocks new
+  work and asks for an App restart. Saved secrets are never filled into forms.
+- Keeps connection controls available when runtime status discovery fails and
+  shows a refresh action instead of treating missing counts as a healthy server.
 
 - Simplifies the chat transcript: removes user and assistant avatars and the
   repeated Assistant heading, and moves Copy below each response. Prose uses
   the panel's text colour with a transparent background in light and dark themes.
 - Shows one run-completion indicator while keeping run details available.
+
+- Pairs App, Integration and panel 1.4.0 with Bridge 0.11.0 and the unchanged,
+  verified Codex 0.155.1 runtime. Stable App images remain amd64-only.
 
 ## 1.3.1
 

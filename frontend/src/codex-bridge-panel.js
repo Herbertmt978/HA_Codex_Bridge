@@ -34,7 +34,7 @@ import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from 
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 
-const PANEL_VERSION = "1.3.1";
+const PANEL_VERSION = "1.4.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -2760,9 +2760,11 @@ template.innerHTML = `
     }
 
     .desktop-table td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 76%, var(--text-color) 24%); font-weight: 600; }
-    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 78%, var(--text-color) 22%); font-weight: 600; }
+    .desktop-table td.is-attention { color: color-mix(in srgb, var(--brand-amber) 42%, var(--text-color) 58%); font-weight: 600; }
     .desktop-table td.is-negative { color: var(--danger-color); font-weight: 600; }
     .desktop-table-actions { min-width: 180px; }
+    .mcp-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .mcp-connection-actions .desktop-action-note { flex-basis: 100%; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -6483,15 +6485,18 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.type === "checkbox" ? target.checked : target.value };
-    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode"].includes(field)) {
+    if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field)) {
       state.formDraft.local_acknowledged = false;
       state.formDraft.auth_acknowledged = false;
+      state.formDraft.endpoint_acknowledged = false;
       clearMcpSecrets(form);
       const authConsent = form.querySelector('[data-desktop-field="auth_acknowledged"]');
       if (authConsent) authConsent.checked = false;
       const consent = form.querySelector('[data-desktop-field="local_acknowledged"]');
       if (consent) consent.checked = false;
-      if (["local", "auth_mode"].includes(field)) {
+      const endpointConsent = form.querySelector('[data-desktop-field="endpoint_acknowledged"]');
+      if (endpointConsent) endpointConsent.checked = false;
+      if (["local", "auth_mode", "credential_action"].includes(field)) {
         this._renderDesktopSurface();
         return;
       }
@@ -6645,6 +6650,24 @@ class CodexBridgePanel extends HTMLElement {
       if (!saved && state.error) { state.formError = state.error; state.error = ""; }
       else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
+    else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_management_v1")) return;
+      if (action === "edit-mcp-connection") {
+        if (server.enabled !== false) return;
+        this._clearDesktopFormDraft(state); state.editingMcp = server; state.form = "mcp-edit";
+      } else {
+        await this._mcpConnectionMutation({ operation: "state", name: server.name, revision: server.revision, enabled: action === "resume-mcp" }, state);
+      }
+    }
+    else if (action === "submit-mcp-connection") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity() || state.loading) return;
+      const values = this._desktopFormValues(target);
+      await this._mcpConnectionMutation({ operation: "edit", name: state.editingMcp?.name,
+        revision: state.editingMcp?.revision, url: values.url, endpoint_acknowledged: values.endpoint_acknowledged,
+        credential_action: values.credential_action, authentication: values.credential_action === "replace" ? readMcpCredential(form) : null }, state, form);
+    }
     else if (action === "edit-mcp-credential") {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
       if (!server || !this._config?.capabilities?.includes("mcp_credentials_v1")) return;
@@ -6770,6 +6793,40 @@ class CodexBridgePanel extends HTMLElement {
       payload.authentication = null;
       state.loading = false;
       this._renderDesktopSurface();
+    }
+  }
+
+  async _mcpConnectionMutation(payload, state, form) {
+    if (!this._config?.capabilities?.includes("mcp_management_v1") || state.loading) return false;
+    clearMcpSecrets(form);
+    if (state.formDraft) { state.formDraft.url = ""; state.formDraft.endpoint_acknowledged = false; state.formDraft.auth_acknowledged = false; }
+    state.loading = true; state.error = ""; state.formError = ""; this._renderDesktopSurface();
+    let message = "Could not confirm the connection change. Refresh server status and check the settings before retrying.";
+    try {
+      const token = this._accessToken();
+      if (!token) throw new Error("Home Assistant sign-in required");
+      const response = await fetch("/api/codex_bridge/mcp/connections", {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(250000),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        if (result.code === "mcp_restart_required") message = "The connection could not be restored safely. Restart the Codex Bridge App before continuing.";
+        else if (response.status === 409) message = "Codex is busy or the connection changed. Wait for current work to finish, close this form and refresh server status before retrying.";
+        throw new Error("MCP connection change failed");
+      }
+      this._clearDesktopFormDraft(state); state.form = null; state.editingMcp = null;
+      state.notice = payload.operation === "edit" ? "Connection saved and still paused. Resume it when ready."
+        : payload.enabled ? "Connection resumed for subsequent turns in existing and new chats and scheduled tasks." : "Connection paused. Its tools are blocked in all chats and scheduled tasks; saved settings are retained.";
+      state.loaded = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.formError = message; state.error = state.form ? "" : message;
+      return false;
+    } finally {
+      payload.authentication = null; payload.url = "";
+      state.loading = false; this._renderDesktopSurface();
     }
   }
 
@@ -8751,6 +8808,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _runStepAccessibleLabel(activity) {
     const parts = [];
+    if (activity.terminal && activity.step) parts.push(activity.action || "Run finished");
     if (activity.step) {
       parts.push(`Step ${activity.step.index} of ${activity.step.total}`, activity.step.label);
     } else {

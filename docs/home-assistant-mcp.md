@@ -1,5 +1,33 @@
 # Home Assistant tools through MCP
 
+## Manage a saved connection
+
+App and Integration 1.4.0 add **Pause**, **Resume** and **Edit connection** in
+Settings → MCP servers. Older Apps show update guidance. Adding HA-MCP and
+other MCP servers remains available through the existing setup flow.
+
+Pause blocks that server's tools in existing chats, new chats and scheduled
+tasks, while retaining its private settings. It stays paused after restart.
+Changes require current and queued work to finish first. Resume makes the tools
+available to subsequent turns; it does not rerun an earlier action.
+
+To change a destination, pause it and choose **Edit connection**. Enter its new
+URL, choose whether to keep, replace or remove authentication, and acknowledge
+the destination warning. Keeping a token lets the new destination receive it.
+The form never displays saved credentials or fills in a saved URL. The server
+stays paused after saving. Public and local connection types cannot be switched
+in place; add another server to change the type. Native OAuth may need a fresh
+sign-in after a URL change.
+
+If a save fails, refresh server status before trying again; submitted secrets
+and destination details are cleared. Concurrent changes require a fresh form.
+If recovery cannot be confirmed, the panel asks you to restart the App and new
+work is blocked until that restart. Pausing cannot undo a completed action or
+revoke a credential at its provider. Tool and resource counts describe the latest
+runtime discovery; unavailable status has a separate refresh message.
+
+## Choose a Home Assistant MCP server
+
 For managing Home Assistant from Codex, we recommend considering
 [HA-MCP](https://github.com/homeassistant-ai/ha-mcp). This community project
 provides tools for finding entities, checking states, controlling devices and

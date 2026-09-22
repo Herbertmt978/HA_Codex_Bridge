@@ -57,6 +57,11 @@ PLUGIN_LIST_REQUEST_TIMEOUT = aiohttp.ClientTimeout(
     sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS,
     sock_read=BRIDGE_PLUGIN_LIST_TIMEOUT_READ_SECONDS,
 )
+# A management mutation may restore and reload the previous configuration.
+MCP_MANAGEMENT_REQUEST_TIMEOUT = aiohttp.ClientTimeout(
+    total=240, connect=BRIDGE_TIMEOUT_POOL_SECONDS,
+    sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS, sock_read=230,
+)
 _UPLOAD_CHUNK_MAX_BYTES = 8 * 1024 * 1024
 _FILE_METADATA_MAX_BYTES = 64 * 1024
 _ARTIFACT_LIST_MAX_BYTES = 8 * 1024 * 1024
@@ -1430,6 +1435,15 @@ class BridgeApiClient:
             "DELETE" if payload is None else "PUT",
             f"/mcp/servers/{_path_segment(name)}/credential",
             json_body=_bounded_mapping(payload) if payload is not None else None,
+        )
+
+    async def async_manage_mcp(self, name: str, payload: dict[str, Any], *, state: bool = False) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_management_v1")
+        return await self._async_json(
+            "PUT", f"/mcp/servers/{_path_segment(name)}" + ("/state" if state else ""),
+            json_body=_bounded_mapping(payload),
+            request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
     async def async_login_mcp(self, name: str) -> dict[str, Any]:

@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.3.1`, Integration and panel `1.3.1`, Bridge `0.10.0` and
+- This release pairs App `1.4.0`, Integration and panel `1.4.0`, Bridge `0.11.0` and
   Codex `0.155.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -76,6 +76,12 @@ to the App or Bridge.
   previous-image rollback require their own target acceptance evidence.
 
 ## Product language
+
+- MCP-05 adds pause/resume and destination editing. Native enabled state owns
+  pause; saved private settings survive restart. Edits require pause and an
+  explicit authentication choice, and stay paused after saving. Configuration
+  changes exclude active/queued work and use revisions. Failed recovery blocks
+  new work until restart. Upgrade alone enables no connection or permission.
 
 - MCP-02 adds write-only bearer tokens and named authentication headers. The
   private relay owns their storage and injection for one approved destination;

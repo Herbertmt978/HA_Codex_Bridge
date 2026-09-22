@@ -175,9 +175,51 @@ export function clearMcpSecrets(form) {
   form?.querySelectorAll("[data-mcp-token], [data-mcp-header-value]").forEach((input) => { input.value = ""; });
 }
 
+export function renderMcpConnectionForm(doc, state) {
+  const server = state.editingMcp || {};
+  const form = doc.createElement("form");
+  form.className = "desktop-form"; form.dataset.desktopForm = "mcp";
+  form.append(text(doc, "h3", `Edit ${server.name || "connection"}`, "desktop-subheading"),
+    text(doc, "p", "This server stays paused after saving. Resume it when you are ready to let existing chats, new chats and scheduled tasks use its tools.", "desktop-note"));
+  const wrap = text(doc, "label", "", "desktop-field");
+  const url = doc.createElement("input");
+  url.type = "url"; url.name = "url"; url.dataset.desktopField = "url";
+  url.required = true; url.maxLength = 2048; url.autocomplete = "off"; url.spellcheck = false;
+  url.value = state.formDraft?.url || "";
+  wrap.append(text(doc, "span", "New connection URL", "desktop-field-label"), url);
+  form.append(wrap, text(doc, "p", `Current destination: ${server.endpoint || server.name}. Saved URLs and credentials are not filled into this form. The connection remains ${server.network === "local" ? "local" : "public HTTPS"}; create a new server to change its network type.`, "desktop-note"));
+  const relayed = server.network === "local" || ["bearer", "headers"].includes(server.auth);
+  const options = [["", "Choose what to do with authentication"], ["keep", "Keep existing authentication"]];
+  if (relayed) options.push(["replace", "Use a new credential"], ["remove", "Remove saved credential"]);
+  const action = state.formDraft?.credential_action || "";
+  const choice = selection(doc, { name: "credential_action", label: "Authentication when changing destination", value: action, options });
+  const control = choice.querySelector("select");
+  control.required = true; control.dataset.desktopField = "credential_action";
+  form.append(text(doc, "span", "Authentication when changing destination", "desktop-field-label"), choice);
+  if (action === "replace") {
+    const replacement = { ...state, formDraft: { ...state.formDraft, auth_mode: state.formDraft?.auth_mode || (["bearer", "headers"].includes(server.auth) ? server.auth : "bearer") } };
+    form.append(renderMcpAuthentication(doc, replacement, { local: server.network === "local", replacing: true }));
+  }
+  const warning = text(doc, "div", "", "mcp-local-warning");
+  warning.append(text(doc, "strong", "Trust the new destination before saving"), text(doc, "p", "Keeping authentication allows the new destination to receive the saved credential. Native OAuth remains bound to its server URL and may require sign-in again. Removing a saved credential blocks an authenticated relay until you set a new one. HTTP sends local requests and credentials without encryption. Tool access does not grant shell or root host access."));
+  const consent = text(doc, "label", "", "mcp-consent");
+  const checkbox = doc.createElement("input"); checkbox.type = "checkbox"; checkbox.required = true;
+  checkbox.name = "endpoint_acknowledged"; checkbox.dataset.desktopField = "endpoint_acknowledged";
+  checkbox.checked = state.formDraft?.endpoint_acknowledged === true;
+  consent.append(checkbox, text(doc, "span", "I trust this destination and approve the authentication choice above"));
+  warning.append(consent); form.append(warning);
+  if (state.formError) {
+    const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error);
+  }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  actions.append(button(doc, "Save paused connection", "submit-mcp-connection"), button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  return form;
+}
+
 export function renderMcpCredentialForm(doc, state) {
   const form = doc.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "mcp";
-  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. To change the destination, remove and add the server again.`, "desktop-note"));
+  form.append(text(doc, "h3", `Credential for ${state.editingMcp?.name || "server"}`, "desktop-subheading"), text(doc, "p", `Destination: ${state.editingMcp?.endpoint || ""}. This form changes only its credential. To change the destination, use Edit connection after pausing, or remove and add the server again on older Apps.`, "desktop-note"));
   form.append(renderMcpAuthentication(doc, state, { local: state.editingMcp?.network === "local", replacing: true }));
   if (state.formError) { const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error); }
   const actions = text(doc, "div", "", "desktop-form-actions");

@@ -493,6 +493,7 @@ class BridgeReadinessRecord(BaseModel):
             "mcp_admin_v1",
             "mcp_local_v1",
             "mcp_credentials_v1",
+            "mcp_management_v1",
             "skills_v1",
             "plugins_v1",
             "agents_v1",
