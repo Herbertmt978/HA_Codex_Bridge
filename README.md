@@ -111,9 +111,10 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.2.0**, Integration and panel **1.2.0**, with Bridge **0.9.0**
-and Codex **0.155.1**. It adds opt-in local MCP connections, including direct
-HA-MCP setup over the LAN or App network. Optional HAOS host access still
+This release pairs App **1.3.0**, Integration and panel **1.3.0**, with Bridge **0.10.0**
+and Codex **0.155.1**. It adds write-only bearer tokens and API-key headers for
+MCP servers, alongside public OAuth and opt-in local HA-MCP connections.
+Optional HAOS host access still
 requires its separate App and explicit consent. Use the
 [published release](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 and [changelog](codex_bridge_app/CHANGELOG.md) to check available versions.

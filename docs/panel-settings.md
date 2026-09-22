@@ -62,8 +62,8 @@ will last only for the current visit.
 **MCP servers** manages trusted public HTTPS tools and explicitly approved local
 connections after MCP has been enabled in the
 App. **Add MCP server** offers guided **Home Assistant (HA-MCP)** setup alongside
-**Other MCP server** for custom connections. The development version also offers
-write-only bearer tokens and API-key headers; this is not in published 1.2.0.
+**Other MCP server** for custom connections. App and Integration 1.3.0 also offer
+write-only bearer tokens and API-key headers.
 See the [MCP guide](home-assistant-mcp.md) for permission, transport and backup
 warnings. **Instructions** edits global or
 project instructions. **Keyboard shortcuts**

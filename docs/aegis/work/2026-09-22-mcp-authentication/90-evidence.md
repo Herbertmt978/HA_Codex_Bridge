@@ -73,3 +73,18 @@ guide. Older backups may retain removed credentials.
 
 The Aegis helper reports pre-existing historical filename/index format drift;
 no historical records were rewritten to satisfy its newer schema.
+
+## Release candidate 1.3.0
+
+The owner subsequently requested publication. App/Integration/panel 1.3.0 and
+Bridge 0.10.0 contain the same qualified credential implementation; Codex remains
+0.155.1. Version projections, notes and current guides were updated together.
+The paired candidate reran all 390 frontend, 41 browser, 351 Integration and
+1,967 Bridge tests successfully, plus eight root restore and ten Windows updater
+checks. HACS, hassfest, reverse-proxy fixtures and the rebuilt image passed.
+That exact candidate passed native credential lifecycle and complete App startup
+checks on HAOS-DEV. No production deployment was performed.
+
+Publication requires final PR CI, signed image/provenance verification and a
+published-image native check. Those results are recorded by the release workflow
+and the task's external evidence, not inferred from these pre-publication tests.

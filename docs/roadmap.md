@@ -3,9 +3,8 @@
 These are separate feature-release plans, based on the gaps reviewed on
 21 September 2026. MCP-01 is implemented for App and Integration 1.2.0; check
 the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases) for
-publication status. MCP-02 is implemented in development and has not been
-released. The remaining entries are plans, not shipped features or promised
-delivery dates.
+publication status. MCP-02 is implemented for App and Integration 1.3.0.
+The remaining entries are plans, not shipped features or promised delivery dates.
 
 Each plan has its own issue, scope, dependencies and acceptance criteria. Use the
 linked issues for implementation progress and update this roadmap when a feature
@@ -19,13 +18,13 @@ permissions without the administrator's choice.
 
 MCP-01 introduces the reviewed, opt-in local relay exception. MCP-02 extends that
 relay with write-only credentials under its own revised security contract.
-Its development code does not change the published 1.2.0 configuration flow.
+It requires App and Integration 1.3.0; the 1.2.0 configuration flow is unchanged.
 MCP-03 still requires a separate isolation design before implementation.
 
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
 | [MCP-01: Local MCP connections](planned-releases/mcp-01-local-connections.md) | Implemented for 1.2.0: connect to HA-MCP and other servers on the LAN or HA App network. | Explicit network permission and destination controls | [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97) |
-| [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Implemented in development: connect servers that require a bearer token or authentication header. Not yet released. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
+| [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Implemented for 1.3.0: connect servers that require a bearer token or authentication header. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
 | [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Run approved MCP server processes with bounded access. | Separate process isolation design | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
 | [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
 | [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |

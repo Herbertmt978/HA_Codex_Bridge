@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 1.3.0
+
+- Adds bearer-token and API-key header authentication to guided HA-MCP setup
+  and custom MCP connections. Update both the App and HACS Integration to use it.
+- Adds masked credential entry, replacement and removal. Saved values cannot be
+  viewed; removing a credential blocks the connection, including after restart.
+- Keeps credentials in the App's private relay storage and out of native Codex
+  configuration. Public authenticated connections pin approved HTTPS addresses;
+  local connections retain their separate enablement and acknowledgement.
+- Explains that HTTP sends credentials unencrypted and App backups include the
+  private plaintext credential store. Provider token revocation remains separate.
+- Preserves public OAuth, existing local connections and older-App compatibility.
+- Pairs App, Integration and panel 1.3.0 with Bridge 0.10.0 and Codex 0.155.1.
+  MCP remains off by default. Local OAuth, stdio and interactive MCP questions
+  remain outside this release.
+
 ## 1.2.0
 
 - Adds optional local HTTP/HTTPS MCP connections for HA-MCP and other servers

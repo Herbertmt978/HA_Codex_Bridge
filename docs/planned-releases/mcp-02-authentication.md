@@ -1,6 +1,8 @@
 # MCP-02: Token and API-key authentication
 
-Status: Implemented in development; not released. Version and date: unassigned.
+Status: Implemented for App and Integration 1.3.0. Check the
+[release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/1.3.0)
+for publication status.
 
 Tracking issue: [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98).
 
@@ -29,11 +31,11 @@ not the WebSocket logging path. The App advertises `mcp_credentials_v1`.
   a retained secret to a different endpoint automatically.
 - Explain token transport and backup exposure, including unencrypted local HTTP.
 
-The development implementation includes create, replace and remove controls in
+The implementation includes create, replace and remove controls in
 the HA-MCP and generic server forms. Saved values are write-only. Removal keeps
 the connection blocked across restart; changing its destination requires a new
 connection. Existing OAuth and unauthenticated local connections remain available.
-See the [setup guide](../home-assistant-mcp.md#tokens-and-api-keys-development-not-yet-released).
+See the [setup guide](../home-assistant-mcp.md#tokens-and-api-keys).
 
 ## Acceptance criteria
 

@@ -13,7 +13,11 @@ The final candidate image and complete App credential API checks also pass.
 Task containers, volumes and transfer archives are removed; DEV103 and CT105
 are restored stopped. Detailed results are in [the evidence record](90-evidence.md).
 
-No release version has been assigned. App/Integration/panel remain 1.2.0,
-Bridge remains 0.9.0 and Codex remains 0.155.1 in this development branch.
-Nothing has been pushed or installed on production. The next release needs
-version synchronisation, publication checks and the normal release workflow.
+## Release preparation
+
+The owner subsequently authorised publication on 22 September 2026. The release
+candidate pairs App, Integration and panel 1.3.0 with Bridge 0.10.0 and Codex
+0.155.1. Release-specific local checks are recorded below in the evidence file.
+The [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/tag/1.3.0)
+and GitHub workflows are the source of publication status. Live HA installation
+is outside this release request.

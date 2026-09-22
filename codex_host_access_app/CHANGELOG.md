@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Keeps the optional Host Access App version aligned with Codex Bridge 1.3.0.
+  Host access permissions and behaviour are unchanged. MCP token authentication
+  does not require this extra App.
+
 ## 1.2.0
 
 - Uses the shared image paired with App and Integration 1.2.0. Host access

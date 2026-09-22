@@ -82,13 +82,17 @@ of prompts, screenshots, issue reports and shared instructions. Local connection
 paths are stored privately in the App and omitted from the server list and
 native connection diagnostics.
 
-The published 1.2.0 release does not accept bearer tokens or authentication
-headers. The next development enhancement adds these options as described below;
-it has not been released. Local OAuth, query strings, stdio servers and
+App and Integration 1.3.0 add bearer tokens and named authentication headers,
+as described below. Update both components; these options are absent in 1.2.0. Local OAuth, query strings, stdio servers and
 interactive MCP questions remain unsupported. Do not remove authentication from
 a server to work around a compatibility restriction.
 
-## Tokens and API keys (development, not yet released)
+## Tokens and API keys
+
+Update both the App and HACS Integration to 1.3.0, restart Home Assistant and
+reload the panel. Keep a pre-upgrade App backup for recovery: the private MCP
+registry is upgraded when changed, and returning to 1.2.0 requires restoring
+that older App data. Existing local connections migrate without re-entry.
 
 The updated App and Integration offer an **Authentication** selector in both the
 HA-MCP guide and **Other MCP server**. Older Apps keep the existing OAuth form.
