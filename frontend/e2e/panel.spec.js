@@ -498,7 +498,7 @@ test("keeps chat prose plain and completion singular across themes and widths", 
       ["message.created", { text: "Say hello" }],
       ["run.started", { run_id: "run-style" }],
       ["plan.updated", { run_id: "run-style", plan: [{ step: "Reply", status: "completed" }] }],
-      ["message.completed", { run_id: "run-style", text: "Hello. This response uses plain, readable text.\n\nThe Copy action sits below the response." }],
+      ["message.completed", { run_id: "run-style", text: "Hello. This response uses plain, readable text.\n\nNo whole-message Copy action is shown." }],
       ["run.completed", { run_id: "run-style" }],
     ].map(([event_type, payload], index) => ({ event_id: `style-${index}`, thread_id: panel._selectedThreadId, sequence: 20000 + index, event_type, payload }));
     panel._forceMessageRebuild = true;
@@ -520,20 +520,68 @@ test("keeps chat prose plain and completion singular across themes and widths", 
       const appearance = await prose.evaluate((node) => {
         const style = getComputedStyle(node);
         const message = node.closest(".message").getBoundingClientRect();
-        const copy = node.parentElement.querySelector(".message-actions").getBoundingClientRect();
-        return { color: style.color, font: style.fontFamily, copyBelow: copy.top >= node.getBoundingClientRect().bottom, fits: message.left >= 0 && message.right <= innerWidth };
+
+        return { color: style.color, font: style.fontFamily, fits: message.left >= 0 && message.right <= innerWidth };
       });
       expect(appearance.font).not.toMatch(/monospace|consolas|courier/i);
       expect(appearance.color).toBe(theme === "light" ? "rgb(21, 27, 41)" : "rgb(240, 242, 246)");
-      expect(appearance.copyBelow).toBe(true);
+      await expect(panel.locator(".message-actions")).toHaveCount(0);
+      await expect(panel.locator(".message.user .bubble")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+      await expect(panel.locator(".message.user .bubble-text")).toHaveCSS("color", "rgb(255, 255, 255)");
       expect(appearance.fits).toBe(true);
       await expect(panel.locator("#run-activity .run-activity-copy, #run-activity .run-step-chip")).toHaveCount(1);
       await expect(panel.locator("#run-step-chip")).toContainText("Run completed");
-      await panel.getByRole("button", { name: "Copy response", exact: true }).focus();
-      await expect(panel.getByRole("button", { name: "Copy response", exact: true })).toBeFocused();
+      await expect(panel.getByRole("button", { name: "Copy response", exact: true })).toHaveCount(0);
       await panel.locator("#prompt-input").focus();
       await page.screenshot({ path: testInfo.outputPath(`chat-${theme}-${width}.png`) });
     }
+  }
+});
+
+test("gives desktop chats wider space and one working control with code-only copying", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await page.evaluate(() => {
+    const node = document.querySelector("codex-bridge-panel");
+    node._activeThread = { ...node._activeThread, status: "running", active_run_id: "layout-run" };
+    node._pendingInteractions = [];
+    node._events = [
+      ["message.created", { text: "Show an example", queued: true }],
+      ["run.started", { run_id: "layout-run" }],
+      ["item.started", { run_id: "layout-run", item_id: "command-layout", item_type: "commandExecution", command_preview: "git diff --stat" }],
+      ["item.completed", { run_id: "layout-run", item_id: "image-layout-1", item_type: "imageView" }],
+      ["item.completed", { run_id: "layout-run", item_id: "image-layout-2", item_type: "imageView" }],
+      ["message.completed", { text: "Use this expression:\n```javascript\nconst answer = 'hello';\n```\nKeep the explanation readable." }],
+    ].map(([event_type, payload], index) => ({ event_id: `layout-${index}`, thread_id: node._selectedThreadId, sequence: 21000 + index, event_type, payload }));
+    node._forceMessageRebuild = true;
+    node._render(true);
+    node._renderInteractions();
+  });
+  const columns = await panel.locator(".shell").evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").map(parseFloat));
+  expect(columns[0]).toBeCloseTo(330 * 0.85, 1);
+  expect(columns[2]).toBeCloseTo(372 * 0.85, 1);
+  await expect(panel.locator("#run-activity .run-activity-copy, #run-activity .run-step-chip")).toHaveCount(1);
+  await expect(panel.locator("#run-activity .activity-spinner, #run-activity .step-spinner")).toHaveCount(1);
+  await expect(panel.locator("#run-step-chip")).toContainText("Running a command");
+  await expect(panel.locator("#run-step-chip")).toContainText("Viewed 2 images");
+  await panel.locator("#run-step-chip").click();
+  await panel.locator(".run-command-details summary").click();
+  await expect(panel.locator(".run-command-details pre")).toBeVisible();
+  await expect(panel.locator(".run-command-details pre")).toHaveText("git diff --stat");
+  await panel.locator("#run-step-chip").click();
+  await expect(panel.locator(".message.assistant button")).toHaveCount(1);
+  const copy = panel.getByRole("button", { name: "Copy code", exact: true });
+  await copy.focus();
+  await expect(copy).toBeFocused();
+  await expect(panel.locator(".code-text")).toHaveText("const answer = 'hello';\n");
+  for (const theme of ["light", "dark"]) {
+    await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+    await expect(panel.locator(".message.user .message-state")).toHaveCSS("color", "rgb(255, 255, 255)");
+    await page.screenshot({ path: testInfo.outputPath(`chat-layout-${theme}.png`) });
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+    expect(accessibility.violations).toEqual([]);
   }
 });
 
@@ -1094,7 +1142,7 @@ test("exposes run stages through one accessible tooltip in both colour schemes",
     const chip = panel.locator("#run-step-chip");
     const tooltip = panel.locator("#run-step-tooltip");
     const genericTooltip = panel.locator("#tooltip-layer");
-    await expect(chip).toHaveText(/Step 2 \/ 3/);
+    await expect(chip).toHaveAccessibleName(/Step 2 of 3/);
     await expect(chip).toHaveAttribute("aria-haspopup", "dialog");
     await expect(chip).toHaveAttribute("aria-expanded", "false");
     await expect(chip).toHaveAttribute("aria-controls", "run-step-tooltip");
@@ -1306,12 +1354,12 @@ test("keeps the conversation rail stable and opens Activity as a compact-width d
         sideBackground: sideElement ? getComputedStyle(sideElement).backgroundColor : "",
       };
     });
-    expect(compactLayout.railWidth).toBeGreaterThanOrEqual(300);
-    expect(compactLayout.railWidth).toBeLessThanOrEqual(330);
+    expect(compactLayout.railWidth).toBeGreaterThanOrEqual(255);
+    expect(compactLayout.railWidth).toBeLessThanOrEqual(280.5);
     expect(compactLayout.mainWidth).toBeCloseTo(width - compactLayout.railWidth, 0);
     expect(compactLayout.sideOffCanvas).toBe(true);
-    expect(compactLayout.readingMeasure).toBeCloseTo(840, 0);
-    expect(compactLayout.composerMeasure).toBeCloseTo(840, 0);
+    expect(compactLayout.readingMeasure).toBeCloseTo(960, 0);
+    expect(compactLayout.composerMeasure).toBeCloseTo(960, 0);
     expect(compactLayout.toolbarInComposer).toBe(true);
     expect(compactLayout.proseFont).not.toMatch(/monospace|consolas|courier/i);
     expect(compactLayout.railBackground).not.toBe(compactLayout.mainBackground);
@@ -1494,10 +1542,10 @@ test("aligns the desktop workspace rails and reading edges at wide widths", asyn
     };
   });
 
-  expect(layout.railWidth).toBeGreaterThanOrEqual(300);
-  expect(layout.railWidth).toBeLessThanOrEqual(330);
-  expect(layout.sideWidth).toBeGreaterThanOrEqual(330);
-  expect(layout.sideWidth).toBeLessThanOrEqual(360);
+  expect(layout.railWidth).toBeGreaterThanOrEqual(255);
+  expect(layout.railWidth).toBeLessThanOrEqual(280.5);
+  expect(layout.sideWidth).toBeGreaterThanOrEqual(278);
+  expect(layout.sideWidth).toBeLessThanOrEqual(305);
   expect(layout.headerTitleAligned).toBe(true);
   expect(layout.headerActionsAligned).toBe(true);
   expect(layout.projectFontSize).toBe("14px");

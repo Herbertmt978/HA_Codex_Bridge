@@ -14,7 +14,7 @@ Codex/OpenAI from your home network.
 [![App status](https://img.shields.io/badge/App-Stable-22C55E?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
 
-[Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Planned releases](docs/roadmap.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
+[Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Chat activity](docs/chat-activity.md) | [Planned releases](docs/roadmap.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
 </div>
 

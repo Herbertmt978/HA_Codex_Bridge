@@ -59,7 +59,7 @@ describe("panel run activity integration", () => {
     expect(select?.getAttribute("aria-label")).toMatch(/Activity chat.*(working|running)/i);
   });
 
-  it("renders the live action line, step chip, bounded history, and file counters", () => {
+  it("renders one live step chip with bounded history and file counters", () => {
     const plan = [
       { step: "Inspect repository", status: "completed" },
       { step: "Implement the change", status: "inProgress" },
@@ -87,13 +87,14 @@ describe("panel run activity integration", () => {
     expect(activity?.getAttribute("role")).toBe("status");
     expect(activity?.getAttribute("aria-live")).toBe("polite");
     expect(activity?.getAttribute("aria-atomic")).toBe("true");
-    expect(activity?.querySelector(".run-activity-copy")?.textContent).toMatch(/Implement the change/i);
+    expect(activity?.querySelector(".run-activity-copy")).toBeNull();
 
     const chip = activity?.querySelector(".run-step-chip");
     expect(chip).toBeTruthy();
     expect(chip?.hasAttribute("data-tooltip")).toBe(false);
     expect(chip?.hasAttribute("title")).toBe(false);
-    expect(chip?.textContent).toMatch(/2\s*\/\s*3/);
+    expect(chip?.textContent).toContain("Waiting for sub-agents");
+    expect(chip?.getAttribute("aria-label")).toContain("Step 2 of 3");
     expect(chip?.textContent).toMatch(/1 file/i);
     expect(chip?.textContent).toContain("+1");
     expect(chip?.textContent).toContain("-1");
@@ -122,7 +123,8 @@ describe("panel run activity integration", () => {
     expect(messageList?.getAttribute("aria-busy")).toBe("true");
     expect(messageList?.querySelector("article.message.assistant.streaming")?.textContent).toContain("Partial answer");
     expect(messageList?.querySelector(".message-state")).toBeNull();
-    expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-activity-copy")?.textContent).toContain("Generating a response");
+    expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-activity-copy")).toBeNull();
+    expect(panel.shadowRoot.getElementById("run-step-chip")?.getAttribute("aria-label")).toContain("Generating a response");
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-step-chip")).toBeTruthy();
 
     panel._events = [
@@ -169,22 +171,61 @@ describe("panel run activity integration", () => {
     expect(chip.getAttribute("aria-label")).toContain("Check files");
   });
 
-  it("keeps message roles accessible without avatars or repeated headings, and copies the response", async () => {
-    const panel = createPanel({ events: [event(1, "message.completed", { text: "Hello from Codex" })] });
+  it("keeps roles accessible and copies only the selected code block exactly", async () => {
+    const code = "if (value < 3) {\n  return 'yes';\n}\n";
+    const panel = createPanel({ events: [event(1, "message.completed", {
+      text: "Use this expression:\n```javascript\n" + code + "```\nExplanation.\n```text\nsecond block\n```",
+    })] });
     const copy = vi.spyOn(panel, "_writeClipboardText").mockResolvedValue();
     panel._render(true);
     const response = panel.shadowRoot.querySelector(".message.assistant");
     expect(response.getAttribute("aria-label")).toBe("Assistant response");
-    expect(response.querySelector(".avatar, .message-head")).toBeNull();
-    expect(response.querySelector(".bubble").firstElementChild.textContent).toBe("Hello from Codex");
-    const button = response.querySelector('[data-action="copy-message"]');
-    expect(button.getAttribute("aria-label")).toBe("Copy response");
-    button.click();
+    expect(response.querySelector(".avatar, .message-head, .message-actions")).toBeNull();
+    expect(response.querySelectorAll("button")).toHaveLength(2);
+    response.querySelector('[data-action="copy-code-block"]').click();
     await Promise.resolve();
-    expect(copy).toHaveBeenCalledWith("Hello from Codex");
-    const user = panel._renderMessage("user", "Say hello", 2, false);
+    expect(copy).toHaveBeenCalledWith(code);
+    const plain = panel._renderMessage("assistant", "Hello", 2);
+    expect(plain.querySelector("button")).toBeNull();
+    const user = panel._renderMessage("user", "Say hello", 3, "Queued steer");
     expect(user.getAttribute("aria-label")).toBe("Your message");
-    expect(user.querySelector(".avatar")).toBeNull();
+    expect(user.querySelector(".message-state").textContent).toBe("Queued steer");
+    expect(user.querySelector(".avatar, button")).toBeNull();
+  });
+
+  it("shows only one working indicator before a plan or response exists", () => {
+    const panel = createPanel({ events: [event(1, "run.started", { run_id: "run-activity" })] });
+    panel._render(true);
+    const activity = panel.shadowRoot.getElementById("run-activity");
+    expect(activity.querySelectorAll(".run-activity-copy, .run-step-chip")).toHaveLength(1);
+    expect(activity.querySelectorAll(".activity-spinner, .step-spinner")).toHaveLength(1);
+    expect(activity.querySelector(".run-step-chip").textContent).toBe("Working");
+    expect(activity.querySelector(".run-step-chip").getAttribute("aria-label")).toContain("Working on the request");
+  });
+
+  it("updates the single activity control from thinking to a tool and retains file counts", () => {
+    const panel = createPanel({ events: [
+      event(1, "run.started", { run_id: "run-activity" }),
+      event(2, "item.started", { run_id: "run-activity", item_id: "reason", item_type: "reasoning" }),
+    ] });
+    panel._render(true);
+    expect(panel.shadowRoot.querySelector(".run-step-label").textContent).toBe("Thinking");
+    panel._events.push(
+      event(3, "item.completed", { run_id: "run-activity", item_id: "reason", item_type: "reasoning" }),
+      event(4, "item.started", { run_id: "run-activity", item_id: "tool", item_type: "commandExecution", command: "secret command" }),
+      event(5, "patch.updated", { run_id: "run-activity", changes: [
+        { path: "a.js", diff: "@@\n-old\n+new\n+another" },
+        { path: "b.js", diff: "@@\n+added" },
+      ] }),
+    );
+    panel._render(true);
+    const activity = panel.shadowRoot.getElementById("run-activity");
+    expect(activity.querySelector(".run-step-label").textContent).toBe("Running a command");
+    expect(activity.querySelector(".run-step-chip").textContent).toContain("2 files changed");
+    expect(activity.querySelector(".run-step-additions").textContent).toBe("+3");
+    expect(activity.querySelector(".run-step-deletions").textContent).toBe("-1");
+    expect(activity.textContent).not.toContain("secret command");
+    expect(activity.querySelectorAll(".run-activity-copy, .run-step-chip")).toHaveLength(1);
   });
 
   it("keeps a partial response and the safe failure reason visible after a failed run", () => {

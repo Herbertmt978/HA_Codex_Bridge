@@ -12,6 +12,8 @@ from time import monotonic
 from typing import Any, Iterator, Literal, Protocol, cast
 from uuid import uuid4
 
+from .activity_display import command_preview
+
 from .codex_app_server import (
     DEFERRED_RESPONSE,
     AppServerNotification,
@@ -4529,9 +4531,9 @@ def _event_payload_bytes(payload: dict[str, object]) -> int:
 def _safe_item_activity_metadata(item: dict[str, Any]) -> dict[str, object]:
     """Project item lifecycle metadata without forwarding provider content.
 
-    Thread items carry commands, paths, URLs, arguments, and output alongside
-    their type.  The UI only needs bounded enum metadata to label activity, so
-    deliberately omit all provider-supplied text and locators here.
+    Commands may include a bounded administrator display preview. Recognised
+    credential-bearing commands are omitted before durable event storage.
+    Environment, working directory, output and other tool arguments stay private.
     """
 
     metadata: dict[str, object] = {}
@@ -4545,6 +4547,9 @@ def _safe_item_activity_metadata(item: dict[str, Any]) -> dict[str, object]:
 
     item_type = item.get("type")
     if item_type == "commandExecution":
+        preview = command_preview(item.get("command"))
+        if preview is not None:
+            metadata["command_preview"] = preview
         actions = item.get("commandActions")
         if isinstance(actions, list):
             action_types: list[str] = []
