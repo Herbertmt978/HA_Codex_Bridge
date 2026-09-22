@@ -40,6 +40,21 @@ class McpCredentialRequest(BaseModel):
     auth_acknowledged: StrictBool = False
 
 
+class McpStateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: StrictBool
+    revision: str = Field(min_length=64, max_length=64)
+
+
+class McpEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(max_length=2048, repr=False)
+    revision: str = Field(min_length=64, max_length=64)
+    endpoint_acknowledged: StrictBool = False
+    credential_action: str
+    authentication: object = Field(default=None, repr=False)
+
+
 class McpOAuthLoginResponse(BaseModel):
     """One-shot response; callers must not persist the authorization URL."""
 
@@ -107,6 +122,28 @@ def replace_mcp_credential(name: str, payload: McpCredentialRequest, request: Re
     response.headers["Cache-Control"] = "no-store"
     try:
         return _manager(request).replace_credential(name, payload.authentication, acknowledged=payload.auth_acknowledged)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.put("/mcp/servers/{name}/state")
+def set_mcp_state(name: str, payload: McpStateRequest, request: Request, response: Response,
+                  authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).set_server_enabled(name, enabled=payload.enabled, revision=payload.revision)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.put("/mcp/servers/{name}")
+def edit_mcp_server(name: str, payload: McpEditRequest, request: Request, response: Response,
+                    authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).edit_server(name, **payload.model_dump())
     except McpManagerError as error:
         raise _problem(error) from None
 

@@ -689,6 +689,7 @@ def create_app(
             and resolved_mcp_manager.elicitation_handler_registered
         ):
             feature_capabilities.append("mcp_admin_v1")
+            feature_capabilities.append("mcp_management_v1")
             if resolved_local_mcp is not None:
                 feature_capabilities.append("mcp_credentials_v1")
                 if resolved_local_mcp.local_enabled:

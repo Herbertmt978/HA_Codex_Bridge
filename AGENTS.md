@@ -38,6 +38,10 @@ changing product language or architecture.
   reflected secrets in relay responses. Stdio and local OAuth remain unsupported. Keep
   OAuth authorisation URLs one-shot and uncached. This local exception does
   not change browser, shell or Host Access permissions.
+- Preserve native MCP pause state across restart. Destination edits require a
+  paused server, a fresh revision and explicit authentication consent. Recover
+  interrupted private edits before activating relay bindings; uncertain rollback
+  blocks new work until restart.
 - Confine skills and project instructions to the selected workspace. Global
   instructions stay in the fixed private Codex home. Writes must be bounded,
   atomic, no-follow, and privately backed up where the implementation promises.

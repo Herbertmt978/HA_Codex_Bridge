@@ -30,8 +30,10 @@ upstream echoes are redacted across streaming chunk boundaries.
 Replacement revokes active requests, atomically changes the saved credential and
 reloads native MCP sessions. Removal clears the credential but retains a disabled
 connection that can receive a replacement. Cancellation cannot undo accepted
-upstream actions or revoke a token at its provider. No destination-edit endpoint exists,
-so a saved secret can never follow an automatic endpoint change.
+upstream actions or revoke a token at its provider. MCP-05 adds destination edits
+only while paused, with an explicit keep, replace or remove decision. A saved
+secret never follows an automatic endpoint change. See the connection management
+addendum below.
 
 ## Alternatives and limits
 
@@ -54,3 +56,27 @@ redirects, reflected response chunks, private storage permissions and native
 configuration inspection. Exercise HA administrator/older-App rejection and
 browser clearing/no-persistence behaviour. Native fixtures must use the same
 pinned Codex runtime as the App.
+
+## Connection management addendum — 22 September 2026
+
+The native `enabled` field owns paused state. The relay derives its active
+bindings from that field; it does not persist a competing pause flag. Pause and
+resume hold the existing configuration lease, excluding active and queued turns.
+They update native configuration with its expected version and reload sessions.
+Failed reloads restore the previous definition; uncertain recovery closes the
+runtime gate and requires an App restart. A conflicting external edit is not
+overwritten during recovery.
+
+Destination editing requires pause first and retains the network class. The
+administrator enters the new URL and explicitly chooses whether its destination
+may receive the saved credential. URLs and credentials never prefill the form.
+For a relayed connection the native binding stays unchanged. A private journal
+retains the previous registry until the new record commits; startup recovers an
+interrupted edit before activating bindings. The journal has the same storage
+permissions and backup exposure as the private registry.
+
+Public OAuth URL editing retains the optional client/resource configuration and
+native authentication store. Native credentials are bound to the server name
+and URL; a changed URL may need sign-in again. Editing is not provider logout.
+Opaque form revisions include native configuration state and private mutations,
+and expire across restart. No new connection or permission is enabled by upgrade.

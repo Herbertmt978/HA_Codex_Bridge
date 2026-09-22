@@ -15,6 +15,74 @@ function setup(capabilities = []) {
 const field = (panel, name) => panel.shadowRoot.querySelector(`[data-desktop-field="${name}"]`);
 const action = (panel, name) => panel.shadowRoot.querySelector(`[data-desktop-action="${name}"]`);
 
+describe("MCP connection management", () => {
+  const capabilities = ["mcp_admin_v1", "mcp_management_v1", "mcp_credentials_v1"];
+  const server = { name: "secured", endpoint: "https://mcp.example.com", auth: "bearer", network: "public", credential_configured: true, enabled: false, revision: "a".repeat(64), tool_count: 0, resource_count: 0 };
+  async function editForm() {
+    const panel = setup(capabilities);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ ...server }];
+    await panel._handleDesktopAction("edit-mcp-connection", { id: server.name });
+    vi.spyOn(panel, "_accessToken").mockReturnValue("ha-fixture-token");
+    return panel;
+  }
+  beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("keeps existing controls and update guidance for older Apps", () => {
+    const panel = setup(["mcp_admin_v1"]);
+    panel._desktopFeatures.settings.data.mcp_servers = [server];
+    panel._renderDesktopSurface();
+    expect(action(panel, "remove-mcp")).toBeTruthy();
+    expect(action(panel, "resume-mcp")).toBeNull();
+    expect(panel.shadowRoot.getElementById("desktop-feature-surface").textContent).toContain("update both");
+  });
+
+  it("requires an explicit authentication decision and fresh destination consent", async () => {
+    const panel = await editForm();
+    expect(field(panel, "url").value).toBe("");
+    expect(field(panel, "credential_action").value).toBe("");
+    expect(field(panel, "endpoint_acknowledged").checked).toBe(false);
+    field(panel, "url").value = "https://new.example.com/private-fixture";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    field(panel, "credential_action").value = "keep";
+    field(panel, "credential_action").dispatchEvent(new Event("change", { bubbles: true }));
+    expect(field(panel, "url").value).toBe("https://new.example.com/private-fixture");
+    field(panel, "endpoint_acknowledged").checked = true;
+    field(panel, "url").value = "https://other.example.com/tools";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(field(panel, "endpoint_acknowledged").checked).toBe(false);
+  });
+
+  it("uses private HTTP for pause/resume and preserves the selected revision", async () => {
+    const panel = await editForm();
+    let request;
+    vi.stubGlobal("fetch", vi.fn(async (url, options) => { request = { url, payload: JSON.parse(options.body) }; return { ok: true }; }));
+    await panel._handleDesktopAction("resume-mcp", { id: server.name });
+    expect(request).toEqual({ url: "/api/codex_bridge/mcp/connections", payload: { operation: "state", name: server.name, revision: server.revision, enabled: true } });
+    expect(panel._desktopFeatures.settings.notice).toContain("subsequent turns");
+  });
+
+  it("clears endpoint and new credentials after a rejected save without leaking provider errors", async () => {
+    const panel = await editForm();
+    field(panel, "credential_action").value = "replace";
+    field(panel, "credential_action").dispatchEvent(new Event("change", { bubbles: true }));
+    field(panel, "url").value = "https://new.example.com/private-fixture";
+    field(panel, "url").dispatchEvent(new Event("input", { bubbles: true }));
+    const token = panel.shadowRoot.querySelector("[data-mcp-token]");
+    token.value = "synthetic-replacement-token";
+    field(panel, "auth_acknowledged").checked = true;
+    field(panel, "endpoint_acknowledged").checked = true;
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ code: "conflict", message: "synthetic-replacement-token" }) })));
+    await panel._handleDesktopAction("submit-mcp-connection", {}, token);
+    expect(token.value).toBe("");
+    expect(field(panel, "url").value).toBe("");
+    expect(field(panel, "endpoint_acknowledged").checked).toBe(false);
+    expect(panel._desktopFeatures.settings.formError).toContain("connection changed");
+    expect(JSON.stringify(panel._desktopFeatures)).not.toContain("synthetic-replacement-token");
+    expect(panel.shadowRoot.textContent).not.toContain("synthetic-replacement-token");
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("MCP setup and access settings", () => {
   beforeEach(() => document.body.replaceChildren());
 

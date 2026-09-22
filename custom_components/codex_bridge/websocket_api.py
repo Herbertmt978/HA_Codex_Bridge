@@ -43,6 +43,7 @@ _FEATURE_ERROR_MESSAGES = {
     "capabilities_unavailable": "Codex capabilities are temporarily unavailable",
     "agents_unavailable": "The selected AGENTS.md file is unavailable",
     "mcp_config_conflict": "Codex is busy or the MCP configuration changed",
+    "mcp_restart_required": "MCP configuration could not be restored. Restart the Codex Bridge App before continuing",
     "mcp_disabled": "Enable MCP in the Codex Bridge App configuration and restart",
     "mcp_elicitation_unavailable": "MCP configuration is unavailable until server prompts can be safely declined",
     "mcp_request_invalid": "The MCP server settings are invalid",

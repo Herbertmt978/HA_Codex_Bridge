@@ -27,7 +27,7 @@ MCP-03 still requires a separate isolation design before implementation.
 | [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Implemented for 1.3.0: connect servers that require a bearer token or authentication header. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
 | [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Run approved MCP server processes with bounded access. | Separate process isolation design | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
 | [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
-| [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
+| [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Implemented for 1.4.0: edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
 | [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Inspect server tools and choose which Codex may use. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
 
 ## Home Assistant integration

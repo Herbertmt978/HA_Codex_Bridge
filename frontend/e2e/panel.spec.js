@@ -1837,6 +1837,68 @@ test("workspace terminal accepts interactive input and closes when leaving the c
 
 
 for (const width of [1440, 390]) {
+  test(`MCP connection edits stay paused and recover from failed saves at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.addInitScript(() => { window.nativeManagementFetch = window.fetch.bind(window); });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      const fixtureFetch = window.fetch;
+      window.fetch = (url, options) => url === "/api/codex_bridge/mcp/connections" ? window.nativeManagementFetch(url, options) : fixtureFetch(url, options);
+      panel._config.capabilities = ["mcp_admin_v1", "mcp_credentials_v1", "mcp_management_v1"];
+      panel._accessToken = () => "synthetic-ha-token";
+      window.managedServer = {name:"secured",endpoint:"https://mcp.example.com",auth:"bearer",network:"public",credential_configured:true,enabled:true,startup:"ready",revision:"a".repeat(64),tool_count:1,resource_count:0};
+      const call = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => method === "list_mcp" ? Promise.resolve({items:[{...window.managedServer}]}) : call(method, args);
+      panel._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", {name:"MCP servers",exact:true}).click();
+    await expect(panel.getByRole("button", {name:"Edit connection",exact:true})).toBeDisabled();
+    let failedEdit = false;
+    await page.route("**/api/codex_bridge/mcp/connections", async (route) => {
+      const payload = route.request().postDataJSON();
+      if (payload.operation === "edit" && !failedEdit) {
+        failedEdit = true;
+        await route.fulfill({status:503,contentType:"application/json",body:'{"code":"mcp_unavailable","message":"private-provider-error"}'});
+        return;
+      }
+      await page.evaluate((change) => {
+        window.managedServer.enabled = change.operation === "state" ? change.enabled : false;
+        window.managedServer.startup = window.managedServer.enabled ? "ready" : "paused";
+        window.managedServer.revision = "b".repeat(64);
+      }, payload);
+      await route.fulfill({status:200,contentType:"application/json",body:'{"saved":true}'});
+    });
+    await panel.getByRole("button", {name:"Pause",exact:true}).click();
+    await expect(panel.getByRole("button", {name:"Resume",exact:true})).toBeVisible();
+    await panel.getByRole("button", {name:"Edit connection",exact:true}).click();
+    const url = panel.getByLabel("New connection URL", {exact:true});
+    await expect(url).toHaveValue("");
+    await url.fill("https://new.example.com/private-fixture");
+    const auth = panel.getByRole("combobox", {name:"Authentication when changing destination",exact:true});
+    await auth.focus();
+    await page.keyboard.press("Enter");
+    await panel.getByRole("option", {name:"Keep existing authentication",exact:true}).click();
+    const consent = panel.getByLabel("I trust this destination and approve the authentication choice above");
+    await consent.check();
+    await panel.getByRole("button", {name:"Save paused connection",exact:true}).click();
+    await expect(url).toHaveValue("");
+    await expect(consent).not.toBeChecked();
+    await expect(panel.getByRole("alert").filter({hasText:"Could not confirm"})).toBeVisible();
+    await expect(panel).not.toContainText("private-provider-error");
+    await url.fill("https://new.example.com/private-fixture");
+    await consent.check();
+    expect((await new AxeBuilder({page}).include("codex-bridge-panel").withTags(["wcag2a","wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({path:testInfo.outputPath("mcp-edit-connection.png")});
+    await panel.getByRole("button", {name:"Save paused connection",exact:true}).click();
+    await expect(panel.getByText("Connection saved and still paused. Resume it when ready.",{exact:true})).toBeVisible();
+    await panel.getByRole("button", {name:"Resume",exact:true}).click();
+    await expect(panel.getByRole("button", {name:"Pause",exact:true})).toBeVisible();
+  });
+
   test(`MCP credentials stay write-only with accessible controls at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.addInitScript(() => { window.nativeCredentialFetch = window.fetch.bind(window); });

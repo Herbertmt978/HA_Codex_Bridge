@@ -312,6 +312,7 @@ class CodexBridgeMcpCredentialView(HomeAssistantView):
     url = "/api/codex_bridge/mcp/credentials"
     name = "api:codex_bridge:mcp_credentials"
     requires_auth = True
+    operations = frozenset({"create", "replace", "remove"})
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
@@ -332,13 +333,13 @@ class CodexBridgeMcpCredentialView(HomeAssistantView):
             if not isinstance(payload, dict):
                 raise ValueError()
             operation = payload.pop("operation", None)
-            if operation not in {"create", "replace", "remove"}:
+            if operation not in self.operations:
                 raise ValueError()
             name = payload.get("name")
             if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name):
                 raise ValueError()
             runtime = async_get_runtime(self.hass)
-            runtime.client.require_capability("mcp_credentials_v1")
+            runtime.client.require_capability("mcp_management_v1" if operation in {"edit", "state"} else "mcp_credentials_v1")
             if operation == "create":
                 allowed = {"name", "url", "local", "local_acknowledged", "authentication", "auth_acknowledged"}
                 if set(payload) - allowed or "authentication" not in payload:
@@ -348,15 +349,23 @@ class CodexBridgeMcpCredentialView(HomeAssistantView):
                 if set(payload) != {"name", "authentication", "auth_acknowledged"}:
                     raise ValueError()
                 await runtime.client.async_replace_mcp_credential(name, {key: value for key, value in payload.items() if key != "name"})
-            else:
+            elif operation == "remove":
                 if set(payload) != {"name"}:
                     raise ValueError()
                 await runtime.client.async_replace_mcp_credential(name, None)
+            else:
+                allowed = ({"name", "enabled", "revision"} if operation == "state" else
+                           {"name", "url", "revision", "endpoint_acknowledged", "credential_action", "authentication"})
+                if set(payload) - allowed:
+                    raise ValueError()
+                await runtime.client.async_manage_mcp(name, {key: value for key, value in payload.items() if key != "name"}, state=operation == "state")
             # Never reflect even an unexpected provider response.
             return web.json_response({"saved": True}, headers=headers)
         except (ValueError, TypeError, UnicodeError, asyncio.TimeoutError):
             return web.json_response({"code": "mcp_request_invalid"}, status=400, headers=headers)
         except BridgeApiError as error:
+            if error.code == "mcp_restart_required":
+                return web.json_response({"code": "mcp_restart_required"}, status=503, headers=headers)
             response = bridge_error_response(error)
             response.headers.update(headers)
             return response
@@ -366,8 +375,17 @@ class CodexBridgeMcpCredentialView(HomeAssistantView):
             return response
 
 
+class CodexBridgeMcpConnectionView(CodexBridgeMcpCredentialView):
+    """Bounded, write-only connection edits and lifecycle changes."""
+
+    url = "/api/codex_bridge/mcp/connections"
+    name = "api:codex_bridge:mcp_connections"
+    operations = frozenset({"edit", "state"})
+
+
 def async_register_http_views(hass: HomeAssistant) -> None:
     hass.http.register_view(CodexBridgeMcpCredentialView(hass))
+    hass.http.register_view(CodexBridgeMcpConnectionView(hass))
     hass.http.register_view(CodexBridgeAttachmentUploadView(hass))
     hass.http.register_view(CodexBridgeUploadCreateView(hass))
     hass.http.register_view(CodexBridgeUploadSessionView(hass))

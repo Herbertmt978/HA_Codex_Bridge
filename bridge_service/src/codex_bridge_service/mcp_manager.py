@@ -9,9 +9,12 @@ and arbitrary config keys are rejected.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import hashlib
+import hmac
 import ipaddress
 import re
+import secrets
 import socket
 from threading import RLock
 from typing import Callable, Protocol
@@ -19,7 +22,7 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from .codex_app_server import mcp_config_is_disabled
 from .mcp_local_policy import LocalMcpError
-from .mcp_relay import McpRelay
+from .mcp_relay import McpRelay, McpRelayRecoveryError
 from .mcp_credentials import parse_credential
 
 
@@ -95,6 +98,11 @@ class McpLocalDisabledError(McpUnavailableError):
     retryable = False
 
 
+class McpRecoveryRequiredError(McpUnavailableError):
+    code = "mcp_restart_required"
+    retryable = False
+
+
 class McpProtocolError(McpManagerError):
     code = "mcp_runtime_invalid"
     retryable = True
@@ -166,12 +174,15 @@ class McpServerDefinition:
     relayed: bool = False
     auth_mode: str = "none"
     credential_configured: bool = False
+    enabled: bool = True
 
-    def config_value(self) -> dict[str, str]:
+    def config_value(self) -> dict[str, object]:
         if self.local or self.relayed:
             # Local upstream URLs must never become native Codex destinations.
             raise McpValidationError()
-        value = {"url": self.url}
+        value: dict[str, object] = {"url": self.url}
+        if not self.enabled:
+            value["enabled"] = False
         if self.oauth_client_id is not None:
             value["oauth_client_id"] = self.oauth_client_id
         if self.oauth_resource is not None:
@@ -207,6 +218,9 @@ class McpManager:
         self._oauth_completion: dict[str, bool] = {}
         self._elicitation_handler_registered = False
         self._startup_config_sanitized = False
+        self._revision_key = secrets.token_bytes(32)
+        self._mutation_serial = 0
+        self._recovery_required = False
         self._register_callbacks()
 
     @property
@@ -226,8 +240,15 @@ class McpManager:
 
         self._require_enabled()
         with self._lock:
-            definitions, _version = self._read_definitions()
-            statuses = self._read_statuses()
+            definitions, version = self._read_definitions()
+            status_unavailable = False
+            try:
+                statuses = self._read_statuses()
+            except McpUnavailableError:
+                # Keep saved connections manageable while discovery is failing.
+                # Unknown counts are not evidence that a server exposes no tools.
+                statuses = {}
+                status_unavailable = True
             views: list[dict[str, object]] = []
             for definition in definitions.values():
                 status = statuses.get(definition.name, {})
@@ -252,16 +273,22 @@ class McpManager:
                     "tool_count": _bounded_collection_size(tools),
                     "resource_count": _bounded_collection_size(resources)
                     + _bounded_collection_size(templates),
+                    "enabled": definition.enabled,
+                    "revision": self._revision(definition.name, version),
                 }
+                if not definition.enabled:
+                    view.update(startup="paused", tool_count=0, resource_count=0)
+                elif status_unavailable:
+                    view.update(startup="unknown", status_unavailable=True)
                 if definition.auth_mode != "none":
                     view["credential_configured"] = definition.credential_configured
                 title = _safe_display_text(info.get("title"), 160)
-                version = _safe_display_text(info.get("version"), 64)
+                server_version = _safe_display_text(info.get("version"), 64)
                 if title is not None:
                     view["title"] = title
-                if version is not None:
-                    view["version"] = version
-                if failure is not None:
+                if server_version is not None:
+                    view["version"] = server_version
+                if failure is not None and definition.enabled:
                     view["failure"] = failure
                 if definition.name in self._oauth_completion:
                     view["oauth_complete"] = self._oauth_completion[definition.name]
@@ -342,6 +369,129 @@ class McpManager:
                     raise
                 self._reload()
         return self._view_for_created(definition)
+
+    def _revision(self, name: str, version: str) -> str:
+        # This process owns relay mutations; native versions also detect edits
+        # made outside it. A fresh key invalidates forms retained across restart.
+        value = f"{name}\0{version}\0{self._mutation_serial}".encode()
+        return hmac.new(self._revision_key, value, hashlib.sha256).hexdigest()
+
+    def _check_revision(self, name: str, version: str, revision: object) -> None:
+        if not isinstance(revision, str) or not re.fullmatch(r"[a-f0-9]{64}", revision):
+            raise McpValidationError()
+        if not hmac.compare_digest(self._revision(name, version), revision):
+            raise McpConflictError()
+
+    def _require_recovery(self, name: str) -> None:
+        self._recovery_required = True
+        if self._relay is not None:
+            self._relay.deactivate(name)
+        # No active/queued turn exists while the configuration lease is held.
+        close = getattr(self._runtime_gate, "close", None)
+        if callable(close):
+            close()
+
+    def _apply_definition(self, previous: McpServerDefinition, updated: McpServerDefinition,
+                          version: str) -> str:
+        """Write and reload, restoring the old definition if the runtime rejects it."""
+        try:
+            self._write_config_value(key_path=f"mcp_servers.{updated.name}",
+                                     value=self._native_value(updated), version=version)
+            self._reload()
+            definitions, current_version = self._read_definitions()
+            if definitions.get(updated.name) != updated:
+                raise McpConflictError()
+        except McpManagerError:
+            try:
+                # Read even after a failed write: a timeout may have committed.
+                definitions, current_version = self._read_definitions()
+                current = definitions.get(previous.name)
+                if current == updated:
+                    self._write_config_value(key_path=f"mcp_servers.{previous.name}",
+                                             value=self._native_value(previous), version=current_version)
+                elif current != previous:
+                    raise McpConflictError()
+                else:
+                    self._native_value(previous)
+                self._reload()
+            except McpManagerError:
+                self._require_recovery(previous.name)
+                raise McpRecoveryRequiredError() from None
+            raise
+        self._mutation_serial += 1
+        self._startup.pop(updated.name, None)
+        self._oauth_completion.pop(updated.name, None)
+        return current_version
+
+    def set_server_enabled(self, name: object, *, enabled: object, revision: object) -> dict[str, object]:
+        self._require_enabled()
+        self._require_elicitation_handler()
+        normalized = _validate_name(name)
+        if type(enabled) is not bool:
+            raise McpValidationError()
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(normalized)
+            if previous is None:
+                raise McpNotFoundError()
+            self._check_revision(normalized, version, revision)
+            updated = replace(previous, enabled=enabled)
+            if previous.enabled != enabled:
+                version = self._apply_definition(previous, updated, version)
+            view = self._view_for_created(updated)
+            view["revision"] = self._revision(normalized, version)
+            return view
+
+    def edit_server(self, name: object, *, url: object, revision: object,
+                    endpoint_acknowledged: bool = False, credential_action: object = None,
+                    authentication: object = None) -> dict[str, object]:
+        """Destination edits are explicit, write-only and require a paused connection."""
+        self._require_enabled()
+        self._require_elicitation_handler()
+        normalized = _validate_name(name)
+        if endpoint_acknowledged is not True or credential_action not in ("keep", "replace", "remove"):
+            raise McpValidationError()
+        try:
+            credential = parse_credential(authentication)
+        except LocalMcpError:
+            raise McpValidationError() from None
+        if (credential_action == "replace") != (credential.mode != "none"):
+            raise McpValidationError()
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(normalized)
+            if previous is None:
+                raise McpNotFoundError()
+            self._check_revision(normalized, version, revision)
+            if previous.enabled:
+                raise McpConflictError()
+            if previous.relayed:
+                try:
+                    canonical = self._relay.edit_paused_endpoint(normalized, url,
+                        credential_action=credential_action, credential=credential)
+                    metadata = self._relay.metadata(normalized)
+                except McpRelayRecoveryError:
+                    self._require_recovery(normalized)
+                    raise McpRecoveryRequiredError() from None
+                except LocalMcpError:
+                    raise McpValidationError() from None
+                except Exception:
+                    raise McpUnavailableError() from None
+                updated = replace(previous, url=canonical, auth_mode=metadata["auth"],
+                                  credential_configured=metadata["credential_configured"])
+                self._mutation_serial += 1
+            else:
+                # Native OAuth is scoped to server name and URL. The explicit
+                # keep decision permits its existing store; a new URL may need login.
+                if credential_action != "keep":
+                    raise McpValidationError()
+                updated = replace(previous, url=_validate_https_url(url, resolver=self._resolver))
+                version = self._apply_definition(previous, updated, version)
+            self._startup.pop(normalized, None)
+            self._oauth_completion.pop(normalized, None)
+            view = self._view_for_created(updated)
+            view["revision"] = self._revision(normalized, version)
+            return view
 
     def remove_server(self, name: object) -> None:
         self._require_enabled()
@@ -483,6 +633,8 @@ class McpManager:
     def _require_enabled(self) -> None:
         if not self._enabled:
             raise McpDisabledError()
+        if self._recovery_required:
+            raise McpRecoveryRequiredError()
 
     def _require_elicitation_handler(self) -> None:
         if not self._elicitation_handler_registered:
@@ -498,7 +650,10 @@ class McpManager:
             "tool_count": 0,
             "resource_count": 0,
             "network": "local" if definition.local else "public",
+            "enabled": definition.enabled,
         }
+        if not definition.enabled:
+            view["startup"] = "paused"
         if definition.auth_mode != "none":
             view["credential_configured"] = definition.credential_configured
         return view
@@ -520,9 +675,12 @@ class McpManager:
                     raise McpNotFoundError()
                 if not definition.relayed or definition.auth_mode == "none" or self._relay is None:
                     raise McpValidationError()
+                # Rotation may persist before reload fails. Invalidate open
+                # destination forms even when its final outcome is uncertain.
+                self._mutation_serial += 1
                 try:
                     self._relay.replace_credential(normalized, credential)
-                    self._relay.native_config(normalized)
+                    self._native_value(definition)
                 except Exception:
                     raise McpUnavailableError() from None
                 self._reload()
@@ -535,7 +693,10 @@ class McpManager:
             if self._relay is None:
                 raise McpLocalDisabledError()
             try:
-                return self._relay.native_config(definition.name)
+                value = self._relay.native_config(definition.name, active=definition.enabled)
+                if not definition.enabled:
+                    value["enabled"] = False
+                return value
             except Exception:
                 raise McpUnavailableError() from None
         return definition.config_value()
@@ -657,7 +818,7 @@ class McpManager:
 
     def _write_config_value(
         self, *, key_path: str, value: object, version: str
-    ) -> None:
+    ) -> str:
         result = self._request(
             "config/batchWrite",
             {
@@ -679,6 +840,7 @@ class McpManager:
             result.get("version")
         ):
             raise McpConflictError()
+        return result["version"]
 
     def _reload(self) -> None:
         result = self._request("config/mcpServer/reload", None)
@@ -741,14 +903,19 @@ def _definition_from_config(
     effective: bool = False,
 ) -> McpServerDefinition:
     normalized_name = _validate_name(name)
+    if not isinstance(value, Mapping) or type(value.get("enabled", True)) is not bool:
+        raise McpValidationError()
+    enabled = value.get("enabled", True)
+    value = {key: item for key, item in value.items() if key != "enabled"}
     if relay is not None:
         original = relay.original_url(normalized_name, value, effective=effective)
         if original is not None:
             metadata = relay.metadata(normalized_name)
             return McpServerDefinition(normalized_name, original, local=metadata["local"], relayed=True,
-                                       auth_mode=metadata["auth"], credential_configured=metadata["credential_configured"])
+                                       auth_mode=metadata["auth"], credential_configured=metadata["credential_configured"],
+                                       enabled=enabled)
     if effective and isinstance(value, Mapping):
-        defaults = {"enabled": True, "environment_id": "local", "tool_timeout_sec": None}
+        defaults = {"environment_id": "local", "tool_timeout_sec": None}
         for key, expected in defaults.items():
             if key in value and (type(value[key]) is not type(expected) or value[key] != expected):
                 raise McpValidationError()
@@ -764,6 +931,7 @@ def _definition_from_config(
         url=_validate_https_url(value.get("url"), resolver=resolver),
         oauth_client_id=_validate_public_field(value.get("oauth_client_id")),
         oauth_resource=_validate_public_field(value.get("oauth_resource")),
+        enabled=enabled,
     )
 
 

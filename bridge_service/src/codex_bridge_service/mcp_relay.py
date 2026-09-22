@@ -10,7 +10,7 @@ import asyncio
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hmac
 import json
 from pathlib import Path
@@ -37,6 +37,10 @@ _MAX_RESPONSE = 8 * 1024 * 1024
 _MAX_REGISTRY = 512 * 1024
 _REQUEST_HEADERS = {"accept", "content-type", "mcp-session-id", "mcp-protocol-version", "last-event-id"}
 _RESPONSE_HEADERS = {b"content-type", b"mcp-session-id", b"mcp-protocol-version"}
+
+
+class McpRelayRecoveryError(LocalMcpError):
+    """A private edit journal must be recovered before runtime work continues."""
 
 
 @dataclass(frozen=True)
@@ -128,9 +132,19 @@ class McpRelay:
     def _load(self) -> None:
         assert self._boundary is not None
         self._records = {}
+        pending = None
         try:
-            with self._boundary.open_regular_file("servers.json") as source:
-                raw = source.read(_MAX_REGISTRY + 1)
+            with self._boundary.open_regular_file("servers.pending.json") as source:
+                pending = source.read(_MAX_REGISTRY + 1)
+        except WorkspaceNotFoundError:
+            pass
+        recovering = pending is not None and pending != b"null"
+        try:
+            if recovering:
+                raw = pending
+            else:
+                with self._boundary.open_regular_file("servers.json") as source:
+                    raw = source.read(_MAX_REGISTRY + 1)
         except WorkspaceNotFoundError:
             return
         if len(raw) > _MAX_REGISTRY:
@@ -153,8 +167,11 @@ class McpRelay:
             if not local and credential.mode == "none":
                 raise LocalMcpError()
             self._records[name] = McpRecord(canonical_local_url(item["url"], local=local), checked_addresses(item["addresses"], local=local), item["token"], local, credential)
+        if recovering:
+            self._save(self._records)
+            self._boundary.atomic_write_bytes("servers.pending.json", b"null")
 
-    def _save(self, records: Mapping[str, McpRecord]) -> None:
+    def _save(self, records: Mapping[str, McpRecord], *, filename: str = "servers.json") -> None:
         if self._boundary is None:
             raise LocalMcpError()
         payload = {"version": 2, "servers": {
@@ -164,7 +181,7 @@ class McpRelay:
         raw = json.dumps(payload, ensure_ascii=True).encode()
         if len(raw) > _MAX_REGISTRY:
             raise LocalMcpError()
-        self._boundary.atomic_write_bytes("servers.json", raw)
+        self._boundary.atomic_write_bytes(filename, raw)
 
     def add(self, name: str, url: object, *, local: bool = True, credential: McpCredential = McpCredential()) -> str:
         if not _NAME.fullmatch(name) or not self.port:
@@ -219,13 +236,61 @@ class McpRelay:
         future.add_done_callback(lambda _: self._dns_slots.release())
         return future
 
-    def native_config(self, name: str) -> dict[str, object]:
+    def deactivate(self, name: str) -> None:
+        with self._lock:
+            self._active.discard(name)
+            if self._loop is not None:
+                for task in tuple(self._tasks.get(name, ())):
+                    self._loop.call_soon_threadsafe(task.cancel)
+
+    def edit_paused_endpoint(self, name: str, url: object, *, credential_action: str,
+                             credential: McpCredential | None = None) -> str:
+        """Atomically change an inactive destination without changing its native binding."""
+        with self._lock:
+            old = self._records[name]
+            if name in self._active or credential_action not in {"keep", "replace", "remove"}:
+                raise LocalMcpError()
+            canonical = canonical_local_url(url, local=old.local)
+            try:
+                addresses = checked_addresses(self._resolve(urlsplit(canonical).hostname or "").result(timeout=5), local=old.local)
+            except Exception:
+                raise LocalMcpError() from None
+            if credential_action == "replace":
+                if credential is None or credential.mode == "none":
+                    raise LocalMcpError()
+                auth = credential
+            elif credential_action == "remove":
+                auth = McpCredential(old.credential.mode)
+            else:
+                auth = old.credential
+            updated = {**self._records, name: replace(old, url=canonical, addresses=addresses, credential=auth)}
+            # Keep the old private state durable until the new record commits.
+            # A crash or failed directory sync is recovered before any relay
+            # binding can be activated on the next startup.
+            try:
+                self._save(self._records, filename="servers.pending.json")
+                self._save(updated)
+                self._boundary.atomic_write_bytes("servers.pending.json", b"null")
+            except Exception:
+                try:
+                    self._save(self._records)
+                    self._boundary.atomic_write_bytes("servers.pending.json", b"null")
+                except Exception:
+                    raise McpRelayRecoveryError() from None
+                raise LocalMcpError() from None
+            self._records = updated
+            return canonical
+
+    def native_config(self, name: str, *, active: bool = True) -> dict[str, object]:
         with self._lock:
             if not self.port or name not in self._records:
                 raise LocalMcpError()
             if self._records[name].local and not self.local_enabled:
                 raise LocalMcpError()
-            self._active.add(name)
+            if active:
+                self._active.add(name)
+            else:
+                self.deactivate(name)
             return {"url": f"http://127.0.0.1:{self.port}/mcp/{name}",
                     "http_headers": {RELAY_HEADER: self._records[name].token}}
 
