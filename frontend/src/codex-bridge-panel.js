@@ -743,6 +743,10 @@ template.innerHTML = `
       border-color: transparent;
     }
 
+    .information-primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent-color) 54%, black 46%);
+    }
+
     .section-scroll,
     .message-list,
     .side-scroll,
@@ -1163,6 +1167,7 @@ template.innerHTML = `
     .bottom-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; position: sticky; top: 0; background: var(--surface-bg); z-index: 1; }
     .bottom-panel-header .row-actions > button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
     .bottom-panel-header button[aria-pressed="true"] { background: var(--surface-muted); color: var(--text-color); }
+    .bottom-panel-header .row-actions > button:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-muted); color: var(--text-color); }
     .terminal-tools > button { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; font-size: var(--font-control-size); font-weight: 500; border-radius: 8px; }
     .terminal-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; }
     .terminal-note { margin: 0; padding: 4px 14px; font-size: var(--font-caption-size); color: var(--muted-color); }
@@ -2811,6 +2816,12 @@ template.innerHTML = `
       color: var(--text-color);
     }
 
+    .desktop-toolbar > button:hover:not(:disabled),
+    .settings-panel > button:hover:not(:disabled) {
+      border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color) 45%);
+      background: color-mix(in srgb, var(--accent-surface) 70%, var(--accent-soft) 30%);
+    }
+
     .desktop-form-intro {
       margin: 0;
       color: var(--muted-color);
@@ -2954,6 +2965,7 @@ template.innerHTML = `
     .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
     .schedule-submit { background: var(--text-color); color: var(--canvas-bg); }
+    .schedule-submit:hover:not(:disabled) { background: color-mix(in srgb, var(--text-color) 84%, var(--surface-bg) 16%); }
     .schedule-editor :is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
     @media (max-width: 540px) {
       .schedule-editor { gap: 20px; }
@@ -3448,6 +3460,12 @@ template.innerHTML = `
       box-shadow: none;
     }
 
+    .auth-actions button.primary:hover:not(:disabled),
+    .decision-actions button[data-decision="accept"]:hover:not(:disabled),
+    .decision-actions button[data-action="answer-interaction"]:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent-color) 54%, black 46%);
+    }
+
     .send-button {
       width: 38px;
       min-width: 38px;
@@ -3461,7 +3479,7 @@ template.innerHTML = `
     }
 
     .send-button:hover {
-      background: color-mix(in srgb, var(--accent-color) 64%, black 36%);
+      background: color-mix(in srgb, var(--accent-color) 54%, black 46%);
       transform: translateY(-1px);
     }
 
@@ -4253,6 +4271,10 @@ template.innerHTML = `
       background: var(--danger-surface);
     }
 
+    .stop-button:hover:not(:disabled) {
+      border-color: var(--danger-color);
+    }
+
     .runtime-notice {
       background: var(--warning-surface);
       color: var(--text-color);
@@ -4273,6 +4295,11 @@ template.innerHTML = `
     .panel-form {
       background: var(--surface-bg);
       box-shadow: none;
+    }
+
+    .copy-button:hover:not(:disabled) {
+      background: var(--surface-muted);
+      color: var(--text-color);
     }
 
     .onboarding-shell,

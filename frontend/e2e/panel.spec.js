@@ -670,28 +670,68 @@ test("shows exhausted usage and confirms a reset credit without spending it", as
   expect(accessibility.violations).toEqual([]);
 });
 
-test("keeps filled controls legible on hover across panel themes", async ({ page }) => {
+test("keeps filled controls legible and styled buttons responsive on hover", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
   await panel.evaluate((node) => {
     const fixture = document.createElement("div");
     fixture.id = "filled-control-check";
-    fixture.style.cssText = "position:fixed;inset:70px auto auto 280px;z-index:100;display:flex;gap:8px;padding:12px;background:var(--surface-bg)";
-    for (const className of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button"]) {
+    fixture.style.cssText = "position:fixed;inset:70px auto auto 280px;z-index:100;display:grid;grid-template-columns:repeat(3,max-content);gap:8px;padding:12px;background:var(--surface-bg)";
+    for (const className of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "copy-button", "stop-button"]) {
       const button = document.createElement("button");
       button.className = className;
       button.type = "button";
+      button.dataset.hoverCheck = className;
       button.textContent = className;
+      button.style.transition = "none";
       fixture.append(button);
+    }
+    for (const [wrapperClass, buttonName] of [
+      ["desktop-toolbar", "desktop-toolbar"],
+      ["settings-panel", "settings-panel"],
+      ["bottom-panel-header", "bottom-panel-header"],
+      ["auth-actions", "auth-primary"],
+      ["decision-actions", "decision-accept"],
+      ["decision-actions", "decision-answer"],
+    ]) {
+      const wrapper = document.createElement("div");
+      wrapper.className = wrapperClass;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.hoverCheck = buttonName;
+      button.textContent = buttonName;
+      button.style.transition = "none";
+      if (buttonName === "auth-primary") button.className = "primary";
+      if (buttonName === "decision-accept") button.dataset.decision = "accept";
+      if (buttonName === "decision-answer") button.dataset.action = "answer-interaction";
+      if (buttonName === "bottom-panel-header") {
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        actions.append(button);
+        wrapper.append(actions);
+      } else {
+        wrapper.append(button);
+      }
+      fixture.append(wrapper);
     }
     node.shadowRoot.append(fixture);
   });
 
   for (const theme of ["light", "dark"]) {
     await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
-    for (const className of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button"]) {
-      const button = panel.locator(`#filled-control-check .${className}`);
+    for (const name of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "copy-button", "stop-button", "desktop-toolbar", "settings-panel", "bottom-panel-header", "auth-primary", "decision-accept", "decision-answer"]) {
+      const button = panel.locator(`#filled-control-check [data-hover-check="${name}"]`);
+      const normal = await button.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.backgroundColor, style.backgroundImage, style.borderColor];
+      });
       await button.hover();
+      const hovered = await button.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.backgroundColor, style.backgroundImage, style.borderColor];
+      });
+      expect(hovered, `${name} hover feedback in ${theme}`).not.toEqual(normal);
+      if (!["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "auth-primary", "decision-accept", "decision-answer"].includes(name)) continue;
       const contrast = await button.evaluate((node) => {
         const style = getComputedStyle(node);
         if (style.backgroundImage !== "none") return { gradient: true };
@@ -716,8 +756,8 @@ test("keeps filled controls legible on hover across panel themes", async ({ page
         return { ratio: (light + 0.05) / (dark + 0.05), opacity: background[3] };
       });
       if (contrast.gradient) continue;
-      expect(contrast.opacity, `${className} background in ${theme}`).toBe(255);
-      expect(contrast.ratio, `${className} hover contrast in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast.opacity, `${name} background in ${theme}`).toBe(255);
+      expect(contrast.ratio, `${name} hover contrast in ${theme}`).toBeGreaterThanOrEqual(4.5);
     }
   }
 });
