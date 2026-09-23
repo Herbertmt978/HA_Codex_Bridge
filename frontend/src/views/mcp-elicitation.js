@@ -106,7 +106,8 @@ export function renderMcpElicitation(container, interaction, { pending = false, 
         control.type = ({ email: "email", uri: "url", date: "date", "date-time": "datetime-local" })[field.format]
           || (field.kind === "integer" || field.kind === "number" ? "number" : "text");
         control.value = saved === undefined ? "" : String(saved);
-        control.required = Boolean(field.required);
+        control.required = Boolean(field.required && !(field.kind === "string"
+          && !field.format && (!Number.isInteger(field.min_length) || field.min_length === 0)));
         if (field.kind === "integer") control.step = "1";
         if (field.kind === "number") control.step = "any";
         if (Number.isInteger(field.min_length)) control.minLength = field.min_length;
@@ -174,6 +175,11 @@ export function collectMcpContent(container, interaction) {
       return null;
     }
     if (value === "" || (Array.isArray(value) && !value.length && !field.required)) {
+      if (field.required && value === "" && field.kind === "string" && !field.format
+        && (!Number.isInteger(field.min_length) || field.min_length === 0)) {
+        content[field.name] = "";
+        continue;
+      }
       if (field.required) return null;
       continue;
     }

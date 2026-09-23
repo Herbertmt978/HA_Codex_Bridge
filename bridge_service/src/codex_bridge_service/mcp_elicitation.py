@@ -58,15 +58,16 @@ def parse_elicitation(
             "mcp_url", server_name,
             InteractionDisplayRecord(
                 title="MCP authorisation request",
-                summary=re.sub(
-                    r"https?://\S+", "[link shown below]", message,
-                    flags=re.IGNORECASE,
-                ),
+                # URL-mode messages are server controlled and can repeat a
+                # one-time code outside the URL. Never persist that text.
+                summary="Open the verified destination to authorise this MCP server.",
                 mcp_server=server_name, mcp_url_host=host,
             ),
             url,
         )
     if params.get("mode") != "form":
+        return None
+    if _SENSITIVE_FIELD.search(message):
         return None
     schema = params.get("requestedSchema")
     if (

@@ -425,6 +425,12 @@ class McpManager:
                 else:
                     self._native_value(previous)
                 self._reload()
+                # A reconciliation read may have observed the attempted write.
+                # Keep the callback snapshot aligned with the restored config.
+                if previous.enabled:
+                    self._active_names = self._active_names | {previous.name}
+                else:
+                    self._active_names = self._active_names - {previous.name}
             except McpManagerError:
                 self._require_recovery(previous.name)
                 raise McpRecoveryRequiredError() from None

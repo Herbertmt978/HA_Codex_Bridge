@@ -65,6 +65,20 @@ describe("MCP elicitation card", () => {
     expect(Date.parse(content.when)).toBe(Date.parse("2026-09-23T20:30"));
   });
 
+  it("allows an explicitly empty required string when the schema permits it", () => {
+    const root = document.createElement("div");
+    const interaction = {
+      ...form,
+      display: {
+        ...form.display,
+        mcp_fields: [{ name: "answer", label: "Answer", kind: "string", required: true, min_length: 0 }],
+      },
+    };
+    renderMcpElicitation(root, interaction);
+    expect(root.querySelector("input").required).toBe(false);
+    expect(collectMcpContent(root, interaction)).toEqual({ answer: "" });
+  });
+
   it("rejects unsupported URLs, malformed email and selection counts before sending", () => {
     const root = document.createElement("div");
     const interaction = {

@@ -33010,7 +33010,7 @@ function renderMcpElicitation(container, interaction, { pending = false, draft =
         control = document.createElement("input");
         control.type = { email: "email", uri: "url", date: "date", "date-time": "datetime-local" }[field2.format] || (field2.kind === "integer" || field2.kind === "number" ? "number" : "text");
         control.value = saved === void 0 ? "" : String(saved);
-        control.required = Boolean(field2.required);
+        control.required = Boolean(field2.required && !(field2.kind === "string" && !field2.format && (!Number.isInteger(field2.min_length) || field2.min_length === 0)));
         if (field2.kind === "integer") control.step = "1";
         if (field2.kind === "number") control.step = "any";
         if (Number.isInteger(field2.min_length)) control.minLength = field2.min_length;
@@ -33071,6 +33071,10 @@ function collectMcpContent(container, interaction) {
       return null;
     }
     if (value === "" || Array.isArray(value) && !value.length && !field2.required) {
+      if (field2.required && value === "" && field2.kind === "string" && !field2.format && (!Number.isInteger(field2.min_length) || field2.min_length === 0)) {
+        content[field2.name] = "";
+        continue;
+      }
       if (field2.required) return null;
       continue;
     }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from threading import Event, Thread
 from types import SimpleNamespace
@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from codex_bridge_service.mcp_manager import (
     McpConflictError,
     McpManager,
+    McpServerDefinition,
     McpProtocolError,
     McpUnavailableError,
     McpValidationError,
@@ -453,6 +454,38 @@ def test_cas_write_failure_is_a_retryable_conflict_and_never_reloads() -> None:
         "config/batchWrite",
     ]
     assert gate.leases[0].released is True
+
+
+@pytest.mark.parametrize("initially_enabled", [False, True])
+def test_failed_config_write_restores_active_snapshot_after_rollback(
+    monkeypatch: pytest.MonkeyPatch, initially_enabled: bool,
+) -> None:
+    manager, _client, _gate = _manager()
+    previous = McpServerDefinition(
+        name="vendor", url="https://mcp.vendor.example/stream", enabled=initially_enabled,
+    )
+    updated = replace(previous, enabled=not initially_enabled)
+    manager._active_names = frozenset({"vendor"} if initially_enabled else set())
+    calls = 0
+
+    def write(**_kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise McpUnavailableError()
+
+    def read() -> tuple[dict[str, McpServerDefinition], str]:
+        manager._active_names = frozenset({"vendor"} if updated.enabled else set())
+        return {"vendor": updated}, "user-v2"
+
+    monkeypatch.setattr(manager, "_write_config_value", write)
+    monkeypatch.setattr(manager, "_read_definitions", read)
+    monkeypatch.setattr(manager, "_reload", lambda: None)
+
+    with pytest.raises(McpUnavailableError):
+        manager._apply_definition(previous, updated, "user-v1")
+    assert calls == 2
+    assert manager.is_active_server("vendor") is initially_enabled
 
 
 @pytest.mark.parametrize("state", ["turn", "queued", "auth"])

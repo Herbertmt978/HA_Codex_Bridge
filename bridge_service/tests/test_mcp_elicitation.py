@@ -55,6 +55,12 @@ def test_unsupported_or_credential_forms_decline(properties: dict[str, object]) 
     assert parse_elicitation(_form(properties)) is None
 
 
+def test_credential_request_in_form_message_is_declined() -> None:
+    params = _form({"value": {"type": "string"}})
+    params["message"] = "Enter your API key here"
+    assert parse_elicitation(params) is None
+
+
 def test_url_requires_validated_destination_and_does_not_put_token_in_display() -> None:
     params = {
         "serverName": "test_server", "threadId": "thread-1", "turnId": "turn-1",
@@ -74,6 +80,10 @@ def test_url_requires_validated_destination_and_does_not_put_token_in_display() 
     uppercase = parse_elicitation(params, url_validator=lambda value: value)
     assert uppercase is not None
     assert "private-value" not in uppercase.display.model_dump_json()
+    params["message"] = "Use code private-value to continue"
+    repeated = parse_elicitation(params, url_validator=lambda value: value)
+    assert repeated is not None
+    assert "private-value" not in repeated.display.model_dump_json()
     assert parse_elicitation(params, url_validator=lambda _value: (_ for _ in ()).throw(ValueError())) is None
 
 
