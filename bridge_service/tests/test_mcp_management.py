@@ -26,6 +26,7 @@ class NativeConfig:
         self.write_timeout = False
         self.masked = False
         self.status_failure = False
+        self.tools_error = None
         self.tools = {"echo": {"description": "Read a value", "annotations": {"readOnlyHint": True}},
                       "erase": {"description": "Delete a value", "annotations": {"destructiveHint": True}}}
         self.writes = []
@@ -74,7 +75,7 @@ class NativeConfig:
             tools = deepcopy(self.tools) if config.get("enabled", True) else {}
             if "enabled_tools" in config:
                 tools = {name: item for name, item in tools.items() if name in config["enabled_tools"]}
-            return {"data": [{"name": "vendor", "tools": tools, "resources": []}]}
+            return {"data": [{"name": "vendor", "tools": tools, "toolsError": self.tools_error, "resources": []}]}
         raise AssertionError(method)
 
 
@@ -305,6 +306,21 @@ def test_tool_catalogue_is_bounded_and_untrusted_text_is_data():
     assert all(tool["name"] != "tool_000" for tool in inventory["tools"])
     with pytest.raises(McpValidationError):
         manager.set_server_tools("vendor", enabled_tools=["echo", "echo"],
+            revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
+
+
+def test_tool_discovery_error_is_not_an_empty_successful_catalogue(tmp_path):
+    native = NativeConfig()
+    native.servers["vendor"]["enabled_tools"] = ["echo"]
+    native.tools_error = "private provider failure"
+    manager, _ = manager_for(native, tmp_path / "mcp-tool-discovery.pending")
+    assert manager.list_servers()[0]["status_unavailable"] is True
+    inventory = manager.list_server_tools("vendor")
+    assert inventory["catalogue_available"] is False
+    assert inventory["tools"] == [] and inventory["stale_tools"] == []
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    with pytest.raises(McpConflictError):
+        manager.set_server_tools("vendor", enabled_tools=[],
             revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
 
 

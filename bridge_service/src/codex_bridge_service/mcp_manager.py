@@ -300,6 +300,8 @@ class McpManager:
                     view.update(startup="paused", tool_count=0, resource_count=0)
                 elif status_unavailable:
                     view.update(startup="unknown", status_unavailable=True)
+                elif status.get("toolsError") is not None:
+                    view.update(tool_count=0, status_unavailable=True)
                 if definition.auth_mode != "none":
                     view["credential_configured"] = definition.credential_configured
                 title = _safe_display_text(info.get("title"), 160)
@@ -342,11 +344,14 @@ class McpManager:
             definitions, current_version = self._read_definitions()
             if definitions.get(normalized) != definition or current_version != version:
                 raise McpConflictError()
-            tools = _tool_catalogue(status)
+            catalogue_available = (definition.enabled and status is not None
+                                   and isinstance(status.get("tools"), Mapping)
+                                   and status.get("toolsError") is None)
+            tools = _tool_catalogue(status) if catalogue_available else []
             discovered = {tool["name"] for tool in tools}
             allowed = definition.enabled_tools
             catalogue_revision = self._catalogue_revision(normalized, tools)
-            if definition.enabled and status is not None and isinstance(status.get("tools"), Mapping):
+            if catalogue_available:
                 self._catalogue_snapshots[normalized] = (catalogue_revision, frozenset(discovered))
             else:
                 self._catalogue_snapshots.pop(normalized, None)
@@ -356,9 +361,9 @@ class McpManager:
                 "mode": "selected" if allowed is not None else "all",
                 "enabled_tools": list(allowed or ()),
                 "tools": tools,
-                "stale_tools": sorted(set(allowed or ()) - discovered) if status is not None else [],
-                "catalogue_available": definition.enabled and status is not None and isinstance(status.get("tools"), Mapping),
-                "catalogue_truncated": isinstance(status.get("tools"), Mapping) and len(status["tools"]) > _MAX_TOOLS if status is not None else False,
+                "stale_tools": sorted(set(allowed or ()) - discovered) if catalogue_available else [],
+                "catalogue_available": catalogue_available,
+                "catalogue_truncated": len(status["tools"]) > _MAX_TOOLS if catalogue_available else False,
                 "revision": self._revision(normalized, version),
                 "catalogue_revision": catalogue_revision,
             }
