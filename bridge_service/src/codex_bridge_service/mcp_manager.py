@@ -363,7 +363,7 @@ class McpManager:
                 "tools": tools,
                 "stale_tools": sorted(set(allowed or ()) - discovered) if catalogue_available else [],
                 "catalogue_available": catalogue_available,
-                "catalogue_truncated": len(status["tools"]) > _MAX_TOOLS if catalogue_available else False,
+                "catalogue_truncated": len(status["tools"]) > len(tools) if catalogue_available else False,
                 "revision": self._revision(normalized, version),
                 "catalogue_revision": catalogue_revision,
             }

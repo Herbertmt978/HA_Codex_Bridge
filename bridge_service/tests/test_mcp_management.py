@@ -308,6 +308,11 @@ def test_tool_catalogue_is_bounded_and_untrusted_text_is_data():
         manager.set_server_tools("vendor", enabled_tools=["echo", "echo"],
             revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
 
+    native.tools = {"safe": {}, "bad": {"name": "different"}}
+    incomplete = manager.list_server_tools("vendor")
+    assert incomplete["catalogue_truncated"] is True
+    assert [tool["name"] for tool in incomplete["tools"]] == ["safe"]
+
 
 def test_tool_discovery_error_is_not_an_empty_successful_catalogue(tmp_path):
     native = NativeConfig()
