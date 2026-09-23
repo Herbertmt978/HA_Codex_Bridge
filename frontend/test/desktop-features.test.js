@@ -7,6 +7,17 @@ import { getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, n
 describe("desktop feature surfaces", () => {
   beforeEach(() => document.body.replaceChildren());
 
+  it("centres a labelled loading indicator until the plugins catalogue is ready", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "plugins", state: { loading: true } });
+    expect(host.getAttribute("aria-busy")).toBe("true");
+    expect(host.querySelector('.desktop-feature-loading[role="status"]')?.textContent).toBe("Loading plugins…");
+    expect(host.querySelector('.desktop-feature-spinner[aria-hidden="true"]')).not.toBeNull();
+    renderDesktopFeatureSurface(host, { destination: "plugins", state: { loading: false, data: {} } });
+    expect(host.getAttribute("aria-busy")).toBe("false");
+    expect(host.querySelector(".desktop-feature-loading")).toBeNull();
+  });
+
   it("normalizes bridge list envelopes and bounds error text", () => {
     expect(normalizeDesktopList({ data: [{ id: "one" }] })).toEqual([{ id: "one" }]);
     expect(normalizeDesktopList({ results: "not-a-list" })).toEqual([]);

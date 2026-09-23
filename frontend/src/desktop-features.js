@@ -191,6 +191,17 @@ function renderEmpty(documentRef, message) {
   return empty;
 }
 
+function renderLoading(documentRef, destinationLabel) {
+  const loading = documentRef.createElement("div");
+  loading.className = "desktop-feature-loading";
+  loading.setAttribute("role", "status");
+  const spinner = documentRef.createElement("span");
+  spinner.className = "desktop-feature-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  loading.append(spinner, text(documentRef, "span", `Loading ${destinationLabel.toLowerCase()}…`, "desktop-feature-loading-label"));
+  return loading;
+}
+
 function renderTable(documentRef, rows, columns, actions = null) {
   if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
   const table = documentRef.createElement("table");
@@ -527,7 +538,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
   if (!(destination === "scheduled" && state.form)) container.append(heading);
-  if (state.loading) { container.setAttribute("aria-busy", "true"); container.append(renderEmpty(documentRef, "Loading…")); return; }
+  if (state.loading) { container.setAttribute("aria-busy", "true"); container.append(renderLoading(documentRef, destinationMeta.label)); return; }
   container.setAttribute("aria-busy", "false");
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }

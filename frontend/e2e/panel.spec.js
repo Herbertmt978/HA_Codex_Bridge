@@ -467,6 +467,41 @@ test("keeps sidebar hover and keyboard focus stable during HA updates", async ({
   expect(new Set(samples.map((sample) => sample.background)).size).toBe(1);
 });
 
+test("centres feature loading and blends nested project actions into the selected row", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await page.evaluate(() => {
+    const element = document.querySelector("codex-bridge-panel");
+    element._stopPolling();
+    element._activeDestination = "plugins";
+    element._desktopFeatures.plugins.loading = true;
+    element._render(true);
+  });
+  const surface = panel.locator(".desktop-feature-surface");
+  const loading = surface.locator(".desktop-feature-loading");
+  await expect(loading).toHaveText("Loading plugins…");
+  const surfaceBox = await surface.boundingBox();
+  const loadingBox = await loading.boundingBox();
+  expect(Math.abs(loadingBox.y + loadingBox.height / 2 - surfaceBox.y - surfaceBox.height / 2)).toBeLessThan(100);
+  await panel.screenshot({ path: testInfo.outputPath("plugins-loading-light.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(parseFloat(await loading.locator(".desktop-feature-spinner").evaluate((element) => getComputedStyle(element).animationDuration))).toBeLessThan(0.01);
+
+  await page.reload();
+  const more = panel.locator("#project-actions-toggle-prj_vba");
+  await expect(more).toBeVisible();
+  await panel.locator('[data-action="select-project"][data-project-id="prj_vba"]').click();
+  await more.click();
+  const menu = panel.locator("#project-secondary-actions-prj_vba");
+  await expect(menu).toBeVisible();
+  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await panel.screenshot({ path: testInfo.outputPath("project-actions-light.png") });
+  await panel.evaluate((element) => element.setAttribute("data-panel-theme", "dark"));
+  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await panel.screenshot({ path: testInfo.outputPath("project-actions-dark.png") });
+});
+
 test("keeps activity details and rebuilt navigation controls steady during HA updates", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
