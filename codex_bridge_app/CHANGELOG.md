@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## Unreleased
+
+- Gives panel errors a compact, consistent presentation with readable actions
+  across light and dark themes. Filled buttons keep their text contrast on hover,
+  and unchanged notices are no longer repeatedly announced to screen readers.
+
 ## 1.6.0
 
 - Lets an administrator describe a scheduled task in chat, review the proposed
