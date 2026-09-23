@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -91,6 +92,42 @@ def test_create_request_retries_are_durable_and_cannot_recreate_after_delete(tmp
     with pytest.raises(AutomationConflictError, match="removed"):
         restored.create(payload, now=NOW)
     assert restored.list() == []
+
+
+def test_deleted_create_request_retention_is_bounded_without_losing_live_ids(tmp_path):
+    store = AutomationStore(tmp_path, max_deleted_create_requests=4)
+    live_payload = _payload(client_request_id="a" * 32)
+    live = store.create(live_payload, now=NOW)
+    for minute, letter in enumerate("bcd", 1):
+        created = store.create(
+            _payload(client_request_id=letter * 32),
+            now=NOW + timedelta(minutes=minute),
+        )
+        paused = store.pause(created["automation_id"], expected_revision=1)
+        store.delete(
+            created["automation_id"],
+            expected_revision=paused["revision"],
+            now=NOW + timedelta(minutes=minute),
+        )
+
+    # Startup also compacts older checkpoints created with a higher limit.
+    restored = AutomationStore(tmp_path, max_deleted_create_requests=2)
+    requests = json.loads((tmp_path / "automations.json").read_text())["create_requests"]
+    assert set(requests) == {"a" * 32, "c" * 32, "d" * 32}
+    assert restored.create(live_payload, now=NOW)["automation_id"] == live["automation_id"]
+    with pytest.raises(AutomationConflictError, match="removed"):
+        restored.create(_payload(client_request_id="c" * 32), now=NOW)
+    newest = restored.create(
+        _payload(client_request_id="e" * 32), now=NOW + timedelta(minutes=4)
+    )
+    paused = restored.pause(newest["automation_id"], expected_revision=1)
+    restored.delete(
+        newest["automation_id"],
+        expected_revision=paused["revision"],
+        now=NOW + timedelta(minutes=4),
+    )
+    requests = json.loads((tmp_path / "automations.json").read_text())["create_requests"]
+    assert set(requests) == {"a" * 32, "d" * 32, "e" * 32}
 
 
 def test_cancelling_one_proposed_task_preserves_another(tmp_path):

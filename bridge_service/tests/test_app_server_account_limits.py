@@ -123,6 +123,26 @@ def test_limits_probe_projects_reset_credit_expiries_without_private_fields() ->
     assert "private detail" not in status.model_dump_json()
 
 
+def test_limits_probe_caps_available_credits_after_filtering_other_statuses() -> None:
+    response = _rate_limits(primary={"usedPercent": 100})
+    response["rateLimitResetCredits"] = {
+        "availableCount": 101,
+        "credits": [
+            {"id": f"used-{index}", "status": "redeemed"} for index in range(150)
+        ] + [
+            {"id": f"available-{index}", "status": "available"}
+            for index in range(101)
+        ],
+    }
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status is not None
+    assert status.reset_credits is not None
+    assert status.reset_credits["available_count"] == 101
+    assert len(status.reset_credits["credits"]) == 100
+    assert status.reset_credits["credits"][0]["id"] == "available-0"
+    assert status.reset_credits["credits"][-1]["id"] == "available-99"
+
+
 def test_limits_probe_uses_backend_usage_permission_for_exhausted_banner() -> None:
     response = _rate_limits(primary={"usedPercent": 99})
     response["ordinaryUsageAllowed"] = False

@@ -96,17 +96,21 @@ class AutomationStore:
         target_validator: Callable[[Mapping[str, Any]], None] | None = None,
         max_runs_per_automation: int = 200,
         max_total_runs: int = 5_000,
+        max_deleted_create_requests: int = 1_000,
         misfire_grace_seconds: int = 300,
     ) -> None:
         if max_runs_per_automation < 1 or max_total_runs < max_runs_per_automation:
             raise ValueError("automation history limits are invalid")
         if misfire_grace_seconds < 0:
             raise ValueError("misfire grace must not be negative")
+        if max_deleted_create_requests < 1:
+            raise ValueError("create request retention limit is invalid")
         self.root = Path(state_root)
         self.path = self.root / "automations.json"
         self._target_validator = target_validator
         self._max_runs_per_automation = max_runs_per_automation
         self._max_total_runs = max_total_runs
+        self._max_deleted_create_requests = max_deleted_create_requests
         self._misfire_grace = timedelta(seconds=misfire_grace_seconds)
         self._lock = RLock()
         self._state = self._load()
@@ -148,8 +152,10 @@ class AutomationStore:
                     automation["last_status"] = "interrupted_restart"
                     automation["updated_at"] = now
                 changed = True
+            pruned_requests = self._prune_create_requests()
             if changed:
                 self._prune_runs(protected_run_ids=protected_run_ids)
+            if changed or pruned_requests:
                 self._save()
 
     def create(
@@ -276,7 +282,9 @@ class AutomationStore:
             automation_id, True, expected_revision=expected_revision, now=now
         )
 
-    def delete(self, automation_id: str, *, expected_revision: int) -> None:
+    def delete(
+        self, automation_id: str, *, expected_revision: int, now: datetime | None = None
+    ) -> None:
         with self._lock:
             record = self._automation(automation_id)
             self._require_revision(record, expected_revision)
@@ -291,6 +299,10 @@ class AutomationStore:
             ):
                 raise AutomationConflictError("automation has an active run")
             del self._state["automations"][automation_id]
+            deleted_at = _iso(_now(now))
+            for request in self._state["create_requests"].values():
+                if request["automation_id"] == automation_id:
+                    request["deleted_at"] = deleted_at
             for run_id, run in list(self._state["runs"].items()):
                 if run["automation_id"] == automation_id:
                     self._state["runs"].pop(run_id)
@@ -746,6 +758,24 @@ class AutomationStore:
             for run_id, run in self._state["runs"].items()
         }
 
+    def _prune_create_requests(self) -> bool:
+        requests = self._state["create_requests"]
+        live = self._state["automations"]
+        deleted = [
+            (request_id, request)
+            for request_id, request in requests.items()
+            if request["automation_id"] not in live
+        ]
+        if len(deleted) <= self._max_deleted_create_requests:
+            return False
+        deleted.sort(
+            key=lambda item: (item[1].get("deleted_at") or "", item[0]),
+            reverse=True,
+        )
+        for request_id, _ in deleted[self._max_deleted_create_requests:]:
+            del requests[request_id]
+        return True
+
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
             return {"version": 1, "automations": {}, "runs": {}, "idempotency": {}, "create_requests": {}}
@@ -776,6 +806,7 @@ class AutomationStore:
         return payload
 
     def _save(self) -> None:
+        self._prune_create_requests()
         self.root.mkdir(parents=True, exist_ok=True)
         encoded = json.dumps(
             self._state, ensure_ascii=False, sort_keys=True, separators=(",", ":")

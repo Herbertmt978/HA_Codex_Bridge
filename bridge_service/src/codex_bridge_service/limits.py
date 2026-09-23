@@ -139,7 +139,7 @@ def _app_server_reset_credits(value: object) -> dict[str, Any] | None:
     if not isinstance(details, list):
         return {"available_count": count, "credits": None}
     credits = []
-    for item in details[:100]:
+    for item in details:
         if not isinstance(item, dict) or item.get("status") != "available":
             continue
         credit_id = item.get("id")
@@ -152,6 +152,8 @@ def _app_server_reset_credits(value: object) -> dict[str, Any] | None:
             "title": title[:160] if isinstance(title, str) else None,
             "expires_at": expires_at if type(expires_at) is int and expires_at > 0 else None,
         })
+        if len(credits) == 100:
+            break
     return {"available_count": count, "credits": credits}
 
 
