@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 
@@ -18,6 +18,9 @@ from .const import (
 from .event_broker import EventBroker
 from .automation_scheduler import AutomationScheduler
 
+if TYPE_CHECKING:
+    from .entity_coordinator import BridgeEntityCoordinator
+
 
 _CAPABILITY_REFRESH_INTERVAL_SECONDS = 5.0
 
@@ -32,6 +35,7 @@ class CodexBridgeRuntime:
     api_version: int
     event_broker: EventBroker | None = None
     automation_scheduler: AutomationScheduler | None = None
+    entity_coordinator: BridgeEntityCoordinator | None = None
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
     _capability_refresh_lock: asyncio.Lock = field(
@@ -110,6 +114,8 @@ class CodexBridgeRuntime:
         """Provide a lifecycle seam without taking ownership of HA's session."""
 
         try:
+            if self.entity_coordinator is not None:
+                await self.entity_coordinator.async_close()
             if self.automation_scheduler is not None:
                 await self.automation_scheduler.async_close()
             if self.event_broker is not None:

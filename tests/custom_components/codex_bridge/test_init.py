@@ -30,6 +30,14 @@ from custom_components.codex_bridge.const import (
 )
 from custom_components.codex_bridge.runtime import normalize_web_search_mode
 
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
+
+
+async def _setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # Direct lifecycle tests must hold the lock normally owned by HA's entry manager.
+    async with entry.setup_lock:
+        return await async_setup_entry(hass, entry)
+
 
 TOKEN = "a" * 48
 
@@ -74,9 +82,9 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
         ) as panel,
         patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
     ):
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
         assert await async_unload_entry(hass, entry)
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
 
     assert http_views.call_count == 1
     assert websocket.call_count == 1
@@ -117,7 +125,7 @@ async def test_external_entry_requires_the_explicit_legacy_capability(hass):
         patch("custom_components.codex_bridge.async_register_websocket_commands"),
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
     ):
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
 
     client.require_legacy_v0.assert_called_once_with()
     runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
@@ -142,7 +150,7 @@ async def test_supervisor_runtime_defaults_live_web_search_when_advertised(hass)
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
         patch("custom_components.codex_bridge.async_remove_panel"),
     ):
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
         runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
         assert runtime.web_search_mode == "live"
         assert runtime.web_search_payload() == {"web_search": "live"}
@@ -198,11 +206,12 @@ async def test_setup_refuses_a_second_active_connection(hass):
         patch("custom_components.codex_bridge.async_register_websocket_commands"),
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
     ):
-        assert await async_setup_entry(hass, first)
+        assert await _setup_entry(hass, first)
         with pytest.raises(ConfigEntryNotReady):
-            await async_setup_entry(hass, second)
+            await _setup_entry(hass, second)
 
     assert set(hass.data[DOMAIN][DATA_ENTRIES]) == {first.entry_id}
+    assert await async_unload_entry(hass, first)
 
 
 async def test_partial_setup_closes_runtime_and_preserves_permanent_registrations(hass):
@@ -222,14 +231,15 @@ async def test_partial_setup_closes_runtime_and_preserves_permanent_registration
         patch("custom_components.codex_bridge.async_register_panel", panel),
     ):
         with pytest.raises(RuntimeError, match="panel failed"):
-            await async_setup_entry(hass, entry)
+            await _setup_entry(hass, entry)
         assert not hass.data[DOMAIN][DATA_ENTRIES]
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
 
     assert http_views.call_count == 1
     assert websocket.call_count == 1
     assert panel.await_count == 2
     client.async_close.assert_awaited_once()
+    assert await async_unload_entry(hass, entry)
 
 
 async def test_v1_event_consumer_is_config_entry_owned_and_cancelled_on_unload(hass):
@@ -255,7 +265,7 @@ async def test_v1_event_consumer_is_config_entry_owned_and_cancelled_on_unload(h
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
         patch("custom_components.codex_bridge.async_remove_panel"),
     ):
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
         await asyncio.wait_for(started.wait(), 1)
         runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
         broker_task = runtime.event_broker._task
@@ -298,12 +308,12 @@ async def test_token_reload_closes_old_broker_before_starting_replacement(hass):
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
         patch("custom_components.codex_bridge.async_remove_panel"),
     ):
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
         assert await async_unload_entry(hass, entry)
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_BRIDGE_TOKEN: "b" * 48}
         )
-        assert await async_setup_entry(hass, entry)
+        assert await _setup_entry(hass, entry)
 
     assert client_class.call_args_list[0].args[2] == TOKEN
     assert client_class.call_args_list[1].args[2] == "b" * 48
@@ -326,4 +336,4 @@ async def test_setup_maps_safe_connection_failures(hass, error, expected):
     client.async_ready = AsyncMock(side_effect=error)
     with patch("custom_components.codex_bridge.BridgeApiClient", return_value=client):
         with pytest.raises(expected):
-            await async_setup_entry(hass, entry)
+            await _setup_entry(hass, entry)

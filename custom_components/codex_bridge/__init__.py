@@ -30,6 +30,7 @@ from .const import (
     CONF_WEB_SEARCH_MODE,
 )
 from .event_broker import EventBroker
+from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
@@ -37,7 +38,7 @@ from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
 from .runtime import CodexBridgeRuntime, normalize_web_search_mode
 from .websocket_api import async_register_websocket_commands
 
-PLATFORMS: list[Platform] = []
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -143,6 +144,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     else None
                 ),
             )
+        runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
         if not domain_data[DATA_VIEWS_REGISTERED]:
@@ -160,7 +162,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await runtime.event_broker.async_start()
         if runtime.automation_scheduler is not None:
             await runtime.automation_scheduler.async_start()
+        if runtime.entity_coordinator is not None:
+            await runtime.entity_coordinator.async_refresh()
+            await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except BaseException:
+        if runtime.entity_coordinator is not None:
+            await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
         await runtime.async_close()
         raise
@@ -173,6 +180,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not domain_data:
         return True
 
+    runtime = domain_data[DATA_ENTRIES].get(entry.entry_id)
+    if runtime is not None and runtime.entity_coordinator is not None:
+        if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+            return False
     runtime = domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
     if runtime is not None:
         await runtime.async_close()
