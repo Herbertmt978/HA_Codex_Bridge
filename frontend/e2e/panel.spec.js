@@ -511,7 +511,7 @@ test("updates chat ages without replacing their navigation controls", async ({ p
       thread.thread_id === "thr_vba_1" ? { ...thread, updated_at: timestamp } : thread);
     bridge._renderNavigationSections();
     const select = bridge.shadowRoot.querySelector('.chat-select[data-thread-id="thr_vba_1"]');
-    const before = select.title;
+    const before = select.dataset.tooltip;
     const originalNow = Date.now;
     try {
       Date.now = () => originalNow() + 2 * 60_000;
@@ -519,7 +519,7 @@ test("updates chat ages without replacing their navigation controls", async ({ p
     } finally {
       Date.now = originalNow;
     }
-    return { before, after: select.title, connected: select.isConnected };
+    return { before, after: select.dataset.tooltip, connected: select.isConnected };
   });
   expect(result.before).toContain("· now");
   expect(result.after).toContain("· 2m");
@@ -574,6 +574,164 @@ test("keeps a hovered activity popover steady as its content changes", async ({ 
   });
   await expect(command).toHaveAttribute("open", "");
   await expect(summary).toBeFocused();
+});
+
+test("keeps a failed-run popover open through a status refresh", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    window.__codexHarness.updateThread("thr_vba_1", { status: "error", last_error: "Codex usage limits have been reached." });
+    window.__codexHarness.emitThreadEvent("thr_vba_1", "run.failed", {
+      run_id: "failed-hover-refresh", error: "Codex usage limits have been reached.",
+    });
+  });
+  const panel = page.locator("codex-bridge-panel");
+  const label = panel.locator("#run-step-chip .run-step-label");
+  await label.hover();
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+  const result = await page.evaluate(async () => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip .run-step-label");
+    bridge._renderedRunActivityKey = "";
+    bridge._renderRunActivity();
+    await new Promise(requestAnimationFrame);
+    return {
+      sameLabel: bridge.shadowRoot.querySelector("#run-step-chip .run-step-label") === original,
+      hovered: original.matches(":hover"),
+      visible: getComputedStyle(bridge.shadowRoot.querySelector("#run-step-tooltip")).visibility === "visible",
+    };
+  });
+  expect(result).toEqual({ sameLabel: true, hovered: true, visible: true });
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+});
+
+test("keeps the hovered activity label mounted while its text changes", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+  const panel = page.locator("codex-bridge-panel");
+  const label = panel.locator("#run-step-chip .run-step-label");
+  await label.hover();
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+  const samples = await page.evaluate(async () => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip .run-step-label");
+    const results = [];
+    for (let index = 0; index < 5; index += 1) {
+      window.__codexHarness.emitThreadEvent("thr_vba_1", "item.started", {
+        run_id: "run_stage_tooltip", item_id: `hover-update-${index}`,
+        item_type: "commandExecution", command_preview: `echo ${index}`,
+      });
+      await new Promise(requestAnimationFrame);
+      const tooltip = bridge.shadowRoot.querySelector("#run-step-tooltip");
+      results.push({
+        sameLabel: bridge.shadowRoot.querySelector("#run-step-chip .run-step-label") === original,
+        hovered: original.matches(":hover"),
+        visible: getComputedStyle(tooltip).visibility === "visible",
+      });
+    }
+    return results;
+  });
+  expect(samples.every((sample) => sample.sameLabel && sample.hovered && sample.visible)).toBe(true);
+});
+
+test("keeps sidebar and menu tooltips readable at viewport edges", async ({ page }) => {
+  for (const width of [390, 1755]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    if (width === 1755) {
+      for (const label of ["View all workspace files", "Add source files"]) {
+        const action = panel.locator(`[data-tooltip="${label}"]`);
+        await action.hover();
+        const tooltip = panel.locator("#tooltip-layer");
+        await expect(tooltip).toHaveText(label);
+        const size = await tooltip.boundingBox();
+        expect(size.width, `${label} remains on one line`).toBeGreaterThan(100);
+      }
+    }
+    if (width === 1755) await panel.locator("#side-tab-files").click();
+    const targets = width === 390
+      ? ["#mobile-nav-toggle"]
+      : ["#workspace-archive-button", "#new-project-button"];
+    for (const selector of targets) {
+      const target = panel.locator(selector);
+      if (!(await target.isVisible())) continue;
+      await target.hover();
+      const geometry = await page.evaluate(() => {
+        const tooltip = document.querySelector("codex-bridge-panel").shadowRoot.querySelector("#tooltip-layer");
+        const rect = tooltip.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: rect.width, text: tooltip.textContent };
+      });
+      expect(geometry.left, `${selector} tooltip left at ${width}px`).toBeGreaterThanOrEqual(7);
+      expect(geometry.right, `${selector} tooltip right at ${width}px`).toBeLessThanOrEqual(width - 7);
+      expect(geometry.width, `${selector} tooltip width at ${width}px`).toBeGreaterThan(width === 390 ? 35 : 70);
+      expect(geometry.text.length).toBeGreaterThan(0);
+    }
+    if (width === 1755) {
+      await panel.locator("#app-menu-toggle").click();
+      const focus = panel.locator("#focus-mode-button");
+      await focus.hover();
+      await expect(panel.locator("#tooltip-layer")).toBeHidden();
+      await expect(focus).not.toHaveAttribute("title", /.+/);
+    }
+  }
+});
+
+test("keeps new-chat actions reachable in a short sidebar", async ({ page }) => {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 416 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await panel.locator("#new-direct-chat-button").click();
+    const create = panel.locator('#thread-form-panel [data-action="save-thread"]');
+    await expect(create).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const root = document.querySelector("codex-bridge-panel").shadowRoot;
+      const stack = root.querySelector(".forms-stack");
+      const button = root.querySelector('#thread-form-panel [data-action="save-thread"]');
+      const stackBox = stack.getBoundingClientRect();
+      const buttonBox = button.getBoundingClientRect();
+      return { scrollable: stack.scrollHeight > stack.clientHeight, buttonTop: buttonBox.top, buttonBottom: buttonBox.bottom, stackBottom: stackBox.bottom };
+    });
+    expect(layout.scrollable).toBe(true);
+    expect(layout.buttonTop).toBeGreaterThanOrEqual(0);
+    expect(layout.buttonBottom).toBeLessThanOrEqual(Math.min(416, layout.stackBottom) + 1);
+    await panel.locator("#thread-title-input").fill(`Short sidebar ${width}`);
+    await create.click();
+    await expect(panel.locator("#thread-form-panel")).not.toHaveClass(/visible/);
+  }
+});
+
+test("places every visible custom hover label inside the viewport", async ({ page }) => {
+  for (const width of [390, 1755]) {
+    await page.setViewportSize({ width, height: 600 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    const failures = await page.evaluate(() => {
+      const bridge = document.querySelector("codex-bridge-panel");
+      const root = bridge.shadowRoot;
+      const layer = root.querySelector("#tooltip-layer");
+      const failures = [];
+      const controls = [...root.querySelectorAll("[data-tooltip]")].filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && box.left >= 0 && box.right <= innerWidth
+          && box.top >= 0 && box.bottom <= innerHeight && getComputedStyle(node).visibility === "visible";
+      });
+      for (const control of controls) {
+        bridge._showTooltipForTarget(control);
+        const rect = layer.getBoundingClientRect();
+        if (rect.left < 7 || rect.right > innerWidth - 7 || rect.top < 7 || rect.bottom > innerHeight - 7 || control.hasAttribute("title")) {
+          failures.push({ label: control.dataset.tooltip, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, nativeTitle: control.hasAttribute("title") });
+        }
+      }
+      bridge._hideTooltip();
+      return failures;
+    });
+    expect(failures).toEqual([]);
+  }
 });
 
 test("keeps activity details open while the pointer crosses into the popover", async ({ page }) => {

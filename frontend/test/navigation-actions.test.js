@@ -86,14 +86,14 @@ describe("panel navigation actions", () => {
     expect(panel._callWS).toHaveBeenCalledWith("delete_project", { project_id: "project-delete" });
   });
 
-  it("shows a shared bounded tooltip on hover and keyboard focus while retaining label and title fallbacks", () => {
+  it("shows one bounded tooltip on hover and keyboard focus with an accessible label", () => {
     const panel = createPanel();
     const newChat = panel.shadowRoot.getElementById("new-direct-chat-button");
     const tooltip = panel.shadowRoot.getElementById("tooltip-layer");
 
     expect(newChat.dataset.tooltip).toBe("New chat");
     expect(newChat.getAttribute("aria-label")).toBe("New chat");
-    expect(newChat.getAttribute("title")).toBe("New chat");
+    expect(newChat.hasAttribute("title")).toBe(false);
     newChat.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     expect(tooltip.hidden).toBe(false);
     expect(tooltip.textContent).toBe("New chat");
@@ -110,6 +110,6 @@ describe("panel navigation actions", () => {
     const longLabel = "x".repeat(180);
     const bounded = panel._actionButton("icon-button", "test-tooltip", longLabel);
     expect(bounded.dataset.tooltip).toHaveLength(120);
-    expect(bounded.getAttribute("title")).toBe(longLabel);
+    expect(bounded.hasAttribute("title")).toBe(false);
   });
 });
