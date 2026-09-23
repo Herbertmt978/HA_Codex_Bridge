@@ -38,7 +38,9 @@ def _run_update_script(
         check=False,
         capture_output=True,
         text=True,
-        timeout=15,
+        # Hosted Windows workers can pause while PowerShell starts child tools.
+        # Keep a finite bound without treating runner contention as a failure.
+        timeout=45,
         env=environment,
     )
 
