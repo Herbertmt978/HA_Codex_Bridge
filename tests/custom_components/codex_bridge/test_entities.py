@@ -18,7 +18,8 @@ from custom_components.codex_bridge.const import (
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
 )
-from custom_components.codex_bridge.entity_coordinator import project_status
+from custom_components.codex_bridge.entity_coordinator import BridgeEntityCoordinator, project_status
+from custom_components.codex_bridge.event_broker import EventBroker
 from custom_components.codex_bridge.runtime import async_get_runtime
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
@@ -82,6 +83,49 @@ def test_auth_change_and_old_or_missing_usage_clear_values():
     assert projected.weekly_used is None
 
 
+async def test_event_during_refresh_triggers_follow_up(hass):
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    client = Mock()
+    client.async_get_status = AsyncMock(side_effect=lambda: _status(at=datetime.now(UTC)))
+
+    async def list_threads():
+        if client.async_list_threads.await_count == 1:
+            entered.set()
+            await release.wait()
+            return [{"status": "running"}]
+        return []
+
+    client.async_list_threads = AsyncMock(side_effect=list_threads)
+    broker = EventBroker(AsyncMock(), initial_cursor=0)
+    coordinator = BridgeEntityCoordinator(hass, Mock(client=client, event_broker=broker))
+
+    async def emit(cursor, event_type):
+        await broker._consume({
+            "events": [{
+                "cursor": cursor, "event_id": f"evt_{cursor}", "scope": "thread",
+                "thread_id": "thr_1", "event_type": event_type,
+                "payload": {}, "timestamp": NOW.isoformat(),
+            }],
+            "next_cursor": cursor, "minimum_cursor": 0,
+            "has_more": False, "heartbeat": False,
+        })
+
+    try:
+        await emit(1, "run.started")
+        await asyncio.wait_for(entered.wait(), 2)
+        await emit(2, "run.completed")
+        release.set()
+        await asyncio.wait_for(coordinator._refresh_task, 2)
+        assert client.async_list_threads.await_count == 2
+        assert coordinator.data.task_running is False
+        assert coordinator.data.last_outcome == "completed"
+    finally:
+        release.set()
+        await coordinator.async_close()
+        await broker.async_close()
+
+
 async def test_registry_ids_and_availability_survive_reload(hass):
     entry = MockConfigEntry(
         domain=DOMAIN, title="Codex Bridge App", source="hassio",
@@ -115,6 +159,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         patch("custom_components.codex_bridge.async_register_websocket_commands"),
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
         patch("custom_components.codex_bridge.async_remove_panel"),
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
     ):
         assert await _setup_entry(hass, entry)
         registry = er.async_get(hass)

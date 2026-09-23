@@ -129,6 +129,7 @@ class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
         self._runtime = runtime
         self._last_outcome: str | None = None
         self._refresh_task: asyncio.Task[None] | None = None
+        self._refresh_pending = False
         broker: EventBroker | None = runtime.event_broker
         self._remove_broker_listener = broker.add_listener(self._on_event) if broker else None
 
@@ -147,10 +148,18 @@ class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
                     self.async_set_updated_data(replace(self.data, last_outcome=None))
             elif not event.event_type.startswith("run."):
                 return
+        self._refresh_pending = True
         if self._refresh_task is None or self._refresh_task.done():
             self._refresh_task = self.hass.async_create_task(
-                self.async_request_refresh(), "codex_bridge_entity_refresh"
+                self._async_refresh_from_events(), "codex_bridge_entity_refresh"
             )
+
+    async def _async_refresh_from_events(self) -> None:
+        # Coalesce events while a request is in flight, then read the latest state.
+        # The default request debouncer can defer the follow-up for ten seconds.
+        while self._refresh_pending:
+            self._refresh_pending = False
+            await self.async_refresh()
 
     async def _async_update_data(self) -> EntitySnapshot:
         try:
@@ -168,6 +177,7 @@ class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
         if self._remove_broker_listener is not None:
             self._remove_broker_listener()
             self._remove_broker_listener = None
+        self._refresh_pending = False
         if self._refresh_task is not None:
             self._refresh_task.cancel()
             try:
