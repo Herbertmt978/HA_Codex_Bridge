@@ -1385,3 +1385,25 @@ async def test_mcp_tool_policy_requires_paired_capability(bridge_server_factory,
                 await client.async_add_mcp({"name": "scoped", "url": "https://tools.example.com/mcp",
                                             "require_tool_selection": True})
     assert observed == ([('POST', '/mcp/servers/secured/tools/discover'), ('PUT', '/mcp/servers/secured/tools')] if supported else [])
+
+
+async def test_mcp_tool_catalogue_accepts_the_bounded_large_response(bridge_server_factory):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"]
+    catalogue = {"server": "secured", "tools": [
+        {"name": f"tool_{index}", "description": "🧰" * 512}
+        for index in range(512)
+    ]}
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        return web.json_response(catalogue)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        result = await client.async_list_mcp_tools("secured")
+    assert len(result["tools"]) == 512
+    assert result["tools"][-1]["name"] == "tool_511"

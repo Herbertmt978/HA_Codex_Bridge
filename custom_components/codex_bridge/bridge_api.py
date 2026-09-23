@@ -1487,8 +1487,10 @@ class BridgeApiClient:
     async def async_list_mcp_tools(self, name: str) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_tool_permissions_v1")
+        # The Bridge caps at 512 tools and 512 description characters each;
+        # non-BMP characters can expand to 12 bytes in escaped JSON.
         return await self._async_json("POST", f"/mcp/servers/{_path_segment(name)}/tools/discover",
-                                      maximum_bytes=512 * 1024)
+                                      maximum_bytes=4 * 1024 * 1024)
 
     async def async_set_mcp_tools(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
