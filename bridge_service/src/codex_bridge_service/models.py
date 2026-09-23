@@ -284,6 +284,7 @@ class LimitsStatusRecord(BaseModel):
     primary: LimitsWindowRecord | None = None
     secondary: LimitsWindowRecord | None = None
     credits: dict[str, Any] | None = None
+    reset_credits: dict[str, Any] | None = None
     plan_type: str | None = None
     updated_at: str | None = None
 
@@ -491,6 +492,7 @@ class BridgeReadinessRecord(BaseModel):
             "interactions_v2",
             "automations_v1",
             "automation_proposals_v1",
+            "reset_credits_v1",
             "mcp_admin_v1",
             "mcp_local_v1",
             "mcp_credentials_v1",

@@ -51,6 +51,7 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_server_not_found": "The MCP server no longer exists",
     "mcp_unavailable": "MCP configuration is temporarily unavailable",
     "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
+    "reset_credit_unavailable": "That reset credit is unavailable. Refresh usage and check again.",
 }
 
 
@@ -58,6 +59,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     commands = (
         ws_get_config,
         ws_get_status,
+        ws_consume_reset_credit,
         ws_get_event_status,
         ws_get_auth_status,
         ws_start_auth_login,
@@ -220,6 +222,21 @@ async def ws_get_status(
         return status
 
     await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/consume_reset_credit",
+    vol.Required("credit_id"): vol.Match(r"^[\x21-\x7e]{1,256}$"),
+    vol.Required("idempotency_key"): vol.Match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
+})
+@websocket_api.async_response
+async def ws_consume_reset_credit(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_consume_reset_credit(
+            msg["credit_id"], msg["idempotency_key"],
+        ),
+    )
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_event_status"})

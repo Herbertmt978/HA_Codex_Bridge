@@ -48,8 +48,8 @@ are independent.
 
 ## Appearance
 
-Chat responses use plain text on the conversation background, with Copy below
-each completed response. Messages have no avatars or repeated assistant headings;
+Chat responses use plain text on the conversation background. Code blocks have
+their own copy control; ordinary messages do not. Messages have no avatars or repeated assistant headings;
 screen readers still identify who sent each message. A partial response keeps its
 label if a run stops before finishing. Each run has one completion indicator.
 Select it to open run details when steps or activity history are available.

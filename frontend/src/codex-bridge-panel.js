@@ -1807,6 +1807,13 @@ template.innerHTML = `
       align-items: start;
     }
 
+    .message-time {
+      justify-self: center;
+      color: var(--muted-color);
+      font-size: var(--font-caption-size);
+      line-height: 1.4;
+    }
+
     .message.user .bubble {
       justify-self: end;
     }
@@ -3405,6 +3412,45 @@ template.innerHTML = `
       line-height: 1.45;
     }
 
+    .run-elapsed {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 5px 0 9px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--muted-color);
+      font-size: var(--font-control-size);
+    }
+
+    .run-elapsed-dots {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: 50%;
+      background: var(--surface-bg);
+    }
+
+    .run-elapsed-dots span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: codex-dot 1.2s ease-in-out infinite;
+    }
+
+    .run-elapsed-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .run-elapsed-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes codex-dot {
+      0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-3px); }
+    }
+
     .run-activity-copy > span:last-child {
       min-width: 0;
       overflow-wrap: anywhere;
@@ -4318,6 +4364,27 @@ template.innerHTML = `
       gap: 12px;
     }
 
+    .reset-credit-section {
+      display: grid;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .reset-credit-section h3 { margin: 0; font-size: var(--font-body-size); }
+
+    .reset-credit-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+    }
+
+    .reset-credit-row > .usage-note { width: 100%; margin: 0; }
+
     .usage-limit-grid {
       display: grid;
       gap: 10px;
@@ -5216,6 +5283,7 @@ class CodexBridgePanel extends HTMLElement {
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
+    this._activityClockTimer = null;
     this._pollTick = 0;
     this._pollActive = false;
     this._pollGeneration = 0;
@@ -5238,6 +5306,9 @@ class CodexBridgePanel extends HTMLElement {
     this._systemReconnectTimer = null;
     this._systemReconnectAttempt = 0;
     this._confirmSignOut = false;
+    this._pendingResetCredit = null;
+    this._resetCreditBusy = false;
+    this._resetCreditNotice = "";
     this._authActionPending = false;
     this._authPollTimer = null;
     this._authPollInFlight = false;
@@ -5322,6 +5393,8 @@ class CodexBridgePanel extends HTMLElement {
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     this._stopPolling();
+    window.clearTimeout(this._activityClockTimer);
+    this._activityClockTimer = null;
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
     this._clearArtifactRefreshRetry();
@@ -5691,6 +5764,21 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "open-usage":
         this._showSideTab("usage", actionTarget);
+        break;
+      case "select-reset-credit":
+        this._pendingResetCredit = {
+          id: actionTarget.dataset.creditId,
+          key: crypto.randomUUID(),
+        };
+        this._resetCreditNotice = "";
+        this._renderUsagePanel();
+        break;
+      case "cancel-reset-credit":
+        this._pendingResetCredit = null;
+        this._renderUsagePanel();
+        break;
+      case "confirm-reset-credit":
+        void this._consumeResetCredit();
         break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
@@ -8601,6 +8689,7 @@ class CodexBridgePanel extends HTMLElement {
         key: `limits:${message}`,
         tone: "error",
         message,
+        actions: [{ action: "open-usage", label: "View usage and resets", primary: true }],
       };
     }
     if (this._activeThread?.last_error) {
@@ -8713,11 +8802,13 @@ class CodexBridgePanel extends HTMLElement {
     const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
     const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
     const hasStepDetails = Boolean(activity.step || history.length || files.changed);
-    const showDetails = Boolean(hasStepDetails || activity.busy || activity.attentionMessage);
+    const showDetails = Boolean(hasStepDetails || activity.attentionMessage);
     const showActivityCopy = Boolean(
       activity.action
-      && (activity.terminal || activity.busy)
+      && activity.terminal
     );
+    window.clearTimeout(this._activityClockTimer);
+    this._activityClockTimer = null;
     if (!this._activeThread || (!showActivityCopy && !hasStepDetails && !activity.busy)) {
       this._runActivityDetailsOpen = false;
       region.hidden = true;
@@ -8727,6 +8818,33 @@ class CodexBridgePanel extends HTMLElement {
 
     region.hidden = false;
     region.setAttribute("aria-busy", String(activity.busy));
+    if (activity.busy) {
+      const started = this._events.slice().reverse().find((event) => event.event_type === "run.started"
+        && (!activity.runId || event.payload?.run_id === activity.runId));
+      const startedMs = Date.parse(started?.timestamp || "");
+      const elapsed = document.createElement("div");
+      elapsed.className = "run-elapsed";
+      const dots = this._textElement("span", "run-elapsed-dots", "");
+      dots.setAttribute("aria-hidden", "true");
+      for (let index = 0; index < 3; index += 1) dots.append(this._textElement("span", "", ""));
+      const label = this._textElement("span", "run-elapsed-label", "Working");
+      elapsed.append(dots, label);
+      region.append(elapsed);
+      const tick = () => {
+        if (!this.isConnected || !label.isConnected || !this._runActivityForThread().busy) return;
+        if (Number.isFinite(startedMs)) {
+          const seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+          const minutes = Math.floor(seconds / 60);
+          label.textContent = `Working for ${minutes ? `${minutes}m ` : ""}${seconds % 60}s`;
+        }
+        this._activityClockTimer = window.setTimeout(tick, 1000);
+      };
+      if (Number.isFinite(startedMs)) {
+        const seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+        label.textContent = `Working for ${Math.floor(seconds / 60) ? `${Math.floor(seconds / 60)}m ` : ""}${seconds % 60}s`;
+      }
+      this._activityClockTimer = window.setTimeout(tick, 1000);
+    }
     if (showActivityCopy && !showDetails) {
       const copy = document.createElement("div");
       copy.className = "run-activity-copy";
@@ -8762,10 +8880,10 @@ class CodexBridgePanel extends HTMLElement {
       const stepState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
       stepIndicator.className = `step-spinner${stepState ? ` ${stepState}` : ""}`;
       stepIndicator.setAttribute("aria-hidden", "true");
-      chip.append(stepIndicator);
+      if (!activity.busy) chip.append(stepIndicator);
 
       const stepText = activity.busy
-          ? activity.liveAction || "Working"
+          ? activity.liveAction === "Working" ? "Activity details" : activity.liveAction || "Activity details"
           : activity.state === "failed"
             ? "Run failed"
             : activity.state === "interrupted"
@@ -9023,7 +9141,8 @@ class CodexBridgePanel extends HTMLElement {
         "user",
         payload.text,
         event.sequence,
-        payload.queued ? "Queued steer" : ""
+        payload.queued ? "Queued steer" : "",
+        event.timestamp
       );
     }
     if (event.event_type === "message.completed") {
@@ -9187,12 +9306,29 @@ class CodexBridgePanel extends HTMLElement {
     return article;
   }
 
-  _renderMessage(role, text, key, label = "") {
+  _renderMessage(role, text, key, label = "", timestamp = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
 
     article.setAttribute("aria-label", role === "user" ? "Your message" : "Assistant response");
+
+    if (role === "user" && timestamp) {
+      const date = new Date(timestamp);
+      if (Number.isFinite(date.getTime())) {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const sameDay = (left, right) => left.getFullYear() === right.getFullYear()
+          && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+        const dateLabel = sameDay(date, today) ? "Today" : sameDay(date, yesterday) ? "Yesterday"
+          : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(date);
+        const timeLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+        const time = this._textElement("time", "message-time", `${dateLabel} ${timeLabel}`);
+        time.dateTime = date.toISOString();
+        article.append(time);
+      }
+    }
 
     const bubble = document.createElement("div");
     bubble.className = "bubble";
@@ -10276,7 +10412,84 @@ class CodexBridgePanel extends HTMLElement {
     ], "context-row");
     const context = this._textElement("p", "usage-note context-usage-summary", contextUsage(this._activeThread?.context_usage).label);
     const contextNote = this._textElement("p", "usage-note", "Last reported context for this chat. Codex may compact earlier conversation as the context fills; this is separate from your account limits.");
-    container.replaceChildren(context, contextNote, grid, summary, details);
+    container.replaceChildren(context, contextNote, grid, summary);
+    if (this._config?.capabilities?.includes("reset_credits_v1") && this._authViewModel().signedIn) {
+      const section = document.createElement("section");
+      section.className = "reset-credit-section";
+      section.append(this._textElement("h3", "", "Usage resets"));
+      const available = limits?.reset_credits?.available_count;
+      section.append(this._textElement("p", "usage-note", available == null
+        ? "Reset credit availability is unavailable."
+        : `${available} reset credit${available === 1 ? "" : "s"} available.`));
+      const credits = limits?.reset_credits?.credits;
+      const visibleCredits = Array.isArray(credits) ? credits.slice() : [];
+      if (this._pendingResetCredit && !visibleCredits.some((credit) => credit.id === this._pendingResetCredit.id)) {
+        visibleCredits.push({ id: this._pendingResetCredit.id, title: "Previous reset attempt" });
+      }
+      if (!Array.isArray(credits) && available > 0) {
+        section.append(this._textElement("p", "usage-note", "The account reported a count but did not provide individual credit details. Refresh usage to check again."));
+      }
+      for (const credit of visibleCredits) {
+        const row = document.createElement("div");
+        row.className = "reset-credit-row";
+        row.append(this._textElement("span", "", credit.title || "Codex usage reset"));
+        row.append(this._textElement("span", "usage-note", credit.expires_at
+          ? `Expires ${this._formatCreditExpiry(credit.expires_at)}` : "No expiry reported"));
+        const selected = this._pendingResetCredit?.id === credit.id;
+        const button = this._actionButton("text-button", selected ? "confirm-reset-credit" : "select-reset-credit", selected ? "Confirm use of this reset credit" : "Use reset");
+        if (!selected) button.dataset.creditId = credit.id;
+        button.textContent = selected ? "Confirm use" : "Use reset";
+        button.disabled = this._resetCreditBusy;
+        row.append(button);
+        if (selected) {
+          row.append(this._textElement("p", "usage-note", "This uses one reset credit for your current Codex account. It cannot be undone."));
+          const cancel = this._actionButton("text-button", "cancel-reset-credit", "Cancel reset");
+          cancel.textContent = "Cancel";
+          cancel.disabled = this._resetCreditBusy;
+          row.append(cancel);
+        }
+        section.append(row);
+      }
+      if (this._resetCreditNotice) {
+        const notice = this._textElement("p", "usage-note", this._resetCreditNotice);
+        notice.setAttribute("role", "status");
+        section.append(notice);
+      }
+      container.append(section);
+    }
+    container.append(details);
+  }
+
+  async _consumeResetCredit() {
+    if (this._resetCreditBusy || !this._pendingResetCredit || !this._config?.capabilities?.includes("reset_credits_v1")) return;
+    this._resetCreditBusy = true;
+    this._renderUsagePanel();
+    try {
+      const result = await this._callWS("consume_reset_credit", {
+        credit_id: this._pendingResetCredit.id,
+        idempotency_key: this._pendingResetCredit.key,
+      });
+      this._resetCreditNotice = {
+        reset: "Reset applied to eligible Codex usage windows.",
+        alreadyRedeemed: "This reset was already applied.",
+        nothingToReset: "No current usage window can be reset.",
+        noCredit: "This reset credit is no longer available.",
+      }[result?.outcome] || "Reset result unavailable. Refresh usage before trying again.";
+      if (["reset", "alreadyRedeemed", "nothingToReset", "noCredit"].includes(result?.outcome)) {
+        this._pendingResetCredit = null;
+        try {
+          this._mergeStatus(await this._callWS("get_status"));
+        } catch {
+          this._resetCreditNotice += " Refresh usage to see the latest balance.";
+        }
+      }
+    } catch {
+      this._resetCreditNotice = "Could not confirm the reset. Retrying will use the same attempt; check usage before trying again.";
+    } finally {
+      this._resetCreditBusy = false;
+      this._renderUsagePanel();
+      this._renderStatusBanner();
+    }
   }
 
   _renderSideTabs() {
@@ -12924,6 +13137,16 @@ class CodexBridgePanel extends HTMLElement {
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
+      }).format(new Date(epochSeconds * 1000));
+    } catch {
+      return "unknown";
+    }
+  }
+
+  _formatCreditExpiry(epochSeconds) {
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
       }).format(new Date(epochSeconds * 1000));
     } catch {
       return "unknown";

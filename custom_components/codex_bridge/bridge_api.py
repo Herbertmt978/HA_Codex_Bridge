@@ -577,6 +577,15 @@ class BridgeApiClient:
     async def async_get_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/status")
 
+    async def async_consume_reset_credit(
+        self, credit_id: str, idempotency_key: str,
+    ) -> dict[str, Any]:
+        self.require_capability("reset_credits_v1")
+        return await self._async_json(
+            "POST", "/account/reset-credits/consume",
+            json_body={"credit_id": credit_id, "idempotency_key": idempotency_key},
+        )
+
     async def async_get_auth_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/auth/status")
 

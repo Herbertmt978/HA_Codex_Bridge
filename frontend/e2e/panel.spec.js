@@ -583,7 +583,7 @@ test("gives desktop chats wider space and one working control with code-only cop
       ["item.completed", { run_id: "layout-run", item_id: "image-layout-1", item_type: "imageView" }],
       ["item.completed", { run_id: "layout-run", item_id: "image-layout-2", item_type: "imageView" }],
       ["message.completed", { text: "Use this expression:\n```javascript\nconst answer = 'hello';\n```\nKeep the explanation readable." }],
-    ].map(([event_type, payload], index) => ({ event_id: `layout-${index}`, thread_id: node._selectedThreadId, sequence: 21000 + index, event_type, payload }));
+    ].map(([event_type, payload], index) => ({ event_id: `layout-${index}`, thread_id: node._selectedThreadId, sequence: 21000 + index, event_type, payload, timestamp: new Date(Date.now() - 90000).toISOString() }));
     node._forceMessageRebuild = true;
     node._render(true);
     node._renderInteractions();
@@ -592,7 +592,10 @@ test("gives desktop chats wider space and one working control with code-only cop
   expect(columns[0]).toBeCloseTo(330 * 0.85, 1);
   expect(columns[2]).toBeCloseTo(372 * 0.85, 1);
   await expect(panel.locator("#run-activity .run-activity-copy, #run-activity .run-step-chip")).toHaveCount(1);
-  await expect(panel.locator("#run-activity .activity-spinner, #run-activity .step-spinner")).toHaveCount(1);
+  await expect(panel.locator("#run-activity .activity-spinner, #run-activity .step-spinner")).toHaveCount(0);
+  await expect(panel.locator("#run-activity .run-elapsed-dots span")).toHaveCount(3);
+  await expect(panel.locator("#run-activity .run-elapsed-label")).toContainText("Working for 1m");
+  await expect(panel.locator(".message.user time")).toContainText(/Today|Yesterday/);
   await expect(panel.locator("#run-step-chip")).toContainText("Running a command");
   await expect(panel.locator("#run-step-chip")).toContainText("Viewed 2 images");
   await panel.locator("#run-step-chip").click();
@@ -612,6 +615,39 @@ test("gives desktop chats wider space and one working control with code-only cop
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
     expect(accessibility.violations).toEqual([]);
   }
+});
+
+test("shows exhausted usage and confirms a reset credit without spending it", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
+    panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "reset_credits_v1"] };
+    const status = {
+      auth: { state: "ok", auth_required: false },
+      account: { available: true, auth_mode: "chatgpt", plan_type: "pro" },
+      limits: { available: true, blocked: true, reset_credits: {
+        available_count: 1,
+        credits: [{ id: "test-credit", title: "Codex reset", expires_at: 1_900_000_000 }],
+      } },
+    };
+    window.__codexHarness.setStatus(status);
+    panel._status = { ...panel._status, ...status };
+    panel._render(true);
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#status-banner")).toContainText("Codex usage limits have been reached");
+  await panel.getByRole("button", { name: "View usage and resets" }).click();
+  await expect(panel.locator("#side-panel-usage")).toBeVisible();
+  await expect(panel.locator(".reset-credit-section")).toContainText("1 reset credit available");
+  await panel.getByRole("button", { name: "Use reset" }).click();
+  await expect(panel.locator(".reset-credit-section")).toContainText("cannot be undone");
+  await panel.getByRole("button", { name: "Cancel reset" }).click();
+  await expect(panel.getByRole("button", { name: "Use reset" })).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
@@ -1246,7 +1282,7 @@ test("keeps run-stage details within the mobile viewport and disables motion whe
     const root = document.querySelector("codex-bridge-panel")?.shadowRoot;
     const tooltip = root?.querySelector("#run-step-tooltip");
     const shell = root?.querySelector(".shell");
-    const spinner = root?.querySelector(".step-spinner");
+    const activityDot = root?.querySelector(".run-elapsed-dots span");
     const tooltipStyle = tooltip ? getComputedStyle(tooltip) : null;
     const chipStyle = root?.querySelector("#run-step-chip") ? getComputedStyle(root.querySelector("#run-step-chip")) : null;
     const tooltipBox = tooltip?.getBoundingClientRect();
@@ -1257,7 +1293,7 @@ test("keeps run-stage details within the mobile viewport and disables motion whe
       shellFits: Boolean(shell && shell.scrollWidth <= shell.clientWidth + 1),
       tooltipTransition: tooltipStyle?.transitionDuration || "",
       tooltipAnimation: tooltipStyle?.animationName || "",
-      spinnerAnimation: spinner ? getComputedStyle(spinner).animationName : "",
+      activityDotDuration: activityDot ? getComputedStyle(activityDot).animationDuration : "",
       chipTransition: chipStyle?.transitionDuration || "",
       chipHeight: root?.querySelector("#run-step-chip")?.getBoundingClientRect().height || 0,
     };
@@ -1267,7 +1303,7 @@ test("keeps run-stage details within the mobile viewport and disables motion whe
   expect(mobileLayout.shellFits).toBe(true);
   expect(mobileLayout.tooltipTransition).toMatch(/0\.01ms|1e-05s|0s/);
   expect(mobileLayout.chipTransition).toMatch(/0\.01ms|1e-05s|0s/);
-  expect(mobileLayout.spinnerAnimation).toBe("none");
+  expect(mobileLayout.activityDotDuration).toMatch(/0\.01ms|1e-05s|0s/);
   expect(mobileLayout.chipHeight).toBeGreaterThanOrEqual(44);
 });
 

@@ -641,6 +641,9 @@
       window.__codexHarness = {
         emitAuthEvent,
         emitThreadEvent,
+        setStatus(updates) {
+          Object.assign(statusPayload, clone(updates));
+        },
         updateThread(threadId, updates) {
           const thread = threadMap[threadId];
           if (!thread || !updates || typeof updates !== "object") return null;
