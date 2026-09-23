@@ -356,6 +356,7 @@ test("reviews a chat message as a schedule before any task is created", async ({
     bridge._render(true);
   });
   await panel.locator("#prompt-input").fill("On 24 September 2026 at 09:00, prepare a report");
+  await panel.getByRole("button", { name: "Add to chat" }).click();
   await panel.getByRole("button", { name: "Schedule this message" }).click();
   await expect(panel.locator('[data-desktop-field="description"]')).toHaveValue("On 24 September 2026 at 09:00, prepare a report");
   await panel.getByRole("button", { name: "Review timing" }).click();
@@ -2364,6 +2365,88 @@ test("keeps the mobile composer focused and folds diagnostics behind an accessib
   const expandedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
   expect(collapsedHeight).toBeLessThan(844 * 0.34);
   expect(expandedHeight - collapsedHeight).toBeGreaterThan(100);
+});
+
+test("fills the available viewport below the Home Assistant header at desktop and phone sizes", async ({ page }) => {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 700 }, { width: 390, height: 520 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await page.evaluate(() => {
+      document.body.style.height = "70vh";
+      document.body.style.paddingTop = "56px";
+      document.querySelector("codex-bridge-panel")._syncViewportHeight();
+    });
+    const layout = await panel.evaluate((element) => {
+      const shell = element.shadowRoot.querySelector(".shell").getBoundingClientRect();
+      const composer = element.shadowRoot.querySelector(".composer-shell").getBoundingClientRect();
+      return {
+        top: shell.top,
+        bottom: shell.bottom,
+        composerBottom: composer.bottom,
+        viewport: window.innerHeight,
+        horizontalOverflow: element.shadowRoot.querySelector(".main-pane").scrollWidth > element.shadowRoot.querySelector(".main-pane").clientWidth + 1,
+      };
+    });
+    expect(layout.top).toBeCloseTo(56, 0);
+    expect(layout.bottom).toBeCloseTo(layout.viewport, 0);
+    expect(layout.composerBottom).toBeLessThanOrEqual(layout.viewport);
+    expect(layout.horizontalOverflow).toBe(false);
+  }
+  await page.setViewportSize({ width: 390, height: 620 });
+  await expect.poll(() => page.locator("codex-bridge-panel").evaluate((element) =>
+    Math.round(element.shadowRoot.querySelector(".shell").getBoundingClientRect().bottom))).toBe(620);
+});
+
+test("offers only supported Add actions and keeps uploads and navigation usable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const toggle = panel.locator("#add-menu-button");
+  const menu = panel.locator("#add-menu");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(menu).toBeVisible();
+  await expect(menu.locator("#upload-file-button")).toBeVisible();
+  await expect(menu.locator("#upload-folder-button")).toBeVisible();
+  await expect(menu.locator("#schedule-message-button")).toBeHidden();
+  await expect(menu.locator("#add-plugins-button")).toBeHidden();
+  await expect(menu.getByText("Attach Google Chrome")).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).include("codex-bridge-panel").analyze()).violations).toEqual([]);
+  const chooserPromise = page.waitForEvent("filechooser");
+  await menu.locator("#upload-file-button").click();
+  await chooserPromise;
+  await expect(menu).toBeHidden();
+  await toggle.click();
+  const folderChooserPromise = page.waitForEvent("filechooser");
+  await menu.locator("#upload-folder-button").click();
+  await folderChooserPromise;
+  await expect(menu).toBeHidden();
+  await toggle.click();
+  await page.keyboard.press("Escape");
+  await expect(toggle).toBeFocused();
+  await expect(menu).toBeHidden();
+
+  await panel.evaluate((element) => {
+    element._config.capabilities = ["automation_proposals_v1", "plugins_v1"];
+    element._renderComposerState(element._activeThread);
+  });
+  await toggle.click();
+  await expect(menu.locator("#schedule-message-button")).toBeVisible();
+  await expect(menu.locator("#add-plugins-button")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 320 });
+  await expect.poll(() => panel.evaluate((element) => Math.round(element.shadowRoot.querySelector(".shell").getBoundingClientRect().bottom))).toBe(320);
+  const menuBounds = await menu.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return { top: box.top, bottom: box.bottom, viewport: window.innerHeight };
+  });
+  expect(menuBounds.top).toBeGreaterThanOrEqual(0);
+  expect(menuBounds.bottom).toBeLessThanOrEqual(menuBounds.viewport);
+  await menu.locator("#add-plugins-button").click();
+  await expect(panel.locator("#desktop-feature-surface")).toContainText("Plugins");
+  await expect(menu).toBeHidden();
 });
 
 test("passes axe checks with live decisions at desktop and mobile widths", async ({ page }, testInfo) => {

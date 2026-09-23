@@ -34565,6 +34565,7 @@ template.innerHTML = `
       --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
       height: 100%;
+      min-height: 0;
       color: var(--text-color);
       font-family: var(--font-ui);
       font-size: var(--font-body-size);
@@ -34726,7 +34727,7 @@ template.innerHTML = `
       grid-template-rows: minmax(0, 1fr);
       gap: 12px;
       height: 100%;
-      max-height: 100vh;
+      max-height: none;
       min-height: 0;
       overflow: hidden;
       padding: 12px;
@@ -38318,6 +38319,52 @@ template.innerHTML = `
       gap: 4px;
     }
 
+    .add-menu {
+      position: absolute;
+      z-index: 5;
+      left: 0;
+      bottom: calc(100% + 8px);
+      display: grid;
+      width: min(360px, 100%);
+      max-height: min(60dvh, 420px);
+      gap: 2px;
+      padding: 8px;
+      overflow: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: var(--surface-bg);
+      box-shadow: 0 12px 36px color-mix(in srgb, var(--text-color) 15%, transparent);
+    }
+
+    .add-menu[hidden] { display: none; }
+    .add-menu-title { padding: 5px 10px 7px; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .add-menu button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 44px;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      text-align: left;
+    }
+    .add-menu button:hover,
+    .add-menu button:focus-visible { background: var(--surface-muted); }
+    .add-menu button svg { flex: 0 0 20px; width: 20px; height: 20px; }
+    .add-menu button.hidden { display: none; }
+    .composer-shell .attachment-toolbar #add-menu-button {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface-muted);
+    }
+    .composer-shell .attachment-toolbar #add-menu-button[aria-expanded="true"] {
+      background: var(--text-color);
+      color: var(--surface-bg);
+    }
+
     .composer-shell .attachment-toolbar .icon-button {
       width: 32px;
       height: 32px;
@@ -39076,7 +39123,7 @@ template.innerHTML = `
       .composer-shell .composer-actions .icon-button,
       .composer-shell .attachment-toolbar .icon-button { min-width: 44px; width: 44px; height: 44px; }
       .shell.desktop-route { display: block; overflow: hidden; }
-      .shell.desktop-route .main-pane { min-height: 100dvh; height: 100dvh; }
+      .shell.desktop-route .main-pane { min-height: 0; height: 100%; }
       .shell.desktop-route .main-pane { display: flex; }
       .shell.desktop-route .main-pane > .main-header { display: grid !important; order: 0; }
       .shell.desktop-route .main-pane > .desktop-feature-surface { order: 1; min-height: 0; }
@@ -39100,24 +39147,31 @@ template.innerHTML = `
 
       .shell {
         display: block;
-        height: 100dvh;
-        max-height: 100dvh;
-        min-height: 100dvh;
+        height: 100%;
+        max-height: none;
+        min-height: 0;
         overflow: hidden;
       }
 
       .main-pane {
-        min-height: 100dvh;
-        height: 100dvh;
+        min-height: 0;
+        height: 100%;
         position: relative;
         z-index: 1;
       }
 
       .main-header {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+        align-items: center;
         padding-inline: 16px;
       }
+
+      .main-header .title-block { grid-column: 2; grid-row: 1; min-width: 0; }
+      .main-header .mobile-header-actions { display: contents; }
+      #mobile-nav-toggle { grid-column: 1; grid-row: 1; }
+      #mobile-context-toggle { grid-column: 3; grid-row: 1; }
+      .main-header .row-actions { grid-column: 4; grid-row: 1; }
 
       .main-header .status-text {
         display: none;
@@ -39596,10 +39650,16 @@ template.innerHTML = `
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       </div>
       <div class="composer-shell">
+        <div class="add-menu" id="add-menu" role="group" aria-label="Add to chat" hidden>
+          <span class="add-menu-title">Add</span>
+          <button type="button" data-action="upload-file" id="upload-file-button"></button>
+          <button type="button" data-action="upload-folder" id="upload-folder-button"></button>
+          <button type="button" data-action="schedule-message" id="schedule-message-button"></button>
+          <button type="button" data-action="add-plugins" id="add-plugins-button"></button>
+        </div>
         <div class="attachment-toolbar">
           <div class="attachment-actions">
-            <button class="icon-button" type="button" data-action="upload-file" title="Upload files" aria-label="Upload files" id="upload-file-button"></button>
-            <button class="icon-button" type="button" data-action="upload-folder" title="Upload folder" aria-label="Upload folder" id="upload-folder-button"></button>
+            <button class="icon-button" type="button" data-action="toggle-add-menu" title="Add to chat" aria-label="Add to chat" aria-controls="add-menu" aria-expanded="false" id="add-menu-button"></button>
             <span class="label-text" id="attachment-meta"></span>
           </div>
           <div class="attachment-chips" id="attachment-chip-list"></div>
@@ -39607,7 +39667,6 @@ template.innerHTML = `
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
           <div class="composer-actions">
-            <button class="icon-button" type="button" data-action="schedule-message" title="Schedule this message" aria-label="Schedule this message" id="schedule-message-button"></button>
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
@@ -39924,16 +39983,24 @@ var CodexBridgePanel = class extends HTMLElement {
     this._runActivityDetailsOpen = false;
     this._activeDestination = "chats";
     this._appMenuOpen = false;
+    this._addMenuOpen = false;
     this._focusMode = false;
     this._focusInvoker = null;
     this._focusFeedback = "";
-    this._fullscreenChangeListener = () => this._syncFocusMode();
+    this._fullscreenChangeListener = () => {
+      this._syncFocusMode();
+      this._syncViewportHeight();
+    };
+    this._viewportResizeListener = () => this._syncViewportHeight();
     this._desktopFeatures = Object.fromEntries(DESTINATIONS.filter(({ id }) => id !== "chats").map(({ id }) => [id, createDesktopFeatureState()]));
   }
   connectedCallback() {
     this._installStaticUi();
     this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
+    window.addEventListener("resize", this._viewportResizeListener);
+    window.visualViewport?.addEventListener("resize", this._viewportResizeListener);
+    this._syncViewportHeight();
     if (this._mobileDrawerMedia && this._mobileDrawerMediaListener && !this._mobileDrawerMediaListening) {
       this._mobileDrawerMedia.addEventListener("change", this._mobileDrawerMediaListener);
       this._mobileDrawerMediaListening = true;
@@ -39954,6 +40021,8 @@ var CodexBridgePanel = class extends HTMLElement {
   disconnectedCallback() {
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
+    window.removeEventListener("resize", this._viewportResizeListener);
+    window.visualViewport?.removeEventListener("resize", this._viewportResizeListener);
     this._stopPolling();
     window.clearTimeout(this._activityClockTimer);
     this._activityClockTimer = null;
@@ -39971,6 +40040,33 @@ var CodexBridgePanel = class extends HTMLElement {
     this._mobileDrawerMediaListening = false;
     this._contextDrawerMedia?.removeEventListener("change", this._contextDrawerMediaListener);
     this._contextDrawerMediaListening = false;
+  }
+  _syncViewportHeight() {
+    const top = Math.max(0, Math.round(this.getBoundingClientRect().top));
+    const viewportBottom = window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : window.innerHeight;
+    this.style.height = `${Math.max(0, Math.round(viewportBottom - top))}px`;
+    if (this._addMenuOpen) this._syncAddMenuHeight();
+  }
+  _syncAddMenuHeight() {
+    const menu = this.shadowRoot.getElementById("add-menu");
+    const composer = this.shadowRoot.querySelector(".composer-shell");
+    if (!menu || !composer) return;
+    const viewport = window.visualViewport;
+    const spaceAbove = composer.getBoundingClientRect().top - (viewport?.offsetTop ?? 0) - 12;
+    menu.style.maxHeight = `${Math.max(44, Math.min(420, Math.floor((viewport?.height ?? window.innerHeight) * 0.6), Math.floor(spaceAbove)))}px`;
+  }
+  _setAddMenuOpen(open, { restoreFocus = false } = {}) {
+    if (open) this._hideTooltip();
+    this._addMenuOpen = open;
+    const menu = this.shadowRoot.getElementById("add-menu");
+    const toggle = this.shadowRoot.getElementById("add-menu-button");
+    menu.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) {
+      this._syncAddMenuHeight();
+      menu.querySelector("button:not(.hidden):not(:disabled)")?.focus();
+    } else menu.style.removeProperty("max-height");
+    if (!open && restoreFocus) toggle.focus();
   }
   set hass(value) {
     const previous = this._hass;
@@ -40056,9 +40152,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-bottom-button"), icons.panelBottom);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-context-button"), icons.panelRight);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("schedule-message-button"), icons.calendar);
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.upload);
-    this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("add-menu-button"), icons.plus);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("schedule-message-button"), icons.calendar, "Schedule this message");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.file, "Upload files");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folder, "Upload folder");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("add-plugins-button"), icons.puzzle, "Plugins");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
@@ -40215,6 +40313,9 @@ var CodexBridgePanel = class extends HTMLElement {
   _handleClick(event) {
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
+    if (this._addMenuOpen && !eventTarget?.closest("#add-menu, #add-menu-button")) {
+      this._setAddMenuOpen(false);
+    }
     if (this._chatMenuOpen && !eventTarget?.closest("#thread-menu, #chat-menu-button")) {
       this._chatMenuOpen = false;
       this._renderChatControls();
@@ -40233,6 +40334,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const action = actionTarget.dataset.action;
+    if (actionTarget.closest("#add-menu")) this._setAddMenuOpen(false);
     if (actionTarget.closest("#thread-menu")) {
       this._chatMenuOpen = false;
       this._renderChatControls();
@@ -40241,6 +40343,12 @@ var CodexBridgePanel = class extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "toggle-add-menu":
+        this._setAddMenuOpen(!this._addMenuOpen);
+        break;
+      case "add-plugins":
+        this._selectDesktopDestination("plugins");
+        break;
       case "toggle-chat-menu":
         this._chatMenuOpen = !this._chatMenuOpen;
         this._renderChatControls();
@@ -40789,6 +40897,11 @@ var CodexBridgePanel = class extends HTMLElement {
       this._closeAppMenu({ restoreFocus: true });
       return;
     }
+    if (event.key === "Escape" && this._addMenuOpen) {
+      event.preventDefault();
+      this._setAddMenuOpen(false, { restoreFocus: true });
+      return;
+    }
     if (event.key === "Escape" && this._chatMenuOpen) {
       event.preventDefault();
       this._chatMenuOpen = false;
@@ -40960,6 +41073,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _selectDesktopDestination(destination) {
+    if (this._addMenuOpen) this._setAddMenuOpen(false);
     const allowed = DESTINATIONS.some((item) => item.id === destination);
     this._activeDestination = allowed ? destination : "chats";
     if (this._activeDestination !== "chats") void this._terminal.close();
@@ -41959,6 +42073,10 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    const addButton = this.shadowRoot.getElementById("add-menu-button");
+    addButton.disabled = !activeThread;
+    if (!activeThread && this._addMenuOpen) this._setAddMenuOpen(false);
+    this.shadowRoot.getElementById("add-plugins-button").classList.toggle("hidden", !this._config?.capabilities?.includes("plugins_v1"));
     const scheduleButton = this.shadowRoot.getElementById("schedule-message-button");
     scheduleButton.classList.toggle("hidden", !this._config?.capabilities?.includes("automation_proposals_v1"));
     scheduleButton.disabled = !activeThread;
