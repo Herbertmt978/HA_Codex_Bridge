@@ -42292,11 +42292,25 @@ var CodexBridgePanel = class extends HTMLElement {
       selectedRun.busy,
       this._isLegacyConnection()
     ]);
-    if (key === this._renderedNavigationKey) return;
+    if (key === this._renderedNavigationKey) {
+      this._refreshNavigationTimes();
+      return;
+    }
     this._renderedNavigationKey = key;
     this._renderDirectSection();
     this._renderProjectList();
     this._renderArchivedSection();
+  }
+  _refreshNavigationTimes() {
+    const threads = new Map(this._threads.map((thread) => [String(thread.thread_id), thread]));
+    for (const select of this.shadowRoot.querySelectorAll(".chat-select[data-thread-id]")) {
+      const thread = threads.get(select.dataset.threadId);
+      if (!thread) continue;
+      const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
+      const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
+      const title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
+      if (select.title !== title) select.title = title;
+    }
   }
   _renderDirectSection() {
     const section2 = this.shadowRoot.getElementById("direct-section");

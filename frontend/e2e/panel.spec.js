@@ -501,6 +501,31 @@ test("keeps activity details and rebuilt navigation controls steady during HA up
   }
 });
 
+test("updates chat ages without replacing their navigation controls", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const result = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const timestamp = new Date().toISOString();
+    bridge._threads = bridge._threads.map((thread) =>
+      thread.thread_id === "thr_vba_1" ? { ...thread, updated_at: timestamp } : thread);
+    bridge._renderNavigationSections();
+    const select = bridge.shadowRoot.querySelector('.chat-select[data-thread-id="thr_vba_1"]');
+    const before = select.title;
+    const originalNow = Date.now;
+    try {
+      Date.now = () => originalNow() + 2 * 60_000;
+      bridge._renderNavigationSections();
+    } finally {
+      Date.now = originalNow;
+    }
+    return { before, after: select.title, connected: select.isConnected };
+  });
+  expect(result.before).toContain("· now");
+  expect(result.after).toContain("· 2m");
+  expect(result.connected).toBe(true);
+});
+
 test("keeps a hovered activity popover steady when unrelated run events render", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
