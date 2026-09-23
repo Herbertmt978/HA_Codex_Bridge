@@ -33585,6 +33585,16 @@ function renderEmpty(documentRef, message) {
   empty.setAttribute("role", "status");
   return empty;
 }
+function renderLoading(documentRef, destinationLabel) {
+  const loading = documentRef.createElement("div");
+  loading.className = "desktop-feature-loading";
+  loading.setAttribute("role", "status");
+  const spinner = documentRef.createElement("span");
+  spinner.className = "desktop-feature-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  loading.append(spinner, text2(documentRef, "span", `Loading ${destinationLabel.toLowerCase()}…`, "desktop-feature-loading-label"));
+  return loading;
+}
 function renderTable(documentRef, rows, columns, actions = null) {
   if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
   const table = documentRef.createElement("table");
@@ -33974,7 +33984,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) {
     container.setAttribute("aria-busy", "true");
-    container.append(renderEmpty(documentRef, "Loading…"));
+    container.append(renderLoading(documentRef, destinationMeta.label));
     return;
   }
   container.setAttribute("aria-busy", "false");
@@ -36815,6 +36825,32 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
+    .desktop-feature-surface.visible:has(.desktop-feature-loading) {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .desktop-feature-loading {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 240px;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--muted-color);
+      font-size: var(--font-body-size);
+    }
+
+    .desktop-feature-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color) 82%);
+      border-top-color: var(--accent-color);
+      border-radius: 50%;
+      animation: codex-spin 900ms linear infinite;
+    }
+
     .shell.desktop-route { grid-template-columns: clamp(255px, 17vw, 280.5px) minmax(0, 1fr); }
     .shell.desktop-route .main-pane > :not(.desktop-feature-surface),
     .shell.desktop-route .side-pane { display: none !important; }
@@ -37348,6 +37384,16 @@ template.innerHTML = `
 
     .rail-action-menu[hidden] {
       display: none;
+    }
+
+    .project-secondary-actions {
+      background: transparent;
+      border-left-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
+    }
+
+    .project-secondary-actions .rail-menu-item:hover,
+    .project-secondary-actions .rail-menu-item:focus-visible {
+      background: color-mix(in srgb, var(--accent-color) 9%, var(--surface-bg) 91%);
     }
 
     .rail-menu-item {
@@ -39182,7 +39228,8 @@ template.innerHTML = `
 
       .status-pill.running,
       .activity-spinner,
-      .step-spinner {
+      .step-spinner,
+      .desktop-feature-spinner {
         animation: none !important;
         border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color) 36%);
       }
