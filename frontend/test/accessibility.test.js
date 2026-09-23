@@ -106,6 +106,42 @@ describe("panel accessibility contract", () => {
     expect(errorStrip.classList.contains("visible")).toBe(false);
   });
 
+  it("keeps unchanged error notices stable for assistive technology", () => {
+    const panel = createPanel();
+    panel._status.limits.blocked = true;
+    panel._render(true);
+
+    const banner = panel.shadowRoot.getElementById("status-banner");
+    const title = banner.querySelector(".banner-title");
+    const action = banner.querySelector('[data-action="open-usage"]');
+    expect(title.textContent).toBe("Codex usage limits have been reached");
+    expect(action.textContent).toBe("View usage and resets");
+    expect(banner.querySelector('[data-action="dismiss-banner"] svg')).not.toBeNull();
+
+    panel._render(true);
+    expect(banner.querySelector(".banner-title")).toBe(title);
+    expect(banner.querySelector('[data-action="open-usage"]')).toBe(action);
+
+    panel._setError("Bridge request failed");
+    const strip = panel.shadowRoot.getElementById("error-strip");
+    const errorTitle = strip.querySelector(".error-title");
+    panel._render(true);
+    expect(strip.querySelector(".error-title")).toBe(errorTitle);
+    expect(strip.querySelector(".error-icon svg")).not.toBeNull();
+  });
+
+  it("updates banner actions when confirmation changes without reannouncing the same state", () => {
+    const panel = createPanel();
+    panel._status.auth = { state: "unsupported", auth_required: true };
+    panel._render(true);
+    const banner = panel.shadowRoot.getElementById("status-banner");
+    expect(banner.querySelector('[data-action="confirm-sign-out"]')?.textContent).toBe("Sign out");
+
+    panel._confirmSignOut = true;
+    panel._render(true);
+    expect(banner.querySelector('[data-action="sign-out"]')?.textContent).toBe("Sign out now");
+  });
+
   it("does not offer a connection retry for local validation or sign-in guidance", () => {
     const panel = createPanel();
     panel._render(true);

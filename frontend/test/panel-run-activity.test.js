@@ -327,7 +327,7 @@ describe("panel run activity integration", () => {
     panel._render(true);
 
     const banner = panel.shadowRoot.getElementById("status-banner");
-    expect(banner?.textContent).toContain("Codex usage limits have been reached.");
+    expect(banner?.textContent).toContain("Codex usage limits have been reached");
     expect(panel.shadowRoot.textContent).not.toContain("Bearer secret");
     expect(panel.shadowRoot.textContent).not.toContain("/private/");
 

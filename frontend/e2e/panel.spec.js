@@ -394,7 +394,13 @@ test("keeps a schedule draft after a save error and fits a narrow screen", async
   await expect(form.locator('[name="target_kind"]')).toHaveValue("continue_thread");
   const overflow = await form.evaluate((node) => node.scrollWidth > node.clientWidth || node.getBoundingClientRect().right > window.innerWidth);
   expect(overflow).toBe(false);
-  await form.screenshot({ path: test.info().outputPath("scheduled-mobile.png") });
+  for (const theme of ["light", "dark"]) {
+    await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+    await form.getByRole("button", { name: "Create task", exact: true }).hover();
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+    expect(accessibility.violations.filter((violation) => violation.id === "color-contrast")).toEqual([]);
+    await form.screenshot({ path: test.info().outputPath(`scheduled-error-${theme}.png`) });
+  }
 });
 
 async function seedRunStageActivity(page) {
@@ -617,7 +623,7 @@ test("gives desktop chats wider space and one working control with code-only cop
   }
 });
 
-test("shows exhausted usage and confirms a reset credit without spending it", async ({ page }) => {
+test("shows exhausted usage and confirms a reset credit without spending it", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
@@ -639,7 +645,21 @@ test("shows exhausted usage and confirms a reset credit without spending it", as
   });
   const panel = page.locator("codex-bridge-panel");
   await expect(panel.locator("#status-banner")).toContainText("Codex usage limits have been reached");
-  await panel.getByRole("button", { name: "View usage and resets" }).click();
+  const usageAction = panel.getByRole("button", { name: "View usage and resets" });
+  for (const theme of ["light", "dark"]) {
+    await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+      await page.setViewportSize(viewport);
+      await usageAction.hover();
+      await expect(usageAction).toBeInViewport({ ratio: 1 });
+      const banner = panel.locator("#status-banner");
+      expect(await banner.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+      expect(accessibility.violations.filter((violation) => violation.id === "color-contrast")).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath(`usage-banner-${theme}-${viewport.width}.png`) });
+    }
+  }
+  await usageAction.click();
   await expect(panel.locator("#side-panel-usage")).toBeVisible();
   await expect(panel.locator(".reset-credit-section")).toContainText("1 reset credit available");
   await panel.getByRole("button", { name: "Use reset" }).click();
@@ -648,6 +668,98 @@ test("shows exhausted usage and confirms a reset credit without spending it", as
   await expect(panel.getByRole("button", { name: "Use reset" })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test("keeps filled controls legible and styled buttons responsive on hover", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.evaluate((node) => {
+    const fixture = document.createElement("div");
+    fixture.id = "filled-control-check";
+    fixture.style.cssText = "position:fixed;inset:70px auto auto 280px;z-index:100;display:grid;grid-template-columns:repeat(3,max-content);gap:8px;padding:12px;background:var(--surface-bg)";
+    for (const className of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "copy-button", "stop-button"]) {
+      const button = document.createElement("button");
+      button.className = className;
+      button.type = "button";
+      button.dataset.hoverCheck = className;
+      button.textContent = className;
+      button.style.transition = "none";
+      fixture.append(button);
+    }
+    for (const [wrapperClass, buttonName] of [
+      ["desktop-toolbar", "desktop-toolbar"],
+      ["settings-panel", "settings-panel"],
+      ["bottom-panel-header", "bottom-panel-header"],
+      ["auth-actions", "auth-primary"],
+      ["decision-actions", "decision-accept"],
+      ["decision-actions", "decision-answer"],
+    ]) {
+      const wrapper = document.createElement("div");
+      wrapper.className = wrapperClass;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.hoverCheck = buttonName;
+      button.textContent = buttonName;
+      button.style.transition = "none";
+      if (buttonName === "auth-primary") button.className = "primary";
+      if (buttonName === "decision-accept") button.dataset.decision = "accept";
+      if (buttonName === "decision-answer") button.dataset.action = "answer-interaction";
+      if (buttonName === "bottom-panel-header") {
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        actions.append(button);
+        wrapper.append(actions);
+      } else {
+        wrapper.append(button);
+      }
+      fixture.append(wrapper);
+    }
+    node.shadowRoot.append(fixture);
+  });
+
+  for (const theme of ["light", "dark"]) {
+    await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+    for (const name of ["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "copy-button", "stop-button", "desktop-toolbar", "settings-panel", "bottom-panel-header", "auth-primary", "decision-accept", "decision-answer"]) {
+      const button = panel.locator(`#filled-control-check [data-hover-check="${name}"]`);
+      const normal = await button.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.backgroundColor, style.backgroundImage, style.borderColor];
+      });
+      await button.hover();
+      const hovered = await button.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.backgroundColor, style.backgroundImage, style.borderColor];
+      });
+      expect(hovered, `${name} hover feedback in ${theme}`).not.toEqual(normal);
+      if (!["information-primary", "panel-button-primary", "empty-state-cta", "send-button", "schedule-submit", "auth-primary", "decision-accept", "decision-answer"].includes(name)) continue;
+      const contrast = await button.evaluate((node) => {
+        const style = getComputedStyle(node);
+        if (style.backgroundImage !== "none") return { gradient: true };
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext("2d");
+        const swatch = (value) => {
+          context.clearRect(0, 0, 1, 1);
+          context.fillStyle = value;
+          context.fillRect(0, 0, 1, 1);
+          return context.getImageData(0, 0, 1, 1).data;
+        };
+        const foreground = swatch(style.color);
+        const background = swatch(style.backgroundColor);
+        const channel = (value) => {
+          const scaled = value / 255;
+          return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+        };
+        const luminance = (rgb) => 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return { ratio: (light + 0.05) / (dark + 0.05), opacity: background[3] };
+      });
+      if (contrast.gradient) continue;
+      expect(contrast.opacity, `${name} background in ${theme}`).toBe(255);
+      expect(contrast.ratio, `${name} hover contrast in ${theme}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
 });
 
 test("keeps hostile Codex content inert and on the Home Assistant origin", async ({ page }) => {
@@ -774,6 +886,10 @@ for (const viewport of [
   const error = page.locator("codex-bridge-panel").locator("#error-strip");
   await expect(error).toBeInViewport({ ratio: 1 });
   await expect(error.getByRole("button", { name: "Retry connection" })).toBeInViewport({ ratio: 1 });
+  await error.getByRole("button", { name: "Retry connection" }).hover();
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
+  expect(accessibility.violations.filter((violation) => violation.id === "color-contrast")).toEqual([]);
+  await error.screenshot({ path: test.info().outputPath(`connection-error-${viewport.name}.png`) });
   });
 }
 
