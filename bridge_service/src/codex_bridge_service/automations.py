@@ -8,6 +8,7 @@ and submit conditional claims from its own scheduler.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import tempfile
@@ -95,17 +96,21 @@ class AutomationStore:
         target_validator: Callable[[Mapping[str, Any]], None] | None = None,
         max_runs_per_automation: int = 200,
         max_total_runs: int = 5_000,
+        max_deleted_create_requests: int = 1_000,
         misfire_grace_seconds: int = 300,
     ) -> None:
         if max_runs_per_automation < 1 or max_total_runs < max_runs_per_automation:
             raise ValueError("automation history limits are invalid")
         if misfire_grace_seconds < 0:
             raise ValueError("misfire grace must not be negative")
+        if max_deleted_create_requests < 1:
+            raise ValueError("create request retention limit is invalid")
         self.root = Path(state_root)
         self.path = self.root / "automations.json"
         self._target_validator = target_validator
         self._max_runs_per_automation = max_runs_per_automation
         self._max_total_runs = max_total_runs
+        self._max_deleted_create_requests = max_deleted_create_requests
         self._misfire_grace = timedelta(seconds=misfire_grace_seconds)
         self._lock = RLock()
         self._state = self._load()
@@ -147,8 +152,10 @@ class AutomationStore:
                     automation["last_status"] = "interrupted_restart"
                     automation["updated_at"] = now
                 changed = True
+            pruned_requests = self._prune_create_requests()
             if changed:
                 self._prune_runs(protected_run_ids=protected_run_ids)
+            if changed or pruned_requests:
                 self._save()
 
     def create(
@@ -156,8 +163,31 @@ class AutomationStore:
     ) -> dict[str, Any]:
         now = _now(now)
         with self._lock:
+            request_id = payload.get("client_request_id")
+            if request_id is not None and (
+                not isinstance(request_id, str)
+                or len(request_id) != 32
+                or any(char not in "0123456789abcdef" for char in request_id)
+            ):
+                raise AutomationValidationError("invalid create request id")
+            fingerprint = hashlib.sha256(json.dumps(
+                {key: value for key, value in payload.items() if key != "client_request_id"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            ).encode("utf-8")).hexdigest() if request_id else None
+            prior = self._state["create_requests"].get(request_id) if request_id else None
+            if prior is not None:
+                if prior["fingerprint"] != fingerprint:
+                    raise AutomationConflictError("create request changed during retry")
+                existing = self._state["automations"].get(prior["automation_id"])
+                if existing is None:
+                    raise AutomationConflictError("created automation was removed")
+                return _public_automation(existing, include_prompt=True)
             record = self._new_record(payload, now)
             self._state["automations"][record["automation_id"]] = record
+            if request_id:
+                self._state["create_requests"][request_id] = {
+                    "automation_id": record["automation_id"], "fingerprint": fingerprint,
+                }
             self._save()
             return _public_automation(record, include_prompt=True)
 
@@ -179,6 +209,22 @@ class AutomationStore:
                     key=lambda item: (item["name"].lower(), item["automation_id"]),
                 )
             ]
+
+    def preview_schedule(
+        self, schedule: Mapping[str, Any], *, now: datetime | None = None, count: int = 3
+    ) -> list[str]:
+        if count < 1 or count > 5:
+            raise ScheduleValidationError("invalid preview count")
+        normalized = _normalize_schedule(schedule)
+        cursor = _now(now)
+        runs: list[str] = []
+        for _ in range(count):
+            next_at = _next_run(normalized, cursor)
+            if next_at is None:
+                break
+            runs.append(next_at)
+            cursor = _parse_datetime(next_at, "schedule time") + timedelta(microseconds=1)
+        return runs
 
     def update(
         self,
@@ -236,7 +282,9 @@ class AutomationStore:
             automation_id, True, expected_revision=expected_revision, now=now
         )
 
-    def delete(self, automation_id: str, *, expected_revision: int) -> None:
+    def delete(
+        self, automation_id: str, *, expected_revision: int, now: datetime | None = None
+    ) -> None:
         with self._lock:
             record = self._automation(automation_id)
             self._require_revision(record, expected_revision)
@@ -251,6 +299,10 @@ class AutomationStore:
             ):
                 raise AutomationConflictError("automation has an active run")
             del self._state["automations"][automation_id]
+            deleted_at = _iso(_now(now))
+            for request in self._state["create_requests"].values():
+                if request["automation_id"] == automation_id:
+                    request["deleted_at"] = deleted_at
             for run_id, run in list(self._state["runs"].items()):
                 if run["automation_id"] == automation_id:
                     self._state["runs"].pop(run_id)
@@ -706,9 +758,27 @@ class AutomationStore:
             for run_id, run in self._state["runs"].items()
         }
 
+    def _prune_create_requests(self) -> bool:
+        requests = self._state["create_requests"]
+        live = self._state["automations"]
+        deleted = [
+            (request_id, request)
+            for request_id, request in requests.items()
+            if request["automation_id"] not in live
+        ]
+        if len(deleted) <= self._max_deleted_create_requests:
+            return False
+        deleted.sort(
+            key=lambda item: (item[1].get("deleted_at") or "", item[0]),
+            reverse=True,
+        )
+        for request_id, _ in deleted[self._max_deleted_create_requests:]:
+            del requests[request_id]
+        return True
+
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
-            return {"version": 1, "automations": {}, "runs": {}, "idempotency": {}}
+            return {"version": 1, "automations": {}, "runs": {}, "idempotency": {}, "create_requests": {}}
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
@@ -726,6 +796,9 @@ class AutomationStore:
             if isinstance(run, dict):
                 # Older checkpoints predate per-claim search overrides.
                 run.setdefault("web_search", None)
+        payload.setdefault("create_requests", {})
+        if not isinstance(payload["create_requests"], dict):
+            raise AutomationValidationError("automation state is invalid")
         for definition in payload["automations"].values():
             if isinstance(definition, dict):
                 definition.setdefault("host_access_grant", None)
@@ -733,6 +806,7 @@ class AutomationStore:
         return payload
 
     def _save(self) -> None:
+        self._prune_create_requests()
         self.root.mkdir(parents=True, exist_ok=True)
         encoded = json.dumps(
             self._state, ensure_ascii=False, sort_keys=True, separators=(",", ":")

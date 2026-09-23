@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 1.6.0
+
+- Lets an administrator describe a scheduled task in chat, review the proposed
+  timing and destination, then save it through Home Assistant's existing scheduler.
+  Ambiguous times require clarification and a proposal cannot run before saving.
+- Shows reported Codex usage reset credits and expiry dates. Redemption requires
+  a separate confirmation and retries reuse the same attempt identifier.
+- Adds an exhausted-usage shortcut, message times and a single elapsed-working
+  indicator with reduced-motion support.
+- Pairs App, Integration and panel `1.6.0` with Bridge `0.13.0` and the
+  Sigstore-verified Codex runtime `0.156.1`. Stable App images remain amd64-only.
+
 ## 1.5.1
 
 - Bundles the Sigstore-verified Codex runtime `0.156.1`.

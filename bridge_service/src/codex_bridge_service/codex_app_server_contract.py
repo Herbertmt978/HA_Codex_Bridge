@@ -44,6 +44,7 @@ _CLIENT_RESPONSE_TYPES = {
     "account/login/cancel": "CancelLoginAccountResponse",
     "account/logout": "LogoutAccountResponse",
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
+    "account/rateLimitResetCredit/consume": "ConsumeAccountRateLimitResetCreditResponse",
     "account/usage/read": "GetAccountTokenUsageResponse",
     "model/list": "ModelListResponse",
     "modelProvider/capabilities/read": "ModelProviderCapabilitiesReadResponse",

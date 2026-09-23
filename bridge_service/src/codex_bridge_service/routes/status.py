@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from ..auth import require_bridge_token
+from ..codex_app_server import CodexAppServerError
 from ..feature_capabilities import provider_capabilities
 from ..models import (
     BridgeDiagnosticsRecord,
@@ -12,6 +14,39 @@ from ..models import (
 )
 
 router = APIRouter()
+
+
+class ConsumeResetCreditRequest(BaseModel):
+    credit_id: str = Field(pattern=r"^[\x21-\x7e]{1,256}$")
+    idempotency_key: str = Field(pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
+
+
+@router.post("/account/reset-credits/consume")
+def consume_reset_credit(
+    payload: ConsumeResetCreditRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, str]:
+    require_bridge_token(
+        authorization=authorization, request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    if "reset_credits_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(409, detail={"code": "capability_unavailable", "retryable": False})
+    client = request.app.state.codex_app_server
+    try:
+        response = client.request(
+            "account/rateLimitResetCredit/consume",
+            {"creditId": payload.credit_id, "idempotencyKey": payload.idempotency_key},
+            timeout_seconds=15.0,
+        )
+    except CodexAppServerError:
+        raise HTTPException(503, detail={"code": "reset_credit_unavailable", "retryable": True}) from None
+    outcome = response.get("outcome") if isinstance(response, dict) else None
+    if outcome not in {"reset", "nothingToReset", "noCredit", "alreadyRedeemed"}:
+        raise HTTPException(503, detail={"code": "reset_credit_unavailable", "retryable": True})
+    request.app.state.storage.limits_probe.invalidate()
+    return {"outcome": outcome}
 
 
 @router.get("/status", response_model=BridgeStatusRecord)

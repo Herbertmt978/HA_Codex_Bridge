@@ -301,7 +301,7 @@ function localParts(instant, timezone) {
   }).formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, second: parts.second };
 }
-function scheduleInstant(date, time, timezone) {
+function scheduleInstantCandidates(date, time, timezone) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) {
     throw new Error("Choose a valid date and time.");
   }
@@ -317,7 +317,10 @@ function scheduleInstant(date, time, timezone) {
     if (resolved.date === date && resolved.time === time) candidates.add(candidate);
   }
   if (!candidates.size) throw new Error("That time does not exist when the clocks change. Choose another time.");
-  return new Date(Math.min(...candidates)).toISOString();
+  return [...candidates].sort((a2, b3) => a2 - b3).map((value) => new Date(value).toISOString());
+}
+function scheduleInstant(date, time, timezone) {
+  return scheduleInstantCandidates(date, time, timezone)[0];
 }
 function scheduleFormValues(automation = {}, timezone = "UTC", now = Date.now()) {
   const schedule = automation.schedule || {};
@@ -542,6 +545,11 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
   frequency.append(field(doc, "time", "Time", values.time, null, "time"));
   frequency.append(staticRow(doc, "Results", "Chat and run history"));
   form.append(element(doc, "p", "schedule-preview"));
+  if (context.proposalsSupported) {
+    const nextRuns = element(doc, "p", "schedule-next-runs", state.nextRuns?.length ? `Next runs: ${state.nextRuns.join(" · ")}` : "Checking the next run times…");
+    nextRuns.setAttribute("aria-live", "polite");
+    form.append(nextRuns);
+  }
   form.append(element(doc, "p", "schedule-month-note", "Months without this date are skipped."));
   const advanced = element(doc, "details", "schedule-advanced");
   advanced.append(element(doc, "summary", "", "Advanced"));
@@ -33610,15 +33618,40 @@ function renderTable(documentRef, rows, columns, actions = null) {
   table.append(body);
   return table;
 }
-function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
+function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsSupported = false) {
   const section2 = documentRef.createElement("div");
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text2(documentRef, "div", "Automations", "desktop-section-label"), button2(documentRef, "New schedule", "open-schedule-form"));
+  toolbar.append(text2(documentRef, "div", "Automations", "desktop-section-label"));
+  if (proposalsSupported) toolbar.append(button2(documentRef, "Describe a task", "open-schedule-description"));
+  toolbar.append(button2(documentRef, "New schedule", "open-schedule-form"));
   if (!state.form) section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    section2.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    section2.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
+    return section2;
+  }
+  if (state.form === "schedule-description") {
+    const form = documentRef.createElement("form");
+    form.className = "schedule-description";
+    form.dataset.desktopForm = "schedule-description";
+    form.append(text2(documentRef, "h3", "Describe a scheduled task"));
+    form.append(text2(documentRef, "p", `Include when it should run and what Codex should do. Times use Home Assistant's ${defaultTimezone} time zone. Nothing runs until you review and create the task.`, "desktop-note"));
+    const description = input(documentRef, "Task and timing", "description", formValue(state, "description"), "textarea");
+    const control = description.querySelector("textarea");
+    control.placeholder = "Every weekday at 9 am, summarise yesterday's events";
+    control.maxLength = 4e3;
+    control.required = true;
+    form.append(description);
+    form.append(text2(documentRef, "p", "Examples: Every Monday at 2 pm, check the heating; On 24 September 2026 at 09:00, prepare a report.", "desktop-note"));
+    const error = text2(documentRef, "p", state.formError || "", "schedule-error");
+    error.setAttribute("role", "alert");
+    form.append(error);
+    const actions = documentRef.createElement("div");
+    actions.className = "schedule-actions";
+    actions.append(button2(documentRef, "Cancel", "close-form"), button2(documentRef, "Review timing", "review-schedule-description"));
+    form.append(actions);
+    section2.append(form);
     return section2;
   }
   const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
@@ -33918,13 +33951,14 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,
+    scheduledProposals: destination === "scheduled" ? config?.capabilities?.includes("automation_proposals_v1") : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null
   });
   const drafts = featureDraftInputs(state);
@@ -33963,12 +33997,108 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     confirm2.append(text2(documentRef, "span", "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm2);
   }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 
+// frontend/src/schedule-language.js
+var DAYS = { monday: "MO", tuesday: "TU", wednesday: "WE", thursday: "TH", friday: "FR", saturday: "SA", sunday: "SU" };
+var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+var TIME = "(?<hour>\\d{1,2})(?::(?<minute>[0-5]\\d))?\\s*(?<meridiem>am|pm)?";
+function localDate(now, timezone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(now)).map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function addDays(date, days) {
+  const value = /* @__PURE__ */ new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+function parseTime(match) {
+  const hour = Number(match.groups.hour);
+  const minute = Number(match.groups.minute || 0);
+  const meridiem = match.groups.meridiem?.toLowerCase();
+  if (!meridiem && !match.groups.minute) throw new Error("Please give the time as 09:00 or 9 am so morning and evening are clear.");
+  if (meridiem && (hour < 1 || hour > 12)) throw new Error("Choose a valid 12-hour time.");
+  if (!meridiem && hour > 23) throw new Error("Choose a valid 24-hour time.");
+  const resolved = meridiem ? hour % 12 + (meridiem === "pm" ? 12 : 0) : hour;
+  return `${String(resolved).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+function parseDate(raw, now, timezone) {
+  const value = raw.toLowerCase().trim();
+  if (value === "tomorrow") return addDays(localDate(now, timezone), 1);
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) return value;
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/u.test(value)) {
+    throw new Error("Use a date such as 24 September 2026 or 2026-09-24; numeric day/month order is ambiguous.");
+  }
+  const named = /^(?<day>\d{1,2})(?:st|nd|rd|th)?\s+(?<month>[a-z]+)\s+(?<year>\d{4})$/u.exec(value);
+  const month = MONTHS[named?.groups.month];
+  if (!named || !month) throw new Error("Include a clear date, for example 24 September 2026.");
+  return `${named.groups.year}-${String(month).padStart(2, "0")}-${String(named.groups.day).padStart(2, "0")}`;
+}
+function taskText(value) {
+  return value.trim().replace(/^(?:please\s+)?(?:ask codex to|remind me to|schedule(?: a task to)?)\s+/iu, "").replace(/[.!\s]+$/u, "").trim();
+}
+function proposeScheduleDescription(description, { timezone = "UTC", now = Date.now() } = {}) {
+  const input2 = String(description || "").trim();
+  if (!input2 || input2.length > 4e3) throw new Error("Describe the task and when it should run, in 4,000 characters or fewer.");
+  const separator = input2.match(/(?:[,;]\s*|:\s+)/u);
+  const trailing = separator ? null : new RegExp(`^(.+?)\\s+((?:daily|every day|every weekdays?|every (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\s+at\\s+${TIME})$`, "iu").exec(input2);
+  if (!separator && !trailing) throw new Error("Include clear timing and instructions. For example: Every weekday at 9 am, summarise yesterday's events.");
+  const when = (separator ? input2.slice(0, separator.index) : trailing[2]).replace(/^please\s+/iu, "").trim();
+  const prompt = taskText(separator ? input2.slice(separator.index + separator[0].length) : trailing[1]);
+  if (!prompt) throw new Error("Add what Codex should do after the timing.");
+  const values = scheduleFormValues({}, timezone, now);
+  const timePattern = new RegExp(`^(.+?)\\s+at\\s+${TIME}$`, "iu");
+  const chatDestination = /\s+in (?:this|the current) chat$/iu.test(when);
+  const match = timePattern.exec(when.replace(/\s+in (?:this|the current) chat$/iu, ""));
+  if (!match) throw new Error("Include a clear time, for example 09:00 or 9 am, before the comma.");
+  const rule = match[1].toLowerCase().trim();
+  values.time = parseTime(match);
+  values.prompt = prompt;
+  values.title = prompt.length > 80 ? `${prompt.slice(0, 77).trimEnd()}…` : prompt;
+  if (chatDestination) values.target_kind = "continue_thread";
+  if (/^(?:daily|every day)$/u.test(rule)) values.repeat = "daily";
+  else if (/^every weekdays?$/u.test(rule)) values.repeat = "weekdays";
+  else {
+    const day = /^(?:every|weekly on)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/u.exec(rule);
+    const month = /^monthly on (?:the )?(\d{1,2})(?:st|nd|rd|th)?$/u.exec(rule);
+    const interval = /^every (\d+) (minutes?|hours?) starting (.+)$/u.exec(rule);
+    const once = /^(?:once\s+)?(?:on\s+)?(.+)$/u.exec(rule);
+    if (day) {
+      values.repeat = "weekly";
+      values.weekday = DAYS[day[1]];
+    } else if (month) {
+      values.repeat = "monthly";
+      values.month_day = month[1];
+    } else if (interval) {
+      values.repeat = "interval";
+      values.interval_count = interval[1];
+      values.interval_unit = interval[2].startsWith("hour") ? "hours" : "minutes";
+      values.date = parseDate(interval[3], now, timezone);
+    } else if (once && (rule.startsWith("on ") || rule.startsWith("once ") || rule === "tomorrow" || /^\d{4}-/u.test(rule))) {
+      values.repeat = "once";
+      values.date = parseDate(once[1], now, timezone);
+    } else throw new Error("Choose daily, weekdays, a named weekday, monthly on a day, an interval with a start date, or a one-off date.");
+  }
+  if (["once", "interval"].includes(values.repeat) && scheduleInstantCandidates(values.date, values.time, timezone).length > 1) {
+    throw new Error("That time occurs twice when the clocks change. Choose another time or use the task editor to review it.");
+  }
+  try {
+    buildSchedule(values, { timezone, now });
+  } catch (error) {
+    throw new Error(error.message, { cause: error });
+  }
+  return values;
+}
+
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.5.0";
+var PANEL_VERSION = "1.6.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -35712,6 +35842,13 @@ template.innerHTML = `
       align-items: start;
     }
 
+    .message-time {
+      justify-self: center;
+      color: var(--muted-color);
+      font-size: var(--font-caption-size);
+      line-height: 1.4;
+    }
+
     .message.user .bubble {
       justify-self: end;
     }
@@ -36747,6 +36884,8 @@ template.innerHTML = `
     @media (max-width: 640px) { .mcp-header-row { grid-template-columns: minmax(0, 1fr); } .mcp-authentication .panel-selection { max-width: 100%; } }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-description { display: grid; gap: 18px; max-width: 760px; }
+    .schedule-description textarea { min-height: 112px; resize: vertical; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
     .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
     .schedule-title, .schedule-prompt { display: block; min-width: 0; }
@@ -36765,6 +36904,7 @@ template.innerHTML = `
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
     .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
+    .schedule-next-runs { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
     .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
     .schedule-advanced .schedule-card { margin-top: 10px; }
@@ -37305,6 +37445,45 @@ template.innerHTML = `
       color: var(--muted-color);
       font-size: var(--font-control-size);
       line-height: 1.45;
+    }
+
+    .run-elapsed {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 5px 0 9px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--muted-color);
+      font-size: var(--font-control-size);
+    }
+
+    .run-elapsed-dots {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: 50%;
+      background: var(--surface-bg);
+    }
+
+    .run-elapsed-dots span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: codex-dot 1.2s ease-in-out infinite;
+    }
+
+    .run-elapsed-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .run-elapsed-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes codex-dot {
+      0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-3px); }
     }
 
     .run-activity-copy > span:last-child {
@@ -38220,6 +38399,27 @@ template.innerHTML = `
       gap: 12px;
     }
 
+    .reset-credit-section {
+      display: grid;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .reset-credit-section h3 { margin: 0; font-size: var(--font-body-size); }
+
+    .reset-credit-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+    }
+
+    .reset-credit-row > .usage-note { width: 100%; margin: 0; }
+
     .usage-limit-grid {
       display: grid;
       gap: 10px;
@@ -38883,6 +39083,7 @@ template.innerHTML = `
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
           <div class="composer-actions">
+            <button class="icon-button" type="button" data-action="schedule-message" title="Schedule this message" aria-label="Schedule this message" id="schedule-message-button"></button>
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
@@ -39114,6 +39315,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._folderDraft = "";
     this._browseState = null;
     this._pollTimer = null;
+    this._activityClockTimer = null;
     this._pollTick = 0;
     this._pollActive = false;
     this._pollGeneration = 0;
@@ -39136,6 +39338,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._systemReconnectTimer = null;
     this._systemReconnectAttempt = 0;
     this._confirmSignOut = false;
+    this._pendingResetCredit = null;
+    this._resetCreditBusy = false;
+    this._resetCreditNotice = "";
     this._authActionPending = false;
     this._authPollTimer = null;
     this._authPollInFlight = false;
@@ -39218,6 +39423,8 @@ var CodexBridgePanel = class extends HTMLElement {
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     this._stopPolling();
+    window.clearTimeout(this._activityClockTimer);
+    this._activityClockTimer = null;
     this._stopEventSubscription();
     this._stopSystemEventSubscription();
     this._clearArtifactRefreshRetry();
@@ -39315,6 +39522,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-bottom-button"), icons.panelBottom);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-context-button"), icons.panelRight);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("schedule-message-button"), icons.calendar);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.upload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
@@ -39558,6 +39766,21 @@ var CodexBridgePanel = class extends HTMLElement {
       case "open-usage":
         this._showSideTab("usage", actionTarget);
         break;
+      case "select-reset-credit":
+        this._pendingResetCredit = {
+          id: actionTarget.dataset.creditId,
+          key: crypto.randomUUID()
+        };
+        this._resetCreditNotice = "";
+        this._renderUsagePanel();
+        break;
+      case "cancel-reset-credit":
+        this._pendingResetCredit = null;
+        this._renderUsagePanel();
+        break;
+      case "confirm-reset-credit":
+        void this._consumeResetCredit();
+        break;
       case "close-mobile-drawer":
         this._closeMobileDrawer();
         break;
@@ -39677,6 +39900,9 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "send-prompt":
         this._sendPrompt();
+        break;
+      case "schedule-message":
+        this._scheduleComposerMessage();
         break;
       case "accept-interaction":
       case "decline-interaction":
@@ -40203,6 +40429,18 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._activeDestination !== "chats") this._loadDesktopDestination(this._activeDestination);
     this._render();
   }
+  _scheduleComposerMessage() {
+    if (!this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    const description = this.shadowRoot.getElementById("prompt-input")?.value?.trim() || "";
+    const state = this._desktopFeatures.scheduled;
+    this._clearDesktopFormDraft(state);
+    state.scheduleContext = this._scheduleContext();
+    state.editingAutomation = null;
+    state.formDraft = { description };
+    state.form = "schedule-description";
+    this._selectDesktopDestination("scheduled");
+    this.shadowRoot.querySelector('[data-desktop-field="description"]')?.focus();
+  }
   _queueSettingsReload(state) {
     if (state.agentsReloadQueued || this._activeDestination !== "settings") return;
     state.agentsReloadQueued = true;
@@ -40305,6 +40543,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field2 || !state?.form) return;
     state.formDraft = { ...state.formDraft || {}, [field2]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "schedule") state.createRequestId = null;
     if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field2)) {
       state.formDraft.local_acknowledged = false;
       state.formDraft.auth_acknowledged = false;
@@ -40322,6 +40561,7 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }
     if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
+    if (form.dataset.desktopForm === "schedule" && ["repeat", "date", "time", "weekday", "month_day", "interval_count", "interval_unit"].includes(field2)) this._queueSchedulePreview(state, form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
   _clearDesktopFormDraft(state) {
@@ -40329,15 +40569,50 @@ var CodexBridgePanel = class extends HTMLElement {
     state.formError = "";
     state.hostAccessGrant = null;
     state.hostUnattendedApproved = null;
+    state.nextRuns = [];
+    state.previewGeneration = (state.previewGeneration || 0) + 1;
+    state.createRequestId = null;
   }
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
     return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
+  _queueSchedulePreview(state, form) {
+    if (!form || !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    const generation = (state.previewGeneration || 0) + 1;
+    state.previewGeneration = generation;
+    const values = this._desktopFormValues(form.querySelector("[data-desktop-field]") || form);
+    const timezone = state.scheduleContext?.timezone || this._hass?.config?.time_zone || "UTC";
+    let schedule;
+    try {
+      schedule = buildSchedule(values, { timezone, editing: state.editingAutomation });
+    } catch (error) {
+      state.nextRuns = [];
+      form.querySelector(".schedule-next-runs").textContent = error.message;
+      return;
+    }
+    form.querySelector(".schedule-next-runs").textContent = "Checking the next run times…";
+    void this._callWS("preview_automation_schedule", { schedule }).then((result) => {
+      if (generation !== state.previewGeneration || !["schedule", "schedule-edit"].includes(state.form)) return;
+      const dates = Array.isArray(result?.next_runs) ? result.next_runs : [];
+      state.nextRuns = dates.map((value) => new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone,
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(new Date(value)));
+      const preview = this.shadowRoot.querySelector(".schedule-next-runs");
+      if (preview) preview.textContent = state.nextRuns.length ? `Next runs (${timezone}): ${state.nextRuns.join(" · ")}` : "No future runs.";
+    }).catch(() => {
+      if (generation !== state.previewGeneration) return;
+      state.nextRuns = [];
+      const preview = this.shadowRoot.querySelector(".schedule-next-runs");
+      if (preview) preview.textContent = "Could not check the next run times. Check the App connection before creating this task.";
+    });
+  }
   async _submitScheduledTask(state, target, update) {
     const form = target?.closest("form");
-    if (!form || !form.reportValidity()) return;
+    if (!form || !form.reportValidity() || state.loading) return;
     try {
       const context = {
         ...state.scheduleContext,
@@ -40347,7 +40622,9 @@ var CodexBridgePanel = class extends HTMLElement {
       };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= crypto.randomUUID().replaceAll("-", "");
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (!state.form) state.createRequestId = null;
       if (state.form && state.error) {
         state.formError = state.error;
         state.error = "";
@@ -40433,7 +40710,28 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
-    if (action === "open-schedule-form") {
+    if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (action === "open-schedule-description") {
+      this._clearDesktopFormDraft(state);
+      state.editingAutomation = null;
+      state.scheduleContext = this._scheduleContext();
+      state.form = "schedule-description";
+    } else if (action === "review-schedule-description") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity()) return;
+      try {
+        const description = form.querySelector('[name="description"]')?.value || "";
+        state.scheduleContext = this._scheduleContext();
+        state.formDraft = proposeScheduleDescription(description, { timezone: state.scheduleContext.timezone });
+        state.formError = "";
+        state.form = "schedule";
+        this._renderDesktopSurface();
+        this._queueSchedulePreview(state, this.shadowRoot.querySelector(".schedule-editor"));
+        return;
+      } catch (error) {
+        state.formError = normalizeDesktopError(error);
+      }
+    } else if (action === "open-schedule-form") {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
       state.scheduleContext = this._scheduleContext();
@@ -40608,6 +40906,9 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }
     this._renderDesktopSurface();
+    if (["open-schedule-form", "update-automation"].includes(action) && ["schedule", "schedule-edit"].includes(state.form)) {
+      this._queueSchedulePreview(state, this.shadowRoot.querySelector(".schedule-editor"));
+    }
     if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
     if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
   }
@@ -41073,6 +41374,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    const scheduleButton = this.shadowRoot.getElementById("schedule-message-button");
+    scheduleButton.classList.toggle("hidden", !this._config?.capabilities?.includes("automation_proposals_v1"));
+    scheduleButton.disabled = !activeThread;
     const hasDraft = Boolean(promptInput.value.trim());
     const stop = isRunning && !hasDraft && !mutation;
     sendButton.disabled = !activeThread || cancelling || locked && !retryable || !stop && !retryable && !hasDraft;
@@ -42243,7 +42547,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `limits:${message}`,
         tone: "error",
-        message
+        message,
+        actions: [{ action: "open-usage", label: "View usage and resets", primary: true }]
       };
     }
     if (this._activeThread?.last_error) {
@@ -42343,10 +42648,12 @@ var CodexBridgePanel = class extends HTMLElement {
     const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
     const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
     const hasStepDetails = Boolean(activity.step || history.length || files.changed);
-    const showDetails = Boolean(hasStepDetails || activity.busy || activity.attentionMessage);
+    const showDetails = Boolean(hasStepDetails || activity.attentionMessage);
     const showActivityCopy = Boolean(
-      activity.action && (activity.terminal || activity.busy)
+      activity.action && activity.terminal
     );
+    window.clearTimeout(this._activityClockTimer);
+    this._activityClockTimer = null;
     if (!this._activeThread || !showActivityCopy && !hasStepDetails && !activity.busy) {
       this._runActivityDetailsOpen = false;
       region.hidden = true;
@@ -42355,6 +42662,32 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     region.hidden = false;
     region.setAttribute("aria-busy", String(activity.busy));
+    if (activity.busy) {
+      const started = this._events.slice().reverse().find((event) => event.event_type === "run.started" && (!activity.runId || event.payload?.run_id === activity.runId));
+      const startedMs = Date.parse(started?.timestamp || "");
+      const elapsed = document.createElement("div");
+      elapsed.className = "run-elapsed";
+      const dots = this._textElement("span", "run-elapsed-dots", "");
+      dots.setAttribute("aria-hidden", "true");
+      for (let index = 0; index < 3; index += 1) dots.append(this._textElement("span", "", ""));
+      const label = this._textElement("span", "run-elapsed-label", "Working");
+      elapsed.append(dots, label);
+      region.append(elapsed);
+      const tick = () => {
+        if (!this.isConnected || !label.isConnected || !this._runActivityForThread().busy) return;
+        if (Number.isFinite(startedMs)) {
+          const seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1e3));
+          const minutes = Math.floor(seconds / 60);
+          label.textContent = `Working for ${minutes ? `${minutes}m ` : ""}${seconds % 60}s`;
+        }
+        this._activityClockTimer = window.setTimeout(tick, 1e3);
+      };
+      if (Number.isFinite(startedMs)) {
+        const seconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1e3));
+        label.textContent = `Working for ${Math.floor(seconds / 60) ? `${Math.floor(seconds / 60)}m ` : ""}${seconds % 60}s`;
+      }
+      this._activityClockTimer = window.setTimeout(tick, 1e3);
+    }
     if (showActivityCopy && !showDetails) {
       const copy = document.createElement("div");
       copy.className = "run-activity-copy";
@@ -42386,8 +42719,8 @@ var CodexBridgePanel = class extends HTMLElement {
       const stepState = activity.state === "failed" ? "failed" : activity.terminal ? "complete" : "";
       stepIndicator.className = `step-spinner${stepState ? ` ${stepState}` : ""}`;
       stepIndicator.setAttribute("aria-hidden", "true");
-      chip.append(stepIndicator);
-      const stepText = activity.busy ? activity.liveAction || "Working" : activity.state === "failed" ? "Run failed" : activity.state === "interrupted" ? "Run interrupted" : activity.state === "cancelled" ? "Run cancelled" : "Run completed";
+      if (!activity.busy) chip.append(stepIndicator);
+      const stepText = activity.busy ? activity.liveAction === "Working" ? "Activity details" : activity.liveAction || "Activity details" : activity.state === "failed" ? "Run failed" : activity.state === "interrupted" ? "Run interrupted" : activity.state === "cancelled" ? "Run cancelled" : "Run completed";
       chip.append(this._textElement("span", "run-step-label", stepText));
       if (files.changed) {
         chip.append(
@@ -42610,7 +42943,8 @@ var CodexBridgePanel = class extends HTMLElement {
         "user",
         payload.text,
         event.sequence,
-        payload.queued ? "Queued steer" : ""
+        payload.queued ? "Queued steer" : "",
+        event.timestamp
       );
     }
     if (event.event_type === "message.completed") {
@@ -42751,11 +43085,25 @@ var CodexBridgePanel = class extends HTMLElement {
     article.append(bubble);
     return article;
   }
-  _renderMessage(role, text3, key, label = "") {
+  _renderMessage(role, text3, key, label = "", timestamp = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
     article.setAttribute("aria-label", role === "user" ? "Your message" : "Assistant response");
+    if (role === "user" && timestamp) {
+      const date = new Date(timestamp);
+      if (Number.isFinite(date.getTime())) {
+        const today = /* @__PURE__ */ new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const sameDay = (left, right) => left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+        const dateLabel = sameDay(date, today) ? "Today" : sameDay(date, yesterday) ? "Yesterday" : new Intl.DateTimeFormat(void 0, { day: "numeric", month: "short", year: "numeric" }).format(date);
+        const timeLabel = new Intl.DateTimeFormat(void 0, { hour: "numeric", minute: "2-digit" }).format(date);
+        const time = this._textElement("time", "message-time", `${dateLabel} ${timeLabel}`);
+        time.dateTime = date.toISOString();
+        article.append(time);
+      }
+    }
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
@@ -43727,7 +44075,80 @@ var CodexBridgePanel = class extends HTMLElement {
     ], "context-row");
     const context = this._textElement("p", "usage-note context-usage-summary", contextUsage(this._activeThread?.context_usage).label);
     const contextNote = this._textElement("p", "usage-note", "Last reported context for this chat. Codex may compact earlier conversation as the context fills; this is separate from your account limits.");
-    container.replaceChildren(context, contextNote, grid, summary, details);
+    container.replaceChildren(context, contextNote, grid, summary);
+    if (this._config?.capabilities?.includes("reset_credits_v1") && this._authViewModel().signedIn) {
+      const section2 = document.createElement("section");
+      section2.className = "reset-credit-section";
+      section2.append(this._textElement("h3", "", "Usage resets"));
+      const available = limits?.reset_credits?.available_count;
+      section2.append(this._textElement("p", "usage-note", available == null ? "Reset credit availability is unavailable." : `${available} reset credit${available === 1 ? "" : "s"} available.`));
+      const credits = limits?.reset_credits?.credits;
+      const visibleCredits = Array.isArray(credits) ? credits.slice() : [];
+      if (this._pendingResetCredit && !visibleCredits.some((credit) => credit.id === this._pendingResetCredit.id)) {
+        visibleCredits.push({ id: this._pendingResetCredit.id, title: "Previous reset attempt" });
+      }
+      if (!Array.isArray(credits) && available > 0) {
+        section2.append(this._textElement("p", "usage-note", "The account reported a count but did not provide individual credit details. Refresh usage to check again."));
+      }
+      for (const credit of visibleCredits) {
+        const row = document.createElement("div");
+        row.className = "reset-credit-row";
+        row.append(this._textElement("span", "", credit.title || "Codex usage reset"));
+        row.append(this._textElement("span", "usage-note", credit.expires_at ? `Expires ${this._formatCreditExpiry(credit.expires_at)}` : "No expiry reported"));
+        const selected = this._pendingResetCredit?.id === credit.id;
+        const button3 = this._actionButton("text-button", selected ? "confirm-reset-credit" : "select-reset-credit", selected ? "Confirm use of this reset credit" : "Use reset");
+        if (!selected) button3.dataset.creditId = credit.id;
+        button3.textContent = selected ? "Confirm use" : "Use reset";
+        button3.disabled = this._resetCreditBusy;
+        row.append(button3);
+        if (selected) {
+          row.append(this._textElement("p", "usage-note", "This uses one reset credit for your current Codex account. It cannot be undone."));
+          const cancel = this._actionButton("text-button", "cancel-reset-credit", "Cancel reset");
+          cancel.textContent = "Cancel";
+          cancel.disabled = this._resetCreditBusy;
+          row.append(cancel);
+        }
+        section2.append(row);
+      }
+      if (this._resetCreditNotice) {
+        const notice = this._textElement("p", "usage-note", this._resetCreditNotice);
+        notice.setAttribute("role", "status");
+        section2.append(notice);
+      }
+      container.append(section2);
+    }
+    container.append(details);
+  }
+  async _consumeResetCredit() {
+    if (this._resetCreditBusy || !this._pendingResetCredit || !this._config?.capabilities?.includes("reset_credits_v1")) return;
+    this._resetCreditBusy = true;
+    this._renderUsagePanel();
+    try {
+      const result = await this._callWS("consume_reset_credit", {
+        credit_id: this._pendingResetCredit.id,
+        idempotency_key: this._pendingResetCredit.key
+      });
+      this._resetCreditNotice = {
+        reset: "Reset applied to eligible Codex usage windows.",
+        alreadyRedeemed: "This reset was already applied.",
+        nothingToReset: "No current usage window can be reset.",
+        noCredit: "This reset credit is no longer available."
+      }[result?.outcome] || "Reset result unavailable. Refresh usage before trying again.";
+      if (["reset", "alreadyRedeemed", "nothingToReset", "noCredit"].includes(result?.outcome)) {
+        this._pendingResetCredit = null;
+        try {
+          this._mergeStatus(await this._callWS("get_status"));
+        } catch {
+          this._resetCreditNotice += " Refresh usage to see the latest balance.";
+        }
+      }
+    } catch {
+      this._resetCreditNotice = "Could not confirm the reset. Retrying will use the same attempt; check usage before trying again.";
+    } finally {
+      this._resetCreditBusy = false;
+      this._renderUsagePanel();
+      this._renderStatusBanner();
+    }
   }
   _renderSideTabs() {
     const allowed = INFO_TABS.map((tab) => tab.id);
@@ -46055,6 +46476,19 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     try {
       return new Intl.DateTimeFormat(void 0, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      }).format(new Date(epochSeconds * 1e3));
+    } catch {
+      return "unknown";
+    }
+  }
+  _formatCreditExpiry(epochSeconds) {
+    try {
+      return new Intl.DateTimeFormat(void 0, {
+        year: "numeric",
         month: "short",
         day: "numeric",
         hour: "numeric",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0
+
+- Keeps the optional Host Access App aligned with Codex Bridge `1.6.0` and
+  Bridge `0.13.0`. Host access still requires separate installation and consent;
+  this release does not enable it automatically.
+
 ## 1.5.1
 
 - Bundles the Sigstore-verified Codex runtime `0.156.1`.

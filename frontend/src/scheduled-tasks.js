@@ -17,7 +17,7 @@ function localParts(instant, timezone) {
 }
 
 /** Resolve wall time in HA's zone, never the browser's possibly different zone. */
-export function scheduleInstant(date, time, timezone) {
+export function scheduleInstantCandidates(date, time, timezone) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) {
     throw new Error("Choose a valid date and time.");
   }
@@ -34,7 +34,11 @@ export function scheduleInstant(date, time, timezone) {
     if (resolved.date === date && resolved.time === time) candidates.add(candidate);
   }
   if (!candidates.size) throw new Error("That time does not exist when the clocks change. Choose another time.");
-  return new Date(Math.min(...candidates)).toISOString();
+  return [...candidates].sort((a, b) => a - b).map((value) => new Date(value).toISOString());
+}
+
+export function scheduleInstant(date, time, timezone) {
+  return scheduleInstantCandidates(date, time, timezone)[0];
 }
 
 export function scheduleFormValues(automation = {}, timezone = "UTC", now = Date.now()) {
@@ -248,6 +252,12 @@ export function renderScheduleForm(doc, state, timezone, context = {}) {
   frequency.append(field(doc, "time", "Time", values.time, null, "time"));
   frequency.append(staticRow(doc, "Results", "Chat and run history"));
   form.append(element(doc, "p", "schedule-preview"));
+  if (context.proposalsSupported) {
+    const nextRuns = element(doc, "p", "schedule-next-runs", state.nextRuns?.length
+      ? `Next runs: ${state.nextRuns.join(" · ")}` : "Checking the next run times…");
+    nextRuns.setAttribute("aria-live", "polite");
+    form.append(nextRuns);
+  }
   form.append(element(doc, "p", "schedule-month-note", "Months without this date are skipped."));
   const advanced = element(doc, "details", "schedule-advanced");
   advanced.append(element(doc, "summary", "", "Advanced"));

@@ -55,6 +55,11 @@ class AppServerLimitsProbe:
         self._generation: int | None = None
         self._probe_lock = Lock()
 
+    def invalidate(self) -> None:
+        with self._probe_lock:
+            self._last_fetch_at = 0.0
+            self._cached_status = None
+
     def probe(self) -> LimitsStatusRecord | None:
         with self._probe_lock:
             now = time.monotonic()
@@ -106,7 +111,7 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
     secondary = _app_server_limits_window(snapshot.get("secondary"))
     primary, secondary = _classify_app_server_limits_windows(primary, secondary)
     reached_type = snapshot.get("rateLimitReachedType")
-    blocked = reached_type is not None or any(
+    blocked = response.get("ordinaryUsageAllowed") is False or reached_type is not None or any(
         window is not None and window.used_percent == 100.0
         for window in (primary, secondary)
     )
@@ -118,11 +123,38 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
         primary=primary,
         secondary=secondary,
         credits=_app_server_credits(snapshot.get("credits")),
+        reset_credits=_app_server_reset_credits(response.get("rateLimitResetCredits")),
         plan_type=normalize_chatgpt_plan_type(plan_type),
         updated_at=datetime.now(UTC)
         .isoformat(timespec="microseconds")
         .replace("+00:00", "Z"),
     )
+
+
+def _app_server_reset_credits(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or type(value.get("availableCount")) is not int:
+        return None
+    count = max(0, min(value["availableCount"], 10000))
+    details = value.get("credits")
+    if not isinstance(details, list):
+        return {"available_count": count, "credits": None}
+    credits = []
+    for item in details:
+        if not isinstance(item, dict) or item.get("status") != "available":
+            continue
+        credit_id = item.get("id")
+        if not isinstance(credit_id, str) or not 1 <= len(credit_id) <= 256 or any(ord(char) < 33 or ord(char) > 126 for char in credit_id):
+            continue
+        expires_at = item.get("expiresAt")
+        title = item.get("title")
+        credits.append({
+            "id": credit_id,
+            "title": title[:160] if isinstance(title, str) else None,
+            "expires_at": expires_at if type(expires_at) is int and expires_at > 0 else None,
+        })
+        if len(credits) == 100:
+            break
+    return {"available_count": count, "credits": credits}
 
 
 def _classify_app_server_limits_windows(

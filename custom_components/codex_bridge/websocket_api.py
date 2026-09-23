@@ -51,6 +51,7 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_server_not_found": "The MCP server no longer exists",
     "mcp_unavailable": "MCP configuration is temporarily unavailable",
     "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
+    "reset_credit_unavailable": "That reset credit is unavailable. Refresh usage and check again.",
 }
 
 
@@ -58,6 +59,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     commands = (
         ws_get_config,
         ws_get_status,
+        ws_consume_reset_credit,
         ws_get_event_status,
         ws_get_auth_status,
         ws_start_auth_login,
@@ -93,6 +95,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_revoke_host_access,
         ws_list_automations,
         ws_get_automation,
+        ws_preview_automation_schedule,
         ws_create_automation,
         ws_update_automation,
         ws_pause_automation,
@@ -219,6 +222,21 @@ async def ws_get_status(
         return status
 
     await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/consume_reset_credit",
+    vol.Required("credit_id"): vol.Match(r"^[\x21-\x7e]{1,256}$"),
+    vol.Required("idempotency_key"): vol.Match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
+})
+@websocket_api.async_response
+async def ws_consume_reset_credit(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_consume_reset_credit(
+            msg["credit_id"], msg["idempotency_key"],
+        ),
+    )
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_event_status"})
@@ -1186,7 +1204,22 @@ async def ws_get_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/preview_automation_schedule",
+        vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
+    }
+)
+@websocket_api.async_response
+async def ws_preview_automation_schedule(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_preview_automation_schedule(msg["schedule"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/create_automation",
+        vol.Optional("client_request_id"): vol.Match(r"^[a-f0-9]{32}$"),
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=160)),
         vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
         vol.Required("target"): vol.All(dict, vol.Length(max=16)),
@@ -1206,7 +1239,7 @@ async def ws_get_automation(hass, connection, msg) -> None:
 async def ws_create_automation(hass, connection, msg) -> None:
     payload = {
         key: msg[key]
-        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved")
+        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved", "client_request_id")
         if key in msg
     }
     payload.setdefault("mode", "observe")

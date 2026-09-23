@@ -577,6 +577,15 @@ class BridgeApiClient:
     async def async_get_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/status")
 
+    async def async_consume_reset_credit(
+        self, credit_id: str, idempotency_key: str,
+    ) -> dict[str, Any]:
+        self.require_capability("reset_credits_v1")
+        return await self._async_json(
+            "POST", "/account/reset-credits/consume",
+            json_body={"credit_id": credit_id, "idempotency_key": idempotency_key},
+        )
+
     async def async_get_auth_status(self) -> dict[str, Any]:
         return await self._async_json("GET", "/auth/status")
 
@@ -1187,6 +1196,8 @@ class BridgeApiClient:
 
     async def async_create_automation(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        if payload.get("client_request_id") is not None:
+            self.require_capability("automation_proposals_v1")
         if payload.get("mode") == "haos-full-access" or payload.get("host_access_grant") is not None:
             self.require_capability("host_access_v1")
         return await self._async_json(
@@ -1195,6 +1206,10 @@ class BridgeApiClient:
             json_body=_bounded_mapping(payload),
             expected_status={201},
         )
+
+    async def async_preview_automation_schedule(self, schedule: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("automation_proposals_v1")
+        return await self._async_json("POST", "/automations/preview", json_body={"schedule": _bounded_mapping(schedule)})
 
     async def async_update_automation(
         self, automation_id: str, payload: dict[str, Any]

@@ -76,7 +76,8 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
 - **Chats and files:** use direct chats or organise work into projects. Model
   and reasoning choices come from the installed Codex runtime and your account.
   Astra appears when that runtime and account advertise it.
-- **Scheduled tasks:** enter a title and instructions, choose a new or current
+- **Scheduled tasks:** describe the task and timing in one sentence, then review
+  the proposed schedule before creating it. You can also enter a title and instructions, choose a new or current
   chat, then set the frequency and time. Daily, weekdays, weekly, monthly,
   intervals and one-off tasks are supported. Times use Home Assistant's time
   zone. Read the [Scheduled guide](docs/scheduled-tasks.md).
@@ -111,8 +112,8 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.5.0**, Integration and panel **1.5.0**, with Bridge **0.12.0**
-and Codex **0.155.1**. It prepares ARM64 development builds; published images
+This release pairs App **1.6.0**, Integration and panel **1.6.0**, with Bridge **0.13.0**
+and Codex **0.156.1**. It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only
 bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local
 HA-MCP connections. [ARM64 development status](docs/arm64-development.md).

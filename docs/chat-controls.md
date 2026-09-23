@@ -11,6 +11,19 @@ Codex compacts earlier conversation. If the runtime has not reported a reading,
 the ring says so rather than showing a made-up percentage. Account limits and
 context usage measure different things.
 
+The Usage panel also lists any reset credits reported by the signed-in Codex
+account, including their expiry when available. Select **Use reset** to review
+one credit, then **Confirm use** to redeem it. This affects the account's
+eligible usage windows and cannot be undone. If the connection drops after
+confirmation, retrying that attempt uses the same idempotency key so it cannot
+redeem a second credit. The panel does not offer redemption when the backend
+reports only a credit count without individual credit details.
+
+When usage is exhausted, the chat shows a banner linking to Usage and resets.
+During a run, the activity line shows elapsed working time with three animated
+dots; reduced-motion preferences stop the animation. Message timestamps use
+the browser's local time.
+
 ## Sidebar and sharing
 
 The sidebar groups pull-request links, workspace outputs and sources used in
@@ -18,6 +31,9 @@ the chat. Open an output to preview or download it. Expand a pull request and
 follow its GitHub link to check its current review or merge status. The Bridge
 does not infer that status from what Codex wrote. Sources include uploads and
 links mentioned in the chat; a link's presence does not verify its contents.
+The Subagents section shows working, completed and attention counts when Codex
+reports them in the active run. It does not invent individual agent identities
+or show unrelated Codex desktop tasks.
 
 The plus button beside Outputs opens the workspace file list. The Sources plus
 button uploads files to the chat. The activity button shows current run details,

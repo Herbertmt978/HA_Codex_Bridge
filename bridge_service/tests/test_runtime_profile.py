@@ -217,6 +217,8 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         "legacy_v0",
         "interactions_v2",
         "automations_v1",
+        "automation_proposals_v1",
+        "reset_credits_v1",
         "skills_v1",
         "plugins_v1",
         "agents_v1",

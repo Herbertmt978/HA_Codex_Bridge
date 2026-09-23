@@ -9,8 +9,11 @@ from inspect import getsource
 from math import inf, nan
 from threading import Event, Lock
 from typing import Any
+from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 import codex_bridge_service.account as account_module
 import codex_bridge_service.limits as limits_module
@@ -19,6 +22,8 @@ from codex_bridge_service.codex_app_server_contract import (
     load_bundled_protocol_contract,
 )
 from codex_bridge_service.models import CodexAccountRecord, LimitsStatusRecord
+from codex_bridge_service.api_contract import API_CURRENT
+from codex_bridge_service.routes.status import router as status_router
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +103,98 @@ def _limits_probe(
         client,
         min_fetch_interval_seconds=min_fetch_interval_seconds,
     )
+
+
+def test_limits_probe_projects_reset_credit_expiries_without_private_fields() -> None:
+    response = _rate_limits(primary={"usedPercent": 100})
+    response["rateLimitResetCredits"] = {
+        "availableCount": 2,
+        "credits": [
+            {"id": "credit-one", "status": "available", "title": "Weekly reset", "expiresAt": 1_800_000_000, "grantedAt": 1_700_000_000, "resetType": "codexRateLimits", "description": "private detail"},
+            {"id": "credit-used", "status": "redeemed", "title": None, "expiresAt": None, "grantedAt": 1_700_000_000, "resetType": "codexRateLimits"},
+        ],
+    }
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status is not None
+    assert status.reset_credits == {
+        "available_count": 2,
+        "credits": [{"id": "credit-one", "title": "Weekly reset", "expires_at": 1_800_000_000}],
+    }
+    assert "private detail" not in status.model_dump_json()
+
+
+def test_limits_probe_caps_available_credits_after_filtering_other_statuses() -> None:
+    response = _rate_limits(primary={"usedPercent": 100})
+    response["rateLimitResetCredits"] = {
+        "availableCount": 101,
+        "credits": [
+            {"id": f"used-{index}", "status": "redeemed"} for index in range(150)
+        ] + [
+            {"id": f"available-{index}", "status": "available"}
+            for index in range(101)
+        ],
+    }
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status is not None
+    assert status.reset_credits is not None
+    assert status.reset_credits["available_count"] == 101
+    assert len(status.reset_credits["credits"]) == 100
+    assert status.reset_credits["credits"][0]["id"] == "available-0"
+    assert status.reset_credits["credits"][-1]["id"] == "available-99"
+
+
+def test_limits_probe_uses_backend_usage_permission_for_exhausted_banner() -> None:
+    response = _rate_limits(primary={"usedPercent": 99})
+    response["ordinaryUsageAllowed"] = False
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status is not None
+    assert status.blocked is True
+
+
+@pytest.mark.parametrize("outcome", ["reset", "alreadyRedeemed", "nothingToReset", "noCredit"])
+def test_reset_credit_route_uses_one_explicit_credit_and_stable_attempt(outcome: str) -> None:
+    _assert_locked_response("account/rateLimitResetCredit/consume", {"outcome": outcome})
+    client = RecordingAppServerClient({"outcome": outcome})
+    invalidated = []
+    app = FastAPI()
+    app.include_router(status_router)
+    app.state.auth_token = "secret"
+    app.state.feature_capabilities = ("reset_credits_v1",)
+    app.state.codex_app_server = client
+    app.state.storage = SimpleNamespace(limits_probe=SimpleNamespace(invalidate=lambda: invalidated.append(True)), runtime_profile="home_assistant")
+    response = TestClient(app).post(
+        "/account/reset-credits/consume",
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": str(API_CURRENT)},
+        json={"credit_id": "credit-one", "idempotency_key": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"outcome": outcome}
+    assert client.calls == [AppServerCall("account/rateLimitResetCredit/consume", {"creditId": "credit-one", "idempotencyKey": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"})]
+    assert invalidated == [True]
+
+
+def test_reset_credit_route_rejects_missing_authority_and_capability() -> None:
+    client = RecordingAppServerClient()
+    app = FastAPI()
+    app.include_router(status_router)
+    app.state.auth_token = "secret"
+    app.state.feature_capabilities = ()
+    app.state.codex_app_server = client
+    app.state.storage = SimpleNamespace(runtime_profile="home_assistant")
+    payload = {"credit_id": "credit-one", "idempotency_key": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}
+    guest = TestClient(app).post(
+        "/account/reset-credits/consume",
+        headers={"X-Codex-Bridge-Api": str(API_CURRENT)},
+        json=payload,
+    )
+    unsupported = TestClient(app).post(
+        "/account/reset-credits/consume",
+        headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": str(API_CURRENT)},
+        json=payload,
+    )
+    assert guest.status_code == 401
+    assert unsupported.status_code == 409
+    assert client.calls == []
 
 
 @lru_cache(maxsize=1)

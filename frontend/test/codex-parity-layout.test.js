@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "../src/codex-bridge-panel.js";
 
@@ -147,5 +147,64 @@ describe("Codex desktop parity layout", () => {
       expect(panelElement.getAttribute("aria-labelledby")).toBe(tab.id);
       expect(panelElement.dataset.sideTabPanel).toBe(tab.dataset.sideTab);
     }
+  });
+
+  it("lists reset credit expiry and requires a separate confirmation before redemption", async () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["reset_credits_v1"];
+    panel._status.limits.reset_credits = {
+      available_count: 1,
+      credits: [{ id: "credit-one", title: "Codex reset", expires_at: 1_900_000_000 }],
+    };
+    const call = vi.spyOn(panel, "_callWS").mockResolvedValueOnce({ outcome: "reset" })
+      .mockResolvedValueOnce(panel._status);
+    panel._renderUsagePanel();
+    const section = panel.shadowRoot.querySelector(".reset-credit-section");
+    expect(section.textContent).toContain("1 reset credit available");
+    expect(section.textContent).toContain("Expires");
+    section.querySelector('[data-action="select-reset-credit"]').click();
+    expect(call).not.toHaveBeenCalled();
+    expect(panel.shadowRoot.querySelector(".reset-credit-section").textContent).toContain("cannot be undone");
+    await panel._consumeResetCredit();
+    expect(call).toHaveBeenCalledWith("consume_reset_credit", {
+      credit_id: "credit-one",
+      idempotency_key: expect.stringMatching(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/),
+    });
+    expect(panel.shadowRoot.querySelector(".reset-credit-section").textContent).toContain("Reset applied");
+  });
+
+  it("keeps the same reset attempt available when the result is uncertain", async () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["reset_credits_v1"];
+    panel._status.limits.reset_credits = {
+      available_count: 1,
+      credits: [{ id: "credit-one", title: "Codex reset", expires_at: null }],
+    };
+    panel._renderUsagePanel();
+    panel.shadowRoot.querySelector('[data-action="select-reset-credit"]').click();
+    const key = panel._pendingResetCredit.key;
+    const call = vi.spyOn(panel, "_callWS").mockRejectedValue(new Error("Connection lost"));
+    await panel._consumeResetCredit();
+    panel._status.limits.reset_credits = { available_count: 0, credits: [] };
+    panel._renderUsagePanel();
+    expect(panel.shadowRoot.querySelector(".reset-credit-section").textContent).toContain("Previous reset attempt");
+    expect(panel.shadowRoot.querySelector('[data-action="confirm-reset-credit"]')).not.toBeNull();
+    await panel._consumeResetCredit();
+    expect(call).toHaveBeenNthCalledWith(2, "consume_reset_credit", {
+      credit_id: "credit-one",
+      idempotency_key: key,
+    });
+  });
+
+  it("reports a successful reset even when the follow-up usage refresh fails", async () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["reset_credits_v1"];
+    panel._pendingResetCredit = { id: "credit-one", key: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+    vi.spyOn(panel, "_callWS").mockResolvedValueOnce({ outcome: "reset" })
+      .mockRejectedValueOnce(new Error("Status unavailable"));
+    await panel._consumeResetCredit();
+    expect(panel._pendingResetCredit).toBeNull();
+    expect(panel.shadowRoot.querySelector(".reset-credit-section").textContent).toContain("Reset applied");
+    expect(panel.shadowRoot.querySelector(".reset-credit-section").textContent).toContain("Refresh usage");
   });
 });

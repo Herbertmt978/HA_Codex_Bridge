@@ -26,6 +26,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_get_events,
     ws_get_automation,
     ws_get_status,
+    ws_consume_reset_credit,
     ws_create_automation,
     ws_login_mcp,
     ws_list_artifacts,
@@ -362,6 +363,20 @@ async def test_create_automation_refreshes_the_local_scheduler() -> None:
     )
     refresh.assert_awaited_once()
     assert connection.results == [(51, {"automation_id": "aut_1", "revision": 1})]
+
+
+async def test_reset_credit_redeems_only_the_selected_credit_and_attempt() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_consume_reset_credit = AsyncMock(return_value={"outcome": "reset"})
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_consume_reset_credit(hass, connection, {
+        "id": 59, "type": f"{DOMAIN}/consume_reset_credit",
+        "credit_id": "credit-one", "idempotency_key": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    })
+    await hass.finish()
+    runtime.client.async_consume_reset_credit.assert_awaited_once_with("credit-one", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    assert connection.results == [(59, {"outcome": "reset"})]
 
 
 @pytest.mark.parametrize(

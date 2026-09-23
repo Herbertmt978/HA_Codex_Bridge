@@ -124,8 +124,8 @@ describe("panel run activity integration", () => {
     expect(messageList?.querySelector("article.message.assistant.streaming")?.textContent).toContain("Partial answer");
     expect(messageList?.querySelector(".message-state")).toBeNull();
     expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-activity-copy")).toBeNull();
-    expect(panel.shadowRoot.getElementById("run-step-chip")?.getAttribute("aria-label")).toContain("Generating a response");
-    expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-step-chip")).toBeTruthy();
+    expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-elapsed-label")?.textContent).toBe("Working");
+    expect(panel.shadowRoot.getElementById("run-activity")?.querySelector(".run-step-chip")).toBeNull();
 
     panel._events = [
       event(1, "message.delta", { run_id: "run-activity", item_id: "assistant-1", text: "Partial answer" }),
@@ -139,6 +139,16 @@ describe("panel run activity integration", () => {
     expect(messageList?.querySelector("article.message.assistant.streaming")).toBeNull();
     expect(messageList?.textContent).toContain("Final answer");
     expect(messageList?.textContent).not.toContain("Partial answer");
+  });
+
+  it("shows a local message time from the durable event timestamp", () => {
+    const sent = event(1, "message.created", { text: "Continue this work" });
+    sent.timestamp = "2026-09-23T07:53:00Z";
+    const panel = createPanel({ status: "idle", activeRunId: null, events: [sent] });
+    panel._render(true);
+    const time = panel.shadowRoot.querySelector(".message.user time");
+    expect(time?.dateTime).toBe("2026-09-23T07:53:00.000Z");
+    expect(time?.textContent).toMatch(/\d+:\d\d/);
   });
 
   it.each([false, true])("shows one completed indicator with details=%s", (withDetails) => {
@@ -197,10 +207,10 @@ describe("panel run activity integration", () => {
     const panel = createPanel({ events: [event(1, "run.started", { run_id: "run-activity" })] });
     panel._render(true);
     const activity = panel.shadowRoot.getElementById("run-activity");
-    expect(activity.querySelectorAll(".run-activity-copy, .run-step-chip")).toHaveLength(1);
-    expect(activity.querySelectorAll(".activity-spinner, .step-spinner")).toHaveLength(1);
-    expect(activity.querySelector(".run-step-chip").textContent).toBe("Working");
-    expect(activity.querySelector(".run-step-chip").getAttribute("aria-label")).toContain("Working on the request");
+    expect(activity.querySelectorAll(".run-elapsed")).toHaveLength(1);
+    expect(activity.querySelectorAll(".run-activity-copy, .run-step-chip, .activity-spinner, .step-spinner")).toHaveLength(0);
+    expect(activity.querySelectorAll(".run-elapsed-dots span")).toHaveLength(3);
+    expect(activity.querySelector(".run-elapsed-label").textContent).toBe("Working");
   });
 
   it("updates the single activity control from thinking to a tool and retains file counts", () => {

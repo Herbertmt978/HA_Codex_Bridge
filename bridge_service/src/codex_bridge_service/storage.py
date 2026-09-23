@@ -4730,6 +4730,7 @@ class BridgeStorage:
                 credits=rate_limits.get("credits")
                 if isinstance(rate_limits.get("credits"), dict)
                 else None,
+                reset_credits=current.reset_credits,
                 plan_type=str(rate_limits.get("plan_type"))
                 if rate_limits.get("plan_type") is not None
                 else None,
