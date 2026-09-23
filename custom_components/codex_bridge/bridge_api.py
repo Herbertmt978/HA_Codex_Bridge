@@ -931,6 +931,27 @@ class BridgeApiClient:
             },
         )
 
+    async def async_answer_mcp_form(
+        self,
+        interaction_id: str,
+        *,
+        thread_id: str,
+        content: dict[str, Any],
+        client_request_id: str,
+    ) -> dict[str, Any]:
+        self.require_capability("mcp_elicitation_v1")
+        if not isinstance(content, dict) or len(content) > 16:
+            raise BridgeApiEndpointError("mcp_form_invalid")
+        return await self._async_json(
+            "POST",
+            f"/interactions/{_path_segment(interaction_id)}/mcp-form",
+            json_body={
+                "thread_id": _path_segment(thread_id),
+                "content": content,
+                "client_request_id": _client_request_id(client_request_id),
+            },
+        )
+
     async def async_list_artifacts(self, thread_id: str) -> list[dict[str, Any]]:
         return await self._async_json(
             "GET",

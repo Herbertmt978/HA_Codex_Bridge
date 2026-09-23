@@ -1519,6 +1519,7 @@ _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
     "interaction.resolved": frozenset({"interaction_id", "status"}),
     "interaction.expired": frozenset({"interaction_id"}),
     "interaction.outcome_unknown": frozenset({"interaction_id"}),
+    "mcp.elicitation_declined": frozenset({"run_id", "server_name", "reason"}),
     # The retired exec adapter used to forward the complete provider JSON.
     # Keep only routing metadata so private cwd/auth/prompt fields cannot enter
     # either the canonical v1 replay or its list-shaped v0 adapter.

@@ -323,6 +323,17 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
         ("config/mcpServer/reload", None),
     ]
     assert len(gate.leases) == 1 and gate.leases[0].released is True
+    assert manager.is_active_server("vendor_mcp") is True
+    assert manager.is_active_server("other_server") is False
+    callback_finished = Event()
+    with manager._lock:
+        callback = Thread(
+            target=lambda: (manager.is_active_server("vendor_mcp"), callback_finished.set()),
+            daemon=True,
+        )
+        callback.start()
+        assert callback_finished.wait(2), "MCP callback must not wait on a config mutation"
+    callback.join(timeout=2)
 
 
 @pytest.mark.asyncio
@@ -414,6 +425,7 @@ def test_remove_uses_same_cas_write_reload_boundary() -> None:
     )
 
     manager.remove_server("vendor")
+    assert manager.is_active_server("vendor") is False
 
     assert client.calls[1].params == {
         "edits": [

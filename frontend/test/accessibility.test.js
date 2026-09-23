@@ -47,6 +47,16 @@ const QUESTION = {
   allowed_actions: ["answer"],
 };
 
+const MCP_FORM = {
+  interaction_id: "interaction-mcp-1", kind: "mcp_form", thread_id: "thread-alpha",
+  event_id: 43, status: "pending", expires_at: "2099-07-13T12:05:00Z",
+  display: {
+    title: "MCP server question", summary: "Choose a result", mcp_server: "calendar",
+    mcp_fields: [{ name: "choice", label: "Choice", kind: "select", options: ["yes", "no"], required: true }],
+  },
+  allowed_actions: ["answer", "decline", "cancel"],
+};
+
 function createPanel() {
   const panel = document.createElement("codex-bridge-panel");
   document.body.append(panel);
@@ -271,6 +281,33 @@ describe("panel accessibility contract", () => {
     expect(panel.shadowRoot.querySelector('[data-action="accept-interaction"]')?.disabled).toBe(true);
     await panel._decideInteraction(APPROVAL.interaction_id, "accept");
     expect(decisionCalls).toBe(1);
+  });
+
+  it("retries the exact MCP form response after an interrupted send", async () => {
+    const panel = createPanel();
+    panel._pendingInteractions = [MCP_FORM];
+    let attempts = 0;
+    const sent = [];
+    panel._callWS = vi.fn(async (action, payload) => {
+      if (action === "answer_mcp_form") {
+        sent.push(payload);
+        attempts += 1;
+        if (attempts === 1) throw new Error("connection interrupted");
+        return { status: "accepted" };
+      }
+      if (action === "list_pending_interactions") {
+        return { items: attempts === 1 ? [MCP_FORM] : [], count: 0, thread_id: "thread-alpha" };
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._render(true);
+    panel.shadowRoot.querySelector(".mcp-form-fields select").value = "yes";
+    panel._answerMcpFormFromTarget(panel.shadowRoot.querySelector('[data-action="answer-mcp-form"]'));
+    await vi.waitFor(() => expect(panel._interactionMutations.get(MCP_FORM.interaction_id)?.state).toBe("retryable"));
+    expect(panel.shadowRoot.querySelector(".mcp-form-fields select").disabled).toBe(true);
+    panel._answerMcpFormFromTarget(panel.shadowRoot.querySelector('[data-action="answer-mcp-form"]'));
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]).toEqual(sent[0]);
   });
 
   it("ignores a late interaction failure after the user switches chats", async () => {

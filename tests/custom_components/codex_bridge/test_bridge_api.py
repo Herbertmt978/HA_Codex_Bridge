@@ -987,7 +987,9 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
         if request.can_read_body:
             bodies[request.path] = await request.json()
         if request.path == "/ready":
-            return web.json_response(_fixture("ready_v1.json"))
+            ready = _fixture("ready_v1.json")
+            ready["capabilities"] = [*ready["capabilities"], "mcp_elicitation_v1"]
+            return web.json_response(ready)
         if request.path in {"/events/replay", "/events/wait"}:
             return web.json_response(
                 {
@@ -1043,6 +1045,11 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
             answers=[{"question_id": "question_safe", "values": ["yes"]}],
             client_request_id="answer-1",
         )
+        await client.async_answer_mcp_form(
+            "int_safe", thread_id="thr_safe",
+            content={"choice": "yes", "enabled": True},
+            client_request_id="mcp-answer-1",
+        )
 
     assert "/events/replay?after=3&scope=thread&thread_id=thr_safe&limit=256" in paths
     assert "/events/wait?after=3&limit=256&timeout_seconds=15" in paths
@@ -1050,6 +1057,7 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
     assert "/interactions/pending?thread_id=thr_safe" in paths
     assert "/interactions/int_safe/decision?" in paths
     assert "/interactions/int_safe/answer?" in paths
+    assert "/interactions/int_safe/mcp-form?" in paths
     assert bodies["/threads/thr_safe/prompts"]["client_request_id"] == "request-1"
     assert bodies["/interactions/int_safe/answer"]["answers"] == [
         {"question_id": "question_safe", "values": ["yes"]}
@@ -1058,6 +1066,9 @@ async def test_v1_global_events_and_interaction_actions_use_safe_contracts(
         "thread_id": "thr_safe",
         "decision": "accept",
         "client_request_id": "decision-1",
+    }
+    assert bodies["/interactions/int_safe/mcp-form"]["content"] == {
+        "choice": "yes", "enabled": True,
     }
     assert "turn_safe" not in repr(bodies)
     assert "item_safe" not in repr(bodies)

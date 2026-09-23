@@ -20,6 +20,7 @@ from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 from custom_components.codex_bridge.protocol import ProblemRecord
 from custom_components.codex_bridge.websocket_api import (
     ws_answer_interaction,
+    ws_answer_mcp_form,
     ws_decide_interaction,
     ws_get_config,
     ws_get_event_status,
@@ -882,6 +883,25 @@ async def test_answer_interaction_forwards_exact_bounded_values_contract() -> No
         thread_id="thr_1",
         answers=[{"question_id": "question_1", "values": ["yes"]}],
         client_request_id="answer-1",
+    )
+
+
+async def test_mcp_form_preserves_typed_values_through_admin_websocket() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_answer_mcp_form = AsyncMock(return_value={"status": "accepted"})
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_answer_mcp_form(hass, connection, {
+        "id": 14, "type": f"{DOMAIN}/answer_mcp_form",
+        "interaction_id": "int_1", "thread_id": "thr_1",
+        "content": {"choice": "yes", "enabled": False, "count": 2},
+        "client_request_id": "mcp-answer-1",
+    })
+    await hass.finish()
+    runtime.client.async_answer_mcp_form.assert_awaited_once_with(
+        "int_1", thread_id="thr_1",
+        content={"choice": "yes", "enabled": False, "count": 2},
+        client_request_id="mcp-answer-1",
     )
 
 

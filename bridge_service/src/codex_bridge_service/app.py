@@ -562,6 +562,12 @@ def create_app(
 
             def bind_codex_account(owner_marker: str) -> None:
                 nonlocal auth_catalog_owner_marker
+                if (
+                    auth_catalog_owner_marker is not None
+                    and auth_catalog_owner_marker != owner_marker
+                    and isinstance(resolved_runner, RuntimeBroker)
+                ):
+                    resolved_runner.cancel_mcp_interactions()
                 storage.bind_codex_account(owner_marker)
                 auth_catalog_owner_marker = owner_marker
 
@@ -786,6 +792,12 @@ def create_app(
             auth_failure_listener=getattr(
                 resolved_auth_coordinator, "report_auth_failure", None
             ),
+            mcp_manager=(
+                resolved_mcp_manager
+                if resolved_mcp_manager is not None
+                and resolved_mcp_manager.elicitation_handler_registered
+                else None
+            ),
         )
         if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         else BridgeRunner(
@@ -803,6 +815,13 @@ def create_app(
             "Home Assistant runtime."
         )
     app.state.runner = resolved_runner
+    if (
+        isinstance(resolved_runner, RuntimeBroker)
+        and resolved_mcp_manager is not None
+        and resolved_mcp_manager.enabled
+        and resolved_mcp_manager.elicitation_handler_registered
+    ):
+        app.state.feature_capabilities += ("mcp_elicitation_v1",)
 
     def dispatch_automation(claim: Mapping[str, Any]) -> object:
         if resolved_automations is None or resolved_runner is None:

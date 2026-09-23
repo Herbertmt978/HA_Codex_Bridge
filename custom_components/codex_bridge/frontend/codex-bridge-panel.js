@@ -32909,6 +32909,185 @@ function renderApproval(container, model) {
   container.append(card);
 }
 
+// frontend/src/views/mcp-elicitation.js
+var MAX_FIELDS = 16;
+function safeText2(value, limit) {
+  return typeof value === "string" ? value.slice(0, limit) : "";
+}
+function safeUrl(value, expectedHost) {
+  if (typeof value !== "string" || value.length > 8192) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.hostname === expectedHost && !parsed.username && !parsed.password ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+function renderMcpElicitation(container, interaction, { pending = false, draft = {} } = {}) {
+  container.replaceChildren();
+  const display = interaction?.display || {};
+  const card = document.createElement("section");
+  card.className = "approval-card mcp-elicitation-card";
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-modal", "false");
+  card.tabIndex = -1;
+  const safeId2 = /^[A-Za-z0-9_.:-]{1,128}$/u.test(interaction?.interaction_id) ? interaction.interaction_id : "pending";
+  const heading = document.createElement("h3");
+  heading.id = `mcp-${safeId2}-title`;
+  heading.textContent = safeText2(display.title, 160) || "MCP request";
+  const server = document.createElement("p");
+  server.className = "decision-label";
+  server.textContent = `Server: ${safeText2(display.mcp_server, 128)}`;
+  const purpose = document.createElement("p");
+  purpose.id = `mcp-${safeId2}-purpose`;
+  purpose.textContent = safeText2(display.summary, 512);
+  card.setAttribute("aria-labelledby", heading.id);
+  card.setAttribute("aria-describedby", purpose.id);
+  const notice = document.createElement("p");
+  notice.className = "decision-status";
+  notice.textContent = "Review this request. Do not enter passwords, tokens or API keys here.";
+  card.append(heading, server, purpose, notice);
+  if (interaction?.kind === "mcp_url") {
+    const host = safeText2(display.mcp_url_host, 253);
+    const destination = document.createElement("p");
+    destination.textContent = `Destination: ${host}`;
+    card.append(destination);
+    const url = safeUrl(interaction.authorization_url, host);
+    if (url) {
+      const link2 = document.createElement("a");
+      link2.className = "mcp-open-link";
+      link2.href = url;
+      link2.target = "_blank";
+      link2.rel = "noopener noreferrer";
+      link2.referrerPolicy = "no-referrer";
+      link2.textContent = `Open ${host} to continue`;
+      card.append(link2);
+    }
+  } else {
+    const form = document.createElement("div");
+    form.className = "mcp-form-fields";
+    const fields = Array.isArray(display.mcp_fields) ? display.mcp_fields.slice(0, MAX_FIELDS) : [];
+    for (const field2 of fields) {
+      const row = document.createElement("div");
+      row.className = "mcp-form-field";
+      row.dataset.mcpField = field2.name;
+      row.dataset.mcpKind = field2.kind;
+      const label = document.createElement("label");
+      label.textContent = `${safeText2(field2.label, 160)}${field2.required ? " *" : ""}`;
+      const saved = draft[field2.name];
+      let control;
+      if (field2.kind === "multi_select") {
+        control = document.createElement("fieldset");
+        const legend = document.createElement("legend");
+        legend.textContent = label.textContent;
+        control.append(legend);
+        for (const [index, option] of (field2.options || []).entries()) {
+          const choice = document.createElement("label");
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = option;
+          checkbox.checked = Array.isArray(saved) && saved.includes(option);
+          checkbox.disabled = pending;
+          choice.append(checkbox, document.createTextNode(safeText2(field2.option_labels?.[index] || option, 160)));
+          control.append(choice);
+        }
+      } else if (field2.kind === "select" || field2.kind === "boolean") {
+        control = document.createElement("select");
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "Select an answer";
+        control.append(empty);
+        const choices = field2.kind === "boolean" ? [["true", "Yes"], ["false", "No"]] : (field2.options || []).map((option, index) => [option, field2.option_labels?.[index] || option]);
+        for (const [value, text3] of choices) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = safeText2(text3, 160);
+          control.append(option);
+        }
+        control.value = saved === void 0 ? "" : String(saved);
+        control.required = Boolean(field2.required);
+      } else {
+        control = document.createElement("input");
+        control.type = { email: "email", uri: "url", date: "date", "date-time": "datetime-local" }[field2.format] || (field2.kind === "integer" || field2.kind === "number" ? "number" : "text");
+        control.value = saved === void 0 ? "" : String(saved);
+        control.required = Boolean(field2.required);
+        if (field2.kind === "integer") control.step = "1";
+        if (field2.kind === "number") control.step = "any";
+        if (Number.isInteger(field2.min_length)) control.minLength = field2.min_length;
+        if (Number.isInteger(field2.max_length)) control.maxLength = field2.max_length;
+        if (typeof field2.minimum === "number") control.min = field2.minimum;
+        if (typeof field2.maximum === "number") control.max = field2.maximum;
+      }
+      control.disabled = pending;
+      if (field2.kind !== "multi_select") {
+        label.append(control);
+        row.append(label);
+      } else {
+        row.append(control);
+      }
+      if (field2.description) {
+        const description = document.createElement("p");
+        description.textContent = safeText2(field2.description, 512);
+        row.append(description);
+      }
+      form.append(row);
+    }
+    card.append(form);
+  }
+  const actions = document.createElement("div");
+  actions.className = "decision-actions";
+  const actionList = interaction?.kind === "mcp_url" ? [["accept", "I've completed this"], ["decline", "Decline"], ["cancel", "Cancel"]] : [["answer", "Send answer"], ["decline", "Decline"], ["cancel", "Cancel"]];
+  for (const [action, label] of actionList) {
+    if (!interaction?.allowed_actions?.includes(action)) continue;
+    const button3 = document.createElement("button");
+    button3.type = "button";
+    button3.dataset.action = action === "answer" ? "answer-mcp-form" : `${action}-interaction`;
+    if (action !== "answer") button3.dataset.decision = action;
+    button3.textContent = label;
+    button3.disabled = pending || interaction.status !== "pending" || action === "accept" && !safeUrl(interaction.authorization_url, display.mcp_url_host);
+    actions.append(button3);
+  }
+  card.append(actions);
+  container.append(card);
+}
+function collectMcpDraft(container, interaction) {
+  const draft = {};
+  for (const field2 of interaction?.display?.mcp_fields || []) {
+    const row = [...container.querySelectorAll("[data-mcp-field]")].find((item) => item.dataset.mcpField === field2.name);
+    if (!row) continue;
+    draft[field2.name] = field2.kind === "multi_select" ? [...row.querySelectorAll("input:checked")].map((input2) => input2.value) : row.querySelector("input, select")?.value ?? "";
+  }
+  return draft;
+}
+function collectMcpContent(container, interaction) {
+  const draft = collectMcpDraft(container, interaction);
+  const content = {};
+  for (const field2 of interaction?.display?.mcp_fields || []) {
+    const value = draft[field2.name];
+    const row = [...container.querySelectorAll("[data-mcp-field]")].find((item) => item.dataset.mcpField === field2.name);
+    const control = row?.querySelector("input, select");
+    if (field2.kind !== "multi_select" && control && !control.checkValidity()) {
+      control.reportValidity();
+      return null;
+    }
+    if (value === "" || Array.isArray(value) && !value.length && !field2.required) {
+      if (field2.required) return null;
+      continue;
+    }
+    if (field2.kind === "boolean") content[field2.name] = value === "true";
+    else if (field2.kind === "number" || field2.kind === "integer") {
+      const number = Number(value);
+      if (!Number.isFinite(number) || field2.kind === "integer" && !Number.isInteger(number)) return null;
+      content[field2.name] = number;
+    } else if (field2.format === "date-time") {
+      const timestamp = new Date(value);
+      if (!Number.isFinite(timestamp.valueOf())) return null;
+      content[field2.name] = timestamp.toISOString();
+    } else content[field2.name] = value;
+  }
+  return content;
+}
+
 // frontend/src/views/onboarding.js
 var STAGE_DEFINITIONS = [
   ["App connected", "Connect the Home Assistant App.", (state) => state.appConnected],
@@ -35768,7 +35947,8 @@ template.innerHTML = `
     }
 
     .decision-actions button[data-decision="accept"],
-    .decision-actions button[data-action="answer-interaction"] {
+    .decision-actions button[data-action="answer-interaction"],
+    .decision-actions button[data-action="answer-mcp-form"] {
       border-color: transparent;
       background: linear-gradient(135deg, var(--brand-blue), var(--brand-violet));
       color: white;
@@ -35778,6 +35958,20 @@ template.innerHTML = `
     .decision-actions button[data-decision="cancel"] {
       color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%);
     }
+
+    .mcp-form-fields { display: grid; gap: 12px; margin: 10px 0; }
+    .mcp-form-field { display: grid; gap: 5px; }
+    .mcp-form-field > label { display: grid; gap: 5px; font-weight: 600; }
+    .mcp-form-field input, .mcp-form-field select {
+      width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 10px;
+      border: 1px solid var(--border-color); border-radius: 9px;
+      background: var(--surface-bg); color: var(--text-color); font: inherit;
+    }
+    .mcp-form-field fieldset { display: grid; gap: 5px; border: 1px solid var(--border-color); border-radius: 9px; }
+    .mcp-form-field fieldset label { display: flex; align-items: center; gap: 8px; }
+    .mcp-form-field fieldset input { width: auto; min-height: 0; }
+    .mcp-form-field p { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .mcp-open-link { display: inline-flex; width: fit-content; margin: 8px 0 12px; overflow-wrap: anywhere; }
 
     .user-input-card fieldset {
       display: grid;
@@ -40168,6 +40362,9 @@ var CodexBridgePanel = class extends HTMLElement {
       case "answer-interaction":
         this._answerInteractionFromTarget(actionTarget);
         break;
+      case "answer-mcp-form":
+        this._answerMcpFormFromTarget(actionTarget);
+        break;
       case "stop-run":
         this._cancelRun();
         break;
@@ -41712,6 +41909,21 @@ var CodexBridgePanel = class extends HTMLElement {
             submit.textContent = "Retry answer";
           }
         }
+      } else if (interaction.kind === "mcp_form" || interaction.kind === "mcp_url") {
+        renderMcpElicitation(wrapper, interaction, {
+          pending,
+          draft: this._interactionAnswers.get(interaction.interaction_id) || {}
+        });
+        if (mutation?.state === "retryable") {
+          for (const control of wrapper.querySelectorAll(".mcp-form-fields input, .mcp-form-fields select")) {
+            control.disabled = true;
+          }
+          for (const button3 of wrapper.querySelectorAll(".decision-actions button")) {
+            const original = button3.dataset.decision === mutation.decision || button3.dataset.action === "answer-mcp-form" && mutation.kind === "mcp_form";
+            button3.disabled = !original;
+            if (original) button3.textContent = `Retry ${button3.textContent.toLowerCase()}`;
+          }
+        }
       } else {
         const model = getApprovalViewModel(interaction, { pending });
         renderApproval(wrapper, model);
@@ -41758,6 +41970,13 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _captureInteractionAnswers(target) {
     const wrapper = target.closest("[data-interaction-id]");
+    const mcpInteraction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "mcp_form"
+    );
+    if (wrapper && mcpInteraction) {
+      this._interactionAnswers.set(mcpInteraction.interaction_id, collectMcpDraft(wrapper, mcpInteraction));
+      return;
+    }
     const interaction = this._pendingInteractions.find(
       (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "user_input"
     );
@@ -41803,6 +42022,35 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     this._answerInteraction(interaction.interaction_id, answers);
+  }
+  _answerMcpFormFromTarget(target) {
+    const wrapper = target.closest("[data-interaction-id]");
+    const interaction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "mcp_form"
+    );
+    if (!wrapper || !interaction) return;
+    const previous = this._interactionMutations.get(interaction.interaction_id);
+    if (previous?.state === "retryable" && previous.kind === "mcp_form") {
+      this._submitInteractionResponse(interaction, {
+        action: "answer_mcp_form",
+        kind: "mcp_form",
+        fingerprint: previous.fingerprint,
+        payload: previous.payload
+      });
+      return;
+    }
+    const content = collectMcpContent(wrapper, interaction);
+    if (content === null) {
+      this._setError("Complete the required MCP fields before continuing.");
+      return;
+    }
+    this._interactionAnswers.set(interaction.interaction_id, collectMcpDraft(wrapper, interaction));
+    this._submitInteractionResponse(interaction, {
+      action: "answer_mcp_form",
+      kind: "mcp_form",
+      fingerprint: `mcp:${JSON.stringify(content)}`,
+      payload: { content }
+    });
   }
   async _decideInteraction(interactionId, decision) {
     const interaction = this._pendingInteractions.find((item) => item.interaction_id === interactionId);
@@ -41850,6 +42098,7 @@ var CodexBridgePanel = class extends HTMLElement {
       clientRequestId: this._createClientRequestId(request.kind),
       decision: request.decision || null,
       answers: request.answers || null,
+      payload: request.payload,
       state: "sending"
     };
     mutation.state = "sending";
@@ -41975,10 +42224,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const identifier = (candidate, limit = 256) => typeof candidate === "string" && candidate.length <= limit && /^[A-Za-z0-9_.:-]+$/u.test(candidate) ? candidate : null;
     const interactionId = identifier(value.interaction_id, 128);
     const actualThreadId = identifier(value.thread_id, 128);
-    const kind = ["command_approval", "file_change_approval", "user_input"].includes(value.kind) ? value.kind : null;
+    const kind = ["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"].includes(value.kind) ? value.kind : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
     const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
-    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (kind === "user_input" ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
+    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (["user_input", "mcp_form"].includes(kind) ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
       return null;
     }
     return {
@@ -41989,6 +42238,7 @@ var CodexBridgePanel = class extends HTMLElement {
       status: "pending",
       expires_at: expiresAt,
       display: { ...value.display },
+      authorization_url: kind === "mcp_url" ? value.authorization_url : null,
       allowed_actions: allowed
     };
   }
@@ -44170,9 +44420,9 @@ var CodexBridgePanel = class extends HTMLElement {
     void this._renderCurrentPdfPage();
   }
   _openPdfPreview() {
-    const safeUrl = sanitizeBlobUrl(this._artifactPreview?.url, { origin: window.location.origin });
-    if (!safeUrl) return;
-    const opened = window.open(safeUrl, "_blank", "noopener,noreferrer");
+    const safeUrl2 = sanitizeBlobUrl(this._artifactPreview?.url, { origin: window.location.origin });
+    if (!safeUrl2) return;
+    const opened = window.open(safeUrl2, "_blank", "noopener,noreferrer");
     if (opened) opened.opener = null;
   }
   _retryPdfPreview() {

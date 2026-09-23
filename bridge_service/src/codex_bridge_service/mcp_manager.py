@@ -215,6 +215,7 @@ class McpManager:
         self._relay = relay
         self._lock = RLock()
         self._startup: dict[str, tuple[str, str | None]] = {}
+        self._active_names: frozenset[str] = frozenset()
         self._oauth_completion: dict[str, bool] = {}
         self._elicitation_handler_registered = False
         self._startup_config_sanitized = False
@@ -225,7 +226,7 @@ class McpManager:
 
     @property
     def elicitation_handler_registered(self) -> bool:
-        """Whether the app-server supports the mandatory decline-only handler."""
+        """Whether the app-server has a safe fail-closed MCP request handler."""
 
         return self._elicitation_handler_registered
 
@@ -234,6 +235,13 @@ class McpManager:
         """Whether the administrator explicitly enabled outbound MCP."""
 
         return self._enabled
+
+    def is_active_server(self, name: str) -> bool:
+        """Consult the last validated config without a re-entrant app-server call."""
+
+        # The callback may arrive while a config mutation holds the manager
+        # lock and waits for app-server I/O. Read an immutable snapshot here.
+        return self._enabled and name in self._active_names and not self._recovery_required
 
     def list_servers(self) -> list[dict[str, object]]:
         """Return only configured safe servers and bounded native status metadata."""
@@ -368,6 +376,7 @@ class McpManager:
                             raise McpUnavailableError() from None
                     raise
                 self._reload()
+                self._active_names = self._active_names | {definition.name}
         return self._view_for_created(definition)
 
     def _revision(self, name: str, version: str) -> str:
@@ -384,6 +393,7 @@ class McpManager:
 
     def _require_recovery(self, name: str) -> None:
         self._recovery_required = True
+        self._active_names = frozenset()
         if self._relay is not None:
             self._relay.deactivate(name)
         # No active/queued turn exists while the configuration lease is held.
@@ -402,6 +412,7 @@ class McpManager:
             if definitions.get(updated.name) != updated:
                 raise McpConflictError()
         except McpManagerError:
+            self._active_names = self._active_names - {previous.name}
             try:
                 # Read even after a failed write: a timeout may have committed.
                 definitions, current_version = self._read_definitions()
@@ -438,6 +449,10 @@ class McpManager:
             updated = replace(previous, enabled=enabled)
             if previous.enabled != enabled:
                 version = self._apply_definition(previous, updated, version)
+            if enabled:
+                self._active_names = self._active_names | {normalized}
+            else:
+                self._active_names = self._active_names - {normalized}
             view = self._view_for_created(updated)
             view["revision"] = self._revision(normalized, version)
             return view
@@ -515,6 +530,7 @@ class McpManager:
                     except Exception:
                         raise McpUnavailableError() from None
                 self._reload()
+                self._active_names = self._active_names - {normalized_name}
                 self._startup.pop(normalized_name, None)
                 self._oauth_completion.pop(normalized_name, None)
 
@@ -562,6 +578,7 @@ class McpManager:
                     raise McpProtocolError()
                 version = _optional_user_config_version(result.get("layers"))
                 if version is None:
+                    self._active_names = frozenset()
                     self._startup.clear()
                     self._oauth_completion.clear()
                     return
@@ -571,6 +588,7 @@ class McpManager:
                     version=version,
                 )
                 self._reload()
+                self._active_names = frozenset()
                 self._startup.clear()
                 self._oauth_completion.clear()
 
@@ -611,6 +629,9 @@ class McpManager:
                 )
                 self._reload()
                 self._startup_config_sanitized = True
+                self._active_names = frozenset(
+                    name for name, definition in definitions.items() if definition.enabled
+                )
 
     def activate_validated_mcp_config(self) -> None:
         """Drop the bootstrap mask only after successful startup sanitation."""
@@ -758,8 +779,8 @@ class McpManager:
 
     @staticmethod
     def _decline_elicitation(_request: object) -> dict[str, str]:
-        # MCP servers are never allowed to collect additional data through this
-        # surface.  A future UX requires a separate explicitly-reviewed flow.
+        # Keep the default fail-closed until the attended RuntimeBroker
+        # registers its exact-turn interaction handler.
         return {"action": "decline"}
 
     def _read_definitions(self) -> tuple[dict[str, McpServerDefinition], str]:
@@ -785,6 +806,9 @@ class McpManager:
                 # Unsafe existing native config is never reflected back into HA.
                 continue
             definitions[definition.name] = definition
+        self._active_names = frozenset(
+            name for name, definition in definitions.items() if definition.enabled
+        )
         return definitions, version
 
     def _read_statuses(self) -> dict[str, Mapping[str, object]]:

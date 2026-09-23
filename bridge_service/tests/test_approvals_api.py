@@ -234,6 +234,19 @@ class RuntimeBrokerDouble:
         self._idempotent_results[key] = result
         return deepcopy(result)
 
+    def respond_mcp(
+        self, interaction_id: str, *, thread_id: str, action: str,
+        content: dict[str, object], client_request_id: str,
+    ) -> dict[str, str]:
+        assert interaction_id == "interaction-mcp-1"
+        assert thread_id == "thread-alpha"
+        assert action == "accept"
+        assert content == {"choice": "yes", "enabled": False, "count": 2}
+        return {
+            "interaction_id": interaction_id, "thread_id": thread_id,
+            "status": "accepted", "client_request_id": client_request_id,
+        }
+
     def _require_item(
         self,
         interaction_id: str,
@@ -297,6 +310,13 @@ def _ha_app(tmp_path: Path, broker: RuntimeBrokerDouble):
                 "client_request_id": "request-answer-1",
             },
         ),
+        (
+            "post", "/interactions/interaction-mcp-1/mcp-form",
+            {
+                "thread_id": "thread-alpha", "content": {"choice": "yes"},
+                "client_request_id": "mcp-answer-1",
+            },
+        ),
     ],
 )
 @pytest.mark.parametrize("headers", [None, {"Authorization": "Bearer wrong"}])
@@ -313,6 +333,31 @@ def test_interaction_routes_require_the_admin_bridge_token(
         response = client.request(method, path, headers=headers, json=body)
 
     assert response.status_code == 401
+
+
+def test_mcp_form_route_preserves_typed_content_and_rejects_objects(tmp_path: Path) -> None:
+    app = _ha_app(tmp_path, RuntimeBrokerDouble())
+    with TestClient(app) as client:
+        response = client.post(
+            "/interactions/interaction-mcp-1/mcp-form",
+            headers=AUTHORIZATION,
+            json={
+                "thread_id": "thread-alpha",
+                "content": {"choice": "yes", "enabled": False, "count": 2},
+                "client_request_id": "mcp-answer-1",
+            },
+        )
+        invalid = client.post(
+            "/interactions/interaction-mcp-1/mcp-form",
+            headers=AUTHORIZATION,
+            json={
+                "thread_id": "thread-alpha", "content": {"choice": {"nested": "no"}},
+                "client_request_id": "mcp-answer-2",
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    assert invalid.status_code == 422
 
 
 def test_pending_interactions_are_thread_scoped_provider_neutral_and_safe(

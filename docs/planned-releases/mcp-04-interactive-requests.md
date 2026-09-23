@@ -1,6 +1,6 @@
 # MCP-04: Interactive MCP requests
 
-Status: Planned. Version and date: unassigned.
+Status: Implemented in source; paired release version and date unassigned.
 
 Tracking issue: [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100).
 
@@ -9,6 +9,11 @@ Tracking issue: [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/10
 Bridge currently declines all MCP elicitation requests. Some servers need the
 user to answer a form or complete authorisation before a tool can finish.
 Support the pinned runtime's compatible requests in attended chats.
+
+The implementation uses the versioned `mcp_elicitation_v1` capability and the
+existing pending-interaction lifecycle. One-time URLs remain in the live
+app-server request and are omitted from persisted runtime state and events.
+The 1.6.3 installation does not include this source change.
 
 ## Scope
 

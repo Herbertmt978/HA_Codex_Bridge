@@ -115,12 +115,15 @@ class RuntimeInteractionState(BaseModel):
         "command_approval",
         "file_change_approval",
         "user_input",
+        "mcp_form",
+        "mcp_url",
     ]
     thread_id: str = Field(min_length=1, max_length=128)
     run_id: str = Field(min_length=1, max_length=128)
     codex_thread_id: str = Field(min_length=1, max_length=256)
     turn_id: str = Field(min_length=1, max_length=256)
     item_id: str = Field(min_length=1, max_length=256)
+    mcp_server_name: str | None = Field(default=None, max_length=128)
     generation: int = Field(ge=1)
     app_request_id: str | int = Field(repr=False)
     status: InteractionStatus = "pending"

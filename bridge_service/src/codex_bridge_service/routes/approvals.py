@@ -9,6 +9,7 @@ from ..auth import require_bridge_token
 from ..models import (
     InteractionAnswerRequest,
     InteractionDecisionRequest,
+    McpFormAnswerRequest,
     InteractionResultRecord,
     PendingInteractionCollectionRecord,
     PendingInteractionRecord,
@@ -91,6 +92,34 @@ def answer_interaction(
         interaction_id,
         thread_id=payload.thread_id,
         answers=[answer.model_dump() for answer in payload.answers],
+        client_request_id=payload.client_request_id,
+    )
+    try:
+        return InteractionResultRecord.model_validate(result)
+    except ValidationError:
+        raise _projection_error() from None
+
+
+@router.post(
+    "/interactions/{interaction_id}/mcp-form",
+    response_model=InteractionResultRecord,
+)
+def answer_mcp_form(
+    interaction_id: Annotated[str, Path(min_length=1, max_length=128)],
+    payload: McpFormAnswerRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> InteractionResultRecord:
+    require_bridge_token(
+        authorization=authorization,
+        request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    result = request.app.state.runner.respond_mcp(
+        interaction_id,
+        thread_id=payload.thread_id,
+        action="accept",
+        content=payload.content,
         client_request_id=payload.client_request_id,
     )
     try:
