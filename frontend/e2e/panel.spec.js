@@ -576,6 +576,35 @@ test("keeps a hovered activity popover steady as its content changes", async ({ 
   await expect(summary).toBeFocused();
 });
 
+test("keeps a failed-run popover open through a status refresh", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    window.__codexHarness.updateThread("thr_vba_1", { status: "error", last_error: "Codex usage limits have been reached." });
+    window.__codexHarness.emitThreadEvent("thr_vba_1", "run.failed", {
+      run_id: "failed-hover-refresh", error: "Codex usage limits have been reached.",
+    });
+  });
+  const panel = page.locator("codex-bridge-panel");
+  const label = panel.locator("#run-step-chip .run-step-label");
+  await label.hover();
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+  const result = await page.evaluate(async () => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip .run-step-label");
+    bridge._renderedRunActivityKey = "";
+    bridge._renderRunActivity();
+    await new Promise(requestAnimationFrame);
+    return {
+      sameLabel: bridge.shadowRoot.querySelector("#run-step-chip .run-step-label") === original,
+      hovered: original.matches(":hover"),
+      visible: getComputedStyle(bridge.shadowRoot.querySelector("#run-step-tooltip")).visibility === "visible",
+    };
+  });
+  expect(result).toEqual({ sameLabel: true, hovered: true, visible: true });
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+});
+
 test("keeps the hovered activity label mounted while its text changes", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
