@@ -36,7 +36,7 @@ import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 import { proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.6.2";
+const PANEL_VERSION = "1.6.3";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -561,7 +561,10 @@ template.innerHTML = `
     .tooltip-layer {
       position: fixed;
       z-index: 30;
+      width: max-content;
       max-width: min(280px, calc(100vw - 16px));
+      max-height: calc(100dvh - 16px);
+      overflow-y: auto;
       padding: 6px 8px;
       border: 1px solid color-mix(in srgb, var(--text-color) 22%, var(--border-color) 78%);
       border-radius: 6px;
@@ -877,6 +880,16 @@ template.innerHTML = `
       background: color-mix(in srgb, var(--surface-bg) 98%, #f6f9fd 2%);
     }
 
+    .forms-stack {
+      flex: 0 1 auto;
+      min-height: 0;
+      max-height: min(70dvh, 620px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+
     .search-shell {
       display: grid;
       grid-template-columns: 18px minmax(0, 1fr);
@@ -976,6 +989,14 @@ template.innerHTML = `
     .panel-form .form-actions > button {
       flex: 0 0 auto;
       white-space: nowrap;
+    }
+
+    .panel-form .form-actions {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      padding: 10px 0 2px;
+      background: var(--surface-bg);
     }
 
     .panel-form .send-button {
@@ -6552,7 +6573,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _handleFocusOut(event) {
     const nextTarget = event.relatedTarget;
-    if (!(nextTarget instanceof Node) || !this._tooltipTarget?.contains(nextTarget)) {
+    if ((!nextTarget || !this._tooltipTarget?.contains(nextTarget)) && !this._tooltipTarget?.matches(":hover")) {
       this._hideTooltip();
     }
     if (!this._isRefreshLockTarget(event.target)) {
@@ -6599,7 +6620,10 @@ class CodexBridgePanel extends HTMLElement {
     focusButton.setAttribute("aria-pressed", String(this._focusMode));
     const focusLabel = this._focusMode ? "Exit focus mode" : "Focus mode";
     focusButton.setAttribute("aria-label", focusLabel);
-    focusButton.title = this._focusMode ? "Exit focus mode" : "Enter focus mode";
+    // The menu item already has a visible label and shortcut. An overlay here
+    // covers the item itself, especially when the menu is near the viewport edge.
+    focusButton.removeAttribute("title");
+    delete focusButton.dataset.tooltip;
     focusButton.firstElementChild.textContent = focusLabel;
     focusButton.lastElementChild.textContent = this._focusMode ? "Esc to exit" : "Fullscreen";
     feedback.textContent = this._focusFeedback;
@@ -7211,6 +7235,7 @@ class CodexBridgePanel extends HTMLElement {
     if (!target || (related instanceof Node && target.contains(related))) {
       return;
     }
+    if (target !== this._tooltipTarget || target.matches(":focus-within")) return;
     this._hideTooltip();
   }
 
@@ -7575,8 +7600,7 @@ class CodexBridgePanel extends HTMLElement {
     stopButton.disabled = cancelling;
     this._renderContextUsage();
     sendButton.setAttribute("aria-label", actionLabel);
-    sendButton.title = actionTitle;
-    sendButton.dataset.tooltip = actionTitle;
+    this._setTooltipTarget(sendButton, actionTitle);
     if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
@@ -8409,7 +8433,7 @@ class CodexBridgePanel extends HTMLElement {
       const meta = `${thread.effective_model} / ${thread.effective_thinking_level}`;
       const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
       const title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
-      if (select.title !== title) select.title = title;
+      if (select.dataset.tooltip !== title) this._setTooltipTarget(select, title);
     }
   }
 
@@ -8520,7 +8544,7 @@ class CodexBridgePanel extends HTMLElement {
       `Select ${project.name || "project"}, ${chatCount}`
     );
     projectButton.dataset.projectId = String(project.project_id || "");
-    projectButton.title = `${project.name || "Untitled project"} · ${chatCount}`;
+    this._setTooltipTarget(projectButton, `${project.name || "Untitled project"} · ${chatCount}`);
     const titleLine = document.createElement("span");
     titleLine.className = "section-title-line";
     const projectName = this._textElement("span", "project-name", project.name || "Untitled project");
@@ -8686,7 +8710,7 @@ class CodexBridgePanel extends HTMLElement {
       `Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
-    select.title = `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`;
+    this._setTooltipTarget(select, `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`);
     if (selected) {
       select.setAttribute("aria-current", "page");
     }
@@ -9270,7 +9294,29 @@ class CodexBridgePanel extends HTMLElement {
       const nextChip = nextWrap.querySelector("#run-step-chip");
       const previousTooltip = previousWrap.querySelector("#run-step-tooltip");
       const nextTooltip = nextWrap.querySelector("#run-step-tooltip");
-      previousChip.replaceChildren(...nextChip.childNodes);
+      // Keep the nodes under the pointer mounted. Replacing the hovered label
+      // makes Chromium drop :hover until the pointer moves, so the popover
+      // repeatedly fades during incoming activity updates.
+      const previousParts = [...previousChip.children];
+      const reusedParts = new Set();
+      const desiredParts = [...nextChip.children].map((part) => {
+        const existing = previousParts.find((candidate) =>
+          !reusedParts.has(candidate)
+          && candidate.tagName === part.tagName
+          && candidate.className === part.className);
+        if (!existing) return part;
+        reusedParts.add(existing);
+        if (existing.textContent !== part.textContent) existing.textContent = part.textContent;
+        return existing;
+      });
+      desiredParts.forEach((part, index) => {
+        if (previousChip.children[index] !== part) {
+          previousChip.insertBefore(part, previousChip.children[index] || null);
+        }
+      });
+      for (const part of previousParts) {
+        if (!desiredParts.includes(part)) part.remove();
+      }
       previousChip.setAttribute("aria-label", nextChip.getAttribute("aria-label"));
       previousChip.setAttribute("aria-expanded", nextChip.getAttribute("aria-expanded"));
       if (nextChip.hasAttribute("aria-describedby")) {
@@ -11221,7 +11267,7 @@ class CodexBridgePanel extends HTMLElement {
       const label = `${expanded ? "Hide" : "Show"} more actions for ${projectName}`;
       toggle.setAttribute("aria-expanded", String(expanded));
       toggle.setAttribute("aria-label", label);
-      toggle.title = label;
+      this._setTooltipTarget(toggle, label);
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
     for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-thread-actions"]')) {
@@ -11230,7 +11276,7 @@ class CodexBridgePanel extends HTMLElement {
       const label = `${expanded ? "Hide" : "Show"} actions for ${threadName}`;
       toggle.setAttribute("aria-expanded", String(expanded));
       toggle.setAttribute("aria-label", label);
-      toggle.title = label;
+      this._setTooltipTarget(toggle, label);
       toggle.closest(".chat-row")?.classList.toggle("actions-open", expanded);
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
@@ -12454,8 +12500,7 @@ class CodexBridgePanel extends HTMLElement {
       const state = this._artifactDownloadState(artifactId);
       button.disabled = state === "pending";
       button.setAttribute("aria-label", label);
-      button.title = label;
-      button.dataset.tooltip = label;
+      this._setTooltipTarget(button, label);
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
       if (generatedImageButton) {
         button.textContent = visibleLabel;
@@ -13800,9 +13845,9 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     target.dataset.tooltip = text;
-    if (!target.getAttribute("title")) {
-      target.title = text;
-    }
+    // The panel provides its own accessible tooltip. A native title adds a
+    // second, browser-controlled hover card with different timing and sizing.
+    target.removeAttribute("title");
   }
 
   _showTooltipForTarget(target) {
@@ -13826,11 +13871,20 @@ class CodexBridgePanel extends HTMLElement {
 
     const rect = trigger.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
-    const left = Math.max(8, Math.min(viewportWidth - 8, rect.left + (rect.width / 2)));
-    const below = rect.top < 56;
+    // Explicit intrinsic width avoids shrink-to-fit collapsing a tooltip to
+    // a few characters when its trigger is near the right edge. Clamp the
+    // whole card, not just its centre, inside the viewport.
+    const tooltipWidth = layer.getBoundingClientRect().width;
+    const halfWidth = tooltipWidth / 2;
+    const left = Math.max(8 + halfWidth, Math.min(viewportWidth - 8 - halfWidth, rect.left + (rect.width / 2)));
+    const tooltipHeight = layer.getBoundingClientRect().height;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 768;
+    const below = rect.top - tooltipHeight - 8 < 8 && rect.bottom + tooltipHeight + 8 <= viewportHeight - 8;
+    const top = Math.max(8, Math.min(viewportHeight - tooltipHeight - 8,
+      below ? rect.bottom + 8 : rect.top - tooltipHeight - 8));
     layer.style.left = `${left}px`;
-    layer.style.top = `${below ? rect.bottom + 8 : rect.top - 8}px`;
-    layer.style.transform = below ? "translateX(-50%)" : "translate(-50%, -100%)";
+    layer.style.top = `${top}px`;
+    layer.style.transform = "translateX(-50%)";
   }
 
   _hideTooltip() {

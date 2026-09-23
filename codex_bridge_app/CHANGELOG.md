@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.6.3
+
+- Keeps activity details steady when their chip text updates under the pointer.
+  Sidebar and menu tooltips now fit the viewport without native duplicates.
+- Keeps the Create chat action reachable when the navigation rail is short.
+- Pairs App, Integration and panel `1.6.3` with Bridge `0.13.0` and Codex
+  `0.156.1`. Stable App images remain amd64-only.
+
 ## 1.6.2
 
 - Keeps activity popovers, navigation controls and usage cards steady through

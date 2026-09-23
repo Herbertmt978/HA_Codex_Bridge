@@ -281,7 +281,8 @@ describe("desktop feature surfaces", () => {
     expect(toolbar.querySelector('[aria-label="Chat thinking level override"]')).toBeTruthy();
     expect(toolbar.textContent).toContain("5h 60% · Week 82%");
     expect(usageButton.getAttribute("aria-label")).toMatch(/open usage details.*5h 60%.*week 82%/i);
-    expect(usageButton.getAttribute("title")).toContain("Pro usage snapshot");
+    expect(usageButton.dataset.tooltip).toContain("Pro usage snapshot");
+    expect(usageButton.hasAttribute("title")).toBe(false);
     expect(diagnostics.querySelector("summary").textContent).toContain("Chat settings and limits");
     usageButton.click();
     expect(panel._sideTab).toBe("usage");

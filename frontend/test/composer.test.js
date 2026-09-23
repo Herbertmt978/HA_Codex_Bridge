@@ -88,7 +88,7 @@ describe("prompt composer mutation contract", () => {
     panel._renderComposerState(panel._activeThread);
     expect(send.textContent).toContain("Send");
     expect(send.getAttribute("aria-label")).toBe("Send");
-    expect(send.title).toBe("Send message to Codex");
+    expect(send.hasAttribute("title")).toBe(false);
     expect(send.dataset.tooltip).toBe("Send message to Codex");
 
     panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "run-one" };
@@ -99,8 +99,8 @@ describe("prompt composer mutation contract", () => {
     panel._renderComposerState(panel._activeThread);
     expect(send.textContent).toContain("Steer");
     expect(send.getAttribute("aria-label")).toBe("Steer");
-    expect(send.title).toMatch(/steer the running/i);
-    expect(send.dataset.tooltip).toBe(send.title);
+    expect(send.dataset.tooltip).toMatch(/steer the running/i);
+    expect(send.hasAttribute("title")).toBe(false);
 
     panel._promptMutation = {
       threadId: "thread-alpha",
@@ -111,8 +111,8 @@ describe("prompt composer mutation contract", () => {
     panel._renderComposerState(panel._activeThread);
     expect(send.textContent).toContain("Retry");
     expect(send.getAttribute("aria-label")).toBe("Retry");
-    expect(send.title).toMatch(/retry this message safely/i);
-    expect(send.dataset.tooltip).toBe(send.title);
+    expect(send.dataset.tooltip).toMatch(/retry this message safely/i);
+    expect(send.hasAttribute("title")).toBe(false);
   });
 
   it("offers Stop with an empty running composer, and both Steer and Stop with a draft", async () => {
