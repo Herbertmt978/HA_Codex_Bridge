@@ -33074,6 +33074,17 @@ function collectMcpContent(container, interaction) {
       if (field2.required) return null;
       continue;
     }
+    if (field2.kind === "multi_select" && (Number.isInteger(field2.min_items) && value.length < field2.min_items || Number.isInteger(field2.max_items) && value.length > field2.max_items)) return null;
+    if (field2.format === "email" && (value.length > 320 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(value))) {
+      return null;
+    }
+    if (field2.format === "uri") {
+      try {
+        if (!["http:", "https:"].includes(new URL(value).protocol)) return null;
+      } catch {
+        return null;
+      }
+    }
     if (field2.kind === "boolean") content[field2.name] = value === "true";
     else if (field2.kind === "number" || field2.kind === "integer") {
       const number = Number(value);
@@ -42169,6 +42180,12 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         this._render();
         this._focusPrompt();
+        return;
+      }
+      if (interaction.kind === "mcp_form" && errorCode === "mcp_request_invalid") {
+        this._interactionMutations.delete(interaction.interaction_id);
+        this._assignError("The MCP answer was rejected. Review the fields and try again.");
+        this._render();
         return;
       }
       if (INTERACTION_ERROR_CODES.has(errorCode)) {

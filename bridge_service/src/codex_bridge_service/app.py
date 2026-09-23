@@ -313,6 +313,10 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request, error: RequestValidationError):
+        if request.url.path.startswith("/interactions/") and request.url.path.endswith("/mcp-form"):
+            return JSONResponse(status_code=422, content={"detail": {
+                "code": "mcp_request_invalid", "retryable": False,
+            }})
         if request.url.path.startswith("/mcp/"):
             return JSONResponse(status_code=422, content={"detail": {
                 "code": "mcp_request_invalid", "retryable": False,

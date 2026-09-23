@@ -8016,6 +8016,12 @@ class CodexBridgePanel extends HTMLElement {
         this._focusPrompt();
         return;
       }
+      if (interaction.kind === "mcp_form" && errorCode === "mcp_request_invalid") {
+        this._interactionMutations.delete(interaction.interaction_id);
+        this._assignError("The MCP answer was rejected. Review the fields and try again.");
+        this._render();
+        return;
+      }
       if (INTERACTION_ERROR_CODES.has(errorCode)) {
         mutation.state = "reconciling";
         this._assignError(errorCode === "interaction_outcome_unknown"

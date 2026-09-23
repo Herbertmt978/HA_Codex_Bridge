@@ -310,6 +310,24 @@ describe("panel accessibility contract", () => {
     expect(sent[1]).toEqual(sent[0]);
   });
 
+  it("lets the user edit an MCP answer rejected by Bridge validation", async () => {
+    const panel = createPanel();
+    panel._pendingInteractions = [MCP_FORM];
+    panel._callWS = vi.fn(async (action) => {
+      if (action === "answer_mcp_form") throw { code: "mcp_request_invalid" };
+      if (action === "list_pending_interactions") {
+        return { items: [MCP_FORM], count: 1, thread_id: "thread-alpha" };
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+    panel._render(true);
+    panel.shadowRoot.querySelector(".mcp-form-fields select").value = "yes";
+    panel._answerMcpFormFromTarget(panel.shadowRoot.querySelector('[data-action="answer-mcp-form"]'));
+    await vi.waitFor(() => expect(panel._error).toContain("Review the fields"));
+    expect(panel._interactionMutations.has(MCP_FORM.interaction_id)).toBe(false);
+    expect(panel.shadowRoot.querySelector(".mcp-form-fields select").disabled).toBe(false);
+  });
+
   it("ignores a late interaction failure after the user switches chats", async () => {
     const panel = createPanel();
     panel._pendingInteractions = [APPROVAL];

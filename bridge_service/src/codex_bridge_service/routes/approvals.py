@@ -115,13 +115,18 @@ def answer_mcp_form(
         request=request,
         expected_token=request.app.state.auth_token,
     )
-    result = request.app.state.runner.respond_mcp(
-        interaction_id,
-        thread_id=payload.thread_id,
-        action="accept",
-        content=payload.content,
-        client_request_id=payload.client_request_id,
-    )
+    try:
+        result = request.app.state.runner.respond_mcp(
+            interaction_id,
+            thread_id=payload.thread_id,
+            action="accept",
+            content=payload.content,
+            client_request_id=payload.client_request_id,
+        )
+    except ValueError:
+        raise HTTPException(status_code=422, detail={
+            "code": "mcp_request_invalid", "retryable": False,
+        }) from None
     try:
         return InteractionResultRecord.model_validate(result)
     except ValidationError:

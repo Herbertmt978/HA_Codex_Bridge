@@ -18,6 +18,7 @@ from .protocol import EndpointError
 from .runtime import async_get_runtime
 
 _INTERACTION_ERROR_MESSAGES = {
+    "mcp_request_invalid": "Review the MCP answer and try again",
     "interaction_already_resolved": "This Codex request was already resolved",
     "interaction_kind_mismatch": "This response does not match the Codex request",
     "interaction_not_found": "This Codex request is no longer available",

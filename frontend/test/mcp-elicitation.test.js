@@ -64,4 +64,31 @@ describe("MCP elicitation card", () => {
     expect(content.when).toMatch(/^2026-09-\d{2}T\d{2}:\d{2}:00\.000Z$/u);
     expect(Date.parse(content.when)).toBe(Date.parse("2026-09-23T20:30"));
   });
+
+  it("rejects unsupported URLs, malformed email and selection counts before sending", () => {
+    const root = document.createElement("div");
+    const interaction = {
+      ...form,
+      display: { ...form.display, mcp_fields: [
+        { name: "email", label: "Email", kind: "string", format: "email", required: true },
+        { name: "site", label: "Site", kind: "string", format: "uri", required: true },
+        { name: "items", label: "Items", kind: "multi_select", required: true,
+          options: ["a", "b"], min_items: 2 },
+      ] },
+    };
+    renderMcpElicitation(root, interaction);
+    const fields = root.querySelectorAll("[data-mcp-field]");
+    fields[0].querySelector("input").value = "person@example.com";
+    fields[1].querySelector("input").value = "ftp://example.com/resource";
+    fields[2].querySelector("input").checked = true;
+    expect(collectMcpContent(root, interaction)).toBeNull();
+    fields[1].querySelector("input").value = "https://example.com/resource";
+    expect(collectMcpContent(root, interaction)).toBeNull();
+    fields[2].querySelectorAll("input")[1].checked = true;
+    expect(collectMcpContent(root, interaction)).toEqual({
+      email: "person@example.com", site: "https://example.com/resource", items: ["a", "b"],
+    });
+    fields[0].querySelector("input").value = "person@example";
+    expect(collectMcpContent(root, interaction)).toBeNull();
+  });
 });

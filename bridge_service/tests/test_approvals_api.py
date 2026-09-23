@@ -358,6 +358,35 @@ def test_mcp_form_route_preserves_typed_content_and_rejects_objects(tmp_path: Pa
     assert response.status_code == 200
     assert response.json()["status"] == "accepted"
     assert invalid.status_code == 422
+    assert invalid.json()["detail"] == {
+        "code": "mcp_request_invalid", "retryable": False,
+    }
+
+
+def test_mcp_form_rejection_does_not_echo_server_or_answer_text(tmp_path: Path) -> None:
+    broker = RuntimeBrokerDouble()
+
+    def reject_answer(*_args, **_kwargs):
+        raise ValueError("Bearer private-secret in an invalid field")
+
+    broker.respond_mcp = reject_answer
+    app = _ha_app(tmp_path, broker)
+    with TestClient(app) as client:
+        response = client.post(
+            "/interactions/interaction-mcp-1/mcp-form",
+            headers=AUTHORIZATION,
+            json={
+                "thread_id": "thread-alpha",
+                "content": {"choice": "wrong"},
+                "client_request_id": "mcp-answer-invalid",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "mcp_request_invalid", "retryable": False,
+    }
+    assert "private-secret" not in response.text
 
 
 def test_pending_interactions_are_thread_scoped_provider_neutral_and_safe(

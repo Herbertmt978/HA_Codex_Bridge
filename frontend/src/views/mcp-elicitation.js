@@ -177,6 +177,20 @@ export function collectMcpContent(container, interaction) {
       if (field.required) return null;
       continue;
     }
+    if (field.kind === "multi_select" && (
+      Number.isInteger(field.min_items) && value.length < field.min_items
+      || Number.isInteger(field.max_items) && value.length > field.max_items
+    )) return null;
+    if (field.format === "email" && (value.length > 320 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(value))) {
+      return null;
+    }
+    if (field.format === "uri") {
+      try {
+        if (!["http:", "https:"].includes(new URL(value).protocol)) return null;
+      } catch {
+        return null;
+      }
+    }
     if (field.kind === "boolean") content[field.name] = value === "true";
     else if (field.kind === "number" || field.kind === "integer") {
       const number = Number(value);

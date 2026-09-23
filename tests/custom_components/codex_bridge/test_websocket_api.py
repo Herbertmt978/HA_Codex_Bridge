@@ -13,6 +13,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiError,
     BridgeApiGoneError,
     BridgeApiMcpDisabledError,
+    BridgeApiProblemError,
 )
 from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
 from custom_components.codex_bridge.event_broker import EventBroker, EventRecord
@@ -903,6 +904,26 @@ async def test_mcp_form_preserves_typed_values_through_admin_websocket() -> None
         content={"choice": "yes", "enabled": False, "count": 2},
         client_request_id="mcp-answer-1",
     )
+
+
+async def test_mcp_form_validation_error_is_safe_and_actionable() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_answer_mcp_form = AsyncMock(side_effect=BridgeApiProblemError(
+        problem=ProblemRecord.from_payload(422, {
+            "detail": {"code": "mcp_request_invalid", "retryable": False},
+        }),
+    ))
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_answer_mcp_form(hass, connection, {
+        "id": 14, "type": f"{DOMAIN}/answer_mcp_form",
+        "interaction_id": "int_1", "thread_id": "thr_1",
+        "content": {"choice": "wrong"}, "client_request_id": "mcp-invalid",
+    })
+    await hass.finish()
+    assert connection.errors == [
+        (14, "mcp_request_invalid", "Review the MCP answer and try again")
+    ]
 
 
 async def test_interaction_commands_preserve_only_actionable_safe_problem_codes() -> (
