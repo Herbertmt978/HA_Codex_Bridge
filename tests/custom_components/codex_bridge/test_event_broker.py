@@ -110,6 +110,18 @@ async def test_two_subscribers_share_one_upstream_and_receive_scoped_exactly_onc
     assert client.wait_after == [4, 5]
 
 
+async def test_internal_entity_listener_uses_existing_stream_and_can_be_removed() -> None:
+    broker = EventBroker(AsyncMock(), initial_cursor=0)
+    observed = []
+    remove = broker.add_listener(observed.append)
+    await broker._consume(_batch(_event(1, event_type="run.completed")))
+    assert [event.event_type for event in observed] == ["run.completed"]
+    remove()
+    await broker._consume(_batch(_event(2, event_type="run.failed")))
+    assert len(observed) == 1
+    await broker.async_close()
+
+
 async def test_late_subscriber_replays_bounded_history_before_live_events() -> None:
     broker = EventBroker(AsyncMock(), initial_cursor=0)
     await broker._consume(_batch(_event(1), _event(2), _event(3)))

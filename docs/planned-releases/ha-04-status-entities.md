@@ -1,13 +1,17 @@
 # HA-04: Status and usage entities
 
-Status: Planned. Version and date: unassigned.
+Implementation is complete locally on the HA-04 branch. The entity behaviour and
+recorder implications are documented in [Status entities](../status-entities.md).
+This plan is not a published release claim.
+
+Status: Implemented locally, unreleased. Version and date: unassigned.
 
 Tracking issue: [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106).
 
 ## Problem and outcome
 
-Bridge status and Codex limits are visible in the panel, but the Integration
-currently has no entity platforms. Expose useful, privacy-preserving HA entities
+Bridge status and Codex limits are visible in the panel, but the released Integration
+has no entity platforms. Expose useful, privacy-preserving HA entities
 for dashboards and automations.
 
 ## Scope

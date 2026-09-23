@@ -352,6 +352,7 @@ class EventBroker:
         self._reconnect_delay = reconnect_delay or default_reconnect_delay
         self._task_factory = task_factory or _default_task_factory
         self._subscribers: set[EventSubscription] = set()
+        self._listeners: set[Callable[[EventRecord | None], None]] = set()
         self._task: asyncio.Task[None] | None = None
         self._starting = False
         self._start_complete = asyncio.Event()
@@ -370,6 +371,20 @@ class EventBroker:
     @property
     def connection_status(self) -> Mapping[str, object]:
         return {**self._status, "cursor": self._cursor}
+
+    def add_listener(self, listener: Callable[[EventRecord | None], None]) -> Callable[[], None]:
+        """Observe the existing stream without opening another upstream consumer."""
+
+        self._listeners.add(listener)
+        return lambda: self._listeners.discard(listener)
+
+    def _notify_listeners(self, event: EventRecord | None) -> None:
+        for listener in tuple(self._listeners):
+            try:
+                listener(event)
+            except Exception:
+                # An entity observer must never interrupt the event stream.
+                pass
 
     async def async_start(self) -> None:
         if self._closed or self._task is not None:
@@ -552,6 +567,7 @@ class EventBroker:
                 pass
 
     def _publish_event(self, event: EventRecord) -> None:
+        self._notify_listeners(event)
         envelope = {"type": "event", "event": event}
         for subscription in tuple(self._subscribers):
             if subscription.closed or not subscription.matches(event):
@@ -575,6 +591,7 @@ class EventBroker:
                 )
 
     def _publish_snapshot(self, envelope: dict[str, Any]) -> None:
+        self._notify_listeners(None)
         for subscription in tuple(self._subscribers):
             subscription._replace_then_close(dict(envelope))
 
@@ -655,6 +672,7 @@ class EventBroker:
         changed = status != self._status
         self._status = status
         if notify and changed:
+            self._notify_listeners(None)
             envelope = {
                 "type": "stream_status",
                 **status,
