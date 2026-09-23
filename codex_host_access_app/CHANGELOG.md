@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.2
+
+- Keeps the optional Host Access App aligned with Codex Bridge `1.6.2`.
+  Host access still requires separate installation and consent.
+
 ## 1.6.1
 
 - Keeps the optional Host Access App aligned with Codex Bridge `1.6.1`.

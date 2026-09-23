@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.6.2
+
+- Keeps activity popovers, navigation controls and usage cards steady through
+  Home Assistant and Bridge refreshes. Live run details update without closing
+  a hovered popover or resetting an open command preview.
+- Pairs App, Integration and panel `1.6.2` with Bridge `0.13.0` and Codex
+  `0.156.1`. Stable App images remain amd64-only.
+
 ## 1.6.1
 
 - Gives panel errors a compact, consistent presentation with readable actions

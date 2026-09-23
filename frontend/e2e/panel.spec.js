@@ -467,6 +467,167 @@ test("keeps sidebar hover and keyboard focus stable during HA updates", async ({
   expect(new Set(samples.map((sample) => sample.background)).size).toBe(1);
 });
 
+test("keeps activity details and rebuilt navigation controls steady during HA updates", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+
+  const panel = page.locator("codex-bridge-panel");
+  for (const selector of ["#run-step-chip", '#direct-section [data-action="toggle-section"]', "#new-project-button"]) {
+    const control = panel.locator(selector);
+    await control.hover();
+    if (selector === "#run-step-chip") {
+      await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+    } else {
+      await expect(panel.locator("#tooltip-layer")).toBeVisible();
+    }
+    const samples = await page.evaluate(async (controlSelector) => {
+      const bridge = document.querySelector("codex-bridge-panel");
+      const original = bridge.shadowRoot.querySelector(controlSelector);
+      const results = [];
+      for (let index = 0; index < 8; index += 1) {
+        bridge.hass = { ...bridge._hass, states: { ...bridge._hass.states } };
+        await new Promise(requestAnimationFrame);
+        results.push({ connected: original.isConnected, hovered: original.matches(":hover") });
+      }
+      return results;
+    }, selector);
+    expect(samples.every(({ connected, hovered }) => connected && hovered)).toBe(true);
+    if (selector === "#run-step-chip") {
+      await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+    } else {
+      await expect(panel.locator("#tooltip-layer")).toBeVisible();
+    }
+  }
+});
+
+test("keeps a hovered activity popover steady when unrelated run events render", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+  const panel = page.locator("codex-bridge-panel");
+  const chip = panel.locator("#run-step-chip");
+  await chip.hover();
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+  const result = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip");
+    bridge._renderRunActivity();
+    return { connected: original.isConnected, hovered: original.matches(":hover") };
+  });
+  expect(result).toEqual({ connected: true, hovered: true });
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+});
+
+test("keeps a hovered activity popover steady as its content changes", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+  const panel = page.locator("codex-bridge-panel");
+  const chip = panel.locator("#run-step-chip");
+  await chip.hover();
+  await expect(panel.locator("#run-step-tooltip")).toBeVisible();
+  const state = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip");
+    window.__codexHarness.emitThreadEvent("thr_vba_1", "item.started", {
+      run_id: "run_stage_tooltip", item_id: "hover-command", item_type: "commandExecution", command_preview: "git status --short",
+    });
+    return { connected: original.isConnected, hovered: original.matches(":hover") };
+  });
+  expect(state).toEqual({ connected: true, hovered: true });
+  await expect(panel.locator("#run-step-tooltip")).toContainText("Command details");
+  const command = panel.locator(".run-command-details").first();
+  const summary = command.locator("summary");
+  await summary.click();
+  await expect(command).toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+  await page.evaluate(() => {
+    window.__codexHarness.emitThreadEvent("thr_vba_1", "item.completed", {
+      run_id: "run_stage_tooltip", item_id: "image-after-command", item_type: "imageView",
+    });
+  });
+  await expect(command).toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+});
+
+test("keeps activity details open while the pointer crosses into the popover", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+  const panel = page.locator("codex-bridge-panel");
+  const chip = panel.locator("#run-step-chip");
+  const tooltip = panel.locator("#run-step-tooltip");
+  await chip.hover();
+  await expect(tooltip).toBeVisible();
+  const chipBox = await chip.boundingBox();
+  const tooltipBox = await tooltip.boundingBox();
+  expect(chipBox && tooltipBox).toBeTruthy();
+  const below = tooltipBox.y > chipBox.y;
+  await page.mouse.move(chipBox.x + 20, below ? chipBox.y + chipBox.height - 2 : chipBox.y + 2, { steps: 8 });
+  await page.mouse.move(tooltipBox.x + 20, below ? tooltipBox.y + 4 : tooltipBox.y + tooltipBox.height - 4, { steps: 16 });
+  await expect(tooltip).toBeVisible();
+  expect(await chip.locator("..").evaluate((wrap) => wrap.matches(":hover"))).toBe(true);
+});
+
+test("keeps visible tooltip controls mounted during unchanged Bridge refreshes", async ({ page }) => {
+  await page.setViewportSize({ width: 1755, height: 900 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await seedRunStageActivity(page);
+  const disconnected = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const controls = [...bridge.shadowRoot.querySelectorAll("[data-tooltip]")]
+      .filter((node) => node.getClientRects().length && getComputedStyle(node).visibility !== "hidden");
+    bridge._render();
+    return controls.filter((node) => !node.isConnected).map((node) => node.dataset.action || node.className || node.tagName);
+  });
+  expect(disconnected).toEqual([]);
+
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator('[data-side-tab="usage"]').click();
+  const limit = panel.locator("#usage-panel .mini-limit").first();
+  await limit.hover();
+  await expect(panel.locator("#tooltip-layer")).toBeVisible();
+  const limitState = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#usage-panel .mini-limit");
+    bridge._render();
+    return { connected: original.isConnected, hovered: original.matches(":hover") };
+  });
+  expect(limitState).toEqual({ connected: true, hovered: true });
+});
+
+test("keeps a failed run's details open on a narrow dark screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    window.__codexHarness.updateThread("thr_vba_1", { status: "error", last_error: "Codex usage limits have been reached." });
+    window.__codexHarness.emitThreadEvent("thr_vba_1", "run.failed", {
+      run_id: "failed-tooltip-run", error: "Codex usage limits have been reached.",
+    });
+  });
+  const panel = page.locator("codex-bridge-panel");
+  const chip = panel.locator("#run-step-chip");
+  const tooltip = panel.locator("#run-step-tooltip");
+  await expect(chip).toContainText("Run failed");
+  await chip.click();
+  await expect(tooltip).toBeVisible();
+  const state = await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    const original = bridge.shadowRoot.querySelector("#run-step-chip");
+    for (let index = 0; index < 8; index += 1) {
+      bridge.hass = { ...bridge._hass, states: { ...bridge._hass.states } };
+      bridge._renderRunActivity();
+    }
+    return { connected: original.isConnected, expanded: original.getAttribute("aria-expanded") };
+  });
+  expect(state).toEqual({ connected: true, expanded: "true" });
+  await expect(tooltip).toContainText("Run failed");
+});
+
 test("keeps a populated plugin catalogue stable through frequent HA refreshes", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
@@ -580,6 +741,7 @@ test("gives desktop chats wider space and one working control with code-only cop
   const panel = page.locator("codex-bridge-panel");
   await page.evaluate(() => {
     const node = document.querySelector("codex-bridge-panel");
+    node._stopPolling();
     node._activeThread = { ...node._activeThread, status: "running", active_run_id: "layout-run" };
     node._pendingInteractions = [];
     node._events = [

@@ -112,7 +112,7 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.6.1**, Integration and panel **1.6.1**, with Bridge **0.13.0**
+This release pairs App **1.6.2**, Integration and panel **1.6.2**, with Bridge **0.13.0**
 and Codex **0.156.1**. It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only
 bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local

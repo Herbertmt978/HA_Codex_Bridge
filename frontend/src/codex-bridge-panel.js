@@ -36,7 +36,7 @@ import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 import { proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.6.1";
+const PANEL_VERSION = "1.6.2";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -3617,6 +3617,22 @@ template.innerHTML = `
       max-width: 100%;
     }
 
+    .run-step-wrap:hover::before,
+    .run-step-wrap:focus-within::before,
+    .run-step-wrap.open::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 100%;
+      width: min(360px, calc(100vw - 32px));
+      height: 9px;
+    }
+
+    .run-step-wrap.tooltip-below::before {
+      top: 100%;
+      bottom: auto;
+    }
+
     .run-step-chip {
       display: inline-flex;
       flex-wrap: wrap;
@@ -5490,6 +5506,10 @@ class CodexBridgePanel extends HTMLElement {
     this._renderedThreadId = null;
     this._renderedSequence = 0;
     this._renderedToolbarKey = "";
+    this._renderedRunActivityKey = "";
+    this._renderedRunActivityThreadId = null;
+    this._renderedNavigationKey = "";
+    this._renderedUsageKey = "";
     this._renderedProjectFormKey = "";
     this._renderedThreadFormKey = "";
     this._forceMessageRebuild = true;
@@ -5578,12 +5598,19 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   set hass(value) {
+    const previous = this._hass;
     this._hass = value;
     this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
       return;
     }
+    // HA publishes a new hass object for ordinary entity changes. This panel
+    // does not render those entities, so rebuilding its controls loses hover,
+    // focus and open popovers without changing anything visible.
+    if (previous && value
+      && previous.user?.id === value?.user?.id
+      && previous.config?.time_zone === value?.config?.time_zone) return;
     this._render();
   }
 
@@ -7235,9 +7262,7 @@ class CodexBridgePanel extends HTMLElement {
       "hidden",
       !this._showProjectForm && !this._showThreadForm
     );
-    this._renderDirectSection();
-    this._renderProjectList();
-    this._renderArchivedSection();
+    this._renderNavigationSections();
     this._renderNavigationEmptyState();
     this._renderToolbar();
     this._renderAttachmentChips();
@@ -8350,6 +8375,29 @@ class CodexBridgePanel extends HTMLElement {
     return map[mimeType] || "bin";
   }
 
+  _renderNavigationSections() {
+    const selectedRun = this._runActivityForThread();
+    const key = JSON.stringify([
+      this._projects,
+      this._threads,
+      this._searchQuery,
+      this._collapsedProjects,
+      this._expandedProjectActions,
+      this._expandedThreadActions,
+      this._collapsedSections,
+      this._selectedProjectId,
+      this._selectedThreadId,
+      selectedRun.state,
+      selectedRun.busy,
+      this._isLegacyConnection(),
+    ]);
+    if (key === this._renderedNavigationKey) return;
+    this._renderedNavigationKey = key;
+    this._renderDirectSection();
+    this._renderProjectList();
+    this._renderArchivedSection();
+  }
+
   _renderDirectSection() {
     const section = this.shadowRoot.getElementById("direct-section");
     const directThreads = this._directThreads(false);
@@ -8986,11 +9034,28 @@ class CodexBridgePanel extends HTMLElement {
     const region = this.shadowRoot.getElementById("run-activity");
     if (!region) return;
 
+    const activity = this._runActivityForThread();
+    const started = activity.busy ? this._events.slice().reverse().find((event) => event.event_type === "run.started"
+      && (!activity.runId || event.payload?.run_id === activity.runId)) : null;
+    const renderKey = JSON.stringify([
+      this._activeThread?.thread_id || null,
+      activity,
+      started?.timestamp || null,
+      this._runActivityDetailsOpen,
+      this._preferences.textSize,
+      window.innerWidth,
+      window.innerHeight,
+    ]);
+    if (renderKey === this._renderedRunActivityKey) return;
+    this._renderedRunActivityKey = renderKey;
+
+    const previousWrap = region.querySelector(".run-step-wrap");
+    const previousThreadId = this._renderedRunActivityThreadId;
+    const nextRegion = document.createElement("div");
+
     if (this._tooltipTarget && region.contains(this._tooltipTarget)) {
       this._hideTooltip();
     }
-    region.replaceChildren();
-    const activity = this._runActivityForThread();
     const files = activity.files || { changed: 0, additions: 0, deletions: 0 };
     const history = Array.isArray(activity.actionHistory) ? activity.actionHistory.slice(-8) : [];
     const hasStepDetails = Boolean(activity.step || history.length || files.changed);
@@ -9003,16 +9068,17 @@ class CodexBridgePanel extends HTMLElement {
     this._activityClockTimer = null;
     if (!this._activeThread || (!showActivityCopy && !hasStepDetails && !activity.busy)) {
       this._runActivityDetailsOpen = false;
+      this._renderedRunActivityThreadId = null;
+      region.replaceChildren();
       region.hidden = true;
       region.setAttribute("aria-busy", "false");
       return;
     }
 
     region.hidden = false;
+    this._renderedRunActivityThreadId = this._activeThread.thread_id;
     region.setAttribute("aria-busy", String(activity.busy));
     if (activity.busy) {
-      const started = this._events.slice().reverse().find((event) => event.event_type === "run.started"
-        && (!activity.runId || event.payload?.run_id === activity.runId));
       const startedMs = Date.parse(started?.timestamp || "");
       const elapsed = document.createElement("div");
       elapsed.className = "run-elapsed";
@@ -9021,7 +9087,7 @@ class CodexBridgePanel extends HTMLElement {
       for (let index = 0; index < 3; index += 1) dots.append(this._textElement("span", "", ""));
       const label = this._textElement("span", "run-elapsed-label", "Working");
       elapsed.append(dots, label);
-      region.append(elapsed);
+      nextRegion.append(elapsed);
       const tick = () => {
         if (!this.isConnected || !label.isConnected || !this._runActivityForThread().busy) return;
         if (Number.isFinite(startedMs)) {
@@ -9045,7 +9111,7 @@ class CodexBridgePanel extends HTMLElement {
       indicator.className = `activity-spinner${indicatorState ? ` ${indicatorState}` : ""}`;
       indicator.setAttribute("aria-hidden", "true");
       copy.append(indicator, this._textElement("span", "", activity.action));
-      region.append(copy);
+      nextRegion.append(copy);
     }
 
     if (showDetails) {
@@ -9178,19 +9244,75 @@ class CodexBridgePanel extends HTMLElement {
       }
       if (history.length || !stages.length) tooltip.append(list);
       wrap.append(chip, tooltip);
-      region.append(wrap);
-      const chipRect = chip.getBoundingClientRect();
-      const tooltipHeight = tooltip.scrollHeight;
-      if (
+      nextRegion.append(wrap);
+    } else {
+      this._runActivityDetailsOpen = false;
+    }
+
+    const nextWrap = nextRegion.querySelector(".run-step-wrap");
+    if (previousWrap && nextWrap && previousThreadId === this._renderedRunActivityThreadId) {
+      const previousChip = previousWrap.querySelector("#run-step-chip");
+      const nextChip = nextWrap.querySelector("#run-step-chip");
+      const previousTooltip = previousWrap.querySelector("#run-step-tooltip");
+      const nextTooltip = nextWrap.querySelector("#run-step-tooltip");
+      previousChip.replaceChildren(...nextChip.childNodes);
+      previousChip.setAttribute("aria-label", nextChip.getAttribute("aria-label"));
+      previousChip.setAttribute("aria-expanded", nextChip.getAttribute("aria-expanded"));
+      if (nextChip.hasAttribute("aria-describedby")) {
+        previousChip.setAttribute("aria-describedby", nextChip.getAttribute("aria-describedby"));
+      } else {
+        previousChip.removeAttribute("aria-describedby");
+      }
+      const previousTitle = previousTooltip.querySelector(".run-step-tooltip-title");
+      const previousDetails = [...previousTooltip.querySelectorAll(".run-command-details")];
+      const reusedDetails = new Set();
+      const desiredChildren = [...nextTooltip.children].map((child) => {
+        if (child.classList.contains("run-step-tooltip-title") && previousTitle) {
+          previousTitle.textContent = child.textContent;
+          return previousTitle;
+        }
+        if (child.classList.contains("run-command-details")) {
+          const preview = child.querySelector("pre")?.textContent;
+          const existing = previousDetails.find((details) =>
+            !reusedDetails.has(details) && details.querySelector("pre")?.textContent === preview);
+          if (existing) {
+            reusedDetails.add(existing);
+            return existing;
+          }
+        }
+        return child;
+      });
+      desiredChildren.forEach((child, index) => {
+        if (previousTooltip.children[index] !== child) {
+          previousTooltip.insertBefore(child, previousTooltip.children[index] || null);
+        }
+      });
+      for (const child of [...previousTooltip.children]) {
+        if (!desiredChildren.includes(child)) child.remove();
+      }
+      previousWrap.className = nextWrap.className;
+      previousWrap.dataset.state = nextWrap.dataset.state;
+      for (const child of [...region.children]) {
+        if (child !== previousWrap) child.remove();
+      }
+      for (const child of [...nextRegion.children]) {
+        if (child !== nextWrap) region.insertBefore(child, previousWrap);
+      }
+    } else {
+      region.replaceChildren(...nextRegion.childNodes);
+    }
+    const liveWrap = region.querySelector(".run-step-wrap");
+    if (liveWrap) {
+      const liveChip = liveWrap.querySelector("#run-step-chip");
+      const liveTooltip = liveWrap.querySelector("#run-step-tooltip");
+      const chipRect = liveChip.getBoundingClientRect();
+      const tooltipHeight = liveTooltip.scrollHeight;
+      liveWrap.classList.toggle("tooltip-below", Boolean(
         chipRect.height > 0
         && tooltipHeight > 0
         && chipRect.top - tooltipHeight - 9 < 8
         && chipRect.bottom + tooltipHeight + 9 < window.innerHeight - 8
-      ) {
-        wrap.classList.add("tooltip-below");
-      }
-    } else {
-      this._runActivityDetailsOpen = false;
+      ));
     }
   }
 
@@ -10596,6 +10718,18 @@ class CodexBridgePanel extends HTMLElement {
     const container = this.shadowRoot.getElementById("usage-panel");
     if (!container) return;
     const limits = this._status?.limits;
+    const usageKey = JSON.stringify([
+      limits,
+      this._status?.account,
+      this._activeThread?.context_usage,
+      this._config?.capabilities,
+      this._authViewModel().signedIn,
+      this._pendingResetCredit,
+      this._resetCreditBusy,
+      this._resetCreditNotice,
+    ]);
+    if (usageKey === this._renderedUsageKey) return;
+    this._renderedUsageKey = usageKey;
     const grid = document.createElement("div");
     grid.className = "usage-limit-grid";
     const shortWindowEmptyLabel = limits?.available && !limits?.primary && limits?.secondary ? "Off" : "Unavailable";
@@ -13025,9 +13159,7 @@ class CodexBridgePanel extends HTMLElement {
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
     if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
-      this._renderDirectSection();
-      this._renderProjectList();
-      this._renderArchivedSection();
+      this._renderNavigationSections();
       this._renderProgress();
     }
     if (
