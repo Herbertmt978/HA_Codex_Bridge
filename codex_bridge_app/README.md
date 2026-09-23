@@ -6,8 +6,8 @@ well; the App itself does not have a browser interface.
 
 ## Status
 
-This release uses App/Integration/panel **1.0.5**, Bridge **0.7.8** and Codex
-**0.155.1**. The stable App supports **amd64 Home Assistant OS**.
+This release pairs App/Integration/panel **1.6.0**, Bridge **0.13.0** and Codex
+**0.156.1**. The stable App supports **amd64 Home Assistant OS**.
 See the [changelog](CHANGELOG.md) and
 [published releases](https://github.com/Herbertmt978/HA_Codex_Bridge/releases)
 for available versions.

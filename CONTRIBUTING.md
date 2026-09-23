@@ -26,20 +26,12 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current App release is `1.0.3` (`amd64`), using Bridge `0.7.8` and
-Codex `0.155.1` with Integration and panel `1.0.3`. Update both the Supervisor
-App and the HACS Integration, then restart Home Assistant and refresh the panel.
-This release enables Astra discovery for eligible accounts and preserves sidebar
-hover and keyboard focus during background updates. App and
-Integration versions are independent when an App-only fix does not change the
-negotiated API or panel. The compatible panel adds the immediate composer
-Send-state update and preserves the account-neutral local-chat contract: local
-chats survive a ChatGPT account switch while stale private provider-thread
-continuity is detached. Provider-gated native web search defaults to Live for
-Supervisor prompts and automations, with bounded time-sensitive guidance;
-model-controlled shell networking remains disabled. Signed-in image generation
-requires both `imageGeneration` and `namespaceTools`, uses no API key, and
-keeps bounded PNG/JPEG/WebP artifacts private.
+The current paired release is App, Integration and panel `1.6.0` (`amd64`),
+Bridge `0.13.0` and Codex `0.156.1`. Update both the Supervisor App and the
+HACS Integration, then restart Home Assistant and refresh the panel. App-only
+fixes may use a different App version when they do not change the negotiated
+API or panel. See the [changelog](codex_bridge_app/CHANGELOG.md) for the
+behaviour included in each release.
 
 The prior signed and target-HA-accepted `0.8.11` App/Integration/panel release
 uses Bridge `0.7.6` and Codex `0.144.5`, exact main commit
