@@ -2,11 +2,13 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.6.1
 
 - Gives panel errors a compact, consistent presentation with readable actions
   across light and dark themes. Filled buttons keep their text contrast on hover,
   and unchanged notices are no longer repeatedly announced to screen readers.
+- Pairs App, Integration and panel `1.6.1` with Bridge `0.13.0` and Codex
+  `0.156.1`. Stable App images remain amd64-only.
 
 ## 1.6.0
 

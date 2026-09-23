@@ -36,7 +36,7 @@ import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 import { proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.6.0";
+const PANEL_VERSION = "1.6.1";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
