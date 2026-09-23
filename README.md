@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/logo.png" alt="Codex Bridge - private code, home control" width="720">
+<img src="brand/logo.svg" alt="Codex Bridge symbol and wordmark" width="720">
 
 # Home Assistant Codex Bridge
 

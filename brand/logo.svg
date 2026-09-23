@@ -34,9 +34,8 @@
     <path d="M119 143h18M111 157h34M101 172h54" fill="none" stroke="url(#bridge)" stroke-width="7" stroke-linecap="round"/>
   </g>
   <g transform="translate(278 0)">
-    <text x="0" y="119" fill="#F5F8FA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="62" font-weight="700" letter-spacing="7">CODEX BRIDGE</text>
-    <rect x="1" y="145" width="72" height="4" rx="2" fill="#18BCF2"/>
-    <rect x="73" y="145" width="58" height="4" rx="2" fill="#5B6CFF"/>
-    <text x="0" y="184" fill="#B9C9D8" font-family="Consolas, IBM Plex Mono, monospace" font-size="18" letter-spacing="3">PRIVATE CODE · HOME CONTROL</text>
+    <text x="0" y="145" fill="#F5F8FA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="62" font-weight="700" letter-spacing="7">CODEX BRIDGE</text>
+    <rect x="1" y="172" width="72" height="4" rx="2" fill="#18BCF2"/>
+    <rect x="73" y="172" width="58" height="4" rx="2" fill="#5B6CFF"/>
   </g>
 </svg>

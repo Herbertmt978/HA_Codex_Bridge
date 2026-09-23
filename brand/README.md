@@ -1,8 +1,9 @@
 # Codex Bridge brand assets
 
 The SVG files are the editable sources for the Codex Bridge identity. The PNG
-exports are generated snapshots for Home Assistant, HACS, README rendering,
-and the GitHub social-preview setting.
+exports are generated snapshots for Home Assistant, HACS, and the GitHub
+social-preview setting. The README uses the SVG directly to stay sharp at any
+display size.
 
 Regenerate every PNG copy from the repository root:
 
