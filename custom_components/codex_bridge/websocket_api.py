@@ -117,6 +117,8 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_remove_marketplace,
         ws_upgrade_marketplace,
         ws_list_mcp,
+        ws_list_mcp_tools,
+        ws_set_mcp_tools,
         ws_add_mcp,
         ws_remove_mcp,
         ws_login_mcp,
@@ -1663,11 +1665,37 @@ async def ws_list_mcp(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_mcp())
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/list_mcp_tools",
+    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
+})
+@websocket_api.async_response
+async def ws_list_mcp_tools(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_list_mcp_tools(msg["name"]))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/set_mcp_tools",
+    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Required("enabled_tools"): vol.All(list, vol.Length(max=512)),
+    vol.Required("revision"): vol.All(str, vol.Length(min=64, max=64)),
+    vol.Required("catalogue_revision"): vol.All(str, vol.Length(min=64, max=64)),
+})
+@websocket_api.async_response
+async def ws_set_mcp_tools(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_set_mcp_tools(msg["name"], {
+                            key: msg[key] for key in ("enabled_tools", "revision", "catalogue_revision")
+                        }))
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/add_mcp",
         vol.Optional("local"): bool,
         vol.Optional("local_acknowledged"): bool,
+        vol.Optional("require_tool_selection"): bool,
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
         vol.Required("url"): vol.All(str, vol.Length(min=1, max=2048)),
         vol.Optional("oauth_client_id"): vol.Any(
@@ -1687,7 +1715,7 @@ async def ws_add_mcp(hass, connection, msg) -> None:
         lambda client: client.async_add_mcp(
             {
                 key: msg[key]
-                for key in ("name", "url", "oauth_client_id", "oauth_resource", "local", "local_acknowledged")
+                for key in ("name", "url", "oauth_client_id", "oauth_resource", "local", "local_acknowledged", "require_tool_selection")
                 if key in msg
             }
         ),

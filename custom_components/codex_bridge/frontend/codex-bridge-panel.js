@@ -33553,6 +33553,60 @@ function clearMcpSecrets(form) {
     input2.value = "";
   });
 }
+function renderMcpToolPermissions(doc, state) {
+  const inventory = state.mcpToolInventory || {};
+  const form = doc.createElement("form");
+  form.className = "desktop-form mcp-tool-permissions";
+  form.dataset.desktopForm = "mcp-tools";
+  form.append(
+    text(doc, "h3", `Tools from ${inventory.server || "server"}`, "desktop-subheading"),
+    text(doc, "p", `Connection: ${inventory.endpoint || ""}. Tool descriptions and safety labels are claims made by this server; they are not verified guarantees.`, "desktop-note")
+  );
+  if (inventory.mode === "all") form.append(text(doc, "p", "All tools are currently available. Saving a selection will also block any tools this server adds later until you allow them.", "desktop-note"));
+  else form.append(text(doc, "p", "Only selected tools are available in chats and scheduled tasks. New or renamed tools stay blocked.", "desktop-note"));
+  if (!inventory.catalogue_available) form.append(text(doc, "p", "Tool catalogue unavailable. Refresh server status, or resume a paused connection before changing permissions.", "desktop-error"));
+  if (inventory.catalogue_truncated) form.append(text(doc, "p", "This server advertises more tools than can be shown here. Unlisted tools remain blocked by a saved selection.", "desktop-note"));
+  if (inventory.stale_tools?.length) form.append(text(doc, "p", inventory.catalogue_truncated ? `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} not shown in this limited catalogue. They remain on the saved list until removed.` : `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} no longer advertised. They remain on the saved list until removed; a renamed tool needs separate approval.`, "desktop-note"));
+  const list = doc.createElement("fieldset");
+  list.className = "mcp-tool-list";
+  list.append(text(doc, "legend", "Allowed tools"));
+  const allowed = new Set(state.mcpToolDraft || inventory.enabled_tools || []);
+  for (const tool of inventory.tools || []) {
+    const row = doc.createElement("label");
+    row.className = "mcp-tool-row";
+    const checkbox = doc.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.mcpTool = tool.name;
+    checkbox.checked = state.mcpToolDraft ? allowed.has(tool.name) : inventory.mode === "all" || allowed.has(tool.name);
+    row.append(checkbox, text(doc, "strong", tool.name));
+    if (tool.description) row.append(text(doc, "span", tool.description, "desktop-note"));
+    const hints = [tool.read_only && "Claims read-only", tool.write_possible && "May write", tool.destructive && "Claims destructive", tool.idempotent && "Claims idempotent"].filter(Boolean);
+    if (hints.length) row.append(text(doc, "small", hints.join(" · "), "desktop-note"));
+    list.append(row);
+  }
+  for (const name of inventory.stale_tools || []) {
+    const row = doc.createElement("label");
+    row.className = "mcp-tool-row";
+    const checkbox = doc.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.mcpTool = name;
+    checkbox.checked = allowed.has(name);
+    row.append(checkbox, text(doc, "strong", name), text(doc, "small", inventory.catalogue_truncated ? "Not in the displayed catalogue" : "Not in the latest catalogue", "desktop-note"));
+    list.append(row);
+  }
+  form.append(list);
+  if (state.formError) {
+    const error = text(doc, "p", state.formError, "desktop-error");
+    error.setAttribute("role", "alert");
+    form.append(error);
+  }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const save = button(doc, "Save allowed tools", "submit-mcp-tools");
+  save.disabled = !inventory.catalogue_available || state.loading;
+  actions.append(save, button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  return form;
+}
 function renderMcpConnectionForm(doc, state) {
   const server = state.editingMcp || {};
   const form = doc.createElement("form");
@@ -34026,9 +34080,11 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
+    const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
+    if (state.form === "mcp-tools" && toolPermissions) panel.append(renderMcpToolPermissions(documentRef, state));
     panel.append(text2(documentRef, "p", management ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats." : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
     panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
@@ -34043,6 +34099,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
         edit.disabled = !paused;
         edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
         controls.append(edit, text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (toolPermissions) controls.append(button2(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text2(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
       }
       controls.append(button2(documentRef, "Remove server", "remove-mcp", { id }));
@@ -34147,6 +34204,11 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
+  container.onchange = (event) => {
+    if (event.target?.matches?.("[data-mcp-tool]")) {
+      state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input2) => input2.dataset.mcpTool);
+    }
+  };
   container.onsubmit = (event) => {
     event.preventDefault();
     const form = event.target?.closest?.("[data-desktop-form]");
@@ -34155,10 +34217,11 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
+    mcpInventoryRevision: state.mcpToolInventory?.catalogue_revision,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,
@@ -37145,6 +37208,12 @@ template.innerHTML = `
     .desktop-table-actions { min-width: 180px; }
     .mcp-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .mcp-connection-actions .desktop-action-note { flex-basis: 100%; }
+    .mcp-tool-list { display: grid; gap: 4px; min-width: 0; max-height: min(48vh, 480px); overflow: auto; padding: 12px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; }
+    .mcp-tool-list legend { font-weight: 600; padding-inline: 4px; }
+    .mcp-tool-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 10px; align-items: start; padding: 9px 4px; border-bottom: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
+    .mcp-tool-row:last-child { border-bottom: 0; }
+    .mcp-tool-row input { grid-row: 1 / span 3; margin: 3px 0; }
+    .mcp-tool-row .desktop-note { grid-column: 2; margin: 2px 0 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -41240,6 +41309,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      if (this._config?.capabilities?.includes("mcp_tool_permissions_v1")) payload.require_tool_selection = true;
       const authentication = readMcpCredential(form);
       delete payload.auth_mode;
       if (payload.local) {
@@ -41261,7 +41331,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (!saved && state.error) {
         state.formError = state.error;
         state.error = "";
-      } else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+      } else if (saved && guided) state.notice = this._config?.capabilities?.includes("mcp_tool_permissions_v1") ? "Home Assistant server added. Complete Sign in if requested, then choose allowed tools before asking Codex to use it." : "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     } else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
       if (!server || !this._config?.capabilities?.includes("mcp_management_v1")) return;
@@ -41272,6 +41342,48 @@ var CodexBridgePanel = class extends HTMLElement {
         state.form = "mcp-edit";
       } else {
         await this._mcpConnectionMutation({ operation: "state", name: server.name, revision: server.revision, enabled: action === "resume-mcp" }, state);
+      }
+    } else if (action === "edit-mcp-tools") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_tool_permissions_v1") || state.loading) return;
+      state.loading = true;
+      state.formError = "";
+      state.error = "";
+      try {
+        state.mcpToolInventory = await this._callWS("list_mcp_tools", { name: server.name });
+        state.mcpToolDraft = null;
+        state.form = "mcp-tools";
+      } catch (error) {
+        state.error = normalizeDesktopError(error);
+      } finally {
+        state.loading = false;
+      }
+    } else if (action === "submit-mcp-tools") {
+      if (!this._config?.capabilities?.includes("mcp_tool_permissions_v1") || state.loading) return;
+      const inventory = state.mcpToolInventory;
+      const form = target?.closest("form");
+      if (!inventory?.catalogue_available || !form) return;
+      const enabled_tools = [...form.querySelectorAll("[data-mcp-tool]:checked")].map((input2) => input2.dataset.mcpTool);
+      state.loading = true;
+      state.formError = "";
+      state.error = "";
+      try {
+        await this._callWS("set_mcp_tools", {
+          name: inventory.server,
+          enabled_tools,
+          revision: inventory.revision,
+          catalogue_revision: inventory.catalogue_revision
+        });
+        state.form = null;
+        state.mcpToolInventory = null;
+        state.mcpToolDraft = null;
+        state.notice = "Allowed tools saved. The policy applies to subsequent turns in chats and scheduled tasks; newly discovered tools stay blocked.";
+        state.loaded = false;
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) {
+        state.formError = normalizeDesktopError(error);
+      } finally {
+        state.loading = false;
       }
     } else if (action === "submit-mcp-connection") {
       const form = target?.closest("form");

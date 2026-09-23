@@ -2493,6 +2493,45 @@ test("workspace terminal accepts interactive input and closes when leaving the c
 
 
 for (const width of [1440, 390]) {
+  test(`MCP tool selection is readable and keyboard accessible at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      panel._config.capabilities = ["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"];
+      window.toolPolicyCalls = [];
+      const original = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => {
+        if (method === "list_mcp") return Promise.resolve({ items: [{ name: "vendor", endpoint: "https://mcp.example.com", enabled: true, startup: "ready", tool_policy: "all", tool_count: 2, resource_count: 0 }] });
+        if (method === "list_mcp_tools") return Promise.resolve({ server: "vendor", endpoint: "https://mcp.example.com", mode: "all", enabled_tools: [], catalogue_available: true,
+          revision: "a".repeat(64), catalogue_revision: "b".repeat(64), stale_tools: [], tools: [
+            { name: "read", description: "Read a value", read_only: true },
+            { name: "erase", description: "Delete a value", write_possible: true, destructive: true },
+          ] });
+        if (method === "set_mcp_tools") { window.toolPolicyCalls.push(args); return Promise.resolve({}); }
+        return original(method, args);
+      };
+      panel._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    await panel.getByRole("button", { name: "Choose allowed tools" }).click();
+    await expect(panel.getByRole("group", { name: "Allowed tools" })).toBeVisible();
+    const erase = panel.getByRole("checkbox", { name: /erase/ });
+    await erase.focus();
+    await page.keyboard.press("Space");
+    await expect(erase).not.toBeChecked();
+    const bounds = await panel.locator(".mcp-tool-permissions").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.getByRole("button", { name: "Save allowed tools" }).click();
+    await expect.poll(() => page.evaluate(() => window.toolPolicyCalls.length)).toBe(1);
+    expect(await page.evaluate(() => window.toolPolicyCalls[0].enabled_tools)).toEqual(["read"]);
+  });
+
   test(`MCP connection edits stay paused and recover from failed saves at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.addInitScript(() => { window.nativeManagementFetch = window.fetch.bind(window); });

@@ -341,7 +341,7 @@ class CodexBridgeMcpCredentialView(HomeAssistantView):
             runtime = async_get_runtime(self.hass)
             runtime.client.require_capability("mcp_management_v1" if operation in {"edit", "state"} else "mcp_credentials_v1")
             if operation == "create":
-                allowed = {"name", "url", "local", "local_acknowledged", "authentication", "auth_acknowledged"}
+                allowed = {"name", "url", "local", "local_acknowledged", "authentication", "auth_acknowledged", "require_tool_selection"}
                 if set(payload) - allowed or "authentication" not in payload:
                     raise ValueError()
                 await runtime.client.async_add_mcp(payload)

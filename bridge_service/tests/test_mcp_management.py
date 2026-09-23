@@ -26,6 +26,8 @@ class NativeConfig:
         self.write_timeout = False
         self.masked = False
         self.status_failure = False
+        self.tools = {"echo": {"description": "Read a value", "annotations": {"readOnlyHint": True}},
+                      "erase": {"description": "Delete a value", "annotations": {"destructiveHint": True}}}
         self.writes = []
 
     def register_notification_handler(self, *_args):
@@ -68,13 +70,17 @@ class NativeConfig:
         if method == "mcpServerStatus/list":
             if self.status_failure:
                 raise RuntimeError("private provider detail")
-            return {"data": [{"name": "vendor", "tools": {"echo": {}}, "resources": []}]}
+            config = self.servers["vendor"]
+            tools = deepcopy(self.tools) if config.get("enabled", True) else {}
+            if "enabled_tools" in config:
+                tools = {name: item for name, item in tools.items() if name in config["enabled_tools"]}
+            return {"data": [{"name": "vendor", "tools": tools, "resources": []}]}
         raise AssertionError(method)
 
 
-def manager_for(client):
+def manager_for(client, marker_path=None):
     gate = RuntimeGate(limits=ResourceLimits())
-    return McpManager(client, gate, enabled=True, resolver=lambda _: ()), gate
+    return McpManager(client, gate, enabled=True, resolver=lambda _: (), discovery_marker=marker_path), gate
 
 
 def test_pause_resume_revisions_and_retained_configuration():
@@ -236,6 +242,133 @@ def test_connection_routes_require_auth_and_preserve_paused_state():
     assert saved.status_code == 200 and saved.headers["Cache-Control"] == "no-store"
     assert saved.json()["enabled"] is False
     assert native.servers["vendor"]["url"] == edit["url"]
+
+
+def test_tool_policy_survives_restart_and_new_or_renamed_tools_stay_blocked(tmp_path):
+    native = NativeConfig()
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    manager, _ = manager_for(native, marker)
+    inventory = manager.list_server_tools("vendor")
+    assert inventory["mode"] == "all"
+    assert inventory["tools"][0]["destructive"] is False
+    assert inventory["tools"][1]["destructive"] is True
+    saved = manager.set_server_tools("vendor", enabled_tools=["echo"],
+        revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert saved["tool_policy"] == "selected"
+    native.tools = {"echo_renamed": {}, "new_tool": {}}
+    native.masked = True
+    restarted, _ = manager_for(native, marker)
+    restarted.sanitize_startup_servers()
+    restarted.activate_validated_mcp_config()
+    current = restarted.list_server_tools("vendor")
+    assert current["enabled_tools"] == ["echo"]
+    assert current["stale_tools"] == ["echo"]
+    assert {tool["name"] for tool in current["tools"]} == {"echo_renamed", "new_tool"}
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert not marker.exists()
+
+
+def test_tool_policy_rejects_stale_catalogue_and_changes_during_work():
+    native = NativeConfig()
+    manager, gate = manager_for(native)
+    inventory = manager.list_server_tools("vendor")
+    native.tools["new"] = {}
+    refreshed = manager.list_server_tools("vendor")
+    with pytest.raises(McpConflictError):
+        manager.set_server_tools("vendor", enabled_tools=["echo"],
+            revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
+    current = refreshed
+    lease = gate.reserve_prompt(client_request_id="tool-policy-fixture")
+    try:
+        with pytest.raises(McpConflictError):
+            manager.set_server_tools("vendor", enabled_tools=["echo"],
+                revision=current["revision"], catalogue_revision=current["catalogue_revision"])
+    finally:
+        lease.release()
+    assert not native.writes
+    with pytest.raises(McpValidationError):
+        manager.set_server_tools("vendor", enabled_tools=["unknown"],
+            revision=current["revision"], catalogue_revision=current["catalogue_revision"])
+
+
+def test_tool_catalogue_is_bounded_and_untrusted_text_is_data():
+    native = NativeConfig()
+    native.tools = {f"tool_{index}": {"description": "<img onerror=alert(1)>" * 40}
+                    for index in range(600)}
+    native.tools["tool_000"] = {"name": "different"}
+    manager, _ = manager_for(native)
+    inventory = manager.list_server_tools("vendor")
+    assert inventory["catalogue_truncated"] is True
+    assert len(inventory["tools"]) <= 512
+    assert all(len(tool["description"]) <= 512 for tool in inventory["tools"])
+    assert all(tool["name"] != "tool_000" for tool in inventory["tools"])
+    with pytest.raises(McpValidationError):
+        manager.set_server_tools("vendor", enabled_tools=["echo", "echo"],
+            revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
+
+
+def test_tool_policy_route_requires_admin_token_and_does_not_cache_catalogue():
+    native = NativeConfig()
+    manager, _ = manager_for(native)
+    app = FastAPI()
+    app.include_router(router)
+    app.state.auth_token = "synthetic-bridge-token"
+    app.state.storage = SimpleNamespace(runtime_profile="external_legacy")
+    app.state.mcp_manager = manager
+    client = TestClient(app)
+    assert client.post("/mcp/servers/vendor/tools/discover").status_code == 401
+    headers = {"Authorization": "Bearer synthetic-bridge-token"}
+    response = client.post("/mcp/servers/vendor/tools/discover", headers=headers)
+    assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
+    payload = {"enabled_tools": [], "revision": response.json()["revision"],
+               "catalogue_revision": response.json()["catalogue_revision"]}
+    assert client.put("/mcp/servers/vendor/tools", json=payload).status_code == 401
+    saved = client.put("/mcp/servers/vendor/tools", headers=headers, json=payload)
+    assert saved.status_code == 200 and saved.headers["Cache-Control"] == "no-store"
+    assert native.servers["vendor"]["enabled_tools"] == []
+
+
+def test_paired_new_connection_starts_with_no_allowed_tools():
+    native = NativeConfig()
+    manager, _ = manager_for(native)
+    created = manager.create_server(name="scoped", url="https://tools.example.com/mcp",
+                                    require_tool_selection=True)
+    assert created["tool_policy"] == "selected"
+    assert native.servers["scoped"]["enabled_tools"] == []
+    legacy = manager.create_server(name="legacy", url="https://legacy.example.com/mcp")
+    assert legacy["tool_policy"] == "all"
+    assert "enabled_tools" not in native.servers["legacy"]
+
+
+def test_interrupted_discovery_pauses_servers_before_startup_activation(tmp_path):
+    native = NativeConfig()
+    native.servers["vendor"]["enabled_tools"] = ["echo"]
+    native.masked = True
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    marker.write_text("MCP tool discovery pending\n")
+    manager, _ = manager_for(native, marker)
+    manager.sanitize_startup_servers()
+    manager.activate_validated_mcp_config()
+    assert native.servers["vendor"]["enabled"] is False
+    assert native.servers["vendor"]["enabled_tools"] == []
+    assert not marker.exists()
+
+
+def test_failed_catalogue_probe_restores_filter_or_blocks_all_work(tmp_path):
+    native = NativeConfig()
+    native.servers["vendor"]["enabled_tools"] = ["echo"]
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    manager, gate = manager_for(native, marker)
+    native.reload_failures = 1
+    assert manager.list_server_tools("vendor")["catalogue_available"] is False
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert not marker.exists() and not gate.snapshot().closed
+
+    native.reload_failures = 2
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.list_server_tools("vendor")
+    assert marker.exists() and gate.snapshot().closed
 
 
 def test_failed_credential_reload_invalidates_destination_forms(monkeypatch):

@@ -175,6 +175,52 @@ export function clearMcpSecrets(form) {
   form?.querySelectorAll("[data-mcp-token], [data-mcp-header-value]").forEach((input) => { input.value = ""; });
 }
 
+export function renderMcpToolPermissions(doc, state) {
+  const inventory = state.mcpToolInventory || {};
+  const form = doc.createElement("form");
+  form.className = "desktop-form mcp-tool-permissions";
+  form.dataset.desktopForm = "mcp-tools";
+  form.append(text(doc, "h3", `Tools from ${inventory.server || "server"}`, "desktop-subheading"),
+    text(doc, "p", `Connection: ${inventory.endpoint || ""}. Tool descriptions and safety labels are claims made by this server; they are not verified guarantees.`, "desktop-note"));
+  if (inventory.mode === "all") form.append(text(doc, "p", "All tools are currently available. Saving a selection will also block any tools this server adds later until you allow them.", "desktop-note"));
+  else form.append(text(doc, "p", "Only selected tools are available in chats and scheduled tasks. New or renamed tools stay blocked.", "desktop-note"));
+  if (!inventory.catalogue_available) form.append(text(doc, "p", "Tool catalogue unavailable. Refresh server status, or resume a paused connection before changing permissions.", "desktop-error"));
+  if (inventory.catalogue_truncated) form.append(text(doc, "p", "This server advertises more tools than can be shown here. Unlisted tools remain blocked by a saved selection.", "desktop-note"));
+  if (inventory.stale_tools?.length) form.append(text(doc, "p", inventory.catalogue_truncated
+    ? `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} not shown in this limited catalogue. They remain on the saved list until removed.`
+    : `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} no longer advertised. They remain on the saved list until removed; a renamed tool needs separate approval.`, "desktop-note"));
+  const list = doc.createElement("fieldset");
+  list.className = "mcp-tool-list";
+  list.append(text(doc, "legend", "Allowed tools"));
+  const allowed = new Set(state.mcpToolDraft || inventory.enabled_tools || []);
+  for (const tool of inventory.tools || []) {
+    const row = doc.createElement("label"); row.className = "mcp-tool-row";
+    const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
+    checkbox.dataset.mcpTool = tool.name;
+    checkbox.checked = state.mcpToolDraft ? allowed.has(tool.name) : inventory.mode === "all" || allowed.has(tool.name);
+    row.append(checkbox, text(doc, "strong", tool.name));
+    if (tool.description) row.append(text(doc, "span", tool.description, "desktop-note"));
+    const hints = [tool.read_only && "Claims read-only", tool.write_possible && "May write", tool.destructive && "Claims destructive", tool.idempotent && "Claims idempotent"].filter(Boolean);
+    if (hints.length) row.append(text(doc, "small", hints.join(" · "), "desktop-note"));
+    list.append(row);
+  }
+  for (const name of inventory.stale_tools || []) {
+    const row = doc.createElement("label"); row.className = "mcp-tool-row";
+    const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
+    checkbox.dataset.mcpTool = name; checkbox.checked = allowed.has(name);
+    row.append(checkbox, text(doc, "strong", name), text(doc, "small", inventory.catalogue_truncated ? "Not in the displayed catalogue" : "Not in the latest catalogue", "desktop-note"));
+    list.append(row);
+  }
+  form.append(list);
+  if (state.formError) { const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error); }
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const save = button(doc, "Save allowed tools", "submit-mcp-tools");
+  save.disabled = !inventory.catalogue_available || state.loading;
+  actions.append(save, button(doc, "Cancel", "close-form"));
+  form.append(actions);
+  return form;
+}
+
 export function renderMcpConnectionForm(doc, state) {
   const server = state.editingMcp || {};
   const form = doc.createElement("form");

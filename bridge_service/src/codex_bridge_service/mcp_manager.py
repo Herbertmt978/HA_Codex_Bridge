@@ -13,6 +13,9 @@ from dataclasses import dataclass, replace
 import hashlib
 import hmac
 import ipaddress
+import json
+import os
+from pathlib import Path
 import re
 import secrets
 import socket
@@ -31,6 +34,8 @@ _MAX_STATUS_PAGES = 4
 _MAX_NAME_BYTES = 64
 _MAX_URL_BYTES = 2048
 _MAX_PUBLIC_FIELD_BYTES = 512
+_MAX_TOOLS = 512
+_MAX_TOOL_NAME_BYTES = 256
 _MAX_OAUTH_URL_BYTES = 8192
 _NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z", re.ASCII)
 _DNS_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z", re.ASCII)
@@ -175,6 +180,7 @@ class McpServerDefinition:
     auth_mode: str = "none"
     credential_configured: bool = False
     enabled: bool = True
+    enabled_tools: tuple[str, ...] | None = None
 
     def config_value(self) -> dict[str, object]:
         if self.local or self.relayed:
@@ -183,6 +189,8 @@ class McpServerDefinition:
         value: dict[str, object] = {"url": self.url}
         if not self.enabled:
             value["enabled"] = False
+        if self.enabled_tools is not None:
+            value["enabled_tools"] = list(self.enabled_tools)
         if self.oauth_client_id is not None:
             value["oauth_client_id"] = self.oauth_client_id
         if self.oauth_resource is not None:
@@ -202,6 +210,7 @@ class McpManager:
         resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
         enabled: bool = False,
         relay: McpRelay | None = None,
+        discovery_marker: Path | None = None,
     ) -> None:
         if request_timeout_seconds <= 0:
             raise ValueError("MCP request timeout must be positive")
@@ -213,6 +222,7 @@ class McpManager:
         self._resolver = resolver
         self._enabled = enabled
         self._relay = relay
+        self._discovery_marker = discovery_marker
         self._lock = RLock()
         self._startup: dict[str, tuple[str, str | None]] = {}
         self._active_names: frozenset[str] = frozenset()
@@ -222,6 +232,7 @@ class McpManager:
         self._revision_key = secrets.token_bytes(32)
         self._mutation_serial = 0
         self._recovery_required = False
+        self._catalogue_snapshots: dict[str, tuple[str, frozenset[str]]] = {}
         self._register_callbacks()
 
     @property
@@ -282,6 +293,7 @@ class McpManager:
                     "resource_count": _bounded_collection_size(resources)
                     + _bounded_collection_size(templates),
                     "enabled": definition.enabled,
+                    "tool_policy": "selected" if definition.enabled_tools is not None else "all",
                     "revision": self._revision(definition.name, version),
                 }
                 if not definition.enabled:
@@ -303,6 +315,145 @@ class McpManager:
                 views.append(view)
             return views
 
+    def list_server_tools(self, name: object) -> dict[str, object]:
+        """Return bounded, untrusted discovery beside the saved native allow-list."""
+        self._require_enabled()
+        normalized = _validate_name(name)
+        with self._lock:
+            definitions, version = self._read_definitions()
+            definition = definitions.get(normalized)
+            if definition is None:
+                raise McpNotFoundError()
+        try:
+            if not definition.enabled:
+                status = None
+            elif definition.enabled_tools is not None:
+                status, version = self._discover_restricted_tools(normalized)
+            else:
+                with self._lock:
+                    status = self._read_statuses().get(normalized)
+        except McpRecoveryRequiredError:
+            raise
+        except McpUnavailableError:
+            status = None
+            with self._lock:
+                _, version = self._read_definitions()
+        with self._lock:
+            definitions, current_version = self._read_definitions()
+            if definitions.get(normalized) != definition or current_version != version:
+                raise McpConflictError()
+            tools = _tool_catalogue(status)
+            discovered = {tool["name"] for tool in tools}
+            allowed = definition.enabled_tools
+            catalogue_revision = self._catalogue_revision(normalized, tools)
+            if definition.enabled and status is not None and isinstance(status.get("tools"), Mapping):
+                self._catalogue_snapshots[normalized] = (catalogue_revision, frozenset(discovered))
+            else:
+                self._catalogue_snapshots.pop(normalized, None)
+            return {
+                "server": normalized,
+                "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
+                "mode": "selected" if allowed is not None else "all",
+                "enabled_tools": list(allowed or ()),
+                "tools": tools,
+                "stale_tools": sorted(set(allowed or ()) - discovered) if status is not None else [],
+                "catalogue_available": definition.enabled and status is not None and isinstance(status.get("tools"), Mapping),
+                "catalogue_truncated": isinstance(status.get("tools"), Mapping) and len(status["tools"]) > _MAX_TOOLS if status is not None else False,
+                "revision": self._revision(normalized, version),
+                "catalogue_revision": catalogue_revision,
+            }
+
+    def _discover_restricted_tools(self, name: str) -> tuple[Mapping[str, object] | None, str]:
+        """Briefly remove the filter while the turn gate is exclusively held.
+
+        A durable marker makes an interrupted probe pause all MCP servers at
+        the next bootstrap before any native work can resume.
+        """
+        if self._discovery_marker is None:
+            raise McpUnavailableError()
+        self._require_elicitation_handler()
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(name)
+            if previous is None:
+                raise McpNotFoundError()
+            if previous.enabled_tools is None:
+                return self._read_statuses().get(name), version
+            try:
+                descriptor = os.open(self._discovery_marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "wb") as marker:
+                    marker.write(b"MCP tool discovery pending\n")
+                    marker.flush()
+                    os.fsync(marker.fileno())
+                if hasattr(os, "O_DIRECTORY"):
+                    directory = os.open(self._discovery_marker.parent, os.O_RDONLY | os.O_DIRECTORY)
+                    try:
+                        os.fsync(directory)
+                    finally:
+                        os.close(directory)
+            except OSError:
+                self._require_recovery(name)
+                raise McpRecoveryRequiredError() from None
+            status = None
+            try:
+                self._write_config_value(key_path=f"mcp_servers.{name}",
+                    value=self._native_value(replace(previous, enabled_tools=None)), version=version)
+                self._reload()
+                try:
+                    status = self._read_statuses().get(name)
+                except McpUnavailableError:
+                    pass
+            finally:
+                try:
+                    current, current_version = self._read_definitions()
+                    if current.get(name) not in (previous, replace(previous, enabled_tools=None)):
+                        raise McpConflictError()
+                    self._write_config_value(key_path=f"mcp_servers.{name}",
+                        value=self._native_value(previous), version=current_version)
+                    self._reload()
+                    restored, current_version = self._read_definitions()
+                    if restored.get(name) != previous:
+                        raise McpConflictError()
+                    self._discovery_marker.unlink()
+                except (McpManagerError, OSError):
+                    self._require_recovery(name)
+                    raise McpRecoveryRequiredError() from None
+            self._mutation_serial += 1
+            return status, current_version
+
+    def _catalogue_revision(self, name: str, tools: list[dict[str, object]]) -> str:
+        serialized = json.dumps(tools, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return hmac.new(self._revision_key, f"{name}\0{serialized}".encode(), hashlib.sha256).hexdigest()
+
+    def set_server_tools(self, name: object, *, enabled_tools: object,
+                         revision: object, catalogue_revision: object) -> dict[str, object]:
+        """Apply native filtering only between turns and against fresh discovery."""
+        self._require_enabled()
+        self._require_elicitation_handler()
+        normalized = _validate_name(name)
+        selected = _validate_enabled_tools(enabled_tools)
+        if selected is None:
+            raise McpValidationError()
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(normalized)
+            if previous is None:
+                raise McpNotFoundError()
+            self._check_revision(normalized, version, revision)
+            snapshot = self._catalogue_snapshots.get(normalized)
+            if (snapshot is None or not isinstance(catalogue_revision, str)
+                    or not hmac.compare_digest(snapshot[0], catalogue_revision)):
+                raise McpConflictError()
+            known = snapshot[1] | set(previous.enabled_tools or ())
+            if not set(selected) <= known:
+                raise McpValidationError()
+            updated = replace(previous, enabled_tools=selected)
+            if updated != previous:
+                version = self._apply_definition(previous, updated, version)
+            self._catalogue_snapshots.pop(normalized, None)
+            return {"name": normalized, "tool_policy": "selected", "enabled_tools": list(selected),
+                    "revision": self._revision(normalized, version)}
+
     def create_server(
         self,
         *,
@@ -314,6 +465,7 @@ class McpManager:
         local_acknowledged: bool = False,
         authentication: object = None,
         auth_acknowledged: bool = False,
+        require_tool_selection: bool = False,
     ) -> dict[str, object]:
         self._require_enabled()
         self._require_elicitation_handler()
@@ -330,6 +482,9 @@ class McpManager:
             raise McpUnavailableError()
         if type(local) is not bool or type(local_acknowledged) is not bool:
             raise McpValidationError()
+        if type(require_tool_selection) is not bool:
+            raise McpValidationError()
+        initial_tools = () if require_tool_selection else None
         if local:
             if self._relay is None or not self._relay.local_enabled:
                 raise McpLocalDisabledError()
@@ -344,6 +499,7 @@ class McpManager:
                 url=_validate_https_url(url, resolver=self._resolver),
                 oauth_client_id=_validate_public_field(oauth_client_id),
                 oauth_resource=_validate_public_field(oauth_resource),
+                enabled_tools=initial_tools,
             )
         with self._mutation_lease():
             with self._lock:
@@ -360,7 +516,8 @@ class McpManager:
                     except Exception:
                         raise McpUnavailableError() from None
                     definition = McpServerDefinition(normalized_name, canonical, local=local, relayed=True,
-                                                     auth_mode=credential.mode, credential_configured=credential.configured)
+                                                     auth_mode=credential.mode, credential_configured=credential.configured,
+                                                     enabled_tools=initial_tools)
                 assert definition is not None
                 try:
                     self._write_config_value(
@@ -620,6 +777,11 @@ class McpManager:
                     resolver=self._resolver,
                     relay=self._relay,
                 )
+                if self._discovery_marker is not None and self._discovery_marker.exists():
+                    # A previous process may have stopped while its native
+                    # filter was temporarily removed. Pause every server.
+                    definitions = {name: replace(item, enabled=False, enabled_tools=())
+                                   for name, item in definitions.items()}
                 if self._relay is not None:
                     try:
                         self._relay.retain({name for name, item in definitions.items() if item.relayed})
@@ -634,6 +796,12 @@ class McpManager:
                     version=version,
                 )
                 self._reload()
+                if self._discovery_marker is not None and self._discovery_marker.exists():
+                    try:
+                        self._discovery_marker.unlink()
+                    except OSError:
+                        self._require_recovery("")
+                        raise McpRecoveryRequiredError() from None
                 self._startup_config_sanitized = True
                 self._active_names = frozenset(
                     name for name, definition in definitions.items() if definition.enabled
@@ -678,6 +846,7 @@ class McpManager:
             "resource_count": 0,
             "network": "local" if definition.local else "public",
             "enabled": definition.enabled,
+            "tool_policy": "selected" if definition.enabled_tools is not None else "all",
         }
         if not definition.enabled:
             view["startup"] = "paused"
@@ -723,6 +892,8 @@ class McpManager:
                 value = self._relay.native_config(definition.name, active=definition.enabled)
                 if not definition.enabled:
                     value["enabled"] = False
+                if definition.enabled_tools is not None:
+                    value["enabled_tools"] = list(definition.enabled_tools)
                 return value
             except Exception:
                 raise McpUnavailableError() from None
@@ -936,14 +1107,15 @@ def _definition_from_config(
     if not isinstance(value, Mapping) or type(value.get("enabled", True)) is not bool:
         raise McpValidationError()
     enabled = value.get("enabled", True)
-    value = {key: item for key, item in value.items() if key != "enabled"}
+    enabled_tools = _validate_enabled_tools(value.get("enabled_tools"))
+    value = {key: item for key, item in value.items() if key not in {"enabled", "enabled_tools"}}
     if relay is not None:
         original = relay.original_url(normalized_name, value, effective=effective)
         if original is not None:
             metadata = relay.metadata(normalized_name)
             return McpServerDefinition(normalized_name, original, local=metadata["local"], relayed=True,
                                        auth_mode=metadata["auth"], credential_configured=metadata["credential_configured"],
-                                       enabled=enabled)
+                                       enabled=enabled, enabled_tools=enabled_tools)
     if effective and isinstance(value, Mapping):
         defaults = {"environment_id": "local", "tool_timeout_sec": None}
         for key, expected in defaults.items():
@@ -962,7 +1134,53 @@ def _definition_from_config(
         oauth_client_id=_validate_public_field(value.get("oauth_client_id")),
         oauth_resource=_validate_public_field(value.get("oauth_resource")),
         enabled=enabled,
+        enabled_tools=enabled_tools,
     )
+
+
+def _valid_tool_name(value: object) -> bool:
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeError:
+        return False
+    return len(encoded) <= _MAX_TOOL_NAME_BYTES and all(char.isprintable() for char in value)
+
+
+def _validate_enabled_tools(value: object) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if (not isinstance(value, list) or len(value) > _MAX_TOOLS
+            or any(not _valid_tool_name(item) for item in value)
+            or len(set(value)) != len(value)):
+        raise McpValidationError()
+    return tuple(sorted(value))
+
+
+def _tool_catalogue(status: Mapping[str, object] | None) -> list[dict[str, object]]:
+    raw = status.get("tools") if status is not None else None
+    if not isinstance(raw, Mapping):
+        return []
+    result: list[dict[str, object]] = []
+    for name, item in sorted(raw.items(), key=lambda pair: str(pair[0]))[:_MAX_TOOLS]:
+        if not _valid_tool_name(name) or not isinstance(item, Mapping):
+            continue
+        if item.get("name", name) != name:
+            continue
+        description = item.get("description")
+        if not isinstance(description, str):
+            description = ""
+        description = " ".join("".join(char if char.isprintable() else " "
+                               for char in description[:2048]).split())[:512]
+        annotations = item.get("annotations")
+        annotations = annotations if isinstance(annotations, Mapping) else {}
+        result.append({"name": name, "description": description,
+                       "read_only": annotations.get("readOnlyHint") is True,
+                       "write_possible": annotations.get("readOnlyHint") is not True,
+                       "destructive": annotations.get("destructiveHint") is True,
+                       "idempotent": annotations.get("idempotentHint") is True})
+    return result
 
 
 def _validate_name(value: object) -> str:
