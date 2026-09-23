@@ -34371,7 +34371,7 @@ template.innerHTML = `
       transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
     }
 
-    button:hover:not(:disabled) {
+    button:where(:hover:not(:disabled)) {
       border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color) 45%);
       background: color-mix(in srgb, var(--surface-bg) 92%, var(--accent-soft) 8%);
     }
@@ -35508,26 +35508,52 @@ template.innerHTML = `
 
     .status-banner {
       display: none;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
+      grid-template-columns: 20px minmax(0, 1fr) auto 30px;
+      gap: 10px;
       align-items: center;
-      min-height: 30px;
-      padding: 8px 10px;
-      border-radius: 8px;
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 10px;
       border: 1px solid color-mix(in srgb, var(--brand-amber) 28%, transparent);
-      background: color-mix(in srgb, var(--brand-amber) 9%, white 91%);
-      color: color-mix(in srgb, var(--brand-amber) 74%, black 26%);
+      border-left: 3px solid var(--brand-amber);
+      background: var(--warning-surface);
+      color: var(--text-color);
       font-size: var(--font-caption-size);
-      line-height: 1.35;
+      line-height: 1.4;
+    }
+
+    .banner-icon {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      color: var(--brand-amber);
+    }
+
+    .banner-icon svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .banner-content {
       display: grid;
-      gap: 8px;
+      gap: 2px;
       min-width: 0;
     }
 
+    .banner-title {
+      font-size: var(--font-control-size);
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
     .banner-message {
+      color: var(--muted-color);
       white-space: normal;
       overflow-wrap: anywhere;
     }
@@ -35535,19 +35561,29 @@ template.innerHTML = `
     .banner-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      justify-content: flex-end;
+      gap: 8px;
     }
 
     .banner-action {
-      color: inherit;
-      background: color-mix(in srgb, var(--surface-bg) 82%, transparent);
+      min-height: 34px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: var(--text-color);
+      background: var(--surface-bg);
     }
 
     .banner-action.primary {
-      color: white;
-      border-color: color-mix(in srgb, var(--danger-color) 65%, black 10%);
-      background: linear-gradient(135deg, var(--danger-color), color-mix(in srgb, var(--danger-color) 72%, var(--brand-violet) 28%));
-      box-shadow: 0 8px 20px color-mix(in srgb, var(--danger-color) 18%, transparent);
+      color: var(--text-color);
+      border-color: var(--border-color);
+      background: var(--surface-bg);
+      box-shadow: none;
+      font-weight: 600;
+    }
+
+    .banner-action:hover:not(:disabled) {
+      color: var(--text-color);
+      background: var(--surface-alt);
     }
 
     .status-banner.visible {
@@ -35555,19 +35591,39 @@ template.innerHTML = `
     }
 
     .status-banner.error {
-      border-color: color-mix(in srgb, var(--danger-color) 24%, transparent);
-      background: color-mix(in srgb, var(--danger-color) 8%, white 92%);
-      color: color-mix(in srgb, var(--danger-color) 82%, black 18%);
+      border-color: color-mix(in srgb, var(--danger-color) 30%, var(--border-color) 70%);
+      border-left-color: var(--danger-color);
+      background: var(--danger-surface);
+    }
+
+    .status-banner.error .banner-icon {
+      color: var(--danger-color);
     }
 
     .banner-dismiss {
-      width: 24px;
-      height: 24px;
-      border-radius: 7px;
-      font-size: 16px;
-      line-height: 1;
-      color: inherit;
+      display: grid;
+      grid-column: 4;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--muted-color);
       background: transparent;
+    }
+
+    .banner-dismiss svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+    }
+
+    .banner-dismiss:hover:not(:disabled) {
+      color: var(--text-color);
+      background: var(--surface-muted);
     }
 
     .interaction-region {
@@ -36235,6 +36291,13 @@ template.innerHTML = `
       flex: 0 0 auto;
     }
 
+    .artifact-refresh-status.error {
+      border-color: color-mix(in srgb, var(--danger-color) 30%, var(--border-color) 70%);
+      border-left: 3px solid var(--danger-color);
+      background: var(--danger-surface);
+      color: var(--text-color);
+    }
+
     .file-name {
       font-size: var(--font-control-size);
       font-weight: 600;
@@ -36403,6 +36466,19 @@ template.innerHTML = `
 
     .pdf-preview-status[hidden] {
       display: none;
+    }
+
+    .pdf-preview-status.error {
+      inset: 50% auto auto 50%;
+      width: min(420px, calc(100% - 32px));
+      min-height: 96px;
+      padding: 16px;
+      border: 1px solid color-mix(in srgb, var(--danger-color) 30%, var(--border-color) 70%);
+      border-left: 3px solid var(--danger-color);
+      border-radius: 10px;
+      background: var(--danger-surface);
+      color: var(--text-color);
+      transform: translate(-50%, -50%);
     }
 
     .preview-empty,
@@ -36877,7 +36953,7 @@ template.innerHTML = `
     .mcp-local-warning { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; line-height: 1.5; }
     .mcp-local-warning p { color: var(--muted-color); }
     .mcp-authentication { display: grid; gap: 14px; }
-    .desktop-form .desktop-error { color: color-mix(in srgb, var(--danger-color) 55%, var(--text-color) 45%); }
+    .desktop-form .desktop-error { color: var(--text-color); }
     .mcp-header-rows { display: grid; gap: 16px; }
     .mcp-header-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 12px; align-items: end; }
     .mcp-header-row input { min-width: 0; width: 100%; box-sizing: border-box; }
@@ -36908,7 +36984,7 @@ template.innerHTML = `
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
     .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
     .schedule-advanced .schedule-card { margin-top: 10px; }
-    .schedule-error { margin: 0; color: var(--danger-color); }
+    .schedule-error { margin: 0; }
     .schedule-error:empty { display: none; }
     .schedule-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .schedule-actions button { min-height: 40px; padding: 8px 18px; border-radius: 20px; }
@@ -36925,9 +37001,31 @@ template.innerHTML = `
     .desktop-empty,
     .desktop-error,
     .desktop-notice { margin: 0; color: var(--muted-color); line-height: 1.5; }
-    .desktop-error { color: var(--danger-color); }
+    .desktop-error,
+    .schedule-error {
+      padding: 9px 11px;
+      border: 1px solid color-mix(in srgb, var(--danger-color) 28%, var(--border-color) 72%);
+      border-left: 3px solid var(--danger-color);
+      border-radius: 8px;
+      background: var(--danger-surface);
+      color: var(--text-color);
+      font-size: var(--font-caption-size);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
     .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
-    .desktop-notice[role="alert"] { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .desktop-notice[role="alert"] {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 11px;
+      border: 1px solid color-mix(in srgb, var(--brand-amber) 28%, var(--border-color) 72%);
+      border-left: 3px solid var(--brand-amber);
+      border-radius: 8px;
+      background: var(--warning-surface);
+      color: var(--text-color);
+    }
     .desktop-notice[role="alert"] > span { flex-basis: 100%; }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
     .settings-card { margin: 16px 0; }
@@ -37380,8 +37478,7 @@ template.innerHTML = `
     .send-button,
     .auth-actions button.primary,
     .decision-actions button[data-decision="accept"],
-    .decision-actions button[data-action="answer-interaction"],
-    .banner-action.primary {
+    .decision-actions button[data-action="answer-interaction"] {
       background: color-mix(in srgb, var(--accent-color) 62%, black 38%);
       box-shadow: none;
     }
@@ -38066,12 +38163,29 @@ template.innerHTML = `
 
     .error-strip.visible {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
       gap: 10px;
-      align-items: start;
-      padding: 10px 11px;
+      align-items: center;
+      padding: 10px 12px;
       border-color: color-mix(in srgb, var(--danger-color) 34%, var(--border-color) 66%);
-      border-left-width: 3px;
+      border-left: 3px solid var(--danger-color);
+      border-radius: 10px;
+    }
+
+    .error-icon {
+      display: grid;
+      place-items: center;
+      color: var(--danger-color);
+    }
+
+    .error-icon svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .error-copy {
@@ -38118,6 +38232,10 @@ template.innerHTML = `
     .error-action.primary {
       border-color: color-mix(in srgb, var(--accent-color) 48%, var(--border-color) 52%);
       background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-bg) 88%);
+    }
+
+    .error-action:hover:not(:disabled) {
+      background: var(--surface-alt);
     }
 
     .error-action svg {
@@ -38861,6 +38979,22 @@ template.innerHTML = `
         min-height: 44px;
       }
 
+      .status-banner.visible {
+        grid-template-columns: 20px minmax(0, 1fr) 44px;
+        align-items: start;
+      }
+
+      .banner-actions {
+        grid-column: 2;
+        grid-row: 2;
+        justify-content: flex-start;
+      }
+
+      .banner-dismiss {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
       .message-list {
         flex: 0 0 auto;
         min-height: 0;
@@ -38958,11 +39092,12 @@ template.innerHTML = `
       }
 
       .error-strip.visible {
-        grid-template-columns: 1fr;
+        grid-template-columns: 20px minmax(0, 1fr);
         gap: 8px;
       }
 
       .error-actions {
+        grid-column: 2;
         width: 100%;
       }
 
@@ -39191,6 +39326,8 @@ var iconSvg = (path) => `
   </svg>
 `;
 var icons = {
+  alert: iconSvg('<circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>'),
+  close: iconSvg('<path d="M6 6l12 12M18 6 6 18"></path>'),
   brand: iconSvg('<path d="m10 4-6 4v8l6 4v-3l-3-2V9l3-2Z"></path><path d="m14 4 6 4v8l-6 4v-3l3-2V9l-3-2Z"></path><path d="M10 12h4"></path><path d="M9 15h6"></path><path d="M8 18h8"></path>'),
   plus: iconSvg('<path d="M12 5v14"></path><path d="M5 12h14"></path>'),
   refresh: iconSvg('<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v6h-6"></path>'),
@@ -39352,7 +39489,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._errorRetryable = false;
     this._errorSource = "";
     this._errorRevision = 0;
+    this._renderedErrorRevision = -1;
     this._dismissedBannerKey = "";
+    this._renderedStatusBannerKey = "";
     this._renderedThreadId = null;
     this._renderedSequence = 0;
     this._renderedToolbarKey = "";
@@ -41115,6 +41254,8 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderErrorSurface() {
     const errorStrip = this.shadowRoot.getElementById("error-strip");
+    if (this._renderedErrorRevision === this._errorRevision) return;
+    this._renderedErrorRevision = this._errorRevision;
     errorStrip.replaceChildren();
     if (!this._error) {
       errorStrip.className = "error-strip";
@@ -41131,6 +41272,9 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     const actions = document.createElement("div");
     actions.className = "error-actions";
+    const icon = document.createElement("span");
+    icon.className = "error-icon";
+    this._appendTrustedIcon(icon, icons.alert);
     const dismiss = this._actionButton("error-action", "dismiss-error", "Dismiss error");
     dismiss.textContent = "Dismiss";
     if (this._errorRetryable) {
@@ -41140,7 +41284,7 @@ var CodexBridgePanel = class extends HTMLElement {
       actions.append(retry);
     }
     actions.append(dismiss);
-    errorStrip.append(copy, actions);
+    errorStrip.append(icon, copy, actions);
   }
   _renderHostAccess() {
     const layer = this.shadowRoot.getElementById("host-access-layer");
@@ -42490,16 +42634,31 @@ var CodexBridgePanel = class extends HTMLElement {
     const banner = this.shadowRoot.getElementById("status-banner");
     const state = this._statusBannerState();
     if (!state || state.key === this._dismissedBannerKey) {
+      this._renderedStatusBannerKey = "";
       banner.className = "status-banner";
       banner.replaceChildren();
       return;
     }
-    banner.className = `status-banner visible ${state.tone}`;
     const actions = state.actions || [];
+    const renderKey = `${state.key}:${actions.map((action) => `${action.action}:${action.label}`).join("|")}`;
+    if (this._renderedStatusBannerKey === renderKey && banner.classList.contains("visible")) {
+      for (const button3 of banner.querySelectorAll(".banner-action")) {
+        button3.disabled = this._authActionPending && AUTH_ACTION_IDS.has(button3.dataset.action);
+      }
+      return;
+    }
+    this._renderedStatusBannerKey = renderKey;
+    banner.className = `status-banner visible ${state.tone}`;
     banner.replaceChildren();
+    const icon = document.createElement("span");
+    icon.className = "banner-icon";
+    this._appendTrustedIcon(icon, icons.alert);
     const content = document.createElement("div");
     content.className = "banner-content";
-    content.append(this._textElement("span", "banner-message", state.message));
+    content.append(
+      this._textElement("strong", "banner-title", state.title),
+      this._textElement("span", "banner-message", state.message)
+    );
     if (actions.length) {
       const actionContainer = document.createElement("div");
       actionContainer.className = "banner-actions";
@@ -42511,11 +42670,12 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         actionContainer.append(button3);
       }
-      content.append(actionContainer);
+      banner.append(actionContainer);
     }
     const dismiss = this._actionButton("banner-dismiss", "dismiss-banner", "Dismiss");
-    dismiss.textContent = "x";
-    banner.append(content, dismiss);
+    this._appendTrustedIcon(dismiss, icons.close);
+    banner.prepend(icon, content);
+    banner.append(dismiss);
   }
   _statusBannerState() {
     const auth = this._status?.auth;
@@ -42524,6 +42684,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return {
           key: "legacy:account-actions",
           tone: "error",
+          title: "Sign-in unavailable",
           message: "Move this connection to the private Home Assistant App to manage ChatGPT sign-in.",
           actions: []
         };
@@ -42537,17 +42698,19 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `auth:${auth?.state || "unknown"}:${message}:${auth?.user_code || ""}`,
         tone: "error",
+        title: ["login_running", "login_starting"].includes(auth?.state) ? "Finish ChatGPT sign-in" : "ChatGPT sign-in needed",
         message,
         actions
       };
     }
     const limits = this._status?.limits;
     if (limits?.blocked) {
-      const message = "Codex usage limits have been reached.";
+      const title = "Codex usage limits have been reached";
       return {
-        key: `limits:${message}`,
+        key: `limits:${title}`,
         tone: "error",
-        message,
+        title,
+        message: "Check reset times and any available credits before trying again.",
         actions: [{ action: "open-usage", label: "View usage and resets", primary: true }]
       };
     }
@@ -42560,6 +42723,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `thread:${this._selectedThreadId}:${safeFailure || "run.failed"}`,
         tone: "error",
+        title: "Run did not complete",
         message: safeFailure || "The latest Codex run did not complete. Refresh the chat or try again."
       };
     }
@@ -42571,7 +42735,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return {
         key: `diagnostics:${diagnosticsError}`,
         tone: "error",
-        message: "The Codex service needs attention. Check the App status in Home Assistant and retry."
+        title: "Codex service needs attention",
+        message: "Check the App status in Home Assistant, then retry."
       };
     }
     return null;
@@ -43338,6 +43503,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._clearArtifactRefreshRetry({ resetState: false });
     this._artifactRefreshState = {
       status: "retryable",
+      tone: "error",
       message: "Files could not be refreshed.",
       action: "retry-artifacts"
     };
@@ -43413,7 +43579,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const refreshState = this._artifactRefreshState;
     if (refreshState.status !== "idle") {
       const status = document.createElement("div");
-      status.className = "artifact-refresh-status";
+      status.className = `artifact-refresh-status${refreshState.tone === "error" ? " error" : ""}`;
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
       status.append(this._textElement("span", "", refreshState.message));
@@ -43739,7 +43905,14 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (status && this._pdfPreviewError) {
       status.hidden = false;
+      status.classList.add("error");
+      status.removeAttribute("aria-live");
+      status.setAttribute("role", "alert");
       status.textContent = this._pdfPreviewError;
+    } else if (status) {
+      status.classList.remove("error");
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
     }
   }
   _setPdfPreviewPage(value) {
@@ -43770,6 +43943,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const shell = this.shadowRoot.querySelector(".pdf-preview-shell");
     const status = shell?.querySelector(".pdf-preview-status");
     if (status) {
+      status.classList.remove("error");
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
       status.hidden = false;
       status.textContent = "Loading PDF…";
     }

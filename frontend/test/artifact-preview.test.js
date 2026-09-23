@@ -48,6 +48,29 @@ describe("artifact previews", () => {
     URL.revokeObjectURL = originalRevokeObjectUrl;
   });
 
+  it("announces a PDF preview failure as an error and clears it when retried", () => {
+    const panel = createPanel(createArtifact({ filename: "report.pdf", mime_type: "application/pdf" }));
+    const shell = document.createElement("div");
+    shell.className = "pdf-preview-shell";
+    const status = document.createElement("div");
+    status.className = "pdf-preview-status";
+    shell.append(status);
+    panel.shadowRoot.append(shell);
+
+    panel._pdfPreviewError = "PDF could not be opened.";
+    panel._syncPdfPreviewControls(shell);
+    expect(status.classList.contains("error")).toBe(true);
+    expect(status.getAttribute("role")).toBe("alert");
+    expect(status.hasAttribute("aria-live")).toBe(false);
+    expect(status.textContent).toBe("PDF could not be opened.");
+
+    panel._pdfPreviewError = "";
+    panel._syncPdfPreviewControls(shell);
+    expect(status.classList.contains("error")).toBe(false);
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.getAttribute("aria-live")).toBe("polite");
+  });
+
   it("fetches and renders a text artifact within the preview cap", async () => {
     const panel = createPanel(createArtifact());
     const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
