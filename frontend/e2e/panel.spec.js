@@ -341,6 +341,35 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
   expect(updated).toMatchObject({ name: "Renamed summary", expected_revision: 1, target: created.target, schedule: created.schedule });
 });
 
+test("reviews a chat message as a schedule before any task is created", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await page.evaluate(() => {
+    const bridge = document.querySelector("codex-bridge-panel");
+    bridge._config = { ...bridge._config, capabilities: [...(bridge._config?.capabilities || []), "automation_proposals_v1"] };
+    bridge.hass = { ...bridge.hass, config: { time_zone: "Europe/London" } };
+    const send = bridge.hass.connection.sendMessagePromise;
+    bridge.hass.connection.sendMessagePromise = (request) => request.type === "codex_bridge/preview_automation_schedule"
+      ? Promise.resolve({ next_runs: ["2026-09-24T08:00:00Z"] }) : send(request);
+    bridge._render(true);
+  });
+  await panel.locator("#prompt-input").fill("On 24 September 2026 at 09:00, prepare a report");
+  await panel.getByRole("button", { name: "Schedule this message" }).click();
+  await expect(panel.locator('[data-desktop-field="description"]')).toHaveValue("On 24 September 2026 at 09:00, prepare a report");
+  await panel.getByRole("button", { name: "Review timing" }).click();
+  const form = panel.locator(".schedule-editor");
+  await expect(form.getByRole("textbox", { name: "Scheduled task title" })).toHaveValue("prepare a report");
+  await expect(form.locator(".schedule-next-runs")).toContainText("24 Sept 2026");
+  expect(await websocketCalls(page, "codex_bridge/create_automation")).toHaveLength(0);
+  const overflow = await form.evaluate((node) => node.scrollWidth > node.clientWidth || node.getBoundingClientRect().right > window.innerWidth);
+  expect(overflow).toBe(false);
+  await form.screenshot({ path: test.info().outputPath("schedule-description-review.png") });
+  const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+});
+
 test("keeps a schedule draft after a save error and fits a narrow screen", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);

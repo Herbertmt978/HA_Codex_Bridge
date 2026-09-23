@@ -225,15 +225,36 @@ function renderTable(documentRef, rows, columns, actions = null) {
   return table;
 }
 
-function renderScheduled(documentRef, state, defaultTimezone = "UTC") {
+function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsSupported = false) {
   const section = documentRef.createElement("div");
   section.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"), button(documentRef, "New schedule", "open-schedule-form"));
+  toolbar.append(text(documentRef, "div", "Automations", "desktop-section-label"));
+  if (proposalsSupported) toolbar.append(button(documentRef, "Describe a task", "open-schedule-description"));
+  toolbar.append(button(documentRef, "New schedule", "open-schedule-form"));
   if (!state.form) section.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
-    section.append(renderScheduleForm(documentRef, state, defaultTimezone, state.scheduleContext));
+    section.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
+    return section;
+  }
+  if (state.form === "schedule-description") {
+    const form = documentRef.createElement("form");
+    form.className = "schedule-description";
+    form.dataset.desktopForm = "schedule-description";
+    form.append(text(documentRef, "h3", "Describe a scheduled task"));
+    form.append(text(documentRef, "p", `Include when it should run and what Codex should do. Times use Home Assistant's ${defaultTimezone} time zone. Nothing runs until you review and create the task.`, "desktop-note"));
+    const description = input(documentRef, "Task and timing", "description", formValue(state, "description"), "textarea");
+    const control = description.querySelector("textarea");
+    control.placeholder = "Every weekday at 9 am, summarise yesterday's events";
+    control.maxLength = 4000;
+    control.required = true;
+    form.append(description);
+    form.append(text(documentRef, "p", "Examples: Every Monday at 2 pm, check the heating; On 24 September 2026 at 09:00, prepare a report.", "desktop-note"));
+    const error = text(documentRef, "p", state.formError || "", "schedule-error"); error.setAttribute("role", "alert"); form.append(error);
+    const actions = documentRef.createElement("div"); actions.className = "schedule-actions";
+    actions.append(button(documentRef, "Cancel", "close-form"), button(documentRef, "Review timing", "review-schedule-description"));
+    form.append(actions); section.append(form);
     return section;
   }
   const rows = normalizeDesktopList(state.data.automations || state.data).map((row) => ({ ...row, permissions: row.mode === HOST_MODE ? HOST_LABEL : row.mode === "full-auto" ? "Full auto · workspace" : row.mode === "edit" ? "Edit workspace" : "Observe", schedule: scheduleSummary(row.schedule, defaultTimezone) }));
@@ -489,10 +510,11 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   // Input handlers sync the draft snapshot because those edits are already in
   // the DOM. Programmatic draft resets must still invalidate the rendered view.
   const inputs = JSON.stringify({
-    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined }, timezone, hasActiveProject, activeProjectId,
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,
+    scheduledProposals: destination === "scheduled" ? config?.capabilities?.includes("automation_proposals_v1") : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,
   });
   const drafts = featureDraftInputs(state);
@@ -510,7 +532,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 

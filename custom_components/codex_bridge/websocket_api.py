@@ -93,6 +93,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_revoke_host_access,
         ws_list_automations,
         ws_get_automation,
+        ws_preview_automation_schedule,
         ws_create_automation,
         ws_update_automation,
         ws_pause_automation,
@@ -1186,7 +1187,22 @@ async def ws_get_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/preview_automation_schedule",
+        vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
+    }
+)
+@websocket_api.async_response
+async def ws_preview_automation_schedule(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_preview_automation_schedule(msg["schedule"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/create_automation",
+        vol.Optional("client_request_id"): vol.Match(r"^[a-f0-9]{32}$"),
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=160)),
         vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
         vol.Required("target"): vol.All(dict, vol.Length(max=16)),
@@ -1206,7 +1222,7 @@ async def ws_get_automation(hass, connection, msg) -> None:
 async def ws_create_automation(hass, connection, msg) -> None:
     payload = {
         key: msg[key]
-        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved")
+        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved", "client_request_id")
         if key in msg
     }
     payload.setdefault("mode", "observe")

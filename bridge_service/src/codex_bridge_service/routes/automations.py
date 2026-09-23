@@ -20,6 +20,7 @@ from ..automations import (
 
 
 class CreateAutomationRequest(BaseModel):
+    client_request_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     name: str
     prompt: str
     target: dict[str, Any]
@@ -29,6 +30,10 @@ class CreateAutomationRequest(BaseModel):
     host_unattended_approved: bool = Field(default=False, strict=True)
     model: str | None = Field(default=None, max_length=160)
     thinking: str | None = Field(default=None, max_length=160)
+
+
+class PreviewAutomationScheduleRequest(BaseModel):
+    schedule: dict[str, Any] = Field(max_length=16)
 
 
 class UpdateAutomationRequest(BaseModel):
@@ -77,6 +82,14 @@ def create_router() -> APIRouter:
         from .host_access import validate_host_selection
         validate_host_selection(request, payload.mode, payload.host_access_grant)
         return _invoke(lambda: _store(request).create(payload.model_dump()))
+
+    @router.post("/automations/preview")
+    def preview_automation_schedule(
+        payload: PreviewAutomationScheduleRequest, request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        _authorize(request, authorization)
+        return {"next_runs": _invoke(lambda: _store(request).preview_schedule(payload.schedule))}
 
     @router.get("/automations/scheduler")
     def scheduler_snapshot(

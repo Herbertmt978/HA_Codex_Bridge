@@ -6,6 +6,32 @@ must stay running, with ChatGPT signed in.
 
 ## Create a task
 
+Choose **Describe a task** on the Scheduled page to write the timing and
+instructions in one sentence. You can also write the request in a chat and
+select **Schedule this message**. The message stays in your chat draft; it is
+not sent as a chat turn. For example:
+
+> Every weekday at 9 am, summarise yesterday's events.
+
+You can put the task first for simple repeats, such as **Remind me to check
+the heating every Monday at 2 pm**. Use **in this chat** immediately after the
+time to propose continuing the current chat; otherwise the task starts a new
+chat in the selected project. Supported timing includes daily, weekdays, a
+named weekday, monthly on a day, a fixed interval with a start date, and a
+one-off date. Write times as **09:00** or **9 am** and one-off dates as **24
+September 2026** or **2026-09-24**. Numeric dates such as **09/10/2026** and
+times such as **9** need clarification.
+
+Select **Review timing** to open the normal task editor. Check the proposed
+title, instructions, destination, next run times and Home Assistant time zone.
+You can change anything before selecting **Create task**. Describing and
+reviewing a task does not create or run it. A proposed task starts in Observe
+mode; host access still needs its own explicit grant and unattended-use
+acknowledgement. If your App does not advertise schedule proposals, use
+**New schedule** until the paired App is updated.
+
+You can also fill in the editor directly:
+
 1. Select the project or chat you want to work in, then open **Scheduled**.
 2. Choose **New schedule** and enter a **Scheduled task title**.
 3. Describe what Codex should do. Include the outcome you want and any
@@ -34,7 +60,10 @@ Times use the Home Assistant time zone shown in the preview, even if your
 browser is in another zone. Daily and weekly schedules follow local clock
 time; fixed intervals measure elapsed time. A time that does not exist when
 clocks move forward is rejected when setting its start. When clocks move back,
-an ambiguous start uses its first occurrence.
+an ambiguous start in the manual editor uses its first occurrence. The
+description flow asks you to choose another time for an ambiguous one-off or
+interval start. The next-run preview comes from the App's scheduler, so it
+matches the times used when the browser is closed.
 
 Existing custom schedules can be kept unchanged when editing the title or
 instructions. Choose another Repeat option only when you intend to replace

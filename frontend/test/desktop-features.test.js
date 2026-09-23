@@ -620,6 +620,29 @@ describe("desktop feature surfaces", () => {
     expect(panel._desktopFeatures.scheduled.formDraft).toEqual({});
   });
 
+  it("reviews a described task without creating it and shows server run times", async () => {
+    const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
+    panel._config = { capabilities: ["automations_v1", "automation_proposals_v1"] };
+    panel._activeDestination = "scheduled";
+    panel._projects = [{ project_id: "p1", kind: "direct" }];
+    panel._selectedProjectId = "p1";
+    const state = panel._desktopFeatures.scheduled;
+    state.loaded = true; state.data = { automations: [] };
+    panel._callWS = vi.fn().mockResolvedValue({ next_runs: ["2026-09-24T08:00:00Z"] });
+    panel._render(true);
+
+    await panel._handleDesktopAction("open-schedule-description", {}, null);
+    const description = panel.shadowRoot.querySelector('[data-desktop-field="description"]');
+    description.value = "On 24 September 2026 at 09:00, prepare a report";
+    await panel._handleDesktopAction("review-schedule-description", {}, description);
+    await vi.waitFor(() => expect(panel.shadowRoot.querySelector(".schedule-next-runs")?.textContent).toContain("24 Sept 2026"));
+
+    expect(state.form).toBe("schedule");
+    expect(panel.shadowRoot.querySelector('[name="title"]').value).toBe("prepare a report");
+    expect(panel._callWS).toHaveBeenCalledWith("preview_automation_schedule", expect.any(Object));
+    expect(panel._callWS).not.toHaveBeenCalledWith("create_automation", expect.any(Object));
+  });
+
   it("shows a list refresh error after a scheduled task was saved", async () => {
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._activeDestination = "scheduled";

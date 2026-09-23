@@ -8,6 +8,7 @@ and submit conditional claims from its own scheduler.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import tempfile
@@ -156,8 +157,31 @@ class AutomationStore:
     ) -> dict[str, Any]:
         now = _now(now)
         with self._lock:
+            request_id = payload.get("client_request_id")
+            if request_id is not None and (
+                not isinstance(request_id, str)
+                or len(request_id) != 32
+                or any(char not in "0123456789abcdef" for char in request_id)
+            ):
+                raise AutomationValidationError("invalid create request id")
+            fingerprint = hashlib.sha256(json.dumps(
+                {key: value for key, value in payload.items() if key != "client_request_id"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            ).encode("utf-8")).hexdigest() if request_id else None
+            prior = self._state["create_requests"].get(request_id) if request_id else None
+            if prior is not None:
+                if prior["fingerprint"] != fingerprint:
+                    raise AutomationConflictError("create request changed during retry")
+                existing = self._state["automations"].get(prior["automation_id"])
+                if existing is None:
+                    raise AutomationConflictError("created automation was removed")
+                return _public_automation(existing, include_prompt=True)
             record = self._new_record(payload, now)
             self._state["automations"][record["automation_id"]] = record
+            if request_id:
+                self._state["create_requests"][request_id] = {
+                    "automation_id": record["automation_id"], "fingerprint": fingerprint,
+                }
             self._save()
             return _public_automation(record, include_prompt=True)
 
@@ -179,6 +203,22 @@ class AutomationStore:
                     key=lambda item: (item["name"].lower(), item["automation_id"]),
                 )
             ]
+
+    def preview_schedule(
+        self, schedule: Mapping[str, Any], *, now: datetime | None = None, count: int = 3
+    ) -> list[str]:
+        if count < 1 or count > 5:
+            raise ScheduleValidationError("invalid preview count")
+        normalized = _normalize_schedule(schedule)
+        cursor = _now(now)
+        runs: list[str] = []
+        for _ in range(count):
+            next_at = _next_run(normalized, cursor)
+            if next_at is None:
+                break
+            runs.append(next_at)
+            cursor = _parse_datetime(next_at, "schedule time") + timedelta(microseconds=1)
+        return runs
 
     def update(
         self,
@@ -708,7 +748,7 @@ class AutomationStore:
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
-            return {"version": 1, "automations": {}, "runs": {}, "idempotency": {}}
+            return {"version": 1, "automations": {}, "runs": {}, "idempotency": {}, "create_requests": {}}
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
@@ -726,6 +766,9 @@ class AutomationStore:
             if isinstance(run, dict):
                 # Older checkpoints predate per-claim search overrides.
                 run.setdefault("web_search", None)
+        payload.setdefault("create_requests", {})
+        if not isinstance(payload["create_requests"], dict):
+            raise AutomationValidationError("automation state is invalid")
         for definition in payload["automations"].values():
             if isinstance(definition, dict):
                 definition.setdefault("host_access_grant", None)

@@ -76,7 +76,8 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
 - **Chats and files:** use direct chats or organise work into projects. Model
   and reasoning choices come from the installed Codex runtime and your account.
   Astra appears when that runtime and account advertise it.
-- **Scheduled tasks:** enter a title and instructions, choose a new or current
+- **Scheduled tasks:** describe the task and timing in one sentence, then review
+  the proposed schedule before creating it. You can also enter a title and instructions, choose a new or current
   chat, then set the frequency and time. Daily, weekdays, weekly, monthly,
   intervals and one-off tasks are supported. Times use Home Assistant's time
   zone. Read the [Scheduled guide](docs/scheduled-tasks.md).

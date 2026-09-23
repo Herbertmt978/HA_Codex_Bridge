@@ -33,6 +33,8 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
+import { proposeScheduleDescription } from "./schedule-language.js";
+import { buildSchedule } from "./scheduled-tasks.js";
 
 const PANEL_VERSION = "1.5.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
@@ -2840,6 +2842,8 @@ template.innerHTML = `
     @media (max-width: 640px) { .mcp-header-row { grid-template-columns: minmax(0, 1fr); } .mcp-authentication .panel-selection { max-width: 100%; } }
     .mcp-oauth .desktop-field + .desktop-field { margin-top: 12px; }
     .schedule-editor { display: grid; gap: 24px; width: 100%; min-width: 0; padding-bottom: 24px; }
+    .schedule-description { display: grid; gap: 18px; max-width: 760px; }
+    .schedule-description textarea { min-height: 112px; resize: vertical; }
     .schedule-editor-header { display: flex; justify-content: space-between; align-items: center; color: var(--muted-color); }
     .schedule-close { width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted-color); font-size: 26px; }
     .schedule-title, .schedule-prompt { display: block; min-width: 0; }
@@ -2858,6 +2862,7 @@ template.innerHTML = `
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
     .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
+    .schedule-next-runs { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
     .schedule-advanced summary { width: fit-content; padding: 6px 0; cursor: pointer; }
     .schedule-advanced .schedule-card { margin-top: 10px; }
@@ -4976,6 +4981,7 @@ template.innerHTML = `
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
           <div class="composer-actions">
+            <button class="icon-button" type="button" data-action="schedule-message" title="Schedule this message" aria-label="Schedule this message" id="schedule-message-button"></button>
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
@@ -5427,6 +5433,7 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-bottom-button"), icons.panelBottom);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-context-button"), icons.panelRight);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("stop-run-button"), icons.stop);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("schedule-message-button"), icons.calendar);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-file-button"), icons.upload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("upload-folder-button"), icons.folderUpload);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
@@ -5798,6 +5805,9 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "send-prompt":
         this._sendPrompt();
+        break;
+      case "schedule-message":
+        this._scheduleComposerMessage();
         break;
       case "accept-interaction":
       case "decline-interaction":
@@ -6371,6 +6381,19 @@ class CodexBridgePanel extends HTMLElement {
     this._render();
   }
 
+  _scheduleComposerMessage() {
+    if (!this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    const description = this.shadowRoot.getElementById("prompt-input")?.value?.trim() || "";
+    const state = this._desktopFeatures.scheduled;
+    this._clearDesktopFormDraft(state);
+    state.scheduleContext = this._scheduleContext();
+    state.editingAutomation = null;
+    state.formDraft = { description };
+    state.form = "schedule-description";
+    this._selectDesktopDestination("scheduled");
+    this.shadowRoot.querySelector('[data-desktop-field="description"]')?.focus();
+  }
+
   _queueSettingsReload(state) {
     if (state.agentsReloadQueued || this._activeDestination !== "settings") return;
     state.agentsReloadQueued = true;
@@ -6472,6 +6495,7 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "schedule") state.createRequestId = null;
     if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field)) {
       state.formDraft.local_acknowledged = false;
       state.formDraft.auth_acknowledged = false;
@@ -6489,6 +6513,7 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     if (form.dataset.desktopForm === "schedule") refreshScheduleForm(form);
+    if (form.dataset.desktopForm === "schedule" && ["repeat", "date", "time", "weekday", "month_day", "interval_count", "interval_unit"].includes(field)) this._queueSchedulePreview(state, form);
     syncDesktopFeatureDrafts(this.shadowRoot.getElementById("desktop-feature-surface"), state);
   }
 
@@ -6497,6 +6522,9 @@ class CodexBridgePanel extends HTMLElement {
     state.formError = "";
     state.hostAccessGrant = null;
     state.hostUnattendedApproved = null;
+    state.nextRuns = [];
+    state.previewGeneration = (state.previewGeneration || 0) + 1;
+    state.createRequestId = null;
   }
 
   _scheduleContext(editing = null) {
@@ -6505,9 +6533,39 @@ class CodexBridgePanel extends HTMLElement {
     return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
+  _queueSchedulePreview(state, form) {
+    if (!form || !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    const generation = (state.previewGeneration || 0) + 1;
+    state.previewGeneration = generation;
+    const values = this._desktopFormValues(form.querySelector("[data-desktop-field]") || form);
+    const timezone = state.scheduleContext?.timezone || this._hass?.config?.time_zone || "UTC";
+    let schedule;
+    try { schedule = buildSchedule(values, { timezone, editing: state.editingAutomation }); }
+    catch (error) {
+      state.nextRuns = [];
+      form.querySelector(".schedule-next-runs").textContent = error.message;
+      return;
+    }
+    form.querySelector(".schedule-next-runs").textContent = "Checking the next run times…";
+    void this._callWS("preview_automation_schedule", { schedule }).then((result) => {
+      if (generation !== state.previewGeneration || !["schedule", "schedule-edit"].includes(state.form)) return;
+      const dates = Array.isArray(result?.next_runs) ? result.next_runs : [];
+      state.nextRuns = dates.map((value) => new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone, dateStyle: "medium", timeStyle: "short",
+      }).format(new Date(value)));
+      const preview = this.shadowRoot.querySelector(".schedule-next-runs");
+      if (preview) preview.textContent = state.nextRuns.length ? `Next runs (${timezone}): ${state.nextRuns.join(" · ")}` : "No future runs.";
+    }).catch(() => {
+      if (generation !== state.previewGeneration) return;
+      state.nextRuns = [];
+      const preview = this.shadowRoot.querySelector(".schedule-next-runs");
+      if (preview) preview.textContent = "Could not check the next run times. Check the App connection before creating this task.";
+    });
+  }
+
   async _submitScheduledTask(state, target, update) {
     const form = target?.closest("form");
-    if (!form || !form.reportValidity()) return;
+    if (!form || !form.reportValidity() || state.loading) return;
     try {
       const context = {
         ...state.scheduleContext, editing: state.editingAutomation,
@@ -6516,7 +6574,9 @@ class CodexBridgePanel extends HTMLElement {
       };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
+      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= crypto.randomUUID().replaceAll("-", "");
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
+      if (!state.form) state.createRequestId = null;
       if (state.form && state.error) { state.formError = state.error; state.error = ""; }
     } catch (error) { state.formError = normalizeDesktopError(error); }
   }
@@ -6588,7 +6648,23 @@ class CodexBridgePanel extends HTMLElement {
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
-    if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
+    if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (action === "open-schedule-description") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.form = "schedule-description"; }
+    else if (action === "review-schedule-description") {
+      const form = target?.closest("form");
+      if (!form?.reportValidity()) return;
+      try {
+        const description = form.querySelector('[name="description"]')?.value || "";
+        state.scheduleContext = this._scheduleContext();
+        state.formDraft = proposeScheduleDescription(description, { timezone: state.scheduleContext.timezone });
+        state.formError = "";
+        state.form = "schedule";
+        this._renderDesktopSurface();
+        this._queueSchedulePreview(state, this.shadowRoot.querySelector(".schedule-editor"));
+        return;
+      } catch (error) { state.formError = normalizeDesktopError(error); }
+    }
+    else if (action === "open-schedule-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.formDraft = scheduleFormValues({}, state.scheduleContext.timezone); state.form = "schedule"; }
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
     else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp-choice"; }
@@ -6731,6 +6807,9 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     this._renderDesktopSurface();
+    if (["open-schedule-form", "update-automation"].includes(action) && ["schedule", "schedule-edit"].includes(state.form)) {
+      this._queueSchedulePreview(state, this.shadowRoot.querySelector(".schedule-editor"));
+    }
     if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
     if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
   }
@@ -7194,6 +7273,9 @@ class CodexBridgePanel extends HTMLElement {
       ? "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    const scheduleButton = this.shadowRoot.getElementById("schedule-message-button");
+    scheduleButton.classList.toggle("hidden", !this._config?.capabilities?.includes("automation_proposals_v1"));
+    scheduleButton.disabled = !activeThread;
     const hasDraft = Boolean(promptInput.value.trim());
     const stop = isRunning && !hasDraft && !mutation;
     sendButton.disabled = !activeThread || cancelling || (locked && !retryable) || (!stop && !retryable && !hasDraft);

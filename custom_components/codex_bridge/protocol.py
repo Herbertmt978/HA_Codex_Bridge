@@ -54,6 +54,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "legacy_v0",
         "interactions_v2",
         "automations_v1",
+        "automation_proposals_v1",
         "mcp_admin_v1",
         "mcp_management_v1",
         "mcp_local_v1",

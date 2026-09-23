@@ -54,6 +54,54 @@ def test_store_persists_safe_definition_and_calculates_rrule_in_utc(tmp_path):
     assert restored.list()[0]["next_run_at"] == "2026-07-15T09:30:00Z"
 
 
+def test_schedule_preview_does_not_create_and_uses_scheduler_times(tmp_path):
+    store = AutomationStore(tmp_path)
+    expected = store.preview_schedule(_payload()["schedule"], now=NOW)
+    assert expected == [
+        "2026-07-15T09:30:00Z",
+        "2026-07-16T09:30:00Z",
+        "2026-07-17T09:30:00Z",
+    ]
+    assert store.list() == []
+    assert store.preview_schedule({"kind": "once", "at": "2026-07-16T09:00:00Z"}, now=NOW) == ["2026-07-16T09:00:00Z"]
+
+
+def test_schedule_preview_follows_home_assistant_clock_change(tmp_path):
+    schedule = {
+        "kind": "rrule", "rule": "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
+        "start_at": "2026-03-28T09:00:00Z", "timezone": "Europe/London",
+    }
+    runs = AutomationStore(tmp_path).preview_schedule(
+        schedule, now=datetime(2026, 3, 28, 8, 0, tzinfo=UTC)
+    )
+    assert runs == ["2026-03-28T09:00:00Z", "2026-03-29T08:00:00Z", "2026-03-30T08:00:00Z"]
+
+
+def test_create_request_retries_are_durable_and_cannot_recreate_after_delete(tmp_path):
+    payload = _payload(client_request_id="a" * 32)
+    store = AutomationStore(tmp_path)
+    first = store.create(payload, now=NOW)
+    restored = AutomationStore(tmp_path)
+    assert restored.create(payload, now=NOW + timedelta(minutes=1))["automation_id"] == first["automation_id"]
+    assert len(restored.list()) == 1
+    with pytest.raises(AutomationConflictError, match="changed"):
+        restored.create({**payload, "prompt": "Changed"}, now=NOW)
+    paused = restored.pause(first["automation_id"], expected_revision=1)
+    restored.delete(first["automation_id"], expected_revision=paused["revision"])
+    with pytest.raises(AutomationConflictError, match="removed"):
+        restored.create(payload, now=NOW)
+    assert restored.list() == []
+
+
+def test_cancelling_one_proposed_task_preserves_another(tmp_path):
+    store = AutomationStore(tmp_path)
+    first = store.create(_payload(client_request_id="a" * 32), now=NOW)
+    second = store.create(_payload(name="Evening check", client_request_id="b" * 32), now=NOW)
+    paused = store.pause(first["automation_id"], expected_revision=1)
+    store.delete(first["automation_id"], expected_revision=paused["revision"])
+    assert [item["automation_id"] for item in store.list()] == [second["automation_id"]]
+
+
 def test_account_rebind_preserves_continue_thread_automation_target(tmp_path):
     root = tmp_path / "bridge"
     storage = BridgeStorage(root_path=root)
@@ -730,6 +778,11 @@ def test_router_uses_app_state_and_projects_safe_errors(tmp_path):
     app.include_router(create_router())
     client = TestClient(app)
     headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+
+    preview = client.post("/automations/preview", headers=headers, json={"schedule": _payload()["schedule"]})
+    assert preview.status_code == 200
+    assert len(preview.json()["next_runs"]) == 3
+    assert client.get("/automations", headers=headers).json() == []
 
     created = client.post("/automations", headers=headers, json=_payload())
     assert created.status_code == 201
