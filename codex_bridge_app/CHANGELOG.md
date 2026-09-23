@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 1.5.1
+
+- Bundles the Sigstore-verified Codex runtime `0.156.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.12.0` without changing its Integration API compatibility.
+
 ## 1.5.0
 
 - Gives user messages black bubbles with white text in both themes. Copy remains
