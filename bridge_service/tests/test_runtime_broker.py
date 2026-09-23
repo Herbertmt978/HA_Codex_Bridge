@@ -48,6 +48,7 @@ from codex_bridge_service.runtime_broker import (
     RuntimeBroker,
     RuntimeBrokerError,
     RuntimeEventPayloadTooLargeError,
+    InteractionStaleError,
 )
 from codex_bridge_service.runtime_gate import RuntimeGate, RuntimeMutationConflictError
 from codex_bridge_service.runtime_policy import (
@@ -490,6 +491,7 @@ def _broker(
     browser_dynamic_tools_enabled: bool = False,
     host_access: object | None = None,
     provider_admission_check: Callable[[], bool] | None = None,
+    mcp_manager: object | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
         storage=storage,
@@ -506,6 +508,7 @@ def _broker(
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
         host_access=host_access,
         provider_admission_check=provider_admission_check,
+        mcp_manager=mcp_manager,
     )
     broker.start()
     return broker
@@ -587,6 +590,204 @@ def _pending_one(broker: RuntimeBroker, thread_id: str) -> dict[str, Any]:
     assert len(pending) == 1
     value = pending[0]
     return value.model_dump() if hasattr(value, "model_dump") else deepcopy(value)
+
+
+class _ActiveMcpManager:
+    enabled = True
+
+    def __init__(self) -> None:
+        self.active = True
+
+    def is_active_server(self, name: str) -> bool:
+        return self.active and name == "test_server"
+
+
+def _mcp_form_params(remote_thread_id: str, turn_id: str) -> dict[str, Any]:
+    return {
+        "serverName": "test_server", "threadId": remote_thread_id,
+        "turnId": turn_id, "mode": "form", "message": "Choose a result",
+        "requestedSchema": {
+            "type": "object", "properties": {
+                "choice": {"type": "string", "enum": ["yes", "no"]},
+            }, "required": ["choice"],
+        },
+    }
+
+
+@pytest.mark.parametrize("unattended", [False, True])
+def test_mcp_form_is_bound_to_attended_server_chat_and_turn(
+    tmp_path: Path, unattended: bool,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    manager = _ActiveMcpManager()
+    broker = _broker(storage, client, mcp_manager=manager)
+    try:
+        broker.submit_prompt(
+            thread.thread_id, "Ask the MCP server", client_request_id="mcp-run",
+            unattended=unattended,
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        params = _mcp_form_params(remote_thread_id, turn_id)
+        assert client.emit_request(
+            "mcpServer/elicitation/request", {**params, "turnId": "other-turn"},
+        ) == {"action": "decline"}
+        assert client.emit_request(
+            "mcpServer/elicitation/request", {**params, "serverName": "unknown_server"},
+        ) == {"action": "decline"}
+        result = client.emit_request("mcpServer/elicitation/request", params)
+        if unattended:
+            assert result == {"action": "decline"}
+            assert broker.pending_interactions(thread.thread_id) == ()
+            assert any(
+                event.event_type == "mcp.elicitation_declined"
+                and event.payload.get("reason") == "unattended"
+                for event in storage.list_thread_events(thread.thread_id)
+            )
+            return
+        assert result is DEFERRED_RESPONSE
+        pending = _pending_one(broker, thread.thread_id)
+        assert pending["kind"] == "mcp_form"
+        assert pending["display"]["mcp_server"] == "test_server"
+        with pytest.raises(RuntimeBrokerError):
+            broker.respond_mcp(
+                pending["interaction_id"], thread_id="another-chat", action="accept",
+                content={"choice": "yes"}, client_request_id="cross-chat",
+            )
+        with pytest.raises(ValueError):
+            broker.respond_mcp(
+                pending["interaction_id"], thread_id=thread.thread_id, action="accept",
+                content={"choice": "maybe"}, client_request_id="bad-choice",
+            )
+        kwargs = dict(
+            interaction_id=pending["interaction_id"], thread_id=thread.thread_id,
+            action="accept", content={"choice": "yes"}, client_request_id="mcp-answer",
+        )
+        first = broker.respond_mcp(**kwargs)
+        assert broker.respond_mcp(**kwargs) == first
+        assert len(client.responses) == 1
+        assert client.responses[0][1] == {"action": "accept", "content": {"choice": "yes"}}
+        assert broker.pending_interactions(thread.thread_id) == ()
+        assert "provider-request-private" not in json.dumps([
+            event.payload for event in storage.list_thread_events(thread.thread_id)
+        ])
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("change", ["account", "server"])
+def test_mcp_pending_request_ends_when_account_or_server_changes(
+    tmp_path: Path, change: str,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    manager = _ActiveMcpManager()
+    broker = _broker(storage, client, mcp_manager=manager)
+    try:
+        broker.submit_prompt(thread.thread_id, "Ask", client_request_id="mcp-run")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        assert client.emit_request(
+            "mcpServer/elicitation/request", _mcp_form_params(remote_thread_id, turn_id),
+        ) is DEFERRED_RESPONSE
+        pending = _pending_one(broker, thread.thread_id)
+        if change == "account":
+            broker.cancel_mcp_interactions()
+        else:
+            manager.active = False
+            broker.list_pending_interactions(thread_id=thread.thread_id)
+        assert broker.pending_interactions(thread.thread_id) == ()
+        assert client.aborted_generations
+        with pytest.raises(RuntimeBrokerError):
+            broker.respond_mcp(
+                pending["interaction_id"], thread_id=thread.thread_id,
+                action="accept", content={"choice": "yes"},
+                client_request_id="late-answer",
+            )
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("trigger", ["answer", "watchdog"])
+def test_mcp_question_closes_when_account_status_becomes_unverifiable(
+    tmp_path: Path, trigger: str,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    admission = {"allowed": True}
+    broker = _broker(
+        storage, client, mcp_manager=_ActiveMcpManager(),
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        broker.submit_prompt(thread.thread_id, "Ask", client_request_id="mcp-run")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        assert client.emit_request(
+            "mcpServer/elicitation/request", _mcp_form_params(remote_thread_id, turn_id),
+        ) is DEFERRED_RESPONSE
+        pending = _pending_one(broker, thread.thread_id)
+
+        admission["allowed"] = False
+        if trigger == "watchdog":
+            _wait_until(lambda: bool(client.aborted_generations))
+        with pytest.raises(InteractionStaleError):
+            broker.respond_mcp(
+                pending["interaction_id"], thread_id=thread.thread_id,
+                action="accept", content={"choice": "yes"},
+                client_request_id="unverified-account",
+            )
+        assert broker.pending_interactions(thread.thread_id) == ()
+        assert client.responses == []
+        assert client.aborted_generations
+        assert client.emit_request(
+            "mcpServer/elicitation/request", _mcp_form_params(remote_thread_id, turn_id),
+        ) == {"action": "decline"}
+    finally:
+        broker.close()
+
+
+def test_mcp_url_is_ephemeral_and_requires_explicit_attended_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parse = runtime_broker_module.parse_elicitation
+    monkeypatch.setattr(
+        runtime_broker_module, "parse_elicitation",
+        lambda params: parse(params, url_validator=lambda value: value),
+    )
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client, mcp_manager=_ActiveMcpManager())
+    try:
+        broker.submit_prompt(thread.thread_id, "Authorise", client_request_id="mcp-url-run")
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        url = "https://login.example.com/authorise?one_time=private-value"
+        result = client.emit_request("mcpServer/elicitation/request", {
+            "serverName": "test_server", "threadId": remote_thread_id,
+            "turnId": turn_id, "mode": "url",
+            "message": f"Open {url} to continue", "elicitationId": "e-1",
+            "url": url,
+        })
+        assert result is DEFERRED_RESPONSE
+        pending = _pending_one(broker, thread.thread_id)
+        assert pending["kind"] == "mcp_url"
+        assert pending["authorization_url"] == url
+        assert broker.list_pending_interactions()[0].authorization_url is None
+        events = json.dumps([
+            event.payload for event in storage.list_thread_events(thread.thread_id)
+        ])
+        assert "private-value" not in events
+        decided = broker.decide_approval(
+            pending["interaction_id"], thread_id=thread.thread_id,
+            decision="accept", client_request_id="mcp-url-accept",
+        )
+        assert decided.status == "accepted"
+        assert client.responses[0][1] == {"action": "accept"}
+        assert "private-value" not in (storage.root / "runtime-state.json").read_text()
+    finally:
+        broker.close()
 
 
 def _assert_broker_error(

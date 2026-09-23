@@ -336,6 +336,23 @@ class InteractionQuestionRecord(BaseModel):
     allow_free_text: bool = False
 
 
+class McpFormFieldRecord(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    label: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=512)
+    kind: Literal["string", "number", "integer", "boolean", "select", "multi_select"]
+    required: bool = False
+    options: list[str] = Field(default_factory=list, max_length=32)
+    option_labels: list[str] = Field(default_factory=list, max_length=32)
+    format: Literal["email", "uri", "date", "date-time"] | None = None
+    min_length: int | None = Field(default=None, ge=0, le=4096)
+    max_length: int | None = Field(default=None, ge=0, le=4096)
+    minimum: float | None = None
+    maximum: float | None = None
+    min_items: int | None = Field(default=None, ge=0, le=32)
+    max_items: int | None = Field(default=None, ge=0, le=32)
+
+
 class InteractionDisplayRecord(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     summary: str = Field(min_length=1, max_length=512)
@@ -344,6 +361,9 @@ class InteractionDisplayRecord(BaseModel):
     questions: list[InteractionQuestionRecord] = Field(
         default_factory=list, max_length=32
     )
+    mcp_server: str | None = Field(default=None, max_length=128)
+    mcp_fields: list[McpFormFieldRecord] = Field(default_factory=list, max_length=16)
+    mcp_url_host: str | None = Field(default=None, max_length=253)
 
     @field_validator("workspace_paths")
     @classmethod
@@ -366,12 +386,13 @@ class PendingInteractionRecord(BaseModel):
     """Browser-safe interaction addressed solely by a local interaction id."""
 
     interaction_id: str = Field(min_length=1, max_length=128)
-    kind: Literal["command_approval", "file_change_approval", "user_input"]
+    kind: Literal["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"]
     thread_id: str = Field(min_length=1, max_length=128)
     event_id: int = Field(ge=0)
     status: Literal["pending"] = "pending"
     expires_at: str = Field(min_length=1, max_length=64)
     display: InteractionDisplayRecord
+    authorization_url: str | None = Field(default=None, max_length=8192)
     allowed_actions: list[Literal["accept", "decline", "cancel", "answer"]] = Field(
         max_length=4
     )
@@ -409,6 +430,12 @@ class InteractionAnswerRequest(BaseModel):
         if len(question_ids) != len(set(question_ids)):
             raise ValueError("question ids must be unique")
         return values
+
+
+class McpFormAnswerRequest(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=128)
+    content: dict[str, str | int | float | bool | list[str]] = Field(max_length=16)
+    client_request_id: str = Field(min_length=1, max_length=256)
 
 
 class InteractionResultRecord(BaseModel):
@@ -497,6 +524,7 @@ class BridgeReadinessRecord(BaseModel):
             "mcp_local_v1",
             "mcp_credentials_v1",
             "mcp_management_v1",
+            "mcp_elicitation_v1",
             "skills_v1",
             "plugins_v1",
             "agents_v1",

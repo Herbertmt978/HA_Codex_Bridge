@@ -665,6 +665,11 @@
         resolveInteraction(interactionId, status = "accepted") {
           return clone(removeInteraction(interactionId, status));
         },
+        addPendingInteraction(interaction) {
+          const threadId = interaction.thread_id;
+          pendingInteractionsByThread[threadId] ||= [];
+          pendingInteractionsByThread[threadId].push(clone(interaction));
+        },
         stopThreadStream(threadId = "thr_vba_1") {
           const subscribers = harnessState.threadSubscribers.get(threadId);
           subscribers?.forEach((callback) => callback({ type: "stream_status", state: "stopped" }));
@@ -984,6 +989,16 @@
                   interaction_id: interaction.interaction_id,
                   thread_id: interaction.thread_id,
                   status: "answered",
+                  client_request_id: payload.client_request_id,
+                };
+              }
+              case "codex_bridge/answer_mcp_form": {
+                const interaction = removeInteraction(payload.interaction_id, "accepted");
+                if (!interaction) throw new Error("interaction_stale");
+                return {
+                  interaction_id: interaction.interaction_id,
+                  thread_id: interaction.thread_id,
+                  status: "accepted",
                   client_request_id: payload.client_request_id,
                 };
               }

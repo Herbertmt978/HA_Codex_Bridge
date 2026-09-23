@@ -28,6 +28,7 @@ import {
 import { uploadResumableFile } from "./uploads.js";
 import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
 import { getApprovalViewModel, renderApproval } from "./views/approval.js";
+import { collectMcpContent, collectMcpDraft, renderMcpElicitation } from "./views/mcp-elicitation.js";
 import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js";
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
@@ -1723,7 +1724,8 @@ template.innerHTML = `
     }
 
     .decision-actions button[data-decision="accept"],
-    .decision-actions button[data-action="answer-interaction"] {
+    .decision-actions button[data-action="answer-interaction"],
+    .decision-actions button[data-action="answer-mcp-form"] {
       border-color: transparent;
       background: linear-gradient(135deg, var(--brand-blue), var(--brand-violet));
       color: white;
@@ -1733,6 +1735,20 @@ template.innerHTML = `
     .decision-actions button[data-decision="cancel"] {
       color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%);
     }
+
+    .mcp-form-fields { display: grid; gap: 12px; margin: 10px 0; }
+    .mcp-form-field { display: grid; gap: 5px; }
+    .mcp-form-field > label { display: grid; gap: 5px; font-weight: 600; }
+    .mcp-form-field input, .mcp-form-field select {
+      width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 10px;
+      border: 1px solid var(--border-color); border-radius: 9px;
+      background: var(--surface-bg); color: var(--text-color); font: inherit;
+    }
+    .mcp-form-field fieldset { display: grid; gap: 5px; border: 1px solid var(--border-color); border-radius: 9px; }
+    .mcp-form-field fieldset label { display: flex; align-items: center; gap: 8px; }
+    .mcp-form-field fieldset input { width: auto; min-height: 0; }
+    .mcp-form-field p { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .mcp-open-link { display: inline-flex; width: fit-content; margin: 8px 0 12px; overflow-wrap: anywhere; }
 
     .user-input-card fieldset {
       display: grid;
@@ -6156,6 +6172,9 @@ class CodexBridgePanel extends HTMLElement {
       case "answer-interaction":
         this._answerInteractionFromTarget(actionTarget);
         break;
+      case "answer-mcp-form":
+        this._answerMcpFormFromTarget(actionTarget);
+        break;
       case "stop-run":
         this._cancelRun();
         break;
@@ -7704,6 +7723,22 @@ class CodexBridgePanel extends HTMLElement {
             submit.textContent = "Retry answer";
           }
         }
+      } else if (interaction.kind === "mcp_form" || interaction.kind === "mcp_url") {
+        renderMcpElicitation(wrapper, interaction, {
+          pending,
+          draft: this._interactionAnswers.get(interaction.interaction_id) || {},
+        });
+        if (mutation?.state === "retryable") {
+          for (const control of wrapper.querySelectorAll(".mcp-form-fields input, .mcp-form-fields select")) {
+            control.disabled = true;
+          }
+          for (const button of wrapper.querySelectorAll(".decision-actions button")) {
+            const original = button.dataset.decision === mutation.decision
+              || button.dataset.action === "answer-mcp-form" && mutation.kind === "mcp_form";
+            button.disabled = !original;
+            if (original) button.textContent = `Retry ${button.textContent.toLowerCase()}`;
+          }
+        }
       } else {
         const model = getApprovalViewModel(interaction, { pending });
         renderApproval(wrapper, model);
@@ -7753,6 +7788,13 @@ class CodexBridgePanel extends HTMLElement {
 
   _captureInteractionAnswers(target) {
     const wrapper = target.closest("[data-interaction-id]");
+    const mcpInteraction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "mcp_form"
+    );
+    if (wrapper && mcpInteraction) {
+      this._interactionAnswers.set(mcpInteraction.interaction_id, collectMcpDraft(wrapper, mcpInteraction));
+      return;
+    }
     const interaction = this._pendingInteractions.find(
       (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "user_input"
     );
@@ -7800,6 +7842,34 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     this._answerInteraction(interaction.interaction_id, answers);
+  }
+
+  _answerMcpFormFromTarget(target) {
+    const wrapper = target.closest("[data-interaction-id]");
+    const interaction = this._pendingInteractions.find(
+      (item) => item.interaction_id === wrapper?.dataset.interactionId && item.kind === "mcp_form"
+    );
+    if (!wrapper || !interaction) return;
+    const previous = this._interactionMutations.get(interaction.interaction_id);
+    if (previous?.state === "retryable" && previous.kind === "mcp_form") {
+      this._submitInteractionResponse(interaction, {
+        action: "answer_mcp_form", kind: "mcp_form",
+        fingerprint: previous.fingerprint, payload: previous.payload,
+      });
+      return;
+    }
+    const content = collectMcpContent(wrapper, interaction);
+    if (content === null) {
+      this._setError("Complete the required MCP fields before continuing.");
+      return;
+    }
+    this._interactionAnswers.set(interaction.interaction_id, collectMcpDraft(wrapper, interaction));
+    this._submitInteractionResponse(interaction, {
+      action: "answer_mcp_form",
+      kind: "mcp_form",
+      fingerprint: `mcp:${JSON.stringify(content)}`,
+      payload: { content },
+    });
   }
 
   async _decideInteraction(interactionId, decision) {
@@ -7860,6 +7930,7 @@ class CodexBridgePanel extends HTMLElement {
       clientRequestId: this._createClientRequestId(request.kind),
       decision: request.decision || null,
       answers: request.answers || null,
+      payload: request.payload,
       state: "sending",
     };
     mutation.state = "sending";
@@ -7945,6 +8016,12 @@ class CodexBridgePanel extends HTMLElement {
         this._focusPrompt();
         return;
       }
+      if (interaction.kind === "mcp_form" && errorCode === "mcp_request_invalid") {
+        this._interactionMutations.delete(interaction.interaction_id);
+        this._assignError("The MCP answer was rejected. Review the fields and try again.");
+        this._render();
+        return;
+      }
       if (INTERACTION_ERROR_CODES.has(errorCode)) {
         mutation.state = "reconciling";
         this._assignError(errorCode === "interaction_outcome_unknown"
@@ -8011,7 +8088,7 @@ class CodexBridgePanel extends HTMLElement {
         : null;
     const interactionId = identifier(value.interaction_id, 128);
     const actualThreadId = identifier(value.thread_id, 128);
-    const kind = ["command_approval", "file_change_approval", "user_input"].includes(value.kind)
+    const kind = ["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"].includes(value.kind)
       ? value.kind
       : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at))
@@ -8031,7 +8108,9 @@ class CodexBridgePanel extends HTMLElement {
       !value.display ||
       typeof value.display !== "object" ||
       Array.isArray(value.display) ||
-      (kind === "user_input" ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))
+      (["user_input", "mcp_form"].includes(kind)
+        ? !allowed.includes("answer")
+        : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))
     ) {
       return null;
     }
@@ -8043,6 +8122,7 @@ class CodexBridgePanel extends HTMLElement {
       status: "pending",
       expires_at: expiresAt,
       display: { ...value.display },
+      authorization_url: kind === "mcp_url" ? value.authorization_url : null,
       allowed_actions: allowed,
     };
   }

@@ -252,6 +252,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         codex_home=codex_home, enable_mcp=True, enable_local_mcp=True,
     )
     assert "mcp_local_v1" in local.state.feature_capabilities
+    assert "mcp_elicitation_v1" in local.state.feature_capabilities
     from codex_bridge_service.models import BridgeReadinessRecord, ComponentVersionRecord
     record = BridgeReadinessRecord(bridge=ComponentVersionRecord(version="0.9.0"), capabilities=local.state.feature_capabilities)
     assert "mcp_local_v1" in record.capabilities

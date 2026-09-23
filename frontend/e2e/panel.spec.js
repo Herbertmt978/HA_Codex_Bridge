@@ -1846,6 +1846,53 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(answers[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 });
 
+test("answers an MCP form and opens an explicit HTTPS authorisation link", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const common = {
+      thread_id: "thr_vba_1", status: "pending", expires_at: "2099-07-14T12:00:00Z",
+    };
+    window.__codexHarness.addPendingInteraction({
+      ...common, interaction_id: "int_mcp_form_harness", event_id: 802,
+      kind: "mcp_form", allowed_actions: ["answer", "decline", "cancel"],
+      display: {
+        title: "MCP server question", summary: "Choose a result", mcp_server: "calendar",
+        mcp_fields: [{ name: "choice", label: "Choice", kind: "select", required: true,
+          options: ["yes", "no"], option_labels: ["Yes", "No"] }],
+      },
+    });
+    window.__codexHarness.addPendingInteraction({
+      ...common, interaction_id: "int_mcp_url_harness", event_id: 803,
+      kind: "mcp_url", allowed_actions: ["accept", "decline", "cancel"],
+      display: {
+        title: "MCP authorisation request", summary: "Sign in to continue",
+        mcp_server: "calendar", mcp_url_host: "login.example.com",
+      },
+      authorization_url: "https://login.example.com/authorise?one_time=private-value",
+    });
+    document.querySelector("codex-bridge-panel")._refreshInteractions();
+  });
+  const panel = page.locator("codex-bridge-panel");
+  const form = panel.locator('[data-interaction-id="int_mcp_form_harness"]');
+  const url = panel.locator('[data-interaction-id="int_mcp_url_harness"]');
+  await expect(form).toContainText("Server: calendar");
+  await form.locator("select").selectOption("yes");
+  await form.locator('[data-action="answer-mcp-form"]').click();
+  await expect(form).toHaveCount(0);
+  const answers = await websocketCalls(page, "codex_bridge/answer_mcp_form");
+  expect(answers).toHaveLength(1);
+  expect(answers[0].payload).toMatchObject({
+    interaction_id: "int_mcp_form_harness", thread_id: "thr_vba_1", content: { choice: "yes" },
+  });
+  await expect(url).toContainText("Destination: login.example.com");
+  await expect(url).not.toContainText("private-value");
+  const link = url.getByRole("link", { name: "Open login.example.com to continue" });
+  await expect(link).toHaveAttribute("href", "https://login.example.com/authorise?one_time=private-value");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+});
+
 test("keeps the active approval actions visible at the 1280px desktop layout", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

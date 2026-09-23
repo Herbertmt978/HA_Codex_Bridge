@@ -23,6 +23,8 @@ from .browser_broker import BrowserBroker, BrowserInvocationContext
 from .browser_contract import browser_dynamic_tool_spec
 from .host_access import HostAccessError, HostAccessManager, HostLease
 from .host_access_contract import HostResult, host_dynamic_tool_spec
+from .mcp_elicitation import parse_elicitation, validate_form_content
+from .mcp_manager import McpManager
 from .event_store import (
     DurableOperationTooLargeError,
     EventDraft,
@@ -474,6 +476,7 @@ class RuntimeBroker:
         host_access: HostAccessManager | None = None,
         provider_admission_check: Callable[[], bool] | None = None,
         auth_failure_listener: Callable[[int], None] | None = None,
+        mcp_manager: McpManager | None = None,
     ) -> None:
         if type(browser_dynamic_tools_enabled) is not bool:
             raise ValueError("browser dynamic tool state must be a boolean")
@@ -513,6 +516,7 @@ class RuntimeBroker:
         )
         self._run_terminal_listener = run_terminal_listener
         self._auth_failure_listener = auth_failure_listener
+        self._mcp_manager = mcp_manager if mcp_manager is not None and mcp_manager.enabled else None
         self._image_generation_authority = image_generation_authority
         self._browser_broker = browser_broker
         self._host_access = host_access
@@ -565,6 +569,8 @@ class RuntimeBroker:
             app_server.register_notification_handler(method, self._on_notification)
         for method in _REQUESTS:
             app_server.register_request_handler(method, self._on_server_request)
+        if self._mcp_manager is not None:
+            app_server.register_request_handler("mcpServer/elicitation/request", self._on_server_request)
 
     def start(self) -> None:
         with self._lock:
@@ -1161,10 +1167,21 @@ class RuntimeBroker:
         *,
         thread_id: str | None = None,
     ) -> tuple[PendingInteractionRecord, ...]:
+        if not self._provider_admission_allowed():
+            self.cancel_mcp_interactions()
         with self._lock:
             self._expire_due_interactions_locked()
             values = [
-                _public_interaction(item)
+                _public_interaction(
+                    item,
+                    authorization_url=(
+                        self._server_requests[item.interaction_id].params.get("url")
+                        if thread_id is not None and item.kind == "mcp_url"
+                        and item.interaction_id in self._server_requests
+                        and isinstance(self._server_requests[item.interaction_id].params, dict)
+                        else None
+                    ),
+                )
                 for item in self._state.interactions.values()
                 if item.status == "pending"
                 and (thread_id is None or item.thread_id == thread_id)
@@ -1189,6 +1206,16 @@ class RuntimeBroker:
     ) -> InteractionResultRecord:
         if decision not in {"accept", "decline", "cancel"}:
             raise ValueError("approval decision is invalid")
+        with self._lock:
+            candidate = self._state.interactions.get(interaction_id)
+            is_mcp = candidate is not None and candidate.kind in {"mcp_form", "mcp_url"}
+            if is_mcp and decision not in candidate.allowed_actions:
+                raise ValueError("MCP decision is invalid")
+        if is_mcp:
+            return self.respond_mcp(
+                interaction_id, thread_id=thread_id, action=decision,
+                content=None, client_request_id=client_request_id,
+            )
         request_id = _identifier(
             client_request_id, limit=256, label="client request id"
         )
@@ -1317,6 +1344,94 @@ class RuntimeBroker:
                     )
                     raise InteractionOutcomeUnknownError()
                 interaction.status = "answered"
+                interaction.display = None
+                self._server_requests.pop(interaction_id, None)
+                self._compact_terminal_state_locked()
+                try:
+                    self._emit_interaction_resolved_locked(interaction)
+                except RuntimeStateError as exc:
+                    raise InteractionOutcomeUnknownError() from exc
+                return _interaction_result(interaction, request_id)
+        finally:
+            with self._lock:
+                self._finish_publication_locked(thread_id)
+
+    def respond_mcp(
+        self,
+        interaction_id: str,
+        *,
+        thread_id: str,
+        action: str,
+        content: dict[str, object] | None,
+        client_request_id: str,
+    ) -> InteractionResultRecord:
+        if action not in {"accept", "decline", "cancel"}:
+            raise ValueError("MCP action is invalid")
+        # Auth can become temporarily unverifiable while an account-change
+        # notification waits for the active turn to release its runtime lease.
+        # Never send an answer to that turn while its account is in doubt.
+        if not self._provider_admission_allowed():
+            self.cancel_mcp_interactions()
+            raise InteractionStaleError()
+        request_id = _identifier(client_request_id, limit=256, label="client request id")
+        with self._lock:
+            candidate = self._state.interactions.get(interaction_id)
+            if candidate is None:
+                raise InteractionNotFoundError()
+            if candidate.kind not in {"mcp_form", "mcp_url"}:
+                raise TurnChangedError()
+            if action == "accept" and candidate.kind == "mcp_form":
+                if candidate.display is not None:
+                    content = validate_form_content(content, candidate.display.mcp_fields)
+            elif content is not None or action not in candidate.allowed_actions:
+                raise ValueError("MCP response is invalid")
+            if candidate.status == "pending" and (
+                self._mcp_manager is None
+                or candidate.mcp_server_name is None
+                or not self._mcp_manager.is_active_server(candidate.mcp_server_name)
+            ):
+                raise InteractionStaleError()
+            original = self._server_requests.get(interaction_id)
+            if original is not None and (
+                not isinstance(original.params, dict)
+                or original.params.get("serverName") != candidate.mcp_server_name
+                or original.params.get("threadId") != candidate.codex_thread_id
+                or original.params.get("turnId") != candidate.turn_id
+            ):
+                raise InteractionStaleError()
+            fingerprint = _fingerprint(["mcp", action, content])
+            interaction, request = self._claim_interaction_locked(
+                interaction_id, thread_id=thread_id,
+                client_request_id=request_id, response_fingerprint=fingerprint,
+                expected_kinds={"mcp_form", "mcp_url"},
+            )
+            if interaction.status != "responding":
+                return _interaction_result(interaction, request_id)
+            result: dict[str, object] = {"action": action}
+            if action == "accept" and content is not None:
+                result["content"] = content
+            self._begin_publication_locked(thread_id)
+        try:
+            try:
+                self.app_server.respond(request, result=result)
+            except Exception as exc:
+                with self._lock:
+                    self._mark_interaction_outcome_unknown_locked(
+                        interaction_id, client_request_id=request_id,
+                        response_fingerprint=fingerprint,
+                    )
+                raise InteractionOutcomeUnknownError() from exc
+            with self._lock:
+                interaction = self._state.interactions.get(interaction_id)
+                if interaction is None or interaction.status != "responding":
+                    self._mark_interaction_outcome_unknown_locked(
+                        interaction_id, client_request_id=request_id,
+                        response_fingerprint=fingerprint,
+                    )
+                    raise InteractionOutcomeUnknownError()
+                interaction.status = {
+                    "accept": "accepted", "decline": "declined", "cancel": "cancelled",
+                }[action]
                 interaction.display = None
                 self._server_requests.pop(interaction_id, None)
                 self._compact_terminal_state_locked()
@@ -1847,6 +1962,10 @@ class RuntimeBroker:
             )
             if event.wait(wait_seconds):
                 return
+            if not self._provider_admission_allowed():
+                # Account updates can be deferred until this turn releases its
+                # runtime lease. End any MCP question before that handoff.
+                self.cancel_mcp_interactions()
             with self._lock:
                 self._expire_due_interactions_locked()
                 run = self._state.runs.get(run_id)
@@ -2531,6 +2650,8 @@ class RuntimeBroker:
         *,
         replaying: bool = False,
     ) -> object:
+        if request.method == "mcpServer/elicitation/request":
+            return self._on_mcp_elicitation(request, replaying=replaying)
         # Dynamic tool calls have their own exact correlation shape. Do this
         # before the approval parser: a browser callback has no itemId and may
         # never enter the deferred user-interaction state machine.
@@ -2648,6 +2769,103 @@ class RuntimeBroker:
                     ),
                 )
             )
+            interaction.event_id = events[0].scope_sequence
+            self._persist_locked()
+            return DEFERRED_RESPONSE
+
+    def _on_mcp_elicitation(
+        self, request: AppServerRequest, *, replaying: bool = False,
+    ) -> object:
+        decline = {"action": "decline"}
+        params = request.params
+        if not isinstance(params, dict) or self._mcp_manager is None:
+            return decline
+        codex_thread_id = params.get("threadId")
+        turn_id = params.get("turnId")
+        if (
+            not isinstance(codex_thread_id, str) or not codex_thread_id
+            or not isinstance(turn_id, str) or not turn_id
+        ):
+            # A nullable turnId is legal in app-server's schema, but cannot be
+            # safely bound to one attended Bridge turn.
+            return decline
+        spec = parse_elicitation(params)
+        if spec is None or not self._mcp_manager.is_active_server(spec.server_name):
+            return decline
+        if not self._provider_admission_allowed():
+            return decline
+        with self._lock:
+            run = self._correlated_run_locked(
+                request.generation, codex_thread_id, turn_id,
+            )
+            if run is None:
+                candidate = self._pre_response_candidate_locked(
+                    request.generation, codex_thread_id,
+                )
+                if candidate is not None and self._buffer_pre_response_callback_locked(
+                    candidate, request,
+                ):
+                    return DEFERRED_RESPONSE
+                return decline
+            if not replaying and run.run_id in self._callback_replays_in_progress:
+                if self._buffer_pre_response_callback_locked(run, request):
+                    return DEFERRED_RESPONSE
+                return decline
+            if run.status != "running":
+                return decline
+            if run.unattended:
+                try:
+                    self._persist_locked(events=(EventDraft(
+                        scope="thread", thread_id=run.thread_id,
+                        event_type="mcp.elicitation_declined",
+                        payload={
+                            "run_id": run.run_id, "server_name": spec.server_name,
+                            "reason": "unattended",
+                        },
+                    ),))
+                except RuntimeStateError:
+                    pass
+                return decline
+            if sum(
+                item.run_id == run.run_id and item.status == "pending"
+                and item.kind in {"mcp_form", "mcp_url"}
+                for item in self._state.interactions.values()
+            ) >= 4:
+                return decline
+            now = datetime.now(UTC)
+            run.last_activity_at = _now()
+            self._activity[run.run_id] = monotonic()
+            interaction = RuntimeInteractionState(
+                interaction_id=f"int_{uuid4().hex[:16]}",
+                kind=spec.kind,
+                thread_id=run.thread_id,
+                run_id=run.run_id,
+                codex_thread_id=codex_thread_id,
+                turn_id=turn_id,
+                item_id=f"mcp_{uuid4().hex}",
+                mcp_server_name=spec.server_name,
+                generation=request.generation,
+                app_request_id=request.request_id,
+                display=spec.display,
+                allowed_actions=(
+                    ["accept", "decline", "cancel"]
+                    if spec.kind == "mcp_url" else ["answer", "decline", "cancel"]
+                ),
+                created_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(seconds=self.interaction_timeout_seconds)
+                ).isoformat(),
+            )
+            self._state.interactions[interaction.interaction_id] = interaction
+            self._server_requests[interaction.interaction_id] = request
+            events = self._persist_locked(events=(
+                EventDraft(
+                    scope="thread", thread_id=run.thread_id,
+                    event_type="interaction.created",
+                    # A signed, one-time URL stays only in the live request.
+                    payload=_public_interaction(interaction).model_dump(mode="json"),
+                ),
+            ))
             interaction.event_id = events[0].scope_sequence
             self._persist_locked()
             return DEFERRED_RESPONSE
@@ -3700,13 +3918,22 @@ class RuntimeBroker:
         now = datetime.now(UTC)
         changed = False
         affected_runs: set[str] = set()
+        affected_mcp_runs: set[str] = set()
         affected_generations: set[int] = set()
         events: list[EventDraft] = []
         for interaction in self._state.interactions.values():
             if interaction.status not in _PENDING_INTERACTION_STATES:
                 continue
             expires_at = _parse_time(interaction.expires_at)
-            if expires_at is None or expires_at > now:
+            server_removed = (
+                interaction.kind in {"mcp_form", "mcp_url"}
+                and (
+                    self._mcp_manager is None
+                    or interaction.mcp_server_name is None
+                    or not self._mcp_manager.is_active_server(interaction.mcp_server_name)
+                )
+            )
+            if not server_removed and (expires_at is None or expires_at > now):
                 continue
             request = self._server_requests.pop(interaction.interaction_id, None)
             if request is not None:
@@ -3719,6 +3946,8 @@ class RuntimeBroker:
             )
             interaction.display = None
             affected_runs.add(interaction.run_id)
+            if interaction.kind in {"mcp_form", "mcp_url"}:
+                affected_mcp_runs.add(interaction.run_id)
             affected_generations.add(interaction.generation)
             events.append(
                 EventDraft(
@@ -3745,8 +3974,22 @@ class RuntimeBroker:
                     self._terminalize_locked(
                         run,
                         "failed",
-                        "A Codex approval or question timed out.",
+                        (
+                            "An MCP question expired or its server or account changed."
+                            if run_id in affected_mcp_runs
+                            else "A Codex approval or question timed out."
+                        ),
                     )
+
+    def cancel_mcp_interactions(self) -> None:
+        """End questions for a changed account without retaining their answers."""
+
+        with self._lock:
+            now = _now()
+            for interaction in self._state.interactions.values():
+                if interaction.kind in {"mcp_form", "mcp_url"} and interaction.status == "pending":
+                    interaction.expires_at = now
+            self._expire_due_interactions_locked()
 
     def _mark_run_cancelling_for_interaction_locked(
         self,
@@ -4054,6 +4297,8 @@ class RuntimeBroker:
 
 def _public_interaction(
     interaction: RuntimeInteractionState,
+    *,
+    authorization_url: str | None = None,
 ) -> PendingInteractionRecord:
     if interaction.display is None:
         raise InteractionStaleError()
@@ -4064,6 +4309,7 @@ def _public_interaction(
         event_id=interaction.event_id,
         expires_at=interaction.expires_at,
         display=interaction.display,
+        authorization_url=authorization_url,
         allowed_actions=interaction.allowed_actions,
     )
 

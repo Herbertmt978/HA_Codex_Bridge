@@ -18,6 +18,7 @@ from .protocol import EndpointError
 from .runtime import async_get_runtime
 
 _INTERACTION_ERROR_MESSAGES = {
+    "mcp_request_invalid": "Review the MCP answer and try again",
     "interaction_already_resolved": "This Codex request was already resolved",
     "interaction_kind_mismatch": "This response does not match the Codex request",
     "interaction_not_found": "This Codex request is no longer available",
@@ -88,6 +89,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_list_pending_interactions,
         ws_decide_interaction,
         ws_answer_interaction,
+        ws_answer_mcp_form,
         ws_list_artifacts,
         ws_create_workspace_archive,
         ws_host_access,
@@ -1043,6 +1045,33 @@ async def ws_answer_interaction(
                     "client_request_id",
                 )
             },
+        ),
+        safe_error_messages=_INTERACTION_ERROR_MESSAGES,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/answer_mcp_form",
+        vol.Required("interaction_id"): str,
+        vol.Required("thread_id"): str,
+        vol.Required("content"): dict,
+        vol.Required("client_request_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_answer_mcp_form(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_answer_mcp_form(
+            msg["interaction_id"],
+            thread_id=msg["thread_id"],
+            content=msg["content"],
+            client_request_id=msg["client_request_id"],
         ),
         safe_error_messages=_INTERACTION_ERROR_MESSAGES,
     )

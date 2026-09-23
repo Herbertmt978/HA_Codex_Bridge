@@ -111,9 +111,28 @@ paths are stored privately in the App and omitted from the server list and
 native connection diagnostics.
 
 App and Integration 1.3.0 add bearer tokens and named authentication headers,
-as described below. Update both components; these options are absent in 1.2.0. Local OAuth, query strings, stdio servers and
-interactive MCP questions remain unsupported. Do not remove authentication from
-a server to work around a compatibility restriction.
+as described below. Update both components; these options are absent in 1.2.0.
+Local OAuth, query strings in configured MCP endpoints and arbitrary stdio
+servers remain unsupported. Do not remove authentication from a server to
+work around a compatibility restriction.
+
+## Interactive MCP questions
+
+The MCP-04 source change adds attended form and authorisation-URL requests. It
+needs a paired App and Integration release advertising `mcp_elicitation_v1`;
+installed 1.6.3 components continue to decline these requests. A question
+appears only in the active chat and names the requesting server. Supported
+forms contain bounded text, number, boolean or offered-choice fields. Unknown
+schemas, credential-looking fields and questions without a matching active
+turn are declined. Scheduled and other unattended runs never answer them.
+
+Authorisation requests show the destination and open a public HTTPS URL only
+when you click its link. The Bridge does not follow it for you or save the
+one-time URL in chat history. Review the site before entering information;
+use the dedicated MCP authentication settings for tokens, API keys and other
+credentials. Decline or Cancel any request you do not recognise. A stopped
+turn, expired request, account change or removed server makes its controls
+invalid, so refresh the chat before trying again.
 
 ## Tokens and API keys
 
