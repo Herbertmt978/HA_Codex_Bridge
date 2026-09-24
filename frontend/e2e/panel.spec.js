@@ -188,6 +188,44 @@ test("settings persist appearance and keep themed menus usable on a narrow scree
 });
 
 for (const width of [390, 1280]) {
+  test(`saved account menu stays private and usable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await expect(panel.locator("#app-menu-toggle")).toBeVisible();
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: ["account_profiles_v1"] };
+      element._status = {
+        ...element._status,
+        auth: { state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" },
+        account: { available: true, auth_mode: "chatgpt", plan_type: "pro" },
+      };
+      const original = element._callWS.bind(element);
+      element._callWS = async (method, args) => method === "list_account_profiles"
+        ? [
+          { id: "a".repeat(32), label: "Personal", plan: "pro", active: true },
+          { id: "b".repeat(32), label: "<Private workspace>", plan: "team", active: false },
+        ]
+        : original(method, args);
+    });
+    await panel.locator("#app-menu-toggle").click();
+    const menu = panel.locator("#app-menu");
+    await expect(menu).toBeVisible();
+    await expect(menu.locator("#account-menu-list")).toContainText("<Private workspace>");
+    await expect(menu.locator("#account-menu-list img")).toHaveCount(0);
+    const bounds = await menu.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    await expect(menu.getByRole("button", { name: "Add another account" })).toBeEnabled();
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
+  });
+}
+
+for (const width of [390, 1280]) {
   test(`guided HA-MCP and custom connections remain accessible at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

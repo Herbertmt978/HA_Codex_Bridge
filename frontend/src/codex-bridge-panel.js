@@ -2605,7 +2605,7 @@ template.innerHTML = `
       z-index: 16;
       top: calc(100% - 5px);
       right: 10px;
-      width: min(280px, calc(100vw - 24px));
+      width: min(280px, calc(100% - 20px));
       display: grid;
       gap: 2px;
       padding: 5px;
