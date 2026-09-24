@@ -30,11 +30,14 @@ SAFE_CHATGPT_PLAN_TYPES = frozenset(
 )
 
 _ACCOUNT_OWNER_CONTEXT = b"ha-codex-bridge/account-owner/v1\0chatgpt\0"
+_ACCOUNT_ID_OWNER_CONTEXT = b"ha-codex-bridge/account-owner/v2\0chatgpt-account\0"
 _ACCOUNT_UNVERIFIED_CONTEXT = b"ha-codex-bridge/account-owner/v1\0unverified"
 _MAX_ACCOUNT_IDENTITY_LENGTH = 512
 
 
-def account_owner_marker(response: object, secret: str) -> str | None:
+def account_owner_marker(
+    response: object, secret: str, *, account_id: str | None = None
+) -> str | None:
     """Derive an opaque private owner marker from an authoritative account read."""
 
     if not isinstance(secret, str) or not secret:
@@ -44,6 +47,18 @@ def account_owner_marker(response: object, secret: str) -> str | None:
     account = response.get("account")
     if not isinstance(account, dict) or account.get("type") != "chatgpt":
         return None
+    if account_id is not None:
+        if (
+            not isinstance(account_id, str)
+            or not 1 <= len(account_id) <= _MAX_ACCOUNT_IDENTITY_LENGTH
+            or any(ord(char) < 33 or ord(char) == 127 for char in account_id)
+        ):
+            return None
+        return hmac.new(
+            secret.encode("utf-8"),
+            _ACCOUNT_ID_OWNER_CONTEXT + account_id.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
     email = account.get("email")
     if not isinstance(email, str):
         return None

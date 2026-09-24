@@ -626,6 +626,28 @@ class BridgeApiClient:
     async def async_logout_auth(self) -> dict[str, Any]:
         return await self._async_json("POST", "/auth/logout")
 
+    async def async_list_account_profiles(self) -> list[dict[str, Any]]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json("GET", "/auth/profiles")
+
+    async def async_save_account_profile(self, label: str) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json(
+            "POST", "/auth/profiles", json_body={"label": label}
+        )
+
+    async def async_switch_account_profile(self, profile_id: str) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json(
+            "POST", "/auth/profiles/switch", json_body={"profile_id": profile_id}
+        )
+
+    async def async_remove_account_profile(self, profile_id: str) -> None:
+        self.require_capability("account_profiles_v1")
+        await self._async_no_content(
+            "DELETE", f"/auth/profiles/{_path_segment(profile_id)}", expected_status={204}
+        )
+
     async def async_list_projects(self) -> list[dict[str, Any]]:
         return await self._async_json("GET", "/projects")
 

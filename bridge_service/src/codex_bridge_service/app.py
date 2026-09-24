@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
+from .account_profiles import AccountProfileStore
 from .auth_coordinator import CodexAuthCoordinator
 from .automations import AutomationError, AutomationStore, AutomationValidationError
 from .browser_broker import BrowserBroker
@@ -228,6 +230,7 @@ def create_app(
             and getattr(resolved_app_server, "enable_experimental_api", False) is True
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
+    resolved_account_profile_store: AccountProfileStore | None = None
     resolved_runner: Any = None
     resolved_host_access: HostAccessManager | None = None
     resolved_terminal: WorkspaceTerminal | None = None
@@ -299,7 +302,11 @@ def create_app(
                             if resolved_runtime_gate is not None:
                                 await asyncio.to_thread(resolved_runtime_gate.close)
                         finally:
-                            await asyncio.to_thread(resolved_app_server.close)
+                            try:
+                                await asyncio.to_thread(resolved_app_server.close)
+                            finally:
+                                if resolved_account_profile_store is not None:
+                                    await asyncio.to_thread(resolved_account_profile_store.close)
             finally:
                 try:
                     if resolved_host_access is not None:
@@ -608,6 +615,10 @@ def create_app(
                     ),
                 )
 
+            if os.name != "nt" and codex_home is not None:
+                resolved_account_profile_store = AccountProfileStore(
+                    storage.root / "account-profiles", Path(codex_home)
+                )
             resolved_auth_coordinator = CodexAuthCoordinator(
                 cast(Any, resolved_app_server),
                 state_listener=persist_auth_status,
@@ -616,6 +627,10 @@ def create_app(
                 runtime_gate=resolved_runtime_gate,
                 account_owner_secret=auth_token,
                 account_binding_listener=bind_codex_account,
+                account_identity_provider=(
+                    (lambda: resolved_account_profile_store.current_credential()[1])
+                    if resolved_account_profile_store is not None else None
+                ),
             )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
@@ -656,6 +671,7 @@ def create_app(
     app.state.sandbox_ready = sandbox_ready
     app.state.runtime_gate = resolved_runtime_gate
     app.state.auth_coordinator = resolved_auth_coordinator
+    app.state.account_profile_store = resolved_account_profile_store
     app.state.account_probe = resolved_account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,
@@ -695,6 +711,8 @@ def create_app(
                 "agents_v1",
             ]
         )
+        if resolved_account_profile_store is not None:
+            feature_capabilities.append("account_profiles_v1")
         # Elicitations must be rejected before we expose MCP administration.
         # Without the app-server callback, an OAuth-enabled MCP server could
         # request data through an interaction path the Bridge cannot control.

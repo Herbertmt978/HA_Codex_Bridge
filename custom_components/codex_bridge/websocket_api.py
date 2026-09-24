@@ -53,6 +53,8 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_unavailable": "MCP configuration is temporarily unavailable",
     "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
     "reset_credit_unavailable": "That reset credit is unavailable. Refresh usage and check again.",
+    "account_profile_invalid": "Review the saved account and try again",
+    "account_profiles_unavailable": "Saved accounts are unavailable in this App version",
 }
 
 
@@ -66,6 +68,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_start_auth_login,
         ws_cancel_auth_login,
         ws_logout_auth,
+        ws_list_account_profiles,
+        ws_save_account_profile,
+        ws_switch_account_profile,
+        ws_remove_account_profile,
         ws_list_projects,
         ws_create_project,
         ws_update_project,
@@ -326,6 +332,50 @@ async def ws_logout_auth(
 ) -> None:
     await _async_handle(
         hass, connection, msg, lambda client: client.async_logout_auth()
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_account_profiles"})
+@websocket_api.async_response
+async def ws_list_account_profiles(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg, lambda client: client.async_list_account_profiles()
+    )
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/save_account_profile",
+    vol.Required("label"): vol.All(str, vol.Length(min=1, max=60)),
+})
+@websocket_api.async_response
+async def ws_save_account_profile(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_save_account_profile(msg["label"]),
+    )
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/switch_account_profile",
+    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+})
+@websocket_api.async_response
+async def ws_switch_account_profile(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_switch_account_profile(msg["profile_id"]),
+    )
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/remove_account_profile",
+    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+})
+@websocket_api.async_response
+async def ws_remove_account_profile(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_remove_account_profile(msg["profile_id"]),
     )
 
 

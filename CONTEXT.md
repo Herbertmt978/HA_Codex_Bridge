@@ -48,6 +48,10 @@ to the App or Bridge.
   changes. The previous account's provider handle is detached; earlier local
   messages are not automatically replayed to the newly connected account.
   Unverified identity blocks new prompts and unattended turns.
+- Saved ChatGPT accounts belong to the Home Assistant App, separately from
+  desktop Codex profiles. Administrators can save and select private App
+  sign-ins; switching replaces only the managed Codex app-server process and
+  checks the selected provider identity before reopening task admission.
 - Model and reasoning choices come from runtime discovery. Recovery catalogues
   are marked stale and must not silently change an existing selection.
 - The browser communicates only with Home Assistant. App discovery supplies

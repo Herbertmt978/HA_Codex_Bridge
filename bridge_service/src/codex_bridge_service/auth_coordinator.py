@@ -8,6 +8,7 @@ from time import monotonic
 from typing import Any, Protocol
 
 from .account import account_owner_marker, account_unverified_marker
+from .account_profiles import AccountProfileError, AccountProfileStore
 from .codex_app_server import AppServerNotification
 from .models import CodexAuthStatusRecord
 from .runtime_gate import (
@@ -71,6 +72,8 @@ class _AuthAppServerClient(Protocol):
         handler: Callable[[AppServerNotification], None],
     ) -> None: ...
 
+    def restart_for_account_change(self) -> None: ...
+
 
 class CodexAuthCoordinator:
     """Own the safe public projection of Codex app-server authentication state."""
@@ -85,6 +88,7 @@ class CodexAuthCoordinator:
         runtime_gate: RuntimeGate | None = None,
         account_owner_secret: str | None = None,
         account_binding_listener: Callable[[str], None] | None = None,
+        account_identity_provider: Callable[[], str] | None = None,
         account_read_timeout_seconds: float = 5.0,
         active_login_poll_interval_seconds: float = 2.0,
     ) -> None:
@@ -118,6 +122,7 @@ class CodexAuthCoordinator:
         self._runtime_gate = runtime_gate
         self._account_owner_secret = account_owner_secret
         self._account_binding_listener = account_binding_listener
+        self._account_identity_provider = account_identity_provider
         self._lock = Lock()
         self._status = (
             initial_status.model_copy(deep=True)
@@ -532,6 +537,130 @@ class CodexAuthCoordinator:
             )
         return self._finish_account_read(operation, generation, response)
 
+    def save_account_profile(
+        self, store: AccountProfileStore, label: str
+    ) -> dict[str, object]:
+        """Save the verified active HA sign-in while runs are excluded."""
+        with self._lock:
+            self._require_open_locked()
+            self._require_idle_mutation_locked()
+            if self._active_login_id is not None:
+                raise AuthOperationConflictError()
+            self._acquire_runtime_auth_locked()
+            operation = self._begin_operation_locked("profile_save")
+        try:
+            _, response = self._read_account(force_refresh=True)
+            if account_status(response)["state"] != "ok":
+                raise AccountProfileError("Sign in with ChatGPT before saving this account.")
+            self._verify_provider_session()
+            return store.save_current(label, response)
+        finally:
+            with self._lock:
+                if self._operation_matches_locked(operation):
+                    self._operation = None
+                lease = self._take_runtime_auth_lease_locked()
+            if lease is not None:
+                lease.release()
+
+    def switch_account_profile(
+        self, store: AccountProfileStore, profile_id: str
+    ) -> CodexAuthStatusRecord:
+        """Switch credentials under the auth gate, verify, and restore on failure."""
+        with self._lock:
+            self._require_open_locked()
+            self._require_idle_mutation_locked()
+            if self._active_login_id is not None:
+                raise AuthOperationConflictError()
+            was_signed_in = self._status.state == "ok"
+            self._acquire_runtime_auth_locked()
+            operation = self._begin_operation_locked("profile_switch")
+            switching = self._set_status_locked(
+                state="checking",
+                busy=True,
+                auth_required=True,
+                message="Switching ChatGPT account…",
+                **cleared_device_fields(),
+            )
+        self._notify(switching)
+        previous: bytes | None = None
+        installed = False
+        try:
+            target, target_account_id = store.target_credential(profile_id)
+            previous = store.current_credential_optional()
+            if was_signed_in:
+                store.refresh_current_if_saved()
+            store.activate_credential(target)
+            installed = True
+            self._client.restart_for_account_change()
+            generation, response = self._read_account(force_refresh=True)
+            if account_status(response)["state"] != "ok":
+                raise AccountProfileError("The saved account needs a new sign-in.")
+            self._verify_provider_session()
+            _, observed_account_id = store.current_credential()
+            if observed_account_id != target_account_id:
+                raise AccountProfileError("The saved account identity could not be verified.")
+            with self._lock:
+                self._operation_account_update_revision = self._account_update_revision
+            store.commit_active(profile_id)
+            if installed and self._account_owner_secret is not None:
+                self._bind_account_owner(account_unverified_marker(self._account_owner_secret))
+            result = self._finish_account_read(operation, generation, response)
+            # _finish_account_read releases the gate. A concurrent account
+            # notification can make its projection unavailable; do not restore
+            # credentials after releasing exclusive mutation ownership.
+        except Exception as error:
+            if installed:
+                try:
+                    store.restore_credential(previous)
+                    self._client.restart_for_account_change()
+                    generation, response = self._read_account()
+                    with self._lock:
+                        self._operation_account_update_revision = self._account_update_revision
+                    self._finish_account_read(operation, generation, response)
+                except Exception:
+                    self._finish_with_failure(
+                        operation, state="unavailable", message=MESSAGE_UNAVAILABLE
+                    )
+                    raise AccountProfileError(
+                        "The account switch failed and the previous sign-in needs checking."
+                    ) from None
+            else:
+                try:
+                    generation, response = self._read_account()
+                    with self._lock:
+                        self._operation_account_update_revision = self._account_update_revision
+                    self._finish_account_read(operation, generation, response)
+                except Exception:
+                    self._finish_with_failure(
+                        operation, state="unavailable", message=MESSAGE_UNAVAILABLE
+                    )
+            if isinstance(error, AccountProfileError):
+                raise
+            raise AccountProfileError("The account switch could not be completed.") from None
+        if result.state != "ok":
+            raise AccountProfileError(
+                "The selected sign-in needs checking before it can be used."
+            )
+        return result
+
+    def remove_account_profile(self, store: AccountProfileStore, profile_id: str) -> None:
+        with self._lock:
+            self._require_open_locked()
+            self._require_idle_mutation_locked()
+            if self._active_login_id is not None:
+                raise AuthOperationConflictError()
+            self._acquire_runtime_auth_locked()
+            operation = self._begin_operation_locked("profile_remove")
+        try:
+            store.remove_inactive(profile_id)
+        finally:
+            with self._lock:
+                if self._operation_matches_locked(operation):
+                    self._operation = None
+                lease = self._take_runtime_auth_lease_locked()
+            if lease is not None:
+                lease.release()
+
     def close(self) -> None:
         """Stop publishing auth state and best-effort cancel an issued device code."""
 
@@ -732,12 +861,12 @@ class CodexAuthCoordinator:
             response,
         )
 
-    def _read_account(self) -> tuple[int, Any]:
+    def _read_account(self, *, force_refresh: bool = False) -> tuple[int, Any]:
         generation = self._client.generation
         with self._lock:
             # A recovery poll must validate credentials, not accept the cached
             # account that the rejected turn already proved unusable.
-            refresh_token = (
+            refresh_token = force_refresh or (
                 self._status.reauthentication_required
                 and self._active_login_id is not None
             )
@@ -749,6 +878,18 @@ class CodexAuthCoordinator:
         if generation != self._client.generation:
             raise RuntimeError("app-server generation changed during account read")
         return generation, response
+
+    def _verify_provider_session(self) -> None:
+        """Reject a cached account/read identity with unusable provider tokens."""
+        try:
+            self._client.request(
+                "account/rateLimits/read",
+                timeout_seconds=self._account_read_timeout_seconds,
+            )
+        except Exception:
+            raise AccountProfileError(
+                "The ChatGPT sign-in could not be verified. Try signing in again."
+            ) from None
 
     def _finish_account_read(
         self,
@@ -826,7 +967,8 @@ class CodexAuthCoordinator:
                 if message_override is not None:
                     normalized["message"] = message_override
                 if (
-                    operation[1] == "login_complete" and normalized["state"] == "ok"
+                    operation[1] in {"login_complete", "profile_switch"}
+                    and normalized["state"] == "ok"
                 ) or (
                     operation[1] == "logout" and normalized["state"] == "logged_out"
                 ):
@@ -1032,7 +1174,17 @@ class CodexAuthCoordinator:
         if self._account_owner_secret is None or self._account_binding_listener is None:
             return None, True
         if normalized.get("state") == "ok":
-            marker = account_owner_marker(response, self._account_owner_secret)
+            account_id = None
+            if self._account_identity_provider is not None:
+                try:
+                    account_id = self._account_identity_provider()
+                except Exception:
+                    return account_unverified_marker(self._account_owner_secret), False
+                if not account_id:
+                    return account_unverified_marker(self._account_owner_secret), False
+            marker = account_owner_marker(
+                response, self._account_owner_secret, account_id=account_id
+            )
             if marker is not None:
                 return marker, True
             return account_unverified_marker(self._account_owner_secret), False

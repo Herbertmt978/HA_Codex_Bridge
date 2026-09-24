@@ -702,6 +702,26 @@ class CodexAppServerClient:
         stopper.start()
         return True
 
+    def restart_for_account_change(self) -> None:
+        """Replace the process so it loads the newly installed credentials."""
+        generation = self.generation
+        if not self.abort_generation(generation):
+            raise AppServerUnavailableError()
+        deadline = monotonic() + (
+            self.initialize_timeout_seconds
+            + self.shutdown_grace_seconds
+            + self.restart_max_delay_seconds
+            + 2
+        )
+        while monotonic() < deadline:
+            with self._state_lock:
+                if self._generation > generation and self._ready.is_set():
+                    return
+                if self._closed or self._closing.is_set():
+                    raise AppServerUnavailableError()
+            self._ready.wait(timeout=0.05)
+        raise AppServerUnavailableError()
+
     def activate_validated_mcp_config(self) -> None:
         """Restart into the validated MCP configuration after a safe bootstrap.
 

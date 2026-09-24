@@ -36906,7 +36906,7 @@ template.innerHTML = `
       z-index: 16;
       top: calc(100% - 5px);
       right: 10px;
-      width: min(230px, calc(100vw - 24px));
+      width: min(280px, calc(100vw - 24px));
       display: grid;
       gap: 2px;
       padding: 5px;
@@ -36951,6 +36951,62 @@ template.innerHTML = `
       color: var(--muted-color);
       font-size: var(--font-caption-size);
       line-height: 1.35;
+    }
+
+    .account-menu-section {
+      border-top: 1px solid var(--border-color);
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+
+    .account-menu-section[hidden] { display: none; }
+
+    .account-menu-title {
+      display: block;
+      padding: 2px 9px 6px;
+      color: var(--muted-color);
+      font-size: var(--font-caption-size);
+    }
+
+    .account-menu-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .account-menu-row .app-menu-item { flex: 1; min-width: 0; }
+
+    .account-menu-row .app-menu-item span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .account-menu-remove {
+      flex: 0 0 30px;
+      min-height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      cursor: pointer;
+    }
+
+    .account-menu-remove:hover, .account-menu-remove:focus-visible {
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .account-menu-label {
+      width: calc(100% - 18px);
+      margin: 4px 9px;
+      padding: 7px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      font: inherit;
+      font-size: var(--font-caption-size);
     }
 
     #app-menu-toggle {
@@ -39583,12 +39639,20 @@ template.innerHTML = `
           </div>
         </div>
         <button class="icon-button" type="button" data-action="toggle-app-menu" id="app-menu-toggle" aria-label="Panel options" aria-controls="app-menu" aria-expanded="false"></button>
-        <div class="app-menu" id="app-menu" hidden>
+      <div class="app-menu" id="app-menu" hidden>
           <button class="app-menu-item" type="button" data-action="toggle-focus" id="focus-mode-button" aria-pressed="false">
             <span>Focus mode</span>
             <span class="menu-shortcut">Fullscreen</span>
           </button>
           <div class="app-menu-feedback" id="focus-mode-feedback" role="status" aria-live="polite"></div>
+          <div class="account-menu-section" id="account-menu-section" hidden>
+            <span class="account-menu-title">ChatGPT accounts</span>
+            <div id="account-menu-list"></div>
+            <input class="account-menu-label" id="account-profile-label" type="text" maxlength="60" autocomplete="off" aria-label="Name for current account" placeholder="Name current account" />
+            <button class="app-menu-item" type="button" data-action="save-account-profile" id="save-account-profile">Save current account</button>
+            <button class="app-menu-item" type="button" data-action="add-account-profile" id="add-account-profile">Add another account</button>
+            <div class="app-menu-feedback" id="account-menu-feedback" role="status" aria-live="polite"></div>
+          </div>
         </div>
       </div>
       <div class="rail-actions">
@@ -39988,6 +40052,12 @@ var CodexBridgePanel = class extends HTMLElement {
     this._runActivityDetailsOpen = false;
     this._activeDestination = "chats";
     this._appMenuOpen = false;
+    this._accountProfiles = [];
+    this._accountProfilesLoaded = false;
+    this._accountProfilePending = false;
+    this._accountProfileFeedback = "";
+    this._accountMenuRenderKey = "";
+    this._pendingAccountRemovalId = null;
     this._addMenuOpen = false;
     this._focusMode = false;
     this._focusInvoker = null;
@@ -40394,8 +40464,21 @@ var CodexBridgePanel = class extends HTMLElement {
         this._appMenuOpen = !this._appMenuOpen;
         this._renderAppMenu();
         if (this._appMenuOpen) {
+          if (this._config?.capabilities?.includes("account_profiles_v1")) void this._loadAccountProfiles();
           queueMicrotask(() => this.shadowRoot.getElementById("focus-mode-button")?.focus());
         }
+        break;
+      case "save-account-profile":
+        void this._saveAccountProfile();
+        break;
+      case "switch-account-profile":
+        void this._switchAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "remove-account-profile":
+        void this._removeAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "add-account-profile":
+        this._prepareAnotherAccount();
         break;
       case "toggle-focus":
         this._toggleFocusMode(actionTarget);
@@ -41034,6 +41117,152 @@ var CodexBridgePanel = class extends HTMLElement {
     focusButton.firstElementChild.textContent = focusLabel;
     focusButton.lastElementChild.textContent = this._focusMode ? "Esc to exit" : "Fullscreen";
     feedback.textContent = this._focusFeedback;
+    const accounts = this.shadowRoot.getElementById("account-menu-section");
+    const list = this.shadowRoot.getElementById("account-menu-list");
+    const save = this.shadowRoot.getElementById("save-account-profile");
+    const add = this.shadowRoot.getElementById("add-account-profile");
+    const accountFeedback = this.shadowRoot.getElementById("account-menu-feedback");
+    const supported = this._config?.capabilities?.includes("account_profiles_v1") === true;
+    accounts.hidden = !supported;
+    if (!supported) return;
+    const signedIn = this._authViewModel().signedIn;
+    save.disabled = this._accountProfilePending || !signedIn;
+    add.disabled = this._accountProfilePending || signedIn && !this._accountProfiles.some((item) => item.active);
+    accountFeedback.textContent = this._accountProfileFeedback || (this._accountProfilePending ? "Updating accounts…" : "");
+    const key = JSON.stringify([this._accountProfiles, this._accountProfilesLoaded, this._accountProfilePending, this._pendingAccountRemovalId]);
+    if (key === this._accountMenuRenderKey) return;
+    this._accountMenuRenderKey = key;
+    const rows = [];
+    if (!this._accountProfilesLoaded) {
+      rows.push(this._textElement("div", "app-menu-feedback", "Loading accounts…"));
+    } else if (!this._accountProfiles.length) {
+      rows.push(this._textElement("div", "app-menu-feedback", "No saved accounts yet"));
+    }
+    for (const profile of this._accountProfiles) {
+      const row = document.createElement("div");
+      row.className = "account-menu-row";
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "app-menu-item";
+      select.dataset.action = "switch-account-profile";
+      select.dataset.profileId = profile.id;
+      select.disabled = this._accountProfilePending || profile.active;
+      const name = document.createElement("span");
+      name.textContent = profile.label;
+      const state = document.createElement("span");
+      state.className = "menu-shortcut";
+      state.textContent = profile.active ? "Current" : "Switch";
+      select.append(name, state);
+      row.append(select);
+      if (!profile.active) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "account-menu-remove";
+        remove.dataset.action = "remove-account-profile";
+        remove.dataset.profileId = profile.id;
+        remove.disabled = this._accountProfilePending;
+        remove.textContent = this._pendingAccountRemovalId === profile.id ? "✓" : "×";
+        remove.setAttribute("aria-label", this._pendingAccountRemovalId === profile.id ? `Confirm removal of ${profile.label}` : `Remove ${profile.label}`);
+        row.append(remove);
+      }
+      rows.push(row);
+    }
+    list.replaceChildren(...rows);
+  }
+  async _loadAccountProfiles() {
+    if (!this._config?.capabilities?.includes("account_profiles_v1")) return;
+    try {
+      const profiles = await this._callWS("list_account_profiles");
+      this._accountProfiles = Array.isArray(profiles) ? profiles : [];
+      this._accountProfilesLoaded = true;
+      this._accountProfileFeedback = "";
+    } catch {
+      this._accountProfileFeedback = "Saved accounts could not be loaded.";
+    }
+    this._renderAppMenu();
+  }
+  async _saveAccountProfile() {
+    if (this._accountProfilePending || !this._authViewModel().signedIn) return;
+    const input2 = this.shadowRoot.getElementById("account-profile-label");
+    const label = input2.value.trim();
+    if (!label || label.length > 60) {
+      this._accountProfileFeedback = "Enter a name of up to 60 characters.";
+      this._renderAppMenu();
+      input2.focus();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("save_account_profile", { label });
+      input2.value = "";
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Account saved on Home Assistant.";
+    } catch {
+      this._accountProfileFeedback = "The account could not be saved. Check sign-in and try again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  async _switchAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    this._accountProfilePending = true;
+    this._accountProfileFeedback = "Verifying saved account…";
+    this._renderAppMenu();
+    try {
+      const auth = await this._callWS("switch_account_profile", { profile_id: profileId });
+      this._applyAuthStatus(auth);
+      await this._loadStatus();
+      await this._loadAccountProfiles();
+      if (auth?.state !== "ok") throw new Error("account verification unavailable");
+      this._closeAppMenu();
+      this._clearError();
+      this._render();
+    } catch {
+      this._accountProfileFeedback = "The switch was not verified. Check the current sign-in before trying again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  async _removeAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    if (this._pendingAccountRemovalId !== profileId) {
+      this._pendingAccountRemovalId = profileId;
+      this._accountProfileFeedback = "Select the tick to remove this saved sign-in.";
+      this._renderAppMenu();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("remove_account_profile", { profile_id: profileId });
+      this._pendingAccountRemovalId = null;
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Saved sign-in removed.";
+    } catch {
+      this._accountProfileFeedback = "The saved sign-in could not be removed.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  _prepareAnotherAccount() {
+    if (this._accountProfilePending) return;
+    if (this._authViewModel().signedIn && !this._accountProfiles.some((item) => item.active)) {
+      this._accountProfileFeedback = "Save the current account before adding another.";
+      this._renderAppMenu();
+      return;
+    }
+    this._closeAppMenu();
+    this._showSideTab("system");
+    if (this._authViewModel().signedIn) {
+      this._confirmSignOut = true;
+      this._renderAuthSurface();
+    } else {
+      void this._startAuthLogin();
+    }
   }
   _closeAppMenu({ restoreFocus = false } = {}) {
     if (!this._appMenuOpen) return;
