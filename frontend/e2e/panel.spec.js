@@ -236,6 +236,57 @@ for (const width of [390, 1280]) {
   });
 }
 
+for (const viewport of [{ width: 390, height: 600 }, { width: 1280, height: 844 }]) {
+  test(`five saved accounts fit the account menu at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    if (viewport.width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: ["account_profiles_v1"] };
+      element._status = {
+        ...element._status,
+        auth: { state: "ok", auth_required: false, auth_mode: "chatgpt", plan_type: "pro" },
+        account: { available: true, auth_mode: "chatgpt", plan_type: "pro" },
+      };
+      element._accountProfileDetails = new Map(Array.from({ length: 5 }, (_, index) => [
+        String(index + 1).repeat(32), {
+          status: index === 4 ? "stale" : "available", plan: "pro",
+          windows: [{ name: "5 hours", remaining_percent: 62 }, { name: "Weekly", remaining_percent: 18 }],
+          available_resets: 1, next_reset_expiry: 1_800_000_000, expiry_complete: true,
+          updated_at: "2026-09-24T18:00:00Z",
+        },
+      ]));
+      element._callWS = async (method) => method === "list_account_profiles"
+        ? Array.from({ length: 5 }, (_, index) => ({
+          id: String(index + 1).repeat(32), label: `Account ${index + 1}`, plan: "pro", active: index === 0,
+        }))
+        : {};
+    });
+    await panel.locator("#app-menu-toggle").click();
+    const menu = panel.locator("#app-menu");
+    const list = menu.locator("#account-menu-list");
+    const rows = list.locator(".account-menu-row");
+    await expect(rows).toHaveCount(5);
+    await expect(rows.last()).toContainText("figures may have changed");
+    const menuBounds = await menu.boundingBox();
+    expect(menuBounds.x).toBeGreaterThanOrEqual(0);
+    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(viewport.height);
+    if (viewport.width === 1280) {
+      expect(menuBounds.width).toBeGreaterThanOrEqual(700);
+      expect((await rows.first().boundingBox()).height).toBeLessThan(130);
+    }
+    await expect(menu.getByRole("button", { name: "Add another account" })).toBeInViewport();
+    await rows.last().scrollIntoViewIfNeeded();
+    await expect(rows.last()).toBeInViewport();
+    await expect(menu.getByRole("button", { name: "Save current account" })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath(`five-account-menu-${viewport.width}.png`), animations: "disabled" });
+  });
+}
+
 for (const width of [390, 1280]) {
   test(`guided HA-MCP and custom connections remain accessible at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });

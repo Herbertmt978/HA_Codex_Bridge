@@ -53,6 +53,7 @@ class RuntimeGateSnapshot:
     active_turns: int
     queued_prompts: int
     auth_mutation_active: bool
+    auth_mutation_revision: int
     config_mutation_active: bool
     closed: bool
 
@@ -122,6 +123,7 @@ class RuntimeGate:
         self._prompt_leases: dict[str, RuntimeLease] = {}
         self._queue: deque[RuntimeLease] = deque()
         self._auth_lease: RuntimeLease | None = None
+        self._auth_mutation_revision = 0
         self._config_lease: RuntimeLease | None = None
         self._closed = False
 
@@ -166,6 +168,7 @@ class RuntimeGate:
                 raise RuntimeMutationConflictError()
             lease = RuntimeLease(self, kind="auth", state="active")
             self._auth_lease = lease
+            self._auth_mutation_revision += 1
             return lease
 
     def acquire_config_mutation(self) -> RuntimeLease:
@@ -191,6 +194,7 @@ class RuntimeGate:
                 active_turns=self._active_prompts,
                 queued_prompts=len(self._queue),
                 auth_mutation_active=self._auth_lease is not None,
+                auth_mutation_revision=self._auth_mutation_revision,
                 config_mutation_active=self._config_lease is not None,
                 closed=self._closed,
             )

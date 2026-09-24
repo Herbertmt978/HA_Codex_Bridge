@@ -7,8 +7,9 @@ All notable App changes are recorded here.
 - Adds private ChatGPT account profiles in the Home Assistant App. Switching
   checks the selected identity, rolls back a failed switch and restarts only
   the App-managed Codex process; desktop sign-ins remain separate.
-- Shows each saved account's plan, available usage, reset times and credits
-  when the provider reports them.
+- Shows each saved account's plan, usage and reset details in a compact menu
+  that accommodates five or more profiles. The App refreshes inactive accounts
+  in the background and labels last-verified figures when a refresh fails.
 - Restores sent chat messages and presents generated files as downloadable
   cards with recognisable, original file-type icons. Authenticated, bounded
   text previews cover DOCX, XLSX and PPTX alongside existing previews.

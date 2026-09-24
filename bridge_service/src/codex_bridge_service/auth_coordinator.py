@@ -586,6 +586,12 @@ class CodexAuthCoordinator:
                 **cleared_device_fields(),
             )
         self._notify(switching)
+        with store.credential_operation():
+            return self._switch_account_profile_under_lock(store, profile_id, was_signed_in, operation)
+
+    def _switch_account_profile_under_lock(
+        self, store: AccountProfileStore, profile_id: str, was_signed_in: bool, operation: tuple[int, str]
+    ) -> CodexAuthStatusRecord:
         previous: bytes | None = None
         installed = False
         try:

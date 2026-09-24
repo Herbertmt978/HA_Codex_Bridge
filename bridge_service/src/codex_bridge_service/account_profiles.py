@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+from contextlib import contextmanager
 import json
 import os
 import re
 import stat
 from pathlib import Path
 from threading import RLock
+from typing import Iterator
 from uuid import uuid4
 
 from .account import normalize_chatgpt_plan_type
@@ -17,6 +19,7 @@ from .workspace import WorkspaceBoundary, WorkspaceNotFoundError
 
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
 _MAX_REGISTRY_BYTES = 64 * 1024
+_MAX_USAGE_SNAPSHOT_BYTES = 4096
 _MAX_PROFILES = 16
 _PROFILE_ID = re.compile(r"[a-f0-9]{32}\Z")
 _ACCOUNT_CLAIM = "https://api.openai.com/auth"
@@ -91,6 +94,15 @@ class AccountProfileStore:
             self.close()
             raise AccountProfileError("Saved account storage is not private.")
         self._lock = RLock()
+        # A provider refresh of a saved sign-in must finish before that same
+        # credential can be installed as the managed App's active sign-in.
+        self._credential_operation_lock = RLock()
+
+    @contextmanager
+    def credential_operation(self) -> Iterator[None]:
+        """Serialize saved-token refresh with activation and rollback."""
+        with self._credential_operation_lock:
+            yield
 
     def close(self) -> None:
         self._profiles.close()
@@ -267,6 +279,26 @@ class AccountProfileStore:
                 self._profiles.atomic_write_bytes(f"{profile_id}/auth.json", refreshed)
             return True
 
+    def read_usage_snapshot(self, profile_id: str) -> bytes | None:
+        """Read private, non-credential usage cached for this saved identity."""
+        with self._lock:
+            self.target_credential(profile_id)
+            try:
+                return self._read_bounded(
+                    self._profiles, f"{profile_id}/usage.json", _MAX_USAGE_SNAPSHOT_BYTES
+                )
+            except WorkspaceNotFoundError:
+                return None
+
+    def write_usage_snapshot(self, profile_id: str, account_id: str, raw: bytes) -> None:
+        if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_USAGE_SNAPSHOT_BYTES:
+            raise AccountProfileError("The saved account usage is invalid.")
+        with self._lock:
+            _, current_account_id = self.target_credential(profile_id)
+            if current_account_id != account_id:
+                raise AccountProfileError("The saved account identity has changed.")
+            self._profiles.atomic_write_bytes(f"{profile_id}/usage.json", raw)
+
     def activate_credential(self, raw: bytes) -> None:
         if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_CREDENTIAL_BYTES:
             raise AccountProfileError("The saved account file is invalid.")
@@ -316,6 +348,10 @@ class AccountProfileStore:
                 raise AccountProfileError("The saved account was not found.")
             if any(item["id"] == profile_id and item["active"] for item in self.list_profiles()):
                 raise AccountProfileError("Switch away from this account before removing it.")
+            try:
+                self._profiles.unlink_regular_file(f"{profile_id}/usage.json")
+            except WorkspaceNotFoundError:
+                pass
             self._profiles.unlink_regular_file(f"{profile_id}/auth.json")
             self._profiles.remove_empty_directory(profile_id)
             registry["profiles"].remove(profile)

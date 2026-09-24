@@ -7,6 +7,7 @@ import json
 import os
 import stat
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 from fastapi import FastAPI
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from codex_bridge_service.account import account_owner_marker
 from codex_bridge_service.account_profiles import AccountProfileError, AccountProfileStore
+from codex_bridge_service.account_profile_details import AccountProfileDetailsProbe
 from codex_bridge_service.auth_coordinator import (
     AuthOperationConflictError,
     CodexAuthCoordinator,
@@ -78,6 +80,75 @@ class _AccountClient:
             self.fail_next_restart = False
             raise RuntimeError("app-server restart failed")
         self.generation += 1
+
+
+def test_background_token_refresh_finishes_before_switch_installs_credential(tmp_path: Path) -> None:
+    store = AccountProfileStore(tmp_path / "profiles", tmp_path / "codex-home")
+    store.activate_credential(_credential("saved-account"))
+    saved = store.save_current("Saved", {"account": {"type": "chatgpt", "planType": "pro"}})
+    store.activate_credential(_credential("active-account"))
+    store.save_current("Active", {"account": {"type": "chatgpt", "planType": "pro"}})
+    gate = RuntimeGate(limits=ResourceLimits())
+    coordinator = CodexAuthCoordinator(_AccountClient(store), runtime_gate=gate)
+    entered = Event()
+    release = Event()
+    switched = Event()
+    outcomes: list[object] = []
+
+    class RefreshingClient:
+        def __init__(self, *, codex_home: Path, **_options) -> None:
+            self.home = codex_home
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def request(self, method, params=None, *, timeout_seconds=None):
+            if method == "account/read":
+                (self.home / "auth.json").write_bytes(json.dumps({
+                    "auth_mode": "chatgpt", "tokens": {
+                        "account_id": "saved-account", "marker": "refreshed",
+                    },
+                }).encode())
+                entered.set()
+                assert release.wait(3)
+                return {"account": {"type": "chatgpt", "planType": "pro"}}
+            return {"accountId": "saved-account", "rateLimits": {"planType": "pro"}}
+
+    probe = AccountProfileDetailsProbe(
+        store, codex_command="codex", active_limits=lambda: None,
+        client_factory=lambda **options: RefreshingClient(**options),
+    )
+    def switch() -> None:
+        try:
+            outcomes.append(coordinator.switch_account_profile(store, saved["id"]))
+        except Exception as error:
+            outcomes.append(error)
+        finally:
+            switched.set()
+
+    try:
+        assert coordinator.start().state == "ok"
+        refresh_thread = Thread(target=lambda: probe.read(saved["id"]))
+        refresh_thread.start()
+        assert entered.wait(3)
+        switch_thread = Thread(target=switch)
+        switch_thread.start()
+        assert not switched.wait(0.1)
+        assert store.current_credential()[1] == "active-account"
+        release.set()
+        refresh_thread.join(timeout=3)
+        switch_thread.join(timeout=3)
+        assert not refresh_thread.is_alive() and not switch_thread.is_alive()
+        assert len(outcomes) == 1 and getattr(outcomes[0], "state", None) == "ok"
+        assert json.loads(store.current_credential()[0])["tokens"]["marker"] == "refreshed"
+    finally:
+        release.set()
+        coordinator.close()
+        gate.close()
+        store.close()
 
 
 def test_same_email_profiles_switch_verify_and_restore_failed_target(tmp_path: Path) -> None:

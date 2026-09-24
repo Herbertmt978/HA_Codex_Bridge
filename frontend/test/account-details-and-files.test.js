@@ -38,6 +38,17 @@ describe("account details and file messages", () => {
     element._accountProfileDetails.set(id, { status: "available", windows: [{ name: "Weekly", remaining_percent: 73 }] });
     element._renderAppMenu();
     expect(element.shadowRoot.querySelector(".account-menu-row").textContent).toContain("5-hour usageOff");
+    element._accountProfileDetails.set(id, {
+      status: "stale", updated_at: "2026-09-24T18:00:00Z",
+      windows: [{ name: "Weekly", remaining_percent: 73 }],
+      available_resets: 1, next_reset_expiry: 2_000_150_000,
+    });
+    element._renderAppMenu();
+    expect(element.shadowRoot.querySelector(".account-menu-row").textContent).toContain("73% remaining");
+    expect(element.shadowRoot.querySelector(".account-menu-row").textContent).toContain("figures may have changed");
+    element._accountProfileDetails.set(id, { ...element._accountProfileDetails.get(id), reauthentication_required: true });
+    element._renderAppMenu();
+    expect(element.shadowRoot.querySelector(".account-menu-row").textContent).toContain("Sign in again to refresh this account");
   });
 
   it("loads every page of a long chat so the latest user prompt is visible", async () => {

@@ -17,11 +17,14 @@ from fastapi.testclient import TestClient
 
 import codex_bridge_service.account as account_module
 import codex_bridge_service.limits as limits_module
+from codex_bridge_service.app import _stable_active_profile_limits
 from codex_bridge_service.codex_app_server_contract import (
     AppServerProtocolValidator,
     load_bundled_protocol_contract,
 )
 from codex_bridge_service.models import CodexAccountRecord, LimitsStatusRecord
+from codex_bridge_service.resource_limits import ResourceLimits
+from codex_bridge_service.runtime_gate import RuntimeGate
 from codex_bridge_service.api_contract import API_CURRENT
 from codex_bridge_service.routes.status import router as status_router
 
@@ -121,6 +124,71 @@ def test_limits_probe_projects_reset_credit_expiries_without_private_fields() ->
         "credits": [{"id": "credit-one", "title": "Weekly reset", "expires_at": 1_800_000_000}],
     }
     assert "private detail" not in status.model_dump_json()
+
+
+def test_limits_probe_never_reuses_previous_account_after_generation_change() -> None:
+    class GenerationClient(RecordingAppServerClient):
+        generation = 1
+
+    client = GenerationClient(_rate_limits(primary={"usedPercent": 25}), RuntimeError("offline"))
+    probe = _limits_probe(client, min_fetch_interval_seconds=45)
+    assert probe.probe().primary.remaining_percent == 75
+    client.generation = 2
+    assert probe.probe() is None
+
+
+def test_limits_probe_discards_same_generation_cache_after_login_change() -> None:
+    class SameGenerationClient(RecordingAppServerClient):
+        generation = 1
+
+    gate = RuntimeGate(limits=ResourceLimits())
+    client = SameGenerationClient(
+        _rate_limits(primary={"usedPercent": 25}),
+        _rate_limits(primary={"usedPercent": 80}),
+    )
+    probe = limits_module.AppServerLimitsProbe(
+        client, min_fetch_interval_seconds=45, auth_state_provider=gate.snapshot,
+    )
+    try:
+        assert probe.probe().primary.remaining_percent == 75
+        lease = gate.acquire_auth_mutation()
+        try:
+            assert probe.probe() is None
+        finally:
+            lease.release()
+        assert client.generation == 1
+        assert probe.probe().primary.remaining_percent == 20
+        assert len(client.calls) == 2
+    finally:
+        gate.close()
+
+
+def test_active_profile_rejects_usage_during_switch_or_generation_change() -> None:
+    gate = RuntimeGate(limits=ResourceLimits())
+    server = SimpleNamespace(generation=1)
+    status = LimitsStatusRecord(available=True)
+
+    class Probe:
+        def probe(self):
+            server.generation += 1
+            return status
+
+    lease = gate.acquire_auth_mutation()
+    try:
+        assert _stable_active_profile_limits(gate, server, Probe()) is None
+    finally:
+        lease.release()
+    assert _stable_active_profile_limits(gate, server, Probe()) is None
+    assert server.generation == 2
+    class MutationProbe:
+        def probe(self):
+            mutation = gate.acquire_auth_mutation()
+            mutation.release()
+            return status
+
+    assert _stable_active_profile_limits(gate, server, MutationProbe()) is None
+    assert _stable_active_profile_limits(gate, server, SimpleNamespace(probe=lambda: status)) is status
+    gate.close()
 
 
 def test_limits_probe_caps_available_credits_after_filtering_other_statuses() -> None:

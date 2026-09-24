@@ -38,7 +38,7 @@ from .mcp_manager import McpManager, McpManagerError
 from .mcp_local_policy import LocalMcpError
 from .mcp_relay import McpRelay
 from .mcp_http import McpHttpBoundary
-from .models import CodexAuthStatusRecord, RunMode, RuntimeProfile
+from .models import CodexAuthStatusRecord, LimitsStatusRecord, RunMode, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
     ResourceLimitError,
@@ -94,6 +94,28 @@ class _AuthCoordinatorLifecycle(Protocol):
 
 _AUTH_STATE_FILENAME = "auth-state.json"
 _OUTBOX_MARKER_FIELD = "_bridge_operation"
+
+
+def _stable_active_profile_limits(
+    gate: RuntimeGate | None,
+    app_server: _AppServerLifecycle | None,
+    probe: AppServerLimitsProbe | None,
+) -> LimitsStatusRecord | None:
+    """Never attach a previous App-server generation's usage to a new sign-in."""
+    if gate is None or app_server is None or probe is None:
+        return None
+    before_generation = getattr(app_server, "generation", None)
+    before = gate.snapshot()
+    if type(before_generation) is not int or before.closed or before.auth_mutation_active:
+        return None
+    limits = probe.probe()
+    after = gate.snapshot()
+    after_generation = getattr(app_server, "generation", None)
+    if after.closed or after.auth_mutation_active or after_generation != before_generation:
+        return None
+    if after.auth_mutation_revision != before.auth_mutation_revision:
+        return None
+    return limits
 
 
 def _browser_broker_ready(broker: BrowserBroker | None) -> bool:
@@ -285,8 +307,16 @@ def create_app(
             # application becomes request-ready.
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
+            account_details = getattr(_app.state, "account_profile_details", None)
+            if account_details is not None:
+                account_details.start_polling()
             yield
         finally:
+            account_details = getattr(_app.state, "account_profile_details", None)
+            account_poll_stopped = (
+                await asyncio.to_thread(account_details.stop_polling)
+                if account_details is not None else True
+            )
             if resolved_terminal is not None:
                 await asyncio.to_thread(resolved_terminal.close)
             try:
@@ -306,7 +336,10 @@ def create_app(
                             try:
                                 await asyncio.to_thread(resolved_app_server.close)
                             finally:
-                                if resolved_account_profile_store is not None:
+                                # A timed-out daemon probe may still be finishing its
+                                # private read. Let process exit reclaim the store
+                                # instead of closing its descriptors underneath it.
+                                if resolved_account_profile_store is not None and account_poll_stopped:
                                     await asyncio.to_thread(resolved_account_profile_store.close)
             finally:
                 try:
@@ -457,7 +490,10 @@ def create_app(
         return catalog.default_model, catalog.default_thinking_level, catalog.stale
 
     resolved_limits_probe = (
-        AppServerLimitsProbe(cast(Any, resolved_app_server))
+        AppServerLimitsProbe(
+            cast(Any, resolved_app_server),
+            auth_state_provider=resolved_runtime_gate.snapshot if resolved_runtime_gate else None,
+        )
         if resolved_app_server is not None
         else limits_probe
     )
@@ -677,7 +713,11 @@ def create_app(
         AccountProfileDetailsProbe(
             resolved_account_profile_store,
             codex_command=codex_command,
-            active_limits=lambda: storage.get_limits_status(refresh=True),
+            # The durable global status file can still describe the account
+            # used before a switch. The generation-scoped native probe cannot.
+            active_limits=lambda: _stable_active_profile_limits(
+                resolved_runtime_gate, resolved_app_server, resolved_limits_probe,
+            ),
         )
         if resolved_account_profile_store is not None else None
     )

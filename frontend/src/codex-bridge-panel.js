@@ -2707,10 +2707,11 @@ template.innerHTML = `
       z-index: 16;
       top: calc(100% - 5px);
       left: 10px;
-      width: min(420px, calc(100vw - 44px));
-      max-height: min(680px, calc(100dvh - 96px));
-      overflow: auto;
-      display: grid;
+      width: min(760px, calc(100vw - 20px));
+      max-height: calc(100dvh - 86px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       gap: 2px;
       padding: 5px;
       border: 1px solid var(--border-color);
@@ -2756,7 +2757,12 @@ template.innerHTML = `
       line-height: 1.35;
     }
 
+    .app-menu-feedback:empty { display: none; }
+
     .account-menu-section {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
       border-top: 1px solid var(--border-color);
       margin-top: 4px;
       padding-top: 8px;
@@ -2766,18 +2772,21 @@ template.innerHTML = `
 
     .account-menu-title {
       display: block;
-      padding: 8px 9px 10px;
+      padding: 6px 9px 8px;
       color: var(--text-color);
       font-size: 15px;
       font-weight: 600;
     }
 
+    #account-menu-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
     .account-menu-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      margin: 4px 5px 10px;
-      padding: 12px;
+      grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr) auto;
+      align-items: start;
+      gap: 6px 10px;
+      margin: 3px 5px 7px;
+      padding: 10px 12px;
       border: 1px solid var(--border-color);
       border-radius: 12px;
       background: var(--surface-bg);
@@ -2796,7 +2805,7 @@ template.innerHTML = `
 
     .account-menu-plan { display: block; margin-top: 2px; color: var(--muted-color); font-size: var(--font-caption-size); }
 
-    .account-menu-actions { display: flex; align-items: start; gap: 4px; }
+    .account-menu-actions { grid-column: 3; grid-row: 1; display: flex; align-items: start; gap: 4px; }
 
     .account-menu-select { padding: 5px 8px; min-height: 30px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
 
@@ -2804,7 +2813,7 @@ template.innerHTML = `
 
     .account-menu-select:disabled { cursor: default; border-color: transparent; background: transparent; color: var(--muted-color); }
 
-    .account-menu-metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px; }
+    .account-menu-metrics { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px 10px; border-left: 1px solid var(--border-color); padding-left: 12px; }
 
     .account-menu-metric { min-width: 0; }
 
@@ -2836,8 +2845,9 @@ template.innerHTML = `
     }
 
     .account-menu-label {
-      width: calc(100% - 18px);
-      margin: 4px 9px;
+      min-width: 0;
+      width: 100%;
+      margin: 0;
       padding: 7px 8px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -2845,6 +2855,18 @@ template.innerHTML = `
       color: var(--text-color);
       font: inherit;
       font-size: var(--font-caption-size);
+    }
+
+    .account-menu-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 6px 5px 3px; border-top: 1px solid var(--border-color); }
+    .account-menu-footer .app-menu-item { white-space: nowrap; padding-inline: 10px; }
+
+    @media (max-width: 620px) {
+      .account-menu-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .account-menu-actions { grid-column: 2; }
+      .account-menu-metrics { grid-column: 1 / -1; grid-row: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; border-top: 1px solid var(--border-color); padding: 8px 0 0; }
+      .account-menu-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .account-menu-label { grid-column: 1 / -1; }
+      .account-menu-footer .app-menu-item { white-space: normal; }
     }
 
     #app-menu-toggle {
@@ -5513,9 +5535,11 @@ template.innerHTML = `
           <div class="account-menu-section" id="account-menu-section" hidden>
             <span class="account-menu-title">ChatGPT accounts</span>
             <div id="account-menu-list"></div>
-            <input class="account-menu-label" id="account-profile-label" type="text" maxlength="60" autocomplete="off" aria-label="Name for current account" placeholder="Name current account" />
-            <button class="app-menu-item" type="button" data-action="save-account-profile" id="save-account-profile">Save current account</button>
-            <button class="app-menu-item" type="button" data-action="add-account-profile" id="add-account-profile">Add another account</button>
+            <div class="account-menu-footer">
+              <input class="account-menu-label" id="account-profile-label" type="text" maxlength="60" autocomplete="off" aria-label="Name for current account" placeholder="Name current account" />
+              <button class="app-menu-item" type="button" data-action="save-account-profile" id="save-account-profile">Save current account</button>
+              <button class="app-menu-item" type="button" data-action="add-account-profile" id="add-account-profile">Add another account</button>
+            </div>
             <div class="app-menu-feedback" id="account-menu-feedback" role="status" aria-live="polite"></div>
           </div>
         </div>
@@ -7174,13 +7198,15 @@ class CodexBridgePanel extends HTMLElement {
       );
       metrics.append(metric);
     }
-    const note = details?.status === "reauthentication_required"
+    const note = details?.status === "stale" && details?.updated_at
+      ? `Last checked ${new Date(details.updated_at).toLocaleString()}. ${details?.reauthentication_required ? "Sign in again to refresh this account." : "Refresh unavailable; figures may have changed."}`
+      : details?.status === "reauthentication_required"
       ? "This account needs a fresh sign-in before its usage can be read."
       : details?.status === "unavailable" ? "Usage is unavailable for this saved sign-in. Sign in again if it does not recover."
         : details?.status === "loading" ? "Checking this account…"
           : details?.updated_at ? `Updated ${new Date(details.updated_at).toLocaleString()}`
             : "Usage has not been checked yet.";
-    metrics.append(this._textElement("span", "account-menu-note", note));
+    metrics.append(this._textElement("span", `account-menu-note${details?.status === "stale" ? " stale" : ""}`, note));
     return metrics;
   }
 
