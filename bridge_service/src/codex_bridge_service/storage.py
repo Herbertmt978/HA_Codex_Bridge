@@ -236,6 +236,10 @@ class ThreadNotFoundError(FileNotFoundError):
     pass
 
 
+class TaskActionConflictError(ValueError):
+    pass
+
+
 class ProjectNotFoundError(FileNotFoundError):
     pass
 
@@ -1803,6 +1807,89 @@ class BridgeStorage:
                 direct_defaults_provisional=direct_defaults_provisional,
             )
 
+    def create_task_thread(
+        self,
+        *,
+        action_id: str,
+        fingerprint: str,
+        title: str,
+        project_id: str,
+        mode: RunMode,
+        model_override: str | None = None,
+        thinking_override: str | None = None,
+    ) -> ThreadViewRecord:
+        """Create a project chat once, even across a task-action retry or restart."""
+
+        if re.fullmatch(r"[a-f0-9]{32}", action_id) is None or _SHA256_PATTERN.fullmatch(fingerprint) is None:
+            raise ValueError("task action identity is invalid")
+        thread_id = f"thr_task_{action_id}"
+        workspace_id = f"ws_{action_id[:12]}"
+        with self._project_mutation_lock, self._thread_mutation_lock:
+            project = self.load_project(project_id)
+            if project.archived_at is not None:
+                raise ProjectMutationError("task project is archived")
+            if self._thread_path(thread_id).exists():
+                existing = self.load_thread(thread_id)
+                if existing.task_action_fingerprint != fingerprint:
+                    raise TaskActionConflictError("task action changed during retry")
+                if existing.archived_at is not None:
+                    raise ProjectMutationError("task chat is archived")
+                return self._resolve_thread(existing)
+            # Workspace IDs are shorter than task IDs for the existing portable
+            # workspace contract. Never let a rare prefix collision share files.
+            for path in self.threads_dir.glob("*.json"):
+                existing = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                if existing.workspace_id == workspace_id:
+                    raise TaskActionConflictError("task workspace identity is already in use")
+            return self._create_thread_locked(
+                title=title,
+                project_id=project_id,
+                mode=mode,
+                model_override=model_override,
+                thinking_override=thinking_override,
+                thread_id_override=thread_id,
+                workspace_id_override=workspace_id,
+                task_action_fingerprint=fingerprint,
+            )
+
+    @contextmanager
+    def prepare_task_thread(
+        self,
+        *,
+        action_id: str,
+        fingerprint: str,
+        title: str,
+        project_id: str,
+        mode: RunMode,
+        model_override: str | None = None,
+        thinking_override: str | None = None,
+    ) -> Iterator[ThreadViewRecord]:
+        """Keep the project reserved until the new task has been submitted."""
+
+        with self._automation_target_lock, self._project_mutation_lock:
+            project = self.load_project(project_id)
+            if project.archived_at is not None:
+                raise ProjectMutationError("task project is archived")
+            self._reserve_automation_target_locked(project_id, None)
+            try:
+                thread = self.create_task_thread(
+                    action_id=action_id,
+                    fingerprint=fingerprint,
+                    title=title,
+                    project_id=project_id,
+                    mode=mode,
+                    model_override=model_override,
+                    thinking_override=thinking_override,
+                )
+            except BaseException:
+                self._release_automation_target_locked(project_id, None)
+                raise
+        try:
+            yield thread
+        finally:
+            with self._automation_target_lock:
+                self._release_automation_target_locked(project_id, None)
+
     def _create_thread_locked(
         self,
         *,
@@ -1815,6 +1902,9 @@ class BridgeStorage:
         direct_default_model: str | None = None,
         direct_default_thinking_level: str | None = None,
         direct_defaults_provisional: bool | None = None,
+        thread_id_override: str | None = None,
+        workspace_id_override: str | None = None,
+        task_action_fingerprint: str | None = None,
     ) -> ThreadViewRecord:
         if not title.strip():
             raise ValueError("title must not be blank")
@@ -1833,7 +1923,7 @@ class BridgeStorage:
                 model_override = project.default_model
             if thinking_override is None:
                 thinking_override = project.default_thinking_level
-        workspace_id = f"ws_{uuid4().hex[:12]}"
+        workspace_id = workspace_id_override or f"ws_{uuid4().hex[:12]}"
         if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
             boundary = self._home_assistant_boundary()
             workspace_path: Path | str
@@ -1854,7 +1944,7 @@ class BridgeStorage:
         now = self._now()
 
         record = ThreadRecord(
-            thread_id=f"thr_{uuid4().hex[:12]}",
+            thread_id=thread_id_override or f"thr_{uuid4().hex[:12]}",
             project_id=project.project_id,
             title=title.strip(),
             workspace_id=workspace_id,
@@ -1864,6 +1954,7 @@ class BridgeStorage:
             host_access_grant=host_access_grant,
             model_override=normalize_model(model_override) if model_override else None,
             thinking_override=thinking_override,
+            task_action_fingerprint=task_action_fingerprint,
             created_at=now,
             updated_at=now,
             archived_at=None,
@@ -1983,6 +2074,30 @@ class BridgeStorage:
                     thread.project_id,
                     None if kind == "standalone" else thread.thread_id,
                 )
+
+    @contextmanager
+    def reserve_task_thread(self, thread_id: str) -> Iterator[ThreadViewRecord]:
+        """Fence a HA task action against archive, deletion and overlapping work."""
+
+        with self._automation_target_lock, self._thread_mutation_lock:
+            record = self.load_thread(thread_id)
+            project = self.load_project(record.project_id or "")
+            if project.archived_at is not None or record.archived_at is not None:
+                raise ProjectMutationError("task chat is archived")
+            if (
+                record.active_run_id is not None
+                or record.pending_prompts
+                or record.status in {"queued", "running"}
+                or self._automation_thread_reservations.get(thread_id, 0)
+            ):
+                raise ProjectMutationError("task chat is busy")
+            self._reserve_automation_target_locked(project.project_id, thread_id)
+            thread = self._resolve_thread(record)
+        try:
+            yield thread
+        finally:
+            with self._automation_target_lock:
+                self._release_automation_target_locked(thread.project_id, thread_id)
 
     def _reserve_automation_target_locked(
         self, project_id: str, thread_id: str | None

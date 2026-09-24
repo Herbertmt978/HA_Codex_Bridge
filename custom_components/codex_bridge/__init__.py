@@ -36,6 +36,8 @@ from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
 from .runtime import CodexBridgeRuntime, normalize_web_search_mode
+from .task_services import async_register_task_services
+from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -127,6 +129,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass, target, name
             ),
         )
+        # Capabilities can refresh after setup when an App is upgraded.
+        runtime.task_event_forwarder = TaskEventForwarder(
+            hass,
+            runtime.event_broker,
+            Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.task_event_cursor"),
+        )
         if (
             connection_type != CONNECTION_TYPE_EXTERNAL_LEGACY
             and runtime.supports_capability("automations_v1")
@@ -147,6 +155,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
+        if not hass.services.has_service(DOMAIN, "start_task"):
+            async_register_task_services(hass)
         if not domain_data[DATA_VIEWS_REGISTERED]:
             async_register_http_views(hass)
             domain_data[DATA_VIEWS_REGISTERED] = True
@@ -159,6 +169,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await async_register_panel(hass, entry.title)
             domain_data[DATA_PANEL_REGISTERED] = True
         if runtime.event_broker is not None:
+            if runtime.task_event_forwarder is not None:
+                await runtime.task_event_forwarder.async_start()
             await runtime.event_broker.async_start()
         if runtime.automation_scheduler is not None:
             await runtime.automation_scheduler.async_start()

@@ -59,6 +59,7 @@ from .routes import (
     prompts,
     runtime_events,
     status,
+    task_actions,
     threads,
 )
 from .runner import BridgeRunner
@@ -686,6 +687,7 @@ def create_app(
             [
                 "interactions_v2",
                 "automations_v1",
+                "task_actions_v1",
                 "automation_proposals_v1",
                 "reset_credits_v1",
                 "skills_v1",
@@ -931,6 +933,7 @@ def create_app(
         app.include_router(approvals.router)
         app.include_router(agents.router)
         app.include_router(automations.router)
+        app.include_router(task_actions.router)
         app.include_router(capabilities.router)
         app.include_router(mcp.router)
         app.include_router(uploads.router)

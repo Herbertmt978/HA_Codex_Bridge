@@ -27,6 +27,7 @@ from .const import (
     DISCOVERY_SOURCE,
     DOMAIN,
     CONF_WEB_SEARCH_MODE,
+    CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
     WEB_SEARCH_MODE_DISABLED,
     WEB_SEARCH_MODE_LIVE,
 )
@@ -332,6 +333,10 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                 title="",
                 data={
                     CONF_WEB_SEARCH_MODE: user_input[CONF_WEB_SEARCH_MODE],
+                    CONF_ALLOW_UNATTENDED_TASK_ACTIONS: user_input.get(
+                        CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+                        self.config_entry.options.get(CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False),
+                    ),
                 },
             )
 
@@ -353,7 +358,13 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                             WEB_SEARCH_MODE_LIVE: "Live",
                             WEB_SEARCH_MODE_DISABLED: "Off",
                         }
-                    )
+                    ),
+                    vol.Required(
+                        CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+                        default=self.config_entry.options.get(
+                            CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False
+                        ),
+                    ): bool,
                 }
             ),
         )

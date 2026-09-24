@@ -202,6 +202,8 @@ class ThreadRecord(BaseModel):
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
     model_override: str | None = None
     thinking_override: str | None = None
+    # Private retry fingerprint for the Home Assistant action that created this chat.
+    task_action_fingerprint: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     archived_at: str | None = None
@@ -259,6 +261,7 @@ class PublicThreadRecord(BaseModel):
                     "active_turn_id",
                     "active_run_id",
                     "pending_prompts",
+                    "task_action_fingerprint",
                 }
             )
         )
@@ -518,6 +521,7 @@ class BridgeReadinessRecord(BaseModel):
             "legacy_v0",
             "interactions_v2",
             "automations_v1",
+            "task_actions_v1",
             "automation_proposals_v1",
             "reset_credits_v1",
             "mcp_admin_v1",

@@ -17,6 +17,9 @@ from types import SimpleNamespace
 import zlib
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 import codex_bridge_service.runtime_broker as runtime_broker_module
 from codex_bridge_service.codex_app_server import (
@@ -65,6 +68,9 @@ from codex_bridge_service.runtime_state import (
     runtime_fingerprint,
 )
 from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
+from codex_bridge_service.routes import task_actions
+from codex_bridge_service.routes.prompts import PromptRequest
+from codex_bridge_service.model_catalog import ModelCatalogError
 
 
 class _ContentionTrackingRLock:
@@ -7899,3 +7905,168 @@ def test_orphan_repair_does_not_block_startup_on_malformed_unrelated_thread(
         assert malformed.read_text(encoding="utf-8") == '{"thread_id":'
     finally:
         broker.close()
+
+
+def test_ha_task_action_start_retry_and_exact_cancel_are_durable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path / "state")
+    project = storage.create_project(
+        name="Action project",
+        root_path=str(tmp_path / "workspace"),
+        default_model="gpt-5.6-codex",
+        default_thinking_level="high",
+    )
+    ha_storage = _HomeAssistantProfileStorage(storage)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(ha_storage, peer)
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.storage = ha_storage
+    app.state.runner = broker
+    app.include_router(task_actions.router)
+    monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
+    submit_prompt = broker.submit_prompt
+
+    def submit_while_project_is_reserved(*args, **kwargs):
+        with pytest.raises(ProjectMutationError):
+            storage.archive_project(project.project_id)
+        return submit_prompt(*args, **kwargs)
+
+    monkeypatch.setattr(broker, "submit_prompt", submit_while_project_is_reserved)
+    http = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    task_id = "a" * 32
+    payload = {
+        "task_id": task_id,
+        "project_id": project.project_id,
+        "title": "Check dashboard",
+        "prompt": "Review the dashboard.",
+        "mode": "observe",
+    }
+    try:
+        first = http.post("/task-actions/start", headers=headers, json=payload)
+        assert first.status_code == 202, first.text
+        reference = first.json()
+        assert reference["task_id"] == task_id
+        assert reference["thread_id"] == f"thr_task_{task_id}"
+        assert storage.load_thread(reference["thread_id"]).task_action_fingerprint
+
+        def unavailable_for_new_work(*_):
+            raise AssertionError("a durable retry must not require fresh readiness")
+
+        monkeypatch.setattr(task_actions, "_require_ready", unavailable_for_new_work)
+        retry = http.post("/task-actions/start", headers=headers, json=payload)
+        assert retry.status_code == 202, retry.text
+        assert retry.json()["run_id"] == reference["run_id"]
+        monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
+        assert len([path for path in storage.threads_dir.glob("*.json")]) == 1
+        assert http.post(
+            "/task-actions/start", headers=headers,
+            json={**payload, "title": "Different work"},
+        ).status_code == 409
+        assert http.get(f"/task-actions/{task_id}", headers=headers).json()["run_id"] == reference["run_id"]
+
+        cancelled = http.post(f"/task-actions/{task_id}/cancel", headers=headers)
+        assert cancelled.status_code == 200, cancelled.text
+        assert cancelled.json()["run_id"] == reference["run_id"]
+        _wait_until(
+            lambda: broker.get_task_action_run(task_id).status == "cancelled",
+            timeout=5,
+        )
+        result_events = [
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+        ]
+        assert len(result_events) == 1
+        assert result_events[0].payload == {
+            "task_id": task_id,
+            "run_id": reference["run_id"],
+            "status": "cancelled",
+        }
+        assert "Review the dashboard" not in json.dumps(result_events[0].payload)
+
+        next_task_id = "b" * 32
+        continued = http.post(
+            "/task-actions/continue",
+            headers=headers,
+            json={
+                "task_id": next_task_id,
+                "thread_id": reference["thread_id"],
+                "prompt": "Check the latest changes.",
+            },
+        )
+        assert continued.status_code == 202, continued.text
+        assert continued.json()["run_id"] != reference["run_id"]
+        monkeypatch.setattr(task_actions, "_require_ready", unavailable_for_new_work)
+        continued_retry = http.post(
+            "/task-actions/continue",
+            headers=headers,
+            json={
+                "task_id": next_task_id,
+                "thread_id": reference["thread_id"],
+                "prompt": "Check the latest changes.",
+            },
+        )
+        assert continued_retry.status_code == 202, continued_retry.text
+        assert continued_retry.json()["run_id"] == continued.json()["run_id"]
+        monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
+        assert http.post(f"/task-actions/{task_id}/cancel", headers=headers).json()["run_id"] == reference["run_id"]
+        assert broker.get_task_action_run(next_task_id).status in {"queued", "starting", "running"}
+        assert len([
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.accepted"
+        ]) == 2
+        _, remote_thread_id, turn_id = _active_ids(storage, reference["thread_id"])
+        _complete(peer, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(
+            lambda: broker.get_task_action_run(next_task_id).status == "completed",
+            timeout=5,
+        )
+        assert http.get(
+            f"/task-actions/{next_task_id}", headers=headers
+        ).json()["status"] == "completed"
+        assert [
+            event.payload["status"]
+            for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+        ] == ["cancelled", "completed"]
+
+        class LimitedCatalog:
+            def probe(self):
+                return SimpleNamespace(
+                    stale=False,
+                    models=[SimpleNamespace(
+                        model="limited-model", thinking_levels=("low", "medium")
+                    )],
+                )
+
+        app.state.model_catalog_probe = LimitedCatalog()
+        incompatible = http.post(
+            "/task-actions/start",
+            headers=headers,
+            json={**payload, "task_id": "c" * 32, "model_override": "limited-model"},
+        )
+        assert incompatible.status_code == 422
+        assert incompatible.json()["detail"]["code"] == "task_model_unavailable"
+        assert not (storage.threads_dir / f"thr_task_{'c' * 32}.json").exists()
+
+        class UnavailableCatalog:
+            def probe(self):
+                raise ModelCatalogError("provider unavailable")
+
+        app.state.model_catalog_probe = UnavailableCatalog()
+        unavailable = http.post(
+            "/task-actions/start",
+            headers=headers,
+            json={**payload, "task_id": "c" * 32, "model_override": "gpt-5.6-codex"},
+        )
+        assert unavailable.status_code == 503
+        assert unavailable.json()["detail"]["code"] == "runtime_unavailable"
+    finally:
+        broker.close()
+
+
+def test_regular_prompts_cannot_claim_a_home_assistant_task_identity() -> None:
+    with pytest.raises(ValidationError):
+        PromptRequest(prompt="Hello", client_request_id="ha-action:" + "a" * 32)

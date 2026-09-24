@@ -1,0 +1,79 @@
+start_task:
+  name: Start Codex task
+  description: Start a new unattended task in an existing Codex project. Returns a durable task ID and exact run reference.
+  fields:
+    project_id:
+      required: true
+      example: prj_123456789abc
+      selector:
+        text:
+    title:
+      required: true
+      example: Check the dashboard
+      selector:
+        text:
+    prompt:
+      required: true
+      example: Review the dashboard configuration.
+      selector:
+        text:
+          multiline: true
+    mode:
+      required: false
+      default: observe
+      selector:
+        select:
+          options:
+            - observe
+            - edit
+            - full-auto
+    model_override:
+      required: false
+      selector:
+        text:
+    thinking_override:
+      required: false
+      selector:
+        text:
+    task_id:
+      required: false
+      description: Reuse the same 32-character hexadecimal ID when retrying the same request.
+      selector:
+        text:
+
+continue_task:
+  name: Continue Codex task
+  description: Run an unattended prompt in an existing idle chat using its current mode and model.
+  fields:
+    thread_id:
+      required: true
+      selector:
+        text:
+    prompt:
+      required: true
+      selector:
+        text:
+          multiline: true
+    task_id:
+      required: false
+      description: Reuse the same 32-character hexadecimal ID when retrying the same request.
+      selector:
+        text:
+
+cancel_task:
+  name: Cancel Codex task
+  description: Cancel only the run identified by this task ID; a newer run in the same chat is not affected.
+  fields:
+    task_id:
+      required: true
+      selector:
+        text:
+
+get_task:
+  name: Get Codex task
+  description: Read the durable status and exact run reference for a task ID.
+  fields:
+    task_id:
+      required: true
+      selector:
+        text:

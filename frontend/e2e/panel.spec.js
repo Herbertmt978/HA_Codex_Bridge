@@ -342,6 +342,7 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
 });
 
 test("reviews a chat message as a schedule before any task is created", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-23T08:00:00Z"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);

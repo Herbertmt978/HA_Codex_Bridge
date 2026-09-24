@@ -1162,6 +1162,18 @@ class RuntimeBroker:
             with self._lock:
                 self._finish_publication_locked(thread_id)
 
+    def get_task_action_run(self, action_id: str) -> RunRecord | None:
+        """Read the durable run admitted with a Home Assistant action key."""
+
+        if len(action_id) != 32 or any(char not in "0123456789abcdef" for char in action_id):
+            raise ValueError("task action id is invalid")
+        with self._lock:
+            outcome = self._state.request_idempotency.get(f"ha-action:{action_id}")
+            if outcome is None:
+                return None
+            run = self._state.runs.get(outcome.run_id)
+            return _run_record(run) if run is not None else _outcome_record(outcome)
+
     def list_pending_interactions(
         self,
         *,
@@ -2690,6 +2702,20 @@ class RuntimeBroker:
             if run.status != "running":
                 return _automatic_denial(request.method, params)
             if run.unattended:
+                if run.client_request_id.startswith("ha-action:"):
+                    self._emit_once_locked(
+                        run,
+                        "task.interaction_needed",
+                        {
+                            "task_id": run.client_request_id.removeprefix("ha-action:"),
+                            "run_id": run.run_id,
+                            "kind": (
+                                "question" if request.method == "item/tool/requestUserInput"
+                                else "approval"
+                            ),
+                        },
+                        source={"method": request.method, "item_id": item_id},
+                    )
                 return _automatic_denial(request.method, params)
             workspace = self.storage.resolve_workspace_path(run.workspace_path)
             if request.method == "item/permissions/requestApproval":
@@ -3244,6 +3270,20 @@ class RuntimeBroker:
             "interrupted": "run.interrupted",
             "failed": "run.failed",
         }[status]
+        if run.client_request_id.startswith("ha-action:"):
+            preceding_events = (
+                *preceding_events,
+                EventDraft(
+                    scope="thread",
+                    thread_id=run.thread_id,
+                    event_type="task.result",
+                    payload={
+                        "task_id": run.client_request_id.removeprefix("ha-action:"),
+                        "run_id": run.run_id,
+                        "status": status,
+                    },
+                ),
+            )
         payload: dict[str, object] = {"run_id": run.run_id}
         if message:
             payload["error" if status == "failed" else "message"] = message
