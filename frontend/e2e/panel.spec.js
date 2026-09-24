@@ -188,7 +188,7 @@ test("settings persist appearance and keep themed menus usable on a narrow scree
 });
 
 for (const width of [390, 1280]) {
-  test(`saved account menu stays private and usable at ${width}px`, async ({ page }) => {
+  test(`saved account menu stays private and usable at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
     const panel = page.locator("codex-bridge-panel");
@@ -222,6 +222,11 @@ for (const width of [390, 1280]) {
     await expect(menu.getByRole("button", { name: "Add another account" })).toBeEnabled();
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`account-menu-${width}.png`), animations: "disabled" });
+    await menu.getByRole("button", { name: "Add another account" }).click();
+    await expect(menu).toBeHidden();
+    await expect(panel.locator("#side-panel-system")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`add-account-${width}.png`), animations: "disabled" });
   });
 }
 
