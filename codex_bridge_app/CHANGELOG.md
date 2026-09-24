@@ -2,12 +2,21 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.7.0
 
-- Adds private, administrator-managed ChatGPT account profiles inside the
-  Home Assistant App. Switching verifies the selected account and replaces
-  only the App-managed Codex app-server process. Desktop Codex sign-ins remain
-  separate.
+- Adds private ChatGPT account profiles in the Home Assistant App. Switching
+  checks the selected identity, rolls back a failed switch and restarts only
+  the App-managed Codex process; desktop sign-ins remain separate.
+- Shows each saved account's plan, available usage, reset times and credits
+  when the provider reports them.
+- Restores sent chat messages and presents generated files as downloadable
+  cards with recognisable, original file-type icons. Authenticated, bounded
+  text previews cover DOCX, XLSX and PPTX alongside existing previews.
+- Centres Skills, Settings and Plugins content, improves search and New chat
+  focus states, and repairs chat controls across desktop and narrow screens.
+- Pairs App, Integration and panel `1.7.0` with Bridge `0.13.0` and the
+  unchanged Sigstore-verified Codex runtime `0.156.1`. Stable App images
+  remain amd64-only; upgrading does not enable MCP or host access.
 
 ## 1.6.4
 
