@@ -1039,6 +1039,14 @@ class BridgeApiClient:
             maximum_bytes=_ARTIFACT_LIST_MAX_BYTES,
         )
 
+    async def async_preview_artifact(self, thread_id: str, artifact_id: str) -> dict[str, Any]:
+        self.require_capability("office_preview_v1")
+        return await self._async_json(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}/preview",
+            maximum_bytes=128 * 1024,
+        )
+
     async def async_create_workspace_archive(self, thread_id: str) -> dict[str, Any]:
         return await self._async_json(
             "POST",

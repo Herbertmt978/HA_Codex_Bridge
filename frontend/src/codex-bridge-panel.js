@@ -26,6 +26,7 @@ import {
   sanitizeFilename,
 } from "./safe-dom.js";
 import { uploadResumableFile } from "./uploads.js";
+import { fileTypeIconMarkup } from "./file-type-icons.js";
 import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
 import { getApprovalViewModel, renderApproval } from "./views/approval.js";
 import { collectMcpContent, collectMcpDraft, renderMcpElicitation } from "./views/mcp-elicitation.js";
@@ -96,6 +97,7 @@ const ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 const ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
 const PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const PDF_PREVIEW_MAX_LABEL = "8 MB";
+const OFFICE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
@@ -123,11 +125,51 @@ function displayArtifactType(artifact) {
   if (["xls", "xlsx", "ods"].includes(extension)) return "Spreadsheet";
   if (extension === "csv") return "CSV file";
   if (extension === "pdf") return "PDF document";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "Presentation";
   if (["txt", "log"].includes(extension)) return "Text document";
   if (extension === "md") return "Markdown document";
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) return "Image";
   if (extension === "zip") return "ZIP archive";
   return extension && extension.length <= 8 ? `${extension.toUpperCase()} file` : "File";
+}
+
+function isOfficePreviewCandidate(artifact, capabilities) {
+  if (!capabilities?.includes("office_preview_v1")) return false;
+  const name = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase();
+  return [".docx", ".xlsx", ".pptx"].some((extension) => name.endsWith(extension));
+}
+
+function normaliseOfficePreview(value, artifact) {
+  if (!value || !["document", "spreadsheet", "presentation"].includes(value.kind)) {
+    throw new Error("Invalid Office preview");
+  }
+  let remaining = 30_000;
+  const safeText = (input) => {
+    if (typeof input !== "string") throw new Error("Invalid Office preview text");
+    const text = input.slice(0, Math.min(remaining, 30_000));
+    remaining -= text.length;
+    return text;
+  };
+  const paragraphs = (input) => {
+    if (!Array.isArray(input)) throw new Error("Invalid Office preview paragraphs");
+    return input.slice(0, 200).map(safeText);
+  };
+  const common = { artifactId: artifact.artifact_id, filename: displayArtifactFilename(artifact.filename), kind: value.kind, truncated: value.truncated === true };
+  if (value.kind === "document") return { ...common, paragraphs: paragraphs(value.paragraphs) };
+  if (value.kind === "presentation") {
+    if (!Array.isArray(value.slides)) throw new Error("Invalid Office preview slides");
+    return { ...common, slides: value.slides.slice(0, 5).map((slide, index) => ({
+      name: `Slide ${index + 1}`, paragraphs: paragraphs(slide?.paragraphs),
+    })) };
+  }
+  if (!Array.isArray(value.sheets)) throw new Error("Invalid Office preview sheets");
+  return { ...common, sheets: value.sheets.slice(0, 3).map((sheet, index) => {
+    if (!Array.isArray(sheet?.rows)) throw new Error("Invalid Office preview rows");
+    return { name: `Sheet ${index + 1}`, rows: sheet.rows.slice(0, 100).map((row) => {
+      if (!Array.isArray(row)) throw new Error("Invalid Office preview cells");
+      return row.slice(0, 20).map(safeText);
+    }) };
+  }) };
 }
 
 function isStandaloneArtifactLink(text, artifacts) {
@@ -165,6 +207,10 @@ function artifactErrorCode(error) {
 }
 
 function artifactPreviewLimit(artifact) {
+  if ([".docx", ".xlsx", ".pptx"].some((extension) =>
+    displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase().endsWith(extension))) {
+    return { bytes: OFFICE_PREVIEW_MAX_BYTES, label: "8 MB" };
+  }
   if (isPdfArtifactCandidate(artifact)) {
     return { bytes: PDF_PREVIEW_MAX_BYTES, label: PDF_PREVIEW_MAX_LABEL };
   }
@@ -2305,6 +2351,9 @@ template.innerHTML = `
       gap: 2px;
       min-width: 0;
     }
+    .file-select-content { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .file-type-icon { display: inline-flex; flex: 0 0 28px; width: 28px; height: 33px; align-items: center; justify-content: center; }
+    .file-type-icon svg { display: block; width: 100%; height: 100%; }
 
     .artifact-refresh-status {
       display: flex;
@@ -2393,6 +2442,17 @@ template.innerHTML = `
       max-height: 560px;
       object-fit: contain;
     }
+    .office-preview { display: grid; gap: 16px; padding: 18px; color: var(--text-color); }
+    .office-preview-heading { display: flex; gap: 12px; align-items: center; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .office-preview-heading .file-type-icon { flex-basis: 36px; width: 36px; height: 42px; }
+    .office-preview-note { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); line-height: 1.4; }
+    .office-preview-page { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); box-shadow: 0 3px 12px color-mix(in srgb, var(--text-color) 6%, transparent); }
+    .office-preview-page p { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .office-preview-page h3 { margin: 0 0 4px; font-size: var(--font-control-size); }
+    .office-preview-table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+    .office-preview table { border-collapse: collapse; min-width: 100%; font-size: var(--font-caption-size); }
+    .office-preview th, .office-preview td { min-width: 74px; max-width: 240px; padding: 6px 9px; border: 1px solid var(--border-color); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .office-preview th { background: var(--surface-muted); font-weight: 600; }
 
     .pdf-preview-shell {
       display: grid;
@@ -2598,9 +2658,8 @@ template.innerHTML = `
 
     .artifact-file-card { display: grid; gap: 12px; max-width: min(480px, 100%); padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); }
     .artifact-file-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .artifact-file-icon { display: inline-grid; flex: 0 0 46px; width: 46px; height: 54px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color)); border-radius: 7px; background: color-mix(in srgb, var(--accent-soft) 44%, var(--surface-bg)); color: var(--text-color); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
-    .artifact-file-icon[data-kind="excel"] { color: #0d6b41; border-color: color-mix(in srgb, #0d6b41 35%, var(--border-color)); background: color-mix(in srgb, #0d6b41 10%, var(--surface-bg)); }
-    .artifact-file-icon[data-kind="word"] { color: #245ca5; border-color: color-mix(in srgb, #245ca5 35%, var(--border-color)); background: color-mix(in srgb, #245ca5 10%, var(--surface-bg)); }
+    .artifact-file-icon { display: inline-flex; flex: 0 0 46px; width: 46px; height: 54px; align-items: center; justify-content: center; }
+    .artifact-file-icon svg { display: block; width: 42px; height: 48px; }
     .artifact-file-info { display: grid; min-width: 0; gap: 3px; }
     .artifact-file-name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
     .artifact-file-meta { color: var(--muted-color); font-size: var(--font-caption-size); }
@@ -10902,7 +10961,8 @@ class CodexBridgePanel extends HTMLElement {
       const row = document.createElement("div");
       row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
       const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
-        || isPdfArtifactCandidate(artifact);
+        || isPdfArtifactCandidate(artifact)
+        || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
@@ -10916,7 +10976,14 @@ class CodexBridgePanel extends HTMLElement {
         this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
         this._textElement("span", "row-meta", `${displayArtifactType(artifact)}${size}`)
       );
-      select.append(main);
+      const content = document.createElement("div");
+      content.className = "file-select-content";
+      const icon = document.createElement("span");
+      icon.className = "file-type-icon";
+      icon.setAttribute("aria-hidden", "true");
+      this._appendTrustedIcon(icon, fileTypeIconMarkup(artifact.filename || artifact.relative_path));
+      content.append(icon, main);
+      select.append(content);
       const download = this._actionButton(
         "download-button small",
         "download-artifact",
@@ -10979,6 +11046,10 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const preview = this._artifactPreview;
+    if (["document", "spreadsheet", "presentation"].includes(preview.kind)) {
+      this._renderOfficePreview(preview, container);
+      return;
+    }
     if (preview.kind === "pdf") {
       this._renderPdfPreview(preview, container);
       return;
@@ -11005,6 +11076,68 @@ class CodexBridgePanel extends HTMLElement {
       binary.append(actions);
     }
     container.append(binary);
+  }
+
+  _renderOfficePreview(preview, container) {
+    const shell = document.createElement("div");
+    shell.className = "office-preview";
+    const heading = document.createElement("div");
+    heading.className = "office-preview-heading";
+    const icon = document.createElement("span");
+    icon.className = "file-type-icon";
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(preview.filename));
+    heading.append(icon, this._textElement("span", "", preview.filename));
+    shell.append(heading);
+    const note = preview.truncated
+      ? "Text-only preview is limited. Download the file for full content and formatting."
+      : "Text-only preview. Download the file for formatting, images, charts and other content.";
+    shell.append(this._textElement("p", "office-preview-note", note));
+    if (preview.kind === "spreadsheet") {
+      for (const sheet of preview.sheets || []) {
+        const section = document.createElement("section");
+        section.append(this._textElement("h3", "", sheet.name));
+        const wrap = document.createElement("div");
+        wrap.className = "office-preview-table-wrap";
+        const table = document.createElement("table");
+        table.setAttribute("aria-label", `${sheet.name} preview`);
+        const width = Math.max(1, ...sheet.rows.map((row) => row.length));
+        const header = document.createElement("tr");
+        header.append(document.createElement("th"));
+        for (let index = 0; index < width; index += 1) {
+          const cell = this._textElement("th", "", String.fromCharCode(65 + index));
+          cell.scope = "col";
+          header.append(cell);
+        }
+        table.append(header);
+        sheet.rows.forEach((row, index) => {
+          const line = document.createElement("tr");
+          const number = this._textElement("th", "", String(index + 1));
+          number.scope = "row";
+          line.append(number);
+          for (let column = 0; column < width; column += 1) {
+            line.append(this._textElement("td", "", row[column] || ""));
+          }
+          table.append(line);
+        });
+        wrap.append(table);
+        section.append(wrap);
+        shell.append(section);
+      }
+    } else {
+      const sections = preview.kind === "presentation" ? preview.slides : [{ paragraphs: preview.paragraphs }];
+      for (const sectionData of sections || []) {
+        const page = document.createElement("section");
+        page.className = "office-preview-page";
+        if (sectionData.name) page.append(this._textElement("h3", "", sectionData.name));
+        for (const paragraph of sectionData.paragraphs || []) {
+          page.append(this._textElement("p", "", paragraph));
+        }
+        if (!sectionData.paragraphs?.length) page.append(this._textElement("p", "empty-note", "No text in this section."));
+        shell.append(page);
+      }
+    }
+    container.append(shell);
   }
 
   _renderPdfPreview(preview, container) {
@@ -11946,10 +12079,6 @@ class CodexBridgePanel extends HTMLElement {
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     const artifact = this._artifacts.find((item) => item?.artifact_id === payload.artifact_id);
     const filename = displayArtifactFilename(artifact?.filename || payload.filename || payload.relative_path, "File");
-    const extension = filename.split(".").pop()?.toLowerCase() || "";
-    const kind = ["doc", "docx", "odt", "rtf"].includes(extension) ? "word"
-      : ["xls", "xlsx", "ods", "csv"].includes(extension) ? "excel" : "file";
-    const badge = extension && extension.length <= 5 ? extension.toUpperCase() : "FILE";
     const article = document.createElement("article");
     article.className = "message assistant artifact-file-message";
     article.dataset.sequence = String(event?.sequence ?? "artifact-file");
@@ -11958,9 +12087,9 @@ class CodexBridgePanel extends HTMLElement {
     bubble.className = "bubble artifact-file-card";
     const heading = document.createElement("div");
     heading.className = "artifact-file-heading";
-    const icon = this._textElement("span", "artifact-file-icon", badge);
-    icon.dataset.kind = kind;
+    const icon = this._textElement("span", "artifact-file-icon", "");
     icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(filename));
     const info = document.createElement("div");
     info.className = "artifact-file-info";
     const size = Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0
@@ -11975,7 +12104,8 @@ class CodexBridgePanel extends HTMLElement {
       const actions = document.createElement("div");
       actions.className = "artifact-file-actions";
       const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
-        || isPdfArtifactCandidate(artifact);
+        || isPdfArtifactCandidate(artifact)
+        || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const preview = this._actionButton("artifact-file-preview", "open-artifact-preview",
         `${canPreview ? "Preview" : "View file details for"} ${filename}`);
       preview.dataset.artifactId = artifact.artifact_id;
@@ -13259,7 +13389,8 @@ class CodexBridgePanel extends HTMLElement {
     const previewToken = ++this._previewToken;
     const advertisedDescriptor = previewDescriptor(artifact, { type: artifact.mime_type });
     const pdfCandidate = isPdfArtifactCandidate(artifact);
-    if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
+    const officeCandidate = isOfficePreviewCandidate(artifact, this._config?.capabilities);
+    if (advertisedDescriptor.kind === "binary" && !pdfCandidate && !officeCandidate) {
       this._revokePreviewUrl();
       this._artifactPreview = {
         ...advertisedDescriptor,
@@ -13280,6 +13411,16 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
+      if (officeCandidate) {
+        const result = await this._callWS("preview_artifact", {
+          thread_id: this._selectedThreadId, artifact_id: artifactId,
+        });
+        if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+        this._revokePreviewUrl();
+        this._artifactPreview = normaliseOfficePreview(result, artifact);
+        this._render();
+        return;
+      }
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const limit = artifactPreviewLimit(artifact);

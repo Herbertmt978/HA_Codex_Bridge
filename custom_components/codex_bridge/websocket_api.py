@@ -100,6 +100,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_answer_interaction,
         ws_answer_mcp_form,
         ws_list_artifacts,
+        ws_preview_artifact,
         ws_create_workspace_archive,
         ws_host_access,
         ws_enable_host_access,
@@ -1247,6 +1248,28 @@ async def ws_list_artifacts(
         connection,
         msg,
         lambda client: client.async_list_artifacts(msg["thread_id"]),
+        safe_error_messages=_ARTIFACT_ERROR_MESSAGES,
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/preview_artifact",
+        vol.Required("thread_id"): str,
+        vol.Required("artifact_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_preview_artifact(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_preview_artifact(msg["thread_id"], msg["artifact_id"]),
         safe_error_messages=_ARTIFACT_ERROR_MESSAGES,
     )
 

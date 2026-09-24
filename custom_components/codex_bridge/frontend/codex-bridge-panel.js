@@ -298,7 +298,7 @@ function localParts(instant, timezone) {
     minute: "2-digit",
     second: "2-digit",
     hourCycle: "h23"
-  }).formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
+  }).formatToParts(new Date(instant)).map(({ type: type2, value }) => [type2, value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, second: parts.second };
 }
 function scheduleInstantCandidates(date, time, timezone) {
@@ -439,7 +439,7 @@ function element(doc, tag, className, value) {
   if (value !== void 0) node2.textContent = value;
   return node2;
 }
-function field(doc, name, label, value, options = null, type = "text") {
+function field(doc, name, label, value, options = null, type2 = "text") {
   const row = element(doc, options ? "div" : "label", "schedule-row");
   row.append(element(doc, "span", "schedule-row-label", label));
   if (options) {
@@ -448,11 +448,11 @@ function field(doc, name, label, value, options = null, type = "text") {
     row.append(picker);
     return row;
   }
-  const control = element(doc, type === "textarea" ? "textarea" : "input");
+  const control = element(doc, type2 === "textarea" ? "textarea" : "input");
   control.name = name;
   control.dataset.desktopField = name;
   control.setAttribute("aria-label", label);
-  if (type !== "textarea") control.type = type;
+  if (type2 !== "textarea") control.type = type2;
   control.value = String(value ?? "");
   row.append(control);
   return row;
@@ -31853,7 +31853,7 @@ function itemLabel(payload = {}) {
   }
   if (itemType === "commandExecution" && Array.isArray(payload.action_types)) {
     return joinActivityLabels(
-      payload.action_types.slice(0, 3).filter((type) => Object.hasOwn(COMMAND_ACTION_LABELS, type)).map((type) => COMMAND_ACTION_LABELS[type]),
+      payload.action_types.slice(0, 3).filter((type2) => Object.hasOwn(COMMAND_ACTION_LABELS, type2)).map((type2) => COMMAND_ACTION_LABELS[type2]),
       ITEM_LABELS[itemType]
     );
   }
@@ -31933,9 +31933,9 @@ function latestItemStart(events, runId) {
       continue;
     }
     if (event.event_type !== "item.started") continue;
-    const type = payload.item_type;
-    if (typeof type === "string" && Object.hasOwn(ITEM_LABELS, type) && !(typeof payload.item_id === "string" && completedItemIds.has(payload.item_id))) {
-      return { event, label: itemLabel(payload), itemType: type };
+    const type2 = payload.item_type;
+    if (typeof type2 === "string" && Object.hasOwn(ITEM_LABELS, type2) && !(typeof payload.item_id === "string" && completedItemIds.has(payload.item_id))) {
+      return { event, label: itemLabel(payload), itemType: type2 };
     }
   }
   return null;
@@ -32258,10 +32258,10 @@ var SHA256_WORDS = new Uint32Array([
   3329325298
 ]);
 var UploadError = class extends Error {
-  constructor(code, { status = null, retryable = false } = {}) {
-    super(status === null ? `Upload ${code.replaceAll("_", " ")}` : `Upload failed (HTTP ${status})`);
+  constructor(code2, { status = null, retryable = false } = {}) {
+    super(status === null ? `Upload ${code2.replaceAll("_", " ")}` : `Upload failed (HTTP ${status})`);
     this.name = "UploadError";
-    this.code = code;
+    this.code = code2;
     this.status = status;
     this.retryable = retryable;
   }
@@ -32590,9 +32590,9 @@ function normaliseRelativePath(value, filename) {
   }
   return path;
 }
-function validateIdentifier(value, code) {
+function validateIdentifier(value, code2) {
   if (typeof value !== "string" || !value || containsControl(value)) {
-    throw new UploadError(code);
+    throw new UploadError(code2);
   }
   return value;
 }
@@ -32675,6 +32675,49 @@ function containsControl(value) {
   });
 }
 
+// frontend/src/file-type-icons.js
+var documentBase = `<path d="M10 2h19l9 9v32a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Z" fill="#fff" stroke="#c9d1db" stroke-width="1.4"/><path d="M29 2v9h9" fill="#edf1f7" stroke="#c9d1db" stroke-width="1.4"/>`;
+var lines = `<path d="M18 17h15M18 22h15M18 27h12M18 32h15M18 37h11" stroke="#b8c7d8" stroke-width="1.5" stroke-linecap="round"/>`;
+var sheet = `<path d="M17 17h16v20H17zM17 23h16M17 30h16M24 17v20" fill="none" stroke="#9ac9af" stroke-width="1.2"/>`;
+var slide = `<rect x="16" y="17" width="18" height="17" rx="1" fill="#fff4ec" stroke="#e5b394"/><path d="M20 21h10M20 25h7" stroke="#d88759" stroke-width="1.5"/>`;
+var photo = `<rect x="16" y="17" width="18" height="16" rx="1" fill="#e9f6f1" stroke="#8ebdad"/><circle cx="29" cy="21" r="2" fill="#e2bb6a"/><path d="m18 30 5-5 4 4 3-3 3 4" fill="none" stroke="#579a81" stroke-width="1.5"/>`;
+var code = `<path d="m22 21-4 4 4 4m7-8 4 4-4 4m-2-10-3 12" stroke="#7188ad" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+var media = `<circle cx="25" cy="27" r="9" fill="#ecf5f6" stroke="#a3c9cd"/><path d="m23 23 7 4-7 4z" fill="#4e93a0"/>`;
+var type = {
+  word: { colour: "#185abd", glyph: "W", detail: lines },
+  excel: { colour: "#107c41", glyph: "X", detail: sheet },
+  powerpoint: { colour: "#c43e1c", glyph: "P", detail: slide },
+  pdf: { colour: "#c43835", glyph: "PDF", detail: lines },
+  image: { colour: "#397f76", glyph: "", detail: photo },
+  text: { colour: "#657486", glyph: "", detail: lines },
+  archive: { colour: "#856944", glyph: "ZIP", detail: lines },
+  code: { colour: "#596f9f", glyph: "", detail: code },
+  audio: { colour: "#725ca5", glyph: "♫", detail: lines },
+  video: { colour: "#397f8d", glyph: "", detail: media },
+  email: { colour: "#47749d", glyph: "@", detail: lines },
+  file: { colour: "#657486", glyph: "", detail: lines }
+};
+function fileTypeKind(filename) {
+  const extension = String(filename || "").split(".").pop().toLowerCase();
+  if (["doc", "docx", "odt", "rtf"].includes(extension)) return "word";
+  if (["xls", "xlsx", "ods", "csv"].includes(extension)) return "excel";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "powerpoint";
+  if (extension === "pdf") return "pdf";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) return "image";
+  if (["txt", "md", "log", "json", "xml", "yaml", "yml"].includes(extension)) return "text";
+  if (["zip", "7z", "tar", "gz"].includes(extension)) return "archive";
+  if (["js", "jsx", "ts", "tsx", "py", "html", "css", "sh", "ps1", "c", "cpp", "cs", "go", "rs", "java"].includes(extension)) return "code";
+  if (["mp3", "wav", "ogg", "m4a", "flac"].includes(extension)) return "audio";
+  if (["mp4", "mov", "mkv", "webm", "avi"].includes(extension)) return "video";
+  if (["eml", "msg"].includes(extension)) return "email";
+  return "file";
+}
+function fileTypeIconMarkup(filename) {
+  const icon = type[fileTypeKind(filename)];
+  const tile = icon.glyph ? `<rect x="1" y="19" width="24" height="23" rx="2.5" fill="${icon.colour}"/><text x="13" y="35" text-anchor="middle" font-family="Arial,sans-serif" font-size="${icon.glyph.length > 1 ? 8 : 18}" font-weight="700" fill="#fff">${icon.glyph}</text>` : `<rect x="1" y="19" width="7" height="23" rx="2" fill="${icon.colour}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 48" fill="none" aria-hidden="true" focusable="false">${documentBase}${icon.detail}${tile}</svg>`;
+}
+
 // frontend/src/views/auth.js
 var PLAN_NAMES2 = /* @__PURE__ */ new Map([
   ["free", "Free"],
@@ -32699,14 +32742,14 @@ function getAuthViewModel(auth = {}) {
   const state = typeof auth.state === "string" ? auth.state : "unknown";
   const loginActive = ACTIVE_STATES.has(state);
   const busy = BUSY_STATES.has(state);
-  const code = loginActive && typeof auth.user_code === "string" && auth.user_code.trim() ? auth.user_code.trim() : null;
+  const code2 = loginActive && typeof auth.user_code === "string" && auth.user_code.trim() ? auth.user_code.trim() : null;
   const authMode = auth.auth_mode ?? auth.account?.auth_mode ?? null;
   const unsupported = state === "unsupported" || typeof authMode === "string" && authMode !== "chatgpt";
   const signedIn = !unsupported && state === "ok" && !auth.auth_required;
   const actions = [];
   if (loginActive) {
     actions.push({ id: "open-chatgpt", label: "Open ChatGPT" });
-    if (code) actions.push({ id: "copy-auth-code", label: "Copy code" });
+    if (code2) actions.push({ id: "copy-auth-code", label: "Copy code" });
     actions.push({ id: "cancel-sign-in", label: "Cancel" });
   } else if (busy) {
   } else if (unsupported) {
@@ -32742,8 +32785,8 @@ function getAuthViewModel(auth = {}) {
     signedIn,
     busy,
     plan: normalizePlanType(auth.account?.plan_type ?? auth.plan_type),
-    code: TERMINAL_STATES2.has(state) ? null : code,
-    canCopyCode: Boolean(code),
+    code: TERMINAL_STATES2.has(state) ? null : code2,
+    canCopyCode: Boolean(code2),
     canOpen: loginActive,
     message,
     guidance: loginActive ? "Continue in ChatGPT on your phone or another signed-in device." : "",
@@ -32769,10 +32812,10 @@ function renderAuth(container, model) {
     card.append(message);
   }
   if (model.code) {
-    const code = document.createElement("code");
-    code.className = "auth-code";
-    code.textContent = model.code;
-    card.append(code);
+    const code2 = document.createElement("code");
+    code2.className = "auth-code";
+    code2.textContent = model.code;
+    card.append(code2);
   }
   if (model.guidance) {
     const guidance = document.createElement("p");
@@ -32806,8 +32849,8 @@ var MAX_SCOPE_PATHS = 128;
 function plainText(value, limit) {
   if (typeof value !== "string") return "";
   return [...value].filter((character) => {
-    const code = character.codePointAt(0);
-    return code > 31 && code !== 127;
+    const code2 = character.codePointAt(0);
+    return code2 > 31 && code2 !== 127;
   }).join("").trim().slice(0, limit);
 }
 function safeWorkspacePath(value) {
@@ -33209,8 +33252,8 @@ var MAX_FREE_TEXT = 4096;
 function plainText2(value, limit) {
   if (typeof value !== "string") return "";
   return [...value].filter((character) => {
-    const code = character.codePointAt(0);
-    return code > 31 && code !== 127;
+    const code2 = character.codePointAt(0);
+    return code2 > 31 && code2 !== 127;
   }).join("").trim().slice(0, limit);
 }
 function safeId(value, fallback) {
@@ -33424,10 +33467,10 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
   form.dataset.desktopForm = "mcp";
   const local = localEnabled && state.formDraft?.local === true;
   const staticAuth = credentialsEnabled && ["bearer", "headers"].includes(state.formDraft?.auth_mode);
-  const field2 = (label, name, type = "text") => {
+  const field2 = (label, name, type2 = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const control = doc.createElement("input");
-    control.type = type;
+    control.type = type2;
     control.name = name;
     control.dataset.desktopField = name;
     control.value = state.formDraft?.[name] ?? "";
@@ -33488,16 +33531,16 @@ function renderMcpAuthentication(doc, state, { local = false, replacing = false 
   const choice = selection(doc, { name: "auth_mode", label: "Authentication", value: mode, options });
   choice.querySelector("select").dataset.desktopField = "auth_mode";
   section2.append(text(doc, "span", "Authentication", "desktop-field-label"), choice);
-  const secretInput = (label, attr, type = "password") => {
+  const secretInput = (label, attr, type2 = "password") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const input2 = doc.createElement("input");
-    input2.type = type;
+    input2.type = type2;
     input2.setAttribute(attr, "");
     input2.autocomplete = "off";
     input2.spellcheck = false;
     input2.required = true;
-    input2.maxLength = type === "password" ? 4096 : 64;
-    if (type === "password") input2.minLength = 8;
+    input2.maxLength = type2 === "password" ? 4096 : 64;
+    if (type2 === "password") input2.minLength = 8;
     wrap.append(text(doc, "span", label, "desktop-field-label"), input2);
     return wrap;
   };
@@ -33734,8 +33777,8 @@ function normalizeDesktopError(error) {
   const record = asRecord(error);
   const candidate = record.body?.message || record.message || record.error || record.detail || error;
   const withoutControlCharacters = Array.from(String(candidate || ""), (character) => {
-    const code = character.codePointAt(0);
-    return code <= 8 || code === 11 || code === 12 || code >= 14 && code <= 31 || code === 127 ? " " : character;
+    const code2 = character.codePointAt(0);
+    return code2 <= 8 || code2 === 11 || code2 === 12 || code2 >= 14 && code2 <= 31 || code2 === 127 ? " " : character;
   }).join("");
   const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
   return (safe || "Unable to load this surface.").slice(0, 500);
@@ -33773,16 +33816,16 @@ var button2 = (documentRef, label, action, extra = {}) => {
   for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
   return node2;
 };
-var input = (documentRef, label, name, value = "", type = "text") => {
+var input = (documentRef, label, name, value = "", type2 = "text") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
   wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
-  const control = documentRef.createElement(type === "textarea" ? "textarea" : "input");
+  const control = documentRef.createElement(type2 === "textarea" ? "textarea" : "input");
   control.name = name;
   control.value = value == null ? "" : String(value);
   control.dataset.desktopField = name;
-  if (type !== "textarea") control.type = type;
-  if (type === "textarea") control.rows = 4;
+  if (type2 !== "textarea") control.type = type2;
+  if (type2 === "textarea") control.rows = 4;
   wrap.append(control);
   return wrap;
 };
@@ -34285,7 +34328,7 @@ function localDate(now, timezone) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).formatToParts(new Date(now)).map(({ type, value }) => [type, value]));
+  }).formatToParts(new Date(now)).map(({ type: type2, value }) => [type2, value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 function addDays(date, days) {
@@ -34430,6 +34473,7 @@ var ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 var ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
 var PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var PDF_PREVIEW_MAX_LABEL = "8 MB";
+var OFFICE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
@@ -34453,11 +34497,50 @@ function displayArtifactType(artifact) {
   if (["xls", "xlsx", "ods"].includes(extension)) return "Spreadsheet";
   if (extension === "csv") return "CSV file";
   if (extension === "pdf") return "PDF document";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "Presentation";
   if (["txt", "log"].includes(extension)) return "Text document";
   if (extension === "md") return "Markdown document";
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) return "Image";
   if (extension === "zip") return "ZIP archive";
   return extension && extension.length <= 8 ? `${extension.toUpperCase()} file` : "File";
+}
+function isOfficePreviewCandidate(artifact, capabilities) {
+  if (!capabilities?.includes("office_preview_v1")) return false;
+  const name = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase();
+  return [".docx", ".xlsx", ".pptx"].some((extension) => name.endsWith(extension));
+}
+function normaliseOfficePreview(value, artifact) {
+  if (!value || !["document", "spreadsheet", "presentation"].includes(value.kind)) {
+    throw new Error("Invalid Office preview");
+  }
+  let remaining = 3e4;
+  const safeText3 = (input2) => {
+    if (typeof input2 !== "string") throw new Error("Invalid Office preview text");
+    const text3 = input2.slice(0, Math.min(remaining, 3e4));
+    remaining -= text3.length;
+    return text3;
+  };
+  const paragraphs = (input2) => {
+    if (!Array.isArray(input2)) throw new Error("Invalid Office preview paragraphs");
+    return input2.slice(0, 200).map(safeText3);
+  };
+  const common = { artifactId: artifact.artifact_id, filename: displayArtifactFilename(artifact.filename), kind: value.kind, truncated: value.truncated === true };
+  if (value.kind === "document") return { ...common, paragraphs: paragraphs(value.paragraphs) };
+  if (value.kind === "presentation") {
+    if (!Array.isArray(value.slides)) throw new Error("Invalid Office preview slides");
+    return { ...common, slides: value.slides.slice(0, 5).map((slide2, index) => ({
+      name: `Slide ${index + 1}`,
+      paragraphs: paragraphs(slide2?.paragraphs)
+    })) };
+  }
+  if (!Array.isArray(value.sheets)) throw new Error("Invalid Office preview sheets");
+  return { ...common, sheets: value.sheets.slice(0, 3).map((sheet2, index) => {
+    if (!Array.isArray(sheet2?.rows)) throw new Error("Invalid Office preview rows");
+    return { name: `Sheet ${index + 1}`, rows: sheet2.rows.slice(0, 100).map((row) => {
+      if (!Array.isArray(row)) throw new Error("Invalid Office preview cells");
+      return row.slice(0, 20).map(safeText3);
+    }) };
+  }) };
 }
 function isStandaloneArtifactLink(text3, artifacts) {
   const match = /^\[[^\]\r\n]{1,240}\]\(<([^<>\r\n]+)>\)\.?$/.exec(String(text3 ?? "").trim());
@@ -34487,6 +34570,9 @@ function artifactErrorCode(error) {
   return "";
 }
 function artifactPreviewLimit(artifact) {
+  if ([".docx", ".xlsx", ".pptx"].some((extension) => displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase().endsWith(extension))) {
+    return { bytes: OFFICE_PREVIEW_MAX_BYTES, label: "8 MB" };
+  }
   if (isPdfArtifactCandidate(artifact)) {
     return { bytes: PDF_PREVIEW_MAX_BYTES, label: PDF_PREVIEW_MAX_LABEL };
   }
@@ -36608,6 +36694,9 @@ template.innerHTML = `
       gap: 2px;
       min-width: 0;
     }
+    .file-select-content { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .file-type-icon { display: inline-flex; flex: 0 0 28px; width: 28px; height: 33px; align-items: center; justify-content: center; }
+    .file-type-icon svg { display: block; width: 100%; height: 100%; }
 
     .artifact-refresh-status {
       display: flex;
@@ -36696,6 +36785,17 @@ template.innerHTML = `
       max-height: 560px;
       object-fit: contain;
     }
+    .office-preview { display: grid; gap: 16px; padding: 18px; color: var(--text-color); }
+    .office-preview-heading { display: flex; gap: 12px; align-items: center; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .office-preview-heading .file-type-icon { flex-basis: 36px; width: 36px; height: 42px; }
+    .office-preview-note { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); line-height: 1.4; }
+    .office-preview-page { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); box-shadow: 0 3px 12px color-mix(in srgb, var(--text-color) 6%, transparent); }
+    .office-preview-page p { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .office-preview-page h3 { margin: 0 0 4px; font-size: var(--font-control-size); }
+    .office-preview-table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+    .office-preview table { border-collapse: collapse; min-width: 100%; font-size: var(--font-caption-size); }
+    .office-preview th, .office-preview td { min-width: 74px; max-width: 240px; padding: 6px 9px; border: 1px solid var(--border-color); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .office-preview th { background: var(--surface-muted); font-weight: 600; }
 
     .pdf-preview-shell {
       display: grid;
@@ -36901,9 +37001,8 @@ template.innerHTML = `
 
     .artifact-file-card { display: grid; gap: 12px; max-width: min(480px, 100%); padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); }
     .artifact-file-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .artifact-file-icon { display: inline-grid; flex: 0 0 46px; width: 46px; height: 54px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color)); border-radius: 7px; background: color-mix(in srgb, var(--accent-soft) 44%, var(--surface-bg)); color: var(--text-color); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
-    .artifact-file-icon[data-kind="excel"] { color: #0d6b41; border-color: color-mix(in srgb, #0d6b41 35%, var(--border-color)); background: color-mix(in srgb, #0d6b41 10%, var(--surface-bg)); }
-    .artifact-file-icon[data-kind="word"] { color: #245ca5; border-color: color-mix(in srgb, #245ca5 35%, var(--border-color)); background: color-mix(in srgb, #245ca5 10%, var(--surface-bg)); }
+    .artifact-file-icon { display: inline-flex; flex: 0 0 46px; width: 46px; height: 54px; align-items: center; justify-content: center; }
+    .artifact-file-icon svg { display: block; width: 42px; height: 48px; }
     .artifact-file-info { display: grid; min-width: 0; gap: 3px; }
     .artifact-file-name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
     .artifact-file-meta { color: var(--muted-color); font-size: var(--font-caption-size); }
@@ -44862,7 +44961,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const generatedImage = isGeneratedImageArtifact(artifact);
       const row = document.createElement("div");
       row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
-      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact);
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact) || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
@@ -44876,7 +44975,14 @@ var CodexBridgePanel = class extends HTMLElement {
         this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
         this._textElement("span", "row-meta", `${displayArtifactType(artifact)}${size}`)
       );
-      select.append(main);
+      const content = document.createElement("div");
+      content.className = "file-select-content";
+      const icon = document.createElement("span");
+      icon.className = "file-type-icon";
+      icon.setAttribute("aria-hidden", "true");
+      this._appendTrustedIcon(icon, fileTypeIconMarkup(artifact.filename || artifact.relative_path));
+      content.append(icon, main);
+      select.append(content);
       const download = this._actionButton(
         "download-button small",
         "download-artifact",
@@ -44931,6 +45037,10 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const preview = this._artifactPreview;
+    if (["document", "spreadsheet", "presentation"].includes(preview.kind)) {
+      this._renderOfficePreview(preview, container);
+      return;
+    }
     if (preview.kind === "pdf") {
       this._renderPdfPreview(preview, container);
       return;
@@ -44956,6 +45066,65 @@ var CodexBridgePanel = class extends HTMLElement {
       binary.append(actions);
     }
     container.append(binary);
+  }
+  _renderOfficePreview(preview, container) {
+    const shell = document.createElement("div");
+    shell.className = "office-preview";
+    const heading = document.createElement("div");
+    heading.className = "office-preview-heading";
+    const icon = document.createElement("span");
+    icon.className = "file-type-icon";
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(preview.filename));
+    heading.append(icon, this._textElement("span", "", preview.filename));
+    shell.append(heading);
+    const note = preview.truncated ? "Text-only preview is limited. Download the file for full content and formatting." : "Text-only preview. Download the file for formatting, images, charts and other content.";
+    shell.append(this._textElement("p", "office-preview-note", note));
+    if (preview.kind === "spreadsheet") {
+      for (const sheet2 of preview.sheets || []) {
+        const section2 = document.createElement("section");
+        section2.append(this._textElement("h3", "", sheet2.name));
+        const wrap = document.createElement("div");
+        wrap.className = "office-preview-table-wrap";
+        const table = document.createElement("table");
+        table.setAttribute("aria-label", `${sheet2.name} preview`);
+        const width = Math.max(1, ...sheet2.rows.map((row) => row.length));
+        const header = document.createElement("tr");
+        header.append(document.createElement("th"));
+        for (let index = 0; index < width; index += 1) {
+          const cell = this._textElement("th", "", String.fromCharCode(65 + index));
+          cell.scope = "col";
+          header.append(cell);
+        }
+        table.append(header);
+        sheet2.rows.forEach((row, index) => {
+          const line = document.createElement("tr");
+          const number = this._textElement("th", "", String(index + 1));
+          number.scope = "row";
+          line.append(number);
+          for (let column = 0; column < width; column += 1) {
+            line.append(this._textElement("td", "", row[column] || ""));
+          }
+          table.append(line);
+        });
+        wrap.append(table);
+        section2.append(wrap);
+        shell.append(section2);
+      }
+    } else {
+      const sections = preview.kind === "presentation" ? preview.slides : [{ paragraphs: preview.paragraphs }];
+      for (const sectionData of sections || []) {
+        const page = document.createElement("section");
+        page.className = "office-preview-page";
+        if (sectionData.name) page.append(this._textElement("h3", "", sectionData.name));
+        for (const paragraph of sectionData.paragraphs || []) {
+          page.append(this._textElement("p", "", paragraph));
+        }
+        if (!sectionData.paragraphs?.length) page.append(this._textElement("p", "empty-note", "No text in this section."));
+        shell.append(page);
+      }
+    }
+    container.append(shell);
   }
   _renderPdfPreview(preview, container) {
     if (!(preview?.blob instanceof Blob)) {
@@ -45806,9 +45975,6 @@ var CodexBridgePanel = class extends HTMLElement {
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     const artifact = this._artifacts.find((item) => item?.artifact_id === payload.artifact_id);
     const filename = displayArtifactFilename(artifact?.filename || payload.filename || payload.relative_path, "File");
-    const extension = filename.split(".").pop()?.toLowerCase() || "";
-    const kind = ["doc", "docx", "odt", "rtf"].includes(extension) ? "word" : ["xls", "xlsx", "ods", "csv"].includes(extension) ? "excel" : "file";
-    const badge = extension && extension.length <= 5 ? extension.toUpperCase() : "FILE";
     const article = document.createElement("article");
     article.className = "message assistant artifact-file-message";
     article.dataset.sequence = String(event?.sequence ?? "artifact-file");
@@ -45817,9 +45983,9 @@ var CodexBridgePanel = class extends HTMLElement {
     bubble.className = "bubble artifact-file-card";
     const heading = document.createElement("div");
     heading.className = "artifact-file-heading";
-    const icon = this._textElement("span", "artifact-file-icon", badge);
-    icon.dataset.kind = kind;
+    const icon = this._textElement("span", "artifact-file-icon", "");
     icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(filename));
     const info2 = document.createElement("div");
     info2.className = "artifact-file-info";
     const size = Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0 ? ` · ${this._formatBytes(artifact.size_bytes)}` : "";
@@ -45832,7 +45998,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (artifact?.artifact_id) {
       const actions = document.createElement("div");
       actions.className = "artifact-file-actions";
-      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact);
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact) || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const preview = this._actionButton(
         "artifact-file-preview",
         "open-artifact-preview",
@@ -46610,12 +46776,12 @@ var CodexBridgePanel = class extends HTMLElement {
     this._authPollInFlight = false;
   }
   async _copyAuthCode() {
-    const code = this._authViewModel().code;
-    if (!code) {
+    const code2 = this._authViewModel().code;
+    if (!code2) {
       return;
     }
     try {
-      await this._writeClipboardText(code);
+      await this._writeClipboardText(code2);
       this._clearError();
     } catch (error) {
       this._setError(error);
@@ -46994,7 +47160,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const previewToken = ++this._previewToken;
     const advertisedDescriptor = previewDescriptor(artifact, { type: artifact.mime_type });
     const pdfCandidate = isPdfArtifactCandidate(artifact);
-    if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
+    const officeCandidate = isOfficePreviewCandidate(artifact, this._config?.capabilities);
+    if (advertisedDescriptor.kind === "binary" && !pdfCandidate && !officeCandidate) {
       this._revokePreviewUrl();
       this._artifactPreview = {
         ...advertisedDescriptor,
@@ -47015,6 +47182,17 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     try {
+      if (officeCandidate) {
+        const result = await this._callWS("preview_artifact", {
+          thread_id: this._selectedThreadId,
+          artifact_id: artifactId
+        });
+        if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+        this._revokePreviewUrl();
+        this._artifactPreview = normaliseOfficePreview(result, artifact);
+        this._render();
+        return;
+      }
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const limit = artifactPreviewLimit(artifact);
@@ -48265,8 +48443,8 @@ var CodexBridgePanel = class extends HTMLElement {
   _safeUiError(error) {
     const candidate = typeof error === "string" ? error : error?.body?.message || error?.body?.error?.message || error?.error?.message || error?.message || "The Codex request did not complete.";
     const withoutControlCharacters = Array.from(String(candidate), (character) => {
-      const code = character.codePointAt(0);
-      return code <= 8 || code === 11 || code === 12 || code >= 14 && code <= 31 || code === 127 ? " " : character;
+      const code2 = character.codePointAt(0);
+      return code2 <= 8 || code2 === 11 || code2 === 12 || code2 >= 14 && code2 <= 31 || code2 === 127 ? " " : character;
     }).join("");
     const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
     return (safe || "The Codex request did not complete.").slice(0, 240);
@@ -48309,8 +48487,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const text3 = Array.from(String(label ?? ""), (character) => {
-      const code = character.codePointAt(0);
-      return code <= 31 || code === 127 ? " " : character;
+      const code2 = character.codePointAt(0);
+      return code2 <= 31 || code2 === 127 ? " " : character;
     }).join("").replace(/\s+/gu, " ").trim().slice(0, 120);
     if (!text3) {
       return;

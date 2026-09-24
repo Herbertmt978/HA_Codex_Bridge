@@ -1749,6 +1749,42 @@ test("shows the prepare and save states on a generic Files-row download", async 
   await expect(downloadButton).toHaveText("Save file");
 });
 
+for (const width of [390, 1280]) {
+  test(`previews an Office file with a recognisable icon at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(async () => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "office_preview_v1"] };
+      const original = panel._callWS.bind(panel);
+      panel._callWS = (action, payload) => action === "preview_artifact"
+        ? Promise.resolve({ kind: "document", paragraphs: ["Hello from Word"], truncated: false })
+        : original(action, payload);
+      const artifact = {
+        artifact_id: "art_word_preview", filename: "hello.docx", relative_path: "hello.docx",
+        mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size_bytes: 929,
+      };
+      panel._artifacts = [...panel._artifacts, artifact];
+      panel._selectedArtifactId = artifact.artifact_id;
+      await panel._loadArtifactPreview(artifact.artifact_id);
+      panel._sideTab = "files";
+      panel._renderSideTabs();
+      panel._renderArtifacts();
+      panel._renderArtifactPreview();
+    });
+    const panel = page.locator("codex-bridge-panel");
+    if (width === 390) await panel.locator("#mobile-context-toggle").click();
+    const preview = panel.locator("#artifact-preview");
+    await expect(preview.locator(".office-preview-page")).toContainText("Hello from Word");
+    await expect(panel.locator('.file-select[data-artifact-id="art_word_preview"] .file-type-icon svg')).toBeVisible();
+    await expect(preview.locator(".file-type-icon svg")).toBeVisible();
+    expect(await preview.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await preview.locator("img, iframe, object, embed").count()).toBe(0);
+  });
+}
+
 test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const requests = [];

@@ -55,6 +55,7 @@ describe("account details and file messages", () => {
 
   it("renders a safe Word file card with file details and authenticated download actions", () => {
     const element = panel();
+    element._config = { capabilities: ["office_preview_v1"] };
     const artifact = {
       artifact_id: "file-safe", filename: "/config/workspaces/hello.docx",
       mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -71,7 +72,8 @@ describe("account details and file messages", () => {
     expect(card.textContent).toContain("Word document · 512 B");
     expect(card.textContent).not.toContain("/config/workspaces");
     expect(card.querySelector("img")).toBeNull();
-    expect(card.querySelector('[data-action="open-artifact-preview"]')?.textContent).toBe("View file");
+    expect(card.querySelector(".artifact-file-icon svg")).not.toBeNull();
+    expect(card.querySelector('[data-action="open-artifact-preview"]')?.textContent).toBe("Preview");
     card.querySelector('[data-action="download-artifact"]').click();
     expect(download).toHaveBeenCalledWith(artifact.artifact_id);
   });

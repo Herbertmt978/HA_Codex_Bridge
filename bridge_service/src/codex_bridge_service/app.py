@@ -718,6 +718,7 @@ def create_app(
                 "skills_v1",
                 "plugins_v1",
                 "agents_v1",
+                "office_preview_v1",
             ]
         )
         if resolved_account_profile_store is not None:

@@ -222,6 +222,15 @@ class _ReleasingBinaryStream:
     def seek(self, offset: int, whence: int = 0) -> int:
         return self._stream.seek(offset, whence)
 
+    def tell(self) -> int:
+        return self._stream.tell()
+
+    def seekable(self) -> bool:
+        return self._stream.seekable()
+
+    def readable(self) -> bool:
+        return self._stream.readable()
+
     def close(self) -> None:
         release = self._release
         self._release = None
