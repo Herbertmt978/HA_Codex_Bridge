@@ -79,6 +79,7 @@ class AccountProfileStore:
     """Store profile credentials without exposing them through the public API."""
 
     def __init__(self, root: Path, codex_home: Path) -> None:
+        self.private_root = Path(root)
         self._profiles = WorkspaceBoundary(root, create=True)
         self._codex = WorkspaceBoundary(codex_home, create=True)
         root_fd = self._profiles.open_directory_fd(".")
@@ -251,6 +252,20 @@ class AccountProfileStore:
             if _credential_account_id(raw) != profile["account_id"]:
                 raise AccountProfileError("The saved account identity has changed.")
             return raw, profile["account_id"]
+
+    def refresh_saved_credential(
+        self, profile_id: str, previous: bytes, refreshed: bytes,
+    ) -> bool:
+        """Keep a provider-refreshed token only if this profile is still unchanged."""
+        if not isinstance(refreshed, bytes) or not refreshed or len(refreshed) > _MAX_CREDENTIAL_BYTES:
+            return False
+        with self._lock:
+            current, account_id = self.target_credential(profile_id)
+            if current != previous or _credential_account_id(refreshed) != account_id:
+                return False
+            if refreshed != current:
+                self._profiles.atomic_write_bytes(f"{profile_id}/auth.json", refreshed)
+            return True
 
     def activate_credential(self, raw: bytes) -> None:
         if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_CREDENTIAL_BYTES:

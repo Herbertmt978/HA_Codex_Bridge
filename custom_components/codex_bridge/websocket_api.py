@@ -70,6 +70,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_cancel_auth_login,
         ws_logout_auth,
         ws_list_account_profiles,
+        ws_account_profile_details,
         ws_save_account_profile,
         ws_switch_account_profile,
         ws_prepare_new_account_login,
@@ -366,6 +367,18 @@ async def ws_switch_account_profile(hass, connection, msg) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_switch_account_profile(msg["profile_id"]),
+    )
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/account_profile_details",
+    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+})
+@websocket_api.async_response
+async def ws_account_profile_details(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_account_profile_details(msg["profile_id"]),
     )
 
 

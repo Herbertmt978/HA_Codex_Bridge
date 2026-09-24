@@ -116,6 +116,31 @@ function displayArtifactMime(value) {
   return mime.slice(0, 120) || "image";
 }
 
+function displayArtifactType(artifact) {
+  const filename = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file");
+  const extension = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  if (["doc", "docx", "odt", "rtf"].includes(extension)) return "Word document";
+  if (["xls", "xlsx", "ods"].includes(extension)) return "Spreadsheet";
+  if (extension === "csv") return "CSV file";
+  if (extension === "pdf") return "PDF document";
+  if (["txt", "log"].includes(extension)) return "Text document";
+  if (extension === "md") return "Markdown document";
+  if (["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) return "Image";
+  if (extension === "zip") return "ZIP archive";
+  return extension && extension.length <= 8 ? `${extension.toUpperCase()} file` : "File";
+}
+
+function isStandaloneArtifactLink(text, artifacts) {
+  const match = /^\[[^\]\r\n]{1,240}\]\(<([^<>\r\n]+)>\)\.?$/.exec(String(text ?? "").trim());
+  if (!match) return false;
+  const target = match[1].replaceAll("\\", "/");
+  const targetName = displayArtifactFilename(target);
+  return artifacts.some((artifact) => [artifact?.filename, artifact?.relative_path]
+    .some((value) => typeof value === "string" && (
+      value.replaceAll("\\", "/") === target || displayArtifactFilename(value) === targetName
+    )));
+}
+
 function canDeferArtifactRefresh(error) {
   return artifactErrorCode(error) === ARTIFACT_RESERVATION_CONFLICT_CODE;
 }
@@ -2571,6 +2596,24 @@ template.innerHTML = `
       border-right: 1px solid var(--border-color);
     }
 
+    .artifact-file-card { display: grid; gap: 12px; max-width: min(480px, 100%); padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); }
+    .artifact-file-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .artifact-file-icon { display: inline-grid; flex: 0 0 46px; width: 46px; height: 54px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color)); border-radius: 7px; background: color-mix(in srgb, var(--accent-soft) 44%, var(--surface-bg)); color: var(--text-color); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+    .artifact-file-icon[data-kind="excel"] { color: #0d6b41; border-color: color-mix(in srgb, #0d6b41 35%, var(--border-color)); background: color-mix(in srgb, #0d6b41 10%, var(--surface-bg)); }
+    .artifact-file-icon[data-kind="word"] { color: #245ca5; border-color: color-mix(in srgb, #245ca5 35%, var(--border-color)); background: color-mix(in srgb, #245ca5 10%, var(--surface-bg)); }
+    .artifact-file-info { display: grid; min-width: 0; gap: 3px; }
+    .artifact-file-name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+    .artifact-file-meta { color: var(--muted-color); font-size: var(--font-caption-size); }
+    .artifact-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .artifact-file-actions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+    .artifact-file-actions button:hover, .artifact-file-actions button:focus-visible { background: var(--surface-muted); }
+    .artifact-file-actions button:disabled { opacity: .55; cursor: default; }
+
+    .rail-pane:has(.app-menu:not([hidden])) {
+      overflow: visible;
+      z-index: 20;
+    }
+
     .side-pane {
       border-left: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
     }
@@ -2604,8 +2647,10 @@ template.innerHTML = `
       position: absolute;
       z-index: 16;
       top: calc(100% - 5px);
-      right: 10px;
-      width: min(280px, calc(100% - 20px));
+      left: 10px;
+      width: min(420px, calc(100vw - 44px));
+      max-height: min(680px, calc(100dvh - 96px));
+      overflow: auto;
       display: grid;
       gap: 2px;
       padding: 5px;
@@ -2662,18 +2707,53 @@ template.innerHTML = `
 
     .account-menu-title {
       display: block;
-      padding: 2px 9px 6px;
-      color: var(--muted-color);
-      font-size: var(--font-caption-size);
+      padding: 8px 9px 10px;
+      color: var(--text-color);
+      font-size: 15px;
+      font-weight: 600;
     }
 
     .account-menu-row {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      margin: 4px 5px 10px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--surface-bg);
     }
 
-    .account-menu-row .app-menu-item { flex: 1; min-width: 0; }
+    .account-menu-row.current {
+      border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+      background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface-bg));
+    }
+
+    .account-menu-row .app-menu-item { min-width: 0; }
+
+    .account-menu-identity { min-width: 0; }
+
+    .account-menu-name { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .account-menu-plan { display: block; margin-top: 2px; color: var(--muted-color); font-size: var(--font-caption-size); }
+
+    .account-menu-actions { display: flex; align-items: start; gap: 4px; }
+
+    .account-menu-select { padding: 5px 8px; min-height: 30px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+
+    .account-menu-select:hover, .account-menu-select:focus-visible { background: var(--surface-muted); }
+
+    .account-menu-select:disabled { cursor: default; border-color: transparent; background: transparent; color: var(--muted-color); }
+
+    .account-menu-metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px; }
+
+    .account-menu-metric { min-width: 0; }
+
+    .account-menu-metric-label { display: block; color: var(--muted-color); font-size: 11px; }
+
+    .account-menu-metric-value { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+    .account-menu-note { grid-column: 1 / -1; color: var(--muted-color); font-size: 11px; line-height: 1.35; }
 
     .account-menu-row .app-menu-item span:first-child {
       overflow: hidden;
@@ -5788,6 +5868,8 @@ class CodexBridgePanel extends HTMLElement {
     this._activeDestination = "chats";
     this._appMenuOpen = false;
     this._accountProfiles = [];
+    this._accountProfileDetails = new Map();
+    this._accountProfileDetailsGeneration = 0;
     this._accountProfilesLoaded = false;
     this._accountProfilePending = false;
     this._accountProfileFeedback = "";
@@ -6951,7 +7033,7 @@ class CodexBridgePanel extends HTMLElement {
     add.disabled = this._accountProfilePending || (signedIn && !this._accountProfiles.some((item) => item.active));
     accountFeedback.textContent = this._accountProfileFeedback
       || (this._accountProfilePending ? "Updating accounts…" : "");
-    const key = JSON.stringify([this._accountProfiles, this._accountProfilesLoaded, this._accountProfilePending, this._pendingAccountRemovalId]);
+    const key = JSON.stringify([this._accountProfiles, [...this._accountProfileDetails], this._accountProfilesLoaded, this._accountProfilePending, this._pendingAccountRemovalId]);
     if (key === this._accountMenuRenderKey) return;
     this._accountMenuRenderKey = key;
     const rows = [];
@@ -6962,20 +7044,24 @@ class CodexBridgePanel extends HTMLElement {
     }
     for (const profile of this._accountProfiles) {
       const row = document.createElement("div");
-      row.className = "account-menu-row";
+      row.className = `account-menu-row${profile.active ? " current" : ""}`;
+      const identity = document.createElement("div");
+      identity.className = "account-menu-identity";
+      identity.append(
+        this._textElement("span", "account-menu-name", profile.label),
+        this._textElement("span", "account-menu-plan", this._accountPlanLabel(this._accountProfileDetails.get(profile.id)?.plan || profile.plan))
+      );
+      const actions = document.createElement("div");
+      actions.className = "account-menu-actions";
       const select = document.createElement("button");
       select.type = "button";
-      select.className = "app-menu-item";
+      select.className = "account-menu-select";
       select.dataset.action = "switch-account-profile";
       select.dataset.profileId = profile.id;
       select.disabled = this._accountProfilePending || profile.active;
-      const name = document.createElement("span");
-      name.textContent = profile.label;
-      const state = document.createElement("span");
-      state.className = "menu-shortcut";
-      state.textContent = profile.active ? "Current" : "Switch";
-      select.append(name, state);
-      row.append(select);
+      select.textContent = profile.active ? "Current" : "Switch";
+      select.setAttribute("aria-label", profile.active ? `${profile.label}, current account` : `Switch to ${profile.label}`);
+      actions.append(select);
       if (!profile.active) {
         const remove = document.createElement("button");
         remove.type = "button";
@@ -6986,11 +7072,57 @@ class CodexBridgePanel extends HTMLElement {
         remove.textContent = this._pendingAccountRemovalId === profile.id ? "✓" : "×";
         remove.setAttribute("aria-label", this._pendingAccountRemovalId === profile.id
           ? `Confirm removal of ${profile.label}` : `Remove ${profile.label}`);
-        row.append(remove);
+        actions.append(remove);
       }
+      row.append(identity, actions, this._accountMetrics(profile));
       rows.push(row);
     }
     list.replaceChildren(...rows);
+  }
+
+  _accountPlanLabel(plan) {
+    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
+    return plan && names[plan] ? `ChatGPT ${names[plan]}` : "Subscription unavailable";
+  }
+
+  _accountMetrics(profile) {
+    const metrics = document.createElement("div");
+    metrics.className = "account-menu-metrics";
+    const details = this._accountProfileDetails.get(profile.id);
+    const windowValue = (name) => {
+      const window = details?.windows?.find((item) => item.name === name);
+      if (name === "5 hours" && !window && details?.status === "available"
+        && details.windows?.some((item) => item.name === "Weekly")) return "Off";
+      return Number.isFinite(window?.remaining_percent)
+        ? `${Math.round(window.remaining_percent)}% remaining`
+        : "Unavailable";
+    };
+    const expiry = Number.isSafeInteger(details?.next_reset_expiry)
+      ? new Date(details.next_reset_expiry * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : details?.available_resets === 0 ? "No resets available" : "Unavailable";
+    const values = [
+      ["5-hour usage", windowValue("5 hours")],
+      ["Weekly usage", windowValue("Weekly")],
+      ["Available resets", Number.isSafeInteger(details?.available_resets) ? String(details.available_resets) : "Unavailable"],
+      [details?.expiry_complete ? "Next reset expiry" : "Next known expiry", expiry],
+    ];
+    for (const [label, value] of values) {
+      const metric = document.createElement("div");
+      metric.className = "account-menu-metric";
+      metric.append(
+        this._textElement("span", "account-menu-metric-label", label),
+        this._textElement("span", "account-menu-metric-value", value)
+      );
+      metrics.append(metric);
+    }
+    const note = details?.status === "reauthentication_required"
+      ? "This account needs a fresh sign-in before its usage can be read."
+      : details?.status === "unavailable" ? "Usage is unavailable for this saved sign-in. Sign in again if it does not recover."
+        : details?.status === "loading" ? "Checking this account…"
+          : details?.updated_at ? `Updated ${new Date(details.updated_at).toLocaleString()}`
+            : "Usage has not been checked yet.";
+    metrics.append(this._textElement("span", "account-menu-note", note));
+    return metrics;
   }
 
   async _loadAccountProfiles() {
@@ -7000,10 +7132,36 @@ class CodexBridgePanel extends HTMLElement {
       this._accountProfiles = Array.isArray(profiles) ? profiles : [];
       this._accountProfilesLoaded = true;
       this._accountProfileFeedback = "";
+      if (this._config?.capabilities?.includes("account_profile_details_v1")) {
+        void this._loadAccountProfileDetails(this._accountProfiles, ++this._accountProfileDetailsGeneration);
+      }
     } catch {
       this._accountProfileFeedback = "Saved accounts could not be loaded.";
     }
     this._renderAppMenu();
+  }
+
+  async _loadAccountProfileDetails(profiles, generation) {
+    const known = new Set(profiles.map((item) => item.id));
+    for (const id of this._accountProfileDetails.keys()) {
+      if (!known.has(id)) this._accountProfileDetails.delete(id);
+    }
+    for (const profile of profiles) {
+      if (generation !== this._accountProfileDetailsGeneration) return;
+      this._accountProfileDetails.set(profile.id, { status: "loading" });
+      this._renderAppMenu();
+      try {
+        const details = await this._callWS("account_profile_details", { profile_id: profile.id });
+        if (generation === this._accountProfileDetailsGeneration && this._accountProfiles.some((item) => item.id === profile.id)) {
+          this._accountProfileDetails.set(profile.id, details);
+        }
+      } catch {
+        if (generation === this._accountProfileDetailsGeneration) {
+          this._accountProfileDetails.set(profile.id, { status: "unavailable" });
+        }
+      }
+      if (generation === this._accountProfileDetailsGeneration) this._renderAppMenu();
+    }
   }
 
   async _saveAccountProfile() {
@@ -10189,6 +10347,7 @@ class CodexBridgePanel extends HTMLElement {
       );
     }
     if (event.event_type === "message.completed") {
+      if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
       return this._renderMessage("assistant", payload.text, event.sequence);
     }
     if (
@@ -10231,11 +10390,7 @@ class CodexBridgePanel extends HTMLElement {
       if (generatedImage || payload.source === "generated_image") {
         return this._renderGeneratedImageCard(event, generatedImage);
       }
-      return this._textElement(
-        "div",
-        "event-row",
-        `Artifact ready: ${payload.relative_path || payload.filename || "artifact"}`
-      );
+      return this._renderFileArtifactCard(event);
     }
     if (event.event_type === "thread.updated") {
       return this._textElement("div", "event-row", "Chat settings updated");
@@ -10681,6 +10836,7 @@ class CodexBridgePanel extends HTMLElement {
         return false;
       }
       this._artifacts = Array.isArray(artifacts) ? artifacts : [];
+      this._forceMessageRebuild = true;
       this._clearArtifactRefreshRetry();
       this._syncSelectedArtifact();
       this._render();
@@ -10745,10 +10901,12 @@ class CodexBridgePanel extends HTMLElement {
       const generatedImage = isGeneratedImageArtifact(artifact);
       const row = document.createElement("div");
       row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
+        || isPdfArtifactCandidate(artifact);
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
-        `Preview ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
+        `${canPreview ? "Preview" : "View file details for"} ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
       );
       select.dataset.artifactId = String(artifact.artifact_id || "");
       const main = document.createElement("div");
@@ -10756,7 +10914,7 @@ class CodexBridgePanel extends HTMLElement {
       const size = artifact.size_bytes ? ` / ${this._formatBytes(artifact.size_bytes)}` : "";
       main.append(
         this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
-        this._textElement("span", "row-meta", `${artifact.mime_type || "application/octet-stream"}${size}`)
+        this._textElement("span", "row-meta", `${displayArtifactType(artifact)}${size}`)
       );
       select.append(main);
       const download = this._actionButton(
@@ -10788,6 +10946,11 @@ class CodexBridgePanel extends HTMLElement {
     const container = this.shadowRoot.getElementById("artifact-preview");
     if (!container) return;
     const currentPreview = this._artifactPreview;
+    const sectionLabel = this.shadowRoot.querySelector("#artifact-preview-section > .section-label");
+    if (sectionLabel) {
+      sectionLabel.textContent = currentPreview?.kind === "binary" && currentPreview.artifactId === this._selectedArtifactId
+        ? "File details" : "Preview";
+    }
     const existingPdfShell = container.querySelector(".pdf-preview-shell");
     if (
       currentPreview?.kind === "pdf"
@@ -11695,7 +11858,7 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const [thread, events, status, interactions] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
-        this._callWS("get_events", { thread_id: threadId, after: 0 }),
+        this._loadThreadEventHistory(threadId),
         this._callWS("get_status"),
         this._listPendingInteractions(threadId),
       ]);
@@ -11777,6 +11940,90 @@ class CodexBridgePanel extends HTMLElement {
       }
       return false;
     }
+  }
+
+  _renderFileArtifactCard(event) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const artifact = this._artifacts.find((item) => item?.artifact_id === payload.artifact_id);
+    const filename = displayArtifactFilename(artifact?.filename || payload.filename || payload.relative_path, "File");
+    const extension = filename.split(".").pop()?.toLowerCase() || "";
+    const kind = ["doc", "docx", "odt", "rtf"].includes(extension) ? "word"
+      : ["xls", "xlsx", "ods", "csv"].includes(extension) ? "excel" : "file";
+    const badge = extension && extension.length <= 5 ? extension.toUpperCase() : "FILE";
+    const article = document.createElement("article");
+    article.className = "message assistant artifact-file-message";
+    article.dataset.sequence = String(event?.sequence ?? "artifact-file");
+    article.setAttribute("aria-label", `File ready: ${filename}`);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble artifact-file-card";
+    const heading = document.createElement("div");
+    heading.className = "artifact-file-heading";
+    const icon = this._textElement("span", "artifact-file-icon", badge);
+    icon.dataset.kind = kind;
+    icon.setAttribute("aria-hidden", "true");
+    const info = document.createElement("div");
+    info.className = "artifact-file-info";
+    const size = Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0
+      ? ` · ${this._formatBytes(artifact.size_bytes)}` : "";
+    info.append(
+      this._textElement("span", "artifact-file-name", filename),
+      this._textElement("span", "artifact-file-meta", `${displayArtifactType(artifact || payload)}${size}`)
+    );
+    heading.append(icon, info);
+    bubble.append(heading);
+    if (artifact?.artifact_id) {
+      const actions = document.createElement("div");
+      actions.className = "artifact-file-actions";
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
+        || isPdfArtifactCandidate(artifact);
+      const preview = this._actionButton("artifact-file-preview", "open-artifact-preview",
+        `${canPreview ? "Preview" : "View file details for"} ${filename}`);
+      preview.dataset.artifactId = artifact.artifact_id;
+      preview.textContent = canPreview ? "Preview" : "View file";
+      const download = this._actionButton("artifact-file-download", "download-artifact",
+        this._artifactDownloadActionLabel(artifact.artifact_id, filename));
+      download.dataset.artifactId = artifact.artifact_id;
+      const state = this._artifactDownloadState(artifact.artifact_id);
+      download.textContent = this._artifactDownloadVisibleLabel(state);
+      download.disabled = state === "pending";
+      actions.append(preview, download);
+      bubble.append(actions);
+    } else {
+      bubble.append(this._textElement("span", "artifact-file-meta", "Available in Files"));
+    }
+    article.append(bubble);
+    return article;
+  }
+
+  async _loadThreadEventHistory(threadId) {
+    if (!this._config?.capabilities?.includes("api_v1")) {
+      return this._callWS("get_events", { thread_id: threadId, after: 0 });
+    }
+    const history = [];
+    let cursor = 0;
+    // A full replay is needed before the transcript can be considered current.
+    // The backend pages this journal; one page can predate the latest user prompt.
+    for (let page = 0; page < 100; page += 1) {
+      const batch = await this._callWS("get_events", {
+        after: cursor,
+        scopes: ["thread"],
+        thread_ids: [threadId],
+      });
+      if (Array.isArray(batch)) return batch;
+      if (!batch || !Array.isArray(batch.events)) throw new Error("Chat history is unavailable.");
+      for (const event of batch.events) {
+        if (event.scope === "thread" && event.thread_id === threadId && Number.isSafeInteger(event.cursor)) {
+          history.push({ ...event, sequence: event.cursor });
+        }
+      }
+      if (history.length > 10000) history.splice(0, history.length - 10000);
+      if (!batch.has_more) return history;
+      if (!Number.isSafeInteger(batch.next_cursor) || batch.next_cursor <= cursor) {
+        throw new Error("Chat history could not advance.");
+      }
+      cursor = batch.next_cursor;
+    }
+    throw new Error("Chat history is too long to load safely.");
   }
 
   async _retryError() {
@@ -13014,7 +13261,10 @@ class CodexBridgePanel extends HTMLElement {
     const pdfCandidate = isPdfArtifactCandidate(artifact);
     if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
       this._revokePreviewUrl();
-      this._artifactPreview = advertisedDescriptor;
+      this._artifactPreview = {
+        ...advertisedDescriptor,
+        notice: "A content preview is not available for this file type. Download it to open the file.",
+      };
       this._render();
       return;
     }
@@ -13217,7 +13467,7 @@ class CodexBridgePanel extends HTMLElement {
       button.setAttribute("aria-label", label);
       this._setTooltipTarget(button, label);
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
-      if (generatedImageButton) {
+      if (generatedImageButton || button.classList.contains("artifact-file-download")) {
         button.textContent = visibleLabel;
       } else if (button.classList.contains("pdf-preview-download")) {
         const text = button.querySelector("span");

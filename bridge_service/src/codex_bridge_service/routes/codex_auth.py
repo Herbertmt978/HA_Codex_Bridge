@@ -136,6 +136,20 @@ def list_account_profiles(
     return _invoke_profile_operation(store.list_profiles)
 
 
+@router.get("/auth/profiles/{profile_id}/details")
+def account_profile_details(
+    profile_id: str,
+    request: Request, authorization: str | None = Header(default=None),
+) -> dict[str, object]:
+    _profiles(request, authorization)
+    if "account_profile_details_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(409, detail={"code": "capability_unavailable", "retryable": False})
+    probe = getattr(request.app.state, "account_profile_details", None)
+    if probe is None:
+        raise HTTPException(503, detail={"code": "account_profiles_unavailable", "retryable": True})
+    return _invoke_profile_operation(lambda: probe.read(profile_id))
+
+
 @router.post("/auth/profiles")
 def save_account_profile(
     payload: SaveAccountProfileRequest,

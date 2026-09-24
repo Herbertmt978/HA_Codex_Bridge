@@ -630,6 +630,12 @@ class BridgeApiClient:
         self.require_capability("account_profiles_v1")
         return await self._async_json("GET", "/auth/profiles")
 
+    async def async_account_profile_details(self, profile_id: str) -> dict[str, Any]:
+        self.require_capability("account_profile_details_v1")
+        return await self._async_json(
+            "GET", f"/auth/profiles/{_path_segment(profile_id)}/details",
+        )
+
     async def async_save_account_profile(self, label: str) -> dict[str, Any]:
         self.require_capability("account_profiles_v1")
         return await self._async_json(

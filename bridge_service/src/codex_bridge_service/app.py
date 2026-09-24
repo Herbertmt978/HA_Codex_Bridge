@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
 from .account_profiles import AccountProfileStore
+from .account_profile_details import AccountProfileDetailsProbe
 from .auth_coordinator import CodexAuthCoordinator
 from .automations import AutomationError, AutomationStore, AutomationValidationError
 from .browser_broker import BrowserBroker
@@ -672,6 +673,14 @@ def create_app(
     app.state.runtime_gate = resolved_runtime_gate
     app.state.auth_coordinator = resolved_auth_coordinator
     app.state.account_profile_store = resolved_account_profile_store
+    app.state.account_profile_details = (
+        AccountProfileDetailsProbe(
+            resolved_account_profile_store,
+            codex_command=codex_command,
+            active_limits=lambda: storage.get_limits_status(refresh=True),
+        )
+        if resolved_account_profile_store is not None else None
+    )
     app.state.account_probe = resolved_account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,
@@ -713,6 +722,7 @@ def create_app(
         )
         if resolved_account_profile_store is not None:
             feature_capabilities.append("account_profiles_v1")
+            feature_capabilities.append("account_profile_details_v1")
         # Elicitations must be rejected before we expose MCP administration.
         # Without the app-server callback, an OAuth-enabled MCP server could
         # request data through an interaction path the Bridge cannot control.
