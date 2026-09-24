@@ -5,6 +5,13 @@ main button to **Steer**; a separate Stop button remains available beside it.
 Stopping does not discard your draft. Enter sends your draft, while Shift+Enter
 adds a new line. Pressing Enter in an empty composer does not stop the run.
 
+**Add** beside the composer opens file and folder uploads. When the connected
+App supports them, it also offers **Schedule this message** and **Plugins**.
+Actions the Bridge cannot perform are omitted. On a phone, **Chats** opens the
+navigation drawer and **Context** opens the activity and usage drawer; chat
+settings remain available from the composer disclosure. The panel fills the
+visible space below the Home Assistant header as the window height changes.
+
 The small ring beside Send shows the latest reported context usage for this
 chat. Select it for token counts and account limits. Context can decrease when
 Codex compacts earlier conversation. If the runtime has not reported a reading,
