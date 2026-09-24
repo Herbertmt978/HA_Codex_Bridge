@@ -1,7 +1,6 @@
 # MCP-06: Tool permissions
 
-Status: Implemented in source; paired release and Home Assistant acceptance pending.
-Version and date: unassigned.
+Status: Included in the paired 1.6.4 release candidate; Home Assistant acceptance pending.
 
 Tracking issue: [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102).
 

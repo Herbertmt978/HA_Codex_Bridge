@@ -2,9 +2,8 @@
 
 ## Choose allowed tools
 
-The MCP-06 source change adds **Choose allowed tools** in Settings → MCP servers.
-It requires a paired App and Integration release advertising
-`mcp_tool_permissions_v1`; installed 1.6.3 components do not yet show it.
+App and Integration 1.6.4 add **Choose allowed tools** in Settings → MCP servers
+when the paired App advertises `mcp_tool_permissions_v1`.
 Existing connections continue to expose their server's tools until an
 administrator saves a selection. Connections added by the paired UI start with
 no allowed tools; choose their tools after connecting. Saving even an empty
@@ -139,9 +138,8 @@ work around a compatibility restriction.
 
 ## Interactive MCP questions
 
-The MCP-04 source change adds attended form and authorisation-URL requests. It
-needs a paired App and Integration release advertising `mcp_elicitation_v1`;
-installed 1.6.3 components continue to decline these requests. A question
+App and Integration 1.6.4 add attended form and authorisation-URL requests
+when the paired App advertises `mcp_elicitation_v1`. A question
 appears only in the active chat and names the requesting server. Supported
 forms contain bounded text, number, boolean or offered-choice fields. Unknown
 schemas, credential-looking fields and questions without a matching active

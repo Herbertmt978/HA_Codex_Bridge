@@ -58,7 +58,7 @@ exec s6-setuidgid codexbridge env -i \
     CODEX_BRIDGE_ENABLE_LOCAL_MCP="${enable_local_mcp}" \
     CODEX_BRIDGE_ENABLE_BROWSER="${enable_browser}" \
     CODEX_BRIDGE_CODEX_WRAPPER_PATH=/usr/local/bin/codex-ha \
-    CODEX_BRIDGE_APP_VERSION=1.6.3 \
+    CODEX_BRIDGE_APP_VERSION=1.6.4 \
     CODEX_BRIDGE_VERSION=0.13.0 \
     CODEX_BRIDGE_CODEX_VERSION=0.156.1 \
     CODEX_BRIDGE_ARCH="${runtime_arch}" \

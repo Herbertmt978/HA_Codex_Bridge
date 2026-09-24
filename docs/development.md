@@ -64,7 +64,7 @@ Home Assistant test plugin imports Linux-only modules and cannot run unchanged
 on Windows. A local container test does not prove that the App sandbox works
 on HAOS; verify the built image and startup attestation on the target as well.
 
-This release pairs App `1.6.3`, Integration and panel `1.6.3`, with Bridge `0.13.0` and
+This release pairs App `1.6.4`, Integration and panel `1.6.4`, with Bridge `0.13.0` and
 Codex `0.156.1`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.

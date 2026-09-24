@@ -4,7 +4,8 @@ These are separate feature-release plans, based on the gaps reviewed on
 21 September 2026. MCP-01 is implemented for App and Integration 1.2.0; check
 the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases) for
 publication status. MCP-02 is implemented for App and Integration 1.3.0.
-The remaining entries are plans, not shipped features or promised delivery dates.
+Check each entry's status and the release page before treating it as shipped;
+unreleased entries have no promised delivery date.
 
 Each plan has its own issue, scope, dependencies and acceptance criteria. Use the
 linked issues for implementation progress and update this roadmap when a feature
@@ -26,9 +27,9 @@ MCP-03 still requires a separate isolation design before implementation.
 | [MCP-01: Local MCP connections](planned-releases/mcp-01-local-connections.md) | Implemented for 1.2.0: connect to HA-MCP and other servers on the LAN or HA App network. | Explicit network permission and destination controls | [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97) |
 | [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Implemented for 1.3.0: connect servers that require a bearer token or authentication header. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
 | [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Run approved MCP server processes with bounded access. | Separate process isolation design | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
-| [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
+| [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Included in 1.6.4 source: answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
 | [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Implemented for 1.4.0: edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
-| [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Implemented in source, release pending: inspect server tools and choose which Codex may use. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
+| [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Included in 1.6.4 source: inspect server tools and choose which Codex may use. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
 
 ## Home Assistant integration
 
@@ -37,7 +38,7 @@ MCP-03 still requires a separate isolation design before implementation.
 | [HA-01: Task actions and result events](planned-releases/ha-01-actions-events.md) | Start and continue tasks from HA scripts and automations. | Idempotent admission and permission policy | [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103) |
 | [HA-02: Completion notifications](planned-releases/ha-02-notifications.md) | Choose when and where task outcomes are announced. | HA-01 result delivery | [#104](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/104) |
 | [HA-03: Assist delegation](planned-releases/ha-03-assist.md) | Ask Assist to delegate a bounded task to Codex. | HA-01 and explicit exposure policy | [#105](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/105) |
-| [HA-04: Status and usage entities](planned-releases/ha-04-status-entities.md) | Use account limits, connection health and task state in HA dashboards. | Stable entity and privacy contracts | [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106) |
+| [HA-04: Status and usage entities](planned-releases/ha-04-status-entities.md) | Included in 1.6.4 source: use account limits, connection health and task state in HA dashboards. | Stable entity and privacy contracts | [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106) |
 | [HA-05: Scoped configuration access](planned-releases/ha-05-config-workspace.md) | Review and edit selected HA configuration without a root-host grant. | Reviewed storage boundary and recovery workflow | [#107](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/107) |
 
 ## Platforms and task experience
@@ -45,7 +46,7 @@ MCP-03 still requires a separate isolation design before implementation.
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
 | [PLATFORM-01: ARM64 support](planned-releases/platform-01-arm64.md) | Build preparation included in 1.3.1; stable App remains amd64-only. | Native ARM64 HAOS hardware and qualification outstanding | [#111](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/111) |
-| [TASK-01: Scheduling through chat](planned-releases/task-01-conversational-scheduling.md) | Describe a task and its frequency, then confirm the interpreted schedule. | Existing scheduler and explicit schedule confirmation | [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112) |
+| [TASK-01: Scheduling through chat](planned-releases/task-01-conversational-scheduling.md) | Included in 1.6.0: describe a task and its frequency, then confirm the interpreted schedule. | Existing scheduler and explicit schedule confirmation | [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112) |
 | [SHARE-01: Public snapshots](planned-releases/share-01-public-snapshots.md) | Publish a selected, fixed, read-only copy of a chat. | Hosting and privacy design; existing proposal | [#95](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/95) |
 
 ## Optional messaging channels

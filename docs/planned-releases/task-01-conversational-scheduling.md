@@ -1,6 +1,6 @@
 # TASK-01: Scheduling through chat
 
-Status: Planned. Version and date: unassigned.
+Status: Included in the paired 1.6.0 release.
 
 Tracking issue: [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112).
 

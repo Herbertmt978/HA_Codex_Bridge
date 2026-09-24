@@ -2,6 +2,24 @@
 
 All notable App changes are recorded here.
 
+## 1.6.4
+
+- Adds eight privacy-conscious Home Assistant status and usage entities for
+  dashboards and automations.
+- Supports attended MCP forms and one-time authorisation links in the active
+  chat. Unattended runs continue to decline interactive requests.
+- Lets administrators inspect an MCP server's tools and save a per-server
+  allow-list. New connections start with no allowed tools; existing connections
+  keep their previous access until an administrator saves a selection.
+- Fills the available chat height below the Home Assistant header and adapts
+  the phone layout. The composer Add menu groups supported file, folder,
+  scheduling and Plugins actions, and keeps keyboard focus after selection.
+- Centres feature loading, softens project action menus and simplifies the
+  header artwork.
+- Pairs App, Integration and panel `1.6.4` with Bridge `0.13.0` and the
+  unchanged Sigstore-verified Codex runtime `0.156.1`. Stable App images remain
+  amd64-only; upgrading does not enable an MCP server or host-access grant.
+
 ## 1.6.3
 
 - Keeps activity details steady when their chip text updates under the pointer.
