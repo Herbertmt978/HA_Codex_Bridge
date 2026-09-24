@@ -2416,14 +2416,17 @@ test("offers only supported Add actions and keeps uploads and navigation usable"
   await expect(menu.getByText("Attach Google Chrome")).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include("codex-bridge-panel").analyze()).violations).toEqual([]);
   const chooserPromise = page.waitForEvent("filechooser");
-  await menu.locator("#upload-file-button").click();
+  await page.keyboard.press("Enter");
   await chooserPromise;
   await expect(menu).toBeHidden();
-  await toggle.click();
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Enter");
+  await menu.locator("#upload-folder-button").focus();
   const folderChooserPromise = page.waitForEvent("filechooser");
-  await menu.locator("#upload-folder-button").click();
+  await page.keyboard.press("Enter");
   await folderChooserPromise;
   await expect(menu).toBeHidden();
+  await expect(toggle).toBeFocused();
   await toggle.click();
   await page.keyboard.press("Escape");
   await expect(toggle).toBeFocused();
@@ -2444,8 +2447,10 @@ test("offers only supported Add actions and keeps uploads and navigation usable"
   });
   expect(menuBounds.top).toBeGreaterThanOrEqual(0);
   expect(menuBounds.bottom).toBeLessThanOrEqual(menuBounds.viewport);
-  await menu.locator("#add-plugins-button").click();
+  await menu.locator("#add-plugins-button").focus();
+  await page.keyboard.press("Enter");
   await expect(panel.locator("#desktop-feature-surface")).toContainText("Plugins");
+  await expect(panel.locator("#desktop-feature-surface")).toBeFocused();
   await expect(menu).toBeHidden();
 });
 

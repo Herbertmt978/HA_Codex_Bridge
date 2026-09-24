@@ -37098,6 +37098,11 @@ template.innerHTML = `
       flex: 1 1 auto;
     }
 
+    .desktop-feature-surface:focus-visible {
+      outline: 2px solid var(--focus-ring-color);
+      outline-offset: -2px;
+    }
+
     .desktop-feature-surface.visible:has(.desktop-feature-loading) {
       display: flex;
       flex-direction: column;
@@ -39609,7 +39614,7 @@ template.innerHTML = `
     </div>
 
     <main class="pane main-pane">
-      <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite"></section>
+      <section class="desktop-feature-surface" id="desktop-feature-surface" aria-live="polite" tabindex="-1"></section>
       <div class="main-header">
         <div class="title-block">
           <span class="eyeline" id="thread-project-label">Ready</span>
@@ -40334,7 +40339,9 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const action = actionTarget.dataset.action;
-    if (actionTarget.closest("#add-menu")) this._setAddMenuOpen(false);
+    if (actionTarget.closest("#add-menu")) {
+      this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
+    }
     if (actionTarget.closest("#thread-menu")) {
       this._chatMenuOpen = false;
       this._renderChatControls();
@@ -40348,6 +40355,7 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "add-plugins":
         this._selectDesktopDestination("plugins");
+        this.shadowRoot.getElementById("desktop-feature-surface")?.focus();
         break;
       case "toggle-chat-menu":
         this._chatMenuOpen = !this._chatMenuOpen;
@@ -41721,6 +41729,7 @@ var CodexBridgePanel = class extends HTMLElement {
     shell?.classList.toggle("desktop-route", route);
     container?.classList.toggle("visible", route);
     if (route) {
+      container.setAttribute("aria-label", DESTINATIONS.find(({ id }) => id === this._activeDestination)?.label || "Workspace");
       const state = this._desktopFeatures[this._activeDestination];
       const activeProjectId = this._activeProject()?.project_id || null;
       const requestedProjectId = Object.hasOwn(state, "agentsRequestProjectId") ? state.agentsRequestProjectId : state.agentsProjectId;
@@ -41730,7 +41739,7 @@ var CodexBridgePanel = class extends HTMLElement {
         void this._loadDesktopDestination("settings", { force: true });
       }
       renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
-    }
+    } else container?.removeAttribute("aria-label");
   }
   _handleTooltipPointerOver(event) {
     const target = event.target instanceof Element ? event.target.closest("[data-tooltip]") : null;
