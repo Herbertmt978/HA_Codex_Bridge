@@ -564,6 +564,15 @@
 
       const harnessState = {
         selectedThreadId: "thr_vba_1",
+        skills: [
+          { name: "review:code", enabled: true },
+          { name: "docs:write", enabled: false },
+        ],
+        plugins: [
+          { id: "app-gmail-fixture", name: "app-gmail-fixture", display_name: "Gmail", version: "0.1.10", enabled: true, installed: true },
+          { id: "app-docs-fixture", name: "app-docs-fixture", display_name: "Documents", version: "1.0.1", enabled: false, installed: false },
+        ],
+        marketplaces: [{ name: "Codex" }],
         threadCounter: 10,
         authRevision: 1,
         systemCursor: 0,
@@ -744,12 +753,59 @@
                 };
               case "codex_bridge/get_status":
                 return clone({ ...statusPayload, auth: harnessState.auth });
+              case "codex_bridge/consume_reset_credit":
+                statusPayload.limits = {
+                  ...statusPayload.limits,
+                  blocked: false,
+                  reset_credits: { available_count: 0, credits: [] },
+                };
+                return { outcome: "reset" };
               case "codex_bridge/list_projects":
                 return clone(projects);
               case "codex_bridge/get_agents":
                 return { content: "", exists: false };
               case "codex_bridge/list_mcp":
                 return { items: [] };
+              case "codex_bridge/list_skills":
+                return { data: [{ cwd: "projects/vba-upgrade", skills: clone(harnessState.skills) }] };
+              case "codex_bridge/list_plugins":
+                return { marketplaces: clone(harnessState.marketplaces.map((marketplace) => ({
+                  ...marketplace,
+                  plugins: marketplace.name === "Codex" ? harnessState.plugins : [],
+                }))) };
+              case "codex_bridge/create_skill": {
+                harnessState.skills.push({ name: payload.name, enabled: true });
+                return { name: payload.name };
+              }
+              case "codex_bridge/set_skill": {
+                const skill = harnessState.skills.find((item) => item.name === payload.name);
+                if (!skill) throw new Error("Skill not found");
+                skill.enabled = payload.enabled;
+                return clone(skill);
+              }
+              case "codex_bridge/delete_skill":
+                harnessState.skills = harnessState.skills.filter((item) => item.name !== payload.name);
+                return { deleted: true };
+              case "codex_bridge/install_plugin": {
+                const plugin = harnessState.plugins.find((item) => item.name === payload.plugin_name);
+                if (!plugin) throw new Error("Plugin not found");
+                plugin.installed = true; plugin.enabled = true;
+                return clone(plugin);
+              }
+              case "codex_bridge/uninstall_plugin": {
+                const plugin = harnessState.plugins.find((item) => item.id === payload.plugin_id);
+                if (!plugin) throw new Error("Plugin not found");
+                plugin.installed = false; plugin.enabled = false;
+                return clone(plugin);
+              }
+              case "codex_bridge/add_marketplace":
+                harnessState.marketplaces.push({ name: new URL(payload.source).hostname });
+                return { added: true };
+              case "codex_bridge/remove_marketplace":
+                harnessState.marketplaces = harnessState.marketplaces.filter((item) => item.name !== payload.marketplace_name);
+                return { removed: true };
+              case "codex_bridge/upgrade_marketplace":
+                return { upgraded: true };
               case "codex_bridge/list_automations":
                 return clone(harnessState.automations || []);
               case "codex_bridge/create_automation": {
@@ -789,6 +845,8 @@
               }
               case "codex_bridge/update_thread": {
                 const thread = threadMap[payload.thread_id];
+                if ("title" in payload) thread.title = payload.title;
+                if ("mode" in payload) thread.mode = payload.mode;
                 if ("model_override" in payload) {
                   thread.model_override = payload.model_override;
                   thread.effective_model = payload.model_override || thread.default_model;

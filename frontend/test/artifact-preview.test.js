@@ -87,6 +87,46 @@ describe("artifact previews", () => {
     });
   });
 
+  it("previews Word content through the negotiated HA command as inert text", async () => {
+    const artifact = createArtifact({ filename: "hello.docx", size_bytes: 929 });
+    const panel = createPanel(artifact);
+    panel._config = { capabilities: ["office_preview_v1"] };
+    panel._callWS = vi.fn().mockResolvedValue({
+      kind: "document", paragraphs: ["Hello", "<img src=x onerror=alert(1)>"], truncated: false,
+    });
+    const fetchSpy = vi.spyOn(window, "fetch");
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    expect(panel._callWS).toHaveBeenCalledWith("preview_artifact", {
+      thread_id: "thread_safe", artifact_id: artifact.artifact_id,
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const preview = panel.shadowRoot.getElementById("artifact-preview");
+    expect(preview.querySelector(".office-preview-page")?.textContent).toContain("Hello");
+    expect(preview.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(preview.querySelector("img, iframe, object, embed")).toBeNull();
+  });
+
+  it("renders spreadsheet cells and limits invalid responses to a local retry", async () => {
+    const artifact = createArtifact({ filename: "table.xlsx", size_bytes: 1024 });
+    const panel = createPanel(artifact);
+    panel._config = { capabilities: ["office_preview_v1"] };
+    panel._callWS = vi.fn().mockResolvedValueOnce({
+      kind: "spreadsheet", sheets: [{ rows: [["Heading", "42"]] }], truncated: false,
+    }).mockResolvedValueOnce({ kind: "spreadsheet", sheets: [{ rows: "bad" }] });
+
+    await panel._loadArtifactPreview(artifact.artifact_id);
+
+    const table = panel.shadowRoot.getElementById("artifact-preview").querySelector("table");
+    expect(table?.textContent).toContain("Heading");
+    expect(table?.textContent).toContain("42");
+    panel._clearArtifactPreview();
+    await panel._loadArtifactPreview(artifact.artifact_id);
+    expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
+    expect(panel.shadowRoot.querySelector('[data-action="retry-artifact-preview"]')).not.toBeNull();
+  });
+
   it("settles a failed preview locally and offers a working retry", async () => {
     const panel = createPanel(createArtifact());
     panel._setError("Bridge request failed", { source: "poll" });

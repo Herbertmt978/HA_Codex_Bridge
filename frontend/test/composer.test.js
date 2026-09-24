@@ -47,6 +47,7 @@ describe("prompt composer mutation contract", () => {
   beforeEach(() => {
     document.body.replaceChildren();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("keeps keyboard guidance accessible without a persistent idle status row", () => {
@@ -148,12 +149,14 @@ describe("prompt composer mutation contract", () => {
     panel._render(true);
     const button = panel.shadowRoot.getElementById("context-usage-button");
     expect(button.getAttribute("aria-label")).toMatch(/not reported yet/);
+    expect(button.hidden).toBe(true);
     for (const [sequence, used] of [[1, 800], [2, 200]]) {
       panel._handleSubscribedEvent("thread-alpha", {
         event_id: `context-${sequence}`, thread_id: "thread-alpha", sequence,
         event_type: "context.updated", payload: { context_usage: { used_tokens: used, context_window: 1000 } },
       });
       expect(button.getAttribute("aria-label")).toContain(`${used / 10}% of context used`);
+      expect(button.hidden).toBe(false);
       expect(button.querySelector(".context-fill").getAttribute("stroke-dasharray")).toBe(`${used / 10} 100`);
     }
     button.click();
@@ -163,6 +166,61 @@ describe("prompt composer mutation contract", () => {
     panel._selectedThreadId = "other";
     panel._render(true);
     expect(button.getAttribute("aria-label")).toMatch(/not reported yet/);
+    expect(button.hidden).toBe(true);
+  });
+
+  it("dictates locally into the active draft without sending, and stops when the chat changes", async () => {
+    const instances = [];
+    class Recognition {
+      static available = vi.fn();
+      constructor() { instances.push(this); }
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+    }
+    Recognition.prototype.processLocally = false;
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    const panel = createPanel();
+    panel._render(true);
+    panel._callWS = vi.fn();
+    const button = panel.shadowRoot.getElementById("dictation-button");
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    expect(button.hidden).toBe(false);
+    expect(Recognition.available).not.toHaveBeenCalled();
+    button.click();
+    await vi.waitFor(() => expect(instances[0].start).toHaveBeenCalledOnce());
+    expect(instances[0].processLocally).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    instances[0].onresult({
+      resultIndex: 0,
+      results: [{ isFinal: true, 0: { transcript: "Inspect the workspace" } }],
+    });
+    expect(prompt.value).toBe("Inspect the workspace");
+    expect(panel._draftForThread("thread-alpha")).toBe(prompt.value);
+    expect(panel._callWS).not.toHaveBeenCalled();
+    button.click();
+    expect(instances[0].stop).toHaveBeenCalledOnce();
+    instances[0].onend();
+    button.click();
+    await vi.waitFor(() => expect(instances).toHaveLength(2));
+    panel._setSelectedThreadId("thread-beta");
+    expect(instances[1].abort).toHaveBeenCalledOnce();
+  });
+
+  it("hides dictation without a local-only recogniser, without querying a hosted service", () => {
+    const instances = [];
+    class Recognition {
+      static available = vi.fn();
+      constructor() { instances.push(this); }
+      start = vi.fn();
+    }
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    const panel = createPanel();
+    panel._render(true);
+    const button = panel.shadowRoot.getElementById("dictation-button");
+    expect(button.hidden).toBe(true);
+    expect(Recognition.available).not.toHaveBeenCalled();
+    expect(instances).toHaveLength(0);
   });
 
   it("locks the composer before awaiting the Bridge and sends one stable request id", async () => {

@@ -329,7 +329,14 @@ function renderPlugins(documentRef, state) {
   toolbar.append(text(documentRef, "div", "Plugins", "desktop-section-label"));
   section.append(toolbar);
   const rows = normalizeDesktopList(state.data.plugins || state.data);
-  section.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
+  const namedRows = rows.map((row) => {
+    const candidate = String(row.display_name || row.name || "").trim();
+    return {
+      ...row,
+      visible_name: candidate && !/^app-/iu.test(candidate) ? candidate : "Unnamed plugin",
+    };
+  });
+  section.append(renderTable(documentRef, namedRows, [["visible_name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
     td.append(button(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
@@ -542,7 +549,8 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (rendered?.inputs === inputs && rendered.drafts === drafts) return;
   container.replaceChildren();
   renderedFeatureInputs.set(container, { inputs, drafts });
-  const heading = documentRef.createElement("div"); heading.className = "desktop-feature-header";
+  const heading = documentRef.createElement("div");
+  heading.className = `desktop-feature-header${destination === "scheduled" ? "" : " desktop-feature-header-centered"}`;
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));

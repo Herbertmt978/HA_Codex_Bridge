@@ -538,6 +538,9 @@ class BridgeReadinessRecord(BaseModel):
             "browser_v1",
             "host_access_v1",
             "workspace_terminal_v1",
+            "account_profiles_v1",
+            "account_profile_details_v1",
+            "office_preview_v1",
         ],
         ...,
     ] = (

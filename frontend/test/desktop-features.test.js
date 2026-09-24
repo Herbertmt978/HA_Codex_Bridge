@@ -13,9 +13,19 @@ describe("desktop feature surfaces", () => {
     expect(host.getAttribute("aria-busy")).toBe("true");
     expect(host.querySelector('.desktop-feature-loading[role="status"]')?.textContent).toBe("Loading plugins…");
     expect(host.querySelector('.desktop-feature-spinner[aria-hidden="true"]')).not.toBeNull();
+    expect(host.querySelector(".desktop-feature-header-centered")).not.toBeNull();
     renderDesktopFeatureSurface(host, { destination: "plugins", state: { loading: false, data: {} } });
     expect(host.getAttribute("aria-busy")).toBe("false");
     expect(host.querySelector(".desktop-feature-loading")).toBeNull();
+    expect(host.querySelector(".desktop-feature-header-centered")).not.toBeNull();
+  });
+
+  it.each(["skills", "settings", "plugins"])("centres the %s heading in loading and loaded states", (destination) => {
+    const host = document.createElement("div");
+    for (const loading of [true, false]) {
+      renderDesktopFeatureSurface(host, { destination, state: { loading, data: {} } });
+      expect(host.querySelector(".desktop-feature-header-centered")).not.toBeNull();
+    }
   });
 
   it("normalizes bridge list envelopes and bounds error text", () => {
@@ -196,6 +206,19 @@ describe("desktop feature surfaces", () => {
     expect(host.textContent).toContain("P"); expect(host.textContent).toContain("1"); expect(host.textContent).not.toContain("[object Object]");
     renderDesktopFeatureSurface(host, { destination: "settings", state: { settingsTab: "mcp", data: { mcp_servers: [{ name: "MCP", endpoint: "https://mcp.example", startup: "ready", auth: "oauth" }] } } });
     expect(host.textContent).toContain("https://mcp.example");
+  });
+
+  it("shows provider display names without exposing opaque app IDs", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "plugins", state: { data: { plugins: [
+      { id: "app-69bc11db874881918718abaca20b68ce", name: "app-69bc11db874881918718abaca20b68ce", display_name: "Gmail", version: "1.0.0" },
+      { id: "app-69d11f3e50c8191b1ca48d03cf7e2ad", name: "app-69d11f3e50c8191b1ca48d03cf7e2ad" },
+    ] } } });
+    const table = host.querySelector(".desktop-table");
+    expect(table.textContent).toContain("Gmail");
+    expect(table.textContent).toContain("Unnamed plugin");
+    expect(table.textContent).not.toContain("app-69");
+    expect(table.querySelector('[data-desktop-action="install-plugin"]').dataset.id).toMatch(/^app-/u);
   });
 
   it("exposes accessible destination navigation and calls the bridge suffix", async () => {

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,6 +13,8 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from pydantic import ValidationError
 
 from .account import AppServerAccountProbe, CodexAccountProbe
+from .account_profiles import AccountProfileStore
+from .account_profile_details import AccountProfileDetailsProbe
 from .auth_coordinator import CodexAuthCoordinator
 from .automations import AutomationError, AutomationStore, AutomationValidationError
 from .browser_broker import BrowserBroker
@@ -35,7 +38,7 @@ from .mcp_manager import McpManager, McpManagerError
 from .mcp_local_policy import LocalMcpError
 from .mcp_relay import McpRelay
 from .mcp_http import McpHttpBoundary
-from .models import CodexAuthStatusRecord, RunMode, RuntimeProfile
+from .models import CodexAuthStatusRecord, LimitsStatusRecord, RunMode, RuntimeProfile
 from .resource_limits import (
     QuotaExceededError,
     ResourceLimitError,
@@ -91,6 +94,28 @@ class _AuthCoordinatorLifecycle(Protocol):
 
 _AUTH_STATE_FILENAME = "auth-state.json"
 _OUTBOX_MARKER_FIELD = "_bridge_operation"
+
+
+def _stable_active_profile_limits(
+    gate: RuntimeGate | None,
+    app_server: _AppServerLifecycle | None,
+    probe: AppServerLimitsProbe | None,
+) -> LimitsStatusRecord | None:
+    """Never attach a previous App-server generation's usage to a new sign-in."""
+    if gate is None or app_server is None or probe is None:
+        return None
+    before_generation = getattr(app_server, "generation", None)
+    before = gate.snapshot()
+    if type(before_generation) is not int or before.closed or before.auth_mutation_active:
+        return None
+    limits = probe.probe()
+    after = gate.snapshot()
+    after_generation = getattr(app_server, "generation", None)
+    if after.closed or after.auth_mutation_active or after_generation != before_generation:
+        return None
+    if after.auth_mutation_revision != before.auth_mutation_revision:
+        return None
+    return limits
 
 
 def _browser_broker_ready(broker: BrowserBroker | None) -> bool:
@@ -228,6 +253,7 @@ def create_app(
             and getattr(resolved_app_server, "enable_experimental_api", False) is True
         )
     resolved_auth_coordinator: _AuthCoordinatorLifecycle | None = None
+    resolved_account_profile_store: AccountProfileStore | None = None
     resolved_runner: Any = None
     resolved_host_access: HostAccessManager | None = None
     resolved_terminal: WorkspaceTerminal | None = None
@@ -281,8 +307,16 @@ def create_app(
             # application becomes request-ready.
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
+            account_details = getattr(_app.state, "account_profile_details", None)
+            if account_details is not None:
+                account_details.start_polling()
             yield
         finally:
+            account_details = getattr(_app.state, "account_profile_details", None)
+            account_poll_stopped = (
+                await asyncio.to_thread(account_details.stop_polling)
+                if account_details is not None else True
+            )
             if resolved_terminal is not None:
                 await asyncio.to_thread(resolved_terminal.close)
             try:
@@ -299,7 +333,14 @@ def create_app(
                             if resolved_runtime_gate is not None:
                                 await asyncio.to_thread(resolved_runtime_gate.close)
                         finally:
-                            await asyncio.to_thread(resolved_app_server.close)
+                            try:
+                                await asyncio.to_thread(resolved_app_server.close)
+                            finally:
+                                # A timed-out daemon probe may still be finishing its
+                                # private read. Let process exit reclaim the store
+                                # instead of closing its descriptors underneath it.
+                                if resolved_account_profile_store is not None and account_poll_stopped:
+                                    await asyncio.to_thread(resolved_account_profile_store.close)
             finally:
                 try:
                     if resolved_host_access is not None:
@@ -449,7 +490,10 @@ def create_app(
         return catalog.default_model, catalog.default_thinking_level, catalog.stale
 
     resolved_limits_probe = (
-        AppServerLimitsProbe(cast(Any, resolved_app_server))
+        AppServerLimitsProbe(
+            cast(Any, resolved_app_server),
+            auth_state_provider=resolved_runtime_gate.snapshot if resolved_runtime_gate else None,
+        )
         if resolved_app_server is not None
         else limits_probe
     )
@@ -566,7 +610,9 @@ def create_app(
                 if resolved_capabilities_manager is not None:
                     resolved_capabilities_manager.invalidate_provider_capabilities()
 
-            def bind_codex_account(owner_marker: str) -> None:
+            def bind_codex_account(
+                owner_marker: str, legacy_marker: str | None = None
+            ) -> None:
                 nonlocal auth_catalog_owner_marker
                 if (
                     auth_catalog_owner_marker is not None
@@ -574,7 +620,19 @@ def create_app(
                     and isinstance(resolved_runner, RuntimeBroker)
                 ):
                     resolved_runner.cancel_mcp_interactions()
-                storage.bind_codex_account(owner_marker)
+                # A 1.6.x installation had one sign-in and bound conversations
+                # by the account email. Only that untouched, single-profile
+                # state can be upgraded without detaching provider threads.
+                migrate_marker = (
+                    legacy_marker
+                    if legacy_marker is not None
+                    and resolved_account_profile_store is not None
+                    and not resolved_account_profile_store.list_profiles()
+                    else None
+                )
+                storage.bind_codex_account(
+                    owner_marker, legacy_owner_marker=migrate_marker
+                )
                 auth_catalog_owner_marker = owner_marker
 
             def persist_auth_status(status: CodexAuthStatusRecord) -> None:
@@ -608,6 +666,10 @@ def create_app(
                     ),
                 )
 
+            if os.name != "nt" and codex_home is not None:
+                resolved_account_profile_store = AccountProfileStore(
+                    storage.root / "account-profiles", Path(codex_home)
+                )
             resolved_auth_coordinator = CodexAuthCoordinator(
                 cast(Any, resolved_app_server),
                 state_listener=persist_auth_status,
@@ -616,6 +678,10 @@ def create_app(
                 runtime_gate=resolved_runtime_gate,
                 account_owner_secret=auth_token,
                 account_binding_listener=bind_codex_account,
+                account_identity_provider=(
+                    (lambda: resolved_account_profile_store.current_credential()[1])
+                    if resolved_account_profile_store is not None else None
+                ),
             )
     if storage.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         limits = storage.resource_limits
@@ -656,6 +722,19 @@ def create_app(
     app.state.sandbox_ready = sandbox_ready
     app.state.runtime_gate = resolved_runtime_gate
     app.state.auth_coordinator = resolved_auth_coordinator
+    app.state.account_profile_store = resolved_account_profile_store
+    app.state.account_profile_details = (
+        AccountProfileDetailsProbe(
+            resolved_account_profile_store,
+            codex_command=codex_command,
+            # The durable global status file can still describe the account
+            # used before a switch. The generation-scoped native probe cannot.
+            active_limits=lambda: _stable_active_profile_limits(
+                resolved_runtime_gate, resolved_app_server, resolved_limits_probe,
+            ),
+        )
+        if resolved_account_profile_store is not None else None
+    )
     app.state.account_probe = resolved_account_probe
     app.state.diagnostics_probe = diagnostics_probe or BridgeDiagnosticsProbe(
         storage=storage,
@@ -693,8 +772,12 @@ def create_app(
                 "skills_v1",
                 "plugins_v1",
                 "agents_v1",
+                "office_preview_v1",
             ]
         )
+        if resolved_account_profile_store is not None:
+            feature_capabilities.append("account_profiles_v1")
+            feature_capabilities.append("account_profile_details_v1")
         # Elicitations must be rejected before we expose MCP administration.
         # Without the app-server callback, an OAuth-enabled MCP server could
         # request data through an interaction path the Bridge cannot control.

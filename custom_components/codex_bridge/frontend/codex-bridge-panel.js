@@ -298,7 +298,7 @@ function localParts(instant, timezone) {
     minute: "2-digit",
     second: "2-digit",
     hourCycle: "h23"
-  }).formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
+  }).formatToParts(new Date(instant)).map(({ type: type2, value }) => [type2, value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, second: parts.second };
 }
 function scheduleInstantCandidates(date, time, timezone) {
@@ -439,7 +439,7 @@ function element(doc, tag, className, value) {
   if (value !== void 0) node2.textContent = value;
   return node2;
 }
-function field(doc, name, label, value, options = null, type = "text") {
+function field(doc, name, label, value, options = null, type2 = "text") {
   const row = element(doc, options ? "div" : "label", "schedule-row");
   row.append(element(doc, "span", "schedule-row-label", label));
   if (options) {
@@ -448,11 +448,11 @@ function field(doc, name, label, value, options = null, type = "text") {
     row.append(picker);
     return row;
   }
-  const control = element(doc, type === "textarea" ? "textarea" : "input");
+  const control = element(doc, type2 === "textarea" ? "textarea" : "input");
   control.name = name;
   control.dataset.desktopField = name;
   control.setAttribute("aria-label", label);
-  if (type !== "textarea") control.type = type;
+  if (type2 !== "textarea") control.type = type2;
   control.value = String(value ?? "");
   row.append(control);
   return row;
@@ -10422,7 +10422,8 @@ function parseEvents(value, options) {
   if (!Array.isArray(value)) return [];
   return normalizeEvents(value.map((item) => parseEvent(item, options)).filter(Boolean));
 }
-function normalizeEvents(events, { maxEvents = 1e4 } = {}) {
+var MAX_RETAINED_EVENTS = 25e3;
+function normalizeEvents(events, { maxEvents = MAX_RETAINED_EVENTS } = {}) {
   const seenSequences = /* @__PURE__ */ new Set();
   const seenIds = /* @__PURE__ */ new Set();
   const valid = [];
@@ -10438,16 +10439,16 @@ function normalizeEvents(events, { maxEvents = 1e4 } = {}) {
     if (event.event_id) seenIds.add(event.event_id);
     valid.push(event);
   }
-  const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(1e4, Math.floor(maxEvents))) : 1e4;
+  const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(MAX_RETAINED_EVENTS, Math.floor(maxEvents))) : MAX_RETAINED_EVENTS;
   return valid.slice(-limit);
 }
 
 // frontend/src/event-stream.js
-function createEventStreamState({ cursor = 0, maxEvents = 1e4 } = {}) {
+function createEventStreamState({ cursor = 0, maxEvents = MAX_RETAINED_EVENTS } = {}) {
   return {
     cursor: Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0,
     events: [],
-    maxEvents: Math.max(1, Math.min(1e4, Number(maxEvents) || 1e4)),
+    maxEvents: Math.max(1, Math.min(MAX_RETAINED_EVENTS, Number(maxEvents) || MAX_RETAINED_EVENTS)),
     needsSnapshot: false,
     error: null
   };
@@ -31853,7 +31854,7 @@ function itemLabel(payload = {}) {
   }
   if (itemType === "commandExecution" && Array.isArray(payload.action_types)) {
     return joinActivityLabels(
-      payload.action_types.slice(0, 3).filter((type) => Object.hasOwn(COMMAND_ACTION_LABELS, type)).map((type) => COMMAND_ACTION_LABELS[type]),
+      payload.action_types.slice(0, 3).filter((type2) => Object.hasOwn(COMMAND_ACTION_LABELS, type2)).map((type2) => COMMAND_ACTION_LABELS[type2]),
       ITEM_LABELS[itemType]
     );
   }
@@ -31933,9 +31934,9 @@ function latestItemStart(events, runId) {
       continue;
     }
     if (event.event_type !== "item.started") continue;
-    const type = payload.item_type;
-    if (typeof type === "string" && Object.hasOwn(ITEM_LABELS, type) && !(typeof payload.item_id === "string" && completedItemIds.has(payload.item_id))) {
-      return { event, label: itemLabel(payload), itemType: type };
+    const type2 = payload.item_type;
+    if (typeof type2 === "string" && Object.hasOwn(ITEM_LABELS, type2) && !(typeof payload.item_id === "string" && completedItemIds.has(payload.item_id))) {
+      return { event, label: itemLabel(payload), itemType: type2 };
     }
   }
   return null;
@@ -32258,10 +32259,10 @@ var SHA256_WORDS = new Uint32Array([
   3329325298
 ]);
 var UploadError = class extends Error {
-  constructor(code, { status = null, retryable = false } = {}) {
-    super(status === null ? `Upload ${code.replaceAll("_", " ")}` : `Upload failed (HTTP ${status})`);
+  constructor(code2, { status = null, retryable = false } = {}) {
+    super(status === null ? `Upload ${code2.replaceAll("_", " ")}` : `Upload failed (HTTP ${status})`);
     this.name = "UploadError";
-    this.code = code;
+    this.code = code2;
     this.status = status;
     this.retryable = retryable;
   }
@@ -32590,9 +32591,9 @@ function normaliseRelativePath(value, filename) {
   }
   return path;
 }
-function validateIdentifier(value, code) {
+function validateIdentifier(value, code2) {
   if (typeof value !== "string" || !value || containsControl(value)) {
-    throw new UploadError(code);
+    throw new UploadError(code2);
   }
   return value;
 }
@@ -32675,6 +32676,49 @@ function containsControl(value) {
   });
 }
 
+// frontend/src/file-type-icons.js
+var documentBase = `<path d="M10 2h19l9 9v32a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Z" fill="#fff" stroke="#c9d1db" stroke-width="1.4"/><path d="M29 2v9h9" fill="#edf1f7" stroke="#c9d1db" stroke-width="1.4"/>`;
+var lines = `<path d="M18 17h15M18 22h15M18 27h12M18 32h15M18 37h11" stroke="#b8c7d8" stroke-width="1.5" stroke-linecap="round"/>`;
+var sheet = `<path d="M17 17h16v20H17zM17 23h16M17 30h16M24 17v20" fill="none" stroke="#9ac9af" stroke-width="1.2"/>`;
+var slide = `<rect x="16" y="17" width="18" height="17" rx="1" fill="#fff4ec" stroke="#e5b394"/><path d="M20 21h10M20 25h7" stroke="#d88759" stroke-width="1.5"/>`;
+var photo = `<rect x="16" y="17" width="18" height="16" rx="1" fill="#e9f6f1" stroke="#8ebdad"/><circle cx="29" cy="21" r="2" fill="#e2bb6a"/><path d="m18 30 5-5 4 4 3-3 3 4" fill="none" stroke="#579a81" stroke-width="1.5"/>`;
+var code = `<path d="m22 21-4 4 4 4m7-8 4 4-4 4m-2-10-3 12" stroke="#7188ad" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+var media = `<circle cx="25" cy="27" r="9" fill="#ecf5f6" stroke="#a3c9cd"/><path d="m23 23 7 4-7 4z" fill="#4e93a0"/>`;
+var type = {
+  word: { colour: "#185abd", glyph: "W", detail: lines },
+  excel: { colour: "#107c41", glyph: "X", detail: sheet },
+  powerpoint: { colour: "#c43e1c", glyph: "P", detail: slide },
+  pdf: { colour: "#c43835", glyph: "PDF", detail: lines },
+  image: { colour: "#397f76", glyph: "", detail: photo },
+  text: { colour: "#657486", glyph: "", detail: lines },
+  archive: { colour: "#856944", glyph: "ZIP", detail: lines },
+  code: { colour: "#596f9f", glyph: "", detail: code },
+  audio: { colour: "#725ca5", glyph: "♫", detail: lines },
+  video: { colour: "#397f8d", glyph: "", detail: media },
+  email: { colour: "#47749d", glyph: "@", detail: lines },
+  file: { colour: "#657486", glyph: "", detail: lines }
+};
+function fileTypeKind(filename) {
+  const extension = String(filename || "").split(".").pop().toLowerCase();
+  if (["doc", "docx", "odt", "rtf"].includes(extension)) return "word";
+  if (["xls", "xlsx", "ods", "csv"].includes(extension)) return "excel";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "powerpoint";
+  if (extension === "pdf") return "pdf";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) return "image";
+  if (["txt", "md", "log", "json", "xml", "yaml", "yml"].includes(extension)) return "text";
+  if (["zip", "7z", "tar", "gz"].includes(extension)) return "archive";
+  if (["js", "jsx", "ts", "tsx", "py", "html", "css", "sh", "ps1", "c", "cpp", "cs", "go", "rs", "java"].includes(extension)) return "code";
+  if (["mp3", "wav", "ogg", "m4a", "flac"].includes(extension)) return "audio";
+  if (["mp4", "mov", "mkv", "webm", "avi"].includes(extension)) return "video";
+  if (["eml", "msg"].includes(extension)) return "email";
+  return "file";
+}
+function fileTypeIconMarkup(filename) {
+  const icon = type[fileTypeKind(filename)];
+  const tile = icon.glyph ? `<rect x="1" y="19" width="24" height="23" rx="2.5" fill="${icon.colour}"/><text x="13" y="35" text-anchor="middle" font-family="Arial,sans-serif" font-size="${icon.glyph.length > 1 ? 8 : 18}" font-weight="700" fill="#fff">${icon.glyph}</text>` : `<rect x="1" y="19" width="7" height="23" rx="2" fill="${icon.colour}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 48" fill="none" aria-hidden="true" focusable="false">${documentBase}${icon.detail}${tile}</svg>`;
+}
+
 // frontend/src/views/auth.js
 var PLAN_NAMES2 = /* @__PURE__ */ new Map([
   ["free", "Free"],
@@ -32699,14 +32743,14 @@ function getAuthViewModel(auth = {}) {
   const state = typeof auth.state === "string" ? auth.state : "unknown";
   const loginActive = ACTIVE_STATES.has(state);
   const busy = BUSY_STATES.has(state);
-  const code = loginActive && typeof auth.user_code === "string" && auth.user_code.trim() ? auth.user_code.trim() : null;
+  const code2 = loginActive && typeof auth.user_code === "string" && auth.user_code.trim() ? auth.user_code.trim() : null;
   const authMode = auth.auth_mode ?? auth.account?.auth_mode ?? null;
   const unsupported = state === "unsupported" || typeof authMode === "string" && authMode !== "chatgpt";
   const signedIn = !unsupported && state === "ok" && !auth.auth_required;
   const actions = [];
   if (loginActive) {
     actions.push({ id: "open-chatgpt", label: "Open ChatGPT" });
-    if (code) actions.push({ id: "copy-auth-code", label: "Copy code" });
+    if (code2) actions.push({ id: "copy-auth-code", label: "Copy code" });
     actions.push({ id: "cancel-sign-in", label: "Cancel" });
   } else if (busy) {
   } else if (unsupported) {
@@ -32742,8 +32786,8 @@ function getAuthViewModel(auth = {}) {
     signedIn,
     busy,
     plan: normalizePlanType(auth.account?.plan_type ?? auth.plan_type),
-    code: TERMINAL_STATES2.has(state) ? null : code,
-    canCopyCode: Boolean(code),
+    code: TERMINAL_STATES2.has(state) ? null : code2,
+    canCopyCode: Boolean(code2),
     canOpen: loginActive,
     message,
     guidance: loginActive ? "Continue in ChatGPT on your phone or another signed-in device." : "",
@@ -32769,10 +32813,10 @@ function renderAuth(container, model) {
     card.append(message);
   }
   if (model.code) {
-    const code = document.createElement("code");
-    code.className = "auth-code";
-    code.textContent = model.code;
-    card.append(code);
+    const code2 = document.createElement("code");
+    code2.className = "auth-code";
+    code2.textContent = model.code;
+    card.append(code2);
   }
   if (model.guidance) {
     const guidance = document.createElement("p");
@@ -32806,8 +32850,8 @@ var MAX_SCOPE_PATHS = 128;
 function plainText(value, limit) {
   if (typeof value !== "string") return "";
   return [...value].filter((character) => {
-    const code = character.codePointAt(0);
-    return code > 31 && code !== 127;
+    const code2 = character.codePointAt(0);
+    return code2 > 31 && code2 !== 127;
   }).join("").trim().slice(0, limit);
 }
 function safeWorkspacePath(value) {
@@ -33209,8 +33253,8 @@ var MAX_FREE_TEXT = 4096;
 function plainText2(value, limit) {
   if (typeof value !== "string") return "";
   return [...value].filter((character) => {
-    const code = character.codePointAt(0);
-    return code > 31 && code !== 127;
+    const code2 = character.codePointAt(0);
+    return code2 > 31 && code2 !== 127;
   }).join("").trim().slice(0, limit);
 }
 function safeId(value, fallback) {
@@ -33424,10 +33468,10 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
   form.dataset.desktopForm = "mcp";
   const local = localEnabled && state.formDraft?.local === true;
   const staticAuth = credentialsEnabled && ["bearer", "headers"].includes(state.formDraft?.auth_mode);
-  const field2 = (label, name, type = "text") => {
+  const field2 = (label, name, type2 = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const control = doc.createElement("input");
-    control.type = type;
+    control.type = type2;
     control.name = name;
     control.dataset.desktopField = name;
     control.value = state.formDraft?.[name] ?? "";
@@ -33488,16 +33532,16 @@ function renderMcpAuthentication(doc, state, { local = false, replacing = false 
   const choice = selection(doc, { name: "auth_mode", label: "Authentication", value: mode, options });
   choice.querySelector("select").dataset.desktopField = "auth_mode";
   section2.append(text(doc, "span", "Authentication", "desktop-field-label"), choice);
-  const secretInput = (label, attr, type = "password") => {
+  const secretInput = (label, attr, type2 = "password") => {
     const wrap = text(doc, "label", "", "desktop-field");
     const input2 = doc.createElement("input");
-    input2.type = type;
+    input2.type = type2;
     input2.setAttribute(attr, "");
     input2.autocomplete = "off";
     input2.spellcheck = false;
     input2.required = true;
-    input2.maxLength = type === "password" ? 4096 : 64;
-    if (type === "password") input2.minLength = 8;
+    input2.maxLength = type2 === "password" ? 4096 : 64;
+    if (type2 === "password") input2.minLength = 8;
     wrap.append(text(doc, "span", label, "desktop-field-label"), input2);
     return wrap;
   };
@@ -33734,8 +33778,8 @@ function normalizeDesktopError(error) {
   const record = asRecord(error);
   const candidate = record.body?.message || record.message || record.error || record.detail || error;
   const withoutControlCharacters = Array.from(String(candidate || ""), (character) => {
-    const code = character.codePointAt(0);
-    return code <= 8 || code === 11 || code === 12 || code >= 14 && code <= 31 || code === 127 ? " " : character;
+    const code2 = character.codePointAt(0);
+    return code2 <= 8 || code2 === 11 || code2 === 12 || code2 >= 14 && code2 <= 31 || code2 === 127 ? " " : character;
   }).join("");
   const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
   return (safe || "Unable to load this surface.").slice(0, 500);
@@ -33773,16 +33817,16 @@ var button2 = (documentRef, label, action, extra = {}) => {
   for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
   return node2;
 };
-var input = (documentRef, label, name, value = "", type = "text") => {
+var input = (documentRef, label, name, value = "", type2 = "text") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
   wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
-  const control = documentRef.createElement(type === "textarea" ? "textarea" : "input");
+  const control = documentRef.createElement(type2 === "textarea" ? "textarea" : "input");
   control.name = name;
   control.value = value == null ? "" : String(value);
   control.dataset.desktopField = name;
-  if (type !== "textarea") control.type = type;
-  if (type === "textarea") control.rows = 4;
+  if (type2 !== "textarea") control.type = type2;
+  if (type2 === "textarea") control.rows = 4;
   wrap.append(control);
   return wrap;
 };
@@ -33976,7 +34020,14 @@ function renderPlugins(documentRef, state) {
   toolbar.append(text2(documentRef, "div", "Plugins", "desktop-section-label"));
   section2.append(toolbar);
   const rows = normalizeDesktopList(state.data.plugins || state.data);
-  section2.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
+  const namedRows = rows.map((row) => {
+    const candidate = String(row.display_name || row.name || "").trim();
+    return {
+      ...row,
+      visible_name: candidate && !/^app-/iu.test(candidate) ? candidate : "Unnamed plugin"
+    };
+  });
+  section2.append(renderTable(documentRef, namedRows, [["visible_name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
     td.append(button2(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
@@ -34234,7 +34285,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   container.replaceChildren();
   renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div");
-  heading.className = "desktop-feature-header";
+  heading.className = `desktop-feature-header${destination === "scheduled" ? "" : " desktop-feature-header-centered"}`;
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text2(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text2(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
@@ -34278,7 +34329,7 @@ function localDate(now, timezone) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).formatToParts(new Date(now)).map(({ type, value }) => [type, value]));
+  }).formatToParts(new Date(now)).map(({ type: type2, value }) => [type2, value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 function addDays(date, days) {
@@ -34365,7 +34416,7 @@ function proposeScheduleDescription(description, { timezone = "UTC", now = Date.
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.6.4";
+var PANEL_VERSION = "1.7.0";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -34423,6 +34474,7 @@ var ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 var ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
 var PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var PDF_PREVIEW_MAX_LABEL = "8 MB";
+var OFFICE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 var GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
@@ -34438,6 +34490,65 @@ function displayArtifactFilename(value, fallback = "Generated image") {
 function displayArtifactMime(value) {
   const mime = String(value ?? "").split(";", 1)[0].trim();
   return mime.slice(0, 120) || "image";
+}
+function displayArtifactType(artifact) {
+  const filename = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file");
+  const extension = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  if (["doc", "docx", "odt", "rtf"].includes(extension)) return "Word document";
+  if (["xls", "xlsx", "ods"].includes(extension)) return "Spreadsheet";
+  if (extension === "csv") return "CSV file";
+  if (extension === "pdf") return "PDF document";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "Presentation";
+  if (["txt", "log"].includes(extension)) return "Text document";
+  if (extension === "md") return "Markdown document";
+  if (["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) return "Image";
+  if (extension === "zip") return "ZIP archive";
+  return extension && extension.length <= 8 ? `${extension.toUpperCase()} file` : "File";
+}
+function isOfficePreviewCandidate(artifact, capabilities) {
+  if (!capabilities?.includes("office_preview_v1")) return false;
+  const name = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase();
+  return [".docx", ".xlsx", ".pptx"].some((extension) => name.endsWith(extension));
+}
+function normaliseOfficePreview(value, artifact) {
+  if (!value || !["document", "spreadsheet", "presentation"].includes(value.kind)) {
+    throw new Error("Invalid Office preview");
+  }
+  let remaining = 3e4;
+  const safeText3 = (input2) => {
+    if (typeof input2 !== "string") throw new Error("Invalid Office preview text");
+    const text3 = input2.slice(0, Math.min(remaining, 3e4));
+    remaining -= text3.length;
+    return text3;
+  };
+  const paragraphs = (input2) => {
+    if (!Array.isArray(input2)) throw new Error("Invalid Office preview paragraphs");
+    return input2.slice(0, 200).map(safeText3);
+  };
+  const common = { artifactId: artifact.artifact_id, filename: displayArtifactFilename(artifact.filename), kind: value.kind, truncated: value.truncated === true };
+  if (value.kind === "document") return { ...common, paragraphs: paragraphs(value.paragraphs) };
+  if (value.kind === "presentation") {
+    if (!Array.isArray(value.slides)) throw new Error("Invalid Office preview slides");
+    return { ...common, slides: value.slides.slice(0, 5).map((slide2, index) => ({
+      name: `Slide ${index + 1}`,
+      paragraphs: paragraphs(slide2?.paragraphs)
+    })) };
+  }
+  if (!Array.isArray(value.sheets)) throw new Error("Invalid Office preview sheets");
+  return { ...common, sheets: value.sheets.slice(0, 3).map((sheet2, index) => {
+    if (!Array.isArray(sheet2?.rows)) throw new Error("Invalid Office preview rows");
+    return { name: `Sheet ${index + 1}`, rows: sheet2.rows.slice(0, 100).map((row) => {
+      if (!Array.isArray(row)) throw new Error("Invalid Office preview cells");
+      return row.slice(0, 20).map(safeText3);
+    }) };
+  }) };
+}
+function isStandaloneArtifactLink(text3, artifacts) {
+  const match = /^\[[^\]\r\n]{1,240}\]\(<([^<>\r\n]+)>\)\.?$/.exec(String(text3 ?? "").trim());
+  if (!match) return false;
+  const target = match[1].replaceAll("\\", "/");
+  const targetName = displayArtifactFilename(target);
+  return artifacts.some((artifact) => [artifact?.filename, artifact?.relative_path].some((value) => typeof value === "string" && (value.replaceAll("\\", "/") === target || displayArtifactFilename(value) === targetName)));
 }
 function canDeferArtifactRefresh(error) {
   return artifactErrorCode(error) === ARTIFACT_RESERVATION_CONFLICT_CODE;
@@ -34460,6 +34571,9 @@ function artifactErrorCode(error) {
   return "";
 }
 function artifactPreviewLimit(artifact) {
+  if ([".docx", ".xlsx", ".pptx"].some((extension) => displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase().endsWith(extension))) {
+    return { bytes: OFFICE_PREVIEW_MAX_BYTES, label: "8 MB" };
+  }
   if (isPdfArtifactCandidate(artifact)) {
     return { bytes: PDF_PREVIEW_MAX_BYTES, label: PDF_PREVIEW_MAX_LABEL };
   }
@@ -36581,6 +36695,9 @@ template.innerHTML = `
       gap: 2px;
       min-width: 0;
     }
+    .file-select-content { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .file-type-icon { display: inline-flex; flex: 0 0 28px; width: 28px; height: 33px; align-items: center; justify-content: center; }
+    .file-type-icon svg { display: block; width: 100%; height: 100%; }
 
     .artifact-refresh-status {
       display: flex;
@@ -36669,6 +36786,17 @@ template.innerHTML = `
       max-height: 560px;
       object-fit: contain;
     }
+    .office-preview { display: grid; gap: 16px; padding: 18px; color: var(--text-color); }
+    .office-preview-heading { display: flex; gap: 12px; align-items: center; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .office-preview-heading .file-type-icon { flex-basis: 36px; width: 36px; height: 42px; }
+    .office-preview-note { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); line-height: 1.4; }
+    .office-preview-page { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); box-shadow: 0 3px 12px color-mix(in srgb, var(--text-color) 6%, transparent); }
+    .office-preview-page p { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .office-preview-page h3 { margin: 0 0 4px; font-size: var(--font-control-size); }
+    .office-preview-table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+    .office-preview table { border-collapse: collapse; min-width: 100%; font-size: var(--font-caption-size); }
+    .office-preview th, .office-preview td { min-width: 74px; max-width: 240px; padding: 6px 9px; border: 1px solid var(--border-color); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .office-preview th { background: var(--surface-muted); font-weight: 600; }
 
     .pdf-preview-shell {
       display: grid;
@@ -36872,6 +37000,23 @@ template.innerHTML = `
       border-right: 1px solid var(--border-color);
     }
 
+    .artifact-file-card { display: grid; gap: 12px; max-width: min(480px, 100%); padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); }
+    .artifact-file-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .artifact-file-icon { display: inline-flex; flex: 0 0 46px; width: 46px; height: 54px; align-items: center; justify-content: center; }
+    .artifact-file-icon svg { display: block; width: 42px; height: 48px; }
+    .artifact-file-info { display: grid; min-width: 0; gap: 3px; }
+    .artifact-file-name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+    .artifact-file-meta { color: var(--muted-color); font-size: var(--font-caption-size); }
+    .artifact-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .artifact-file-actions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+    .artifact-file-actions button:hover, .artifact-file-actions button:focus-visible { background: var(--surface-muted); }
+    .artifact-file-actions button:disabled { opacity: .55; cursor: default; }
+
+    .rail-pane:has(.app-menu:not([hidden])) {
+      overflow: visible;
+      z-index: 20;
+    }
+
     .side-pane {
       border-left: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
     }
@@ -36905,9 +37050,12 @@ template.innerHTML = `
       position: absolute;
       z-index: 16;
       top: calc(100% - 5px);
-      right: 10px;
-      width: min(230px, calc(100vw - 24px));
-      display: grid;
+      left: 10px;
+      width: min(760px, calc(100vw - 20px));
+      max-height: calc(100dvh - 86px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       gap: 2px;
       padding: 5px;
       border: 1px solid var(--border-color);
@@ -36951,6 +37099,118 @@ template.innerHTML = `
       color: var(--muted-color);
       font-size: var(--font-caption-size);
       line-height: 1.35;
+    }
+
+    .app-menu-feedback:empty { display: none; }
+
+    .account-menu-section {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-top: 1px solid var(--border-color);
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+
+    .account-menu-section[hidden] { display: none; }
+
+    .account-menu-title {
+      display: block;
+      padding: 6px 9px 8px;
+      color: var(--text-color);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    #account-menu-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+    .account-menu-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr) auto;
+      align-items: start;
+      gap: 6px 10px;
+      margin: 3px 5px 7px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--surface-bg);
+    }
+
+    .account-menu-row.current {
+      border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+      background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface-bg));
+    }
+
+    .account-menu-row .app-menu-item { min-width: 0; }
+
+    .account-menu-identity { min-width: 0; }
+
+    .account-menu-name { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .account-menu-plan { display: block; margin-top: 2px; color: var(--muted-color); font-size: var(--font-caption-size); }
+
+    .account-menu-actions { grid-column: 3; grid-row: 1; display: flex; align-items: start; gap: 4px; }
+
+    .account-menu-select { padding: 5px 8px; min-height: 30px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+
+    .account-menu-select:hover, .account-menu-select:focus-visible { background: var(--surface-muted); }
+
+    .account-menu-select:disabled { cursor: default; border-color: transparent; background: transparent; color: var(--muted-color); }
+
+    .account-menu-metrics { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px 10px; border-left: 1px solid var(--border-color); padding-left: 12px; }
+
+    .account-menu-metric { min-width: 0; }
+
+    .account-menu-metric-label { display: block; color: var(--muted-color); font-size: 11px; }
+
+    .account-menu-metric-value { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+    .account-menu-note { grid-column: 1 / -1; color: var(--muted-color); font-size: 11px; line-height: 1.35; }
+
+    .account-menu-row .app-menu-item span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .account-menu-remove {
+      flex: 0 0 30px;
+      min-height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      cursor: pointer;
+    }
+
+    .account-menu-remove:hover, .account-menu-remove:focus-visible {
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .account-menu-label {
+      min-width: 0;
+      width: 100%;
+      margin: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      font: inherit;
+      font-size: var(--font-caption-size);
+    }
+
+    .account-menu-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 6px 5px 3px; border-top: 1px solid var(--border-color); }
+    .account-menu-footer .app-menu-item { white-space: nowrap; padding-inline: 10px; }
+
+    @media (max-width: 620px) {
+      .account-menu-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .account-menu-actions { grid-column: 2; }
+      .account-menu-metrics { grid-column: 1 / -1; grid-row: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; border-top: 1px solid var(--border-color); padding: 8px 0 0; }
+      .account-menu-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .account-menu-label { grid-column: 1 / -1; }
+      .account-menu-footer .app-menu-item { white-space: normal; }
     }
 
     #app-menu-toggle {
@@ -37137,6 +37397,9 @@ template.innerHTML = `
       max-width: 900px;
       margin: 0 auto 28px;
     }
+
+    .desktop-feature-header-centered { text-align: center; }
+    .desktop-feature-header-centered .desktop-feature-summary { margin-inline: auto; }
 
     .desktop-feature-title {
       font-size: 24px;
@@ -37404,8 +37667,8 @@ template.innerHTML = `
 
     #new-direct-chat-button:hover,
     #new-direct-chat-button:focus-visible {
-      border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
-      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+      border-color: transparent;
+      background: color-mix(in srgb, var(--text-color) 8%, var(--surface-muted) 92%);
     }
 
     .search-shell {
@@ -37419,8 +37682,9 @@ template.innerHTML = `
     }
 
     .search-shell:focus-within {
-      border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%);
-      background: var(--surface-bg);
+      border-color: color-mix(in srgb, var(--text-color) 24%, var(--border-color) 76%);
+      background: var(--surface-muted);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color) 9%, transparent);
     }
 
     .search-shell svg {
@@ -37436,6 +37700,13 @@ template.innerHTML = `
     .search-shell input {
       font-size: var(--font-control-size);
       outline: 0;
+    }
+
+    .search-shell input:focus,
+    .search-shell input:focus-visible {
+      border: 0;
+      outline: 0;
+      box-shadow: none;
     }
 
     .search-shell input::-webkit-search-cancel-button {
@@ -38401,7 +38672,23 @@ template.innerHTML = `
     .composer-actions { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 6px; }
     .composer-actions .icon-button { width: 32px; min-width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 50%; background: transparent; color: var(--muted-color); }
     .composer-actions .icon-button:hover:not(:disabled) { background: var(--surface-muted); color: var(--text-color); }
+    .dictation-button[aria-pressed="true"] {
+      position: relative;
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+    .dictation-button[aria-pressed="true"]::after {
+      content: "";
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      right: 1px;
+      bottom: 1px;
+      border-radius: 50%;
+      background: var(--danger-color);
+    }
     .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
+    .context-usage-button[hidden] { display: none; }
     .context-track { opacity: .2; }
     .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
     .context-usage-button[data-level="high"] { color: var(--brand-amber); }
@@ -39583,12 +39870,22 @@ template.innerHTML = `
           </div>
         </div>
         <button class="icon-button" type="button" data-action="toggle-app-menu" id="app-menu-toggle" aria-label="Panel options" aria-controls="app-menu" aria-expanded="false"></button>
-        <div class="app-menu" id="app-menu" hidden>
+      <div class="app-menu" id="app-menu" hidden>
           <button class="app-menu-item" type="button" data-action="toggle-focus" id="focus-mode-button" aria-pressed="false">
             <span>Focus mode</span>
             <span class="menu-shortcut">Fullscreen</span>
           </button>
           <div class="app-menu-feedback" id="focus-mode-feedback" role="status" aria-live="polite"></div>
+          <div class="account-menu-section" id="account-menu-section" hidden>
+            <span class="account-menu-title">ChatGPT accounts</span>
+            <div id="account-menu-list"></div>
+            <div class="account-menu-footer">
+              <input class="account-menu-label" id="account-profile-label" type="text" maxlength="60" autocomplete="off" aria-label="Name for current account" placeholder="Name current account" />
+              <button class="app-menu-item" type="button" data-action="save-account-profile" id="save-account-profile">Save current account</button>
+              <button class="app-menu-item" type="button" data-action="add-account-profile" id="add-account-profile">Add another account</button>
+            </div>
+            <div class="app-menu-feedback" id="account-menu-feedback" role="status" aria-live="polite"></div>
+          </div>
         </div>
       </div>
       <div class="rail-actions">
@@ -39675,6 +39972,7 @@ template.innerHTML = `
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
+            <button class="icon-button dictation-button" type="button" data-action="toggle-dictation" id="dictation-button" aria-label="Dictate message" aria-pressed="false" hidden></button>
             <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
             <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
           </div>
@@ -39787,6 +40085,7 @@ var icons = {
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
   folderUpload: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M12 17V9"></path><path d="m8.5 12.5 3.5-3.5 3.5 3.5"></path>'),
   send: iconSvg('<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>'),
+  microphone: iconSvg('<rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"></path>'),
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
@@ -39854,6 +40153,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this._threadSnapshotEpoch = 0;
     this._threadRefreshGraceUntil = 0;
     this._activeThread = null;
+    this._speechRecognition = null;
+    this._speechThreadId = null;
+    this._speechStatus = "";
+    this._speechLastFinalResult = -1;
+    this._speechAvailable = true;
     this._events = [];
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -39988,6 +40292,14 @@ var CodexBridgePanel = class extends HTMLElement {
     this._runActivityDetailsOpen = false;
     this._activeDestination = "chats";
     this._appMenuOpen = false;
+    this._accountProfiles = [];
+    this._accountProfileDetails = /* @__PURE__ */ new Map();
+    this._accountProfileDetailsGeneration = 0;
+    this._accountProfilesLoaded = false;
+    this._accountProfilePending = false;
+    this._accountProfileFeedback = "";
+    this._accountMenuRenderKey = "";
+    this._pendingAccountRemovalId = null;
     this._addMenuOpen = false;
     this._focusMode = false;
     this._focusInvoker = null;
@@ -40024,6 +40336,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
   }
   disconnectedCallback() {
+    this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.removeEventListener("resize", this._viewportResizeListener);
@@ -40164,6 +40477,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("add-plugins-button"), icons.puzzle, "Plugins");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("dictation-button"), icons.microphone);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
     for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
@@ -40392,10 +40706,24 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "toggle-app-menu":
         this._appMenuOpen = !this._appMenuOpen;
+        if (this._appMenuOpen) this._hideTooltip();
         this._renderAppMenu();
         if (this._appMenuOpen) {
+          if (this._config?.capabilities?.includes("account_profiles_v1")) void this._loadAccountProfiles();
           queueMicrotask(() => this.shadowRoot.getElementById("focus-mode-button")?.focus());
         }
+        break;
+      case "save-account-profile":
+        void this._saveAccountProfile();
+        break;
+      case "switch-account-profile":
+        void this._switchAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "remove-account-profile":
+        void this._removeAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "add-account-profile":
+        void this._prepareAnotherAccount();
         break;
       case "toggle-focus":
         this._toggleFocusMode(actionTarget);
@@ -40479,7 +40807,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._createFolder();
         break;
       case "save-thread":
-        this._createThread();
+        if (this._threadForm.threadId) this._saveThreadSettings();
+        else this._createThread();
         break;
       case "cancel-thread-form":
         this._showThreadForm = false;
@@ -40550,6 +40879,9 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "send-prompt":
         this._sendPrompt();
+        break;
+      case "toggle-dictation":
+        this._toggleDictation();
         break;
       case "schedule-message":
         this._scheduleComposerMessage();
@@ -41034,6 +41366,230 @@ var CodexBridgePanel = class extends HTMLElement {
     focusButton.firstElementChild.textContent = focusLabel;
     focusButton.lastElementChild.textContent = this._focusMode ? "Esc to exit" : "Fullscreen";
     feedback.textContent = this._focusFeedback;
+    const accounts = this.shadowRoot.getElementById("account-menu-section");
+    const list = this.shadowRoot.getElementById("account-menu-list");
+    const save = this.shadowRoot.getElementById("save-account-profile");
+    const add = this.shadowRoot.getElementById("add-account-profile");
+    const accountFeedback = this.shadowRoot.getElementById("account-menu-feedback");
+    const supported = this._config?.capabilities?.includes("account_profiles_v1") === true;
+    accounts.hidden = !supported;
+    if (!supported) return;
+    const signedIn = this._authViewModel().signedIn;
+    save.disabled = this._accountProfilePending || !signedIn;
+    add.disabled = this._accountProfilePending || signedIn && !this._accountProfiles.some((item) => item.active);
+    accountFeedback.textContent = this._accountProfileFeedback || (this._accountProfilePending ? "Updating accounts…" : "");
+    const key = JSON.stringify([this._accountProfiles, [...this._accountProfileDetails], this._accountProfilesLoaded, this._accountProfilePending, this._pendingAccountRemovalId]);
+    if (key === this._accountMenuRenderKey) return;
+    this._accountMenuRenderKey = key;
+    const rows = [];
+    if (!this._accountProfilesLoaded) {
+      rows.push(this._textElement("div", "app-menu-feedback", "Loading accounts…"));
+    } else if (!this._accountProfiles.length) {
+      rows.push(this._textElement("div", "app-menu-feedback", "No saved accounts yet"));
+    }
+    for (const profile of this._accountProfiles) {
+      const row = document.createElement("div");
+      row.className = `account-menu-row${profile.active ? " current" : ""}`;
+      const identity = document.createElement("div");
+      identity.className = "account-menu-identity";
+      identity.append(
+        this._textElement("span", "account-menu-name", profile.label),
+        this._textElement("span", "account-menu-plan", this._accountPlanLabel(this._accountProfileDetails.get(profile.id)?.plan || profile.plan))
+      );
+      const actions = document.createElement("div");
+      actions.className = "account-menu-actions";
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "account-menu-select";
+      select.dataset.action = "switch-account-profile";
+      select.dataset.profileId = profile.id;
+      select.disabled = this._accountProfilePending || profile.active;
+      select.textContent = profile.active ? "Current" : "Switch";
+      select.setAttribute("aria-label", profile.active ? `${profile.label}, current account` : `Switch to ${profile.label}`);
+      actions.append(select);
+      if (!profile.active) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "account-menu-remove";
+        remove.dataset.action = "remove-account-profile";
+        remove.dataset.profileId = profile.id;
+        remove.disabled = this._accountProfilePending;
+        remove.textContent = this._pendingAccountRemovalId === profile.id ? "✓" : "×";
+        remove.setAttribute("aria-label", this._pendingAccountRemovalId === profile.id ? `Confirm removal of ${profile.label}` : `Remove ${profile.label}`);
+        actions.append(remove);
+      }
+      row.append(identity, actions, this._accountMetrics(profile));
+      rows.push(row);
+    }
+    list.replaceChildren(...rows);
+  }
+  _accountPlanLabel(plan) {
+    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
+    return plan && names[plan] ? `ChatGPT ${names[plan]}` : "Subscription unavailable";
+  }
+  _accountMetrics(profile) {
+    const metrics = document.createElement("div");
+    metrics.className = "account-menu-metrics";
+    const details = this._accountProfileDetails.get(profile.id);
+    const windowValue = (name) => {
+      const window2 = details?.windows?.find((item) => item.name === name);
+      if (name === "5 hours" && !window2 && details?.status === "available" && details.windows?.some((item) => item.name === "Weekly")) return "Off";
+      return Number.isFinite(window2?.remaining_percent) ? `${Math.round(window2.remaining_percent)}% remaining` : "Unavailable";
+    };
+    const expiry = Number.isSafeInteger(details?.next_reset_expiry) ? new Date(details.next_reset_expiry * 1e3).toLocaleString(void 0, { dateStyle: "medium", timeStyle: "short" }) : details?.available_resets === 0 ? "No resets available" : "Unavailable";
+    const values = [
+      ["5-hour usage", windowValue("5 hours")],
+      ["Weekly usage", windowValue("Weekly")],
+      ["Available resets", Number.isSafeInteger(details?.available_resets) ? String(details.available_resets) : "Unavailable"],
+      [details?.expiry_complete ? "Next reset expiry" : "Next known expiry", expiry]
+    ];
+    for (const [label, value] of values) {
+      const metric = document.createElement("div");
+      metric.className = "account-menu-metric";
+      metric.append(
+        this._textElement("span", "account-menu-metric-label", label),
+        this._textElement("span", "account-menu-metric-value", value)
+      );
+      metrics.append(metric);
+    }
+    const note = details?.status === "stale" && details?.updated_at ? `Last checked ${new Date(details.updated_at).toLocaleString()}. ${details?.reauthentication_required ? "Sign in again to refresh this account." : "Refresh unavailable; figures may have changed."}` : details?.status === "reauthentication_required" ? "This account needs a fresh sign-in before its usage can be read." : details?.status === "unavailable" ? "Usage is unavailable for this saved sign-in. Sign in again if it does not recover." : details?.status === "loading" ? "Checking this account…" : details?.updated_at ? `Updated ${new Date(details.updated_at).toLocaleString()}` : "Usage has not been checked yet.";
+    metrics.append(this._textElement("span", `account-menu-note${details?.status === "stale" ? " stale" : ""}`, note));
+    return metrics;
+  }
+  async _loadAccountProfiles() {
+    if (!this._config?.capabilities?.includes("account_profiles_v1")) return;
+    try {
+      const profiles = await this._callWS("list_account_profiles");
+      this._accountProfiles = Array.isArray(profiles) ? profiles : [];
+      this._accountProfilesLoaded = true;
+      this._accountProfileFeedback = "";
+      if (this._config?.capabilities?.includes("account_profile_details_v1")) {
+        void this._loadAccountProfileDetails(this._accountProfiles, ++this._accountProfileDetailsGeneration);
+      }
+    } catch {
+      this._accountProfileFeedback = "Saved accounts could not be loaded.";
+    }
+    this._renderAppMenu();
+  }
+  async _loadAccountProfileDetails(profiles, generation) {
+    const known = new Set(profiles.map((item) => item.id));
+    for (const id of this._accountProfileDetails.keys()) {
+      if (!known.has(id)) this._accountProfileDetails.delete(id);
+    }
+    for (const profile of profiles) {
+      if (generation !== this._accountProfileDetailsGeneration) return;
+      this._accountProfileDetails.set(profile.id, { status: "loading" });
+      this._renderAppMenu();
+      try {
+        const details = await this._callWS("account_profile_details", { profile_id: profile.id });
+        if (generation === this._accountProfileDetailsGeneration && this._accountProfiles.some((item) => item.id === profile.id)) {
+          this._accountProfileDetails.set(profile.id, details);
+        }
+      } catch {
+        if (generation === this._accountProfileDetailsGeneration) {
+          this._accountProfileDetails.set(profile.id, { status: "unavailable" });
+        }
+      }
+      if (generation === this._accountProfileDetailsGeneration) this._renderAppMenu();
+    }
+  }
+  async _saveAccountProfile() {
+    if (this._accountProfilePending || !this._authViewModel().signedIn) return;
+    const input2 = this.shadowRoot.getElementById("account-profile-label");
+    const label = input2.value.trim();
+    if (!label || label.length > 60) {
+      this._accountProfileFeedback = "Enter a name of up to 60 characters.";
+      this._renderAppMenu();
+      input2.focus();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("save_account_profile", { label });
+      input2.value = "";
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Account saved on Home Assistant.";
+    } catch {
+      this._accountProfileFeedback = "The account could not be saved. Check sign-in and try again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  async _switchAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    const profile = this._accountProfiles.find((item) => item.id === profileId);
+    this._accountProfilePending = true;
+    this._accountProfileFeedback = "Verifying saved account…";
+    this._renderAppMenu();
+    try {
+      const auth = await this._callWS("switch_account_profile", { profile_id: profileId });
+      this._applyAuthStatus(auth);
+      await this._loadStatus();
+      await this._loadAccountProfiles();
+      if (auth?.state !== "ok") throw new Error("account verification unavailable");
+      this._closeAppMenu();
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._accountProfileFeedback = error?.code === "account_profile_reauthentication_required" ? `${profile.label} needs a fresh sign-in. Use Add another account, sign in to it, then save it again.` : "The switch could not be verified. Refresh the account list before trying again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  async _removeAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    if (this._pendingAccountRemovalId !== profileId) {
+      this._pendingAccountRemovalId = profileId;
+      this._accountProfileFeedback = "Select the tick to remove this saved sign-in.";
+      this._renderAppMenu();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("remove_account_profile", { profile_id: profileId });
+      this._pendingAccountRemovalId = null;
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Saved sign-in removed.";
+    } catch {
+      this._accountProfileFeedback = "The saved sign-in could not be removed.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+  async _prepareAnotherAccount() {
+    if (this._accountProfilePending) return;
+    if (this._authViewModel().signedIn && !this._accountProfiles.some((item) => item.active)) {
+      this._accountProfileFeedback = "Save the current account before adding another.";
+      this._renderAppMenu();
+      return;
+    }
+    if (this._authViewModel().signedIn) {
+      this._accountProfilePending = true;
+      this._accountProfileFeedback = "Preserving the current account…";
+      this._renderAppMenu();
+      try {
+        const auth = await this._callWS("prepare_new_account_login");
+        this._applyAuthStatus(auth);
+        await this._loadAccountProfiles();
+        this._closeAppMenu();
+        this._showSideTab("system");
+        await this._startAuthLogin();
+      } catch {
+        this._accountProfileFeedback = "The current sign-in could not be preserved. Check it before adding another.";
+      } finally {
+        this._accountProfilePending = false;
+        this._renderAppMenu();
+      }
+    } else {
+      this._closeAppMenu();
+      this._showSideTab("system");
+      await this._startAuthLogin();
+    }
   }
   _closeAppMenu({ restoreFocus = false } = {}) {
     if (!this._appMenuOpen) return;
@@ -42082,6 +42638,10 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
+      this._stopDictation({ abort: true });
+    }
+    this._renderDictationControl(activeThread, locked);
     const addButton = this.shadowRoot.getElementById("add-menu-button");
     addButton.disabled = !activeThread;
     if (!activeThread && this._addMenuOpen) this._setAddMenuOpen(false);
@@ -42109,7 +42669,101 @@ var CodexBridgePanel = class extends HTMLElement {
     } else if (retryable) {
       composerStatus.textContent = "The response was interrupted. Retry safely with the same request ID.";
     } else {
-      composerStatus.textContent = activeThread ? "" : "Select a chat before sending a message.";
+      composerStatus.textContent = activeThread ? this._speechStatus : "Select a chat before sending a message.";
+    }
+  }
+  _renderDictationControl(activeThread, locked) {
+    const button3 = this.shadowRoot.getElementById("dictation-button");
+    if (!button3) return;
+    const Recognition = window.SpeechRecognition;
+    button3.hidden = !activeThread || !this._speechAvailable || typeof Recognition !== "function" || !Recognition.prototype || !("processLocally" in Recognition.prototype);
+    button3.disabled = locked;
+    const listening = Boolean(this._speechRecognition);
+    button3.setAttribute("aria-pressed", String(listening));
+    button3.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
+    this._setTooltipTarget(button3, listening ? "Stop dictation" : "Dictate on this device");
+  }
+  _stopDictation({ abort = false } = {}) {
+    const recognition = this._speechRecognition;
+    if (!recognition) return;
+    if (abort) {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "";
+      recognition.abort();
+      this._renderDictationControl(this._activeThread, false);
+    } else {
+      this._speechStatus = "Finishing dictation…";
+      recognition.stop();
+      this._renderComposerState(this._activeThread);
+    }
+  }
+  _toggleDictation() {
+    if (this._speechRecognition) {
+      this._stopDictation();
+      return;
+    }
+    const Recognition = window.SpeechRecognition;
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    if (typeof Recognition !== "function" || !this._speechAvailable || !this._activeThread || promptInput?.disabled) return;
+    const lang = this._hass?.language || navigator.language || "en-GB";
+    const recognition = new Recognition();
+    if (!("processLocally" in recognition)) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.processLocally = true;
+    if (recognition.processLocally !== true) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.lang = lang;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    this._speechRecognition = recognition;
+    this._speechThreadId = this._selectedThreadId;
+    this._speechLastFinalResult = -1;
+    this._speechStatus = "Listening on this device… Review the text before sending.";
+    recognition.onresult = (event) => {
+      if (this._speechRecognition !== recognition || this._speechThreadId !== this._selectedThreadId) return;
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (!result.isFinal || index <= this._speechLastFinalResult) continue;
+        this._speechLastFinalResult = index;
+        const spoken = result[0]?.transcript?.trim();
+        if (!spoken) continue;
+        promptInput.value += `${promptInput.value && !/\s$/u.test(promptInput.value) ? " " : ""}${spoken}`;
+        promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    recognition.onerror = (event) => {
+      if (this._speechRecognition !== recognition) return;
+      if (event.error === "language-not-supported") {
+        this._speechAvailable = false;
+        this._renderDictationControl(this._activeThread, false);
+      }
+      this._speechStatus = event.error === "language-not-supported" ? "An on-device speech pack is unavailable for this language." : event.error === "not-allowed" || event.error === "service-not-allowed" ? "Microphone access was blocked. Check your browser permission." : event.error === "no-speech" ? "No speech was detected." : "Dictation stopped. Please try again.";
+      this.shadowRoot.getElementById("composer-status").textContent = this._speechStatus;
+    };
+    recognition.onend = () => {
+      if (this._speechRecognition !== recognition) return;
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      if (this._speechStatus.startsWith("Listening") || this._speechStatus.startsWith("Finishing")) {
+        this._speechStatus = "Dictation stopped. Review your message before sending.";
+      }
+      this._renderComposerState(this._activeThread);
+    };
+    try {
+      recognition.start();
+      this._renderComposerState(this._activeThread);
+    } catch {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "Dictation could not start in this browser.";
+      this._renderComposerState(this._activeThread);
     }
   }
   _renderInteractions() {
@@ -42747,7 +43401,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const targetProject = this._threadForm.projectId ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null : this._directProject();
     const isDirect = !this._threadForm.projectId || targetProject?.kind === "direct";
+    const isEdit = Boolean(this._threadForm.threadId);
     const formKey = JSON.stringify({
+      threadId: this._threadForm.threadId || "",
       projectId: this._threadForm.projectId || "",
       targetProjectId: targetProject?.project_id || "",
       targetProjectName: targetProject?.name || "",
@@ -42761,8 +43417,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const titleBlock = document.createElement("div");
     titleBlock.className = "title-block";
     titleBlock.append(
-      this._textElement("span", "eyeline", isDirect ? "New direct chat" : "New project chat"),
-      this._textElement("span", "title", targetProject?.name || "Choose a target")
+      this._textElement("span", "eyeline", isEdit ? "Chat settings" : isDirect ? "New direct chat" : "New project chat"),
+      this._textElement("span", "title", isEdit ? this._threadForm.title : targetProject?.name || "Choose a target")
     );
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
@@ -42783,7 +43439,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
     const save = this._actionButton("send-button", "save-thread");
-    this._setTrustedButtonContent(save, icons.chat, "Create chat");
+    this._setTrustedButtonContent(save, icons.save, isEdit ? "Save changes" : "Create chat");
     const close = this._actionButton("text-button", "cancel-thread-form");
     close.textContent = "Close";
     formActions.append(save, close);
@@ -43863,6 +44519,7 @@ var CodexBridgePanel = class extends HTMLElement {
       );
     }
     if (event.event_type === "message.completed") {
+      if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
       return this._renderMessage("assistant", payload.text, event.sequence);
     }
     if (event.event_type === "item.completed" && payload.item_type === "imageGeneration" && payload.status === "failed") {
@@ -43901,11 +44558,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (generatedImage || payload.source === "generated_image") {
         return this._renderGeneratedImageCard(event, generatedImage);
       }
-      return this._textElement(
-        "div",
-        "event-row",
-        `Artifact ready: ${payload.relative_path || payload.filename || "artifact"}`
-      );
+      return this._renderFileArtifactCard(event);
     }
     if (event.event_type === "thread.updated") {
       return this._textElement("div", "event-row", "Chat settings updated");
@@ -44295,6 +44948,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return false;
       }
       this._artifacts = Array.isArray(artifacts) ? artifacts : [];
+      this._forceMessageRebuild = true;
       this._clearArtifactRefreshRetry();
       this._syncSelectedArtifact();
       this._render();
@@ -44349,10 +45003,11 @@ var CodexBridgePanel = class extends HTMLElement {
       const generatedImage = isGeneratedImageArtifact(artifact);
       const row = document.createElement("div");
       row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact) || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
-        `Preview ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
+        `${canPreview ? "Preview" : "View file details for"} ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
       );
       select.dataset.artifactId = String(artifact.artifact_id || "");
       const main = document.createElement("div");
@@ -44360,9 +45015,16 @@ var CodexBridgePanel = class extends HTMLElement {
       const size = artifact.size_bytes ? ` / ${this._formatBytes(artifact.size_bytes)}` : "";
       main.append(
         this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
-        this._textElement("span", "row-meta", `${artifact.mime_type || "application/octet-stream"}${size}`)
+        this._textElement("span", "row-meta", `${displayArtifactType(artifact)}${size}`)
       );
-      select.append(main);
+      const content = document.createElement("div");
+      content.className = "file-select-content";
+      const icon = document.createElement("span");
+      icon.className = "file-type-icon";
+      icon.setAttribute("aria-hidden", "true");
+      this._appendTrustedIcon(icon, fileTypeIconMarkup(artifact.filename || artifact.relative_path));
+      content.append(icon, main);
+      select.append(content);
       const download = this._actionButton(
         "download-button small",
         "download-artifact",
@@ -44391,6 +45053,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const container = this.shadowRoot.getElementById("artifact-preview");
     if (!container) return;
     const currentPreview = this._artifactPreview;
+    const sectionLabel = this.shadowRoot.querySelector("#artifact-preview-section > .section-label");
+    if (sectionLabel) {
+      sectionLabel.textContent = currentPreview?.kind === "binary" && currentPreview.artifactId === this._selectedArtifactId ? "File details" : "Preview";
+    }
     const existingPdfShell = container.querySelector(".pdf-preview-shell");
     if (currentPreview?.kind === "pdf" && currentPreview.artifactId === this._selectedArtifactId && existingPdfShell?.dataset.artifactId === currentPreview.artifactId) {
       this._syncPdfPreviewControls(existingPdfShell);
@@ -44413,6 +45079,10 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const preview = this._artifactPreview;
+    if (["document", "spreadsheet", "presentation"].includes(preview.kind)) {
+      this._renderOfficePreview(preview, container);
+      return;
+    }
     if (preview.kind === "pdf") {
       this._renderPdfPreview(preview, container);
       return;
@@ -44438,6 +45108,65 @@ var CodexBridgePanel = class extends HTMLElement {
       binary.append(actions);
     }
     container.append(binary);
+  }
+  _renderOfficePreview(preview, container) {
+    const shell = document.createElement("div");
+    shell.className = "office-preview";
+    const heading = document.createElement("div");
+    heading.className = "office-preview-heading";
+    const icon = document.createElement("span");
+    icon.className = "file-type-icon";
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(preview.filename));
+    heading.append(icon, this._textElement("span", "", preview.filename));
+    shell.append(heading);
+    const note = preview.truncated ? "Text-only preview is limited. Download the file for full content and formatting." : "Text-only preview. Download the file for formatting, images, charts and other content.";
+    shell.append(this._textElement("p", "office-preview-note", note));
+    if (preview.kind === "spreadsheet") {
+      for (const sheet2 of preview.sheets || []) {
+        const section2 = document.createElement("section");
+        section2.append(this._textElement("h3", "", sheet2.name));
+        const wrap = document.createElement("div");
+        wrap.className = "office-preview-table-wrap";
+        const table = document.createElement("table");
+        table.setAttribute("aria-label", `${sheet2.name} preview`);
+        const width = Math.max(1, ...sheet2.rows.map((row) => row.length));
+        const header = document.createElement("tr");
+        header.append(document.createElement("th"));
+        for (let index = 0; index < width; index += 1) {
+          const cell = this._textElement("th", "", String.fromCharCode(65 + index));
+          cell.scope = "col";
+          header.append(cell);
+        }
+        table.append(header);
+        sheet2.rows.forEach((row, index) => {
+          const line = document.createElement("tr");
+          const number = this._textElement("th", "", String(index + 1));
+          number.scope = "row";
+          line.append(number);
+          for (let column = 0; column < width; column += 1) {
+            line.append(this._textElement("td", "", row[column] || ""));
+          }
+          table.append(line);
+        });
+        wrap.append(table);
+        section2.append(wrap);
+        shell.append(section2);
+      }
+    } else {
+      const sections = preview.kind === "presentation" ? preview.slides : [{ paragraphs: preview.paragraphs }];
+      for (const sectionData of sections || []) {
+        const page = document.createElement("section");
+        page.className = "office-preview-page";
+        if (sectionData.name) page.append(this._textElement("h3", "", sectionData.name));
+        for (const paragraph of sectionData.paragraphs || []) {
+          page.append(this._textElement("p", "", paragraph));
+        }
+        if (!sectionData.paragraphs?.length) page.append(this._textElement("p", "empty-note", "No text in this section."));
+        shell.append(page);
+      }
+    }
+    container.append(shell);
   }
   _renderPdfPreview(preview, container) {
     if (!(preview?.blob instanceof Blob)) {
@@ -44949,7 +45678,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._chatMenuKey = menuKey;
     menu.replaceChildren();
     for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
-      const button3 = this._actionButton("", action, label);
+      const button3 = document.createElement("button");
+      button3.type = "button";
+      button3.dataset.action = action;
       button3.textContent = label;
       button3.dataset.threadId = this._selectedThreadId;
       menu.append(button3);
@@ -44970,8 +45701,8 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderContextUsage() {
     const button3 = this.shadowRoot.getElementById("context-usage-button");
     if (!button3) return;
-    button3.hidden = !this._activeThread;
     const usage = contextUsage(this._activeThread?.context_usage);
+    button3.hidden = !this._activeThread || !usage.known;
     button3.setAttribute("aria-label", `${usage.label}. Open usage details`);
     button3.title = usage.label;
     this._setTooltipTarget(button3, usage.label);
@@ -45210,7 +45941,7 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       const [thread, events, status, interactions] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
-        this._callWS("get_events", { thread_id: threadId, after: 0 }),
+        this._loadThreadEventHistory(threadId),
         this._callWS("get_status"),
         this._listPendingInteractions(threadId)
       ]);
@@ -45235,26 +45966,21 @@ var CodexBridgePanel = class extends HTMLElement {
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
       );
-      const replay = acceptEvents(
-        createEventStreamState(),
-        authoritativeEvents.filter(
-          (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
-        )
+      const replayEvents = authoritativeEvents.filter(
+        (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
       );
-      const authoritativeCursor = authoritativeEvents.reduce(
-        (cursor, event) => Math.max(cursor, event.sequence),
-        Math.max(
-          replay.state.cursor,
-          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
-        )
+      const authoritativeCursor = Math.max(
+        authoritativeEvents.at(-1)?.sequence || 0,
+        Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : 0
       );
       this._eventStream = {
-        ...replay.state,
+        ...createEventStreamState(),
         cursor: authoritativeCursor,
+        events: replayEvents,
         needsSnapshot: false,
         error: null
       };
-      this._events = replay.state.events;
+      this._events = replayEvents;
       this._sequence = authoritativeCursor;
       if (artifacts) {
         this._artifacts = artifacts;
@@ -45281,6 +46007,88 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       return false;
     }
+  }
+  _renderFileArtifactCard(event) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const artifact = this._artifacts.find((item) => item?.artifact_id === payload.artifact_id);
+    const filename = displayArtifactFilename(artifact?.filename || payload.filename || payload.relative_path, "File");
+    const article = document.createElement("article");
+    article.className = "message assistant artifact-file-message";
+    article.dataset.sequence = String(event?.sequence ?? "artifact-file");
+    article.setAttribute("aria-label", `File ready: ${filename}`);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble artifact-file-card";
+    const heading = document.createElement("div");
+    heading.className = "artifact-file-heading";
+    const icon = this._textElement("span", "artifact-file-icon", "");
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(filename));
+    const info2 = document.createElement("div");
+    info2.className = "artifact-file-info";
+    const size = Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0 ? ` · ${this._formatBytes(artifact.size_bytes)}` : "";
+    info2.append(
+      this._textElement("span", "artifact-file-name", filename),
+      this._textElement("span", "artifact-file-meta", `${displayArtifactType(artifact || payload)}${size}`)
+    );
+    heading.append(icon, info2);
+    bubble.append(heading);
+    if (artifact?.artifact_id) {
+      const actions = document.createElement("div");
+      actions.className = "artifact-file-actions";
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary" || isPdfArtifactCandidate(artifact) || isOfficePreviewCandidate(artifact, this._config?.capabilities);
+      const preview = this._actionButton(
+        "artifact-file-preview",
+        "open-artifact-preview",
+        `${canPreview ? "Preview" : "View file details for"} ${filename}`
+      );
+      preview.dataset.artifactId = artifact.artifact_id;
+      preview.textContent = canPreview ? "Preview" : "View file";
+      const download = this._actionButton(
+        "artifact-file-download",
+        "download-artifact",
+        this._artifactDownloadActionLabel(artifact.artifact_id, filename)
+      );
+      download.dataset.artifactId = artifact.artifact_id;
+      const state = this._artifactDownloadState(artifact.artifact_id);
+      download.textContent = this._artifactDownloadVisibleLabel(state);
+      download.disabled = state === "pending";
+      actions.append(preview, download);
+      bubble.append(actions);
+    } else {
+      bubble.append(this._textElement("span", "artifact-file-meta", "Available in Files"));
+    }
+    article.append(bubble);
+    return article;
+  }
+  async _loadThreadEventHistory(threadId) {
+    if (!this._config?.capabilities?.includes("api_v1")) {
+      return this._callWS("get_events", { thread_id: threadId, after: 0 });
+    }
+    const history = [];
+    let cursor = 0;
+    for (let page = 0; page < MAX_RETAINED_EVENTS; page += 1) {
+      const batch = await this._callWS("get_events", {
+        after: cursor,
+        scopes: ["thread"],
+        thread_ids: [threadId]
+      });
+      if (Array.isArray(batch)) return batch;
+      if (!batch || !Array.isArray(batch.events)) throw new Error("Chat history is unavailable.");
+      for (const event of batch.events) {
+        if (event.scope === "thread" && event.thread_id === threadId && Number.isSafeInteger(event.cursor)) {
+          history.push({ ...event, sequence: event.cursor });
+        }
+      }
+      if (history.length > MAX_RETAINED_EVENTS) {
+        throw new Error("Chat history exceeds the supported limit.");
+      }
+      if (!batch.has_more) return history;
+      if (!Number.isSafeInteger(batch.next_cursor) || batch.next_cursor <= cursor) {
+        throw new Error("Chat history could not advance.");
+      }
+      cursor = batch.next_cursor;
+    }
+    throw new Error("Chat history is too long to load safely.");
   }
   async _retryError() {
     if (this._isLoading || !this._errorRetryable) {
@@ -45356,11 +46164,30 @@ var CodexBridgePanel = class extends HTMLElement {
     this._showThreadForm = true;
     this._showProjectForm = false;
     this._threadForm = {
+      threadId: null,
       title: "",
       mode: this._preferences.mode,
       projectId
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
+    this._render();
+    queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
+  }
+  _openThreadFormForEdit(threadId) {
+    const thread = this._activeThread?.thread_id === threadId ? this._activeThread : this._threads.find((item) => item.thread_id === threadId);
+    if (!thread) return;
+    this._showThreadForm = true;
+    this._showProjectForm = false;
+    this._threadForm = {
+      threadId,
+      title: thread.title || "",
+      mode: thread.mode || "edit",
+      projectId: thread.project_id || null,
+      hostAccessGrant: thread.host_access_grant || null
+    };
+    if (this._mobileDrawerMedia?.matches && this._mobileDrawer !== "navigation") {
+      this._toggleMobileDrawer("navigation", this.shadowRoot.getElementById("chat-menu-button"));
+    }
     this._render();
     queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
   }
@@ -45479,6 +46306,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       if (nextThreadId !== this._selectedThreadId) {
+        this._stopDictation({ abort: true });
+        if (this._threadForm.threadId) this._showThreadForm = false;
         void this._terminal.close();
         this._chatMenuOpen = false;
       }
@@ -45609,6 +46438,26 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       this._clearError();
       this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+  async _saveThreadSettings() {
+    const threadId = this._threadForm.threadId;
+    const title = this._threadForm.title.trim();
+    if (!threadId || !title || threadId !== this._selectedThreadId) return;
+    try {
+      const updated = await this._callWS("update_thread", {
+        thread_id: threadId,
+        title,
+        mode: this._threadForm.mode,
+        ...this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}
+      });
+      this._activeThread = updated;
+      this._syncThreadListStatus();
+      this._showThreadForm = false;
+      this._clearError();
+      this._render(true);
     } catch (error) {
       this._setError(error);
     }
@@ -45966,12 +46815,12 @@ var CodexBridgePanel = class extends HTMLElement {
     this._authPollInFlight = false;
   }
   async _copyAuthCode() {
-    const code = this._authViewModel().code;
-    if (!code) {
+    const code2 = this._authViewModel().code;
+    if (!code2) {
       return;
     }
     try {
-      await this._writeClipboardText(code);
+      await this._writeClipboardText(code2);
       this._clearError();
     } catch (error) {
       this._setError(error);
@@ -46350,9 +47199,13 @@ var CodexBridgePanel = class extends HTMLElement {
     const previewToken = ++this._previewToken;
     const advertisedDescriptor = previewDescriptor(artifact, { type: artifact.mime_type });
     const pdfCandidate = isPdfArtifactCandidate(artifact);
-    if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
+    const officeCandidate = isOfficePreviewCandidate(artifact, this._config?.capabilities);
+    if (advertisedDescriptor.kind === "binary" && !pdfCandidate && !officeCandidate) {
       this._revokePreviewUrl();
-      this._artifactPreview = advertisedDescriptor;
+      this._artifactPreview = {
+        ...advertisedDescriptor,
+        notice: "A content preview is not available for this file type. Download it to open the file."
+      };
       this._render();
       return;
     }
@@ -46368,6 +47221,17 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     try {
+      if (officeCandidate) {
+        const result = await this._callWS("preview_artifact", {
+          thread_id: this._selectedThreadId,
+          artifact_id: artifactId
+        });
+        if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+        this._revokePreviewUrl();
+        this._artifactPreview = normaliseOfficePreview(result, artifact);
+        this._render();
+        return;
+      }
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const limit = artifactPreviewLimit(artifact);
@@ -46533,7 +47397,7 @@ var CodexBridgePanel = class extends HTMLElement {
       button3.setAttribute("aria-label", label);
       this._setTooltipTarget(button3, label);
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
-      if (generatedImageButton) {
+      if (generatedImageButton || button3.classList.contains("artifact-file-download")) {
         button3.textContent = visibleLabel;
       } else if (button3.classList.contains("pdf-preview-download")) {
         const text3 = button3.querySelector("span");
@@ -47618,8 +48482,8 @@ var CodexBridgePanel = class extends HTMLElement {
   _safeUiError(error) {
     const candidate = typeof error === "string" ? error : error?.body?.message || error?.body?.error?.message || error?.error?.message || error?.message || "The Codex request did not complete.";
     const withoutControlCharacters = Array.from(String(candidate), (character) => {
-      const code = character.codePointAt(0);
-      return code <= 8 || code === 11 || code === 12 || code >= 14 && code <= 31 || code === 127 ? " " : character;
+      const code2 = character.codePointAt(0);
+      return code2 <= 8 || code2 === 11 || code2 === 12 || code2 >= 14 && code2 <= 31 || code2 === 127 ? " " : character;
     }).join("");
     const safe = withoutControlCharacters.replace(/https?:\/\/[^\s<>"']+/giu, "[private address]").replace(/(?:[A-Za-z]:\\|\\\\)[^\s<>"']+/gu, "[private path]").replace(/\/(?:data|config|share|addon_configs|home|root|Users)(?:\/[^\s<>"']*)?/gu, "[private path]").replace(/(^|[\s([{:])\/(?!\/)[^\s<>"']+/gu, "$1[private path]").replace(/\b(?:authorization\s*:\s*)?bearer\s+[A-Za-z0-9._~+/-]+=*/giu, "[private credential]").replace(/\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+/giu, "$1=[private credential]").replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[private account]").replace(/\s+/gu, " ").trim();
     return (safe || "The Codex request did not complete.").slice(0, 240);
@@ -47662,8 +48526,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     const text3 = Array.from(String(label ?? ""), (character) => {
-      const code = character.codePointAt(0);
-      return code <= 31 || code === 127 ? " " : character;
+      const code2 = character.codePointAt(0);
+      return code2 <= 31 || code2 === 127 ? " " : character;
     }).join("").replace(/\s+/gu, " ").trim().slice(0, 120);
     if (!text3) {
       return;
@@ -47674,6 +48538,10 @@ var CodexBridgePanel = class extends HTMLElement {
   _showTooltipForTarget(target) {
     const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
     if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
+      return;
+    }
+    if (trigger.id === "app-menu-toggle" && this._appMenuOpen) {
+      this._hideTooltip();
       return;
     }
     const text3 = trigger.dataset.tooltip;

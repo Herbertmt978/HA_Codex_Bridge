@@ -54,7 +54,9 @@ export function parseEvents(value, options) {
 }
 
 /** Sort by the trusted cursor and remove duplicate sequence/event IDs. */
-export function normalizeEvents(events, { maxEvents = 10000 } = {}) {
+export const MAX_RETAINED_EVENTS = 25_000;
+
+export function normalizeEvents(events, { maxEvents = MAX_RETAINED_EVENTS } = {}) {
   const seenSequences = new Set();
   const seenIds = new Set();
   const valid = [];
@@ -70,7 +72,9 @@ export function normalizeEvents(events, { maxEvents = 10000 } = {}) {
     if (event.event_id) seenIds.add(event.event_id);
     valid.push(event);
   }
-  const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(10000, Math.floor(maxEvents))) : 10000;
+  const limit = Number.isFinite(maxEvents)
+    ? Math.max(1, Math.min(MAX_RETAINED_EVENTS, Math.floor(maxEvents)))
+    : MAX_RETAINED_EVENTS;
   return valid.slice(-limit);
 }
 

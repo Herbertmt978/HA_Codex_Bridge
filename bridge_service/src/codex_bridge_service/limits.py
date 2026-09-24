@@ -5,11 +5,12 @@ from math import isfinite
 from pathlib import Path
 from threading import Lock
 import time
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 from urllib import request
 
 from .account import normalize_chatgpt_plan_type
 from .models import LimitsStatusRecord, LimitsWindowRecord
+from .runtime_gate import RuntimeGateSnapshot
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
@@ -39,6 +40,7 @@ class AppServerLimitsProbe:
         *,
         min_fetch_interval_seconds: int = 45,
         timeout_seconds: float = 5.0,
+        auth_state_provider: Callable[[], RuntimeGateSnapshot] | None = None,
     ) -> None:
         if (
             isinstance(timeout_seconds, bool)
@@ -48,12 +50,20 @@ class AppServerLimitsProbe:
         ):
             raise ValueError("limits probe timeout must be positive")
         self._client = client
+        self._auth_state_provider = auth_state_provider
         self._timeout_seconds = float(timeout_seconds)
         self._min_fetch_interval_seconds = max(0, min_fetch_interval_seconds)
         self._last_fetch_at = 0.0
         self._cached_status: LimitsStatusRecord | None = None
         self._generation: int | None = None
+        self._auth_revision: int | None = None
         self._probe_lock = Lock()
+
+    def _auth_state(self) -> tuple[int | None, bool]:
+        if self._auth_state_provider is None:
+            return None, False
+        state = self._auth_state_provider()
+        return state.auth_mutation_revision, state.auth_mutation_active or state.closed
 
     def invalidate(self) -> None:
         with self._probe_lock:
@@ -63,16 +73,28 @@ class AppServerLimitsProbe:
     def probe(self) -> LimitsStatusRecord | None:
         with self._probe_lock:
             now = time.monotonic()
+            auth_revision, auth_busy = self._auth_state()
+            if auth_busy:
+                return None
             generation = getattr(self._client, "generation", None)
             resolved_generation = generation if type(generation) is int else None
-            if self._generation != resolved_generation:
+            if self._generation != resolved_generation or self._auth_revision != auth_revision:
                 self._generation = resolved_generation
+                self._auth_revision = auth_revision
                 self._last_fetch_at = 0.0
                 self._cached_status = None
             if (
                 self._cached_status is not None
                 and now - self._last_fetch_at < self._min_fetch_interval_seconds
             ):
+                after_revision, after_busy = self._auth_state()
+                if (
+                    after_busy or after_revision != auth_revision
+                    or getattr(self._client, "generation", None) != generation
+                ):
+                    self._last_fetch_at = 0.0
+                    self._cached_status = None
+                    return None
                 return self._cached_status.model_copy(deep=True)
 
             try:
@@ -82,6 +104,17 @@ class AppServerLimitsProbe:
                     timeout_seconds=self._timeout_seconds,
                 )
             except Exception:
+                response = None
+            after_revision, after_busy = self._auth_state()
+            after_generation = getattr(self._client, "generation", None)
+            if (
+                after_busy or after_revision != auth_revision
+                or after_generation != generation
+            ):
+                self._last_fetch_at = 0.0
+                self._cached_status = None
+                return None
+            if response is None:
                 return (
                     self._cached_status.model_copy(deep=True)
                     if self._cached_status is not None

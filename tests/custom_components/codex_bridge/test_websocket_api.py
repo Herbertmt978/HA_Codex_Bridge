@@ -32,6 +32,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_create_automation,
     ws_login_mcp,
     ws_list_artifacts,
+    ws_preview_artifact,
     ws_run_automation,
     ws_send_prompt,
     ws_start_auth_login,
@@ -858,6 +859,25 @@ async def test_list_artifacts_redacts_unrecognized_busy_errors() -> None:
 
     assert connection.errors == [(122, "bridge_error", "Bridge request failed")]
     assert "private_workspace_conflict" not in repr(connection.errors)
+
+
+async def test_office_preview_forwards_only_the_requested_owned_artifact() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_preview_artifact = AsyncMock(
+        return_value={"kind": "document", "paragraphs": ["Hello"], "truncated": False}
+    )
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_preview_artifact(
+        hass,
+        connection,
+        {"id": 123, "type": f"{DOMAIN}/preview_artifact", "thread_id": "thr_1", "artifact_id": "art_1"},
+    )
+    await hass.finish()
+
+    runtime.client.async_preview_artifact.assert_awaited_once_with("thr_1", "art_1")
+    assert connection.results == [(123, {"kind": "document", "paragraphs": ["Hello"], "truncated": False})]
 
 
 async def test_answer_interaction_forwards_exact_bounded_values_contract() -> None:

@@ -1,10 +1,10 @@
-import { normalizeEvents, parseEvent } from "./protocol.js";
+import { MAX_RETAINED_EVENTS, normalizeEvents, parseEvent } from "./protocol.js";
 
-export function createEventStreamState({ cursor = 0, maxEvents = 10000 } = {}) {
+export function createEventStreamState({ cursor = 0, maxEvents = MAX_RETAINED_EVENTS } = {}) {
   return {
     cursor: Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0,
     events: [],
-    maxEvents: Math.max(1, Math.min(10000, Number(maxEvents) || 10000)),
+    maxEvents: Math.max(1, Math.min(MAX_RETAINED_EVENTS, Number(maxEvents) || MAX_RETAINED_EVENTS)),
     needsSnapshot: false,
     error: null,
   };

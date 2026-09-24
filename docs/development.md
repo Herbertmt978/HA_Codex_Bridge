@@ -62,9 +62,13 @@ python -m pytest -q bridge_service\tests -p pytest_asyncio.plugin -p pytest_time
 Use an isolated Linux worker for the full Bridge and App build checks. The
 Home Assistant test plugin imports Linux-only modules and cannot run unchanged
 on Windows. A local container test does not prove that the App sandbox works
-on HAOS; verify the built image and startup attestation on the target as well.
+on HAOS; verify the published image and startup attestation through the
+Supervisor-managed App on DEV. Do not launch standalone test containers on
+HAOS: Supervisor reports them as unsupported software. Check
+`ha resolution info` before and after DEV installation and remove only
+task-owned disposable containers if an earlier test left any behind.
 
-This release pairs App `1.6.4`, Integration and panel `1.6.4`, with Bridge `0.13.0` and
+This release pairs App `1.7.0`, Integration and panel `1.7.0`, with Bridge `0.13.0` and
 Codex `0.156.1`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.

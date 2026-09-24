@@ -7,7 +7,7 @@ import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js"
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
-import { parseEvents } from "./protocol.js";
+import { MAX_RETAINED_EVENTS, parseEvents } from "./protocol.js";
 import {
   PDF_PREVIEW_MAX_SCALE,
   PDF_PREVIEW_MIN_SCALE,
@@ -26,6 +26,7 @@ import {
   sanitizeFilename,
 } from "./safe-dom.js";
 import { uploadResumableFile } from "./uploads.js";
+import { fileTypeIconMarkup } from "./file-type-icons.js";
 import { getAuthViewModel, normalizePlanType, renderAuth } from "./views/auth.js";
 import { getApprovalViewModel, renderApproval } from "./views/approval.js";
 import { collectMcpContent, collectMcpDraft, renderMcpElicitation } from "./views/mcp-elicitation.js";
@@ -37,7 +38,7 @@ import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
 import { proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.6.4";
+const PANEL_VERSION = "1.7.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -96,6 +97,7 @@ const ARTIFACT_PREVIEW_MAX_BYTES = 512 * 1024;
 const ARTIFACT_PREVIEW_MAX_LABEL = "512 KB";
 const PDF_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const PDF_PREVIEW_MAX_LABEL = "8 MB";
+const OFFICE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
@@ -114,6 +116,71 @@ function displayArtifactFilename(value, fallback = "Generated image") {
 function displayArtifactMime(value) {
   const mime = String(value ?? "").split(";", 1)[0].trim();
   return mime.slice(0, 120) || "image";
+}
+
+function displayArtifactType(artifact) {
+  const filename = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file");
+  const extension = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  if (["doc", "docx", "odt", "rtf"].includes(extension)) return "Word document";
+  if (["xls", "xlsx", "ods"].includes(extension)) return "Spreadsheet";
+  if (extension === "csv") return "CSV file";
+  if (extension === "pdf") return "PDF document";
+  if (["ppt", "pptx", "odp"].includes(extension)) return "Presentation";
+  if (["txt", "log"].includes(extension)) return "Text document";
+  if (extension === "md") return "Markdown document";
+  if (["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) return "Image";
+  if (extension === "zip") return "ZIP archive";
+  return extension && extension.length <= 8 ? `${extension.toUpperCase()} file` : "File";
+}
+
+function isOfficePreviewCandidate(artifact, capabilities) {
+  if (!capabilities?.includes("office_preview_v1")) return false;
+  const name = displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase();
+  return [".docx", ".xlsx", ".pptx"].some((extension) => name.endsWith(extension));
+}
+
+function normaliseOfficePreview(value, artifact) {
+  if (!value || !["document", "spreadsheet", "presentation"].includes(value.kind)) {
+    throw new Error("Invalid Office preview");
+  }
+  let remaining = 30_000;
+  const safeText = (input) => {
+    if (typeof input !== "string") throw new Error("Invalid Office preview text");
+    const text = input.slice(0, Math.min(remaining, 30_000));
+    remaining -= text.length;
+    return text;
+  };
+  const paragraphs = (input) => {
+    if (!Array.isArray(input)) throw new Error("Invalid Office preview paragraphs");
+    return input.slice(0, 200).map(safeText);
+  };
+  const common = { artifactId: artifact.artifact_id, filename: displayArtifactFilename(artifact.filename), kind: value.kind, truncated: value.truncated === true };
+  if (value.kind === "document") return { ...common, paragraphs: paragraphs(value.paragraphs) };
+  if (value.kind === "presentation") {
+    if (!Array.isArray(value.slides)) throw new Error("Invalid Office preview slides");
+    return { ...common, slides: value.slides.slice(0, 5).map((slide, index) => ({
+      name: `Slide ${index + 1}`, paragraphs: paragraphs(slide?.paragraphs),
+    })) };
+  }
+  if (!Array.isArray(value.sheets)) throw new Error("Invalid Office preview sheets");
+  return { ...common, sheets: value.sheets.slice(0, 3).map((sheet, index) => {
+    if (!Array.isArray(sheet?.rows)) throw new Error("Invalid Office preview rows");
+    return { name: `Sheet ${index + 1}`, rows: sheet.rows.slice(0, 100).map((row) => {
+      if (!Array.isArray(row)) throw new Error("Invalid Office preview cells");
+      return row.slice(0, 20).map(safeText);
+    }) };
+  }) };
+}
+
+function isStandaloneArtifactLink(text, artifacts) {
+  const match = /^\[[^\]\r\n]{1,240}\]\(<([^<>\r\n]+)>\)\.?$/.exec(String(text ?? "").trim());
+  if (!match) return false;
+  const target = match[1].replaceAll("\\", "/");
+  const targetName = displayArtifactFilename(target);
+  return artifacts.some((artifact) => [artifact?.filename, artifact?.relative_path]
+    .some((value) => typeof value === "string" && (
+      value.replaceAll("\\", "/") === target || displayArtifactFilename(value) === targetName
+    )));
 }
 
 function canDeferArtifactRefresh(error) {
@@ -140,6 +207,10 @@ function artifactErrorCode(error) {
 }
 
 function artifactPreviewLimit(artifact) {
+  if ([".docx", ".xlsx", ".pptx"].some((extension) =>
+    displayArtifactFilename(artifact?.filename || artifact?.relative_path, "file").toLowerCase().endsWith(extension))) {
+    return { bytes: OFFICE_PREVIEW_MAX_BYTES, label: "8 MB" };
+  }
   if (isPdfArtifactCandidate(artifact)) {
     return { bytes: PDF_PREVIEW_MAX_BYTES, label: PDF_PREVIEW_MAX_LABEL };
   }
@@ -2280,6 +2351,9 @@ template.innerHTML = `
       gap: 2px;
       min-width: 0;
     }
+    .file-select-content { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .file-type-icon { display: inline-flex; flex: 0 0 28px; width: 28px; height: 33px; align-items: center; justify-content: center; }
+    .file-type-icon svg { display: block; width: 100%; height: 100%; }
 
     .artifact-refresh-status {
       display: flex;
@@ -2368,6 +2442,17 @@ template.innerHTML = `
       max-height: 560px;
       object-fit: contain;
     }
+    .office-preview { display: grid; gap: 16px; padding: 18px; color: var(--text-color); }
+    .office-preview-heading { display: flex; gap: 12px; align-items: center; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .office-preview-heading .file-type-icon { flex-basis: 36px; width: 36px; height: 42px; }
+    .office-preview-note { margin: 0; color: var(--muted-color); font-size: var(--font-caption-size); line-height: 1.4; }
+    .office-preview-page { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); box-shadow: 0 3px 12px color-mix(in srgb, var(--text-color) 6%, transparent); }
+    .office-preview-page p { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .office-preview-page h3 { margin: 0 0 4px; font-size: var(--font-control-size); }
+    .office-preview-table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+    .office-preview table { border-collapse: collapse; min-width: 100%; font-size: var(--font-caption-size); }
+    .office-preview th, .office-preview td { min-width: 74px; max-width: 240px; padding: 6px 9px; border: 1px solid var(--border-color); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .office-preview th { background: var(--surface-muted); font-weight: 600; }
 
     .pdf-preview-shell {
       display: grid;
@@ -2571,6 +2656,23 @@ template.innerHTML = `
       border-right: 1px solid var(--border-color);
     }
 
+    .artifact-file-card { display: grid; gap: 12px; max-width: min(480px, 100%); padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); }
+    .artifact-file-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .artifact-file-icon { display: inline-flex; flex: 0 0 46px; width: 46px; height: 54px; align-items: center; justify-content: center; }
+    .artifact-file-icon svg { display: block; width: 42px; height: 48px; }
+    .artifact-file-info { display: grid; min-width: 0; gap: 3px; }
+    .artifact-file-name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+    .artifact-file-meta { color: var(--muted-color); font-size: var(--font-caption-size); }
+    .artifact-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .artifact-file-actions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+    .artifact-file-actions button:hover, .artifact-file-actions button:focus-visible { background: var(--surface-muted); }
+    .artifact-file-actions button:disabled { opacity: .55; cursor: default; }
+
+    .rail-pane:has(.app-menu:not([hidden])) {
+      overflow: visible;
+      z-index: 20;
+    }
+
     .side-pane {
       border-left: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
     }
@@ -2604,9 +2706,12 @@ template.innerHTML = `
       position: absolute;
       z-index: 16;
       top: calc(100% - 5px);
-      right: 10px;
-      width: min(230px, calc(100vw - 24px));
-      display: grid;
+      left: 10px;
+      width: min(760px, calc(100vw - 20px));
+      max-height: calc(100dvh - 86px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       gap: 2px;
       padding: 5px;
       border: 1px solid var(--border-color);
@@ -2650,6 +2755,118 @@ template.innerHTML = `
       color: var(--muted-color);
       font-size: var(--font-caption-size);
       line-height: 1.35;
+    }
+
+    .app-menu-feedback:empty { display: none; }
+
+    .account-menu-section {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-top: 1px solid var(--border-color);
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+
+    .account-menu-section[hidden] { display: none; }
+
+    .account-menu-title {
+      display: block;
+      padding: 6px 9px 8px;
+      color: var(--text-color);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    #account-menu-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+    .account-menu-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr) auto;
+      align-items: start;
+      gap: 6px 10px;
+      margin: 3px 5px 7px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--surface-bg);
+    }
+
+    .account-menu-row.current {
+      border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+      background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface-bg));
+    }
+
+    .account-menu-row .app-menu-item { min-width: 0; }
+
+    .account-menu-identity { min-width: 0; }
+
+    .account-menu-name { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .account-menu-plan { display: block; margin-top: 2px; color: var(--muted-color); font-size: var(--font-caption-size); }
+
+    .account-menu-actions { grid-column: 3; grid-row: 1; display: flex; align-items: start; gap: 4px; }
+
+    .account-menu-select { padding: 5px 8px; min-height: 30px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-bg); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); cursor: pointer; }
+
+    .account-menu-select:hover, .account-menu-select:focus-visible { background: var(--surface-muted); }
+
+    .account-menu-select:disabled { cursor: default; border-color: transparent; background: transparent; color: var(--muted-color); }
+
+    .account-menu-metrics { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px 10px; border-left: 1px solid var(--border-color); padding-left: 12px; }
+
+    .account-menu-metric { min-width: 0; }
+
+    .account-menu-metric-label { display: block; color: var(--muted-color); font-size: 11px; }
+
+    .account-menu-metric-value { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+    .account-menu-note { grid-column: 1 / -1; color: var(--muted-color); font-size: 11px; line-height: 1.35; }
+
+    .account-menu-row .app-menu-item span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .account-menu-remove {
+      flex: 0 0 30px;
+      min-height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted-color);
+      cursor: pointer;
+    }
+
+    .account-menu-remove:hover, .account-menu-remove:focus-visible {
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+
+    .account-menu-label {
+      min-width: 0;
+      width: 100%;
+      margin: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      font: inherit;
+      font-size: var(--font-caption-size);
+    }
+
+    .account-menu-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 6px 5px 3px; border-top: 1px solid var(--border-color); }
+    .account-menu-footer .app-menu-item { white-space: nowrap; padding-inline: 10px; }
+
+    @media (max-width: 620px) {
+      .account-menu-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .account-menu-actions { grid-column: 2; }
+      .account-menu-metrics { grid-column: 1 / -1; grid-row: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; border-top: 1px solid var(--border-color); padding: 8px 0 0; }
+      .account-menu-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .account-menu-label { grid-column: 1 / -1; }
+      .account-menu-footer .app-menu-item { white-space: normal; }
     }
 
     #app-menu-toggle {
@@ -2836,6 +3053,9 @@ template.innerHTML = `
       max-width: 900px;
       margin: 0 auto 28px;
     }
+
+    .desktop-feature-header-centered { text-align: center; }
+    .desktop-feature-header-centered .desktop-feature-summary { margin-inline: auto; }
 
     .desktop-feature-title {
       font-size: 24px;
@@ -3103,8 +3323,8 @@ template.innerHTML = `
 
     #new-direct-chat-button:hover,
     #new-direct-chat-button:focus-visible {
-      border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
-      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+      border-color: transparent;
+      background: color-mix(in srgb, var(--text-color) 8%, var(--surface-muted) 92%);
     }
 
     .search-shell {
@@ -3118,8 +3338,9 @@ template.innerHTML = `
     }
 
     .search-shell:focus-within {
-      border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%);
-      background: var(--surface-bg);
+      border-color: color-mix(in srgb, var(--text-color) 24%, var(--border-color) 76%);
+      background: var(--surface-muted);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color) 9%, transparent);
     }
 
     .search-shell svg {
@@ -3135,6 +3356,13 @@ template.innerHTML = `
     .search-shell input {
       font-size: var(--font-control-size);
       outline: 0;
+    }
+
+    .search-shell input:focus,
+    .search-shell input:focus-visible {
+      border: 0;
+      outline: 0;
+      box-shadow: none;
     }
 
     .search-shell input::-webkit-search-cancel-button {
@@ -4100,7 +4328,23 @@ template.innerHTML = `
     .composer-actions { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 6px; }
     .composer-actions .icon-button { width: 32px; min-width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 50%; background: transparent; color: var(--muted-color); }
     .composer-actions .icon-button:hover:not(:disabled) { background: var(--surface-muted); color: var(--text-color); }
+    .dictation-button[aria-pressed="true"] {
+      position: relative;
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+    .dictation-button[aria-pressed="true"]::after {
+      content: "";
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      right: 1px;
+      bottom: 1px;
+      border-radius: 50%;
+      background: var(--danger-color);
+    }
     .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
+    .context-usage-button[hidden] { display: none; }
     .context-track { opacity: .2; }
     .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
     .context-usage-button[data-level="high"] { color: var(--brand-amber); }
@@ -5282,12 +5526,22 @@ template.innerHTML = `
           </div>
         </div>
         <button class="icon-button" type="button" data-action="toggle-app-menu" id="app-menu-toggle" aria-label="Panel options" aria-controls="app-menu" aria-expanded="false"></button>
-        <div class="app-menu" id="app-menu" hidden>
+      <div class="app-menu" id="app-menu" hidden>
           <button class="app-menu-item" type="button" data-action="toggle-focus" id="focus-mode-button" aria-pressed="false">
             <span>Focus mode</span>
             <span class="menu-shortcut">Fullscreen</span>
           </button>
           <div class="app-menu-feedback" id="focus-mode-feedback" role="status" aria-live="polite"></div>
+          <div class="account-menu-section" id="account-menu-section" hidden>
+            <span class="account-menu-title">ChatGPT accounts</span>
+            <div id="account-menu-list"></div>
+            <div class="account-menu-footer">
+              <input class="account-menu-label" id="account-profile-label" type="text" maxlength="60" autocomplete="off" aria-label="Name for current account" placeholder="Name current account" />
+              <button class="app-menu-item" type="button" data-action="save-account-profile" id="save-account-profile">Save current account</button>
+              <button class="app-menu-item" type="button" data-action="add-account-profile" id="add-account-profile">Add another account</button>
+            </div>
+            <div class="app-menu-feedback" id="account-menu-feedback" role="status" aria-live="polite"></div>
+          </div>
         </div>
       </div>
       <div class="rail-actions">
@@ -5374,6 +5628,7 @@ template.innerHTML = `
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
+            <button class="icon-button dictation-button" type="button" data-action="toggle-dictation" id="dictation-button" aria-label="Dictate message" aria-pressed="false" hidden></button>
             <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
             <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
           </div>
@@ -5488,6 +5743,7 @@ const icons = {
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
   folderUpload: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M12 17V9"></path><path d="m8.5 12.5 3.5-3.5 3.5 3.5"></path>'),
   send: iconSvg('<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>'),
+  microphone: iconSvg('<rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"></path>'),
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
@@ -5556,6 +5812,11 @@ class CodexBridgePanel extends HTMLElement {
     this._threadSnapshotEpoch = 0;
     this._threadRefreshGraceUntil = 0;
     this._activeThread = null;
+    this._speechRecognition = null;
+    this._speechThreadId = null;
+    this._speechStatus = "";
+    this._speechLastFinalResult = -1;
+    this._speechAvailable = true;
     this._events = [];
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -5690,6 +5951,14 @@ class CodexBridgePanel extends HTMLElement {
     this._runActivityDetailsOpen = false;
     this._activeDestination = "chats";
     this._appMenuOpen = false;
+    this._accountProfiles = [];
+    this._accountProfileDetails = new Map();
+    this._accountProfileDetailsGeneration = 0;
+    this._accountProfilesLoaded = false;
+    this._accountProfilePending = false;
+    this._accountProfileFeedback = "";
+    this._accountMenuRenderKey = "";
+    this._pendingAccountRemovalId = null;
     this._addMenuOpen = false;
     this._focusMode = false;
     this._focusInvoker = null;
@@ -5728,6 +5997,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.removeEventListener("resize", this._viewportResizeListener);
@@ -5892,6 +6162,7 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("add-plugins-button"), icons.puzzle, "Plugins");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("dictation-button"), icons.microphone);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
     for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
@@ -6133,10 +6404,24 @@ class CodexBridgePanel extends HTMLElement {
       case "close-terminal": void this._terminal.close(); break;
       case "toggle-app-menu":
         this._appMenuOpen = !this._appMenuOpen;
+        if (this._appMenuOpen) this._hideTooltip();
         this._renderAppMenu();
         if (this._appMenuOpen) {
+          if (this._config?.capabilities?.includes("account_profiles_v1")) void this._loadAccountProfiles();
           queueMicrotask(() => this.shadowRoot.getElementById("focus-mode-button")?.focus());
         }
+        break;
+      case "save-account-profile":
+        void this._saveAccountProfile();
+        break;
+      case "switch-account-profile":
+        void this._switchAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "remove-account-profile":
+        void this._removeAccountProfile(actionTarget.dataset.profileId);
+        break;
+      case "add-account-profile":
+        void this._prepareAnotherAccount();
         break;
       case "toggle-focus":
         this._toggleFocusMode(actionTarget);
@@ -6222,7 +6507,8 @@ class CodexBridgePanel extends HTMLElement {
         this._createFolder();
         break;
       case "save-thread":
-        this._createThread();
+        if (this._threadForm.threadId) this._saveThreadSettings();
+        else this._createThread();
         break;
       case "cancel-thread-form":
         this._showThreadForm = false;
@@ -6287,6 +6573,9 @@ class CodexBridgePanel extends HTMLElement {
         break;
       case "send-prompt":
         this._sendPrompt();
+        break;
+      case "toggle-dictation":
+        this._toggleDictation();
         break;
       case "schedule-message":
         this._scheduleComposerMessage();
@@ -6815,6 +7104,254 @@ class CodexBridgePanel extends HTMLElement {
     focusButton.firstElementChild.textContent = focusLabel;
     focusButton.lastElementChild.textContent = this._focusMode ? "Esc to exit" : "Fullscreen";
     feedback.textContent = this._focusFeedback;
+    const accounts = this.shadowRoot.getElementById("account-menu-section");
+    const list = this.shadowRoot.getElementById("account-menu-list");
+    const save = this.shadowRoot.getElementById("save-account-profile");
+    const add = this.shadowRoot.getElementById("add-account-profile");
+    const accountFeedback = this.shadowRoot.getElementById("account-menu-feedback");
+    const supported = this._config?.capabilities?.includes("account_profiles_v1") === true;
+    accounts.hidden = !supported;
+    if (!supported) return;
+    const signedIn = this._authViewModel().signedIn;
+    save.disabled = this._accountProfilePending || !signedIn;
+    add.disabled = this._accountProfilePending || (signedIn && !this._accountProfiles.some((item) => item.active));
+    accountFeedback.textContent = this._accountProfileFeedback
+      || (this._accountProfilePending ? "Updating accounts…" : "");
+    const key = JSON.stringify([this._accountProfiles, [...this._accountProfileDetails], this._accountProfilesLoaded, this._accountProfilePending, this._pendingAccountRemovalId]);
+    if (key === this._accountMenuRenderKey) return;
+    this._accountMenuRenderKey = key;
+    const rows = [];
+    if (!this._accountProfilesLoaded) {
+      rows.push(this._textElement("div", "app-menu-feedback", "Loading accounts…"));
+    } else if (!this._accountProfiles.length) {
+      rows.push(this._textElement("div", "app-menu-feedback", "No saved accounts yet"));
+    }
+    for (const profile of this._accountProfiles) {
+      const row = document.createElement("div");
+      row.className = `account-menu-row${profile.active ? " current" : ""}`;
+      const identity = document.createElement("div");
+      identity.className = "account-menu-identity";
+      identity.append(
+        this._textElement("span", "account-menu-name", profile.label),
+        this._textElement("span", "account-menu-plan", this._accountPlanLabel(this._accountProfileDetails.get(profile.id)?.plan || profile.plan))
+      );
+      const actions = document.createElement("div");
+      actions.className = "account-menu-actions";
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "account-menu-select";
+      select.dataset.action = "switch-account-profile";
+      select.dataset.profileId = profile.id;
+      select.disabled = this._accountProfilePending || profile.active;
+      select.textContent = profile.active ? "Current" : "Switch";
+      select.setAttribute("aria-label", profile.active ? `${profile.label}, current account` : `Switch to ${profile.label}`);
+      actions.append(select);
+      if (!profile.active) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "account-menu-remove";
+        remove.dataset.action = "remove-account-profile";
+        remove.dataset.profileId = profile.id;
+        remove.disabled = this._accountProfilePending;
+        remove.textContent = this._pendingAccountRemovalId === profile.id ? "✓" : "×";
+        remove.setAttribute("aria-label", this._pendingAccountRemovalId === profile.id
+          ? `Confirm removal of ${profile.label}` : `Remove ${profile.label}`);
+        actions.append(remove);
+      }
+      row.append(identity, actions, this._accountMetrics(profile));
+      rows.push(row);
+    }
+    list.replaceChildren(...rows);
+  }
+
+  _accountPlanLabel(plan) {
+    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
+    return plan && names[plan] ? `ChatGPT ${names[plan]}` : "Subscription unavailable";
+  }
+
+  _accountMetrics(profile) {
+    const metrics = document.createElement("div");
+    metrics.className = "account-menu-metrics";
+    const details = this._accountProfileDetails.get(profile.id);
+    const windowValue = (name) => {
+      const window = details?.windows?.find((item) => item.name === name);
+      if (name === "5 hours" && !window && details?.status === "available"
+        && details.windows?.some((item) => item.name === "Weekly")) return "Off";
+      return Number.isFinite(window?.remaining_percent)
+        ? `${Math.round(window.remaining_percent)}% remaining`
+        : "Unavailable";
+    };
+    const expiry = Number.isSafeInteger(details?.next_reset_expiry)
+      ? new Date(details.next_reset_expiry * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : details?.available_resets === 0 ? "No resets available" : "Unavailable";
+    const values = [
+      ["5-hour usage", windowValue("5 hours")],
+      ["Weekly usage", windowValue("Weekly")],
+      ["Available resets", Number.isSafeInteger(details?.available_resets) ? String(details.available_resets) : "Unavailable"],
+      [details?.expiry_complete ? "Next reset expiry" : "Next known expiry", expiry],
+    ];
+    for (const [label, value] of values) {
+      const metric = document.createElement("div");
+      metric.className = "account-menu-metric";
+      metric.append(
+        this._textElement("span", "account-menu-metric-label", label),
+        this._textElement("span", "account-menu-metric-value", value)
+      );
+      metrics.append(metric);
+    }
+    const note = details?.status === "stale" && details?.updated_at
+      ? `Last checked ${new Date(details.updated_at).toLocaleString()}. ${details?.reauthentication_required ? "Sign in again to refresh this account." : "Refresh unavailable; figures may have changed."}`
+      : details?.status === "reauthentication_required"
+      ? "This account needs a fresh sign-in before its usage can be read."
+      : details?.status === "unavailable" ? "Usage is unavailable for this saved sign-in. Sign in again if it does not recover."
+        : details?.status === "loading" ? "Checking this account…"
+          : details?.updated_at ? `Updated ${new Date(details.updated_at).toLocaleString()}`
+            : "Usage has not been checked yet.";
+    metrics.append(this._textElement("span", `account-menu-note${details?.status === "stale" ? " stale" : ""}`, note));
+    return metrics;
+  }
+
+  async _loadAccountProfiles() {
+    if (!this._config?.capabilities?.includes("account_profiles_v1")) return;
+    try {
+      const profiles = await this._callWS("list_account_profiles");
+      this._accountProfiles = Array.isArray(profiles) ? profiles : [];
+      this._accountProfilesLoaded = true;
+      this._accountProfileFeedback = "";
+      if (this._config?.capabilities?.includes("account_profile_details_v1")) {
+        void this._loadAccountProfileDetails(this._accountProfiles, ++this._accountProfileDetailsGeneration);
+      }
+    } catch {
+      this._accountProfileFeedback = "Saved accounts could not be loaded.";
+    }
+    this._renderAppMenu();
+  }
+
+  async _loadAccountProfileDetails(profiles, generation) {
+    const known = new Set(profiles.map((item) => item.id));
+    for (const id of this._accountProfileDetails.keys()) {
+      if (!known.has(id)) this._accountProfileDetails.delete(id);
+    }
+    for (const profile of profiles) {
+      if (generation !== this._accountProfileDetailsGeneration) return;
+      this._accountProfileDetails.set(profile.id, { status: "loading" });
+      this._renderAppMenu();
+      try {
+        const details = await this._callWS("account_profile_details", { profile_id: profile.id });
+        if (generation === this._accountProfileDetailsGeneration && this._accountProfiles.some((item) => item.id === profile.id)) {
+          this._accountProfileDetails.set(profile.id, details);
+        }
+      } catch {
+        if (generation === this._accountProfileDetailsGeneration) {
+          this._accountProfileDetails.set(profile.id, { status: "unavailable" });
+        }
+      }
+      if (generation === this._accountProfileDetailsGeneration) this._renderAppMenu();
+    }
+  }
+
+  async _saveAccountProfile() {
+    if (this._accountProfilePending || !this._authViewModel().signedIn) return;
+    const input = this.shadowRoot.getElementById("account-profile-label");
+    const label = input.value.trim();
+    if (!label || label.length > 60) {
+      this._accountProfileFeedback = "Enter a name of up to 60 characters.";
+      this._renderAppMenu();
+      input.focus();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("save_account_profile", { label });
+      input.value = "";
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Account saved on Home Assistant.";
+    } catch {
+      this._accountProfileFeedback = "The account could not be saved. Check sign-in and try again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+
+  async _switchAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    const profile = this._accountProfiles.find((item) => item.id === profileId);
+    this._accountProfilePending = true;
+    this._accountProfileFeedback = "Verifying saved account…";
+    this._renderAppMenu();
+    try {
+      const auth = await this._callWS("switch_account_profile", { profile_id: profileId });
+      this._applyAuthStatus(auth);
+      await this._loadStatus();
+      await this._loadAccountProfiles();
+      if (auth?.state !== "ok") throw new Error("account verification unavailable");
+      this._closeAppMenu();
+      this._clearError();
+      this._render();
+    } catch (error) {
+      this._accountProfileFeedback = error?.code === "account_profile_reauthentication_required"
+        ? `${profile.label} needs a fresh sign-in. Use Add another account, sign in to it, then save it again.`
+        : "The switch could not be verified. Refresh the account list before trying again.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+
+  async _removeAccountProfile(profileId) {
+    if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    if (this._pendingAccountRemovalId !== profileId) {
+      this._pendingAccountRemovalId = profileId;
+      this._accountProfileFeedback = "Select the tick to remove this saved sign-in.";
+      this._renderAppMenu();
+      return;
+    }
+    this._accountProfilePending = true;
+    this._renderAppMenu();
+    try {
+      await this._callWS("remove_account_profile", { profile_id: profileId });
+      this._pendingAccountRemovalId = null;
+      await this._loadAccountProfiles();
+      this._accountProfileFeedback = "Saved sign-in removed.";
+    } catch {
+      this._accountProfileFeedback = "The saved sign-in could not be removed.";
+    } finally {
+      this._accountProfilePending = false;
+      this._renderAppMenu();
+    }
+  }
+
+  async _prepareAnotherAccount() {
+    if (this._accountProfilePending) return;
+    if (this._authViewModel().signedIn && !this._accountProfiles.some((item) => item.active)) {
+      this._accountProfileFeedback = "Save the current account before adding another.";
+      this._renderAppMenu();
+      return;
+    }
+    if (this._authViewModel().signedIn) {
+      this._accountProfilePending = true;
+      this._accountProfileFeedback = "Preserving the current account…";
+      this._renderAppMenu();
+      try {
+        const auth = await this._callWS("prepare_new_account_login");
+        this._applyAuthStatus(auth);
+        await this._loadAccountProfiles();
+        this._closeAppMenu();
+        this._showSideTab("system");
+        await this._startAuthLogin();
+      } catch {
+        this._accountProfileFeedback = "The current sign-in could not be preserved. Check it before adding another.";
+      } finally {
+        this._accountProfilePending = false;
+        this._renderAppMenu();
+      }
+    } else {
+      this._closeAppMenu();
+      this._showSideTab("system");
+      await this._startAuthLogin();
+    }
   }
 
   _closeAppMenu({ restoreFocus = false } = {}) {
@@ -7803,6 +8340,10 @@ class CodexBridgePanel extends HTMLElement {
       ? "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
+      this._stopDictation({ abort: true });
+    }
+    this._renderDictationControl(activeThread, locked);
     const addButton = this.shadowRoot.getElementById("add-menu-button");
     addButton.disabled = !activeThread;
     if (!activeThread && this._addMenuOpen) this._setAddMenuOpen(false);
@@ -7834,8 +8375,118 @@ class CodexBridgePanel extends HTMLElement {
       composerStatus.textContent = "The response was interrupted. Retry safely with the same request ID.";
     } else {
       composerStatus.textContent = activeThread
-        ? ""
+        ? this._speechStatus
         : "Select a chat before sending a message.";
+    }
+  }
+
+  _renderDictationControl(activeThread, locked) {
+    const button = this.shadowRoot.getElementById("dictation-button");
+    if (!button) return;
+    // The unprefixed API can require on-device processing. The prefixed API
+    // may use a hosted recogniser, which would bypass Home Assistant.
+    const Recognition = window.SpeechRecognition;
+    // Do not call SpeechRecognition.available here. Some Chromium builds
+    // crash the page on that optional query. A local-only start fails closed
+    // when the required language pack is missing.
+    button.hidden = !activeThread || !this._speechAvailable
+      || typeof Recognition !== "function"
+      || !Recognition.prototype
+      || !("processLocally" in Recognition.prototype);
+    button.disabled = locked;
+    const listening = Boolean(this._speechRecognition);
+    button.setAttribute("aria-pressed", String(listening));
+    button.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
+    this._setTooltipTarget(button, listening ? "Stop dictation" : "Dictate on this device");
+  }
+
+  _stopDictation({ abort = false } = {}) {
+    const recognition = this._speechRecognition;
+    if (!recognition) return;
+    if (abort) {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "";
+      recognition.abort();
+      this._renderDictationControl(this._activeThread, false);
+    } else {
+      this._speechStatus = "Finishing dictation…";
+      recognition.stop();
+      this._renderComposerState(this._activeThread);
+    }
+  }
+
+  _toggleDictation() {
+    if (this._speechRecognition) {
+      this._stopDictation();
+      return;
+    }
+    const Recognition = window.SpeechRecognition;
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    if (typeof Recognition !== "function" || !this._speechAvailable
+      || !this._activeThread || promptInput?.disabled) return;
+    const lang = this._hass?.language || navigator.language || "en-GB";
+    const recognition = new Recognition();
+    if (!("processLocally" in recognition)) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.processLocally = true;
+    if (recognition.processLocally !== true) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.lang = lang;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    this._speechRecognition = recognition;
+    this._speechThreadId = this._selectedThreadId;
+    this._speechLastFinalResult = -1;
+    this._speechStatus = "Listening on this device… Review the text before sending.";
+    recognition.onresult = (event) => {
+      if (this._speechRecognition !== recognition || this._speechThreadId !== this._selectedThreadId) return;
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (!result.isFinal || index <= this._speechLastFinalResult) continue;
+        this._speechLastFinalResult = index;
+        const spoken = result[0]?.transcript?.trim();
+        if (!spoken) continue;
+        promptInput.value += `${promptInput.value && !/\s$/u.test(promptInput.value) ? " " : ""}${spoken}`;
+        promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    recognition.onerror = (event) => {
+      if (this._speechRecognition !== recognition) return;
+      if (event.error === "language-not-supported") {
+        this._speechAvailable = false;
+        this._renderDictationControl(this._activeThread, false);
+      }
+      this._speechStatus = event.error === "language-not-supported"
+        ? "An on-device speech pack is unavailable for this language."
+        : event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "Microphone access was blocked. Check your browser permission."
+        : event.error === "no-speech" ? "No speech was detected." : "Dictation stopped. Please try again.";
+      this.shadowRoot.getElementById("composer-status").textContent = this._speechStatus;
+    };
+    recognition.onend = () => {
+      if (this._speechRecognition !== recognition) return;
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      if (this._speechStatus.startsWith("Listening") || this._speechStatus.startsWith("Finishing")) {
+        this._speechStatus = "Dictation stopped. Review your message before sending.";
+      }
+      this._renderComposerState(this._activeThread);
+    };
+    try {
+      recognition.start();
+      this._renderComposerState(this._activeThread);
+    } catch {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "Dictation could not start in this browser.";
+      this._renderComposerState(this._activeThread);
     }
   }
 
@@ -8569,7 +9220,9 @@ class CodexBridgePanel extends HTMLElement {
       ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null
       : this._directProject();
     const isDirect = !this._threadForm.projectId || targetProject?.kind === "direct";
+    const isEdit = Boolean(this._threadForm.threadId);
     const formKey = JSON.stringify({
+      threadId: this._threadForm.threadId || "",
       projectId: this._threadForm.projectId || "",
       targetProjectId: targetProject?.project_id || "",
       targetProjectName: targetProject?.name || "",
@@ -8583,8 +9236,8 @@ class CodexBridgePanel extends HTMLElement {
     const titleBlock = document.createElement("div");
     titleBlock.className = "title-block";
     titleBlock.append(
-      this._textElement("span", "eyeline", isDirect ? "New direct chat" : "New project chat"),
-      this._textElement("span", "title", targetProject?.name || "Choose a target")
+      this._textElement("span", "eyeline", isEdit ? "Chat settings" : isDirect ? "New direct chat" : "New project chat"),
+      this._textElement("span", "title", isEdit ? this._threadForm.title : targetProject?.name || "Choose a target")
     );
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
@@ -8605,7 +9258,7 @@ class CodexBridgePanel extends HTMLElement {
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
     const save = this._actionButton("send-button", "save-thread");
-    this._setTrustedButtonContent(save, icons.chat, "Create chat");
+    this._setTrustedButtonContent(save, icons.save, isEdit ? "Save changes" : "Create chat");
     const close = this._actionButton("text-button", "cancel-thread-form");
     close.textContent = "Close";
     formActions.append(save, close);
@@ -9807,6 +10460,7 @@ class CodexBridgePanel extends HTMLElement {
       );
     }
     if (event.event_type === "message.completed") {
+      if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
       return this._renderMessage("assistant", payload.text, event.sequence);
     }
     if (
@@ -9849,11 +10503,7 @@ class CodexBridgePanel extends HTMLElement {
       if (generatedImage || payload.source === "generated_image") {
         return this._renderGeneratedImageCard(event, generatedImage);
       }
-      return this._textElement(
-        "div",
-        "event-row",
-        `Artifact ready: ${payload.relative_path || payload.filename || "artifact"}`
-      );
+      return this._renderFileArtifactCard(event);
     }
     if (event.event_type === "thread.updated") {
       return this._textElement("div", "event-row", "Chat settings updated");
@@ -10299,6 +10949,7 @@ class CodexBridgePanel extends HTMLElement {
         return false;
       }
       this._artifacts = Array.isArray(artifacts) ? artifacts : [];
+      this._forceMessageRebuild = true;
       this._clearArtifactRefreshRetry();
       this._syncSelectedArtifact();
       this._render();
@@ -10363,10 +11014,13 @@ class CodexBridgePanel extends HTMLElement {
       const generatedImage = isGeneratedImageArtifact(artifact);
       const row = document.createElement("div");
       row.className = `file-row${active ? " active" : ""}${generatedImage ? " generated-image-file" : ""}`;
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
+        || isPdfArtifactCandidate(artifact)
+        || isOfficePreviewCandidate(artifact, this._config?.capabilities);
       const select = this._actionButton(
         `file-select${active ? " active" : ""}`,
         "select-artifact",
-        `Preview ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
+        `${canPreview ? "Preview" : "View file details for"} ${generatedImage ? "generated image" : artifact.filename || "artifact"}`
       );
       select.dataset.artifactId = String(artifact.artifact_id || "");
       const main = document.createElement("div");
@@ -10374,9 +11028,16 @@ class CodexBridgePanel extends HTMLElement {
       const size = artifact.size_bytes ? ` / ${this._formatBytes(artifact.size_bytes)}` : "";
       main.append(
         this._textElement("span", "file-name", generatedImage ? "Generated image" : artifact.relative_path || artifact.filename || "Artifact"),
-        this._textElement("span", "row-meta", `${artifact.mime_type || "application/octet-stream"}${size}`)
+        this._textElement("span", "row-meta", `${displayArtifactType(artifact)}${size}`)
       );
-      select.append(main);
+      const content = document.createElement("div");
+      content.className = "file-select-content";
+      const icon = document.createElement("span");
+      icon.className = "file-type-icon";
+      icon.setAttribute("aria-hidden", "true");
+      this._appendTrustedIcon(icon, fileTypeIconMarkup(artifact.filename || artifact.relative_path));
+      content.append(icon, main);
+      select.append(content);
       const download = this._actionButton(
         "download-button small",
         "download-artifact",
@@ -10406,6 +11067,11 @@ class CodexBridgePanel extends HTMLElement {
     const container = this.shadowRoot.getElementById("artifact-preview");
     if (!container) return;
     const currentPreview = this._artifactPreview;
+    const sectionLabel = this.shadowRoot.querySelector("#artifact-preview-section > .section-label");
+    if (sectionLabel) {
+      sectionLabel.textContent = currentPreview?.kind === "binary" && currentPreview.artifactId === this._selectedArtifactId
+        ? "File details" : "Preview";
+    }
     const existingPdfShell = container.querySelector(".pdf-preview-shell");
     if (
       currentPreview?.kind === "pdf"
@@ -10434,6 +11100,10 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     const preview = this._artifactPreview;
+    if (["document", "spreadsheet", "presentation"].includes(preview.kind)) {
+      this._renderOfficePreview(preview, container);
+      return;
+    }
     if (preview.kind === "pdf") {
       this._renderPdfPreview(preview, container);
       return;
@@ -10460,6 +11130,68 @@ class CodexBridgePanel extends HTMLElement {
       binary.append(actions);
     }
     container.append(binary);
+  }
+
+  _renderOfficePreview(preview, container) {
+    const shell = document.createElement("div");
+    shell.className = "office-preview";
+    const heading = document.createElement("div");
+    heading.className = "office-preview-heading";
+    const icon = document.createElement("span");
+    icon.className = "file-type-icon";
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(preview.filename));
+    heading.append(icon, this._textElement("span", "", preview.filename));
+    shell.append(heading);
+    const note = preview.truncated
+      ? "Text-only preview is limited. Download the file for full content and formatting."
+      : "Text-only preview. Download the file for formatting, images, charts and other content.";
+    shell.append(this._textElement("p", "office-preview-note", note));
+    if (preview.kind === "spreadsheet") {
+      for (const sheet of preview.sheets || []) {
+        const section = document.createElement("section");
+        section.append(this._textElement("h3", "", sheet.name));
+        const wrap = document.createElement("div");
+        wrap.className = "office-preview-table-wrap";
+        const table = document.createElement("table");
+        table.setAttribute("aria-label", `${sheet.name} preview`);
+        const width = Math.max(1, ...sheet.rows.map((row) => row.length));
+        const header = document.createElement("tr");
+        header.append(document.createElement("th"));
+        for (let index = 0; index < width; index += 1) {
+          const cell = this._textElement("th", "", String.fromCharCode(65 + index));
+          cell.scope = "col";
+          header.append(cell);
+        }
+        table.append(header);
+        sheet.rows.forEach((row, index) => {
+          const line = document.createElement("tr");
+          const number = this._textElement("th", "", String(index + 1));
+          number.scope = "row";
+          line.append(number);
+          for (let column = 0; column < width; column += 1) {
+            line.append(this._textElement("td", "", row[column] || ""));
+          }
+          table.append(line);
+        });
+        wrap.append(table);
+        section.append(wrap);
+        shell.append(section);
+      }
+    } else {
+      const sections = preview.kind === "presentation" ? preview.slides : [{ paragraphs: preview.paragraphs }];
+      for (const sectionData of sections || []) {
+        const page = document.createElement("section");
+        page.className = "office-preview-page";
+        if (sectionData.name) page.append(this._textElement("h3", "", sectionData.name));
+        for (const paragraph of sectionData.paragraphs || []) {
+          page.append(this._textElement("p", "", paragraph));
+        }
+        if (!sectionData.paragraphs?.length) page.append(this._textElement("p", "empty-note", "No text in this section."));
+        shell.append(page);
+      }
+    }
+    container.append(shell);
   }
 
   _renderPdfPreview(preview, container) {
@@ -11029,7 +11761,9 @@ class CodexBridgePanel extends HTMLElement {
     this._chatMenuKey = menuKey;
     menu.replaceChildren();
     for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
-      const button = this._actionButton("", action, label);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.action = action;
       button.textContent = label;
       button.dataset.threadId = this._selectedThreadId;
       menu.append(button);
@@ -11052,8 +11786,8 @@ class CodexBridgePanel extends HTMLElement {
   _renderContextUsage() {
     const button = this.shadowRoot.getElementById("context-usage-button");
     if (!button) return;
-    button.hidden = !this._activeThread;
     const usage = contextUsage(this._activeThread?.context_usage);
+    button.hidden = !this._activeThread || !usage.known;
     button.setAttribute("aria-label", `${usage.label}. Open usage details`);
     button.title = usage.label;
     this._setTooltipTarget(button, usage.label);
@@ -11311,7 +12045,7 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const [thread, events, status, interactions] = await Promise.all([
         this._callWS("get_thread", { thread_id: threadId }),
-        this._callWS("get_events", { thread_id: threadId, after: 0 }),
+        this._loadThreadEventHistory(threadId),
         this._callWS("get_status"),
         this._listPendingInteractions(threadId),
       ]);
@@ -11336,29 +12070,24 @@ class CodexBridgePanel extends HTMLElement {
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
       );
-      const replay = acceptEvents(
-        createEventStreamState(),
-        authoritativeEvents.filter(
-          (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
-        )
+      const replayEvents = authoritativeEvents.filter(
+        (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
       );
-      const authoritativeCursor = authoritativeEvents.reduce(
-        (cursor, event) => Math.max(cursor, event.sequence),
-        Math.max(
-          replay.state.cursor,
-          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
-        )
+      const authoritativeCursor = Math.max(
+        authoritativeEvents.at(-1)?.sequence || 0,
+        Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : 0
       );
       // A full get_events replay is authoritative. Historical replay controls
       // advance the cursor but cannot truncate later transcript events or
       // permanently request another snapshot.
       this._eventStream = {
-        ...replay.state,
+        ...createEventStreamState(),
         cursor: authoritativeCursor,
+        events: replayEvents,
         needsSnapshot: false,
         error: null,
       };
-      this._events = replay.state.events;
+      this._events = replayEvents;
       this._sequence = authoritativeCursor;
       if (artifacts) {
         this._artifacts = artifacts;
@@ -11393,6 +12122,89 @@ class CodexBridgePanel extends HTMLElement {
       }
       return false;
     }
+  }
+
+  _renderFileArtifactCard(event) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const artifact = this._artifacts.find((item) => item?.artifact_id === payload.artifact_id);
+    const filename = displayArtifactFilename(artifact?.filename || payload.filename || payload.relative_path, "File");
+    const article = document.createElement("article");
+    article.className = "message assistant artifact-file-message";
+    article.dataset.sequence = String(event?.sequence ?? "artifact-file");
+    article.setAttribute("aria-label", `File ready: ${filename}`);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble artifact-file-card";
+    const heading = document.createElement("div");
+    heading.className = "artifact-file-heading";
+    const icon = this._textElement("span", "artifact-file-icon", "");
+    icon.setAttribute("aria-hidden", "true");
+    this._appendTrustedIcon(icon, fileTypeIconMarkup(filename));
+    const info = document.createElement("div");
+    info.className = "artifact-file-info";
+    const size = Number.isSafeInteger(artifact?.size_bytes) && artifact.size_bytes >= 0
+      ? ` · ${this._formatBytes(artifact.size_bytes)}` : "";
+    info.append(
+      this._textElement("span", "artifact-file-name", filename),
+      this._textElement("span", "artifact-file-meta", `${displayArtifactType(artifact || payload)}${size}`)
+    );
+    heading.append(icon, info);
+    bubble.append(heading);
+    if (artifact?.artifact_id) {
+      const actions = document.createElement("div");
+      actions.className = "artifact-file-actions";
+      const canPreview = previewDescriptor(artifact, { type: artifact.mime_type }).kind !== "binary"
+        || isPdfArtifactCandidate(artifact)
+        || isOfficePreviewCandidate(artifact, this._config?.capabilities);
+      const preview = this._actionButton("artifact-file-preview", "open-artifact-preview",
+        `${canPreview ? "Preview" : "View file details for"} ${filename}`);
+      preview.dataset.artifactId = artifact.artifact_id;
+      preview.textContent = canPreview ? "Preview" : "View file";
+      const download = this._actionButton("artifact-file-download", "download-artifact",
+        this._artifactDownloadActionLabel(artifact.artifact_id, filename));
+      download.dataset.artifactId = artifact.artifact_id;
+      const state = this._artifactDownloadState(artifact.artifact_id);
+      download.textContent = this._artifactDownloadVisibleLabel(state);
+      download.disabled = state === "pending";
+      actions.append(preview, download);
+      bubble.append(actions);
+    } else {
+      bubble.append(this._textElement("span", "artifact-file-meta", "Available in Files"));
+    }
+    article.append(bubble);
+    return article;
+  }
+
+  async _loadThreadEventHistory(threadId) {
+    if (!this._config?.capabilities?.includes("api_v1")) {
+      return this._callWS("get_events", { thread_id: threadId, after: 0 });
+    }
+    const history = [];
+    let cursor = 0;
+    // A full replay is needed before the transcript can be considered current.
+    // The backend pages this journal; one page can predate the latest user prompt.
+    for (let page = 0; page < MAX_RETAINED_EVENTS; page += 1) {
+      const batch = await this._callWS("get_events", {
+        after: cursor,
+        scopes: ["thread"],
+        thread_ids: [threadId],
+      });
+      if (Array.isArray(batch)) return batch;
+      if (!batch || !Array.isArray(batch.events)) throw new Error("Chat history is unavailable.");
+      for (const event of batch.events) {
+        if (event.scope === "thread" && event.thread_id === threadId && Number.isSafeInteger(event.cursor)) {
+          history.push({ ...event, sequence: event.cursor });
+        }
+      }
+      if (history.length > MAX_RETAINED_EVENTS) {
+        throw new Error("Chat history exceeds the supported limit.");
+      }
+      if (!batch.has_more) return history;
+      if (!Number.isSafeInteger(batch.next_cursor) || batch.next_cursor <= cursor) {
+        throw new Error("Chat history could not advance.");
+      }
+      cursor = batch.next_cursor;
+    }
+    throw new Error("Chat history is too long to load safely.");
   }
 
   async _retryError() {
@@ -11473,11 +12285,33 @@ class CodexBridgePanel extends HTMLElement {
     this._showThreadForm = true;
     this._showProjectForm = false;
     this._threadForm = {
+      threadId: null,
       title: "",
       mode: this._preferences.mode,
       projectId,
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
+    this._render();
+    queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
+  }
+
+  _openThreadFormForEdit(threadId) {
+    const thread = this._activeThread?.thread_id === threadId
+      ? this._activeThread
+      : this._threads.find((item) => item.thread_id === threadId);
+    if (!thread) return;
+    this._showThreadForm = true;
+    this._showProjectForm = false;
+    this._threadForm = {
+      threadId,
+      title: thread.title || "",
+      mode: thread.mode || "edit",
+      projectId: thread.project_id || null,
+      hostAccessGrant: thread.host_access_grant || null,
+    };
+    if (this._mobileDrawerMedia?.matches && this._mobileDrawer !== "navigation") {
+      this._toggleMobileDrawer("navigation", this.shadowRoot.getElementById("chat-menu-button"));
+    }
     this._render();
     queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
   }
@@ -11612,6 +12446,8 @@ class CodexBridgePanel extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       if (nextThreadId !== this._selectedThreadId) {
+        this._stopDictation({ abort: true });
+        if (this._threadForm.threadId) this._showThreadForm = false;
         void this._terminal.close();
         this._chatMenuOpen = false;
       }
@@ -11754,6 +12590,27 @@ class CodexBridgePanel extends HTMLElement {
       }
       this._clearError();
       this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+
+  async _saveThreadSettings() {
+    const threadId = this._threadForm.threadId;
+    const title = this._threadForm.title.trim();
+    if (!threadId || !title || threadId !== this._selectedThreadId) return;
+    try {
+      const updated = await this._callWS("update_thread", {
+        thread_id: threadId,
+        title,
+        mode: this._threadForm.mode,
+        ...(this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}),
+      });
+      this._activeThread = updated;
+      this._syncThreadListStatus();
+      this._showThreadForm = false;
+      this._clearError();
+      this._render(true);
     } catch (error) {
       this._setError(error);
     }
@@ -12583,9 +13440,13 @@ class CodexBridgePanel extends HTMLElement {
     const previewToken = ++this._previewToken;
     const advertisedDescriptor = previewDescriptor(artifact, { type: artifact.mime_type });
     const pdfCandidate = isPdfArtifactCandidate(artifact);
-    if (advertisedDescriptor.kind === "binary" && !pdfCandidate) {
+    const officeCandidate = isOfficePreviewCandidate(artifact, this._config?.capabilities);
+    if (advertisedDescriptor.kind === "binary" && !pdfCandidate && !officeCandidate) {
       this._revokePreviewUrl();
-      this._artifactPreview = advertisedDescriptor;
+      this._artifactPreview = {
+        ...advertisedDescriptor,
+        notice: "A content preview is not available for this file type. Download it to open the file.",
+      };
       this._render();
       return;
     }
@@ -12601,6 +13462,16 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
+      if (officeCandidate) {
+        const result = await this._callWS("preview_artifact", {
+          thread_id: this._selectedThreadId, artifact_id: artifactId,
+        });
+        if (previewToken !== this._previewToken || artifactId !== this._selectedArtifactId) return;
+        this._revokePreviewUrl();
+        this._artifactPreview = normaliseOfficePreview(result, artifact);
+        this._render();
+        return;
+      }
       const token = this._accessToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const limit = artifactPreviewLimit(artifact);
@@ -12788,7 +13659,7 @@ class CodexBridgePanel extends HTMLElement {
       button.setAttribute("aria-label", label);
       this._setTooltipTarget(button, label);
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
-      if (generatedImageButton) {
+      if (generatedImageButton || button.classList.contains("artifact-file-download")) {
         button.textContent = visibleLabel;
       } else if (button.classList.contains("pdf-preview-download")) {
         const text = button.querySelector("span");
@@ -14139,6 +15010,12 @@ class CodexBridgePanel extends HTMLElement {
   _showTooltipForTarget(target) {
     const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
     if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
+      return;
+    }
+    // The panel-options label would cover its open menu while the pointer
+    // remains on the toggle. Other expanded controls still need their labels.
+    if (trigger.id === "app-menu-toggle" && this._appMenuOpen) {
+      this._hideTooltip();
       return;
     }
     const text = trigger.dataset.tooltip;

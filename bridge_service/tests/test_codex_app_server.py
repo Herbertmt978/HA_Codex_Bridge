@@ -971,6 +971,24 @@ def test_discard_server_request_atomically_invalidates_the_response_token(
         client.close()
 
 
+def test_account_change_restarts_only_the_managed_app_server(
+    fake_server: FakeAppServer,
+) -> None:
+    module = _load_module()
+    fake_server.configure()
+    fake_server.configure(2)
+    client = _client(module, fake_server)
+    try:
+        client.start()
+        previous_generation = client.generation
+        client.restart_for_account_change()
+        assert client.generation > previous_generation
+        assert client.ready is True
+        assert client.request("ping") == {"echo": None}
+    finally:
+        client.close()
+
+
 def test_abort_generation_fails_waiters_discards_tokens_and_restarts_only_match(
     fake_server: FakeAppServer,
 ) -> None:

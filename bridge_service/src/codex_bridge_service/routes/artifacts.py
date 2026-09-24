@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import BinaryIO, Iterator
@@ -10,6 +11,7 @@ from starlette.background import BackgroundTask
 
 from ..auth import require_bridge_token
 from ..models import ArtifactRecord, RuntimeProfile
+from ..office_preview import OfficePreviewError, preview_office
 from ..storage import ThreadNotFoundError
 from ..workspace import (
     WorkspaceBoundaryError,
@@ -70,6 +72,41 @@ def create_workspace_archive(
         ) from exc
     except WorkspaceBoundaryError as exc:
         raise HTTPException(status_code=400, detail="invalid artifact location") from exc
+
+
+@router.get("/threads/{thread_id}/artifacts/{artifact_id}/preview")
+def preview_artifact(
+    thread_id: str,
+    artifact_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    require_bridge_token(
+        authorization=authorization,
+        request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    if request.app.state.storage.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+        raise HTTPException(status_code=404, detail="preview unavailable")
+    try:
+        artifact, stream, size_bytes = request.app.state.storage.open_artifact(
+            thread_id, artifact_id
+        )
+    except (ThreadNotFoundError, WorkspaceNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail="artifact not found") from exc
+    except WorkspaceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail="invalid artifact location") from exc
+    try:
+        preview = preview_office(stream, artifact.filename, size_bytes)
+    except OfficePreviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        stream.close()
+    return Response(
+        content=json.dumps(preview, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.get("/threads/{thread_id}/artifacts/{artifact_id}")

@@ -626,6 +626,38 @@ class BridgeApiClient:
     async def async_logout_auth(self) -> dict[str, Any]:
         return await self._async_json("POST", "/auth/logout")
 
+    async def async_list_account_profiles(self) -> list[dict[str, Any]]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json("GET", "/auth/profiles")
+
+    async def async_account_profile_details(self, profile_id: str) -> dict[str, Any]:
+        self.require_capability("account_profile_details_v1")
+        return await self._async_json(
+            "GET", f"/auth/profiles/{_path_segment(profile_id)}/details",
+        )
+
+    async def async_save_account_profile(self, label: str) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json(
+            "POST", "/auth/profiles", json_body={"label": label}
+        )
+
+    async def async_switch_account_profile(self, profile_id: str) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json(
+            "POST", "/auth/profiles/switch", json_body={"profile_id": profile_id}
+        )
+
+    async def async_prepare_new_account_login(self) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json("POST", "/auth/profiles/prepare-login")
+
+    async def async_remove_account_profile(self, profile_id: str) -> None:
+        self.require_capability("account_profiles_v1")
+        await self._async_no_content(
+            "DELETE", f"/auth/profiles/{_path_segment(profile_id)}", expected_status={204}
+        )
+
     async def async_list_projects(self) -> list[dict[str, Any]]:
         return await self._async_json("GET", "/projects")
 
@@ -1005,6 +1037,14 @@ class BridgeApiClient:
             "GET",
             f"/threads/{_path_segment(thread_id)}/artifacts",
             maximum_bytes=_ARTIFACT_LIST_MAX_BYTES,
+        )
+
+    async def async_preview_artifact(self, thread_id: str, artifact_id: str) -> dict[str, Any]:
+        self.require_capability("office_preview_v1")
+        return await self._async_json(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}/preview",
+            maximum_bytes=128 * 1024,
         )
 
     async def async_create_workspace_archive(self, thread_id: str) -> dict[str, Any]:

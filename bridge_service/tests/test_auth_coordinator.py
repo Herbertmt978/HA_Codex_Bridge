@@ -459,7 +459,7 @@ def test_login_completion_binds_private_owner_while_auth_is_exclusive() -> None:
     gate = RuntimeGate(limits=ResourceLimits())
     publications: list[str] = []
 
-    def bind_owner(marker: str) -> None:
+    def bind_owner(marker: str, _legacy_marker: str | None) -> None:
         assert gate.snapshot().auth_mutation_active is True
         publications.append(f"binding:{marker}")
 
@@ -488,6 +488,28 @@ def test_login_completion_binds_private_owner_while_auth_is_exclusive() -> None:
     assert gate.snapshot().auth_mutation_active is False
 
 
+def test_verified_account_id_supplies_legacy_marker_for_single_account_upgrade() -> None:
+    secret = "stable-bridge-secret"
+    account = _chatgpt_account(email="existing-account@example.test")
+    client = FakeAppServerClient()
+    client.script("account/read", account)
+    bindings: list[tuple[str, str | None]] = []
+    coordinator = _coordinator(
+        client,
+        account_owner_secret=secret,
+        account_binding_listener=lambda marker, legacy: bindings.append((marker, legacy)),
+        account_identity_provider=lambda: "verified-account-id",
+    )
+
+    assert coordinator.start().state == "ok"
+    assert bindings == [
+        (
+            account_owner_marker(account, secret, account_id="verified-account-id"),
+            account_owner_marker(account, secret),
+        )
+    ]
+
+
 def test_plan_only_account_update_does_not_rebind_private_owner() -> None:
     secret = "stable-bridge-secret"
     account = _chatgpt_account(email="same-account@example.test")
@@ -501,7 +523,7 @@ def test_plan_only_account_update_does_not_rebind_private_owner() -> None:
     coordinator = _coordinator(
         client,
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
 
     coordinator.start()
@@ -528,7 +550,7 @@ def test_account_update_rereads_authoritative_owner_before_rebinding() -> None:
         client,
         runtime_gate=RuntimeGate(limits=ResourceLimits()),
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
 
     coordinator.start()
@@ -612,7 +634,7 @@ def test_account_update_invalidates_an_in_flight_authoritative_read() -> None:
         states,
         runtime_gate=RuntimeGate(limits=ResourceLimits()),
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
 
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -650,7 +672,7 @@ def test_identityless_chatgpt_account_detaches_and_stays_auth_required() -> None
         client,
         runtime_gate=RuntimeGate(limits=ResourceLimits()),
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
 
     coordinator.start()
@@ -680,7 +702,7 @@ def test_account_update_during_active_turn_blocks_until_owner_is_reconciled() ->
         states,
         runtime_gate=gate,
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
     coordinator.start()
     active = gate.reserve_prompt(client_request_id="active-turn")
@@ -819,7 +841,7 @@ def test_account_update_invalidates_an_in_flight_active_login_poll() -> None:
         states,
         active_login_poll_interval_seconds=0,
         account_owner_secret=secret,
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
     )
     coordinator.start()
     coordinator.start_device_login()

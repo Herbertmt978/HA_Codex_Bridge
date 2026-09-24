@@ -222,6 +222,15 @@ class _ReleasingBinaryStream:
     def seek(self, offset: int, whence: int = 0) -> int:
         return self._stream.seek(offset, whence)
 
+    def tell(self) -> int:
+        return self._stream.tell()
+
+    def seekable(self) -> bool:
+        return self._stream.seekable()
+
+    def readable(self) -> bool:
+        return self._stream.readable()
+
     def close(self) -> None:
         release = self._release
         self._release = None
@@ -2425,13 +2434,20 @@ class BridgeStorage:
         ):
             boundary.remove_empty_directory(directory, missing_ok=True)
 
-    def bind_codex_account(self, owner_marker: str) -> int:
+    def bind_codex_account(
+        self, owner_marker: str, *, legacy_owner_marker: str | None = None
+    ) -> int:
         """Bind cached provider threads to one private ChatGPT account owner."""
 
         if not isinstance(owner_marker, str) or not _SHA256_PATTERN.fullmatch(
             owner_marker
         ):
             raise ValueError("Codex account owner marker is invalid.")
+        if legacy_owner_marker is not None and (
+            not isinstance(legacy_owner_marker, str)
+            or not _SHA256_PATTERN.fullmatch(legacy_owner_marker)
+        ):
+            raise ValueError("Legacy Codex account owner marker is invalid.")
 
         with self._automation_target_lock:
             with self._thread_mutation_lock:
@@ -2445,6 +2461,19 @@ class BridgeStorage:
                     raise ProjectMutationError(
                         "Codex account binding cannot change while automation is reserved"
                     )
+
+                if legacy_owner_marker is not None and current == legacy_owner_marker:
+                    # The caller verified the current provider account and
+                    # confirmed that no multi-account profiles exist. Upgrade
+                    # the marker atomically without losing existing threads.
+                    self._atomic_write_json(
+                        self.root / _ACCOUNT_BINDING_FILENAME,
+                        {
+                            "schema_version": _ACCOUNT_BINDING_SCHEMA_VERSION,
+                            "owner_marker": owner_marker,
+                        },
+                    )
+                    return 0
 
                 records: list[ThreadRecord] = []
                 for target in sorted(

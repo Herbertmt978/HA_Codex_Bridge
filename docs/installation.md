@@ -4,7 +4,7 @@
 
 You need both the HACS Integration and the Supervisor App. The Integration
 adds the panel; the App runs Codex. This release pairs App, Integration and
-panel `1.6.4`, with Bridge `0.13.0` and Codex `0.156.1`.
+panel `1.7.0`, with Bridge `0.13.0` and Codex `0.156.1`.
 
 Install versions available on the
 [Releases page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).
@@ -51,6 +51,13 @@ page to open and no host, port or token to copy. If discovery arrives while
 the App is still starting, wait for readiness and retry the same discovery
 flow. If logs report `sandbox_unavailable`, see [Support](../SUPPORT.md);
 do not change App permissions to bypass the check.
+
+Run DEV and production installs through the Supervisor-managed App. Standalone
+Docker containers on Home Assistant OS trigger its
+[unsupported software warning](https://www.home-assistant.io/more-info/unsupported/software)
+and cannot rely on the App's private Supervisor connection. Build disposable
+images on a separate Linux worker; install the published App through the App
+store for Home Assistant testing and updates.
 
 ## First run
 
@@ -106,6 +113,8 @@ authentication requirements. Install and enable it separately.
    open Codex Bridge tab. This loads the new panel code.
 6. Check that the App is running, ChatGPT is connected and existing chats are
    present before resuming scheduled work.
+7. Check **Settings → System → Repairs** for an unsupported-software warning;
+   `ha resolution info` should also report no unsupported entries.
 
 If no Integration update appears, open its HACS repository menu and select
 **Update information**. HACS checks downloaded custom repositories at startup
