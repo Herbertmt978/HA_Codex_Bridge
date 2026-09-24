@@ -29,6 +29,10 @@ MAX_SUBSCRIBER_BYTES = 8 * 1024 * 1024
 _SAFE_PAYLOAD_NODES = 1024
 _CLOSE = object()
 
+
+class _ListenerRetryError(Exception):
+    """A durable listener did not accept the event; replay its cursor."""
+
 TaskFactory = Callable[
     [Coroutine[Any, Any, None], str],
     asyncio.Task[None],
@@ -641,7 +645,10 @@ class EventBroker:
                 )
                 return batch.has_more
             for listener in tuple(self._async_listeners):
-                await listener(event)
+                try:
+                    await listener(event)
+                except Exception:
+                    raise _ListenerRetryError() from None
             self._cursor = event.cursor
             self._append_history(event)
             self._publish_event(event)
@@ -737,6 +744,13 @@ class EventBroker:
                 )
                 return
             except BridgeApiConnectionError:
+                retry += 1
+                replay = True
+                self._set_status(
+                    "reconnecting", phase=phase, retry_count=retry, notify=True
+                )
+                await asyncio.sleep(self._reconnect_delay(retry))
+            except _ListenerRetryError:
                 retry += 1
                 replay = True
                 self._set_status(

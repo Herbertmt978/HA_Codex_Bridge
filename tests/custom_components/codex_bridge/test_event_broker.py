@@ -122,6 +122,35 @@ async def test_internal_entity_listener_uses_existing_stream_and_can_be_removed(
     await broker.async_close()
 
 
+async def test_durable_listener_failure_retries_the_same_unadvanced_event() -> None:
+    event = _event(1, event_type="task.result")
+    client = _ScriptedClient(replay=[_batch(event), _batch(event)])
+    broker = EventBroker(client, initial_cursor=0, reconnect_delay=lambda _: 0)
+    subscription = broker.subscribe(after=0)
+    attempts = 0
+
+    async def persist(_event_record) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("temporary Home Assistant storage failure")
+
+    broker.add_async_listener(persist)
+    await broker.async_start()
+    try:
+        while True:
+            delivered = await asyncio.wait_for(subscription.get(), 1)
+            if delivered["type"] == "event":
+                break
+        await asyncio.wait_for(client.blocked.wait(), 1)
+        assert delivered["event"].cursor == 1
+        assert broker.connection_status["cursor"] == 1
+        assert client.replay_after == [0, 0]
+        assert attempts == 2
+    finally:
+        await broker.async_close()
+
+
 async def test_late_subscriber_replays_bounded_history_before_live_events() -> None:
     broker = EventBroker(AsyncMock(), initial_cursor=0)
     await broker._consume(_batch(_event(1), _event(2), _event(3)))

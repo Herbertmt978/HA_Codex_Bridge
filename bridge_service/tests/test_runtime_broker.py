@@ -8032,6 +8032,25 @@ def test_ha_task_action_start_retry_and_exact_cancel_are_durable(
             if event.event_type == "task.result"
         ] == ["cancelled", "completed"]
 
+        class LimitedCatalog:
+            def probe(self):
+                return SimpleNamespace(
+                    stale=False,
+                    models=[SimpleNamespace(
+                        model="limited-model", thinking_levels=("low", "medium")
+                    )],
+                )
+
+        app.state.model_catalog_probe = LimitedCatalog()
+        incompatible = http.post(
+            "/task-actions/start",
+            headers=headers,
+            json={**payload, "task_id": "c" * 32, "model_override": "limited-model"},
+        )
+        assert incompatible.status_code == 422
+        assert incompatible.json()["detail"]["code"] == "task_model_unavailable"
+        assert not (storage.threads_dir / f"thr_task_{'c' * 32}.json").exists()
+
         class UnavailableCatalog:
             def probe(self):
                 raise ModelCatalogError("provider unavailable")

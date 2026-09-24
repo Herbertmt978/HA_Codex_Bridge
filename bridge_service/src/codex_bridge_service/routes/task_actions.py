@@ -179,10 +179,8 @@ def start_task(
         supported = next(
             (item for item in catalogue.models if item.model == model), None
         )
-        if supported is None or (
-            payload.thinking_override is not None
-            and payload.thinking_override not in supported.thinking_levels
-        ):
+        effective_thinking = payload.thinking_override or project.default_thinking_level
+        if supported is None or effective_thinking not in supported.thinking_levels:
             raise HTTPException(
                 422, detail={"code": "task_model_unavailable", "retryable": False}
             )
