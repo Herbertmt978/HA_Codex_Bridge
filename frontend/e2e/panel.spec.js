@@ -2812,11 +2812,19 @@ test("desktop controls show real references, Stop/Steer and context usage", asyn
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel");
     panel._stopPolling();
+    panel._activeThread = { ...panel._activeThread, context_usage: null };
+    panel._renderContextUsage();
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#context-usage-button")).toBeHidden();
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
     panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "control-test", context_usage: { used_tokens: 25000, context_window: 100000 } };
     panel._events = [{ sequence: 1, event_type: "run.started", payload: { run_id: "control-test" } }, { sequence: 2, event_type: "message.completed", payload: { text: "[Login improvement](https://github.com/owner/repo/pull/12)" } }];
     panel._render(true);
   });
-  const panel = page.locator("codex-bridge-panel");
+  await expect(panel.locator("#context-usage-button")).toBeVisible();
   await expect(panel.locator("#send-button")).toHaveAttribute("aria-label", "Stop");
   await panel.locator("#prompt-input").fill("Use the smaller change");
   await expect(panel.locator("#send-button")).toHaveAttribute("aria-label", "Steer");

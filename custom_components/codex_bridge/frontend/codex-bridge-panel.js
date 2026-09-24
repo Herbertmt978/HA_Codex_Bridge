@@ -38491,6 +38491,7 @@ template.innerHTML = `
       background: var(--danger-color);
     }
     .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
+    .context-usage-button[hidden] { display: none; }
     .context-track { opacity: .2; }
     .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
     .context-usage-button[data-level="high"] { color: var(--brand-amber); }
