@@ -2907,6 +2907,12 @@ template.innerHTML = `
     .desktop-table-actions { min-width: 180px; }
     .mcp-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .mcp-connection-actions .desktop-action-note { flex-basis: 100%; }
+    .mcp-tool-list { display: grid; gap: 4px; min-width: 0; max-height: min(48vh, 480px); overflow: auto; padding: 12px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; }
+    .mcp-tool-list legend { font-weight: 600; padding-inline: 4px; }
+    .mcp-tool-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 10px; align-items: start; padding: 9px 4px; border-bottom: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
+    .mcp-tool-row:last-child { border-bottom: 0; }
+    .mcp-tool-row input { grid-row: 1 / span 3; margin: 3px 0; }
+    .mcp-tool-row .desktop-note { grid-column: 2; margin: 2px 0 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -7052,6 +7058,7 @@ class CodexBridgePanel extends HTMLElement {
       const guided = state.form === "mcp-ha";
       state.formError = "";
       const payload = this._desktopFormValues(target);
+      if (this._config?.capabilities?.includes("mcp_tool_permissions_v1")) payload.require_tool_selection = true;
       const authentication = readMcpCredential(form);
       delete payload.auth_mode;
       if (payload.local) {
@@ -7072,7 +7079,9 @@ class CodexBridgePanel extends HTMLElement {
         ? await this._mcpCredentialMutation({ operation: "create", ...payload, authentication }, state, form)
         : await this._desktopMutation("add_mcp", payload, state, { clearFormDraft: true });
       if (!saved && state.error) { state.formError = state.error; state.error = ""; }
-      else if (saved && guided) state.notice = "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+      else if (saved && guided) state.notice = this._config?.capabilities?.includes("mcp_tool_permissions_v1")
+        ? "Home Assistant server added. Complete Sign in if requested, then choose allowed tools before asking Codex to use it."
+        : "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
     else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
@@ -7083,6 +7092,34 @@ class CodexBridgePanel extends HTMLElement {
       } else {
         await this._mcpConnectionMutation({ operation: "state", name: server.name, revision: server.revision, enabled: action === "resume-mcp" }, state);
       }
+    }
+    else if (action === "edit-mcp-tools") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
+      if (!server || !this._config?.capabilities?.includes("mcp_tool_permissions_v1") || state.loading) return;
+      state.loading = true; state.formError = ""; state.error = "";
+      try {
+        state.mcpToolInventory = await this._callWS("list_mcp_tools", { name: server.name });
+        state.mcpToolDraft = null;
+        state.form = "mcp-tools";
+      } catch (error) { state.error = normalizeDesktopError(error); }
+      finally { state.loading = false; }
+    }
+    else if (action === "submit-mcp-tools") {
+      if (!this._config?.capabilities?.includes("mcp_tool_permissions_v1") || state.loading) return;
+      const inventory = state.mcpToolInventory;
+      const form = target?.closest("form");
+      if (!inventory?.catalogue_available || !form) return;
+      const enabled_tools = [...form.querySelectorAll("[data-mcp-tool]:checked")].map((input) => input.dataset.mcpTool);
+      state.loading = true; state.formError = ""; state.error = "";
+      try {
+        await this._callWS("set_mcp_tools", { name: inventory.server, enabled_tools,
+          revision: inventory.revision, catalogue_revision: inventory.catalogue_revision });
+        state.form = null; state.mcpToolInventory = null; state.mcpToolDraft = null;
+        state.notice = "Allowed tools saved. The policy applies to subsequent turns in chats and scheduled tasks; newly discovered tools stay blocked.";
+        state.loaded = false;
+        await this._loadDesktopDestination("settings", { force: true });
+      } catch (error) { state.formError = normalizeDesktopError(error); }
+      finally { state.loading = false; }
     }
     else if (action === "submit-mcp-connection") {
       const form = target?.closest("form");

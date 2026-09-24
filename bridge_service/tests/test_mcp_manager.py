@@ -293,6 +293,7 @@ def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:
     assert result == {
         "name": "vendor_mcp",
         "enabled": True,
+        "tool_policy": "all",
         "transport": "streamable_http",
         "network": "public",
         "endpoint": "https://mcp.vendor.example/stream",
@@ -568,6 +569,7 @@ def test_existing_stdio_bearer_and_environment_config_are_never_reflected() -> N
         {
             "name": "safe",
             "enabled": True,
+            "tool_policy": "all",
             "transport": "streamable_http",
         "network": "public",
             "endpoint": "https://mcp.vendor.example/path",
@@ -827,6 +829,7 @@ def test_enabled_startup_replaces_unsafe_user_mcp_before_activation() -> None:
         "network": "public",
             "endpoint": "https://mcp.vendor.example/stream",
             "enabled": True,
+            "tool_policy": "all",
             "auth": "unknown",
             "startup": "unknown",
             "tool_count": 0,

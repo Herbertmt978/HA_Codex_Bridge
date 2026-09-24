@@ -32,6 +32,7 @@ class CreateMcpServerRequest(BaseModel):
     local_acknowledged: StrictBool = False
     authentication: object = Field(default=None, repr=False)
     auth_acknowledged: StrictBool = False
+    require_tool_selection: StrictBool = False
 
 
 class McpCredentialRequest(BaseModel):
@@ -44,6 +45,13 @@ class McpStateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: StrictBool
     revision: str = Field(min_length=64, max_length=64)
+
+
+class McpToolsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled_tools: list[str] = Field(max_length=512)
+    revision: str = Field(min_length=64, max_length=64)
+    catalogue_revision: str = Field(min_length=64, max_length=64)
 
 
 class McpEditRequest(BaseModel):
@@ -110,6 +118,7 @@ def create_mcp_server(
             local_acknowledged=payload.local_acknowledged,
             authentication=payload.authentication,
             auth_acknowledged=payload.auth_acknowledged,
+            require_tool_selection=payload.require_tool_selection,
         )
     except McpManagerError as error:
         raise _problem(error) from None
@@ -133,6 +142,28 @@ def set_mcp_state(name: str, payload: McpStateRequest, request: Request, respons
     response.headers["Cache-Control"] = "no-store"
     try:
         return _manager(request).set_server_enabled(name, enabled=payload.enabled, revision=payload.revision)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/servers/{name}/tools/discover")
+def list_mcp_tools(name: str, request: Request, response: Response,
+                   authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).list_server_tools(name)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.put("/mcp/servers/{name}/tools")
+def set_mcp_tools(name: str, payload: McpToolsRequest, request: Request, response: Response,
+                  authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).set_server_tools(name, **payload.model_dump())
     except McpManagerError as error:
         raise _problem(error) from None
 

@@ -3,7 +3,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
-import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm } from "./mcp-setup.js";
+import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -396,9 +396,11 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(text(documentRef, "h3", "MCP servers", "desktop-subheading"), text(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button(documentRef, "Add MCP server", "open-mcp-form"));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
+    const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
+    if (state.form === "mcp-tools" && toolPermissions) panel.append(renderMcpToolPermissions(documentRef, state));
     panel.append(text(documentRef, "p", management
       ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats."
       : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
@@ -413,6 +415,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
         const edit = button(documentRef, "Edit connection", "edit-mcp-connection", { id });
         edit.disabled = !paused; edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
         controls.append(edit, text(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (toolPermissions) controls.append(button(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
       }
       controls.append(button(documentRef, "Remove server", "remove-mcp", { id }));
@@ -510,6 +513,11 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
+  container.onchange = (event) => {
+    if (event.target?.matches?.("[data-mcp-tool]")) {
+      state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input) => input.dataset.mcpTool);
+    }
+  };
   container.onsubmit = (event) => {
     event.preventDefault();
     const form = event.target?.closest?.("[data-desktop-form]");
@@ -521,7 +529,8 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   // Input handlers sync the draft snapshot because those edits are already in
   // the DOM. Programmatic draft resets must still invalidate the rendered view.
   const inputs = JSON.stringify({
-    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, mcpToolInventory: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
+    mcpInventoryRevision: state.mcpToolInventory?.catalogue_revision,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,

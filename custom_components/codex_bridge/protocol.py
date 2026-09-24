@@ -58,6 +58,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "reset_credits_v1",
         "mcp_admin_v1",
         "mcp_management_v1",
+        "mcp_tool_permissions_v1",
         "mcp_local_v1",
         "mcp_credentials_v1",
         "mcp_elicitation_v1",

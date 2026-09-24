@@ -1447,6 +1447,8 @@ class BridgeApiClient:
 
     async def async_add_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
+        if payload.get("require_tool_selection"):
+            self.require_capability("mcp_tool_permissions_v1")
         if payload.get("local"):
             self.require_capability("mcp_local_v1")
         if "authentication" in payload or "auth_acknowledged" in payload:
@@ -1480,6 +1482,22 @@ class BridgeApiClient:
             "PUT", f"/mcp/servers/{_path_segment(name)}" + ("/state" if state else ""),
             json_body=_bounded_mapping(payload),
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
+        )
+
+    async def async_list_mcp_tools(self, name: str) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_tool_permissions_v1")
+        # The Bridge caps at 512 tools and 512 description characters each;
+        # non-BMP characters can expand to 12 bytes in escaped JSON.
+        return await self._async_json("POST", f"/mcp/servers/{_path_segment(name)}/tools/discover",
+                                      maximum_bytes=4 * 1024 * 1024)
+
+    async def async_set_mcp_tools(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_tool_permissions_v1")
+        return await self._async_json(
+            "PUT", f"/mcp/servers/{_path_segment(name)}/tools",
+            json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
     async def async_login_mcp(self, name: str) -> dict[str, Any]:

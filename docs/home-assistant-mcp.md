@@ -1,5 +1,26 @@
 # Home Assistant tools through MCP
 
+## Choose allowed tools
+
+The MCP-06 source change adds **Choose allowed tools** in Settings → MCP servers.
+It requires a paired App and Integration release advertising
+`mcp_tool_permissions_v1`; installed 1.6.3 components do not yet show it.
+Existing connections continue to expose their server's tools until an
+administrator saves a selection. Connections added by the paired UI start with
+no allowed tools; choose their tools after connecting. Saving even an empty
+selection applies Codex's
+native allow-list to chats and scheduled tasks. New or renamed tools remain
+blocked until explicitly selected. Tool names, descriptions and read-only or
+destructive labels are supplied by the server and are not verified safety
+guarantees. The server's own permissions still matter.
+
+Permission changes wait for active and queued work to finish. A paused server
+must be resumed to refresh its catalogue; its tools remain blocked while it is
+paused. If discovery is unavailable, the panel shows that state and prevents
+saving a selection. If a previously allowed tool disappears, the panel marks it
+as stale and lets you remove it. A connection change or restart invalidates an
+open form, so refresh before retrying.
+
 ## Manage a saved connection
 
 App and Integration 1.4.0 add **Pause**, **Resume** and **Edit connection** in

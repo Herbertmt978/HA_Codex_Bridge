@@ -1354,3 +1354,56 @@ async def test_mcp_management_requires_capability_before_sending_edits(bridge_se
                 with pytest.raises(BridgeApiCapabilityError):
                     await client.async_manage_mcp("secured", payload, state=state)
     assert observed == ([("PUT", "/mcp/servers/secured", change), ("PUT", "/mcp/servers/secured/state", pause)] if supported else [])
+
+
+@pytest.mark.parametrize("supported", [False, True])
+async def test_mcp_tool_policy_requires_paired_capability(bridge_server_factory, supported):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1"] + (["mcp_tool_permissions_v1"] if supported else [])
+    observed = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        observed.append((request.method, request.path))
+        return web.json_response({"server": "secured", "tools": []})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        if supported:
+            await client.async_list_mcp_tools("secured")
+            await client.async_set_mcp_tools("secured", {"enabled_tools": [], "revision": "a" * 64,
+                "catalogue_revision": "b" * 64})
+        else:
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_list_mcp_tools("secured")
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_set_mcp_tools("secured", {"enabled_tools": []})
+            with pytest.raises(BridgeApiCapabilityError):
+                await client.async_add_mcp({"name": "scoped", "url": "https://tools.example.com/mcp",
+                                            "require_tool_selection": True})
+    assert observed == ([('POST', '/mcp/servers/secured/tools/discover'), ('PUT', '/mcp/servers/secured/tools')] if supported else [])
+
+
+async def test_mcp_tool_catalogue_accepts_the_bounded_large_response(bridge_server_factory):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"]
+    catalogue = {"server": "secured", "tools": [
+        {"name": f"tool_{index}", "description": "🧰" * 512}
+        for index in range(512)
+    ]}
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        return web.json_response(catalogue)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        result = await client.async_list_mcp_tools("secured")
+    assert len(result["tools"]) == 512
+    assert result["tools"][-1]["name"] == "tool_511"

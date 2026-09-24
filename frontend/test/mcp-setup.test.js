@@ -211,6 +211,53 @@ describe("MCP setup and access settings", () => {
   });
 });
 
+describe("MCP tool permissions", () => {
+  beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
+
+  it("shows untrusted descriptions as text and saves an explicit allow-list", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"]);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name: "vendor", tool_policy: "all", revision: "a".repeat(64) }];
+    const inventory = { server: "vendor", endpoint: "https://mcp.example", mode: "all",
+      enabled_tools: [], catalogue_available: true, catalogue_revision: "b".repeat(64), revision: "a".repeat(64),
+      tools: [{ name: "read", description: "<img src=x onerror=alert(1)>", read_only: true },
+        { name: "delete", description: "Deletes a record", destructive: true }], stale_tools: [] };
+    panel._callWS = vi.fn(async (operation) => operation === "list_mcp_tools" ? inventory : {});
+    panel._renderDesktopSurface();
+    await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
+    panel._renderDesktopSurface();
+    expect(panel.shadowRoot.querySelector(".mcp-tool-list img")).toBeNull();
+    expect(panel.shadowRoot.querySelector(".mcp-tool-list").textContent).toContain("Claims destructive");
+    const deleteTool = [...panel.shadowRoot.querySelectorAll("[data-mcp-tool]")].find((input) => input.dataset.mcpTool === "delete");
+    deleteTool.click();
+    panel._renderDesktopSurface();
+    expect([...panel.shadowRoot.querySelectorAll("[data-mcp-tool]:checked")].map((input) => input.dataset.mcpTool)).toEqual(["read"]);
+    await panel._handleDesktopAction("submit-mcp-tools", {}, action(panel, "submit-mcp-tools"));
+    expect(panel._callWS).toHaveBeenCalledWith("set_mcp_tools", { name: "vendor", enabled_tools: ["read"],
+      revision: "a".repeat(64), catalogue_revision: "b".repeat(64) });
+  });
+
+  it("starts paired new servers with no allowed tools", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_tool_permissions_v1"]);
+    await panel._handleDesktopAction("choose-custom-mcp");
+    field(panel, "name").value = "scoped";
+    field(panel, "url").value = "https://tools.example.com/mcp";
+    await panel._handleDesktopAction("submit-mcp", {}, field(panel, "url"));
+    expect(panel._callWS).toHaveBeenCalledWith("add_mcp", {
+      name: "scoped", url: "https://tools.example.com/mcp", require_tool_selection: true,
+    });
+  });
+
+  it("keeps changes unavailable when discovery is stale", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"]);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name: "vendor" }];
+    panel._callWS = vi.fn().mockResolvedValue({ server: "vendor", catalogue_available: false, tools: [], stale_tools: ["old"] });
+    await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
+    panel._renderDesktopSurface();
+    expect(action(panel, "submit-mcp-tools").disabled).toBe(true);
+    expect(panel.shadowRoot.textContent).toContain("previously allowed tool is no longer advertised");
+  });
+});
+
 
 describe("MCP write-only credentials", () => {
   const capabilities = ["mcp_admin_v1", "mcp_local_v1", "mcp_credentials_v1"];
