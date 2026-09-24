@@ -8,7 +8,11 @@ from time import monotonic
 from typing import Any, Protocol
 
 from .account import account_owner_marker, account_unverified_marker
-from .account_profiles import AccountProfileError, AccountProfileStore
+from .account_profiles import (
+    AccountProfileError,
+    AccountProfileReauthenticationRequiredError,
+    AccountProfileStore,
+)
 from .codex_app_server import AppServerNotification
 from .models import CodexAuthStatusRecord
 from .runtime_gate import (
@@ -594,7 +598,9 @@ class CodexAuthCoordinator:
             self._client.restart_for_account_change()
             generation, response = self._read_account(force_refresh=True)
             if account_status(response)["state"] != "ok":
-                raise AccountProfileError("The saved account needs a new sign-in.")
+                raise AccountProfileReauthenticationRequiredError(
+                    "The saved account needs a new sign-in."
+                )
             self._verify_provider_session()
             _, observed_account_id = store.current_credential()
             if observed_account_id != target_account_id:
@@ -646,6 +652,82 @@ class CodexAuthCoordinator:
             raise AccountProfileError(
                 "The selected sign-in needs checking before it can be used."
             )
+        return result
+
+    def prepare_new_account_login(
+        self, store: AccountProfileStore
+    ) -> CodexAuthStatusRecord:
+        """Detach a saved local sign-in without revoking it at the provider."""
+        with self._lock:
+            self._require_open_locked()
+            self._require_idle_mutation_locked()
+            if self._active_login_id is not None:
+                raise AuthOperationConflictError()
+            if self._status.state != "ok":
+                raise AccountProfileError("Sign in before adding another account.")
+            self._acquire_runtime_auth_locked()
+            operation = self._begin_operation_locked("profile_prepare_login")
+            checking = self._set_status_locked(
+                state="checking",
+                busy=True,
+                auth_required=True,
+                message="Preparing another ChatGPT sign-in…",
+                **cleared_device_fields(),
+            )
+        self._notify(checking)
+        previous: bytes | None = None
+        detached = False
+        try:
+            _, response = self._read_account(force_refresh=True)
+            if account_status(response)["state"] != "ok":
+                raise AccountProfileError("The current sign-in needs checking.")
+            self._verify_provider_session()
+            previous = store.preserve_current_for_new_login()
+            detached = True
+            store.restore_credential(None)
+            self._client.restart_for_account_change()
+            generation, response = self._read_account()
+            if account_status(response)["state"] != "logged_out":
+                raise AccountProfileError("The new sign-in could not be prepared.")
+            with self._lock:
+                self._operation_account_update_revision = self._account_update_revision
+            result = self._finish_account_read(operation, generation, response)
+        except Exception as error:
+            if detached and previous is not None:
+                try:
+                    store.restore_credential(previous)
+                    self._client.restart_for_account_change()
+                    generation, response = self._read_account(force_refresh=True)
+                    if account_status(response)["state"] == "ok":
+                        self._verify_provider_session()
+                    with self._lock:
+                        self._operation_account_update_revision = self._account_update_revision
+                    self._finish_account_read(operation, generation, response)
+                except Exception:
+                    self._finish_with_failure(
+                        operation,
+                        state="unavailable",
+                        message=MESSAGE_UNAVAILABLE,
+                        require_reauthentication=True,
+                    )
+                    raise AccountProfileError(
+                        "The previous sign-in needs checking before adding another."
+                    ) from None
+            else:
+                try:
+                    generation, response = self._read_account()
+                    with self._lock:
+                        self._operation_account_update_revision = self._account_update_revision
+                    self._finish_account_read(operation, generation, response)
+                except Exception:
+                    self._finish_with_failure(
+                        operation, state="unavailable", message=MESSAGE_UNAVAILABLE
+                    )
+            if isinstance(error, AccountProfileError):
+                raise
+            raise AccountProfileError("The new sign-in could not be prepared.") from None
+        if result.state != "logged_out":
+            raise AccountProfileError("The new sign-in needs checking before it can start.")
         return result
 
     def remove_account_profile(self, store: AccountProfileStore, profile_id: str) -> None:

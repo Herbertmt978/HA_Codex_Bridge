@@ -61,4 +61,44 @@ describe("saved Home Assistant accounts", () => {
     expect(panel._accountProfiles.find((item) => item.id === OTHER.id).active).toBe(true);
     expect(panel.shadowRoot.getElementById("app-menu").hidden).toBe(true);
   });
+
+  it("explains when a saved account needs a new sign-in and keeps the current account", async () => {
+    const panel = panelWithAccounts();
+    panel._accountProfiles = [CURRENT, OTHER];
+    panel._accountProfilesLoaded = true;
+    panel._callWS = vi.fn(async () => {
+      throw Object.assign(new Error("saved sign-in expired"), {
+        code: "account_profile_reauthentication_required",
+      });
+    });
+
+    await panel._switchAccountProfile(OTHER.id);
+
+    expect(panel._accountProfileFeedback).toContain("Workspace needs a fresh sign-in");
+    expect(panel._accountProfiles.find((item) => item.id === CURRENT.id).active).toBe(true);
+  });
+
+  it("preserves the current account before starting another sign-in", async () => {
+    const panel = panelWithAccounts();
+    panel._accountProfiles = [CURRENT];
+    panel._accountProfilesLoaded = true;
+    panel._appMenuOpen = true;
+    panel._callWS = vi.fn(async (action) => {
+      if (action === "prepare_new_account_login") return { state: "logged_out" };
+      if (action === "list_account_profiles") return [{ ...CURRENT, active: false }];
+      throw new Error("unexpected action");
+    });
+    panel._applyAuthStatus = vi.fn();
+    panel._showSideTab = vi.fn();
+    panel._startAuthLogin = vi.fn(async () => {});
+
+    await panel._prepareAnotherAccount();
+
+    expect(panel._callWS.mock.calls.map(([action]) => action)).toEqual([
+      "prepare_new_account_login", "list_account_profiles",
+    ]);
+    expect(panel._showSideTab).toHaveBeenCalledWith("system");
+    expect(panel._startAuthLogin).toHaveBeenCalledOnce();
+    expect(panel._callWS).not.toHaveBeenCalledWith("logout_auth");
+  });
 });

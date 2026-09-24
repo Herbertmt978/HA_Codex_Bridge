@@ -8,7 +8,10 @@ from ..auth_coordinator import (
     AuthCoordinatorClosedError,
     AuthOperationConflictError,
 )
-from ..account_profiles import AccountProfileError
+from ..account_profiles import (
+    AccountProfileError,
+    AccountProfileReauthenticationRequiredError,
+)
 from ..codex_app_server import CodexAppServerError
 from ..models import CodexAuthStatusRecord
 from ..workspace import WorkspaceBoundaryError
@@ -155,6 +158,15 @@ def switch_account_profile(
     )
 
 
+@router.post("/auth/profiles/prepare-login", response_model=CodexAuthStatusRecord)
+def prepare_new_account_login(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> CodexAuthStatusRecord:
+    store, coordinator = _profiles(request, authorization)
+    return _invoke_profile_operation(lambda: coordinator.prepare_new_account_login(store))
+
+
 @router.delete("/auth/profiles/{profile_id}", status_code=204)
 def remove_account_profile(
     profile_id: str,
@@ -168,6 +180,11 @@ def remove_account_profile(
 def _invoke_profile_operation(operation):
     try:
         return operation()
+    except AccountProfileReauthenticationRequiredError:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "account_profile_reauthentication_required", "retryable": False},
+        ) from None
     except AccountProfileError as error:
         raise HTTPException(
             status_code=409,

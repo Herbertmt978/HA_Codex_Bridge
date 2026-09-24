@@ -54,6 +54,7 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
     "reset_credit_unavailable": "That reset credit is unavailable. Refresh usage and check again.",
     "account_profile_invalid": "Review the saved account and try again",
+    "account_profile_reauthentication_required": "This saved account needs a fresh sign-in",
     "account_profiles_unavailable": "Saved accounts are unavailable in this App version",
 }
 
@@ -71,6 +72,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_list_account_profiles,
         ws_save_account_profile,
         ws_switch_account_profile,
+        ws_prepare_new_account_login,
         ws_remove_account_profile,
         ws_list_projects,
         ws_create_project,
@@ -364,6 +366,15 @@ async def ws_switch_account_profile(hass, connection, msg) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_switch_account_profile(msg["profile_id"]),
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/prepare_new_account_login"})
+@websocket_api.async_response
+async def ws_prepare_new_account_login(hass, connection, msg) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_prepare_new_account_login(),
     )
 
 

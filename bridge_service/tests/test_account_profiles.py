@@ -187,6 +187,53 @@ def test_saved_accounts_have_a_bounded_limit(tmp_path: Path) -> None:
         store.close()
 
 
+def test_adding_account_preserves_saved_sign_in_without_provider_logout(tmp_path: Path) -> None:
+    store = AccountProfileStore(tmp_path / "private-profiles", tmp_path / "codex-home")
+    store.activate_credential(_credential("first_account"))
+    client = _AccountClient(store)
+    gate = RuntimeGate(limits=ResourceLimits())
+    coordinator = CodexAuthCoordinator(client, runtime_gate=gate)
+    try:
+        assert coordinator.start().state == "ok"
+        with pytest.raises(AccountProfileError, match="Save the current account"):
+            coordinator.prepare_new_account_login(store)
+        assert store.current_credential()[1] == "first_account"
+        saved = coordinator.save_account_profile(store, "First")
+        assert coordinator.prepare_new_account_login(store).state == "logged_out"
+        assert client.restart_count == 1
+        assert store.current_credential_optional() is None
+        assert store.list_profiles() == [{**saved, "active": False}]
+        assert coordinator.switch_account_profile(store, saved["id"]).state == "ok"
+        assert store.current_credential()[1] == "first_account"
+        assert gate.snapshot().auth_mutation_active is False
+    finally:
+        coordinator.close()
+        gate.close()
+        store.close()
+
+
+def test_prepare_new_account_restores_current_sign_in_when_restart_fails(tmp_path: Path) -> None:
+    store = AccountProfileStore(tmp_path / "private-profiles", tmp_path / "codex-home")
+    store.activate_credential(_credential("first_account"))
+    client = _AccountClient(store)
+    gate = RuntimeGate(limits=ResourceLimits())
+    coordinator = CodexAuthCoordinator(client, runtime_gate=gate)
+    try:
+        assert coordinator.start().state == "ok"
+        coordinator.save_account_profile(store, "First")
+        client.fail_next_restart = True
+        with pytest.raises(AccountProfileError, match="could not be prepared"):
+            coordinator.prepare_new_account_login(store)
+        assert coordinator.status().state == "ok"
+        assert store.current_credential()[1] == "first_account"
+        assert store.list_profiles()[0]["active"] is True
+        assert gate.snapshot().auth_mutation_active is False
+    finally:
+        coordinator.close()
+        gate.close()
+        store.close()
+
+
 def test_cannot_save_a_cached_identity_with_rejected_provider_token(tmp_path: Path) -> None:
     store = AccountProfileStore(tmp_path / "private-profiles", tmp_path / "codex-home")
     store.activate_credential(_credential("expired_account"))
@@ -280,6 +327,7 @@ def test_profile_routes_keep_credentials_private_and_require_bridge_auth(tmp_pat
         with TestClient(app) as http:
             assert http.get("/auth/profiles").status_code == 401
             assert http.post("/auth/profiles", json={"label": "Home"}).status_code == 401
+            assert http.post("/auth/profiles/prepare-login").status_code == 401
             saved = http.post("/auth/profiles", headers=headers, json={"label": "Home"})
             assert saved.status_code == 200
             profile_id = saved.json()["id"]

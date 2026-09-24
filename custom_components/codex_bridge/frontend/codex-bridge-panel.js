@@ -40521,7 +40521,7 @@ var CodexBridgePanel = class extends HTMLElement {
         void this._removeAccountProfile(actionTarget.dataset.profileId);
         break;
       case "add-account-profile":
-        this._prepareAnotherAccount();
+        void this._prepareAnotherAccount();
         break;
       case "toggle-focus":
         this._toggleFocusMode(actionTarget);
@@ -41254,6 +41254,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   async _switchAccountProfile(profileId) {
     if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    const profile = this._accountProfiles.find((item) => item.id === profileId);
     this._accountProfilePending = true;
     this._accountProfileFeedback = "Verifying saved account…";
     this._renderAppMenu();
@@ -41266,8 +41267,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._closeAppMenu();
       this._clearError();
       this._render();
-    } catch {
-      this._accountProfileFeedback = "The switch was not verified. Check the current sign-in before trying again.";
+    } catch (error) {
+      this._accountProfileFeedback = error?.code === "account_profile_reauthentication_required" ? `${profile.label} needs a fresh sign-in. Use Add another account, sign in to it, then save it again.` : "The switch could not be verified. Refresh the account list before trying again.";
     } finally {
       this._accountProfilePending = false;
       this._renderAppMenu();
@@ -41295,20 +41296,34 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderAppMenu();
     }
   }
-  _prepareAnotherAccount() {
+  async _prepareAnotherAccount() {
     if (this._accountProfilePending) return;
     if (this._authViewModel().signedIn && !this._accountProfiles.some((item) => item.active)) {
       this._accountProfileFeedback = "Save the current account before adding another.";
       this._renderAppMenu();
       return;
     }
-    this._closeAppMenu();
-    this._showSideTab("system");
     if (this._authViewModel().signedIn) {
-      this._confirmSignOut = true;
-      this._renderAuthSurface();
+      this._accountProfilePending = true;
+      this._accountProfileFeedback = "Preserving the current account…";
+      this._renderAppMenu();
+      try {
+        const auth = await this._callWS("prepare_new_account_login");
+        this._applyAuthStatus(auth);
+        await this._loadAccountProfiles();
+        this._closeAppMenu();
+        this._showSideTab("system");
+        await this._startAuthLogin();
+      } catch {
+        this._accountProfileFeedback = "The current sign-in could not be preserved. Check it before adding another.";
+      } finally {
+        this._accountProfilePending = false;
+        this._renderAppMenu();
+      }
     } else {
-      void this._startAuthLogin();
+      this._closeAppMenu();
+      this._showSideTab("system");
+      await this._startAuthLogin();
     }
   }
   _closeAppMenu({ restoreFocus = false } = {}) {

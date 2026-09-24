@@ -26,6 +26,10 @@ class AccountProfileError(ValueError):
     """A profile cannot be saved or activated safely."""
 
 
+class AccountProfileReauthenticationRequiredError(AccountProfileError):
+    """A saved sign-in can no longer be refreshed by Codex."""
+
+
 def _credential_account_id(raw: bytes) -> str:
     try:
         payload = json.loads(raw)
@@ -191,6 +195,20 @@ class AccountProfileStore:
             profile = next((item for item in registry["profiles"] if item["account_id"] == account_id), None)
             if profile is not None:
                 self._profiles.atomic_write_bytes(f"{profile['id']}/auth.json", raw)
+
+    def preserve_current_for_new_login(self) -> bytes:
+        """Refresh the saved copy before detaching the current local sign-in."""
+        raw, account_id = self.current_credential()
+        with self._lock:
+            registry = self._registry()
+            profile = next(
+                (item for item in registry["profiles"] if item["account_id"] == account_id),
+                None,
+            )
+            if profile is None:
+                raise AccountProfileError("Save the current account before adding another.")
+            self._profiles.atomic_write_bytes(f"{profile['id']}/auth.json", raw)
+        return raw
 
     def save_current(self, label: str, account_response: object) -> dict[str, object]:
         label = _label(label)

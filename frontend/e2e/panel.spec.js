@@ -204,12 +204,18 @@ for (const width of [390, 1280]) {
         account: { available: true, auth_mode: "chatgpt", plan_type: "pro" },
       };
       const original = element._callWS.bind(element);
-      element._callWS = async (method, args) => method === "list_account_profiles"
-        ? [
-          { id: "a".repeat(32), label: "Personal", plan: "pro", active: true },
+      let detached = false;
+      element._callWS = async (method, args) => {
+        if (method === "prepare_new_account_login") {
+          detached = true;
+          return { state: "logged_out", revision: 2 };
+        }
+        if (method === "list_account_profiles") return [
+          { id: "a".repeat(32), label: "Personal", plan: "pro", active: !detached },
           { id: "b".repeat(32), label: "<Private workspace>", plan: "team", active: false },
-        ]
-        : original(method, args);
+        ];
+        return original(method, args);
+      };
     });
     await panel.locator("#app-menu-toggle").click();
     const menu = panel.locator("#app-menu");

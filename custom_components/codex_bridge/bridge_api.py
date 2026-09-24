@@ -642,6 +642,10 @@ class BridgeApiClient:
             "POST", "/auth/profiles/switch", json_body={"profile_id": profile_id}
         )
 
+    async def async_prepare_new_account_login(self) -> dict[str, Any]:
+        self.require_capability("account_profiles_v1")
+        return await self._async_json("POST", "/auth/profiles/prepare-login")
+
     async def async_remove_account_profile(self, profile_id: str) -> None:
         self.require_capability("account_profiles_v1")
         await self._async_no_content(

@@ -311,6 +311,21 @@ def test_problem_record_redacts_unknown_remote_codes_and_untrusted_fields() -> N
     assert "secret-token" not in repr(problem)
 
 
+def test_problem_record_preserves_account_reauthentication_code_without_details() -> None:
+    problem = ProblemRecord.from_payload(
+        409,
+        {"detail": {
+            "code": "account_profile_reauthentication_required",
+            "retryable": False,
+            "message": "private-provider-detail",
+        }},
+    )
+
+    assert problem.code == "account_profile_reauthentication_required"
+    assert problem.retryable is False
+    assert "private-provider-detail" not in repr(problem)
+
+
 def test_problem_record_preserves_safe_mcp_elicitation_unavailable_code() -> None:
     problem = ProblemRecord.from_payload(
         503,
