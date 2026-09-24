@@ -8,15 +8,21 @@ adds a new line. Pressing Enter in an empty composer does not stop the run.
 **Add** beside the composer opens file and folder uploads. When the connected
 App supports them, it also offers **Schedule this message** and **Plugins**.
 Actions the Bridge cannot perform are omitted. On a phone, **Chats** opens the
-navigation drawer and **Context** opens the activity and usage drawer; chat
-settings remain available from the composer disclosure. The panel fills the
+navigation drawer and **Context** opens the activity and usage drawer. **Chat
+settings** in the chat actions menu opens the editable title and permission
+settings in the navigation drawer. The panel fills the
 visible space below the Home Assistant header as the window height changes.
 
-The small ring beside Send shows the latest reported context usage for this
+Where the browser supports speech recognition, the microphone beside Send
+dictates into the draft. Select it again to stop, review the text, then press
+Send yourself. The browser may send audio to its speech service; audio is not
+uploaded through the Bridge. The microphone is hidden when speech recognition
+is unavailable.
+
+The small ring beside Send appears once Codex reports context usage for this
 chat. Select it for token counts and account limits. Context can decrease when
-Codex compacts earlier conversation. If the runtime has not reported a reading,
-the ring says so rather than showing a made-up percentage. Account limits and
-context usage measure different things.
+Codex compacts earlier conversation. Account limits and context usage measure
+different things.
 
 The Usage panel also lists any reset credits reported by the signed-in Codex
 account, including their expiry when available. Select **Use reset** to review

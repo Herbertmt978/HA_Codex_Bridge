@@ -33976,7 +33976,14 @@ function renderPlugins(documentRef, state) {
   toolbar.append(text2(documentRef, "div", "Plugins", "desktop-section-label"));
   section2.append(toolbar);
   const rows = normalizeDesktopList(state.data.plugins || state.data);
-  section2.append(renderTable(documentRef, rows, [["name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
+  const namedRows = rows.map((row) => {
+    const candidate = String(row.display_name || row.name || "").trim();
+    return {
+      ...row,
+      visible_name: candidate && !/^app-/iu.test(candidate) ? candidate : "Unnamed plugin"
+    };
+  });
+  section2.append(renderTable(documentRef, namedRows, [["visible_name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
     td.append(button2(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
@@ -34234,7 +34241,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   container.replaceChildren();
   renderedFeatureInputs.set(container, { inputs, drafts });
   const heading = documentRef.createElement("div");
-  heading.className = "desktop-feature-header";
+  heading.className = `desktop-feature-header${destination === "scheduled" ? "" : " desktop-feature-header-centered"}`;
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text2(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
   heading.append(text2(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
@@ -37194,6 +37201,9 @@ template.innerHTML = `
       margin: 0 auto 28px;
     }
 
+    .desktop-feature-header-centered { text-align: center; }
+    .desktop-feature-header-centered .desktop-feature-summary { margin-inline: auto; }
+
     .desktop-feature-title {
       font-size: 24px;
       font-weight: 600;
@@ -37460,8 +37470,8 @@ template.innerHTML = `
 
     #new-direct-chat-button:hover,
     #new-direct-chat-button:focus-visible {
-      border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color) 76%);
-      background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-bg) 92%);
+      border-color: transparent;
+      background: color-mix(in srgb, var(--text-color) 8%, var(--surface-muted) 92%);
     }
 
     .search-shell {
@@ -37475,8 +37485,9 @@ template.innerHTML = `
     }
 
     .search-shell:focus-within {
-      border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%);
-      background: var(--surface-bg);
+      border-color: color-mix(in srgb, var(--text-color) 24%, var(--border-color) 76%);
+      background: var(--surface-muted);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color) 9%, transparent);
     }
 
     .search-shell svg {
@@ -37492,6 +37503,13 @@ template.innerHTML = `
     .search-shell input {
       font-size: var(--font-control-size);
       outline: 0;
+    }
+
+    .search-shell input:focus,
+    .search-shell input:focus-visible {
+      border: 0;
+      outline: 0;
+      box-shadow: none;
     }
 
     .search-shell input::-webkit-search-cancel-button {
@@ -38457,6 +38475,21 @@ template.innerHTML = `
     .composer-actions { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 6px; }
     .composer-actions .icon-button { width: 32px; min-width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 50%; background: transparent; color: var(--muted-color); }
     .composer-actions .icon-button:hover:not(:disabled) { background: var(--surface-muted); color: var(--text-color); }
+    .dictation-button[aria-pressed="true"] {
+      position: relative;
+      background: var(--surface-muted);
+      color: var(--text-color);
+    }
+    .dictation-button[aria-pressed="true"]::after {
+      content: "";
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      right: 1px;
+      bottom: 1px;
+      border-radius: 50%;
+      background: var(--danger-color);
+    }
     .context-usage-button svg { width: 20px; height: 20px; stroke-width: 2.5; }
     .context-track { opacity: .2; }
     .context-fill { stroke-dasharray: 0 100; transition: stroke-dasharray 180ms ease; }
@@ -39739,6 +39772,7 @@ template.innerHTML = `
             <button class="icon-button context-usage-button" type="button" data-action="open-usage" id="context-usage-button" aria-label="Context usage not reported yet" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="context-track" cx="12" cy="12" r="8"/><circle class="context-fill" cx="12" cy="12" r="8" pathLength="100" transform="rotate(-90 12 12)"/></svg>
             </button>
+            <button class="icon-button dictation-button" type="button" data-action="toggle-dictation" id="dictation-button" aria-label="Dictate message" aria-pressed="false" hidden></button>
             <button class="icon-button stop-button hidden" type="button" data-action="stop-run" title="Stop run" aria-label="Stop run" id="stop-run-button"></button>
             <button class="send-button" type="button" data-action="send-prompt" id="send-button" title="Send" aria-label="Send" aria-describedby="composer-status"></button>
           </div>
@@ -39851,6 +39885,7 @@ var icons = {
   upload: iconSvg('<path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path>'),
   folderUpload: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M12 17V9"></path><path d="m8.5 12.5 3.5-3.5 3.5 3.5"></path>'),
   send: iconSvg('<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>'),
+  microphone: iconSvg('<rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"></path>'),
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
@@ -39918,6 +39953,10 @@ var CodexBridgePanel = class extends HTMLElement {
     this._threadSnapshotEpoch = 0;
     this._threadRefreshGraceUntil = 0;
     this._activeThread = null;
+    this._speechRecognition = null;
+    this._speechThreadId = null;
+    this._speechStatus = "";
+    this._speechLastFinalResult = -1;
     this._events = [];
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -40094,6 +40133,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
   }
   disconnectedCallback() {
+    this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.removeEventListener("resize", this._viewportResizeListener);
@@ -40234,6 +40274,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("add-plugins-button"), icons.puzzle, "Plugins");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("dictation-button"), icons.microphone);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
     for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
@@ -40462,6 +40503,7 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "toggle-app-menu":
         this._appMenuOpen = !this._appMenuOpen;
+        if (this._appMenuOpen) this._hideTooltip();
         this._renderAppMenu();
         if (this._appMenuOpen) {
           if (this._config?.capabilities?.includes("account_profiles_v1")) void this._loadAccountProfiles();
@@ -40562,7 +40604,8 @@ var CodexBridgePanel = class extends HTMLElement {
         this._createFolder();
         break;
       case "save-thread":
-        this._createThread();
+        if (this._threadForm.threadId) this._saveThreadSettings();
+        else this._createThread();
         break;
       case "cancel-thread-form":
         this._showThreadForm = false;
@@ -40633,6 +40676,9 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "send-prompt":
         this._sendPrompt();
+        break;
+      case "toggle-dictation":
+        this._toggleDictation();
         break;
       case "schedule-message":
         this._scheduleComposerMessage();
@@ -42311,6 +42357,10 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     promptInput.placeholder = isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked;
+    if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
+      this._stopDictation({ abort: true });
+    }
+    this._renderDictationControl(activeThread, locked);
     const addButton = this.shadowRoot.getElementById("add-menu-button");
     addButton.disabled = !activeThread;
     if (!activeThread && this._addMenuOpen) this._setAddMenuOpen(false);
@@ -42338,7 +42388,85 @@ var CodexBridgePanel = class extends HTMLElement {
     } else if (retryable) {
       composerStatus.textContent = "The response was interrupted. Retry safely with the same request ID.";
     } else {
-      composerStatus.textContent = activeThread ? "" : "Select a chat before sending a message.";
+      composerStatus.textContent = activeThread ? this._speechStatus : "Select a chat before sending a message.";
+    }
+  }
+  _renderDictationControl(activeThread, locked) {
+    const button3 = this.shadowRoot.getElementById("dictation-button");
+    if (!button3) return;
+    const supported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+    button3.hidden = !supported || !activeThread;
+    button3.disabled = locked;
+    const listening = Boolean(this._speechRecognition);
+    button3.setAttribute("aria-pressed", String(listening));
+    button3.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
+    this._setTooltipTarget(button3, listening ? "Stop dictation" : "Dictate using your browser's speech service");
+  }
+  _stopDictation({ abort = false } = {}) {
+    const recognition = this._speechRecognition;
+    if (!recognition) return;
+    if (abort) {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "";
+      recognition.abort();
+      this._renderDictationControl(this._activeThread, false);
+    } else {
+      this._speechStatus = "Finishing dictation…";
+      recognition.stop();
+      this._renderComposerState(this._activeThread);
+    }
+  }
+  _toggleDictation() {
+    if (this._speechRecognition) {
+      this._stopDictation();
+      return;
+    }
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const promptInput = this.shadowRoot.getElementById("prompt-input");
+    if (!Recognition || !this._activeThread || promptInput?.disabled) return;
+    const recognition = new Recognition();
+    recognition.lang = this._hass?.language || navigator.language || "en-GB";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    this._speechRecognition = recognition;
+    this._speechThreadId = this._selectedThreadId;
+    this._speechLastFinalResult = -1;
+    this._speechStatus = "Listening… Your browser may send audio to its speech service. Review the text before sending.";
+    recognition.onresult = (event) => {
+      if (this._speechRecognition !== recognition || this._speechThreadId !== this._selectedThreadId) return;
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (!result.isFinal || index <= this._speechLastFinalResult) continue;
+        this._speechLastFinalResult = index;
+        const spoken = result[0]?.transcript?.trim();
+        if (!spoken) continue;
+        promptInput.value += `${promptInput.value && !/\s$/u.test(promptInput.value) ? " " : ""}${spoken}`;
+        promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    recognition.onerror = (event) => {
+      if (this._speechRecognition !== recognition) return;
+      this._speechStatus = event.error === "not-allowed" || event.error === "service-not-allowed" ? "Microphone access was blocked. Check your browser permission." : event.error === "no-speech" ? "No speech was detected." : "Dictation stopped. Please try again.";
+      this.shadowRoot.getElementById("composer-status").textContent = this._speechStatus;
+    };
+    recognition.onend = () => {
+      if (this._speechRecognition !== recognition) return;
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      if (this._speechStatus.startsWith("Listening") || this._speechStatus.startsWith("Finishing")) {
+        this._speechStatus = "Dictation stopped. Review your message before sending.";
+      }
+      this._renderComposerState(this._activeThread);
+    };
+    try {
+      recognition.start();
+      this._renderComposerState(this._activeThread);
+    } catch {
+      this._speechRecognition = null;
+      this._speechThreadId = null;
+      this._speechStatus = "Dictation could not start in this browser.";
+      this._renderComposerState(this._activeThread);
     }
   }
   _renderInteractions() {
@@ -42976,7 +43104,9 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const targetProject = this._threadForm.projectId ? this._projects.find((project) => project.project_id === this._threadForm.projectId) || null : this._directProject();
     const isDirect = !this._threadForm.projectId || targetProject?.kind === "direct";
+    const isEdit = Boolean(this._threadForm.threadId);
     const formKey = JSON.stringify({
+      threadId: this._threadForm.threadId || "",
       projectId: this._threadForm.projectId || "",
       targetProjectId: targetProject?.project_id || "",
       targetProjectName: targetProject?.name || "",
@@ -42990,8 +43120,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const titleBlock = document.createElement("div");
     titleBlock.className = "title-block";
     titleBlock.append(
-      this._textElement("span", "eyeline", isDirect ? "New direct chat" : "New project chat"),
-      this._textElement("span", "title", targetProject?.name || "Choose a target")
+      this._textElement("span", "eyeline", isEdit ? "Chat settings" : isDirect ? "New direct chat" : "New project chat"),
+      this._textElement("span", "title", isEdit ? this._threadForm.title : targetProject?.name || "Choose a target")
     );
     const titleInput = this._input("field", "thread-title-input", "Chat title", this._threadForm.title, "Chat title");
     const modeSelect = this._select("field-select stable-select", "thread-mode-select", "Chat permission mode");
@@ -43012,7 +43142,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
     const save = this._actionButton("send-button", "save-thread");
-    this._setTrustedButtonContent(save, icons.chat, "Create chat");
+    this._setTrustedButtonContent(save, icons.save, isEdit ? "Save changes" : "Create chat");
     const close = this._actionButton("text-button", "cancel-thread-form");
     close.textContent = "Close";
     formActions.append(save, close);
@@ -45178,7 +45308,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._chatMenuKey = menuKey;
     menu.replaceChildren();
     for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
-      const button3 = this._actionButton("", action, label);
+      const button3 = document.createElement("button");
+      button3.type = "button";
+      button3.dataset.action = action;
       button3.textContent = label;
       button3.dataset.threadId = this._selectedThreadId;
       menu.append(button3);
@@ -45199,8 +45331,8 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderContextUsage() {
     const button3 = this.shadowRoot.getElementById("context-usage-button");
     if (!button3) return;
-    button3.hidden = !this._activeThread;
     const usage = contextUsage(this._activeThread?.context_usage);
+    button3.hidden = !this._activeThread || !usage.known;
     button3.setAttribute("aria-label", `${usage.label}. Open usage details`);
     button3.title = usage.label;
     this._setTooltipTarget(button3, usage.label);
@@ -45585,11 +45717,30 @@ var CodexBridgePanel = class extends HTMLElement {
     this._showThreadForm = true;
     this._showProjectForm = false;
     this._threadForm = {
+      threadId: null,
       title: "",
       mode: this._preferences.mode,
       projectId
     };
     this._selectedProjectId = projectId || this._directProject()?.project_id || this._selectedProjectId;
+    this._render();
+    queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
+  }
+  _openThreadFormForEdit(threadId) {
+    const thread = this._activeThread?.thread_id === threadId ? this._activeThread : this._threads.find((item) => item.thread_id === threadId);
+    if (!thread) return;
+    this._showThreadForm = true;
+    this._showProjectForm = false;
+    this._threadForm = {
+      threadId,
+      title: thread.title || "",
+      mode: thread.mode || "edit",
+      projectId: thread.project_id || null,
+      hostAccessGrant: thread.host_access_grant || null
+    };
+    if (this._mobileDrawerMedia?.matches && this._mobileDrawer !== "navigation") {
+      this._toggleMobileDrawer("navigation", this.shadowRoot.getElementById("chat-menu-button"));
+    }
     this._render();
     queueMicrotask(() => this.shadowRoot.getElementById("thread-title-input")?.focus());
   }
@@ -45708,6 +45859,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       if (nextThreadId !== this._selectedThreadId) {
+        this._stopDictation({ abort: true });
+        if (this._threadForm.threadId) this._showThreadForm = false;
         void this._terminal.close();
         this._chatMenuOpen = false;
       }
@@ -45838,6 +45991,26 @@ var CodexBridgePanel = class extends HTMLElement {
       }
       this._clearError();
       this._render();
+    } catch (error) {
+      this._setError(error);
+    }
+  }
+  async _saveThreadSettings() {
+    const threadId = this._threadForm.threadId;
+    const title = this._threadForm.title.trim();
+    if (!threadId || !title || threadId !== this._selectedThreadId) return;
+    try {
+      const updated = await this._callWS("update_thread", {
+        thread_id: threadId,
+        title,
+        mode: this._threadForm.mode,
+        ...this._threadForm.mode === HOST_MODE ? { host_access_grant: this._threadForm.hostAccessGrant } : {}
+      });
+      this._activeThread = updated;
+      this._syncThreadListStatus();
+      this._showThreadForm = false;
+      this._clearError();
+      this._render(true);
     } catch (error) {
       this._setError(error);
     }
@@ -47903,6 +48076,10 @@ var CodexBridgePanel = class extends HTMLElement {
   _showTooltipForTarget(target) {
     const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
     if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
+      return;
+    }
+    if (trigger.id === "app-menu-toggle" && this._appMenuOpen) {
+      this._hideTooltip();
       return;
     }
     const text3 = trigger.dataset.tooltip;

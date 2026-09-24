@@ -576,6 +576,254 @@ test("keeps activity details and rebuilt navigation controls steady during HA up
   }
 });
 
+test("centres feature headings before and after loading at desktop and mobile widths", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const destination of ["skills", "settings", "plugins"]) {
+      for (const loading of [true, false]) {
+        const positions = await panel.evaluate((element, next) => {
+          element._activeDestination = next.destination;
+          element._desktopFeatures[next.destination] = {
+            ...element._desktopFeatures[next.destination],
+            loading: next.loading,
+            data: {},
+          };
+          element._render(true);
+          const surface = element.shadowRoot.getElementById("desktop-feature-surface");
+          const title = surface.querySelector(".desktop-feature-title");
+          const summary = surface.querySelector(".desktop-feature-summary");
+          const centre = (node) => {
+            const bounds = node.getBoundingClientRect();
+            return bounds.left + bounds.width / 2;
+          };
+          return { surface: centre(surface), title: centre(title), summary: centre(summary) };
+        }, { destination, loading });
+        expect(Math.abs(positions.title - positions.surface)).toBeLessThan(3);
+        expect(Math.abs(positions.summary - positions.surface)).toBeLessThan(3);
+      }
+    }
+  }
+});
+
+test("keeps sidebar search and New chat on neutral surfaces", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  const search = panel.locator("#search-input");
+  const newChat = panel.locator("#new-direct-chat-button");
+  const shell = panel.locator(".search-shell");
+  const base = await newChat.evaluate((node) => getComputedStyle(node).backgroundColor);
+  expect(base).toBe(await shell.evaluate((node) => getComputedStyle(node).backgroundColor));
+  await search.focus();
+  expect(await search.evaluate((node) => getComputedStyle(node).boxShadow)).toBe("none");
+  expect(await shell.evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe("none");
+  await newChat.hover();
+  expect(await newChat.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(base);
+});
+
+test("creates disposable chats and uses the menu to edit, archive and delete them", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  const createChat = async (title) => {
+    await panel.locator("#new-direct-chat-button").click();
+    await panel.locator("#thread-title-input").fill(title);
+    await panel.locator('#thread-form-panel [data-action="save-thread"]').click();
+    await expect(panel.locator("#thread-title-label")).toHaveText(title);
+  };
+  await createChat("Disposable archive check");
+  await panel.locator("#chat-menu-button").click();
+  const menu = panel.locator("#thread-menu");
+  await expect(menu.locator('[data-action="edit-current-chat"]')).toBeVisible();
+  expect(await menu.locator("button[data-tooltip]").count()).toBe(0);
+  await menu.locator('[data-action="edit-current-chat"]').click();
+  await expect(panel.locator("#thread-form-panel")).toContainText("Chat settings");
+  await panel.locator("#thread-title-input").fill("Disposable renamed check");
+  await panel.locator('#thread-form-panel [data-action="save-thread"]').click();
+  await expect(panel.locator("#thread-title-label")).toHaveText("Disposable renamed check");
+  await panel.locator("#chat-menu-button").click();
+  await menu.locator('[data-action="archive-thread"]').click();
+  await expect(panel.locator("#thread-title-label")).not.toHaveText("Disposable renamed check");
+  await expect.poll(() => panel.evaluate((element) => element._threads.some((thread) =>
+    thread.title === "Disposable renamed check" && Boolean(thread.archived_at)))).toBe(true);
+  await createChat("Disposable delete check");
+  await panel.locator("#chat-menu-button").click();
+  await menu.locator('[data-action="delete-thread"]').click();
+  await expect(panel.locator("#confirmation-dialog")).toBeVisible();
+  await panel.locator("#confirm-delete-button").click();
+  await expect.poll(() => panel.evaluate((element) => element._threads.some((thread) =>
+    thread.title === "Disposable delete check"))).toBe(false);
+});
+
+test("audits every destination, settings tab and primary menu in both themes and layouts", async ({ page }, testInfo) => {
+  const inventory = [];
+  const capture = async (name) => {
+    const controls = await page.locator("codex-bridge-panel").evaluate((element) => {
+      const root = element.shadowRoot;
+      return [...root.querySelectorAll("button, input, select, textarea, summary, a[href]")]
+        .filter((control) => {
+          const style = getComputedStyle(control);
+          const box = control.getBoundingClientRect();
+          return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none" && !control.closest("[inert]");
+        })
+        .map((control) => {
+          const box = control.getBoundingClientRect();
+          return {
+            tag: control.tagName.toLowerCase(),
+            action: control.dataset.action || control.dataset.desktopAction || "",
+            name: (control.getAttribute("aria-label") || control.getAttribute("title") || control.textContent || "").trim().replace(/\s+/gu, " ").slice(0, 120),
+            scrollable: Boolean(control.closest(".settings-tabs")?.scrollWidth > control.closest(".settings-tabs")?.clientWidth),
+            x: Math.round(box.x), right: Math.round(box.right), width: Math.round(box.width),
+          };
+        });
+    });
+    const width = page.viewportSize().width;
+    const clipped = controls.filter((control) => !control.scrollable && (control.x < -1 || control.right > width + 1));
+    expect(clipped, `${name}: controls must fit the viewport`).toEqual([]);
+    inventory.push({ state: name, controls });
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true, animations: "disabled" });
+  };
+
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      await selectHarnessThread(page);
+      const panel = page.locator("codex-bridge-panel");
+      const state = `${scheme}-${width}`;
+      await capture(`${state}-chat`);
+      const mobileContext = panel.locator("#mobile-context-toggle");
+      if (await mobileContext.isVisible()) await mobileContext.click();
+      for (const tab of ["Activity", "Files", "Usage", "System"]) {
+        await panel.getByRole("tab", { name: tab, exact: true }).click();
+        await capture(`${state}-side-${tab.toLowerCase()}`);
+      }
+      if (await mobileContext.isVisible()) await panel.locator("#mobile-drawer-scrim").click({ position: { x: 8, y: 420 } });
+      await panel.locator("#toggle-bottom-button").click();
+      await capture(`${state}-bottom-preview`);
+      await panel.locator("#bottom-terminal-button").click();
+      await capture(`${state}-bottom-terminal`);
+      await panel.locator("#toggle-bottom-button").click();
+      for (const destination of ["scheduled", "skills", "plugins", "settings"]) {
+        await panel.evaluate((element, target) => element._selectDesktopDestination(target), destination);
+        await expect(panel.locator("#desktop-feature-surface .desktop-feature-title")).toHaveText(destination === "scheduled" ? "Scheduled" : destination[0].toUpperCase() + destination.slice(1));
+        await expect(panel.locator("#desktop-feature-surface")).toHaveAttribute("aria-busy", "false");
+        if (destination === "plugins") {
+          await expect(panel.locator("#desktop-feature-surface")).toContainText("Gmail");
+          await expect(panel.locator("#desktop-feature-surface")).not.toContainText("app-gmail-fixture");
+        }
+        await capture(`${state}-${destination}`);
+        if (destination === "settings") {
+          for (const tab of ["Access", "Appearance", "MCP servers", "Instructions", "Keyboard shortcuts", "About / security"]) {
+            await panel.getByRole("tab", { name: tab, exact: true }).click();
+            await capture(`${state}-settings-${tab.toLowerCase().replace(/[^a-z]+/gu, "-")}`);
+          }
+        }
+      }
+      await panel.evaluate((element) => element._selectDesktopDestination("chats"));
+      await panel.locator("#chat-menu-button").click();
+      await capture(`${state}-chat-menu`);
+      await panel.locator("#chat-menu-button").click();
+      await panel.locator("#add-menu-button").click();
+      await capture(`${state}-add-menu`);
+      await panel.locator("#add-menu-button").click();
+      if (width === 390) {
+        await panel.locator("#mobile-nav-toggle").click();
+        await expect.poll(() => panel.locator("#workspace-drawer").evaluate((drawer) => Math.round(drawer.getBoundingClientRect().left))).toBeGreaterThanOrEqual(0);
+        await capture(`${state}-navigation`);
+      }
+      await panel.locator("#app-menu-toggle").click();
+      await expect(panel.locator("#tooltip-layer")).toBeHidden();
+      await capture(`${state}-app-menu`);
+      await panel.locator("#app-menu-toggle").click();
+    }
+  }
+  await import("node:fs/promises").then(({ writeFile }) => writeFile(testInfo.outputPath("control-inventory.json"), JSON.stringify(inventory, null, 2)));
+});
+
+test("skill and plugin controls complete their advertised actions in the browser", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const surface = panel.locator("#desktop-feature-surface");
+  await panel.evaluate((element) => element._selectDesktopDestination("skills"));
+  await expect(surface).toContainText("docs:write");
+  await surface.getByRole("button", { name: "Create skill" }).click();
+  await expect(surface.locator('[data-desktop-form="skill"]')).toBeVisible();
+  await surface.locator('[data-desktop-field="name"]').fill("audit:temporary");
+  await surface.locator('[data-desktop-field="description"]').fill("Disposable audit skill");
+  await surface.locator('[data-desktop-field="instructions"]').fill("Test the control.");
+  await page.screenshot({ path: testInfo.outputPath("skill-form-mobile.png"), animations: "disabled" });
+  await surface.locator('[data-desktop-action="submit-skill"]').click();
+  await expect(surface).toContainText("audit:temporary");
+  const skillRow = surface.locator("tr", { hasText: "audit:temporary" });
+  await skillRow.getByRole("button", { name: "Disable" }).click();
+  await expect(surface.locator("tr", { hasText: "audit:temporary" })).toContainText("Disabled");
+  await surface.locator("tr", { hasText: "audit:temporary" }).getByRole("button", { name: "Delete" }).click();
+  await expect(surface).toContainText("This action is destructive");
+  await surface.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(surface).toContainText("audit:temporary");
+  await surface.locator("tr", { hasText: "audit:temporary" }).getByRole("button", { name: "Delete" }).click();
+  await surface.getByRole("button", { name: "Confirm" }).click();
+  await expect(surface).not.toContainText("audit:temporary");
+
+  await panel.evaluate((element) => element._selectDesktopDestination("plugins"));
+  await expect(surface).toContainText("Documents");
+  const documents = surface.locator("tr", { hasText: "Documents" });
+  await documents.getByRole("button", { name: "Install" }).click();
+  await expect(surface.locator("tr", { hasText: "Documents" })).toContainText("Enabled");
+  await surface.locator("tr", { hasText: "Documents" }).getByRole("button", { name: "Uninstall" }).click();
+  await expect(surface).toContainText("This action is destructive");
+  await surface.getByRole("button", { name: "Confirm" }).click();
+  await expect(surface.locator("tr", { hasText: "Documents" })).toContainText("Disabled");
+  await surface.getByRole("button", { name: "Add marketplace" }).click();
+  await surface.locator('[data-desktop-field="source"]').fill("https://catalogue.example.test/plugins");
+  await page.screenshot({ path: testInfo.outputPath("marketplace-form-mobile.png"), animations: "disabled" });
+  await surface.locator('[data-desktop-action="submit-marketplace"]').click();
+  await expect(surface).toContainText("catalogue.example.test");
+  const marketplace = surface.locator("tr", { hasText: "catalogue.example.test" });
+  await marketplace.getByRole("button", { name: "Upgrade" }).click();
+  await expect(surface).toContainText("Saved.");
+  await surface.locator("tr", { hasText: "catalogue.example.test" }).getByRole("button", { name: "Remove" }).click();
+  await surface.getByRole("button", { name: "Confirm" }).click();
+  await expect(surface).not.toContainText("catalogue.example.test");
+  const calls = await page.evaluate(() => window.__codexHarness.calls.filter((call) => call.kind === "ws").map((call) => call.type));
+  for (const action of ["create_skill", "set_skill", "delete_skill", "install_plugin", "uninstall_plugin", "add_marketplace", "upgrade_marketplace", "remove_marketplace"]) {
+    expect(calls).toContain(`codex_bridge/${action}`);
+  }
+});
+
+test("search, share, refresh and account-menu controls produce visible results", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const search = panel.locator("#search-input");
+  await search.fill("Quick bridge");
+  await expect(panel.locator("#direct-chat-list")).toContainText("Quick bridge note");
+  await expect(panel.locator(".project-list")).not.toContainText("Attachment validation");
+  await search.fill("");
+  await expect(panel.locator(".project-list")).toContainText("Attachment validation");
+
+  await panel.evaluate((element) => { element._writeClipboardText = async (value) => { window.__copiedChatLink = value; }; });
+  await panel.locator("#share-chat-button").click();
+  await expect(panel.locator("#share-status")).toContainText("Chat link copied");
+  const copied = await page.evaluate(() => window.__copiedChatLink);
+  expect(copied).toContain("thr_vba_1");
+  expect(copied).not.toMatch(/access_token|Bearer/iu);
+
+  const before = (await websocketCalls(page, "codex_bridge/get_thread")).length;
+  await panel.locator("#chat-menu-button").click();
+  await panel.locator('#thread-menu [data-action="refresh-thread"]').click();
+  await expect.poll(async () => (await websocketCalls(page, "codex_bridge/get_thread")).length).toBeGreaterThan(before);
+  await panel.locator("#app-menu-toggle").click();
+  await expect(panel.locator("#app-menu")).toBeVisible();
+  await expect(panel.locator("#tooltip-layer")).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(panel.locator("#app-menu")).toBeHidden();
+});
+
 test("updates chat ages without replacing their navigation controls", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
@@ -1043,7 +1291,7 @@ test("gives desktop chats wider space and one working control with code-only cop
   }
 });
 
-test("shows exhausted usage and confirms a reset credit without spending it", async ({ page }, testInfo) => {
+test("shows exhausted usage and completes a simulated reset credit", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
@@ -1086,6 +1334,11 @@ test("shows exhausted usage and confirms a reset credit without spending it", as
   await expect(panel.locator(".reset-credit-section")).toContainText("cannot be undone");
   await panel.getByRole("button", { name: "Cancel reset" }).click();
   await expect(panel.getByRole("button", { name: "Use reset" })).toBeVisible();
+  await panel.getByRole("button", { name: "Use reset" }).click();
+  await panel.getByRole("button", { name: "Confirm use of this reset credit" }).click();
+  await expect(panel.locator(".reset-credit-section")).toContainText("Reset applied");
+  await expect(panel.locator(".reset-credit-section")).toContainText("0 reset credits available");
+  expect((await websocketCalls(page, "codex_bridge/consume_reset_credit")).length).toBe(1);
   const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").analyze();
   expect(accessibility.violations).toEqual([]);
 });

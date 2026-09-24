@@ -810,6 +810,12 @@ class CapabilitiesManager:
         return {
             "id": plugin_id,
             "name": safe_name,
+            "display_name": _safe_text(
+                (value.get("interface") or {}).get("displayName")
+                if isinstance(value.get("interface"), dict)
+                else None,
+                limit=_MAX_NAME_BYTES,
+            ),
             "description": _safe_text(
                 (value.get("interface") or {}).get("shortDescription")
                 if isinstance(value.get("interface"), dict)

@@ -70,4 +70,28 @@ describe("desktop chat controls", () => {
     element._renderTerminalAvailability();
     expect(root.getElementById("open-terminal-button").disabled).toBe(true);
   });
+
+  it("opens working chat settings without redundant menu tooltips", async () => {
+    const element = panel();
+    const root = element.shadowRoot;
+    element._callWS = vi.fn().mockResolvedValue({ ...element._activeThread, title: "Renamed chat" });
+    root.getElementById("chat-menu-button").click();
+    const settings = root.querySelector('#thread-menu [data-action="edit-current-chat"]');
+    expect(settings.dataset.tooltip).toBeUndefined();
+    expect(settings.hasAttribute("title")).toBe(false);
+    settings.click();
+    expect(root.getElementById("thread-form-panel").classList.contains("visible")).toBe(true);
+    expect(root.getElementById("thread-form-panel").textContent).toContain("Chat settings");
+    const title = root.getElementById("thread-title-input");
+    title.value = "Renamed chat";
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+    root.querySelector('#thread-form-panel [data-action="save-thread"]').click();
+    await vi.waitFor(() => expect(element._callWS).toHaveBeenCalledWith("update_thread", {
+      thread_id: "chat-one",
+      title: "Renamed chat",
+      mode: "edit",
+    }));
+    await vi.waitFor(() => expect(root.getElementById("thread-form-panel").classList.contains("visible")).toBe(false));
+    expect(element._activeThread.title).toBe("Renamed chat");
+  });
 });

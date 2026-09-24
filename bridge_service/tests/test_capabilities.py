@@ -502,7 +502,10 @@ def test_list_plugins_projects_payload_and_uses_workspace_cwd(tmp_path: Path) ->
                     {
                         "id": "plugin.one",
                         "name": "Plugin One",
-                        "interface": {"shortDescription": "A useful plugin"},
+                        "interface": {
+                            "displayName": "Plugin One for people",
+                            "shortDescription": "A useful plugin",
+                        },
                         "enabled": True,
                         "installed": False,
                         "version": "1.2.3",
@@ -533,6 +536,7 @@ def test_list_plugins_projects_payload_and_uses_workspace_cwd(tmp_path: Path) ->
                     {
                         "id": "plugin.one",
                         "name": "Plugin One",
+                        "display_name": "Plugin One for people",
                         "description": "A useful plugin",
                         "enabled": True,
                         "installed": False,
