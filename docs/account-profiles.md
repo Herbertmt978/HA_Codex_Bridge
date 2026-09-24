@@ -9,6 +9,8 @@ sequence is the reference pattern; its desktop process control is not reused.
 The account menu lists a user-chosen label and the current selection. An HA
 administrator can save the current ChatGPT sign-in, add another through device
 sign-in, select a saved account, or remove an inactive saved profile. The
+selected account is App-wide and shared by Home Assistant administrators; it
+is not a separate account choice for each browser session. The
 browser receives only labels, opaque profile IDs and safe state. The menu
 never returns credential files, token claims, account IDs or device login
 secrets beyond the existing one-time device code flow.
