@@ -1,10 +1,9 @@
 # HA-04: Status and usage entities
 
-Implementation is complete locally on the HA-04 branch. The entity behaviour and
-recorder implications are documented in [Status entities](../status-entities.md).
-This plan is not a published release claim.
+Implementation is merged. The entity behaviour and recorder implications are
+documented in [Status entities](../status-entities.md).
 
-Status: Implemented locally, unreleased. Version and date: unassigned.
+Status: Included in the paired 1.6.4 release candidate; target acceptance pending.
 
 Tracking issue: [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106).
 

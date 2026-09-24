@@ -1,6 +1,6 @@
 # MCP-04: Interactive MCP requests
 
-Status: Implemented in source; paired release version and date unassigned.
+Status: Included in the paired 1.6.4 release candidate; target acceptance pending.
 
 Tracking issue: [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100).
 
@@ -13,7 +13,7 @@ Support the pinned runtime's compatible requests in attended chats.
 The implementation uses the versioned `mcp_elicitation_v1` capability and the
 existing pending-interaction lifecycle. One-time URLs remain in the live
 app-server request and are omitted from persisted runtime state and events.
-The 1.6.3 installation does not include this source change.
+The 1.6.4 App and Integration advertise this capability together.
 
 ## Scope
 

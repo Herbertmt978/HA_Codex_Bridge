@@ -99,11 +99,15 @@ local option off and restarting removes local bindings without removing valid
 public connections. See the [setup guide](../docs/home-assistant-mcp.md) for
 allowed destinations and how to reconnect after an IP change.
 
-Local OAuth, bearer-token settings, custom headers and stdio are not supported.
+Bearer tokens and named authentication headers can be configured privately for
+an approved endpoint in **Settings → MCP servers**. Their values are write-only
+and are not placed in the native Codex configuration. Local OAuth and arbitrary
+stdio servers remain unsupported.
 
 OAuth sign-in is an explicit, one-time flow. Do not save or share its temporary
-URL. MCP requests that require elicitation are declined. Enabling MCP does not
-publish an App or Bridge endpoint.
+URL. Supported forms and authorisation links can be answered in the active chat;
+unknown or credential-looking forms and all unattended requests are declined.
+Enabling MCP does not publish an App or Bridge endpoint.
 
 ## Search, images and browser support
 
@@ -126,7 +130,7 @@ and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.6.3`, with Bridge `0.13.0` and
+This release pairs App, Integration and panel `1.6.4`, with Bridge `0.13.0` and
 Codex `0.156.1`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).
