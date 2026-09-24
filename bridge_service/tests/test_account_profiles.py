@@ -151,6 +151,16 @@ def test_same_email_profiles_switch_verify_and_restore_failed_target(tmp_path: P
         assert coordinator.status().state == "ok"
         assert client.restart_count == 7
 
+        client.provider_unavailable_ids.add(first_id)
+        with pytest.raises(AccountProfileError, match="previous sign-in needs checking"):
+            coordinator.switch_account_profile(store, second["id"])
+        assert store.current_credential()[1] == first_id
+        recovery = coordinator.status()
+        assert recovery.auth_required is True
+        assert recovery.reauthentication_required is True
+        assert recovery.state in {"unavailable", "expired"}
+        assert gate.snapshot().auth_mutation_active is False
+
         coordinator.remove_account_profile(store, second["id"])
         assert len(store.list_profiles()) == 1
         with pytest.raises(AccountProfileError, match="Switch away"):

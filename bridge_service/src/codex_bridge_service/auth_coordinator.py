@@ -613,13 +613,18 @@ class CodexAuthCoordinator:
                 try:
                     store.restore_credential(previous)
                     self._client.restart_for_account_change()
-                    generation, response = self._read_account()
+                    generation, response = self._read_account(force_refresh=True)
+                    if account_status(response)["state"] == "ok":
+                        self._verify_provider_session()
                     with self._lock:
                         self._operation_account_update_revision = self._account_update_revision
                     self._finish_account_read(operation, generation, response)
                 except Exception:
                     self._finish_with_failure(
-                        operation, state="unavailable", message=MESSAGE_UNAVAILABLE
+                        operation,
+                        state="unavailable",
+                        message=MESSAGE_UNAVAILABLE,
+                        require_reauthentication=True,
                     )
                     raise AccountProfileError(
                         "The account switch failed and the previous sign-in needs checking."
@@ -1213,6 +1218,7 @@ class CodexAuthCoordinator:
         *,
         state: str,
         message: str,
+        require_reauthentication: bool = False,
     ) -> CodexAuthStatusRecord:
         with self._lock:
             if not self._operation_matches_locked(operation):
@@ -1226,6 +1232,9 @@ class CodexAuthCoordinator:
             self._observed_generation = None
             self._cancel_requested = False
             self._clear_active_login_locked()
+            updates: dict[str, Any] = {}
+            if require_reauthentication:
+                updates["reauthentication_required"] = True
             published = self._set_status_locked(
                 state=state,
                 busy=False,
@@ -1234,6 +1243,7 @@ class CodexAuthCoordinator:
                 plan_type=None,
                 message=message,
                 **cleared_device_fields(),
+                **updates,
             )
             runtime_lease = self._take_runtime_auth_lease_locked()
         if runtime_lease is not None:
