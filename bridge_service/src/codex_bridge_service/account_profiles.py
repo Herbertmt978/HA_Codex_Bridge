@@ -29,17 +29,30 @@ class AccountProfileError(ValueError):
 def _credential_account_id(raw: bytes) -> str:
     try:
         payload = json.loads(raw)
+        if not isinstance(payload, dict) or payload.get("auth_mode") != "chatgpt":
+            raise ValueError
         tokens = payload["tokens"]
         if not isinstance(tokens, dict):
             raise ValueError
-        account_id = tokens.get("account_id")
-        if not account_id:
-            token = tokens.get("id_token")
+        account_id = None
+        for token_name in ("id_token", "access_token"):
+            token = tokens.get(token_name)
             if not isinstance(token, str):
-                raise ValueError
-            encoded = token.split(".")[1]
-            decoded = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-            account_id = decoded[_ACCOUNT_CLAIM]["chatgpt_account_id"]
+                continue
+            parts = token.split(".")
+            if len(parts) < 2:
+                continue
+            try:
+                encoded = parts[1]
+                decoded = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+                claim = decoded.get(_ACCOUNT_CLAIM, {}) if isinstance(decoded, dict) else {}
+                account_id = claim.get("chatgpt_account_id") if isinstance(claim, dict) else None
+            except (binascii.Error, TypeError, ValueError, UnicodeError):
+                continue
+            if account_id:
+                break
+        if not account_id:
+            account_id = tokens.get("account_id")
         if not isinstance(account_id, str) or not 1 <= len(account_id) <= 256:
             raise ValueError
         if any(ord(char) < 33 or ord(char) == 127 for char in account_id):

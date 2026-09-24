@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import stat
@@ -27,6 +28,12 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="HA credential storage r
 
 def _credential(account_id: str) -> bytes:
     return json.dumps({"auth_mode": "chatgpt", "tokens": {"account_id": account_id}}).encode()
+
+
+def _jwt(account_id: str) -> str:
+    claims = {"https://api.openai.com/auth": {"chatgpt_account_id": account_id}}
+    encoded = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+    return f"header.{encoded}.signature"
 
 
 class _AccountClient:
@@ -223,6 +230,22 @@ def test_rollback_restores_a_non_chatgpt_native_auth_file(tmp_path: Path) -> Non
         store.restore_credential(native_api_key_auth)
         assert store.current_credential_optional() == native_api_key_auth
         assert store.list_profiles() == [{**profile, "active": False}]
+    finally:
+        store.close()
+
+
+def test_native_token_claim_precedes_the_account_id_fallback(tmp_path: Path) -> None:
+    store = AccountProfileStore(tmp_path / "private-profiles", tmp_path / "codex-home")
+    try:
+        raw = json.dumps({
+            "auth_mode": "chatgpt",
+            "tokens": {"id_token": _jwt("claim_account"), "account_id": "stale_fallback"},
+        }).encode()
+        store.activate_credential(raw)
+        assert store.current_credential()[1] == "claim_account"
+        assert store.save_current(
+            "Claim", {"account": {"type": "chatgpt", "planType": "pro"}}
+        )["active"] is True
     finally:
         store.close()
 
