@@ -2,6 +2,13 @@
 
 All notable App changes are recorded here.
 
+## Unreleased
+
+- Adds private, administrator-managed ChatGPT account profiles inside the
+  Home Assistant App. Switching verifies the selected account and replaces
+  only the App-managed Codex app-server process. Desktop Codex sign-ins remain
+  separate.
+
 ## 1.6.4
 
 - Adds eight privacy-conscious Home Assistant status and usage entities for
