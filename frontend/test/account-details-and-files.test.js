@@ -64,6 +64,40 @@ describe("account details and file messages", () => {
     expect(element._renderEvent(events[1]).textContent).toContain("Generate me a word document");
   });
 
+  it("keeps the beginning and end of a chat beyond ten thousand events", async () => {
+    const element = panel();
+    const threadId = "thr_long";
+    element._config = { capabilities: ["api_v1"] };
+    element._selectedThreadId = threadId;
+    element._render = vi.fn();
+    element._startEventSubscription = vi.fn();
+    element._listPendingInteractions = vi.fn().mockResolvedValue([]);
+    element._callWS = vi.fn(async (action, options = {}) => {
+      if (action === "get_thread") return { thread_id: threadId, project_id: "project", status: "idle", attachments: [] };
+      if (action === "get_status") return {};
+      if (action === "list_artifacts") return [];
+      if (action === "get_events") {
+        const start = options.after + 1;
+        const end = Math.min(start + 255, 10_001);
+        return {
+          events: Array.from({ length: end - start + 1 }, (_, offset) => ({
+            scope: "thread", thread_id: threadId, cursor: start + offset,
+            event_type: "message.created", payload: { text: `Message ${start + offset}` },
+          })),
+          next_cursor: end, has_more: end < 10_001,
+        };
+      }
+      throw new Error(`Unexpected action: ${action}`);
+    });
+
+    expect(await element._refreshActiveThread()).toBe(true);
+    expect(element._events).toHaveLength(10_001);
+    expect(element._eventStream.events).toHaveLength(10_001);
+    expect(element._events[0].payload.text).toBe("Message 1");
+    expect(element._events.at(-1).payload.text).toBe("Message 10001");
+    expect(element._sequence).toBe(10_001);
+  });
+
   it("renders a safe Word file card with file details and authenticated download actions", () => {
     const element = panel();
     element._config = { capabilities: ["office_preview_v1"] };

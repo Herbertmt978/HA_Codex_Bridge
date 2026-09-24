@@ -169,14 +169,16 @@ describe("prompt composer mutation contract", () => {
     expect(button.hidden).toBe(true);
   });
 
-  it("dictates into the active draft without sending, and stops when the chat changes", () => {
+  it("dictates locally into the active draft without sending, and stops when the chat changes", async () => {
     const instances = [];
     class Recognition {
+      static available = vi.fn();
       constructor() { instances.push(this); }
       start = vi.fn();
       stop = vi.fn();
       abort = vi.fn();
     }
+    Recognition.prototype.processLocally = false;
     vi.stubGlobal("SpeechRecognition", Recognition);
     const panel = createPanel();
     panel._render(true);
@@ -184,8 +186,10 @@ describe("prompt composer mutation contract", () => {
     const button = panel.shadowRoot.getElementById("dictation-button");
     const prompt = panel.shadowRoot.getElementById("prompt-input");
     expect(button.hidden).toBe(false);
+    expect(Recognition.available).not.toHaveBeenCalled();
     button.click();
-    expect(instances[0].start).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(instances[0].start).toHaveBeenCalledOnce());
+    expect(instances[0].processLocally).toBe(true);
     expect(button.getAttribute("aria-pressed")).toBe("true");
     instances[0].onresult({
       resultIndex: 0,
@@ -198,8 +202,25 @@ describe("prompt composer mutation contract", () => {
     expect(instances[0].stop).toHaveBeenCalledOnce();
     instances[0].onend();
     button.click();
+    await vi.waitFor(() => expect(instances).toHaveLength(2));
     panel._setSelectedThreadId("thread-beta");
     expect(instances[1].abort).toHaveBeenCalledOnce();
+  });
+
+  it("hides dictation without a local-only recogniser, without querying a hosted service", () => {
+    const instances = [];
+    class Recognition {
+      static available = vi.fn();
+      constructor() { instances.push(this); }
+      start = vi.fn();
+    }
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    const panel = createPanel();
+    panel._render(true);
+    const button = panel.shadowRoot.getElementById("dictation-button");
+    expect(button.hidden).toBe(true);
+    expect(Recognition.available).not.toHaveBeenCalled();
+    expect(instances).toHaveLength(0);
   });
 
   it("locks the composer before awaiting the Bridge and sends one stable request id", async () => {

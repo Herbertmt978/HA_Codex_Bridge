@@ -164,7 +164,7 @@ def test_same_email_profiles_switch_verify_and_restore_failed_target(tmp_path: P
         client,
         runtime_gate=gate,
         account_owner_secret="private-bridge-secret",
-        account_binding_listener=bindings.append,
+        account_binding_listener=lambda marker, _legacy: bindings.append(marker),
         account_identity_provider=lambda: store.current_credential()[1],
     )
     try:

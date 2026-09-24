@@ -13,11 +13,12 @@ settings** in the chat actions menu opens the editable title and permission
 settings in the navigation drawer. The panel fills the
 visible space below the Home Assistant header as the window height changes.
 
-Where the browser supports speech recognition, the microphone beside Send
-dictates into the draft. Select it again to stop, review the text, then press
-Send yourself. The browser may send audio to its speech service; audio is not
-uploaded through the Bridge. The microphone is hidden when speech recognition
-is unavailable.
+Where the browser supports on-device speech recognition, the microphone
+beside Send dictates into the draft. Select it again to stop, review the
+text, then press Send yourself. The Bridge requires local processing and
+never falls back to hosted recognition. The microphone stays hidden when
+the browser lacks that capability or reports that the local language pack
+is unavailable. The Bridge does not upload microphone audio or install packs.
 
 The small ring beside Send appears once Codex reports context usage for this
 chat. Select it for token counts and account limits. Context can decrease when

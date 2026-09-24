@@ -610,7 +610,9 @@ def create_app(
                 if resolved_capabilities_manager is not None:
                     resolved_capabilities_manager.invalidate_provider_capabilities()
 
-            def bind_codex_account(owner_marker: str) -> None:
+            def bind_codex_account(
+                owner_marker: str, legacy_marker: str | None = None
+            ) -> None:
                 nonlocal auth_catalog_owner_marker
                 if (
                     auth_catalog_owner_marker is not None
@@ -618,7 +620,19 @@ def create_app(
                     and isinstance(resolved_runner, RuntimeBroker)
                 ):
                     resolved_runner.cancel_mcp_interactions()
-                storage.bind_codex_account(owner_marker)
+                # A 1.6.x installation had one sign-in and bound conversations
+                # by the account email. Only that untouched, single-profile
+                # state can be upgraded without detaching provider threads.
+                migrate_marker = (
+                    legacy_marker
+                    if legacy_marker is not None
+                    and resolved_account_profile_store is not None
+                    and not resolved_account_profile_store.list_profiles()
+                    else None
+                )
+                storage.bind_codex_account(
+                    owner_marker, legacy_owner_marker=migrate_marker
+                )
                 auth_catalog_owner_marker = owner_marker
 
             def persist_auth_status(status: CodexAuthStatusRecord) -> None:

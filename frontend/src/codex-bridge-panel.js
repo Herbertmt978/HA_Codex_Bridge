@@ -7,7 +7,7 @@ import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js"
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
-import { parseEvents } from "./protocol.js";
+import { MAX_RETAINED_EVENTS, parseEvents } from "./protocol.js";
 import {
   PDF_PREVIEW_MAX_SCALE,
   PDF_PREVIEW_MIN_SCALE,
@@ -5816,6 +5816,7 @@ class CodexBridgePanel extends HTMLElement {
     this._speechThreadId = null;
     this._speechStatus = "";
     this._speechLastFinalResult = -1;
+    this._speechAvailable = true;
     this._events = [];
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -8382,13 +8383,21 @@ class CodexBridgePanel extends HTMLElement {
   _renderDictationControl(activeThread, locked) {
     const button = this.shadowRoot.getElementById("dictation-button");
     if (!button) return;
-    const supported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
-    button.hidden = !supported || !activeThread;
+    // The unprefixed API can require on-device processing. The prefixed API
+    // may use a hosted recogniser, which would bypass Home Assistant.
+    const Recognition = window.SpeechRecognition;
+    // Do not call SpeechRecognition.available here. Some Chromium builds
+    // crash the page on that optional query. A local-only start fails closed
+    // when the required language pack is missing.
+    button.hidden = !activeThread || !this._speechAvailable
+      || typeof Recognition !== "function"
+      || !Recognition.prototype
+      || !("processLocally" in Recognition.prototype);
     button.disabled = locked;
     const listening = Boolean(this._speechRecognition);
     button.setAttribute("aria-pressed", String(listening));
     button.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
-    this._setTooltipTarget(button, listening ? "Stop dictation" : "Dictate using your browser's speech service");
+    this._setTooltipTarget(button, listening ? "Stop dictation" : "Dictate on this device");
   }
 
   _stopDictation({ abort = false } = {}) {
@@ -8412,17 +8421,30 @@ class CodexBridgePanel extends HTMLElement {
       this._stopDictation();
       return;
     }
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Recognition = window.SpeechRecognition;
     const promptInput = this.shadowRoot.getElementById("prompt-input");
-    if (!Recognition || !this._activeThread || promptInput?.disabled) return;
+    if (typeof Recognition !== "function" || !this._speechAvailable
+      || !this._activeThread || promptInput?.disabled) return;
+    const lang = this._hass?.language || navigator.language || "en-GB";
     const recognition = new Recognition();
-    recognition.lang = this._hass?.language || navigator.language || "en-GB";
+    if (!("processLocally" in recognition)) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.processLocally = true;
+    if (recognition.processLocally !== true) {
+      this._speechAvailable = false;
+      this._renderDictationControl(this._activeThread, false);
+      return;
+    }
+    recognition.lang = lang;
     recognition.continuous = true;
     recognition.interimResults = false;
     this._speechRecognition = recognition;
     this._speechThreadId = this._selectedThreadId;
     this._speechLastFinalResult = -1;
-    this._speechStatus = "Listening… Your browser may send audio to its speech service. Review the text before sending.";
+    this._speechStatus = "Listening on this device… Review the text before sending.";
     recognition.onresult = (event) => {
       if (this._speechRecognition !== recognition || this._speechThreadId !== this._selectedThreadId) return;
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -8437,7 +8459,13 @@ class CodexBridgePanel extends HTMLElement {
     };
     recognition.onerror = (event) => {
       if (this._speechRecognition !== recognition) return;
-      this._speechStatus = event.error === "not-allowed" || event.error === "service-not-allowed"
+      if (event.error === "language-not-supported") {
+        this._speechAvailable = false;
+        this._renderDictationControl(this._activeThread, false);
+      }
+      this._speechStatus = event.error === "language-not-supported"
+        ? "An on-device speech pack is unavailable for this language."
+        : event.error === "not-allowed" || event.error === "service-not-allowed"
         ? "Microphone access was blocked. Check your browser permission."
         : event.error === "no-speech" ? "No speech was detected." : "Dictation stopped. Please try again.";
       this.shadowRoot.getElementById("composer-status").textContent = this._speechStatus;
@@ -12042,29 +12070,24 @@ class CodexBridgePanel extends HTMLElement {
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
       );
-      const replay = acceptEvents(
-        createEventStreamState(),
-        authoritativeEvents.filter(
-          (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
-        )
+      const replayEvents = authoritativeEvents.filter(
+        (event) => event.event_type !== "bridge.snapshot_required" && event.event_type !== "bridge.error"
       );
-      const authoritativeCursor = authoritativeEvents.reduce(
-        (cursor, event) => Math.max(cursor, event.sequence),
-        Math.max(
-          replay.state.cursor,
-          Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : replay.state.cursor
-        )
+      const authoritativeCursor = Math.max(
+        authoritativeEvents.at(-1)?.sequence || 0,
+        Number.isSafeInteger(cursorFloor) && cursorFloor >= 0 ? cursorFloor : 0
       );
       // A full get_events replay is authoritative. Historical replay controls
       // advance the cursor but cannot truncate later transcript events or
       // permanently request another snapshot.
       this._eventStream = {
-        ...replay.state,
+        ...createEventStreamState(),
         cursor: authoritativeCursor,
+        events: replayEvents,
         needsSnapshot: false,
         error: null,
       };
-      this._events = replay.state.events;
+      this._events = replayEvents;
       this._sequence = authoritativeCursor;
       if (artifacts) {
         this._artifacts = artifacts;
@@ -12159,7 +12182,7 @@ class CodexBridgePanel extends HTMLElement {
     let cursor = 0;
     // A full replay is needed before the transcript can be considered current.
     // The backend pages this journal; one page can predate the latest user prompt.
-    for (let page = 0; page < 100; page += 1) {
+    for (let page = 0; page < MAX_RETAINED_EVENTS; page += 1) {
       const batch = await this._callWS("get_events", {
         after: cursor,
         scopes: ["thread"],
@@ -12172,7 +12195,9 @@ class CodexBridgePanel extends HTMLElement {
           history.push({ ...event, sequence: event.cursor });
         }
       }
-      if (history.length > 10000) history.splice(0, history.length - 10000);
+      if (history.length > MAX_RETAINED_EVENTS) {
+        throw new Error("Chat history exceeds the supported limit.");
+      }
       if (!batch.has_more) return history;
       if (!Number.isSafeInteger(batch.next_cursor) || batch.next_cursor <= cursor) {
         throw new Error("Chat history could not advance.");

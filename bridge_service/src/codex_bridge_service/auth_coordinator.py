@@ -91,7 +91,7 @@ class CodexAuthCoordinator:
         state_listener_fatal: bool = False,
         runtime_gate: RuntimeGate | None = None,
         account_owner_secret: str | None = None,
-        account_binding_listener: Callable[[str], None] | None = None,
+        account_binding_listener: Callable[[str, str | None], None] | None = None,
         account_identity_provider: Callable[[], str] | None = None,
         account_read_timeout_seconds: float = 5.0,
         active_login_poll_interval_seconds: float = 2.0,
@@ -1000,7 +1000,7 @@ class CodexAuthCoordinator:
                 state="unavailable",
                 message=MESSAGE_UNAVAILABLE,
             )
-        binding_marker, owner_verified = self._binding_observation(
+        binding_marker, owner_verified, legacy_marker = self._binding_observation(
             response,
             normalized,
         )
@@ -1020,7 +1020,7 @@ class CodexAuthCoordinator:
             )
         if generation_is_current and binding_marker is not None:
             try:
-                self._bind_account_owner(binding_marker)
+                self._bind_account_owner(binding_marker, legacy_marker)
             except Exception:
                 return self._finish_with_failure(
                     operation,
@@ -1085,7 +1085,7 @@ class CodexAuthCoordinator:
             normalized = account_status(response)
         except (TypeError, ValueError):
             return self._finish_active_login_poll_failure(login_poll)
-        binding_marker, owner_verified = self._binding_observation(
+        binding_marker, owner_verified, legacy_marker = self._binding_observation(
             response,
             normalized,
         )
@@ -1139,7 +1139,7 @@ class CodexAuthCoordinator:
                 return self._finish_active_login_poll_failure(login_poll)
         if binding_marker is not None:
             try:
-                self._bind_account_owner(binding_marker)
+                self._bind_account_owner(binding_marker, legacy_marker)
             except Exception:
                 return self._finish_active_login_binding_failure(login_poll)
         if not owner_verified:
@@ -1263,25 +1263,29 @@ class CodexAuthCoordinator:
         self,
         response: Any,
         normalized: dict[str, Any],
-    ) -> tuple[str | None, bool]:
+    ) -> tuple[str | None, bool, str | None]:
         if self._account_owner_secret is None or self._account_binding_listener is None:
-            return None, True
+            return None, True, None
         if normalized.get("state") == "ok":
             account_id = None
             if self._account_identity_provider is not None:
                 try:
                     account_id = self._account_identity_provider()
                 except Exception:
-                    return account_unverified_marker(self._account_owner_secret), False
+                    return account_unverified_marker(self._account_owner_secret), False, None
                 if not account_id:
-                    return account_unverified_marker(self._account_owner_secret), False
+                    return account_unverified_marker(self._account_owner_secret), False, None
             marker = account_owner_marker(
                 response, self._account_owner_secret, account_id=account_id
             )
             if marker is not None:
-                return marker, True
-            return account_unverified_marker(self._account_owner_secret), False
-        return account_unverified_marker(self._account_owner_secret), True
+                legacy_marker = (
+                    account_owner_marker(response, self._account_owner_secret)
+                    if account_id is not None else None
+                )
+                return marker, True, legacy_marker
+            return account_unverified_marker(self._account_owner_secret), False, None
+        return account_unverified_marker(self._account_owner_secret), True, None
 
     @staticmethod
     def _unverified_account_status() -> dict[str, Any]:
@@ -1295,10 +1299,10 @@ class CodexAuthCoordinator:
             **cleared_device_fields(),
         }
 
-    def _bind_account_owner(self, marker: str) -> None:
+    def _bind_account_owner(self, marker: str, legacy_marker: str | None = None) -> None:
         listener = self._account_binding_listener
         if listener is not None:
-            listener(marker)
+            listener(marker, legacy_marker)
 
     def _finish_with_failure(
         self,

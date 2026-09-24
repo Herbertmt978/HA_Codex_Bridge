@@ -224,6 +224,30 @@ def test_codex_account_binding_preserves_same_owner_and_detaches_changed_owner(
     assert storage.load_thread(thread.thread_id).codex_thread_id is None
 
 
+def test_codex_account_binding_upgrades_matching_legacy_marker_once(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Existing account", mode=RunMode.FULL_AUTO)
+    legacy_marker = "a" * 64
+    new_marker = "b" * 64
+    other_marker = "c" * 64
+    assert storage.bind_codex_account(legacy_marker) == 0
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "existing-provider-thread"
+    storage.save_thread(record)
+
+    assert storage.bind_codex_account(
+        new_marker, legacy_owner_marker=legacy_marker
+    ) == 0
+    assert storage.load_thread(thread.thread_id).codex_thread_id == "existing-provider-thread"
+    assert storage.bind_codex_account(new_marker) == 0
+
+    # The old marker can no longer bless a different current account.
+    assert storage.bind_codex_account(
+        other_marker, legacy_owner_marker=legacy_marker
+    ) == 1
+    assert storage.load_thread(thread.thread_id).codex_thread_id is None
+
+
 def test_codex_account_binding_detaches_legacy_exec_session_only(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
     thread = storage.create_thread(title="Legacy continuity", mode=RunMode.FULL_AUTO)
