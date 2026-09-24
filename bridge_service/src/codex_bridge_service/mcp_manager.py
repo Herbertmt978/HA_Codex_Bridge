@@ -36,6 +36,7 @@ _MAX_URL_BYTES = 2048
 _MAX_PUBLIC_FIELD_BYTES = 512
 _MAX_TOOLS = 512
 _MAX_TOOL_NAME_BYTES = 256
+_MAX_DISCOVERY_MARKER_BYTES = 512 * 1024
 _MAX_OAUTH_URL_BYTES = 8192
 _NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z", re.ASCII)
 _DNS_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z", re.ASCII)
@@ -387,7 +388,11 @@ class McpManager:
             try:
                 descriptor = os.open(self._discovery_marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(descriptor, "wb") as marker:
-                    marker.write(b"MCP tool discovery pending\n")
+                    marker.write(json.dumps({
+                        "version": 1,
+                        "server": name,
+                        "enabled_tools": list(previous.enabled_tools),
+                    }, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
                     marker.flush()
                     os.fsync(marker.fileno())
                 if hasattr(os, "O_DIRECTORY"):
@@ -425,6 +430,26 @@ class McpManager:
                     raise McpRecoveryRequiredError() from None
             self._mutation_serial += 1
             return status, current_version
+
+    def _read_discovery_marker(self) -> tuple[str, tuple[str, ...]]:
+        """Recover the saved policy before a temporary unfiltered read."""
+        if self._discovery_marker is None:
+            raise McpRecoveryRequiredError()
+        try:
+            if self._discovery_marker.stat().st_size > _MAX_DISCOVERY_MARKER_BYTES:
+                raise ValueError()
+            payload = json.loads(self._discovery_marker.read_text(encoding="utf-8"))
+            if (not isinstance(payload, dict) or set(payload) != {"version", "server", "enabled_tools"}
+                    or payload["version"] != 1):
+                raise ValueError()
+            name = _validate_name(payload["server"])
+            selected = _validate_enabled_tools(payload["enabled_tools"])
+            if selected is None:
+                raise ValueError()
+            return name, selected
+        except (OSError, ValueError, McpManagerError):
+            self._require_recovery("")
+            raise McpRecoveryRequiredError() from None
 
     def _catalogue_revision(self, name: str, tools: list[dict[str, object]]) -> str:
         serialized = json.dumps(tools, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -782,11 +807,15 @@ class McpManager:
                     resolver=self._resolver,
                     relay=self._relay,
                 )
-                if self._discovery_marker is not None and self._discovery_marker.exists():
+                marker_pending = self._discovery_marker is not None and self._discovery_marker.exists()
+                if marker_pending:
                     # A previous process may have stopped while its native
-                    # filter was temporarily removed. Pause every server.
-                    definitions = {name: replace(item, enabled=False, enabled_tools=())
-                                   for name, item in definitions.items()}
+                    # filter was temporarily removed. Restore its saved policy
+                    # and pause every server without discarding other selections.
+                    discovered_name, selected = self._read_discovery_marker()
+                    definitions = {name: replace(item, enabled=False,
+                        enabled_tools=selected if name == discovered_name else item.enabled_tools)
+                        for name, item in definitions.items()}
                 if self._relay is not None:
                     try:
                         self._relay.retain({name for name, item in definitions.items() if item.relayed})
@@ -801,7 +830,7 @@ class McpManager:
                     version=version,
                 )
                 self._reload()
-                if self._discovery_marker is not None and self._discovery_marker.exists():
+                if marker_pending:
                     try:
                         self._discovery_marker.unlink()
                     except OSError:

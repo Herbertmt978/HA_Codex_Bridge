@@ -1,6 +1,7 @@
 """Connection changes preserve configuration and exclude stale or active work."""
 
 from copy import deepcopy
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -365,15 +366,45 @@ def test_paired_new_connection_starts_with_no_allowed_tools():
 def test_interrupted_discovery_pauses_servers_before_startup_activation(tmp_path):
     native = NativeConfig()
     native.servers["vendor"]["enabled_tools"] = ["echo"]
+    native.servers["other"] = {"url": "https://other.example/stream", "enabled_tools": ["keep"]}
     native.masked = True
     marker = tmp_path / "mcp-tool-discovery.pending"
-    marker.write_text("MCP tool discovery pending\n")
+    marker.write_text(json.dumps({"version": 1, "server": "vendor", "enabled_tools": ["echo"]}))
     manager, _ = manager_for(native, marker)
     manager.sanitize_startup_servers()
     manager.activate_validated_mcp_config()
     assert native.servers["vendor"]["enabled"] is False
-    assert native.servers["vendor"]["enabled_tools"] == []
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert native.servers["other"]["enabled"] is False
+    assert native.servers["other"]["enabled_tools"] == ["keep"]
     assert not marker.exists()
+
+
+def test_interrupted_unfiltered_discovery_restores_only_its_own_policy(tmp_path):
+    native = NativeConfig()
+    native.servers["other"] = {"url": "https://other.example/stream", "enabled_tools": ["keep"]}
+    native.masked = True
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    marker.write_text(json.dumps({"version": 1, "server": "vendor", "enabled_tools": ["echo"]}))
+    manager, _ = manager_for(native, marker)
+    manager.sanitize_startup_servers()
+    manager.activate_validated_mcp_config()
+    assert native.servers["vendor"]["enabled"] is False
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert native.servers["other"]["enabled_tools"] == ["keep"]
+    assert not marker.exists()
+
+
+def test_damaged_discovery_marker_keeps_bootstrap_masked(tmp_path):
+    native = NativeConfig()
+    native.masked = True
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    marker.write_text("incomplete")
+    manager, gate = manager_for(native, marker)
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.sanitize_startup_servers()
+    assert native.masked and marker.exists() and not native.writes
+    assert gate.snapshot().closed
 
 
 def test_failed_catalogue_probe_restores_filter_or_blocks_all_work(tmp_path):
@@ -390,6 +421,9 @@ def test_failed_catalogue_probe_restores_filter_or_blocks_all_work(tmp_path):
     with pytest.raises(McpRecoveryRequiredError):
         manager.list_server_tools("vendor")
     assert marker.exists() and gate.snapshot().closed
+    assert json.loads(marker.read_text()) == {
+        "version": 1, "server": "vendor", "enabled_tools": ["echo"],
+    }
 
 
 def test_failed_credential_reload_invalidates_destination_forms(monkeypatch):
