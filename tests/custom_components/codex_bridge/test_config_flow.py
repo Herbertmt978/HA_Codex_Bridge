@@ -20,6 +20,7 @@ from custom_components.codex_bridge.const import (
     CONF_BRIDGE_URL,
     CONF_CONNECTION_TYPE,
     CONF_DISCOVERY_UUID,
+    CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
     CONF_WEB_SEARCH_MODE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
@@ -108,11 +109,23 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
 
     form = await flow.async_step_init()
     assert form["type"] is FlowResultType.FORM
-    assert form["data_schema"]({}) == {CONF_WEB_SEARCH_MODE: "live"}
+    assert form["data_schema"]({}) == {
+        CONF_WEB_SEARCH_MODE: "live",
+        CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+    }
     result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_WEB_SEARCH_MODE: "disabled"}
+    assert result["data"] == {
+        CONF_WEB_SEARCH_MODE: "disabled",
+        CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+    }
+
+    enabled = await flow.async_step_init({
+        CONF_WEB_SEARCH_MODE: "live",
+        CONF_ALLOW_UNATTENDED_TASK_ACTIONS: True,
+    })
+    assert enabled["data"][CONF_ALLOW_UNATTENDED_TASK_ACTIONS] is True
 
 
 async def test_supervisor_options_remain_available_before_login_capability_recovery(hass):
@@ -129,7 +142,10 @@ async def test_supervisor_options_remain_available_before_login_capability_recov
     result = await flow.async_step_init()
 
     assert result["type"] is FlowResultType.FORM
-    assert result["data_schema"]({}) == {CONF_WEB_SEARCH_MODE: "live"}
+    assert result["data_schema"]({}) == {
+        CONF_WEB_SEARCH_MODE: "live",
+        CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+    }
 
 
 async def test_external_legacy_entry_has_no_native_web_search_options(hass):

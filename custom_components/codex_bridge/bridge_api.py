@@ -83,6 +83,7 @@ _PRIVATE_THREAD_CONTINUITY_FIELDS = frozenset(
         "active_turn_id",
         "active_run_id",
         "pending_prompts",
+        "task_action_fingerprint",
     }
 )
 _PRIVATE_INTERACTION_CONTINUITY_FIELDS = frozenset(
@@ -168,6 +169,29 @@ def _public_thread_payload(value: object) -> dict[str, Any]:
         for key, item in value.items()
         if key not in _PRIVATE_THREAD_CONTINUITY_FIELDS
     }
+
+
+def _task_action_payload(value: object, expected_task_id: str) -> dict[str, str]:
+    """Accept only the opaque task reference and finite lifecycle state."""
+
+    if not isinstance(value, dict):
+        raise BridgeApiEndpointError("task_payload_invalid")
+    try:
+        task_id = value["task_id"]
+        thread_id = validate_bridge_identifier(value["thread_id"])
+        run_id = validate_bridge_identifier(value["run_id"])
+        state = value["status"]
+    except (KeyError, EndpointError):
+        raise BridgeApiEndpointError("task_payload_invalid") from None
+    if (
+        not isinstance(task_id, str)
+        or re.fullmatch(r"[a-f0-9]{32}", task_id) is None
+        or task_id != expected_task_id
+        or not isinstance(state, str)
+        or state not in {"queued", "starting", "running", "cancelling", "completed", "failed", "cancelled", "interrupted"}
+    ):
+        raise BridgeApiEndpointError("task_payload_invalid")
+    return {"task_id": task_id, "thread_id": thread_id, "run_id": run_id, "status": state}
 
 
 def _public_interaction_payload(value: object) -> dict[str, Any]:
@@ -781,6 +805,30 @@ class BridgeApiClient:
             "POST",
             f"/threads/{_path_segment(thread_id)}/runs/current/cancel",
         )
+
+    async def async_start_task(self, payload: dict[str, Any]) -> dict[str, str]:
+        self.require_capability("task_actions_v1")
+        return _task_action_payload(await self._async_json(
+            "POST", "/task-actions/start", json_body=payload, expected_status={202}
+        ), payload["task_id"])
+
+    async def async_continue_task(self, payload: dict[str, Any]) -> dict[str, str]:
+        self.require_capability("task_actions_v1")
+        return _task_action_payload(await self._async_json(
+            "POST", "/task-actions/continue", json_body=payload, expected_status={202}
+        ), payload["task_id"])
+
+    async def async_get_task(self, task_id: str) -> dict[str, str]:
+        self.require_capability("task_actions_v1")
+        return _task_action_payload(await self._async_json(
+            "GET", f"/task-actions/{_path_segment(task_id)}"
+        ), task_id)
+
+    async def async_cancel_task(self, task_id: str) -> dict[str, str]:
+        self.require_capability("task_actions_v1")
+        return _task_action_payload(await self._async_json(
+            "POST", f"/task-actions/{_path_segment(task_id)}/cancel"
+        ), task_id)
 
     async def async_get_events(
         self, thread_id: str, after: int = 0

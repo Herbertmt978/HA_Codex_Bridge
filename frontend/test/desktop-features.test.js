@@ -633,6 +633,7 @@ describe("desktop feature surfaces", () => {
   });
 
   it("reviews a described task without creating it and shows server run times", async () => {
+    const scheduleYear = new Date().getUTCFullYear() + 1;
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._config = { capabilities: ["automations_v1", "automation_proposals_v1"] };
     panel._activeDestination = "scheduled";
@@ -640,14 +641,14 @@ describe("desktop feature surfaces", () => {
     panel._selectedProjectId = "p1";
     const state = panel._desktopFeatures.scheduled;
     state.loaded = true; state.data = { automations: [] };
-    panel._callWS = vi.fn().mockResolvedValue({ next_runs: ["2026-09-24T08:00:00Z"] });
+    panel._callWS = vi.fn().mockResolvedValue({ next_runs: [`${scheduleYear}-09-24T08:00:00Z`] });
     panel._render(true);
 
     await panel._handleDesktopAction("open-schedule-description", {}, null);
     const description = panel.shadowRoot.querySelector('[data-desktop-field="description"]');
-    description.value = "On 24 September 2026 at 09:00, prepare a report";
+    description.value = `On 24 September ${scheduleYear} at 09:00, prepare a report`;
     await panel._handleDesktopAction("review-schedule-description", {}, description);
-    await vi.waitFor(() => expect(panel.shadowRoot.querySelector(".schedule-next-runs")?.textContent).toContain("24 Sept 2026"));
+    await vi.waitFor(() => expect(panel.shadowRoot.querySelector(".schedule-next-runs")?.textContent).toContain(`24 Sept ${scheduleYear}`));
 
     expect(state.form).toBe("schedule");
     expect(panel.shadowRoot.querySelector('[name="title"]').value).toBe("prepare a report");

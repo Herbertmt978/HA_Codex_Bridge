@@ -50,10 +50,11 @@
   "options": {
     "step": {
       "init": {
-        "title": "Native web search",
-        "description": "Choose whether Codex may use its native live web search for prompts and automations. Shell-command networking remains disabled.",
+        "title": "Codex task settings",
+        "description": "Choose native web search and whether Home Assistant automations may launch unattended Codex tasks. Only enable unattended actions for trusted scripts; host access remains unavailable to them.",
         "data": {
-          "web_search_mode": "Web search"
+          "web_search_mode": "Web search",
+          "allow_unattended_task_actions": "Allow unattended task actions from automations"
         }
       }
     },

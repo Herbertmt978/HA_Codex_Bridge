@@ -353,6 +353,9 @@ class EventBroker:
         self._task_factory = task_factory or _default_task_factory
         self._subscribers: set[EventSubscription] = set()
         self._listeners: set[Callable[[EventRecord | None], None]] = set()
+        self._async_listeners: set[
+            Callable[[EventRecord], Coroutine[Any, Any, None]]
+        ] = set()
         self._task: asyncio.Task[None] | None = None
         self._starting = False
         self._start_complete = asyncio.Event()
@@ -377,6 +380,14 @@ class EventBroker:
 
         self._listeners.add(listener)
         return lambda: self._listeners.discard(listener)
+
+    def add_async_listener(
+        self, listener: Callable[[EventRecord], Coroutine[Any, Any, None]]
+    ) -> Callable[[], None]:
+        """Deliver durable side effects before advancing the stream cursor."""
+
+        self._async_listeners.add(listener)
+        return lambda: self._async_listeners.discard(listener)
 
     def _notify_listeners(self, event: EventRecord | None) -> None:
         for listener in tuple(self._listeners):
@@ -629,6 +640,8 @@ class EventBroker:
                     self._snapshot_envelope(reason="cursor_gap")
                 )
                 return batch.has_more
+            for listener in tuple(self._async_listeners):
+                await listener(event)
             self._cursor = event.cursor
             self._append_history(event)
             self._publish_event(event)

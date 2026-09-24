@@ -40,6 +40,50 @@ def _fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+async def test_task_action_requires_capability_and_projects_opaque_reference(
+    bridge_server_factory,
+):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"].append("task_actions_v1")
+    received = []
+    response_task_id = {"value": "a" * 32}
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        received.append((request.path, await request.json()))
+        return web.json_response(
+            {
+                "task_id": response_task_id["value"],
+                "thread_id": "thr_task_" + "a" * 32,
+                "run_id": "run_123",
+                "status": "starting",
+                "prompt": "private text must not reach HA services",
+            },
+            status=202,
+        )
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        result = await client.async_start_task(
+            {"task_id": "a" * 32, "project_id": "prj_1", "prompt": "Check"}
+        )
+        assert result == {
+            "task_id": "a" * 32,
+            "thread_id": "thr_task_" + "a" * 32,
+            "run_id": "run_123",
+            "status": "starting",
+        }
+        assert received[0][0] == "/task-actions/start"
+        response_task_id["value"] = "b" * 32
+        with pytest.raises(BridgeApiEndpointError):
+            await client.async_start_task(
+                {"task_id": "a" * 32, "project_id": "prj_1", "prompt": "Check"}
+            )
+
+
 @pytest.mark.parametrize("supported", [False, True])
 async def test_terminal_requires_advertised_capability(bridge_server_factory, supported):
     ready = _fixture("ready_v1.json")

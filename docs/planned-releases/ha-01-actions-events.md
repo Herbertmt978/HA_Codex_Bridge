@@ -1,6 +1,6 @@
 # HA-01: Task actions and result events
 
-Status: Planned. Version and date: unassigned.
+Status: In development. Version and date: unassigned.
 
 Tracking issue: [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103).
 
@@ -35,6 +35,9 @@ Requires an idempotent task contract and a decision on unattended permissions.
 Provides the basis for HA-02 and HA-03. This does not expose a public Bridge API
 or allow an ordinary HA user to bypass administrator controls.
 
+The implementation and permission contract are documented in
+[Home Assistant task actions](../home-assistant-task-actions.md).
+
 Reference: [Codex for Home Assistant](https://github.com/moryoav/home-assistant-codex)
-documents actions and task-result events. Review any reusable MIT code and
-preserve attribution; do not import its access model unchanged.
+documents actions and task-result events. Its approach was reviewed as a feature
+comparison; this implementation does not copy its code or access model.

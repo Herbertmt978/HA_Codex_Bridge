@@ -1461,6 +1461,9 @@ def _canonical_payload(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]]
 
 
 _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
+    "task.accepted": frozenset({"task_id", "run_id", "status"}),
+    "task.interaction_needed": frozenset({"task_id", "run_id", "kind"}),
+    "task.result": frozenset({"task_id", "run_id", "status"}),
     "auth.status_changed": frozenset(
         {
             "revision",

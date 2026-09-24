@@ -35,6 +35,7 @@ CONF_BRIDGE_TOKEN = "bridge_token"
 CONF_CONNECTION_TYPE = "connection_type"
 CONF_DISCOVERY_UUID = "discovery_uuid"
 CONF_WEB_SEARCH_MODE = "web_search_mode"
+CONF_ALLOW_UNATTENDED_TASK_ACTIONS = "allow_unattended_task_actions"
 
 CONNECTION_TYPE_SUPERVISOR = "supervisor"
 CONNECTION_TYPE_EXTERNAL_LEGACY = "external_legacy"

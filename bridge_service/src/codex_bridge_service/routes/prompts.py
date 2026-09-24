@@ -32,7 +32,11 @@ class PromptRequest(BaseModel):
     def validate_client_request_id(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if value != value.strip() or len(value.encode("utf-8")) > 256:
+        if (
+            value != value.strip()
+            or len(value.encode("utf-8")) > 256
+            or value.startswith("ha-action:")
+        ):
             raise ValueError("client request id is invalid")
         return value
 

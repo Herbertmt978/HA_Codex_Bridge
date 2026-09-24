@@ -83,6 +83,7 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
         patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
     ):
         assert await _setup_entry(hass, entry)
+        assert hass.services.has_service(DOMAIN, "start_task")
         assert await async_unload_entry(hass, entry)
         assert await _setup_entry(hass, entry)
 
@@ -98,6 +99,7 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
     assert runtime.connection_type == CONNECTION_TYPE_SUPERVISOR
     assert runtime.discovery_uuid == entry.unique_id
     assert runtime.api_version == 1
+    assert runtime.task_event_forwarder is not None
 
 
 async def test_external_entry_requires_the_explicit_legacy_capability(hass):
