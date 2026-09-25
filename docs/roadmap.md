@@ -35,7 +35,7 @@ MCP-03 still requires a separate isolation design before implementation.
 
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
-| [HA-01: Task actions and result events](planned-releases/ha-01-actions-events.md) | Implemented in source: start and continue tasks from HA scripts and automations. | Idempotent admission and permission policy | [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103) |
+| [HA-01: Task actions and result events](planned-releases/ha-01-actions-events.md) | Released and natively accepted: start, continue, cancel and inspect tasks from HA actions. | Idempotent admission and permission policy | [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103) |
 | [HA-02: Completion notifications](planned-releases/ha-02-notifications.md) | In development: choose when and where scheduled-task outcomes are announced. | Durable automation history and HA notification services | [#104](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/104) |
 | [HA-03: Assist conversation agent](planned-releases/ha-03-assist.md) | In development: receive direct Codex answers from one explicitly selected project. | HA-01 and explicit exposure policy | [#105](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/105) |
 | [HA-04: Status and usage entities](planned-releases/ha-04-status-entities.md) | Included in 1.6.4 source: use account limits, connection health and task state in HA dashboards. | Stable entity and privacy contracts | [#106](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/106) |
