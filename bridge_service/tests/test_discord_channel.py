@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,7 +20,14 @@ from codex_bridge_service.discord_channel import (
     permitted,
     safe_answer,
 )
-from codex_bridge_service.models import RuntimeProfile
+from codex_bridge_service.models import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING_LEVEL,
+    ProjectKind,
+    RunMode,
+    RuntimeProfile,
+)
+from codex_bridge_service.storage import BridgeStorage
 from codex_bridge_service.routes.task_actions import (
     ContinueTaskRequest,
     StartTaskRequest,
@@ -40,6 +48,16 @@ def policy() -> dict[str, object]:
         "dm_user_ids": [USER],
         "guilds": [{"guild_id": GUILD, "channel_ids": [CHANNEL], "user_ids": [USER]}],
     }
+
+
+def model_probe() -> SimpleNamespace:
+    return SimpleNamespace(
+        probe=lambda: SimpleNamespace(
+            default_model=DEFAULT_MODEL,
+            default_thinking_level=DEFAULT_THINKING_LEVEL,
+            stale=False,
+        )
+    )
 
 
 def test_discord_admin_api_authenticates_and_never_returns_credential(
@@ -173,10 +191,17 @@ def test_admitted_run_is_recovered_after_local_receipt_failure(
     failure_point: str,
 ) -> None:
     storage = SimpleNamespace(
-        ensure_direct_project=lambda: SimpleNamespace(project_id="direct")
+        create_project=lambda **_kwargs: SimpleNamespace(project_id="isolated")
     )
-    app = SimpleNamespace(state=SimpleNamespace(auth_token="a" * 40, storage=storage))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_token="a" * 40,
+            storage=storage,
+            model_catalog_probe=model_probe(),
+        )
+    )
     manager = DiscordChannelManager(app, tmp_path)
+    monkeypatch.setattr(manager, "_preflight_new_project", lambda: None)
     manager.state.configure(policy(), TOKEN)
     notices: list[str] = []
 
@@ -222,6 +247,233 @@ def test_admitted_run_is_recovered_after_local_receipt_failure(
     asyncio.run(manager._recover_claims())
     assert manager.state.pending()[0]["run_id"] == "run_private"
     assert manager.state.dm_thread(USER) == "thr_private"
+    manager.state.close()
+
+
+def test_discord_requests_use_distinct_confined_projects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if os.name == "nt":
+        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd")
+    workspace_root = tmp_path / "workspaces"
+    storage = BridgeStorage(
+        root_path=tmp_path / "state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+    )
+    direct = storage.ensure_direct_project()
+    direct_thread = storage.create_thread(title="HA direct", mode=RunMode.OBSERVE)
+    assert direct.root_path == "."
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_token="a" * 40,
+            storage=storage,
+            model_catalog_probe=model_probe(),
+        )
+    )
+    discord_root = tmp_path / "discord"
+    discord_root.mkdir()
+    manager = DiscordChannelManager(app, discord_root)
+    allowed = policy()
+    allowed["dm_user_ids"] = [USER, OTHER]
+    manager.state.configure(allowed, TOKEN)
+    monkeypatch.setattr(manager, "_preflight_new_project", lambda: None)
+    started: list[tuple[object, object]] = []
+    continued: list[str] = []
+
+    def start(payload: StartTaskRequest, *_args: object) -> dict[str, str]:
+        project = storage.load_project(payload.project_id)
+        thread = storage.create_thread(
+            title=payload.title,
+            project_id=payload.project_id,
+            mode=RunMode.OBSERVE,
+        )
+        started.append((project, thread))
+        return {"thread_id": thread.thread_id, "run_id": "run_" + payload.task_id}
+
+    def continue_run(payload: ContinueTaskRequest, *_args: object) -> dict[str, str]:
+        continued.append(payload.thread_id)
+        return {"thread_id": payload.thread_id, "run_id": "run_" + payload.task_id}
+
+    monkeypatch.setattr(discord_channel, "start_task", start)
+    monkeypatch.setattr(discord_channel, "continue_task", continue_run)
+
+    async def acknowledge(**_kwargs: object) -> None:
+        pass
+
+    async def send(_message: str, **_kwargs: object) -> None:
+        pass
+
+    def interaction(offset: int, user_id: str, *, shared: bool) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=str(int(INTERACTION) + offset),
+            user=SimpleNamespace(id=user_id, bot=False),
+            guild_id=GUILD if shared else None,
+            channel_id=CHANNEL,
+            channel=SimpleNamespace(type=0 if shared else 1),
+            response=SimpleNamespace(defer=acknowledge),
+            followup=SimpleNamespace(send=send),
+        )
+
+    async def exercise() -> None:
+        await manager._ask(interaction(0, USER, shared=False), "first DM")
+        await manager._ask(interaction(1, USER, shared=False), "continued DM")
+        await manager._ask(interaction(2, OTHER, shared=False), "other DM")
+        await manager._ask(interaction(3, USER, shared=True), "first shared")
+        await manager._ask(interaction(4, USER, shared=True), "second shared")
+
+    asyncio.run(exercise())
+    assert len(started) == 4
+    assert continued == [started[0][1].thread_id]
+    assert manager.state.dm_thread(USER) == started[0][1].thread_id
+    assert manager.state.dm_thread(OTHER) == started[1][1].thread_id
+    direct_workspace = (workspace_root / direct_thread.workspace_path).resolve()
+    roots = [(workspace_root / project.root_path).resolve() for project, _ in started]
+    assert len(set(roots)) == len(roots)
+    # ha_observe grants read access at the run's "." workspace root. No
+    # Discord root may contain an HA direct or another Discord chat's file.
+    direct_file = direct_workspace / "ha-private.txt"
+    direct_file.write_text("private", encoding="utf-8")
+    discord_files = []
+    for (project, thread), root in zip(started, roots, strict=True):
+        assert project.kind is ProjectKind.PROJECT
+        assert project.root_path != "."
+        assert thread.workspace_path == project.root_path
+        assert root.is_dir()
+        assert direct_workspace != root
+        assert not direct_workspace.is_relative_to(root)
+        assert not root.is_relative_to(direct_workspace)
+        assert not direct_file.is_relative_to(root)
+        marker = root / "private.txt"
+        marker.write_text("private", encoding="utf-8")
+        discord_files.append(marker)
+    for index, root in enumerate(roots):
+        assert all(
+            not marker.is_relative_to(root)
+            for other_index, marker in enumerate(discord_files)
+            if other_index != index
+        )
+        assert not discord_files[index].is_relative_to(direct_workspace)
+    manager.state.close()
+
+
+@pytest.mark.parametrize("failure_point", ["preflight", "catalogue", "project"])
+def test_discord_rejected_start_never_admits_a_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+) -> None:
+    created: list[str] = []
+
+    def create_project(**_kwargs: object) -> SimpleNamespace:
+        created.append("project")
+        raise OSError("workspace unavailable")
+
+    storage = SimpleNamespace(create_project=create_project)
+    catalogue = model_probe()
+    if failure_point == "catalogue":
+        catalogue.probe = lambda: SimpleNamespace(stale=True)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_token="a" * 40,
+            storage=storage,
+            model_catalog_probe=catalogue,
+        )
+    )
+    manager = DiscordChannelManager(app, tmp_path)
+    manager.state.configure(policy(), TOKEN)
+    if failure_point == "preflight":
+        monkeypatch.setattr(
+            manager,
+            "_preflight_new_project",
+            lambda: (_ for _ in ()).throw(DiscordChannelError("not ready")),
+        )
+    else:
+        monkeypatch.setattr(manager, "_preflight_new_project", lambda: None)
+    admitted: list[str] = []
+    monkeypatch.setattr(
+        discord_channel,
+        "start_task",
+        lambda *_args: admitted.append("started"),
+    )
+    notices: list[str] = []
+
+    async def acknowledge(**_kwargs: object) -> None:
+        pass
+
+    async def send(message: str, **_kwargs: object) -> None:
+        notices.append(message)
+
+    interaction = SimpleNamespace(
+        id=INTERACTION,
+        user=SimpleNamespace(id=USER, bot=False),
+        guild_id=None,
+        channel_id=CHANNEL,
+        channel=SimpleNamespace(type=1),
+        response=SimpleNamespace(defer=acknowledge),
+        followup=SimpleNamespace(send=send),
+    )
+    asyncio.run(manager._ask(interaction, "rejected"))
+    assert created == (["project"] if failure_point == "project" else [])
+    assert admitted == []
+    assert manager.state.dm_thread(USER) is None
+    assert notices == [
+        "Codex could not start this task. Check its status in Home Assistant."
+    ]
+    manager.state.close()
+
+
+def test_discord_unready_runtime_does_not_create_a_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspaces"
+    workspace.mkdir()
+    (tmp_path / "codex-home").mkdir()
+    app = create_app(
+        root_path=tmp_path / "state",
+        auth_token="a" * 40,
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace,
+        codex_home=tmp_path / "codex-home",
+    )
+    manager = app.state.discord_channel
+    manager.state.configure(policy(), TOKEN)
+    created: list[str] = []
+    monkeypatch.setattr(
+        app.state.storage,
+        "create_project",
+        lambda **_kwargs: created.append("project"),
+    )
+    monkeypatch.setattr(
+        discord_channel,
+        "start_task",
+        lambda *_args: pytest.fail("unready task was admitted"),
+    )
+
+    async def acknowledge(**_kwargs: object) -> None:
+        pass
+
+    notices: list[str] = []
+
+    async def send(message: str, **_kwargs: object) -> None:
+        notices.append(message)
+
+    interaction = SimpleNamespace(
+        id=INTERACTION,
+        user=SimpleNamespace(id=USER, bot=False),
+        guild_id=None,
+        channel_id=CHANNEL,
+        channel=SimpleNamespace(type=1),
+        response=SimpleNamespace(defer=acknowledge),
+        followup=SimpleNamespace(send=send),
+    )
+    asyncio.run(manager._ask(interaction, "runtime unavailable"))
+    assert created == []
+    assert notices == [
+        "Codex could not start this task. Check its status in Home Assistant."
+    ]
     manager.state.close()
 
 
@@ -335,10 +587,17 @@ def test_deleted_dm_thread_is_cleared_for_next_interaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = SimpleNamespace(
-        ensure_direct_project=lambda: SimpleNamespace(project_id="direct")
+        create_project=lambda **_kwargs: SimpleNamespace(project_id="isolated")
     )
-    app = SimpleNamespace(state=SimpleNamespace(auth_token="a" * 40, storage=storage))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_token="a" * 40,
+            storage=storage,
+            model_catalog_probe=model_probe(),
+        )
+    )
     manager = DiscordChannelManager(app, tmp_path)
+    monkeypatch.setattr(manager, "_preflight_new_project", lambda: None)
     manager.state.configure(policy(), TOKEN)
     manager.state.set_dm_thread(USER, "thr_deleted")
     continued: list[str] = []

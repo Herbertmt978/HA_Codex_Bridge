@@ -41,9 +41,12 @@ Bots and webhooks cannot invoke these slash commands as users; ordinary
 messages and attachments are ignored. The supported commands are `/codex`,
 `/codex_status`, and `/codex_cancel`.
 
-Each authorised DM user has a separate continuing chat and workspace. Shared
-channel commands create a fresh standalone chat and workspace for every
-request. There is no way to select another user's chat or upload an artifact
+Each authorised DM user gets a separate continuing chat in a dedicated
+HA-visible project and workspace. Each shared-channel command gets a fresh
+standalone chat and dedicated project/workspace. The `ha_observe` permission
+profile grants file reads only inside that run's workspace root, so neither
+kind of Discord turn uses the HA direct-chat root or another Discord turn's
+root. There is no way to select another user's chat or upload an artifact
 through Discord. A shared result appears as a plain text message visible to
 everyone who can read that channel; the command acknowledgement and status
 are private to the invoker. The App omits artifact links and external links
@@ -51,9 +54,17 @@ from shared answers and disables all mentions and embeds. Treat the prompt
 and its answer as shared with that channel's readers. Do not allow a private
 or sensitive prompt in a shared channel.
 
+The projects and workspaces remain visible in Home Assistant after tasks
+finish. Readiness and model-catalogue checks run before creating a project,
+so known rejected admissions do not create empty workspaces. A failure after
+project creation can still leave an empty project. An administrator may remove
+it after confirming the request has no active or recoverable run; deleting a
+project record does not erase its workspace directory. Keep that directory
+until its contents have been reviewed and any needed files retained.
+
 Discord turns use the existing constrained Home Assistant task-action path:
 observe mode, unattended interaction refusal, disabled web search, isolated
-direct-project workspace, no Host Access grant and no Home Assistant
+project workspace, no Host Access grant and no Home Assistant
 administrator identity. While the App's MCP connection manager is enabled,
 this path declines new Discord work rather than granting tools through a
 different identity. All privileged approvals remain in Home Assistant.
@@ -85,8 +96,10 @@ restarted without reposting a delivered result. Denying the bot Send Messages
 in the chosen channel left the admitted task recorded, posted no result to
 Discord, and exposed only `delivery_permission_denied` in status. Local
 tests simulate short and long Discord rate limits; a live 429 was not induced
-against the provider. No production Discord connection is implied by these
-checks.
+against the provider. The later project-root isolation correction was checked
+against POSIX HA storage with two DM users, two shared requests and an HA
+direct chat; it was not rerun with a live bot. No production Discord
+connection is implied by these checks.
 
 Discord protocol references: [application commands](https://docs.discord.com/developers/docs/interactions/slash-commands),
 [create message and nonce](https://docs.discord.com/developers/resources/message#create-message),

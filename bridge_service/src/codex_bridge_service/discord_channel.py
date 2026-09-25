@@ -21,6 +21,9 @@ import httpx
 from fastapi import HTTPException
 from starlette.requests import Request
 
+from .models import RuntimeProfile
+from .readiness import evaluate_readiness
+from .runtime_broker import RuntimeBroker
 from .routes.task_actions import (
     ContinueTaskRequest,
     StartTaskRequest,
@@ -481,6 +484,19 @@ class DiscordChannelManager:
     def _authorisation(self) -> str:
         return "Bearer " + self.app.state.auth_token
 
+    def _preflight_new_project(self) -> None:
+        """Avoid creating an empty workspace for a known rejected admission."""
+
+        state = self.app.state
+        if (
+            state.storage.runtime_profile is not RuntimeProfile.HOME_ASSISTANT
+            or not isinstance(state.runner, RuntimeBroker)
+            or evaluate_readiness(state, include_catalogue=False).state != "ready"
+            or getattr(getattr(state, "mcp_manager", None), "enabled", None)
+            is not False
+        ):
+            raise DiscordChannelError("The Discord task runtime is unavailable.")
+
     def status(self) -> dict[str, Any]:
         return {
             **self.state.status(),
@@ -716,8 +732,21 @@ class DiscordChannelManager:
                             self.state.dm_thread(user_id) if guild_id is None else None
                         )
                         if thread_id is None:
+                            await asyncio.to_thread(self._preflight_new_project)
+                            catalogue = await asyncio.to_thread(
+                                self.app.state.model_catalog_probe.probe
+                            )
+                            if catalogue.stale is not False:
+                                raise DiscordChannelError(
+                                    "The Discord model catalogue is unavailable."
+                                )
                             project = await asyncio.to_thread(
-                                self.app.state.storage.ensure_direct_project
+                                self.app.state.storage.create_project,
+                                name="Discord private chat"
+                                if guild_id is None
+                                else "Discord shared request",
+                                default_model=catalogue.default_model,
+                                default_thinking_level=catalogue.default_thinking_level,
                             )
                             payload = StartTaskRequest(
                                 task_id=record["task_id"],
