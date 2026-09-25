@@ -373,6 +373,14 @@ class DiscordState:
                 (user_id, epoch, thread_id),
             )
 
+    def clear_dm_thread(self, user_id: str, thread_id: str) -> None:
+        epoch, _, _ = self.policy()
+        with self._lock:
+            self._db.execute(
+                "DELETE FROM dm_threads WHERE user_id=? AND epoch=? AND thread_id=?",
+                (user_id, epoch, thread_id),
+            )
+
     def pending(self) -> list[dict[str, Any]]:
         with self._lock:
             return [
@@ -427,6 +435,21 @@ class DiscordState:
                 (user_id, guild_id, channel_id, epoch),
             ).fetchone()
             return None if row is None else dict(row)
+
+    def pending_for_user(
+        self, user_id: str, guild_id: str | None, channel_id: str
+    ) -> list[dict[str, Any]]:
+        epoch, _, _ = self.policy()
+        with self._lock:
+            return [
+                dict(row)
+                for row in self._db.execute(
+                    "SELECT * FROM requests WHERE user_id=? AND guild_id IS ? AND channel_id=? "
+                    "AND epoch=? AND delivery='pending' AND run_id IS NOT NULL "
+                    "ORDER BY interaction_id DESC",
+                    (user_id, guild_id, channel_id, epoch),
+                )
+            ]
 
 
 class DiscordChannelManager:
@@ -721,12 +744,23 @@ class DiscordChannelManager:
                                 web_search="disabled",
                                 assist=True,
                             )
-                            run = await asyncio.to_thread(
-                                continue_task,
-                                payload,
-                                self._request(),
-                                self._authorisation(),
-                            )
+                            try:
+                                run = await asyncio.to_thread(
+                                    continue_task,
+                                    payload,
+                                    self._request(),
+                                    self._authorisation(),
+                                )
+                            except HTTPException as error:
+                                if (
+                                    guild_id is None
+                                    and error.status_code == 404
+                                    and isinstance(error.detail, dict)
+                                    and error.detail.get("code")
+                                    == "task_target_not_found"
+                                ):
+                                    self.state.clear_dm_thread(user_id, thread_id)
+                                raise
                         self.state.record_run(
                             interaction_id,
                             thread_id=run["thread_id"],
@@ -795,20 +829,33 @@ class DiscordChannelManager:
             if self._identity(interaction) != identity:
                 message = "Discord access is no longer allowed here."
             else:
-                row = self.state.latest_for_user(*identity)
-                if row is None or row["run_id"] is None:
-                    message = "There is no active task for you in this destination."
-                else:
+                message = "There is no active task for you in this destination."
+                for row in self.state.pending_for_user(*identity):
                     try:
+                        current = await asyncio.to_thread(
+                            get_task,
+                            row["task_id"],
+                            self._request(),
+                            self._authorisation(),
+                        )
+                        if current["status"] in {
+                            "completed",
+                            "failed",
+                            "cancelled",
+                            "interrupted",
+                        }:
+                            continue
                         result = await asyncio.to_thread(
                             cancel_task,
                             row["task_id"],
                             self._request(),
                             self._authorisation(),
                         )
-                        message = f"Your latest task is {result['status']}."
+                        message = f"Your active task is {result['status']}."
+                        break
                     except Exception:
                         message = "Cancellation is unavailable. Check Home Assistant."
+                        break
         try:
             await interaction.followup.send(message, ephemeral=True)
         except Exception:

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 import httpx
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from codex_bridge_service import discord_channel
@@ -19,6 +20,10 @@ from codex_bridge_service.discord_channel import (
     safe_answer,
 )
 from codex_bridge_service.models import RuntimeProfile
+from codex_bridge_service.routes.task_actions import (
+    ContinueTaskRequest,
+    StartTaskRequest,
+)
 
 USER = "123456789012345678"
 OTHER = "123456789012345679"
@@ -266,8 +271,118 @@ def test_status_and_cancel_are_scoped_to_the_invoker(
     owner, allowed = interaction(USER)
     asyncio.run(manager._status_command(owner))
     asyncio.run(manager._cancel_command(owner))
-    assert allowed == ["Your latest task is completed."] * 2
+    assert allowed == [
+        "Your latest task is completed.",
+        "There is no active task for you in this destination.",
+    ]
     assert called == [row["task_id"]] * 2
+    manager.state.close()
+
+
+def test_cancel_finds_older_active_run_after_newer_completed_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = SimpleNamespace(state=SimpleNamespace(auth_token="a" * 40))
+    manager = DiscordChannelManager(app, tmp_path)
+    manager.state.configure(policy(), TOKEN)
+    older_id, newer_id = INTERACTION, str(int(INTERACTION) + 1)
+    _, older = manager.state.claim(
+        older_id, user_id=USER, guild_id=GUILD, channel_id=CHANNEL, prompt="long"
+    )
+    _, newer = manager.state.claim(
+        newer_id, user_id=USER, guild_id=GUILD, channel_id=CHANNEL, prompt="short"
+    )
+    manager.state.record_run(older_id, thread_id="thr_older", run_id="run_older")
+    manager.state.record_run(newer_id, thread_id="thr_newer", run_id="run_newer")
+    inspected: list[str] = []
+    cancelled: list[str] = []
+
+    def get(task_id: str, *_args: object) -> dict[str, str]:
+        inspected.append(task_id)
+        return {"status": "completed" if task_id == newer["task_id"] else "running"}
+
+    def cancel(task_id: str, *_args: object) -> dict[str, str]:
+        cancelled.append(task_id)
+        return {"status": "cancelled"}
+
+    monkeypatch.setattr(discord_channel, "get_task", get)
+    monkeypatch.setattr(discord_channel, "cancel_task", cancel)
+    messages: list[str] = []
+
+    async def send(message: str, **_kwargs: object) -> None:
+        messages.append(message)
+
+    async def defer(**_kwargs: object) -> None:
+        pass
+
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=USER, bot=False),
+        guild_id=GUILD,
+        channel_id=CHANNEL,
+        response=SimpleNamespace(defer=defer),
+        followup=SimpleNamespace(send=send),
+    )
+    asyncio.run(manager._cancel_command(interaction))
+    assert inspected == [newer["task_id"], older["task_id"]]
+    assert cancelled == [older["task_id"]]
+    assert messages == ["Your active task is cancelled."]
+    manager.state.close()
+
+
+def test_deleted_dm_thread_is_cleared_for_next_interaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = SimpleNamespace(
+        ensure_direct_project=lambda: SimpleNamespace(project_id="direct")
+    )
+    app = SimpleNamespace(state=SimpleNamespace(auth_token="a" * 40, storage=storage))
+    manager = DiscordChannelManager(app, tmp_path)
+    manager.state.configure(policy(), TOKEN)
+    manager.state.set_dm_thread(USER, "thr_deleted")
+    continued: list[str] = []
+    started: list[str] = []
+
+    def continue_missing(payload: ContinueTaskRequest, *_args: object) -> None:
+        continued.append(payload.task_id)
+        raise HTTPException(404, detail={"code": "task_target_not_found"})
+
+    def start_new(payload: StartTaskRequest, *_args: object) -> dict[str, str]:
+        started.append(payload.task_id)
+        return {"thread_id": "thr_new", "run_id": "run_new"}
+
+    monkeypatch.setattr(discord_channel, "continue_task", continue_missing)
+    monkeypatch.setattr(discord_channel, "start_task", start_new)
+
+    async def acknowledge(**_kwargs: object) -> None:
+        pass
+
+    async def send(_message: str, **_kwargs: object) -> None:
+        pass
+
+    def interaction(interaction_id: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=interaction_id,
+            user=SimpleNamespace(id=USER, bot=False),
+            guild_id=None,
+            channel_id=CHANNEL,
+            channel=SimpleNamespace(type=1),
+            response=SimpleNamespace(defer=acknowledge),
+            followup=SimpleNamespace(send=send),
+        )
+
+    async def exercise() -> None:
+        first = interaction(INTERACTION)
+        await manager._ask(first, "first")
+        assert manager.state.dm_thread(USER) is None
+        await manager._ask(first, "first")
+        await manager._ask(interaction(str(int(INTERACTION) + 1)), "second")
+
+    asyncio.run(exercise())
+    assert len(continued) == 1
+    assert len(started) == 1
+    assert manager.state.dm_thread(USER) == "thr_new"
     manager.state.close()
 
 
