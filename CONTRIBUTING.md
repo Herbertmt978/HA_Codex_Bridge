@@ -26,8 +26,8 @@ works only in an explicitly granted workspace.
    authentication, workspace, model, security, update, recovery, or uninstall
    behavior changes.
 
-The current paired release is App, Integration and panel `1.7.0` (`amd64`),
-Bridge `0.13.0` and Codex `0.156.1`. Update both the Supervisor App and the
+The current paired release is App, Integration and panel `1.7.2` (`amd64`),
+Bridge `0.13.0` and Codex `0.157.0`. Update both the Supervisor App and the
 HACS Integration, then restart Home Assistant and refresh the panel. App-only
 fixes may use a different App version when they do not change the negotiated
 API or panel. See the [changelog](codex_bridge_app/CHANGELOG.md) for the
