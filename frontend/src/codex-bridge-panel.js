@@ -3251,6 +3251,8 @@ template.innerHTML = `
     .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
+    .schedule-check-row .schedule-row-label { flex: 1 1 auto; min-width: 0; padding-block: 12px; }
+    .schedule-check-row input[type="checkbox"] { flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px; max-width: 20px; accent-color: var(--accent-color); cursor: pointer; }
     .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-next-runs { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
@@ -6451,7 +6453,7 @@ class CodexBridgePanel extends HTMLElement {
       case "select-reset-credit":
         this._pendingResetCredit = {
           id: actionTarget.dataset.creditId,
-          key: crypto.randomUUID(),
+          key: this._createRandomUuid(),
         };
         this._resetCreditNotice = "";
         this._renderUsagePanel();
@@ -7565,7 +7567,9 @@ class CodexBridgePanel extends HTMLElement {
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
-    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    const mobileAvailable = Object.keys(this._hass?.services?.notify || {}).filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    const mobileTargets = [...new Set([...mobileAvailable, ...(editing?.notifications?.mobile_targets || [])])].filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
   _queueSchedulePreview(state, form) {
@@ -7609,7 +7613,7 @@ class CodexBridgePanel extends HTMLElement {
       };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
-      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= crypto.randomUUID().replaceAll("-", "");
+      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= this._createRandomUuid().replaceAll("-", "");
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
       if (!state.form) state.createRequestId = null;
       if (state.form && state.error) { state.formError = state.error; state.error = ""; }
@@ -8990,14 +8994,18 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _createClientRequestId(prefix = "request") {
+    return `${prefix}-${this._createRandomUuid()}`;
+  }
+
+  _createRandomUuid() {
     const uuid = globalThis.crypto?.randomUUID?.();
-    if (uuid) {
-      return `${prefix}-${uuid}`;
-    }
-    const bytes = new Uint8Array(16);
-    globalThis.crypto?.getRandomValues?.(bytes);
-    const entropy = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
-    return `${prefix}-${Date.now().toString(36)}-${entropy || Math.random().toString(36).slice(2)}`;
+    if (uuid) return uuid;
+    if (!globalThis.crypto?.getRandomValues) throw new Error("Secure random numbers are unavailable in this browser");
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
   _bridgeErrorCode(error) {

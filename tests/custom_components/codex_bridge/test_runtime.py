@@ -56,3 +56,15 @@ async def test_capability_refresh_failure_keeps_last_known_runtime_state() -> No
 
     assert runtime.capabilities == ("api_v1", "web_search_v1")
     assert runtime.web_search_payload() == {"web_search": "live"}
+
+
+async def test_capability_refresh_starts_new_notification_support() -> None:
+    runtime = _runtime()
+    runtime.automation_notifications = SimpleNamespace(async_start=AsyncMock())
+    runtime.client.async_refresh_ready.return_value = SimpleNamespace(
+        capabilities=("api_v1", "automation_notifications_v1")
+    )
+
+    assert await runtime.async_refresh_capabilities(force=True)
+
+    runtime.automation_notifications.async_start.assert_awaited_once()

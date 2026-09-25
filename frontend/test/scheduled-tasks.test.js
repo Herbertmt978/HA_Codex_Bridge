@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAutomationPayload, buildAutomationUpdatePayload, buildSchedule, scheduleFormValues, scheduleInstant, scheduleSummary } from "../src/scheduled-tasks.js";
+import { buildAutomationPayload, buildAutomationUpdatePayload, buildSchedule, renderScheduleForm, scheduleFormValues, scheduleInstant, scheduleSummary } from "../src/scheduled-tasks.js";
 
 const now = Date.parse("2026-09-19T12:00:00Z");
 const context = { projectId: "p1", threadId: "t1", timezone: "Europe/London", now };
@@ -18,6 +18,36 @@ describe("scheduled task form contract", () => {
     expect(buildAutomationPayload({ ...values(), target_kind: "continue_thread" }, context).target).toEqual({ kind: "continue_thread", thread_id: "t1" });
     expect(() => buildAutomationPayload(values(), { ...context, projectId: null })).toThrow(/Select a chat or workspace/);
     expect(() => buildAutomationPayload({ ...values(), prompt: " " }, context)).toThrow(/title/);
+  });
+
+  it("keeps phone notifications opt-in and selects only explicit destinations", () => {
+    const notificationContext = { ...context, notificationsSupported: true, mobileTargets: ["mobile_app_test_phone", "mobile_app_other_phone"] };
+    const off = buildAutomationPayload(values(), notificationContext);
+    expect(off.notifications).toEqual({ policy: "off", persistent: false, mobile_targets: [], preview: false });
+    expect(() => buildAutomationPayload({ ...values(), notification_policy: "all" }, notificationContext)).toThrow(/destination/);
+    const selected = buildAutomationPayload({ ...values(), notification_policy: "attention", notification_persistent: true, "mobile_target:mobile_app_test_phone": true }, notificationContext);
+    expect(selected.notifications).toEqual({ policy: "attention", persistent: true, mobile_targets: ["mobile_app_test_phone"], preview: false });
+    expect(selected.notifications.mobile_targets).not.toContain("mobile_app_other_phone");
+  });
+
+  it("preserves saved notification choices when editing", () => {
+    const notifications = { policy: "all", persistent: true, mobile_targets: ["mobile_app_test_phone"], preview: true };
+    const editing = { ...buildAutomationPayload(values(), context), notifications, revision: 2 };
+    const drafted = scheduleFormValues(editing, context.timezone, now);
+    const result = buildAutomationUpdatePayload(drafted, { ...context, editing, notificationsSupported: true, mobileTargets: ["mobile_app_test_phone"] });
+    expect(result.notifications).toEqual(notifications);
+  });
+
+  it("shows only available phones and labels a saved unavailable phone", () => {
+    const automation = { notifications: { policy: "attention", persistent: false, mobile_targets: ["mobile_app_old_phone"], preview: false } };
+    const form = renderScheduleForm(document, { editingAutomation: automation }, "Europe/London", {
+      ...context, notificationsSupported: true,
+      mobileTargets: ["mobile_app_current_phone", "mobile_app_old_phone"], mobileAvailable: ["mobile_app_current_phone"],
+    });
+    expect(form.querySelector('[name="mobile_target:mobile_app_old_phone"]').checked).toBe(true);
+    expect(form.querySelector('[name="mobile_target:mobile_app_old_phone"]').parentElement.textContent).toContain("unavailable");
+    expect(form.querySelector('[name="mobile_target:mobile_app_current_phone"]').checked).toBe(false);
+    expect(form.querySelector('[name="notification_preview"]').checked).toBe(false);
   });
 
   it.each([

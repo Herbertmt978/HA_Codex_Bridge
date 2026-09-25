@@ -766,6 +766,7 @@ def create_app(
             [
                 "interactions_v2",
                 "automations_v1",
+                "automation_notifications_v1",
                 "task_actions_v1",
                 "assist_conversation_v1",
                 "automation_proposals_v1",
@@ -1006,6 +1007,7 @@ def create_app(
         resolved_automations.mark_running(
             automation_run_id,
             bridge_run_id=run.run_id,
+            thread_id=run.thread_id,
         )
         return run
 

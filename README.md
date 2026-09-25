@@ -107,7 +107,10 @@ Scheduled work runs through Home Assistant, so your PC and browser do not need
 to stay open. Home Assistant, the App and the ChatGPT session must remain
 available. Tasks that overlap, miss their window or need an approval may be
 skipped or stopped; check **Run history**. Results appear in chats and run
-history. Configurable desktop or mobile notifications are not provided.
+history. Scheduled-task notifications are opt-in: choose a generic Home
+Assistant notification and/or specific Companion App phones in the task editor.
+Answer previews on selected phones require a separate opt-in. See the
+[Scheduled guide](docs/scheduled-tasks.md) for privacy and delivery limits.
 
 ## Updates and recovery
 

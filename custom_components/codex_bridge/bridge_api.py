@@ -1327,6 +1327,8 @@ class BridgeApiClient:
 
     async def async_create_automation(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        if "notifications" in payload:
+            self.require_capability("automation_notifications_v1")
         if payload.get("client_request_id") is not None:
             self.require_capability("automation_proposals_v1")
         if payload.get("mode") == "haos-full-access" or payload.get("host_access_grant") is not None:
@@ -1346,6 +1348,8 @@ class BridgeApiClient:
         self, automation_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         self.require_capability("automations_v1")
+        if "notifications" in payload:
+            self.require_capability("automation_notifications_v1")
         if payload.get("mode") == "haos-full-access" or "host_access_grant" in payload:
             self.require_capability("host_access_v1")
         return await self._async_json(
@@ -1433,6 +1437,14 @@ class BridgeApiClient:
         return await self._async_json(
             "GET", f"/automations/{_path_segment(automation_id)}/runs?limit={limit}"
         )
+
+    async def async_automation_run_preview(self, automation_id: str, automation_run_id: str) -> str | None:
+        self.require_capability("automation_notifications_v1")
+        result = await self._async_json(
+            "GET", f"/automations/{_path_segment(automation_id)}/runs/{_path_segment(automation_run_id)}/preview"
+        )
+        preview = result.get("preview") if isinstance(result, dict) else None
+        return preview if isinstance(preview, str) and len(preview) <= 161 else None
 
     async def async_scheduler_automations(self) -> dict[str, Any]:
         self.require_capability("automations_v1")
