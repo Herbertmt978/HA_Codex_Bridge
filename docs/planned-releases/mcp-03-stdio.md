@@ -1,6 +1,7 @@
 # MCP-03: Isolated stdio servers
 
-Status: Planned; architecture required. Version and date: unassigned.
+Status: Included in App and Integration 1.8.0 source; publication and final
+image checks remain release gates. Design accepted on 25 September 2026.
 
 Tracking issue: [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99).
 
@@ -10,15 +11,13 @@ Some MCP servers are local programs rather than HTTP services. Provide a
 managed way to run approved stdio servers without giving them the Bridge's
 private credentials or unrestricted host access.
 
-## Required security-contract review
+## Security contract
 
-The current MCP contract permits trusted remote HTTPS servers, not executable
-stdio servers. Before implementation, approve the worker isolation and transport
-design and deliberately revise [AGENTS.md](../../AGENTS.md),
-[CONTEXT.md](../../CONTEXT.md) and [SECURITY.md](../../SECURITY.md) to define the new
-boundary. Package verification and process controls do not by themselves permit
-an exception. This plan remains conditional on that review; the existing
-HTTPS-only runtime contract is unchanged.
+The isolated worker and private adapter have their own reviewed boundary in
+[ADR 0009](../aegis/adr/0009-isolated-stdio-mcp.md), [AGENTS.md](../../AGENTS.md),
+[CONTEXT.md](../../CONTEXT.md) and [SECURITY.md](../../SECURITY.md). The existing
+public HTTPS and private LAN relay contracts remain in force. A package digest
+alone does not grant execution or tool access.
 
 ## Scope
 
@@ -39,7 +38,8 @@ HTTPS-only runtime contract is unchanged.
 
 ## Dependencies and boundary
 
-Requires an approved isolation design, resource budget and package distribution
-process. Integrates with MCP-05 and MCP-06. An arbitrary command text box running
-as the Bridge user is not an acceptable implementation. No production worker is
-enabled merely by installing a release.
+The first release supports a fixed, verified Python 3.14 package on amd64 HAOS:
+Bridge Time 1.0.0. It has no network or workspace access and is disabled unless
+both MCP App options are enabled. Its connection begins paused with no allowed
+tools. MCP-05 and MCP-06 own pause and tool policy. No worker is enabled merely
+by installing the release; arbitrary commands are not accepted.

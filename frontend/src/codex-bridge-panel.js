@@ -34,11 +34,11 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
-import { readMcpCredential, clearMcpSecrets } from "./mcp-setup.js";
+import { readMcpCredential, clearMcpSecrets, validStdioPackage } from "./mcp-setup.js";
 import { proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.7.3";
+const PANEL_VERSION = "1.8.0";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -686,7 +686,7 @@ template.innerHTML = `
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
     .schedule-card.host-access-settings { padding: 20px; }
     .host-access-settings + .host-access-settings { margin-top: 16px; }
-    .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
+    .host-access-settings a, .mcp-setup a, .mcp-stdio-settings a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
@@ -3140,6 +3140,14 @@ template.innerHTML = `
     .mcp-tool-row:last-child { border-bottom: 0; }
     .mcp-tool-row input { grid-row: 1 / span 3; margin: 3px 0; }
     .mcp-tool-row .desktop-note { grid-column: 2; margin: 2px 0 0; }
+    .mcp-stdio-settings, .stdio-server-card { display: grid; gap: 10px; min-width: 0; }
+    .mcp-stdio-settings { margin-block: 16px; }
+    .stdio-server-card h4, .stdio-server-card p, .stdio-package-details p { margin: 0; }
+    .stdio-package-details { display: grid; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; background: var(--secondary-background-color, #f5f5f5); overflow-wrap: anywhere; }
+    .stdio-package-details a { color: var(--primary-text-color, #111); text-decoration: underline; text-underline-offset: 2px; }
+    .stdio-server-details { display: grid; grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: 6px 12px; margin: 0; padding-top: 10px; border-top: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
+    .stdio-server-details dt { font-weight: 600; }
+    .stdio-server-details dd { margin: 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -7496,6 +7504,18 @@ class CodexBridgePanel extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (capabilities.includes("mcp_stdio_v1")) {
+          try {
+            state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
+            state.stdioError = "";
+          } catch (error) {
+            state.data.stdio_packages = [];
+            state.stdioError = normalizeDesktopError(error);
+          }
+        } else {
+          state.data.stdio_packages = [];
+          state.stdioError = "";
+        }
       }
       if (destination === "settings" && (!isCurrentSettingsRequest() || hasMovedProjects())) {
         if (isCurrentSettingsRequest()) {
@@ -7532,6 +7552,17 @@ class CodexBridgePanel extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field || !state?.form) return;
     state.formDraft = { ...(state.formDraft || {}), [field]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "stdio" && field === "stdio_package") {
+      state.formDraft.stdio_acknowledged = false;
+      state.formDraft.stdio_reviewed_digest = "";
+      this._renderDesktopSurface();
+      return;
+    }
+    if (form.dataset.desktopForm === "stdio" && field === "stdio_acknowledged") {
+      const selectedKey = form.querySelector('[data-desktop-field="stdio_package"]')?.value;
+      const selected = state.data.stdio_packages?.find((item) => validStdioPackage(item) && `${item.package_id}:${item.revision}` === selectedKey);
+      state.formDraft.stdio_reviewed_digest = target.checked ? selected?.digest || "" : "";
+    }
     if (form.dataset.desktopForm === "schedule") state.createRequestId = null;
     if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field)) {
       state.formDraft.local_acknowledged = false;
@@ -7682,9 +7713,14 @@ class CodexBridgePanel extends HTMLElement {
       if (scope === "project") dataset.projectId = projectId;
       dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
-    const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "delete-agents"]);
+    const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "rollback-stdio", "delete-agents"]);
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
+    if (action === "rollback-stdio" && !confirmed) {
+      const reviewed = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!reviewed || reviewed.enabled !== false || !reviewed.rollback_available) return;
+      dataset = { ...dataset, expectedRevision: reviewed.revision };
+    }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
     if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
@@ -7708,13 +7744,28 @@ class CodexBridgePanel extends HTMLElement {
     else if (action === "open-skill-form") { this._clearDesktopFormDraft(state); state.form = "skill"; }
     else if (action === "open-marketplace-form") { this._clearDesktopFormDraft(state); state.form = "marketplace"; }
     else if (action === "open-mcp-form") { this._clearDesktopFormDraft(state); state.form = "mcp-choice"; }
+    else if (action === "open-stdio-form") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      this._clearDesktopFormDraft(state); state.stdioEditing = null; state.form = "stdio-add";
+    }
+    else if (action === "open-stdio-update") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server || server.enabled !== false) return;
+      this._clearDesktopFormDraft(state); state.stdioEditing = server; state.form = "stdio-update";
+    }
+    else if (action === "toggle-stdio-details") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server) return;
+      state.expandedStdioServer = state.expandedStdioServer === server.name ? null : server.name;
+    }
     else if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) {
       this._clearDesktopFormDraft(state);
       state.form = action === "choose-ha-mcp" ? "mcp-ha" : "mcp";
       if (state.form === "mcp-ha") state.formDraft = { name: "home-assistant" };
     }
     else if (action === "select-settings-tab") state.settingsTab = dataset.tab || "general";
-    else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.form = null; }
+    else if (action === "close-form") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.stdioEditing = null; state.form = null; }
     else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
     else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
     else if (action === "submit-skill") await this._desktopMutation("create_skill", { ...this._desktopProjectSelector(), ...this._desktopFormValues(target) }, state, { clearFormDraft: true });
@@ -7756,6 +7807,33 @@ class CodexBridgePanel extends HTMLElement {
         ? "Home Assistant server added. Complete Sign in if requested, then choose allowed tools before asking Codex to use it."
         : "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
     }
+    else if (["submit-stdio-add", "submit-stdio-update"].includes(action)) {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1") || state.loading) return;
+      const form = target?.closest("form");
+      if (!form?.reportValidity()) return;
+      const values = this._desktopFormValues(target);
+      const packages = Array.isArray(state.data.stdio_packages) ? state.data.stdio_packages : [];
+      const selected = packages.find((item) => validStdioPackage(item) && `${item.package_id}:${item.revision}` === values.stdio_package);
+      if (!selected || values.stdio_acknowledged !== true || state.formDraft?.stdio_reviewed_digest !== selected.digest) { state.formError = "Review the current verified package and confirm its access limits before continuing."; return; }
+      if (action === "submit-stdio-add") {
+        const name = String(values.stdio_name || "").trim();
+        if (!/^[a-z][a-z0-9_-]{0,63}$/u.test(name)) { state.formError = "Use a lower-case server name with letters, numbers, underscores or hyphens."; return; }
+        const saved = await this._desktopMutation("add_stdio_mcp", { name, package_id: selected.package_id, revision: selected.revision, acknowledged: true }, state, { clearFormDraft: true });
+        if (saved) state.notice = "Isolated server added in a paused state. Choose allowed tools, then resume it when ready.";
+      } else {
+        const server = state.stdioEditing;
+        if (!server || server.enabled !== false || server.package_id !== selected.package_id || server.package_revision === selected.revision) return;
+        const saved = await this._desktopMutation("update_stdio_mcp", { name: server.name, revision: selected.revision, expected_revision: server.revision, acknowledged: true }, state, { clearFormDraft: true });
+        if (saved) { state.stdioEditing = null; state.notice = "Package update staged. The server remains paused until you review its tools and resume it."; }
+      }
+    }
+    else if (action === "rollback-stdio") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server || server.enabled !== false || !server.rollback_available) return;
+      const saved = await this._desktopMutation("rollback_stdio_mcp", { name: server.name, expected_revision: dataset.expectedRevision }, state);
+      if (saved) state.notice = "The previous packaged revision was restored. Review its tools before resuming.";
+    }
     else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
       if (!server || !this._config?.capabilities?.includes("mcp_management_v1")) return;
@@ -7771,7 +7849,10 @@ class CodexBridgePanel extends HTMLElement {
       if (!server || !this._config?.capabilities?.includes("mcp_tool_permissions_v1") || state.loading) return;
       state.loading = true; state.formError = ""; state.error = "";
       try {
-        state.mcpToolInventory = await this._callWS("list_mcp_tools", { name: server.name });
+        const inventory = await this._callWS("list_mcp_tools", { name: server.name });
+        state.mcpToolInventory = server.transport === "stdio"
+          ? { ...inventory, endpoint: "Isolated App worker" }
+          : inventory;
         state.mcpToolDraft = null;
         state.form = "mcp-tools";
       } catch (error) { state.error = normalizeDesktopError(error); }

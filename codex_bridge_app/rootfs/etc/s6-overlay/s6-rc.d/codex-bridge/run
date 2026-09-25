@@ -41,6 +41,16 @@ case "${enable_local_mcp}" in
         ;;
 esac
 
+enable_stdio_mcp="$(bashio::config 'enable_stdio_mcp')"
+case "${enable_stdio_mcp}" in
+    true|false) ;;
+    null|'') enable_stdio_mcp=false ;;
+    *)
+        bashio::log.fatal "The enable_stdio_mcp option must be a boolean."
+        exit 1
+        ;;
+esac
+
 # Deliberately construct the service environment from an allowlist. In
 # particular, the Supervisor credential is neither inherited nor re-exported
 # to Bridge, Codex, or model-controlled tools.
@@ -59,10 +69,11 @@ exec s6-setuidgid codexbridge env -i \
     CODEX_BRIDGE_RUNTIME_PROFILE=home_assistant \
     CODEX_BRIDGE_ENABLE_MCP="${enable_mcp}" \
     CODEX_BRIDGE_ENABLE_LOCAL_MCP="${enable_local_mcp}" \
+    CODEX_BRIDGE_ENABLE_STDIO_MCP="${enable_stdio_mcp}" \
     CODEX_BRIDGE_ENABLE_BROWSER="${enable_browser}" \
     CODEX_BRIDGE_CODEX_WRAPPER_PATH=/usr/local/bin/codex-ha \
-    CODEX_BRIDGE_APP_VERSION=1.7.3 \
-    CODEX_BRIDGE_VERSION=0.13.0 \
+    CODEX_BRIDGE_APP_VERSION=1.8.0 \
+    CODEX_BRIDGE_VERSION=0.14.0 \
     CODEX_BRIDGE_CODEX_VERSION=0.157.0 \
     CODEX_BRIDGE_ARCH="${runtime_arch}" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST=57be03a9c3fa96ddf02141427609b1552375ce157b24d66fe57a96205896c5be \

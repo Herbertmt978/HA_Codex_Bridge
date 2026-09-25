@@ -35,6 +35,26 @@ class CreateMcpServerRequest(BaseModel):
     require_tool_selection: StrictBool = False
 
 
+class CreateStdioServerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=64)
+    package_id: str = Field(min_length=1, max_length=64)
+    revision: str = Field(min_length=1, max_length=96)
+    acknowledged: StrictBool = False
+
+
+class ChangeStdioRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: str | None = Field(default=None, max_length=96)
+    expected_revision: str = Field(min_length=64, max_length=64)
+    acknowledged: StrictBool = False
+
+
+class RollbackStdioRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: str = Field(min_length=64, max_length=64)
+
+
 class McpCredentialRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     authentication: object = Field(repr=False)
@@ -120,6 +140,48 @@ def create_mcp_server(
             auth_acknowledged=payload.auth_acknowledged,
             require_tool_selection=payload.require_tool_selection,
         )
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.get("/mcp/stdio/packages")
+def list_stdio_packages(request: Request,
+                        authorization: str | None = Header(default=None)) -> list[dict[str, object]]:
+    _authorize(request, authorization)
+    try:
+        return _manager(request).available_stdio_packages()
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/stdio/servers", status_code=status.HTTP_201_CREATED)
+def create_stdio_server(payload: CreateStdioServerRequest, request: Request,
+                        authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    try:
+        return _manager(request).create_stdio_server(**payload.model_dump())
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/stdio/servers/{name}/update")
+def update_stdio_server(name: str, payload: ChangeStdioRevisionRequest, request: Request,
+                        authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    try:
+        return _manager(request).change_stdio_revision(name, revision=payload.revision,
+            expected_revision=payload.expected_revision, acknowledged=payload.acknowledged)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/stdio/servers/{name}/rollback")
+def rollback_stdio_server(name: str, payload: RollbackStdioRevisionRequest, request: Request,
+                          authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    try:
+        return _manager(request).change_stdio_revision(name, revision=None,
+            expected_revision=payload.expected_revision, acknowledged=True, rollback=True)
     except McpManagerError as error:
         raise _problem(error) from None
 

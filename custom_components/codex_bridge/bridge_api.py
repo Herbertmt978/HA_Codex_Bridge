@@ -1568,6 +1568,44 @@ class BridgeApiClient:
         self._require_mcp_capability()
         return await self._async_json("GET", "/mcp/servers")
 
+    async def async_list_stdio_packages(self) -> list[dict[str, Any]]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_stdio_v1")
+        return await self._async_json("GET", "/mcp/stdio/packages")
+
+    async def async_add_stdio_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_stdio_v1")
+        self.require_capability("mcp_management_v1")
+        self.require_capability("mcp_tool_permissions_v1")
+        if payload.get("acknowledged") is not True:
+            raise ValueError("Stdio package approval is required")
+        return await self._async_json(
+            "POST", "/mcp/stdio/servers", json_body=_bounded_mapping(payload),
+            expected_status={201}, request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
+        )
+
+    async def async_update_stdio_mcp(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_stdio_v1")
+        self.require_capability("mcp_management_v1")
+        if payload.get("acknowledged") is not True:
+            raise ValueError("Stdio package approval is required")
+        return await self._async_json(
+            "POST", f"/mcp/stdio/servers/{_path_segment(name)}/update",
+            json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
+        )
+
+    async def async_rollback_stdio_mcp(self, name: str, expected_revision: str) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_stdio_v1")
+        self.require_capability("mcp_management_v1")
+        return await self._async_json(
+            "POST", f"/mcp/stdio/servers/{_path_segment(name)}/rollback",
+            json_body={"expected_revision": expected_revision},
+            request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
+        )
+
     async def async_add_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
         if payload.get("require_tool_selection"):

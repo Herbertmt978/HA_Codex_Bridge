@@ -26,6 +26,12 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 from .codex_app_server import mcp_config_is_disabled
 from .mcp_local_policy import LocalMcpError
 from .mcp_relay import McpRelay, McpRelayRecoveryError
+from .mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
+from .stdio_package_catalogue import (
+    PackageVerificationError,
+    list_packages as list_stdio_packages,
+    previous_revision,
+)
 from .mcp_credentials import parse_credential
 
 
@@ -178,13 +184,16 @@ class McpServerDefinition:
     oauth_resource: str | None = None
     local: bool = False
     relayed: bool = False
+    stdio: bool = False
+    package_id: str | None = None
+    package_revision: str | None = None
     auth_mode: str = "none"
     credential_configured: bool = False
     enabled: bool = True
     enabled_tools: tuple[str, ...] | None = None
 
     def config_value(self) -> dict[str, object]:
-        if self.local or self.relayed:
+        if self.local or self.relayed or self.stdio:
             # Local upstream URLs must never become native Codex destinations.
             raise McpValidationError()
         value: dict[str, object] = {"url": self.url}
@@ -211,6 +220,7 @@ class McpManager:
         resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
         enabled: bool = False,
         relay: McpRelay | None = None,
+        stdio_adapter: StdioMcpAdapter | None = None,
         discovery_marker: Path | None = None,
     ) -> None:
         if request_timeout_seconds <= 0:
@@ -223,6 +233,7 @@ class McpManager:
         self._resolver = resolver
         self._enabled = enabled
         self._relay = relay
+        self._stdio_adapter = stdio_adapter
         self._discovery_marker = discovery_marker
         self._lock = RLock()
         self._startup: dict[str, tuple[str, str | None]] = {}
@@ -285,8 +296,8 @@ class McpManager:
                 templates = status.get("resourceTemplates")
                 view: dict[str, object] = {
                     "name": definition.name,
-                    "transport": "streamable_http",
-                    "network": "local" if definition.local else "public",
+                    "transport": "stdio" if definition.stdio else "streamable_http",
+                    "network": "none" if definition.stdio else "local" if definition.local else "public",
                     "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
                     "auth": definition.auth_mode if definition.relayed else _auth_display(auth_status),
                     "startup": startup,
@@ -305,6 +316,16 @@ class McpManager:
                     view.update(tool_count=0, status_unavailable=True)
                 if definition.auth_mode != "none":
                     view["credential_configured"] = definition.credential_configured
+                if definition.stdio:
+                    view["package_id"] = definition.package_id
+                    view["package_revision"] = definition.package_revision
+                    try:
+                        view["rollback_available"] = bool(previous_revision(
+                            definition.package_id, definition.package_revision))
+                    except PackageVerificationError:
+                        view["rollback_available"] = False
+                        view["startup"] = "unavailable"
+                        view["failure"] = "package_unavailable"
                 title = _safe_display_text(info.get("title"), 160)
                 server_version = _safe_display_text(info.get("version"), 64)
                 if title is not None:
@@ -328,7 +349,17 @@ class McpManager:
             if definition is None:
                 raise McpNotFoundError()
         try:
-            if not definition.enabled:
+            if definition.stdio:
+                if self._stdio_adapter is None:
+                    raise McpUnavailableError()
+                with self._mutation_lease():
+                    try:
+                        discovered_tools = self._stdio_adapter.discover_tools(normalized)
+                    except StdioAdapterError:
+                        status = None
+                    else:
+                        status = {"tools": {tool["name"]: tool for tool in discovered_tools}}
+            elif not definition.enabled:
                 status = None
             elif definition.enabled_tools is not None:
                 status, version = self._discover_restricted_tools(normalized)
@@ -345,7 +376,7 @@ class McpManager:
             definitions, current_version = self._read_definitions()
             if definitions.get(normalized) != definition or current_version != version:
                 raise McpConflictError()
-            catalogue_available = (definition.enabled and status is not None
+            catalogue_available = ((definition.enabled or definition.stdio) and status is not None
                                    and isinstance(status.get("tools"), Mapping)
                                    and status.get("toolsError") is None)
             tools = _tool_catalogue(status) if catalogue_available else []
@@ -479,7 +510,30 @@ class McpManager:
                 raise McpValidationError()
             updated = replace(previous, enabled_tools=selected)
             if updated != previous:
-                version = self._apply_definition(previous, updated, version)
+                if previous.stdio and self._stdio_adapter is not None:
+                    # The native filter is authoritative while a turn lease
+                    # excludes active work. Persist both policies for crash
+                    # recovery, then narrow to the committed selection.
+                    old = set(previous.enabled_tools or ())
+                    try:
+                        self._stdio_adapter.set_tools(normalized, tuple(sorted(old | set(selected))))
+                    except StdioAdapterError:
+                        raise McpUnavailableError() from None
+                try:
+                    version = self._apply_definition(previous, updated, version)
+                except McpManagerError:
+                    if previous.stdio and self._stdio_adapter is not None:
+                        try:
+                            self._stdio_adapter.set_tools(normalized, previous.enabled_tools or ())
+                        except StdioAdapterError:
+                            self._require_recovery(normalized)
+                    raise
+                if previous.stdio and self._stdio_adapter is not None:
+                    try:
+                        self._stdio_adapter.set_tools(normalized, selected)
+                    except StdioAdapterError:
+                        self._require_recovery(normalized)
+                        raise McpRecoveryRequiredError() from None
             self._catalogue_snapshots.pop(normalized, None)
             return {"name": normalized, "tool_policy": "selected", "enabled_tools": list(selected),
                     "revision": self._revision(normalized, version)}
@@ -566,6 +620,99 @@ class McpManager:
                 self._active_names = self._active_names | {definition.name}
         return self._view_for_created(definition)
 
+    def available_stdio_packages(self) -> list[dict[str, object]]:
+        self._require_enabled()
+        if self._stdio_adapter is None:
+            raise McpUnavailableError()
+        try:
+            return list_stdio_packages()
+        except Exception:  # noqa: BLE001 - invalid image catalogue must fail closed
+            raise McpUnavailableError() from None
+
+    def create_stdio_server(self, *, name: object, package_id: object,
+                            revision: object, acknowledged: object) -> dict[str, object]:
+        """Install an image-approved package paused, with no permitted tools."""
+        self._require_enabled()
+        self._require_elicitation_handler()
+        if (self._stdio_adapter is None or acknowledged is not True
+                or not isinstance(package_id, str) or not isinstance(revision, str)):
+            raise McpValidationError()
+        normalized = _validate_name(name)
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            if normalized in definitions:
+                raise McpConflictError()
+            if len(definitions) >= _MAX_SERVERS:
+                raise McpValidationError()
+            try:
+                self._stdio_adapter.add(normalized, package_id, revision)
+                definition = McpServerDefinition(
+                    normalized, f"stdio://{package_id}/{revision}", stdio=True,
+                    package_id=package_id, package_revision=revision,
+                    enabled=False, enabled_tools=(),
+                )
+                self._write_config_value(key_path=f"mcp_servers.{normalized}",
+                                         value=self._native_value(definition), version=version)
+            except StdioAdapterError:
+                raise McpValidationError() from None
+            except McpManagerError:
+                try:
+                    self._stdio_adapter.remove(normalized)
+                except StdioAdapterError:
+                    self._require_recovery(normalized)
+                    raise McpRecoveryRequiredError() from None
+                raise
+            self._reload()
+            self._mutation_serial += 1
+            return self._view_for_created(definition)
+
+    def change_stdio_revision(self, name: object, *, revision: object,
+                              expected_revision: object, acknowledged: object,
+                              rollback: bool = False) -> dict[str, object]:
+        self._require_enabled()
+        self._require_elicitation_handler()
+        if self._stdio_adapter is None or acknowledged is not True:
+            raise McpValidationError()
+        normalized = _validate_name(name)
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(normalized)
+            if previous is None or not previous.stdio or previous.package_id is None:
+                raise McpNotFoundError()
+            self._check_revision(normalized, version, expected_revision)
+            if previous.enabled:
+                raise McpConflictError()
+            try:
+                target = previous_revision(
+                    previous.package_id, previous.package_revision,
+                ) if rollback else revision
+            except PackageVerificationError:
+                raise McpValidationError() from None
+            if not isinstance(target, str) or target == previous.package_revision:
+                raise McpValidationError()
+            paused = replace(previous, enabled_tools=())
+            if previous != paused:
+                version = self._apply_definition(previous, paused, version)
+            try:
+                self._stdio_adapter.replace_package(normalized, target)
+                self._reload()
+                definitions, version = self._read_definitions()
+                updated = definitions.get(normalized)
+                if (updated is None or updated.enabled or updated.package_id != previous.package_id
+                        or updated.package_revision != target or updated.enabled_tools != ()):
+                    raise McpConflictError()
+            except (StdioAdapterError, McpManagerError):
+                # The package registry or native reload may have committed even
+                # when its response failed. Block all new work until restart
+                # reconciles the installed revision with the paused config.
+                self._require_recovery(normalized)
+                raise McpRecoveryRequiredError() from None
+            self._mutation_serial += 1
+            self._active_names = self._active_names - {normalized}
+            result = self._view_for_created(updated)
+            result["revision"] = self._revision(normalized, version)
+            return result
+
     def _revision(self, name: str, version: str) -> str:
         # This process owns relay mutations; native versions also detect edits
         # made outside it. A fresh key invalidates forms retained across restart.
@@ -583,6 +730,8 @@ class McpManager:
         self._active_names = frozenset()
         if self._relay is not None:
             self._relay.deactivate(name)
+        if self._stdio_adapter is not None:
+            self._stdio_adapter.deactivate(name)
         # No active/queued turn exists while the configuration lease is held.
         close = getattr(self._runtime_gate, "close", None)
         if callable(close):
@@ -673,6 +822,8 @@ class McpManager:
             self._check_revision(normalized, version, revision)
             if previous.enabled:
                 raise McpConflictError()
+            if previous.stdio:
+                raise McpValidationError()
             if previous.relayed:
                 try:
                     canonical = self._relay.edit_paused_endpoint(normalized, url,
@@ -722,6 +873,12 @@ class McpManager:
                         self._relay.remove(normalized_name)
                     except Exception:
                         raise McpUnavailableError() from None
+                if definitions[normalized_name].stdio and self._stdio_adapter is not None:
+                    try:
+                        self._stdio_adapter.remove(normalized_name)
+                    except StdioAdapterError:
+                        self._require_recovery(normalized_name)
+                        raise McpRecoveryRequiredError() from None
                 self._reload()
                 self._active_names = self._active_names - {normalized_name}
                 self._startup.pop(normalized_name, None)
@@ -736,7 +893,7 @@ class McpManager:
                 definitions, _version = self._read_definitions()
                 if normalized_name not in definitions:
                     raise McpNotFoundError()
-                if definitions[normalized_name].relayed:
+                if definitions[normalized_name].relayed or definitions[normalized_name].stdio:
                     raise McpValidationError()
                 result = self._request(
                     "mcpServer/oauth/login",
@@ -806,6 +963,7 @@ class McpManager:
                     result,
                     resolver=self._resolver,
                     relay=self._relay,
+                    stdio_adapter=self._stdio_adapter,
                 )
                 marker_pending = self._discovery_marker is not None and self._discovery_marker.exists()
                 if marker_pending:
@@ -820,6 +978,11 @@ class McpManager:
                     try:
                         self._relay.retain({name for name, item in definitions.items() if item.relayed})
                     except Exception:
+                        raise McpUnavailableError() from None
+                if self._stdio_adapter is not None:
+                    try:
+                        self._stdio_adapter.retain({name for name, item in definitions.items() if item.stdio})
+                    except StdioAdapterError:
                         raise McpUnavailableError() from None
                 self._write_config_value(
                     key_path="mcp_servers",
@@ -872,13 +1035,13 @@ class McpManager:
     def _view_for_created(self, definition: McpServerDefinition) -> dict[str, object]:
         view = {
             "name": definition.name,
-            "transport": "streamable_http",
+            "transport": "stdio" if definition.stdio else "streamable_http",
             "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
             "auth": definition.auth_mode if definition.relayed else "oauth" if definition.oauth_client_id else "none",
             "startup": "starting",
             "tool_count": 0,
             "resource_count": 0,
-            "network": "local" if definition.local else "public",
+            "network": "none" if definition.stdio else "local" if definition.local else "public",
             "enabled": definition.enabled,
             "tool_policy": "selected" if definition.enabled_tools is not None else "all",
         }
@@ -886,6 +1049,11 @@ class McpManager:
             view["startup"] = "paused"
         if definition.auth_mode != "none":
             view["credential_configured"] = definition.credential_configured
+        if definition.stdio:
+            view["package_id"] = definition.package_id
+            view["package_revision"] = definition.package_revision
+            view["rollback_available"] = bool(previous_revision(
+                definition.package_id, definition.package_revision))
         return view
 
     def replace_credential(self, name: object, authentication: object = None, *, acknowledged: bool = False, remove: bool = False) -> dict[str, object]:
@@ -919,6 +1087,17 @@ class McpManager:
                 "credential_configured": credential is not None}
 
     def _native_value(self, definition: McpServerDefinition) -> dict[str, object]:
+        if definition.stdio:
+            if self._stdio_adapter is None or definition.enabled_tools is None:
+                raise McpUnavailableError()
+            try:
+                value = self._stdio_adapter.native_config(definition.name, active=definition.enabled)
+            except StdioAdapterError:
+                raise McpUnavailableError() from None
+            if not definition.enabled:
+                value["enabled"] = False
+            value["enabled_tools"] = list(definition.enabled_tools)
+            return value
         if definition.relayed:
             if self._relay is None:
                 raise McpLocalDisabledError()
@@ -1011,7 +1190,8 @@ class McpManager:
         for raw_name, raw_value in raw_servers.items():
             try:
                 definition = _definition_from_config(
-                    raw_name, raw_value, relay=self._relay, effective=True,
+                    raw_name, raw_value, relay=self._relay,
+                    stdio_adapter=self._stdio_adapter, effective=True,
                 )
             except McpValidationError:
                 # Unsafe existing native config is never reflected back into HA.
@@ -1135,6 +1315,7 @@ def _definition_from_config(
     *,
     resolver: Callable[[str], tuple[str, ...]] = _resolve_host,
     relay: McpRelay | None = None,
+    stdio_adapter: StdioMcpAdapter | None = None,
     effective: bool = False,
 ) -> McpServerDefinition:
     normalized_name = _validate_name(name)
@@ -1143,6 +1324,19 @@ def _definition_from_config(
     enabled = value.get("enabled", True)
     enabled_tools = _validate_enabled_tools(value.get("enabled_tools"))
     value = {key: item for key, item in value.items() if key not in {"enabled", "enabled_tools"}}
+    if stdio_adapter is not None and stdio_adapter.original_binding(normalized_name, value, effective=effective):
+        if enabled_tools is None:
+            raise McpValidationError()
+        metadata = stdio_adapter.metadata(normalized_name)
+        if not set(enabled_tools) <= set(metadata["allowed_tools"]):
+            raise McpValidationError()
+        package_id = metadata["package_id"]
+        revision = metadata["revision"]
+        return McpServerDefinition(
+            normalized_name, f"stdio://{package_id}/{revision}", stdio=True,
+            package_id=str(package_id), package_revision=str(revision),
+            enabled=enabled, enabled_tools=enabled_tools,
+        )
     if relay is not None:
         original = relay.original_url(normalized_name, value, effective=effective)
         if original is not None:
@@ -1382,6 +1576,7 @@ def _validated_user_definitions(
     *,
     resolver: Callable[[str], tuple[str, ...]],
     relay: McpRelay | None = None,
+    stdio_adapter: StdioMcpAdapter | None = None,
 ) -> tuple[dict[str, McpServerDefinition], str]:
     """Return only safe servers from the raw user layer behind a session mask."""
 
@@ -1454,6 +1649,7 @@ def _validated_user_definitions(
                     value,
                     resolver=resolver,
                     relay=relay,
+                    stdio_adapter=stdio_adapter,
                 )
             except McpValidationError:
                 continue
@@ -1513,6 +1709,8 @@ def _safe_display_text(value: object, maximum: int) -> str | None:
 
 def _endpoint_display(url: str, *, private_path: bool = False) -> str:
     parsed = urlsplit(url)
+    if parsed.scheme == "stdio":
+        return f"{parsed.netloc} {parsed.path.lstrip('/')}"
     if private_path:
         return f"{parsed.scheme}://{parsed.netloc}"
     path = parsed.path if parsed.path and parsed.path != "/" else ""

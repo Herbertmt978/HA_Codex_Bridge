@@ -107,13 +107,15 @@ def test_failed_page_setup_closes_the_browser_and_proxy(worker, monkeypatch, tmp
 
     monkeypatch.setattr(worker, "UnixPolicyProxy", Proxy)
     monkeypatch.setattr(worker, "CdpPipe", Pipe)
+    monkeypatch.setattr(worker, "acquire_worker_lease", lambda: 42)
+    monkeypatch.setattr(worker, "release_worker_lease", lambda _fd: events.append("lease-release"))
     monkeypatch.setattr(worker.tempfile, "mkdtemp", lambda **kwargs: str(tmp_path))
     monkeypatch.setattr(
         worker, "_remove_profile", lambda path: events.append("profile-removed")
     )
     with pytest.raises(worker.CdpError):
         worker.Session.create("brs_test")
-    assert events == ["proxy-start", "browser-close", "proxy-close", "profile-removed"]
+    assert events == ["proxy-start", "browser-close", "proxy-close", "profile-removed", "lease-release"]
 
 
 def test_oversized_unterminated_request_is_read_with_a_bound(worker, monkeypatch):

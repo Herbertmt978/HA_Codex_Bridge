@@ -31,6 +31,24 @@ case "${enable_browser}" in
         ;;
 esac
 
+# Stdio workers have a distinct, default-closed boundary. Only a successful
+# root-side probe from this boot permits the non-root Bridge to advertise them.
+enable_stdio_mcp="$(bashio::config 'enable_stdio_mcp')"
+case "${enable_stdio_mcp}" in
+    true)
+        if ! python /usr/local/libexec/codex-bridge/stdio_attest.py; then
+            bashio::log.warning "Stdio MCP isolation could not be verified; stdio servers remain unavailable."
+        fi
+        ;;
+    false|null|'')
+        python /usr/local/libexec/codex-bridge/stdio_attest.py --disabled
+        ;;
+    *)
+        bashio::log.error "The enable_stdio_mcp option must be a boolean."
+        exit 1
+        ;;
+esac
+
 # Only root-side initialization/discovery helpers may inherit Supervisor auth.
 # The long-lived Bridge/Codex process constructs a clean environment itself.
 unset SUPERVISOR_TOKEN

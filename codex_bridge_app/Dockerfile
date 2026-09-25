@@ -6,7 +6,7 @@ ARG BUILD_ARCH=amd64
 LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.version="1.7.3"
+    io.hass.version="1.8.0"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -14,6 +14,7 @@ COPY wheel/ /tmp/wheel/
 COPY codex-release.json /tmp/codex-release.json
 COPY assets/ /tmp/assets/
 COPY rootfs/ /
+COPY stdio-packages/ /opt/codex-stdio/packages/
 
 RUN set -eux; \
     case "${BUILD_ARCH}:${TARGETARCH}" in amd64:amd64|aarch64:arm64) ;; *) exit 1 ;; esac; \
@@ -48,6 +49,11 @@ RUN set -eux; \
       /opt/codex/bin/bwrap; \
     install -d -o root -g root -m 0755 /opt/codex-browser/bin; \
     install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-browser/bin/bwrap; \
+    install -d -o root -g root -m 0755 /opt/codex-stdio/bin; \
+    install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-stdio/bin/bwrap; \
+    chown -R root:root /opt/codex-stdio/packages; \
+    find /opt/codex-stdio/packages -type d -exec chmod 0555 {} +; \
+    find /opt/codex-stdio/packages -type f -exec chmod 0444 {} +; \
     rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
     chmod 0755 /usr/local/bin/codex-app-entrypoint /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
       /usr/local/bin/bwrap /opt/codex/bin/bwrap; \
@@ -62,8 +68,8 @@ EXPOSE 8766
 
 ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
 
-ENV CODEX_BRIDGE_APP_VERSION="1.7.3" \
-    CODEX_BRIDGE_VERSION="0.13.0" \
+ENV CODEX_BRIDGE_APP_VERSION="1.8.0" \
+    CODEX_BRIDGE_VERSION="0.14.0" \
     CODEX_BRIDGE_CODEX_VERSION="0.157.0" \
     CODEX_BRIDGE_ARCH="${BUILD_ARCH}" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="57be03a9c3fa96ddf02141427609b1552375ce157b24d66fe57a96205896c5be" \

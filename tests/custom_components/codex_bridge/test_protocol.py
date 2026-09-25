@@ -82,6 +82,13 @@ def test_retains_optional_browser_capability_without_enabling_it_for_older_apps(
     assert "browser_v1" in ReadyRecord.from_payload(payload).capabilities
 
 
+def test_retains_isolated_stdio_capability_only_when_advertised() -> None:
+    payload = _fixture("ready_v1.json")
+    assert "mcp_stdio_v1" not in ReadyRecord.from_payload(payload).capabilities
+    payload["capabilities"].append("mcp_stdio_v1")
+    assert "mcp_stdio_v1" in ReadyRecord.from_payload(payload).capabilities
+
+
 def test_parses_legacy_v0_ready_only_with_explicit_compatibility() -> None:
     ready = ReadyRecord.from_payload(
         _fixture("ready_legacy_v0.json"), allow_legacy_v0=True

@@ -12,6 +12,7 @@ from codex_bridge_service.mcp_manager import (
     McpConflictError, McpManager, McpRecoveryRequiredError, McpValidationError,
     McpUnavailableError, McpServerDefinition,
 )
+from codex_bridge_service.mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
 from codex_bridge_service.runtime_gate import RuntimeGate
 from codex_bridge_service.resource_limits import ResourceLimits
 from codex_bridge_service.routes.mcp import router
@@ -85,6 +86,207 @@ def manager_for(client, marker_path=None):
     return McpManager(client, gate, enabled=True, resolver=lambda _: (), discovery_marker=marker_path), gate
 
 
+class StdioAdapterFixture:
+    """Private binding stub; tests the manager's native configuration contract."""
+
+    def __init__(self):
+        self.record = None
+        self.allowed_tools = ()
+        self.active = False
+        self.port = 8767
+
+    def add(self, name, package_id, revision):
+        assert self.record is None
+        self.record = (name, package_id, revision)
+
+    def metadata(self, name):
+        assert self.record is not None and self.record[0] == name
+        return {
+            "package_id": self.record[1],
+            "revision": self.record[2],
+            "allowed_tools": list(self.allowed_tools),
+        }
+
+    def native_config(self, name, *, active=False):
+        assert self.record is not None and self.record[0] == name
+        self.active = active
+        return {
+            "url": f"http://127.0.0.1:{self.port}/mcp/{name}",
+            "http_headers": {"x-codex-stdio-mcp": "private-token"},
+        }
+
+    def original_binding(self, name, value, *, effective=False):
+        if self.record is None or self.record[0] != name:
+            return False
+        if effective:
+            value = {
+                key: item for key, item in value.items()
+                if key not in {"enabled", "environment_id", "tool_timeout_sec"}
+            }
+        return value == self.native_config(name, active=self.active)
+
+    def set_tools(self, name, selected):
+        assert self.record is not None and self.record[0] == name
+        self.allowed_tools = selected
+
+    def replace_package(self, name, revision):
+        if self.record is None or self.record[0] != name or self.active:
+            raise StdioAdapterError()
+        self.record = (name, self.record[1], revision)
+        self.allowed_tools = ()
+
+    def deactivate(self, name):
+        self.active = False
+
+    def remove(self, name):
+        self.deactivate(name)
+        self.record = None
+
+    def discover_tools(self, name):
+        assert self.record is not None and self.record[0] == name
+        return [{"name": "get_current_time", "inputSchema": {"type": "object"}}]
+
+
+def test_stdio_connection_starts_paused_and_exposes_no_private_binding():
+    client = NativeConfig()
+    adapter = StdioAdapterFixture()
+    gate = RuntimeGate(limits=ResourceLimits())
+    manager = McpManager(client, gate, enabled=True, resolver=lambda _: (),
+                         stdio_adapter=adapter)
+    created = manager.create_stdio_server(name="clock", package_id="bridge-time",
+        revision="1.0.0", acknowledged=True)
+    assert created["enabled"] is False
+    assert client.servers["clock"]["enabled_tools"] == []
+    assert client.servers["clock"]["enabled"] is False
+    assert "private-token" not in str(created)
+    listing = manager.list_servers()
+    clock = next(row for row in listing if row["name"] == "clock")
+    assert clock["transport"] == "stdio"
+    assert clock["network"] == "none"
+    assert "127.0.0.1" not in str(clock)
+    tools = manager.list_server_tools("clock")
+    assert tools["catalogue_available"] is True
+    assert tools["tools"][0]["name"] == "get_current_time"
+    assert "127.0.0.1" not in str(tools)
+    assert not adapter.active
+    selected = manager.set_server_tools(
+        "clock", enabled_tools=["get_current_time"],
+        revision=tools["revision"], catalogue_revision=tools["catalogue_revision"],
+    )
+    assert adapter.allowed_tools == ("get_current_time",)
+    assert not adapter.active
+    resumed = manager.set_server_enabled(
+        "clock", enabled=True, revision=selected["revision"],
+    )
+    assert resumed["enabled"] is True
+    assert adapter.active
+    manager.remove_server("clock")
+    assert adapter.record is None
+
+
+def test_stdio_create_route_requires_bridge_auth_and_explicit_review(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, revision: "1.0.0" if revision == "1.1.0" else None)
+    native = NativeConfig()
+    adapter = StdioAdapterFixture()
+    manager = McpManager(native, RuntimeGate(limits=ResourceLimits()), enabled=True,
+                         resolver=lambda _: (), stdio_adapter=adapter)
+    app = FastAPI()
+    app.include_router(router)
+    app.state.auth_token = "synthetic-bridge-token"
+    app.state.storage = SimpleNamespace(runtime_profile="external_legacy")
+    app.state.mcp_manager = manager
+    client = TestClient(app)
+    payload = {"name": "clock", "package_id": "bridge-time",
+               "revision": "1.0.0", "acknowledged": True}
+    assert client.post("/mcp/stdio/servers", json=payload).status_code == 401
+    assert adapter.record is None
+    headers = {"Authorization": "Bearer synthetic-bridge-token"}
+    assert client.post("/mcp/stdio/servers", headers=headers,
+                       json={**payload, "acknowledged": False}).status_code == 400
+    assert adapter.record is None
+    created = client.post("/mcp/stdio/servers", headers=headers, json=payload)
+    assert created.status_code == 201
+    assert created.json()["enabled"] is False
+    assert "private-token" not in created.text
+    current = next(row for row in client.get("/mcp/servers", headers=headers).json()
+                   if row["name"] == "clock")
+    update_url = "/mcp/stdio/servers/clock/update"
+    update = {"revision": "1.1.0", "acknowledged": True,
+              "expected_revision": current["revision"]}
+    assert client.post(update_url, headers=headers,
+                       json={"revision": "1.1.0", "acknowledged": True}).status_code == 422
+    assert client.post(update_url, headers=headers,
+                       json={**update, "expected_revision": "0" * 64}).status_code == 409
+    changed = client.post(update_url, headers=headers, json=update)
+    assert changed.status_code == 200
+    assert changed.json()["package_revision"] == "1.1.0"
+    rollback_url = "/mcp/stdio/servers/clock/rollback"
+    assert client.post(rollback_url, headers=headers,
+                       json={"expected_revision": current["revision"]}).status_code == 409
+    restored = client.post(rollback_url, headers=headers,
+                           json={"expected_revision": changed.json()["revision"]})
+    assert restored.status_code == 200
+    assert restored.json()["package_revision"] == "1.0.0"
+
+
+def test_stdio_revision_change_requires_paused_fresh_state(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, revision: "1.0.0" if revision == "1.1.0" else None)
+    native = NativeConfig()
+    adapter = StdioAdapterFixture()
+    manager = McpManager(native, RuntimeGate(limits=ResourceLimits()), enabled=True,
+                         resolver=lambda _: (), stdio_adapter=adapter)
+    manager.create_stdio_server(name="clock", package_id="bridge-time",
+                                revision="1.0.0", acknowledged=True)
+    created = next(row for row in manager.list_servers() if row["name"] == "clock")
+    resumed = manager.set_server_enabled("clock", enabled=True,
+                                         revision=created["revision"])
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=resumed["revision"], acknowledged=True)
+    paused = manager.set_server_enabled("clock", enabled=False,
+                                        revision=resumed["revision"])
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=created["revision"], acknowledged=True)
+    assert adapter.record == ("clock", "bridge-time", "1.0.0")
+    updated = manager.change_stdio_revision("clock", revision="1.1.0",
+        expected_revision=paused["revision"], acknowledged=True)
+    assert updated["package_revision"] == "1.1.0"
+    assert updated["enabled"] is False
+    assert native.servers["clock"]["enabled_tools"] == []
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision=None,
+            expected_revision=paused["revision"], acknowledged=True, rollback=True)
+    rolled_back = manager.change_stdio_revision("clock", revision=None,
+        expected_revision=updated["revision"], acknowledged=True, rollback=True)
+    assert rolled_back["package_revision"] == "1.0.0"
+
+
+def test_failed_stdio_revision_reload_blocks_activation_until_recovery(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, _revision: None)
+    native = NativeConfig()
+    adapter = StdioAdapterFixture()
+    gate = RuntimeGate(limits=ResourceLimits())
+    manager = McpManager(native, gate, enabled=True, resolver=lambda _: (),
+                         stdio_adapter=adapter)
+    manager.create_stdio_server(name="clock", package_id="bridge-time",
+                                revision="1.0.0", acknowledged=True)
+    created = next(row for row in manager.list_servers() if row["name"] == "clock")
+    native.reload_failures = 1
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=created["revision"], acknowledged=True)
+    assert adapter.record == ("clock", "bridge-time", "1.1.0")
+    assert native.servers["clock"]["enabled"] is False
+    assert native.servers["clock"]["enabled_tools"] == []
+    assert gate.snapshot().closed
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.list_servers()
+
+
 def test_pause_resume_revisions_and_retained_configuration():
     client = NativeConfig()
     manager, _gate = manager_for(client)
@@ -108,6 +310,26 @@ def test_paused_definition_survives_startup_sanitisation():
     manager.activate_validated_mcp_config()
     assert manager.list_servers()[0]["startup"] == "paused"
     assert client.servers["vendor"]["enabled"] is False
+
+
+def test_startup_rebinds_saved_stdio_selection_to_current_private_port():
+    adapter = StdioMcpAdapter(lambda *_: None, package_verifier=lambda *_: object())
+    adapter.port = 8767
+    adapter.add("clock", "bridge-time", "1.0.0")
+    old = adapter.native_config("clock")
+    client = NativeConfig()
+    client.servers = {"clock": {
+        **old, "url": "http://127.0.0.1:9531/mcp/clock",
+        "enabled": False, "enabled_tools": [],
+    }}
+    client.masked = True
+    gate = RuntimeGate(limits=ResourceLimits())
+    manager = McpManager(client, gate, enabled=True, resolver=lambda _: (),
+                         stdio_adapter=adapter)
+    manager.sanitize_startup_servers()
+    assert client.servers["clock"]["url"] == old["url"]
+    assert client.servers["clock"]["enabled"] is False
+    assert client.servers["clock"]["enabled_tools"] == []
 
 
 def test_each_server_revision_uses_the_native_config_version():

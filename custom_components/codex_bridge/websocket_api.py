@@ -52,6 +52,10 @@ _FEATURE_ERROR_MESSAGES = {
     "mcp_server_not_found": "The MCP server no longer exists",
     "mcp_unavailable": "MCP configuration is temporarily unavailable",
     "mcp_local_disabled": "Enable local MCP connections in the App configuration and restart it",
+    "mcp_stdio_disabled": "Enable isolated stdio MCP in the Codex Bridge App and restart it",
+    "mcp_stdio_unavailable": "Isolated stdio MCP is unavailable. Check the App's worker status and restart it if needed",
+    "mcp_package_invalid": "This package could not be verified. Refresh the catalogue or update the App",
+    "mcp_package_not_found": "This package revision is not in the installed App. Refresh the catalogue",
     "reset_credit_unavailable": "That reset credit is unavailable. Refresh usage and check again.",
     "account_profile_invalid": "Review the saved account and try again",
     "account_profile_reauthentication_required": "This saved account needs a fresh sign-in",
@@ -127,6 +131,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_remove_marketplace,
         ws_upgrade_marketplace,
         ws_list_mcp,
+        ws_list_stdio_packages,
+        ws_add_stdio_mcp,
+        ws_update_stdio_mcp,
+        ws_rollback_stdio_mcp,
         ws_list_mcp_tools,
         ws_set_mcp_tools,
         ws_add_mcp,
@@ -1763,6 +1771,54 @@ async def ws_upgrade_marketplace(hass, connection, msg) -> None:
 @websocket_api.async_response
 async def ws_list_mcp(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_mcp())
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_stdio_packages"})
+@websocket_api.async_response
+async def ws_list_stdio_packages(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_list_stdio_packages())
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/add_stdio_mcp",
+    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    vol.Required("package_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("revision"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("acknowledged"): vol.All(bool, vol.In([True])),
+})
+@websocket_api.async_response
+async def ws_add_stdio_mcp(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_add_stdio_mcp({key: msg[key] for key in (
+                            "name", "package_id", "revision", "acknowledged")}))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/update_stdio_mcp",
+    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    vol.Required("revision"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    vol.Required("acknowledged"): vol.All(bool, vol.In([True])),
+})
+@websocket_api.async_response
+async def ws_update_stdio_mcp(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_update_stdio_mcp(
+                            msg["name"], {"revision": msg["revision"],
+                                          "expected_revision": msg["expected_revision"],
+                                          "acknowledged": True}))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/rollback_stdio_mcp",
+    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+})
+@websocket_api.async_response
+async def ws_rollback_stdio_mcp(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_rollback_stdio_mcp(
+                            msg["name"], msg["expected_revision"]))
 
 
 @websocket_api.websocket_command({

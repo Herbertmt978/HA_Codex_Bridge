@@ -1,4 +1,5 @@
 import os
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +13,19 @@ from codex_bridge_service.resource_limits import ResourceLimits
 from codex_bridge_service.routes.agents import WorkspaceAgentsManager
 from codex_bridge_service.runner import BridgeRunner
 from codex_bridge_service.storage import BridgeStorage
+from codex_bridge_service.stdio_runtime import saved_stdio_records_present
+
+
+def test_saved_stdio_state_blocks_unavailable_worker_without_dropping_empty_registry(tmp_path) -> None:
+    registry = tmp_path / "stdio-servers.json"
+    assert saved_stdio_records_present(registry) is False
+    registry.write_text(json.dumps({"version": 1, "servers": {}}), encoding="utf-8")
+    assert saved_stdio_records_present(registry) is False
+    registry.write_text(json.dumps({"version": 1, "servers": {"clock": {}}}), encoding="utf-8")
+    assert saved_stdio_records_present(registry) is True
+    registry.unlink()
+    registry.symlink_to(tmp_path / "missing")
+    assert saved_stdio_records_present(registry) is True
 
 
 class _ReadyBrowserBroker:
@@ -269,6 +283,20 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         codex_home=codex_home, enable_local_mcp=True,
     )
     assert "mcp_local_v1" not in local_only.state.feature_capabilities
+
+    stdio_unverified = create_app(
+        root_path=tmp_path / "stdio-unverified", auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT, workspace_root=workspace_root,
+        codex_home=codex_home, enable_mcp=True, enable_stdio_mcp=True,
+    )
+    assert "mcp_stdio_v1" not in stdio_unverified.state.feature_capabilities
+    stdio_verified = create_app(
+        root_path=tmp_path / "stdio-verified", auth_token="secret",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT, workspace_root=workspace_root,
+        codex_home=codex_home, enable_mcp=True, enable_stdio_mcp=True,
+        stdio_worker_factory=lambda _package, _revision: None,
+    )
+    assert "mcp_stdio_v1" in stdio_verified.state.feature_capabilities
 
     external = create_app(root_path=tmp_path / "external", auth_token="secret")
     external_paths = _registered_paths(external)

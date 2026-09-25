@@ -83,6 +83,90 @@ describe("MCP connection management", () => {
   });
 });
 
+describe("isolated stdio MCP packages", () => {
+  const capabilities = ["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1", "mcp_stdio_v1"];
+  const digest = "a".repeat(64);
+  const fixture = (revision = "1.0.0") => ({ package_id: "safe-probe", revision, title: "Safe probe",
+    source: "https://example.org/probe", licence: "MIT", python: "3.14", digest,
+    entrypoint: ["python3.14", "-m", "safe_probe"], tools: ["read_probe"], network: "none", files: "none", environment: [] });
+  beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
+
+  it("keeps package controls absent on an older App", () => {
+    const panel = setup(["mcp_admin_v1", "mcp_management_v1"]);
+    panel._desktopFeatures.settings.data.stdio_packages = [fixture()];
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name: "old-probe", transport: "stdio", enabled: false, package_id: "safe-probe", package_revision: "1.0.0", startup: "paused" }];
+    panel._renderDesktopSurface();
+    expect(action(panel, "open-stdio-form")).toBeNull();
+    expect(action(panel, "resume-mcp")).toBeNull();
+    expect(action(panel, "remove-mcp")).toBeTruthy();
+    expect(action(panel, "toggle-stdio-details")).toBeTruthy();
+    expect(panel.shadowRoot.textContent).toContain("Isolated local packages require a newer App");
+    expect(panel._callWS).not.toHaveBeenCalledWith("list_stdio_packages");
+  });
+
+  it("shows package provenance and creates a paused server only after consent", async () => {
+    const panel = setup(capabilities);
+    panel._desktopFeatures.settings.data.stdio_packages = [fixture()];
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue();
+    panel._renderDesktopSurface();
+    await panel._handleDesktopAction("open-stdio-form");
+    expect(panel.shadowRoot.textContent).toContain("Fixed command: python3.14 -m safe_probe");
+    expect(panel.shadowRoot.textContent).toContain("Package SHA-256: aaaaaaaaaaaaaaaa…");
+    expect(panel.shadowRoot.textContent).toContain("no network, no workspace files");
+    field(panel, "stdio_name").value = "probe";
+    await panel._handleDesktopAction("submit-stdio-add", {}, action(panel, "submit-stdio-add"));
+    expect(panel._callWS).not.toHaveBeenCalledWith("add_stdio_mcp", expect.anything());
+    field(panel, "stdio_acknowledged").click();
+    await panel._handleDesktopAction("submit-stdio-add", {}, action(panel, "submit-stdio-add"));
+    expect(panel._callWS).toHaveBeenCalledWith("add_stdio_mcp", { name: "probe", package_id: "safe-probe", revision: "1.0.0", acknowledged: true });
+    expect(panel._desktopFeatures.settings.notice).toContain("paused state");
+  });
+
+  it("hides malformed packages and clears approval when a revision changes", async () => {
+    const panel = setup(capabilities);
+    panel._desktopFeatures.settings.data.stdio_packages = [fixture(), fixture("1.1.0"), { ...fixture("bad"), digest: "invalid" }];
+    await panel._handleDesktopAction("open-stdio-form");
+    const select = field(panel, "stdio_package");
+    expect(select.options).toHaveLength(2);
+    field(panel, "stdio_acknowledged").click();
+    select.value = "safe-probe:1.1.0";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(field(panel, "stdio_acknowledged").checked).toBe(false);
+    expect(panel.shadowRoot.textContent).toContain("Version: 1.1.0");
+    expect(panel.shadowRoot.textContent).not.toContain("Version: bad");
+    field(panel, "stdio_acknowledged").click();
+    panel._desktopFeatures.settings.data.stdio_packages[1] = { ...fixture("1.1.0"), digest: "b".repeat(64) };
+    panel._renderDesktopSurface();
+    expect(field(panel, "stdio_acknowledged").checked).toBe(false);
+  });
+
+  it("updates only a paused stdio server and offers rollback with confirmation", async () => {
+    const panel = setup(capabilities);
+    const state = panel._desktopFeatures.settings;
+    state.data.stdio_packages = [fixture(), fixture("1.1.0")];
+    state.data.mcp_servers = [{ name: "probe", transport: "stdio", package_id: "safe-probe", package_revision: "1.0.0", enabled: false, revision: "b".repeat(64), startup: "ready", rollback_available: true, failure: "private-worker-output" }];
+    panel._loadDesktopDestination = vi.fn().mockResolvedValue();
+    panel._renderDesktopSurface();
+    expect(action(panel, "edit-mcp-connection")).toBeNull();
+    expect(action(panel, "edit-mcp-tools")).toBeTruthy();
+    await panel._handleDesktopAction("toggle-stdio-details", { id: "probe" });
+    expect(panel.shadowRoot.querySelector(".stdio-server-details").textContent).toContain("Needs attention; check App logs");
+    expect(panel.shadowRoot.textContent).not.toContain("private-worker-output");
+    await panel._handleDesktopAction("open-stdio-update", { id: "probe" });
+    expect(field(panel, "stdio_package").value).toBe("safe-probe:1.1.0");
+    field(panel, "stdio_acknowledged").click();
+    await panel._handleDesktopAction("submit-stdio-update", {}, action(panel, "submit-stdio-update"));
+    expect(panel._callWS).toHaveBeenCalledWith("update_stdio_mcp", { name: "probe", revision: "1.1.0", expected_revision: "b".repeat(64), acknowledged: true });
+    await panel._handleDesktopAction("rollback-stdio", { id: "probe" });
+    expect(state.confirmAction?.action).toBe("rollback-stdio");
+    expect(state.confirmAction?.dataset.expectedRevision).toBe("b".repeat(64));
+    expect(panel._callWS).not.toHaveBeenCalledWith("rollback_stdio_mcp", expect.anything());
+    state.data.mcp_servers[0].revision = "c".repeat(64);
+    await panel._handleDesktopAction("confirm-desktop");
+    expect(panel._callWS).toHaveBeenCalledWith("rollback_stdio_mcp", { name: "probe", expected_revision: "b".repeat(64) });
+  });
+});
+
 describe("MCP setup and access settings", () => {
   beforeEach(() => document.body.replaceChildren());
 

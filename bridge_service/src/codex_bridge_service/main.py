@@ -12,6 +12,7 @@ from .models import RuntimeProfile
 from .runner import BridgeRunner
 from .sandbox_attestation import sandbox_attestation_ready
 from .settings import Settings
+from .stdio_runtime import load_worker_factory
 
 
 def build_app() -> FastAPI:
@@ -57,6 +58,12 @@ def build_app() -> FastAPI:
         model_cache_ttl_seconds=settings.model_cache_ttl_seconds,
         enable_mcp=settings.enable_mcp,
         enable_local_mcp=settings.enable_local_mcp,
+        enable_stdio_mcp=settings.enable_stdio_mcp,
+        stdio_worker_factory=(
+            load_worker_factory()
+            if settings.enable_mcp and settings.enable_stdio_mcp and not external_legacy
+            else None
+        ),
         browser_broker=(
             BrowserBroker(browser_worker)
             if browser_worker is not None and browser_worker.ready()

@@ -8,3 +8,6 @@ configuration:
   enable_local_mcp:
     name: Enable local MCP connections
     description: Allow separately approved LAN and HA App MCP endpoints through the private relay. Enable MCP must also be on. HTTP is unencrypted. Restart after changing this option. Turning it off removes local connections; add them again to re-enable them.
+  enable_stdio_mcp:
+    name: Enable isolated stdio MCP servers
+    description: Allow only bundled and verified MCP packages in a separate worker. Enable MCP must also be on. Restart after changing this option. Remove saved stdio connections before turning it off; otherwise the App preserves them in recovery mode.

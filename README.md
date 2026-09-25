@@ -91,7 +91,11 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
   the App configuration and restart it before adding a trusted HTTPS server.
   Local HTTP/HTTPS servers need **Enable local MCP connections** as well, plus
   acknowledgement of the endpoint's access and HTTP encryption warning.
-  See [App documentation](codex_bridge_app/DOCS.md) for restrictions.
+  On amd64 Home Assistant OS, **Enable isolated stdio MCP servers** separately to
+  review a verified, bundled Python package. New stdio connections start
+  paused with no permitted tools. The first package has no network or
+  workspace access. See [App documentation](codex_bridge_app/DOCS.md) for
+  restrictions.
 - **Settings:** save a light or dark appearance, chat text size, reduced motion
   and defaults for new chats. See [Panel settings](docs/panel-settings.md).
 - **Chat controls:** stop or steer a running turn from the composer, check its
@@ -119,7 +123,7 @@ store updates Codex and the Bridge. Update both when the release notes call for
 it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
-This release pairs App **1.7.3**, Integration and panel **1.7.3**, with Bridge **0.13.0**
+This release pairs App **1.8.0**, Integration and panel **1.8.0**, with Bridge **0.14.0**
 and Codex **0.157.0**. It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only
 bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local

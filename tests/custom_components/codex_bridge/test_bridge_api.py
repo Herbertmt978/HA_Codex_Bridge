@@ -1466,6 +1466,56 @@ async def test_mcp_management_requires_capability_before_sending_edits(bridge_se
 
 
 @pytest.mark.parametrize("supported", [False, True])
+async def test_stdio_package_routes_require_separate_capability(bridge_server_factory, supported):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1", "mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"] + (["mcp_stdio_v1"] if supported else [])
+    observed = []
+    packages = [{"package_id": "safe-probe", "revision": "1.0.0", "digest": "a" * 64}]
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        observed.append((request.method, request.path, await request.json() if request.content_length else None))
+        if request.path == "/mcp/stdio/packages":
+            return web.json_response(packages)
+        return web.json_response({"name": "probe", "enabled": False}, status=201 if request.path == "/mcp/stdio/servers" else 200)
+
+    server = await bridge_server_factory(handler)
+    create = {"name": "probe", "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True}
+    update = {"revision": "1.1.0", "expected_revision": "b" * 64, "acknowledged": True}
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        if supported:
+            assert await client.async_list_stdio_packages() == packages
+            with pytest.raises(ValueError):
+                await client.async_add_stdio_mcp({**create, "acknowledged": False})
+            assert (await client.async_add_stdio_mcp(create))["enabled"] is False
+            with pytest.raises(ValueError):
+                await client.async_update_stdio_mcp("probe", {**update, "acknowledged": False})
+            await client.async_update_stdio_mcp("probe", update)
+            await client.async_rollback_stdio_mcp("probe", "b" * 64)
+        else:
+            for request in (
+                client.async_list_stdio_packages(),
+                client.async_add_stdio_mcp(create),
+                client.async_update_stdio_mcp("probe", update),
+                client.async_rollback_stdio_mcp("probe", "b" * 64),
+            ):
+                with pytest.raises(BridgeApiCapabilityError):
+                    await request
+    assert [(method, path) for method, path, _ in observed] == (
+        [("GET", "/mcp/stdio/packages"), ("POST", "/mcp/stdio/servers"),
+         ("POST", "/mcp/stdio/servers/probe/update"), ("POST", "/mcp/stdio/servers/probe/rollback")]
+        if supported else []
+    )
+    if supported:
+        assert observed[1][2] == create
+        assert observed[2][2] == update
+        assert observed[3][2] == {"expected_revision": "b" * 64}
+
+
+@pytest.mark.parametrize("supported", [False, True])
 async def test_mcp_tool_policy_requires_paired_capability(bridge_server_factory, supported):
     ready = _fixture("ready_v1.json")
     ready["capabilities"] = ["api_v1", "mcp_admin_v1"] + (["mcp_tool_permissions_v1"] if supported else [])
