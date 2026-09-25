@@ -94,7 +94,7 @@ class AutomationNotificationCoordinator:
             saved = await self._store.async_load()
         except Exception:
             # An optional notification ledger cannot prevent chat setup.
-            _LOGGER.exception("Scheduled notification receipts are unavailable")
+            _LOGGER.warning("Scheduled notification receipts are unavailable")
             return
         if isinstance(saved, Mapping) and isinstance(saved.get("receipts"), dict):
             self._receipts = {
@@ -144,10 +144,10 @@ class AutomationNotificationCoordinator:
                         continue
                     for run in reversed(runs):
                         await self._deliver(definition, current, run)
-            except BridgeApiError as error:
-                _LOGGER.debug("Scheduled notification history unavailable: %s", error)
+            except BridgeApiError:
+                _LOGGER.debug("Scheduled notification history unavailable")
             except Exception:
-                _LOGGER.exception("Scheduled notification delivery check failed")
+                _LOGGER.warning("Scheduled notification delivery check failed")
 
     async def _deliver(
         self, definition: Mapping, current: Mapping, run: object
@@ -265,9 +265,7 @@ class AutomationNotificationCoordinator:
                     )
             except Exception:
                 _LOGGER.warning(
-                    "Scheduled notification delivery failed for %s",
-                    destination,
-                    exc_info=True,
+                    "Scheduled notification delivery failed for a selected destination"
                 )
 
     async def _claim(self, key: str, state: str) -> None:

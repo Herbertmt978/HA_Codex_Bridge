@@ -166,6 +166,38 @@ async def test_current_off_mutes_and_missing_mobile_does_not_retry(monkeypatch):
     await coordinator.async_close()
 
 
+async def test_delivery_error_does_not_log_private_payload_or_retry(
+    monkeypatch, caplog
+):
+    settings = _settings(persistent=False, targets=["mobile_app_test_phone"])
+    definition = {
+        "automation_id": "aut_one",
+        "name": "Private task title",
+        "notifications_revision": 1,
+        "notifications": settings,
+    }
+    services = _Services({("notify", "mobile_app_test_phone")})
+    services.async_call = AsyncMock(
+        side_effect=RuntimeError("private result echoed by notification service")
+    )
+    store = _Store()
+    coordinator, _client, _services = _fixture(
+        monkeypatch,
+        [definition],
+        [_run(notifications=settings)],
+        services=services,
+        store=store,
+    )
+    await coordinator.async_start()
+    await coordinator.async_refresh()
+    assert services.async_call.await_count == 1
+    assert len(store.value["receipts"]) == 1
+    assert "Private task title" not in caplog.text
+    assert "private result" not in caplog.text
+    assert "mobile_app_test_phone" not in caplog.text
+    await coordinator.async_close()
+
+
 async def test_preview_is_brief_opt_in_and_scoped_to_run(monkeypatch):
     settings = _settings(targets=["mobile_app_test_phone"], preview=True)
     definition = {
