@@ -1,6 +1,7 @@
 # MCP-06: Tool permissions
 
-Status: Included in the paired 1.6.4 release candidate; Home Assistant acceptance pending.
+Status: Released in the paired 1.6.4 release on 24 September 2026. Native
+Home Assistant DEV acceptance passed on 25 September 2026.
 
 Tracking issue: [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102).
 
@@ -43,7 +44,20 @@ tools, so the Bridge briefly reads the full catalogue under an exclusive
 no-active-turn lease and restores the saved policy before accepting work. A
 durable marker pauses all MCP connections during startup if that read is ever
 interrupted. Paused or unavailable servers cannot have their selection edited
-until discovery succeeds. The pinned Codex 0.156.1 runtime was probed with a
-synthetic streamable-HTTP server: an allowed tool call completed, a blocked call
-was rejected before reaching the server, and an empty allow-list blocked both
-tools. Paired App/Integration release and Home Assistant acceptance remain.
+until discovery succeeds.
+
+The released 1.7.3 App on HAOS-DEV, with Codex 0.157.0, discovered a disposable
+streamable-HTTP server. The new connection started with an empty allow-list.
+After selecting one tool, an actual native call to it succeeded; a call to the
+blocked tool was rejected without reaching the server. The choice survived an
+App restart. When the server advertised a renamed tool and a new tool, both
+remained blocked and the old selected name appeared as stale. Selecting the new
+tool allowed its native call while the other names remained blocked. The test
+server, connection and temporary files were removed; the App option was restored,
+the rollback snapshot was deleted, and DEV remained running as found. Production
+was not changed.
+
+The same native server configuration applies to attended chats and scheduled
+work. The unattended run regression check covers both a new scheduled chat and
+continuation of an existing chat with MCP enabled. Neither thread nor turn
+requests can supply a per-run MCP configuration that broadens the selection.
