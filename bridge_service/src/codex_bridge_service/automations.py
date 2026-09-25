@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
@@ -69,6 +70,50 @@ _SKIPPED_STATUSES = {
 }
 _RUN_STATUSES = _ACTIVE_STATUSES | _TERMINAL_STATUSES | _SKIPPED_STATUSES
 _MODES = {"observe", "edit", "full-auto", "haos-full-access"}
+_NOTIFICATION_POLICIES = {"off", "attention", "all"}
+_MOBILE_NOTIFY_SERVICE = re.compile(r"mobile_app_[a-z0-9_]{1,100}\Z")
+
+
+def _default_notifications() -> dict[str, Any]:
+    return {"policy": "off", "persistent": False, "mobile_targets": [], "preview": False}
+
+
+def _normalize_notifications(value: object) -> dict[str, Any]:
+    """Keep notification destinations explicit and safe to pass to Home Assistant."""
+
+    if value is None:
+        return _default_notifications()
+    if not isinstance(value, Mapping) or set(value) != {
+        "policy", "persistent", "mobile_targets", "preview"
+    }:
+        raise AutomationValidationError("notification settings are invalid")
+    policy = value["policy"]
+    persistent = value["persistent"]
+    targets = value["mobile_targets"]
+    preview = value["preview"]
+    if (
+        not isinstance(policy, str)
+        or policy not in _NOTIFICATION_POLICIES
+        or type(persistent) is not bool
+        or type(preview) is not bool
+        or not isinstance(targets, list)
+        or len(targets) > 8
+        or any(
+            not isinstance(target, str)
+            or _MOBILE_NOTIFY_SERVICE.fullmatch(target) is None
+            for target in targets
+        )
+        or len(set(targets)) != len(targets)
+        or (policy != "off" and not persistent and not targets)
+        or (preview and not targets)
+    ):
+        raise AutomationValidationError("notification settings are invalid")
+    return {
+        "policy": policy,
+        "persistent": persistent,
+        "mobile_targets": list(targets),
+        "preview": preview,
+    }
 
 
 def _is_pending_runtime_link(run: Mapping[str, Any]) -> bool:
@@ -248,6 +293,7 @@ class AutomationStore:
                 "host_access_grant",
                 "host_unattended_approved",
                 "schedule",
+                "notifications",
             }
             unknown = set(changes) - allowed
             if unknown:
@@ -263,6 +309,11 @@ class AutomationStore:
                 revision=record["revision"] + 1,
                 created_at=record["created_at"],
                 enabled=record["enabled"],
+            )
+            normalized["notifications_revision"] = (
+                record["notifications_revision"]
+                if normalized["notifications"] == record["notifications"]
+                else record["notifications_revision"] + 1
             )
             self._state["automations"][automation_id] = normalized
             self._save()
@@ -451,6 +502,7 @@ class AutomationStore:
         automation_run_id: str,
         *,
         bridge_run_id: str | None = None,
+        thread_id: str | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         now = _now(now)
@@ -461,6 +513,9 @@ class AutomationStore:
                 if bridge_run_id is not None
                 else None
             )
+            normalized_thread_id = (
+                _identifier(thread_id, "thread id") if thread_id is not None else None
+            )
             if run["status"] != "queued":
                 if (
                     run["status"] in _TERMINAL_STATUSES
@@ -469,6 +524,7 @@ class AutomationStore:
                 ):
                     if _is_pending_runtime_link(run):
                         run["started_at"] = _iso(now)
+                        run["thread_id"] = normalized_thread_id
                         self._prune_runs(protected_run_ids={automation_run_id})
                         self._save()
                     return _public_run(run)
@@ -478,6 +534,8 @@ class AutomationStore:
             run["started_at"] = _iso(now)
             if normalized_bridge_run_id is not None:
                 run["bridge_run_id"] = normalized_bridge_run_id
+            if normalized_thread_id is not None:
+                run["thread_id"] = normalized_thread_id
             self._save()
             return _public_run(run)
 
@@ -498,6 +556,14 @@ class AutomationStore:
                 reverse=True,
             )
             return [_public_run(run) for run in values[:limit]]
+
+    def get_run(self, automation_id: str, automation_run_id: str) -> dict[str, Any]:
+        with self._lock:
+            self._automation(automation_id)
+            run = self._run(automation_run_id)
+            if run["automation_id"] != automation_id:
+                raise AutomationNotFoundError("automation run was not found")
+            return _public_run(run)
 
     def scheduler_snapshot(
         self, *, now: datetime | None = None
@@ -606,6 +672,9 @@ class AutomationStore:
                 "bridge_run_id": None,
                 "error": None,
                 "web_search": web_search,
+                "thread_id": None,
+                "notifications": copy.deepcopy(record["notifications"]),
+                "notifications_revision": record["notifications_revision"],
             }
             self._state["runs"][run_id] = run
             self._state["idempotency"][idempotency_key] = run_id
@@ -678,6 +747,8 @@ class AutomationStore:
             "host_access_grant": host_grant,
             "host_unattended_approved": host_unattended,
             "schedule": schedule,
+            "notifications": _normalize_notifications(payload.get("notifications")),
+            "notifications_revision": 1,
             "enabled": enabled,
             "created_at": created_at or _iso(now),
             "updated_at": _iso(now),
@@ -796,6 +867,9 @@ class AutomationStore:
             if isinstance(run, dict):
                 # Older checkpoints predate per-claim search overrides.
                 run.setdefault("web_search", None)
+                run.setdefault("thread_id", None)
+                run.setdefault("notifications", _default_notifications())
+                run.setdefault("notifications_revision", 0)
         payload.setdefault("create_requests", {})
         if not isinstance(payload["create_requests"], dict):
             raise AutomationValidationError("automation state is invalid")
@@ -803,6 +877,8 @@ class AutomationStore:
             if isinstance(definition, dict):
                 definition.setdefault("host_access_grant", None)
                 definition.setdefault("host_unattended_approved", False)
+                definition.setdefault("notifications", _default_notifications())
+                definition.setdefault("notifications_revision", 1)
         return payload
 
     def _save(self) -> None:
@@ -944,6 +1020,8 @@ def _public_automation(
             "host_access_grant",
             "host_unattended_approved",
             "schedule",
+            "notifications",
+            "notifications_revision",
             "enabled",
             "created_at",
             "updated_at",
@@ -959,7 +1037,7 @@ def _public_automation(
 
 def _public_run(value: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        key: value[key]
+        key: copy.deepcopy(value[key])
         for key in (
             "automation_run_id",
             "automation_id",
@@ -973,6 +1051,9 @@ def _public_run(value: Mapping[str, Any]) -> dict[str, Any]:
             "bridge_run_id",
             "error",
             "web_search",
+            "thread_id",
+            "notifications",
+            "notifications_revision",
         )
     }
 

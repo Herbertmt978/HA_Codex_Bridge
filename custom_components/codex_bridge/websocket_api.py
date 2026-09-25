@@ -1361,13 +1361,14 @@ async def ws_preview_automation_schedule(hass, connection, msg) -> None:
         vol.Optional("thinking"): vol.Any(
             None, vol.All(str, vol.Length(min=1, max=160))
         ),
+        vol.Optional("notifications"): vol.All(dict, vol.Length(max=4)),
     }
 )
 @websocket_api.async_response
 async def ws_create_automation(hass, connection, msg) -> None:
     payload = {
         key: msg[key]
-        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved", "client_request_id")
+        for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved", "client_request_id", "notifications")
         if key in msg
     }
     payload.setdefault("mode", "observe")
@@ -1396,6 +1397,7 @@ async def ws_create_automation(hass, connection, msg) -> None:
         vol.Optional("thinking"): vol.Any(
             None, vol.All(str, vol.Length(min=1, max=160))
         ),
+        vol.Optional("notifications"): vol.All(dict, vol.Length(max=4)),
     }
 )
 @websocket_api.async_response
@@ -1413,6 +1415,7 @@ async def ws_update_automation(hass, connection, msg) -> None:
             "thinking",
             "host_access_grant",
             "host_unattended_approved",
+            "notifications",
         )
         if key in msg
     }

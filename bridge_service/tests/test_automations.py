@@ -55,6 +55,42 @@ def test_store_persists_safe_definition_and_calculates_rrule_in_utc(tmp_path):
     assert restored.list()[0]["next_run_at"] == "2026-07-15T09:30:00Z"
 
 
+def test_notification_choices_are_validated_and_snapshotted_per_run(tmp_path):
+    store = AutomationStore(tmp_path)
+    settings = {
+        "policy": "all", "persistent": True,
+        "mobile_targets": ["mobile_app_test_phone"], "preview": False,
+    }
+    created = store.create(_payload(notifications=settings), now=NOW)
+    automation_id = created["automation_id"]
+    claim = store.claim(automation_id, due_at="2026-07-15T09:30:00Z", idempotency_key="notify-test", expected_revision=1, now=NOW)
+    assert claim["notifications"] == settings
+    assert claim["notifications_revision"] == 1
+    assert claim["thread_id"] is None
+    store.mark_running(claim["automation_run_id"], bridge_run_id="run_1", thread_id="thread_1", now=NOW)
+    store.complete(claim["automation_run_id"], status="completed", now=NOW)
+    saved = AutomationStore(tmp_path).list_runs(automation_id)[0]
+    assert saved["thread_id"] == "thread_1"
+    assert saved["notifications"] == settings
+    revised = store.update(automation_id, {"notifications": {"policy": "off", "persistent": False, "mobile_targets": [], "preview": False}}, expected_revision=1, now=NOW)
+    assert revised["notifications"]["policy"] == "off"
+    assert revised["notifications_revision"] == 2
+    assert store.list_runs(automation_id)[0]["notifications"] == settings
+
+
+@pytest.mark.parametrize("settings", [
+    {"policy": "all", "persistent": False, "mobile_targets": [], "preview": False},
+    {"policy": "attention", "persistent": True, "mobile_targets": ["notify_all"], "preview": False},
+    {"policy": "all", "persistent": True, "mobile_targets": ["mobile_app_phone"] * 2, "preview": False},
+    {"policy": "all", "persistent": 1, "mobile_targets": [], "preview": False},
+    {"policy": "all", "persistent": True, "mobile_targets": [], "preview": True},
+    {"policy": "all", "persistent": True, "mobile_targets": [], "preview": False, "extra": 1},
+])
+def test_notification_choices_reject_unsafe_or_ambiguous_destinations(tmp_path, settings):
+    with pytest.raises(AutomationValidationError, match="notification"):
+        AutomationStore(tmp_path).create(_payload(notifications=settings), now=NOW)
+
+
 def test_schedule_preview_does_not_create_and_uses_scheduler_times(tmp_path):
     store = AutomationStore(tmp_path)
     expected = store.preview_schedule(_payload()["schedule"], now=NOW)
@@ -875,6 +911,31 @@ def test_router_projects_a_dispatch_failure_as_a_safe_blocked_run(tmp_path):
     assert response.json()["status"] == "blocked"
     assert response.json()["dispatchable"] is False
     assert response.json()["error"] == "automation dispatcher rejected the claim"
+
+
+def test_run_preview_is_bounded_to_the_selected_completed_run(tmp_path):
+    store = AutomationStore(tmp_path)
+    settings = {"policy": "all", "persistent": True, "mobile_targets": ["mobile_app_test_phone"], "preview": True}
+    first = store.create(_payload(notifications=settings), now=NOW)
+    other = store.create(_payload(name="Other", notifications=settings), now=NOW)
+    run = store.run_now(first["automation_id"], now=NOW)
+    store.mark_running(run["automation_run_id"], bridge_run_id="run_selected", thread_id="thread_selected", now=NOW)
+    store.complete(run["automation_run_id"], status="completed", now=NOW)
+    events = [
+        SimpleNamespace(event_type="message.completed", payload={"run_id": "run_selected", "role": "assistant", "text": "The answer  is\nready."}),
+        SimpleNamespace(event_type="message.completed", payload={"run_id": "another_run", "role": "assistant", "text": "Wrong answer"}),
+    ]
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.automations = store
+    app.state.storage = SimpleNamespace(list_thread_events=lambda thread_id: events if thread_id == "thread_selected" else [])
+    app.include_router(create_router())
+    client = TestClient(app)
+    path = f"/automations/{first['automation_id']}/runs/{run['automation_run_id']}/preview"
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    assert client.get(path, headers=headers).json() == {"preview": "The answer is ready."}
+    assert client.get(path.replace(first["automation_id"], other["automation_id"]), headers=headers).status_code == 404
+    assert client.get(path).status_code == 401
 
 
 def test_router_derives_capacity_from_the_runtime_gate(tmp_path):

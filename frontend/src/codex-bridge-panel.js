@@ -3251,6 +3251,8 @@ template.innerHTML = `
     .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
+    .schedule-check-row .schedule-row-label { flex: 1 1 auto; min-width: 0; padding-block: 12px; }
+    .schedule-check-row input[type="checkbox"] { flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px; max-width: 20px; accent-color: var(--accent-color); cursor: pointer; }
     .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-next-runs { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
@@ -7565,7 +7567,9 @@ class CodexBridgePanel extends HTMLElement {
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
-    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    const mobileAvailable = Object.keys(this._hass?.services?.notify || {}).filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    const mobileTargets = [...new Set([...mobileAvailable, ...(editing?.notifications?.mobile_targets || [])])].filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
   _queueSchedulePreview(state, form) {

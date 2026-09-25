@@ -32,6 +32,7 @@ from .const import (
 from .event_broker import EventBroker
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
+from .automation_notifications import AutomationNotificationCoordinator
 from .http import async_register_http_views
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
@@ -152,6 +153,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     else None
                 ),
             )
+        if connection_type != CONNECTION_TYPE_EXTERNAL_LEGACY:
+            runtime.automation_notifications = AutomationNotificationCoordinator(
+                hass,
+                runtime,
+                Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.automation_notifications"),
+            )
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
@@ -174,6 +181,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await runtime.event_broker.async_start()
         if runtime.automation_scheduler is not None:
             await runtime.automation_scheduler.async_start()
+        if (
+            runtime.automation_notifications is not None
+            and runtime.supports_capability("automation_notifications_v1")
+        ):
+            await runtime.automation_notifications.async_start()
         if runtime.entity_coordinator is not None:
             await runtime.entity_coordinator.async_refresh()
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

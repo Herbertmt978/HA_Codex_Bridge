@@ -40,6 +40,10 @@ You can also fill in the editor directly:
    the selected project. Current chat continues the selected conversation.
 5. Under **Frequency**, choose the repeat pattern and time. Check the preview
    beneath the card, then select **Create task**.
+6. Under **Notifications**, leave **Off** or choose when to be notified. Select
+   a Home Assistant notification and/or individual Companion App phones. No
+   phone is selected automatically. Answer previews on selected phones need a
+   separate opt-in.
 
 For example: title **Morning summary**, instructions **Summarise the new
 information in this project's files and highlight anything needing attention**,
@@ -89,8 +93,18 @@ See [Host Access](../codex_host_access_app/DOCS.md) before using this mode.
 An unattended task cannot answer approval requests or questions. A run may be
 stopped or skipped if it needs interaction, overlaps another run, exceeds
 capacity or misses its scheduling window. Check **Runs** for the recorded
-outcome. Successful responses appear in the task's chat. Configurable desktop
-and mobile notifications are not available in this panel.
+outcome. Successful responses appear in the task's chat. **Needs attention or
+failed** notifies for blocked, failed, interrupted and skipped runs. **All
+outcomes** adds completions and cancellations, including manual runs. If your
+ChatGPT sign-in expires, the blocked or failed run follows the attention setting.
+
+Home Assistant's persistent notifications are visible to all HA users. Codex
+Bridge therefore puts only a generic update and a link in them; the link opens
+the administrator-only panel. A selected phone may show the task title. Its
+answer preview is off by default because lock screens and notification history
+can expose it. Notifications are attempted once per selected destination;
+Home Assistant or the phone service being unavailable can mean an alert is
+missed, while the run history remains available.
 
 Use **Pause** before changing a workspace, updating the App or restoring a
 backup. **Resume** enables future runs; **Run** requests a manual run.

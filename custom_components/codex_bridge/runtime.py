@@ -17,6 +17,7 @@ from .const import (
 )
 from .event_broker import EventBroker
 from .automation_scheduler import AutomationScheduler
+from .automation_notifications import AutomationNotificationCoordinator
 
 if TYPE_CHECKING:
     from .entity_coordinator import BridgeEntityCoordinator
@@ -37,6 +38,7 @@ class CodexBridgeRuntime:
     event_broker: EventBroker | None = None
     task_event_forwarder: TaskEventForwarder | None = None
     automation_scheduler: AutomationScheduler | None = None
+    automation_notifications: AutomationNotificationCoordinator | None = None
     entity_coordinator: BridgeEntityCoordinator | None = None
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
@@ -93,6 +95,11 @@ class CodexBridgeRuntime:
                     if self.supports_capability(WEB_SEARCH_CAPABILITY)
                     else None
                 )
+            if (
+                self.automation_notifications is not None
+                and self.supports_capability("automation_notifications_v1")
+            ):
+                await self.automation_notifications.async_start()
             return True
 
     def capability_refresh_is_urgent(self, status: object) -> bool:
@@ -122,6 +129,8 @@ class CodexBridgeRuntime:
                 await self.entity_coordinator.async_close()
             if self.automation_scheduler is not None:
                 await self.automation_scheduler.async_close()
+            if self.automation_notifications is not None:
+                await self.automation_notifications.async_close()
             if self.event_broker is not None:
                 await self.event_broker.async_close()
         finally:

@@ -342,8 +342,12 @@ function scheduleFormValues(automation = {}, timezone = "UTC", now = Date.now())
     mode: automation.mode || "observe",
     model: automation.model || "",
     thinking: automation.thinking || "",
-    timezone: zone
+    timezone: zone,
+    notification_policy: automation.notifications?.policy || "off",
+    notification_persistent: automation.notifications?.persistent === true,
+    notification_preview: automation.notifications?.preview === true
   };
+  for (const target of automation.notifications?.mobile_targets || []) values[`mobile_target:${target}`] = true;
   if (schedule.kind === "interval") {
     const unit = schedule.seconds % 3600 === 0 ? "hours" : schedule.seconds % 60 === 0 ? "minutes" : "seconds";
     values.interval_unit = unit;
@@ -412,6 +416,14 @@ function buildAutomationPayload(values = {}, context = {}) {
   const target = editing?.target?.kind === kind ? { ...editing.target } : kind === "continue_thread" ? { kind, thread_id: threadId } : { kind: "standalone", project_id: projectId };
   if (!(target.thread_id || target.project_id)) throw new Error("Select a chat or workspace before creating a scheduled task.");
   const payload = { name, prompt, target, schedule: buildSchedule(values, context), mode: values.mode || "observe", model: values.model || null, thinking: values.thinking || null };
+  if (context.notificationsSupported) {
+    const policy = values.notification_policy || "off";
+    const mobileTargets = (context.mobileTargets || []).filter((target2) => values[`mobile_target:${target2}`] === true);
+    if (mobileTargets.length > 8) throw new Error("Choose no more than eight phone notification destinations.");
+    const persistent = values.notification_persistent === true;
+    if (policy !== "off" && !persistent && !mobileTargets.length) throw new Error("Choose a Home Assistant or phone notification destination.");
+    payload.notifications = { policy, persistent, mobile_targets: mobileTargets, preview: mobileTargets.length > 0 && values.notification_preview === true };
+  }
   if (payload.mode === HOST_MODE) {
     if (!context.hostAccessGrant || context.hostUnattendedApproved !== true) throw new Error("Review and acknowledge host access for this scheduled task.");
     payload.host_access_grant = context.hostAccessGrant;
@@ -462,6 +474,18 @@ function staticRow(doc, label, value) {
   row.append(element(doc, "span", "schedule-row-label", label), element(doc, "span", "schedule-row-value", value));
   return row;
 }
+function checkRow(doc, name, label, checked) {
+  const row = element(doc, "label", "schedule-row schedule-check-row");
+  row.append(element(doc, "span", "schedule-row-label", label));
+  const control = element(doc, "input");
+  control.type = "checkbox";
+  control.name = name;
+  control.dataset.desktopField = name;
+  control.setAttribute("aria-label", label);
+  control.checked = checked === true;
+  row.append(control);
+  return row;
+}
 function refreshScheduleForm(form) {
   const values = Object.fromEntries([...form.querySelectorAll("[data-desktop-field]")].map((control) => [control.name, control.value]));
   for (const row of form.querySelectorAll("[data-repeat-for]")) {
@@ -480,6 +504,12 @@ function refreshScheduleForm(form) {
   }
   const monthly = form.querySelector(".schedule-month-note");
   monthly.hidden = values.repeat !== "monthly" || Number(values.month_day) < 29;
+  const previewChoice = form.querySelector('[name="notification_preview"]');
+  if (previewChoice) {
+    const hasPhone = [...form.querySelectorAll('input[name^="mobile_target:"]')].some((control) => control.checked);
+    previewChoice.disabled = !hasPhone;
+    if (!hasPhone) previewChoice.checked = false;
+  }
 }
 function renderScheduleForm(doc, state, timezone, context = {}) {
   const editing = state.editingAutomation;
@@ -544,6 +574,26 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
   conditional(field(doc, "date", "Date / starts on", values.date, null, "date"), "once interval");
   frequency.append(field(doc, "time", "Time", values.time, null, "time"));
   frequency.append(staticRow(doc, "Results", "Chat and run history"));
+  if (context.notificationsSupported) {
+    const notifications = addGroup("Notifications");
+    notifications.append(field(doc, "notification_policy", "When to notify", values.notification_policy, [
+      ["off", "Off"],
+      ["attention", "Needs attention or failed"],
+      ["all", "All outcomes"]
+    ]));
+    notifications.append(checkRow(doc, "notification_persistent", "Home Assistant notification (visible to all HA users)", values.notification_persistent));
+    for (const target of context.mobileTargets || []) {
+      const display = target.replace(/^mobile_app_/, "").replaceAll("_", " ");
+      const available = context.mobileAvailable?.includes(target);
+      const label = `Phone · ${display}${available ? "" : " (unavailable)"}`;
+      const row = checkRow(doc, `mobile_target:${target}`, label, values[`mobile_target:${target}`]);
+      if (!available && !editing?.notifications?.mobile_targets?.includes(target)) row.querySelector("input").disabled = true;
+      notifications.append(row);
+    }
+    if (!context.mobileTargets?.length) notifications.append(element(doc, "p", "desktop-note", "No Companion App phone notification services are available."));
+    notifications.append(checkRow(doc, "notification_preview", "Include a brief answer preview on selected phones", values.notification_preview));
+    notifications.append(element(doc, "p", "desktop-note", "Home Assistant notifications contain a generic update only. Phone notices go only to selected devices. Chat links require an administrator sign-in."));
+  }
   form.append(element(doc, "p", "schedule-preview"));
   if (context.proposalsSupported) {
     const nextRuns = element(doc, "p", "schedule-next-runs", state.nextRuns?.length ? `Next runs: ${state.nextRuns.join(" · ")}` : "Checking the next run times…");
@@ -37595,6 +37645,8 @@ template.innerHTML = `
     .schedule-row input, .schedule-row select { min-width: 0; max-width: 65%; width: auto; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-color); text-align: right; font-size: 15px; }
     .schedule-row select { text-align-last: right; cursor: pointer; }
     .schedule-row input[type="number"] { width: 96px; }
+    .schedule-check-row .schedule-row-label { flex: 1 1 auto; min-width: 0; padding-block: 12px; }
+    .schedule-check-row input[type="checkbox"] { flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px; max-width: 20px; accent-color: var(--accent-color); cursor: pointer; }
     .schedule-preview, .schedule-month-note { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-next-runs { margin: -12px 5px 0; color: var(--muted-color); font-size: var(--font-control-size); line-height: 1.5; }
     .schedule-advanced { min-width: 0; color: var(--muted-color); }
@@ -41796,7 +41848,9 @@ var CodexBridgePanel = class extends HTMLElement {
   _scheduleContext(editing = null) {
     const project = this._projects.find((item) => item.project_id === editing?.target?.project_id) || this._activeProject() || this._directProject();
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
-    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    const mobileAvailable = Object.keys(this._hass?.services?.notify || {}).filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    const mobileTargets = [.../* @__PURE__ */ new Set([...mobileAvailable, ...editing?.notifications?.mobile_targets || []])].filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
   _queueSchedulePreview(state, form) {
     if (!form || !this._config?.capabilities?.includes("automation_proposals_v1")) return;

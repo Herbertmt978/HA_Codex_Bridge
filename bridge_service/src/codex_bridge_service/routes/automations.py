@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+import unicodedata
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
@@ -30,6 +31,7 @@ class CreateAutomationRequest(BaseModel):
     host_unattended_approved: bool = Field(default=False, strict=True)
     model: str | None = Field(default=None, max_length=160)
     thinking: str | None = Field(default=None, max_length=160)
+    notifications: dict[str, Any] | None = None
 
 
 class PreviewAutomationScheduleRequest(BaseModel):
@@ -47,6 +49,7 @@ class UpdateAutomationRequest(BaseModel):
     host_unattended_approved: bool | None = Field(default=None, strict=True)
     model: str | None = Field(default=None, max_length=160)
     thinking: str | None = Field(default=None, max_length=160)
+    notifications: dict[str, Any] | None = None
 
 
 class RevisionRequest(BaseModel):
@@ -236,6 +239,45 @@ def create_router() -> APIRouter:
     ) -> list[dict[str, Any]]:
         _authorize(request, authorization)
         return _invoke(lambda: _store(request).list_runs(automation_id, limit=limit))
+
+    @router.get("/automations/{automation_id}/runs/{automation_run_id}/preview")
+    def run_preview(
+        automation_id: str,
+        automation_run_id: str,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, str | None]:
+        _authorize(request, authorization)
+        run = _invoke(
+            lambda: _store(request).get_run(automation_id, automation_run_id)
+        )
+        if run["status"] != "completed" or run["notifications"]["preview"] is not True:
+            return {"preview": None}
+        thread_id, bridge_run_id = run["thread_id"], run["bridge_run_id"]
+        if not isinstance(thread_id, str) or not isinstance(bridge_run_id, str):
+            return {"preview": None}
+        events = request.app.state.storage.list_thread_events(thread_id)
+        for event in reversed(events):
+            payload = event.payload
+            if (
+                event.event_type != "message.completed"
+                or payload.get("run_id") != bridge_run_id
+                or payload.get("role") != "assistant"
+                or not isinstance(payload.get("text"), str)
+            ):
+                continue
+            cleaned = "".join(
+                " " if char.isspace()
+                else "" if unicodedata.category(char).startswith("C")
+                else char
+                for char in payload["text"]
+            )
+            plain = " ".join(cleaned.split())
+            return {
+                "preview": plain[:160] + ("…" if len(plain) > 160 else "")
+                if plain else None
+            }
+        return {"preview": None}
 
     return router
 

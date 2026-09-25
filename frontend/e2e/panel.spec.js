@@ -441,6 +441,40 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
   expect(updated).toMatchObject({ name: "Renamed summary", expected_revision: 1, target: created.target, schedule: created.schedule });
 });
 
+for (const width of [390, 1280]) {
+  test(`scheduled notifications select only the chosen phone at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_notifications_v1"] };
+      panel.hass = { ...panel.hass, services: { ...panel.hass?.services, notify: { mobile_app_test_phone: {}, mobile_app_second_phone: {} } } };
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.locator('[data-destination="scheduled"]').click();
+    await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+    await page.setViewportSize({ width, height: 844 });
+    const form = panel.locator(".schedule-editor");
+    await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Morning report");
+    await form.getByRole("textbox", { name: "Task instructions" }).fill("Report the result.");
+    await form.getByRole("combobox", { name: "When to notify" }).click();
+    await form.getByRole("option", { name: "All outcomes" }).click();
+    await form.getByRole("checkbox", { name: "Home Assistant notification (visible to all HA users)" }).check();
+    await form.getByRole("checkbox", { name: "Phone · test phone" }).check();
+    await expect(form.getByRole("checkbox", { name: "Phone · second phone" })).not.toBeChecked();
+    await expect(form.getByRole("checkbox", { name: "Include a brief answer preview on selected phones" })).not.toBeChecked();
+    const bounds = await form.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    await form.screenshot({ path: test.info().outputPath(`scheduled-notifications-${width}.png`) });
+    await form.getByRole("button", { name: "Create task" }).click();
+    const created = (await websocketCalls(page, "codex_bridge/create_automation")).at(-1).payload;
+    expect(created.notifications).toEqual({ policy: "all", persistent: true, mobile_targets: ["mobile_app_test_phone"], preview: false });
+  });
+}
+
 test("reviews a chat message as a schedule before any task is created", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-09-23T08:00:00Z"));
   await page.setViewportSize({ width: 390, height: 844 });
