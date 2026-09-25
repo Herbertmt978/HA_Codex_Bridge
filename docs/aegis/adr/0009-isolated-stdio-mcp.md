@@ -1,11 +1,9 @@
 # ADR 0009: Isolated stdio MCP workers
 
-**Status:** Proposed for repository security review, 25 September 2026. The
-owner's request authorises implementation work. Issue #99's design-approval
-condition means reviewing this explicit boundary and its contract changes
-before activation; it is not a further user-permission gate. This document
-does not enable stdio servers, approve a package, or establish native Home
-Assistant OS acceptance.
+**Status:** Accepted for the MCP-03 implementation, 25 September 2026. The
+security review and native HAOS-DEV isolation, discovery and tool-call checks
+support this bounded first release. The App option remains off by default and
+new connections require package review and tool selection.
 
 ## Context
 
@@ -22,7 +20,7 @@ worker on amd64 HAOS without added container capabilities. Its profile and proof
 are browser-specific and must not be reused as evidence for an MCP worker.
 HAOS-DEV currently has 2 vCPUs and 2 GiB RAM; Node is not packaged in the App.
 
-## Proposed decision
+## Decision
 
 ### Transport and ownership
 
@@ -111,8 +109,8 @@ Direct native Codex `command` configuration and an arbitrary-command text box
 are rejected: they would launch code in the wrong trust boundary. A separate
 Supervisor App/container could provide a harder aggregate resource boundary,
 but adds an App pairing, distribution and state-transfer model not yet
-qualified. A single App-owned namespace worker is the proposed first design,
-conditional on native isolation and resource evidence.
+qualified. A single App-owned namespace worker is the first design, conditional
+on native isolation and resource evidence.
 
 No workspace grant means the first release can run useful stateless Python MCP
 servers but cannot run filesystem servers. No network means it cannot run
@@ -150,8 +148,9 @@ an intermediate implementation, not completion of issue #99.
 
 ## Baseline sync
 
-This proposed boundary is reflected as a future requirement in
+This boundary is reflected in
 [AGENTS.md](../../../AGENTS.md), [CONTEXT.md](../../../CONTEXT.md) and
-[SECURITY.md](../../../SECURITY.md). Those documents continue to describe
-stdio as unsupported in the released runtime until implementation and native
-acceptance are complete.
+[SECURITY.md](../../../SECURITY.md). Arbitrary executable stdio commands remain
+unsupported. The only first-release package is Bridge Time 1.0.0; no second
+revision is bundled, so package update and rollback controls have no choice
+until a reviewed later release supplies one.

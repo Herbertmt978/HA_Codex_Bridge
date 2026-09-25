@@ -126,27 +126,26 @@ rejected. The relay redacts literal and JSON-escaped reflected credentials acros
 response chunks. A trusted server receives its credential and can misuse or
 transform it; redaction cannot make an untrusted provider safe.
 
-### Proposed isolated stdio MCP boundary
+### Isolated stdio MCP boundary
 
-[ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md) proposes a new,
-separately reviewed execution boundary for MCP-03. It is **not implemented or
-enabled in the released App**. Existing public HTTPS/OAuth and acknowledged
-LAN/App relay rules remain in force. Enabling MCP or installing an App update
-must not silently create or activate a stdio worker.
+[ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md) defines a separate
+execution boundary for MCP-03. It is disabled by default. Existing public
+HTTPS/OAuth and acknowledged LAN/App relay rules remain in force. Enabling MCP
+or installing an App update must not silently create or activate a stdio worker.
 
-The first proposed stdio release supports approved Python 3.14 packages on
+The first stdio release supports approved Python 3.14 packages on
 amd64 only. Packages and dependencies are pinned in a root-owned catalogue
 within the signed immutable App image, with source, exact version, file digests
 and fixed entrypoint recorded in a manifest. Activation re-verifies the
 package bytes. The administrator must see the source, fixed command, grants
 and selected tools before approval. A package update stages a new paused
-revision, verifies it, waits for active work, then switches atomically with a
-packaged previous revision available for rollback. Runtime package downloads,
+revision, verifies it, waits for active work, then switches atomically. Rollback
+requires a previous revision still bundled in the App. Runtime package downloads,
 user-uploaded executables, native Codex `command` entries and arbitrary
-environment variables are not permitted by this proposal.
+environment variables are not permitted.
 
-Codex would connect only to a generated, authenticated loopback HTTP endpoint
-owned by the trusted Bridge. The Bridge would own each stdio session and pass
+Codex connects only to a generated, authenticated loopback HTTP endpoint
+owned by the trusted Bridge. The Bridge owns each stdio session and passes
 only bounded MCP JSON-RPC lines through private pipes. Its capability header,
 HTTP authentication, Supervisor token and Codex sign-in state must never reach
 the worker. A worker needs its own AppArmor child, Bubblewrap namespaces,

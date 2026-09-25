@@ -4,7 +4,7 @@
 
 You need both the HACS Integration and the Supervisor App. The Integration
 adds the panel; the App runs Codex. This release pairs App, Integration and
-panel `1.7.3`, with Bridge `0.13.0` and Codex `0.157.0`.
+panel `1.8.0`, with Bridge `0.14.0` and Codex `0.157.0`.
 
 Install versions available on the
 [Releases page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).
@@ -93,6 +93,11 @@ servers require trusted HTTPS. Private HTTP/HTTPS endpoints need the separate
 **Enable local MCP connections** option and per-endpoint consent. Bearer tokens
 and named authentication headers are configured privately in the panel; see
 [App documentation](../codex_bridge_app/DOCS.md).
+
+For a verified local stdio server on amd64 HAOS, also enable **Enable isolated
+stdio MCP servers** and restart the App. Review its fixed package and permissions in
+**Settings → MCP servers**. A new connection is paused and has no permitted
+tools until you select them and resume it. Arbitrary commands are unavailable.
 
 For Home Assistant management, [HA-MCP](https://github.com/homeassistant-ai/ha-mcp)
 is a recommended optional tool server. It offers Home Assistant operations

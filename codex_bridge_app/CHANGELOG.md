@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 1.8.0
+
+- Adds opt-in isolated stdio MCP support on amd64 Home Assistant OS. The first
+  approved package is Bridge Time 1.0.0, a local Python time and timezone
+  server with no network or workspace access.
+- Shows the package source, fixed command, verified files and access limits
+  before an administrator creates a paused connection. Tool selection,
+  pause/resume, diagnostics, update, rollback and removal use the existing MCP
+  management controls.
+- Runs stdio servers in a separately attested AppArmor and Bubblewrap worker.
+  A private Bridge adapter handles MCP messages; Codex never launches the
+  package directly or passes its sign-in or Supervisor credentials to it.
+  Installation and upgrades do not activate a worker or grant tools.
+- Pairs App, Integration and panel `1.8.0` with Bridge `0.14.0` and the
+  unchanged verified Codex runtime `0.157.0`.
+
 ## 1.7.3
 
 - Stops Assist conversations being selected for scheduled tasks. The editor

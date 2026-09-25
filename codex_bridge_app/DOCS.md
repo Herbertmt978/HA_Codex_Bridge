@@ -10,6 +10,7 @@ The App has two optional capabilities:
 | Option | Default | What it does |
 | --- | --- | --- |
 | Enable MCP (`enable_mcp`) | Off | Allows configuration of trusted outbound HTTPS MCP servers. Save and restart the App after changing it. |
+| Enable isolated stdio MCP servers (`enable_stdio_mcp`) | Off | On amd64 HAOS, permits the separately isolated worker for verified packages. Also requires Enable MCP. Save and restart the App after changing it. |
 | Enable browser (`enable_browser`) | Off | Starts the isolated interactive browser worker. Save and restart the App; new chats then receive its tools. |
 
 ChatGPT login is completed in the Codex Bridge panel. Do not enter account
@@ -102,7 +103,23 @@ allowed destinations and how to reconnect after an IP change.
 Bearer tokens and named authentication headers can be configured privately for
 an approved endpoint in **Settings → MCP servers**. Their values are write-only
 and are not placed in the native Codex configuration. Local OAuth and arbitrary
-stdio servers remain unsupported.
+stdio commands remain unsupported.
+
+On amd64 HAOS, **Enable isolated stdio MCP servers** adds a separate catalogue under
+**Settings → MCP servers**. The first reviewed package, Bridge Time 1.0.0,
+answers local time and timezone questions. Its source, fixed command, exact
+package digest and access limits appear before you add it. New connections are
+paused with no allowed tools: inspect its tool descriptions, select the tools
+you trust, then resume it. A package update pauses the connection and requires
+another review; the previous bundled revision can be selected for rollback
+when available. Removal stops its sessions and discards its saved policy.
+
+The worker has no network, workspace, Home Assistant configuration, Codex
+login or Supervisor credential access. Only the fixed bundled Python 3.14
+package and scratch space are visible. Bridge verifies the package and worker
+isolation on start; if either check fails, the panel shows a recovery state and
+does not launch the package. Disabling this option and restarting prevents new
+stdio workers without deleting saved connection choices.
 
 OAuth sign-in is an explicit, one-time flow. Do not save or share its temporary
 URL. Supported forms and authorisation links can be answered in the active chat;
@@ -130,7 +147,7 @@ and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.7.3`, with Bridge `0.13.0` and
+This release pairs App, Integration and panel `1.8.0`, with Bridge `0.14.0` and
 Codex `0.157.0`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).

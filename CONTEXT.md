@@ -25,12 +25,12 @@ to the App or Bridge.
 | **Host Access App** | An optional, separately installed companion for explicitly acknowledged root commands on the HAOS machine. | Normal workspace access, an MCP server, or permission to use another host. |
 | **Automation** | A durable prompt definition whose due time is scheduled by Home Assistant and claimed idempotently by the Bridge. | A free-running background worker or unrestricted cron job. |
 | **Skill** | A workspace-scoped Codex instruction under `.agents/skills/`. | A global executable or a path outside the workspace. |
-| **MCP server** | In the released runtime, an explicitly enabled outbound streamable-HTTP server: public HTTPS with optional OAuth, or an acknowledged local endpoint through the confined relay. MCP-03 proposes a separately isolated local stdio worker behind a Bridge-owned private HTTP adapter. | A public listener for the App, Bridge, or Home Assistant; an arbitrary native Codex command. |
+| **MCP server** | An explicitly enabled outbound streamable-HTTP server: public HTTPS with optional OAuth, an acknowledged local endpoint through the confined relay, or a verified local stdio package behind a separate Bridge-owned private HTTP adapter. | A public listener for the App, Bridge, or Home Assistant; an arbitrary native Codex command. |
 | **Global/project AGENTS.md** | Global Codex instructions or an `AGENTS.md` at the selected project workspace root. | A way to grant Codex additional filesystem access. |
 
 ## Current compatibility statement
 
-- This release pairs App `1.7.3`, Integration and panel `1.7.3`, Bridge `0.13.0` and
+- This release pairs App `1.8.0`, Integration and panel `1.8.0`, Bridge `0.14.0` and
   Codex `0.157.0`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -62,11 +62,11 @@ to the App or Bridge.
   endpoint acknowledgement, and uses the private relay with approved IP
   pinning, TLS verification and redirect refusal. DNS changes require fresh
   approval. No shell, browser or host grant follows from an MCP connection.
-- Stdio MCP remains unsupported in the released App. The proposed MCP-03
-  boundary is [ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md): a
+- Isolated stdio MCP is opt-in through a separate, default-disabled App option.
+  Its boundary is [ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md): a
   Bridge-owned stdio-to-private-HTTP adapter and an independently attested
-  worker, disabled by default. Its first supported scope would be approved
-  Python 3.14 packages on amd64 with no network or workspace file grant.
+  worker. Its first supported scope is approved Python 3.14 packages on amd64
+  with no network or workspace file grant.
   Package approval, tool selection, quota checks and native HAOS acceptance
   precede activation; an App update alone grants nothing.
 - The optional Host Access App privately pairs through Supervisor discovery.
@@ -101,7 +101,7 @@ to the App or Bridge.
   require HTTPS and connection-time public-address validation. Existing public
   OAuth retains its native path. See ADR 0008 for the credential boundary.
 
-- MCP-03 is a proposed, unreleased stdio capability. A reviewed package
+- MCP-03 is an opt-in stdio capability. A reviewed package
   manifest fixes its source, version and command; the administrator reviews
   its grants and selects tools before enabling it. The worker receives only
   bounded MCP messages, an allowlisted environment, immutable package files
@@ -136,7 +136,7 @@ to the App or Bridge.
   public contract that Home Assistant schedules and the Bridge claims.
 - Keep MCP documentation explicit that configured endpoints are outbound,
   disabled by default. Distinguish public HTTPS/OAuth from opt-in LAN/App
-  endpoints through the private relay and proposed stdio workers behind their
+  endpoints through the private relay and isolated stdio workers behind their
   private adapter. Never expose the App or Bridge to the browser as an MCP
   endpoint. Public DNS screening remains best effort. Never disclose secret
   URL paths, relay credentials or OAuth authorisation URLs.
