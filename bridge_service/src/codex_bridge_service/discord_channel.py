@@ -193,6 +193,7 @@ class DiscordState:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA busy_timeout=5000")
         self._db.execute("PRAGMA synchronous=FULL")
+        self._db.execute("PRAGMA secure_delete=ON")
         self._db.executescript("""
             CREATE TABLE IF NOT EXISTS policy (
                 singleton INTEGER PRIMARY KEY CHECK(singleton=1),

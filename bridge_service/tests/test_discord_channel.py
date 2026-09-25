@@ -275,6 +275,7 @@ def test_discord_ingress_replay_mapping_and_revoke_survive_restart(
     tmp_path: Path,
 ) -> None:
     store = DiscordState(tmp_path)
+    assert store._db.execute("PRAGMA secure_delete").fetchone()[0] == 1
     assert store.status()["credential_present"] is False
     with pytest.raises(DiscordChannelError):
         store.configure(policy(), None)

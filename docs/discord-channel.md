@@ -23,7 +23,9 @@ Disable the bot's public installation option where practical. Give the App
 the bot token through the authenticated Home Assistant endpoint only. App
 private storage holds it in a mode `0600` database below a mode `0700`
 directory; it is absent from API responses, browser storage, Codex prompts,
-native Codex configuration and logs. Revoking it removes the saved credential.
+native Codex configuration and logs. Revoking disables the connection and
+clears the active saved credential. SQLite secure deletion is enabled for
+database updates, but local revocation is not a guarantee of forensic erasure.
 If the token may have been copied or disclosed, also reset it in Discord's
 Developer Portal; local revocation cannot invalidate a token outside this App.
 Home Assistant Supervisor backups may contain earlier copies of the App's
