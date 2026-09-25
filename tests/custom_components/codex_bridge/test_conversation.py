@@ -13,7 +13,7 @@ from custom_components.codex_bridge.conversation import (
     CodexAssistConversation,
     async_setup_entry,
 )
-from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError
+from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError, BridgeApiError
 from custom_components.codex_bridge.const import (
     CONF_ASSIST_ALLOW_VOICE,
     CONF_ASSIST_ENABLED,
@@ -246,6 +246,29 @@ async def test_lost_admission_response_replays_the_same_task_id(hass):
         chat_log.async_add_assistant_content_without_tools.call_args.args[0].content
         == "Hello back."
     )
+
+
+async def test_retryable_admission_error_keeps_the_same_task_id(hass):
+    admin = await hass.auth.async_create_user(
+        "Administrator", group_ids=[GROUP_ID_ADMIN]
+    )
+    agent, client = _agent(hass)
+    accepted = client.async_start_task.return_value
+    client.async_start_task.side_effect = [
+        BridgeApiError("event_store_capacity_exhausted", status=507, retryable=True),
+        accepted,
+    ]
+    chat_log = Mock(conversation_id="ha_conversation", content=[object()])
+
+    uncertain = await agent._async_handle_message(_input(admin.id), chat_log)
+    assert uncertain.conversation_id == "ha_conversation"
+    recovered = await agent._async_handle_message(
+        _input(admin.id, uncertain.conversation_id), chat_log
+    )
+
+    assert recovered.conversation_id == uncertain.conversation_id
+    assert len({call.args[0]["task_id"] for call in client.async_start_task.await_args_list}) == 1
+    client.async_continue_task.assert_not_awaited()
 
 
 async def test_answer_from_timed_out_turn_is_delivered_before_new_answer(hass):

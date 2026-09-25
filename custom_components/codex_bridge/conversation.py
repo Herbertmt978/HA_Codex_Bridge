@@ -229,7 +229,7 @@ class CodexAssistConversation(ConversationEntity):
             except TimeoutError:
                 answer = {"status": "running", "answer": None}
             except BridgeApiError as error:
-                if isinstance(error, BridgeApiConnectionError):
+                if error.retryable:
                     return self._reply(
                         user_input,
                         chat_log,
