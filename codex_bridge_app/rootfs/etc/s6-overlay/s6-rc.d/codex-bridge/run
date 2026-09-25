@@ -8,6 +8,9 @@ ulimit -c 0
 # Supervisor validates this as a boolean, and this second check keeps malformed
 # restored option state fail-closed before it reaches the Bridge process.
 source /usr/lib/bashio/bashio.sh
+# Bashio persists the Supervisor options response under /tmp. A Docker
+# restart preserves that cache, so read the current App options on every start.
+bashio::cache.flush "addons.self.options.config"
 runtime_arch="$(python /usr/local/libexec/codex-bridge/runtime_architecture.py)"
 enable_mcp="$(bashio::config 'enable_mcp')"
 case "${enable_mcp}" in

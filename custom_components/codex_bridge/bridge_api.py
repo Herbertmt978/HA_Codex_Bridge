@@ -194,6 +194,22 @@ def _task_action_payload(value: object, expected_task_id: str) -> dict[str, str]
     return {"task_id": task_id, "thread_id": thread_id, "run_id": run_id, "status": state}
 
 
+def _task_answer_payload(value: object, expected_task_id: str) -> dict[str, Any]:
+    """Validate the App's bounded answer without passing through other run data."""
+
+    reference = _task_action_payload(value, expected_task_id)
+    answer = value.get("answer")
+    if answer is not None and (
+        reference["status"] != "completed"
+        or not isinstance(answer, str)
+        or not answer.strip()
+        or len(answer) > 4096
+        or any(ord(character) < 32 and character not in "\r\n\t" for character in answer)
+    ):
+        raise BridgeApiEndpointError("task_answer_invalid")
+    return {**reference, "answer": answer}
+
+
 def _public_interaction_payload(value: object) -> dict[str, Any]:
     """Defence in depth against provider locators from a skewed App."""
 
@@ -854,6 +870,12 @@ class BridgeApiClient:
         self.require_capability("task_actions_v1")
         return _task_action_payload(await self._async_json(
             "GET", f"/task-actions/{_path_segment(task_id)}"
+        ), task_id)
+
+    async def async_get_task_answer(self, task_id: str) -> dict[str, Any]:
+        self.require_capability("assist_conversation_v1")
+        return _task_answer_payload(await self._async_json(
+            "GET", f"/task-actions/{_path_segment(task_id)}/answer"
         ), task_id)
 
     async def async_cancel_task(self, task_id: str) -> dict[str, str]:

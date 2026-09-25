@@ -1,26 +1,26 @@
-# HA-03: Assist delegation
+# HA-03: Assist conversation agent
 
-Status: Planned. Version and date: unassigned.
+Status: In development. Version and date: unassigned.
 
 Tracking issue: [#105](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/105).
 
 ## Problem and outcome
 
-Users should be able to ask their chosen HA Assist agent to delegate an approved
-piece of work to Codex without opening the Bridge panel.
+Users should be able to select Codex Bridge as an HA Assist conversation agent
+and receive Codex's answer directly, without opening the Bridge panel.
 
 ## Scope
 
-- Provide a supported, opt-in Assist/LLM tool or exposed-script pattern that
-  calls the bounded Bridge task actions.
-- Let an administrator choose allowed projects and modes. Explain which prompt
-  and context are sent to Codex and where results will appear.
-- Return a useful acknowledgement for long work; deliver the eventual result
-  through HA-01/HA-02 rather than keeping the conversation request open forever.
+- Provide an opt-in conversation entity backed by bounded Bridge task actions.
+- Let an administrator select one project. Restrict Assist turns to observe
+  mode, disabled web search and no host access; explain what workspace material
+  Codex can read and what is returned as speech.
+- Return Codex's final text directly when it completes within the response
+  window. Preserve a longer-running task and explain where to review it.
 
 ## Acceptance criteria
 
-- Native Assist qualification starts a bounded task and follows its result.
+- Native Assist qualification starts a bounded task and returns its final text.
 - Requests cannot choose an unexposed project, obtain host access, answer an
   administrator approval or broaden MCP permissions through prompt text.
 - Unavailable Codex, authentication expiry and duplicate requests return clear

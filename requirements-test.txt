@@ -2,6 +2,13 @@
 # Keep it as the single version authority so Dependabot updates the pair together.
 pytest-homeassistant-custom-component==0.13.366
 
+# The opt-in conversation platform imports Home Assistant's conversation
+# component during test collection, before HA can install its requirements.
+# Keep these aligned with the HA version selected by the test fixture.
+gazetteer-matcher==1.1.0
+hassil==3.12.1
+home-assistant-intents==2026.8.28
+
 # Install the Bridge package and its test dependencies in the same environment.
 # Its suite has a separate pytest lifecycle because the Home Assistant plugin's
 # global leak checks are intentionally stricter than the legacy worker tests.

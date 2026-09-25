@@ -98,6 +98,10 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
   context usage, and open files or links from the sidebar. Share copies a chat
   link that requires Home Assistant sign-in. The bottom panel includes an
   interactive workspace terminal. See [Chat controls](docs/chat-controls.md).
+- **Assist conversation agent:** an administrator can opt in to direct Codex
+  answers from one selected project. Assist requests are restricted to observe
+  mode and are separate from ordinary device control. See the
+  [Assist setup and access guide](docs/home-assistant-assist.md).
 
 Scheduled work runs through Home Assistant, so your PC and browser do not need
 to stay open. Home Assistant, the App and the ChatGPT session must remain

@@ -150,6 +150,13 @@ class RuntimeRequestConflictError(RuntimeBrokerError):
         super().__init__("The client request ID was already used for different input.")
 
 
+class AssistPolicyError(RuntimeBrokerError):
+    code = "assist_policy_invalid"
+
+    def __init__(self) -> None:
+        super().__init__("Assist turns must keep their restricted task policy.")
+
+
 class RuntimeUnavailableError(RuntimeBrokerError):
     code = "app_server_unavailable"
     status_code = 503
@@ -737,9 +744,12 @@ class RuntimeBroker:
         host_unattended_approved: bool = False,
         web_search: Literal["live", "disabled"] | None = None,
         admission: PromptAdmission | None = None,
+        assist: bool = False,
     ) -> RunRecord:
         if type(unattended) is not bool:
             raise ValueError("unattended must be a boolean")
+        if type(assist) is not bool:
+            raise ValueError("assist must be a boolean")
         if web_search is not None and (
             type(web_search) is not str or web_search not in {"live", "disabled"}
         ):
@@ -753,6 +763,11 @@ class RuntimeBroker:
             maximum_bytes=self.limits.max_event_payload_bytes,
         )
         thread = self.storage.get_thread(thread_id)
+        if thread.assist_origin != assist or (assist and (
+            thread.mode is not RunMode.OBSERVE or not unattended
+            or web_search != "disabled"
+        )):
+            raise AssistPolicyError()
         self.storage.resolve_workspace_path(thread.workspace_path)
         if thread.mode is RunMode.HAOS_FULL_ACCESS:
             if self._host_access is None:
@@ -780,7 +795,12 @@ class RuntimeBroker:
             # Broker-owned deletion holds this same lock. Revalidate here so a
             # submit that resolved metadata before deletion cannot resurrect
             # runtime ownership after the chat has been removed.
-            self.storage.load_thread(thread_id)
+            current_thread = self.storage.load_thread(thread_id)
+            if current_thread.assist_origin != assist or (assist and (
+                current_thread.mode is not RunMode.OBSERVE or not unattended
+                or web_search != "disabled"
+            )):
+                raise AssistPolicyError()
             existing_outcome = self._state.request_idempotency.get(request_id)
             if existing_outcome is not None:
                 existing = self._state.runs.get(existing_outcome.run_id)
@@ -827,7 +847,12 @@ class RuntimeBroker:
                 )
             # A delete or concurrent idempotent submission can complete while
             # the authoritative auth read runs without the broker lock.
-            self.storage.load_thread(thread_id)
+            current_thread = self.storage.load_thread(thread_id)
+            if current_thread.assist_origin != assist or (assist and (
+                current_thread.mode is not RunMode.OBSERVE or not unattended
+                or web_search != "disabled"
+            )):
+                raise AssistPolicyError()
             existing_outcome = self._state.request_idempotency.get(request_id)
             if existing_outcome is not None:
                 existing = self._state.runs.get(existing_outcome.run_id)
@@ -1734,7 +1759,7 @@ class RuntimeBroker:
 
         image_generation_authority_revision: int | None = None
         authority = self._image_generation_authority
-        if authority is not None:
+        if authority is not None and not thread.assist_origin:
             try:
                 candidate_revision = authority.authorize_image_generation(
                     generation

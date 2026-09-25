@@ -84,6 +84,40 @@ async def test_task_action_requires_capability_and_projects_opaque_reference(
             )
 
 
+async def test_assist_answer_requires_capability_and_rejects_wrong_task_or_oversize_text(
+    bridge_server_factory,
+):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"].append("assist_conversation_v1")
+    task_id = "a" * 32
+    response = {
+        "task_id": task_id,
+        "thread_id": "thr_task_" + task_id,
+        "run_id": "run_123",
+        "status": "completed",
+        "answer": "Hello back.",
+    }
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        assert request.path == f"/task-actions/{task_id}/answer"
+        return web.json_response(response)
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        assert (await client.async_get_task_answer(task_id))["answer"] == "Hello back."
+        response["task_id"] = "b" * 32
+        with pytest.raises(BridgeApiEndpointError):
+            await client.async_get_task_answer(task_id)
+        response["task_id"] = task_id
+        response["answer"] = "x" * 4097
+        with pytest.raises(BridgeApiEndpointError):
+            await client.async_get_task_answer(task_id)
+
+
 @pytest.mark.parametrize("supported", [False, True])
 async def test_terminal_requires_advertised_capability(bridge_server_factory, supported):
     ready = _fixture("ready_v1.json")

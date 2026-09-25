@@ -204,6 +204,8 @@ class ThreadRecord(BaseModel):
     thinking_override: str | None = None
     # Private retry fingerprint for the Home Assistant action that created this chat.
     task_action_fingerprint: str | None = None
+    # Private origin marker: Assist chats can only continue under Assist's constrained policy.
+    assist_origin: bool = False
     created_at: str | None = None
     updated_at: str | None = None
     archived_at: str | None = None
@@ -262,6 +264,7 @@ class PublicThreadRecord(BaseModel):
                     "active_run_id",
                     "pending_prompts",
                     "task_action_fingerprint",
+                    "assist_origin",
                 }
             )
         )
@@ -522,6 +525,7 @@ class BridgeReadinessRecord(BaseModel):
             "interactions_v2",
             "automations_v1",
             "task_actions_v1",
+            "assist_conversation_v1",
             "automation_proposals_v1",
             "reset_credits_v1",
             "mcp_admin_v1",

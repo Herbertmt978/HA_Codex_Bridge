@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from homeassistant.setup import async_setup_component
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -127,6 +128,9 @@ async def test_event_during_refresh_triggers_follow_up(hass):
 
 
 async def test_registry_ids_and_availability_survive_reload(hass):
+    # The conversation dependency expects HA's exposed-entity registry, which
+    # production Core initialises before custom integrations are set up.
+    assert await async_setup_component(hass, "homeassistant", {})
     entry = MockConfigEntry(
         domain=DOMAIN, title="Codex Bridge App", source="hassio",
         data={

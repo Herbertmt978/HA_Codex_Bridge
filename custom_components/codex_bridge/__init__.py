@@ -40,7 +40,7 @@ from .task_services import async_register_task_services
 from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CONVERSATION]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -1070,6 +1070,34 @@ class BridgeEventStore:
         assert normalized_thread is not None
         return [_event_row(row) for row in rows]
 
+    def latest_assistant_message(self, thread_id: str, run_id: str) -> str | None:
+        """Read only the last retained assistant message for one run in one thread.
+
+        This private projection never falls back to a different run's text. The
+        journal bounds each thread, so a reverse scan also remains bounded.
+        """
+
+        self._require_open()
+        _scope, _thread, scope_id = _normalize_scope("thread", thread_id)
+        if not isinstance(run_id, str) or not run_id or len(run_id) > 256:
+            raise ValueError("run id is invalid")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT payload_json FROM events WHERE scope = 'thread' "
+                "AND scope_id = ? AND event_type = 'message.completed' "
+                "ORDER BY cursor DESC",
+                (scope_id,),
+            )
+            for row in rows:
+                payload = json.loads(row["payload_json"])
+                if not isinstance(payload, dict):
+                    continue
+                if payload.get("run_id") != run_id or payload.get("role") != "assistant":
+                    continue
+                answer = payload.get("text")
+                return answer if isinstance(answer, str) else None
+        return None
+
     def purge_thread(self, thread_id: str) -> CompactionResult:
         """Remove one deleted chat's replayable payloads, retaining cursor guidance."""
 
