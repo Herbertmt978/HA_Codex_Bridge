@@ -51,12 +51,18 @@
     "step": {
       "init": {
         "title": "Codex task settings",
-        "description": "Choose native web search and whether Home Assistant automations may launch unattended Codex tasks. Only enable unattended actions for trusted scripts; host access remains unavailable to them.",
+        "description": "Choose task permissions and optionally expose a dedicated project to Assist. Assist runs in observe mode without web search or host access. People using voice have no verified HA identity; enable that separately only when everyone with access to Assist may hear answers from this project. Assist is unavailable while MCP is enabled in the App.",
         "data": {
           "web_search_mode": "Web search",
-          "allow_unattended_task_actions": "Allow unattended task actions from automations"
+          "allow_unattended_task_actions": "Allow unattended task actions from automations",
+          "assist_enabled": "Enable Codex Bridge Assist conversation agent",
+          "assist_project_id": "Project available to Assist",
+          "assist_allow_voice_without_user": "Allow voice requests without a signed-in HA user"
         }
       }
+    },
+    "error": {
+      "assist_project_required": "Choose an active project before enabling Assist. Create a dedicated project in Codex Bridge if none is listed."
     },
     "abort": {
       "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",

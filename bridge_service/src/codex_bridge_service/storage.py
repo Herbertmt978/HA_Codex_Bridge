@@ -1826,11 +1826,14 @@ class BridgeStorage:
         mode: RunMode,
         model_override: str | None = None,
         thinking_override: str | None = None,
+        assist_origin: bool = False,
     ) -> ThreadViewRecord:
         """Create a project chat once, even across a task-action retry or restart."""
 
         if re.fullmatch(r"[a-f0-9]{32}", action_id) is None or _SHA256_PATTERN.fullmatch(fingerprint) is None:
             raise ValueError("task action identity is invalid")
+        if assist_origin and mode is not RunMode.OBSERVE:
+            raise ValueError("Assist task must be observe-only")
         thread_id = f"thr_task_{action_id}"
         workspace_id = f"ws_{action_id[:12]}"
         with self._project_mutation_lock, self._thread_mutation_lock:
@@ -1839,7 +1842,8 @@ class BridgeStorage:
                 raise ProjectMutationError("task project is archived")
             if self._thread_path(thread_id).exists():
                 existing = self.load_thread(thread_id)
-                if existing.task_action_fingerprint != fingerprint:
+                if (existing.task_action_fingerprint != fingerprint
+                        or existing.assist_origin != assist_origin):
                     raise TaskActionConflictError("task action changed during retry")
                 if existing.archived_at is not None:
                     raise ProjectMutationError("task chat is archived")
@@ -1859,6 +1863,7 @@ class BridgeStorage:
                 thread_id_override=thread_id,
                 workspace_id_override=workspace_id,
                 task_action_fingerprint=fingerprint,
+                assist_origin=assist_origin,
             )
 
     @contextmanager
@@ -1872,6 +1877,7 @@ class BridgeStorage:
         mode: RunMode,
         model_override: str | None = None,
         thinking_override: str | None = None,
+        assist_origin: bool = False,
     ) -> Iterator[ThreadViewRecord]:
         """Keep the project reserved until the new task has been submitted."""
 
@@ -1889,6 +1895,7 @@ class BridgeStorage:
                     mode=mode,
                     model_override=model_override,
                     thinking_override=thinking_override,
+                    assist_origin=assist_origin,
                 )
             except BaseException:
                 self._release_automation_target_locked(project_id, None)
@@ -1914,6 +1921,7 @@ class BridgeStorage:
         thread_id_override: str | None = None,
         workspace_id_override: str | None = None,
         task_action_fingerprint: str | None = None,
+        assist_origin: bool = False,
     ) -> ThreadViewRecord:
         if not title.strip():
             raise ValueError("title must not be blank")
@@ -1964,6 +1972,7 @@ class BridgeStorage:
             model_override=normalize_model(model_override) if model_override else None,
             thinking_override=thinking_override,
             task_action_fingerprint=task_action_fingerprint,
+            assist_origin=assist_origin,
             created_at=now,
             updated_at=now,
             archived_at=None,
@@ -2201,6 +2210,8 @@ class BridgeStorage:
                 raise ValueError("title must not be blank")
             record.title = title.strip()
         effective_mode = mode if mode is not None else record.mode
+        if record.assist_origin and effective_mode is not RunMode.OBSERVE:
+            raise ValueError("Assist chat must remain observe-only")
         effective_grant = (
             record.host_access_grant if host_access_grant is _UNSET else host_access_grant
         ) if effective_mode is RunMode.HAOS_FULL_ACCESS else None

@@ -21,6 +21,9 @@ from custom_components.codex_bridge.const import (
     CONF_CONNECTION_TYPE,
     CONF_DISCOVERY_UUID,
     CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+    CONF_ASSIST_ENABLED,
+    CONF_ASSIST_PROJECT_ID,
+    CONF_ASSIST_ALLOW_VOICE,
     CONF_WEB_SEARCH_MODE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
@@ -112,6 +115,9 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
     assert form["data_schema"]({}) == {
         CONF_WEB_SEARCH_MODE: "live",
         CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+        CONF_ASSIST_ENABLED: False,
+        CONF_ASSIST_PROJECT_ID: "",
+        CONF_ASSIST_ALLOW_VOICE: False,
     }
     result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
 
@@ -119,6 +125,9 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
     assert result["data"] == {
         CONF_WEB_SEARCH_MODE: "disabled",
         CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+        CONF_ASSIST_ENABLED: False,
+        CONF_ASSIST_PROJECT_ID: "",
+        CONF_ASSIST_ALLOW_VOICE: False,
     }
 
     enabled = await flow.async_step_init({
@@ -145,7 +154,40 @@ async def test_supervisor_options_remain_available_before_login_capability_recov
     assert result["data_schema"]({}) == {
         CONF_WEB_SEARCH_MODE: "live",
         CONF_ALLOW_UNATTENDED_TASK_ACTIONS: False,
+        CONF_ASSIST_ENABLED: False,
+        CONF_ASSIST_PROJECT_ID: "",
+        CONF_ASSIST_ALLOW_VOICE: False,
     }
+
+
+async def test_assist_options_require_an_active_selected_project(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    with patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj_assist": "Assist"})):
+        missing = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live",
+            CONF_ASSIST_ENABLED: True,
+            CONF_ASSIST_PROJECT_ID: "",
+        })
+        assert missing["type"] is FlowResultType.FORM
+        assert missing["errors"] == {"base": "assist_project_required"}
+
+        enabled = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live",
+            CONF_ASSIST_ENABLED: True,
+            CONF_ASSIST_PROJECT_ID: "prj_assist",
+            CONF_ASSIST_ALLOW_VOICE: True,
+        })
+    assert enabled["type"] is FlowResultType.CREATE_ENTRY
+    assert enabled["data"][CONF_ASSIST_PROJECT_ID] == "prj_assist"
+    assert enabled["data"][CONF_ASSIST_ALLOW_VOICE] is True
 
 
 async def test_external_legacy_entry_has_no_native_web_search_options(hass):

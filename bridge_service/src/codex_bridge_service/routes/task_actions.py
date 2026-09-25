@@ -37,6 +37,7 @@ class StartTaskRequest(BaseModel):
     model_override: str | None = Field(default=None, max_length=160)
     thinking_override: str | None = Field(default=None, max_length=160)
     web_search: Literal["live", "disabled"] | None = None
+    assist: bool = Field(default=False, strict=True)
 
     @field_validator("title", "prompt", "model_override", "thinking_override")
     @classmethod
@@ -53,6 +54,7 @@ class ContinueTaskRequest(BaseModel):
     thread_id: str = Field(pattern=_IDENTIFIER)
     prompt: str = Field(min_length=1, max_length=65_536)
     web_search: Literal["live", "disabled"] | None = None
+    assist: bool = Field(default=False, strict=True)
 
     @field_validator("prompt")
     @classmethod
@@ -89,9 +91,32 @@ def _require_ready(request: Request, web_search: str | None) -> None:
         raise HTTPException(
             503, detail={"code": "runtime_unavailable", "retryable": True}
         )
-    if web_search is not None and not supports_web_search(request.app.state):
+    if web_search == "live" and not supports_web_search(request.app.state):
         raise HTTPException(
             422, detail={"code": "capabilities_unavailable", "retryable": False}
+        )
+
+
+def _require_assist_safety(
+    request: Request,
+    *,
+    assist: bool,
+    mode: RunMode,
+    web_search: str | None,
+) -> None:
+    if not assist:
+        return
+    if mode is not RunMode.OBSERVE or web_search != "disabled":
+        raise HTTPException(
+            422, detail={"code": "assist_policy_invalid", "retryable": False}
+        )
+    # MCP tools are configured for the whole native app-server, not isolated
+    # per turn. A snapshot of currently active servers is not a security gate:
+    # a server could become available between admission and execution.
+    manager = getattr(request.app.state, "mcp_manager", None)
+    if manager is None or getattr(manager, "enabled", None) is not False:
+        raise HTTPException(
+            409, detail={"code": "assist_mcp_unavailable", "retryable": False}
         )
 
 
@@ -132,10 +157,16 @@ def start_task(
     authorization: str | None = Header(default=None),
 ) -> dict[str, str]:
     runner = _authorize(request, authorization)
+    _require_assist_safety(
+        request, assist=payload.assist,
+        mode=RunMode(payload.mode), web_search=payload.web_search,
+    )
     storage = request.app.state.storage
     fingerprint = hashlib.sha256(
         json.dumps(
-            payload.model_dump(exclude={"task_id"}),
+            payload.model_dump(
+                exclude={"task_id"} if payload.assist else {"task_id", "assist"}
+            ),
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -149,6 +180,7 @@ def start_task(
         if (
             thread.thread_id != f"thr_task_{payload.task_id}"
             or thread.task_action_fingerprint != fingerprint
+            or thread.assist_origin != payload.assist
         ):
             raise HTTPException(
                 409, detail={"code": "task_retry_conflict", "retryable": False}
@@ -201,6 +233,7 @@ def start_task(
             if (
                 thread.thread_id != f"thr_task_{payload.task_id}"
                 or thread.task_action_fingerprint != fingerprint
+                or thread.assist_origin != payload.assist
             ):
                 raise HTTPException(
                     409, detail={"code": "task_retry_conflict", "retryable": False}
@@ -215,6 +248,7 @@ def start_task(
                     mode=RunMode(payload.mode),
                     model_override=payload.model_override,
                     thinking_override=payload.thinking_override,
+                    assist_origin=payload.assist,
                 ) as thread:
                     run = runner.submit_prompt(
                         thread.thread_id,
@@ -223,6 +257,7 @@ def start_task(
                         unattended=True,
                         web_search=payload.web_search,
                         admission=admission,
+                        assist=payload.assist,
                     )
             except (ProjectNotFoundError, ProjectMutationError) as error:
                 raise _target_error(error) from None
@@ -240,9 +275,26 @@ def continue_task(
     authorization: str | None = Header(default=None),
 ) -> dict[str, str]:
     runner = _authorize(request, authorization)
+    if payload.assist:
+        _require_assist_safety(
+            request, assist=True, mode=RunMode.OBSERVE,
+            web_search=payload.web_search,
+        )
     if runner.get_task_action_run(payload.task_id) is None:
         _require_ready(request, payload.web_search)
     storage = request.app.state.storage
+    try:
+        target = storage.load_thread(payload.thread_id)
+    except ThreadNotFoundError as error:
+        raise _target_error(error) from None
+    if target.assist_origin != payload.assist:
+        raise HTTPException(
+            409, detail={"code": "task_target_unavailable", "retryable": False}
+        )
+    if payload.assist and target.mode is not RunMode.OBSERVE:
+        raise HTTPException(
+            409, detail={"code": "assist_policy_invalid", "retryable": False}
+        )
     request_id = f"ha-action:{payload.task_id}"
     with runner.admit_prompt(
         payload.prompt,
@@ -259,6 +311,13 @@ def continue_task(
         else:
             try:
                 with storage.reserve_task_thread(payload.thread_id) as thread:
+                    if thread.assist_origin != payload.assist or (
+                        payload.assist and thread.mode is not RunMode.OBSERVE
+                    ):
+                        raise HTTPException(
+                            409,
+                            detail={"code": "task_target_unavailable", "retryable": False},
+                        )
                     if thread.mode is RunMode.HAOS_FULL_ACCESS:
                         raise HTTPException(
                             409,
@@ -274,6 +333,7 @@ def continue_task(
                         unattended=True,
                         web_search=payload.web_search,
                         admission=admission,
+                        assist=payload.assist,
                     )
             except (
                 ProjectNotFoundError,
@@ -297,6 +357,36 @@ def get_task(
     if run is None:
         raise HTTPException(404, detail={"code": "task_not_found", "retryable": False})
     return _record(task_id, run)
+
+
+@router.get("/task-actions/{task_id}/answer")
+def get_task_answer(
+    task_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, str | None]:
+    """Return a bounded Assist reply from this task's completed run only."""
+
+    runner = _authorize(request, authorization)
+    if len(task_id) != 32 or any(char not in "0123456789abcdef" for char in task_id):
+        raise HTTPException(422, detail={"code": "task_id_invalid", "retryable": False})
+    run = runner.get_task_action_run(task_id)
+    if run is None:
+        raise HTTPException(404, detail={"code": "task_not_found", "retryable": False})
+    try:
+        thread = request.app.state.storage.load_thread(run.thread_id)
+    except ThreadNotFoundError:
+        raise HTTPException(404, detail={"code": "task_not_found", "retryable": False}) from None
+    if not thread.assist_origin:
+        raise HTTPException(404, detail={"code": "task_not_found", "retryable": False})
+    answer = None
+    if run.status == "completed":
+        text = request.app.state.storage.event_store.latest_assistant_message(
+            run.thread_id, run.run_id
+        )
+        if text:
+            answer = text[:4095] + "…" if len(text) > 4096 else text
+    return {**_record(task_id, run), "answer": answer}
 
 
 @router.post("/task-actions/{task_id}/cancel")

@@ -2511,6 +2511,60 @@ test("keeps drawer state and accessibility exact at the responsive boundaries", 
   expect(compactDesktop.contextLeft).toBeGreaterThanOrEqual(compactDesktop.viewport - 1);
 });
 
+test("keeps mobile headers and drawers below the device safe area", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  await panel.evaluate((element) => {
+    element.style.setProperty("--safe-area-inset-top", "48px");
+    element._syncViewportHeight();
+  });
+
+  const headerTop = await panel.locator(".main-header").evaluate((element) => element.getBoundingClientRect().top);
+  expect(headerTop).toBeGreaterThanOrEqual(48);
+  await panel.locator("#mobile-nav-toggle").click();
+  await expect(panel.locator("#workspace-drawer")).toHaveAttribute("aria-hidden", "false");
+  const navTop = await panel.locator("#workspace-drawer").evaluate((element) => element.getBoundingClientRect().top);
+  const scrimTop = await panel.locator("#mobile-drawer-scrim").evaluate((element) => element.getBoundingClientRect().top);
+  expect(navTop).toBeGreaterThanOrEqual(48);
+  expect(scrimTop).toBeGreaterThanOrEqual(48);
+  await page.screenshot({ path: testInfo.outputPath("safe-area-navigation.png"), animations: "disabled" });
+
+  await panel.locator("#mobile-drawer-scrim").click({ position: { x: 380, y: 200 } });
+  await panel.locator("#mobile-context-toggle").click();
+  await expect(panel.locator("#context-drawer")).toHaveAttribute("aria-hidden", "false");
+  const contextTop = await panel.locator("#context-drawer").evaluate((element) => element.getBoundingClientRect().top);
+  expect(contextTop).toBeGreaterThanOrEqual(48);
+  await page.screenshot({ path: testInfo.outputPath("safe-area-context.png"), animations: "disabled" });
+
+  await panel.evaluate((element) => {
+    document.body.style.paddingTop = "56px";
+    element._syncViewportHeight();
+  });
+  const insetContextTop = await panel.locator("#context-drawer").evaluate((element) => element.getBoundingClientRect().top);
+  const insetHeaderTop = await panel.locator(".main-header").evaluate((element) => element.getBoundingClientRect().top);
+  expect(insetContextTop).toBeCloseTo(56, 0);
+  expect(insetHeaderTop).toBeCloseTo(56, 0);
+});
+
+test("does not strand contextual labels over a touch conversation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (query) => query === "(hover: none)" ? { matches: true } : original(query);
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator("#mobile-context-toggle").click();
+  await expect(panel.locator("#tooltip-layer")).toBeHidden();
+  await panel.locator("#mobile-drawer-scrim").click({ position: { x: 10, y: 400 } });
+  await panel.locator("#prompt-input").fill("Say only hello");
+  await panel.locator("#send-button").click();
+  await expect(panel.locator("#tooltip-layer")).toBeHidden();
+});
+
 test("aligns the desktop workspace rails and reading edges at wide widths", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1000 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

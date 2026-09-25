@@ -40,6 +40,7 @@ from codex_bridge_service.event_store import EventStoreAdmissionError
 from codex_bridge_service.models import (
     ArtifactRecord,
     ArtifactSource,
+    PublicThreadRecord,
     RunMode,
     RuntimeProfile,
 )
@@ -8070,3 +8071,170 @@ def test_ha_task_action_start_retry_and_exact_cancel_are_durable(
 def test_regular_prompts_cannot_claim_a_home_assistant_task_identity() -> None:
     with pytest.raises(ValidationError):
         PromptRequest(prompt="Hello", client_request_id="ha-action:" + "a" * 32)
+
+
+def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path / "state")
+    project = storage.create_project(
+        name="Assist project",
+        root_path=str(tmp_path / "workspace"),
+        default_model="gpt-5.6-codex",
+        default_thinking_level="high",
+    )
+    ha_storage = _HomeAssistantProfileStorage(storage)
+    peer = ValidatorBackedAppServer()
+    image_authority = _ImageGenerationAuthority()
+    broker = _broker(ha_storage, peer, image_generation_authority=image_authority)
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.storage = ha_storage
+    app.state.runner = broker
+    app.state.mcp_manager = SimpleNamespace(enabled=False)
+    app.include_router(task_actions.router)
+    monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
+    http = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    first_id = "d" * 32
+    second_id = "e" * 32
+    third_id = "f" * 32
+
+    def publish_answer(thread_id: str, text: str) -> None:
+        _, remote_thread_id, turn_id = _active_ids(storage, thread_id)
+        peer.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_000,
+                "item": {"id": f"item-{len(text)}-{text[:8]}", "type": "agentMessage", "text": text},
+            },
+        )
+        _complete(peer, remote_thread_id=remote_thread_id, turn_id=turn_id)
+
+    try:
+        first = http.post(
+            "/task-actions/start", headers=headers,
+            json={
+                "task_id": first_id, "project_id": project.project_id,
+                "title": "Assist conversation", "prompt": "Hello",
+                "mode": "observe", "web_search": "disabled", "assist": True,
+            },
+        )
+        assert first.status_code == 202, first.text
+        thread_id = first.json()["thread_id"]
+        assert storage.load_thread(thread_id).assist_origin is True
+        assert "assist_origin" not in PublicThreadRecord.from_thread_view(
+            storage.get_thread(thread_id)
+        ).model_dump()
+        _wait_until(lambda: len(_requests(peer, "turn/start")) == 1)
+        assert image_authority.authorized_generations == []
+        pending = http.get(f"/task-actions/{first_id}/answer", headers=headers).json()
+        assert pending["task_id"] == first_id
+        assert pending["thread_id"] == thread_id
+        assert pending["run_id"] == first.json()["run_id"]
+        assert pending["status"] in {"queued", "starting", "running"}
+        assert pending["answer"] is None
+        with pytest.raises(RuntimeBrokerError):
+            broker.submit_prompt(thread_id, "Bypass Assist")
+        with pytest.raises(ValueError):
+            storage.update_thread(thread_id, mode=RunMode.FULL_AUTO)
+        publish_answer(thread_id, "First reply")
+        _wait_until(lambda: broker.get_task_action_run(first_id).status == "completed")
+        assert http.get(f"/task-actions/{first_id}/answer", headers=headers).json()["answer"] == "First reply"
+
+        second = http.post(
+            "/task-actions/continue", headers=headers,
+            json={
+                "task_id": second_id, "thread_id": thread_id,
+                "prompt": "Continue", "web_search": "disabled", "assist": True,
+            },
+        )
+        assert second.status_code == 202, second.text
+        assert http.get(f"/task-actions/{second_id}/answer", headers=headers).json()["answer"] is None
+        publish_answer(thread_id, "Second reply")
+        _wait_until(lambda: broker.get_task_action_run(second_id).status == "completed")
+        assert http.get(f"/task-actions/{second_id}/answer", headers=headers).json()["answer"] == "Second reply"
+        assert http.get(f"/task-actions/{first_id}/answer", headers=headers).json()["answer"] == "First reply"
+
+        third = http.post(
+            "/task-actions/continue", headers=headers,
+            json={
+                "task_id": third_id, "thread_id": thread_id,
+                "prompt": "Fail", "web_search": "disabled", "assist": True,
+            },
+        )
+        assert third.status_code == 202, third.text
+        _, remote_thread_id, turn_id = _active_ids(storage, thread_id)
+        peer.emit_notification(
+            "item/completed",
+            {
+                "threadId": remote_thread_id, "turnId": turn_id,
+                "completedAtMs": 1_783_936_800_000,
+                "item": {"id": "failed-answer", "type": "agentMessage", "text": "Do not return this"},
+            },
+        )
+        _complete(peer, remote_thread_id=remote_thread_id, turn_id=turn_id, status="failed")
+        _wait_until(lambda: broker.get_task_action_run(third_id).status == "failed")
+        assert http.get(f"/task-actions/{third_id}/answer", headers=headers).json()["answer"] is None
+        storage.event_store.append(
+            operation_key="assist-long-answer",
+            scope="thread",
+            thread_id=thread_id,
+            event_type="message.completed",
+            payload={"run_id": first.json()["run_id"], "role": "assistant", "text": "x" * 5000},
+        )
+        bounded = http.get(f"/task-actions/{first_id}/answer", headers=headers).json()["answer"]
+        assert len(bounded) == 4096
+        assert bounded.endswith("…")
+    finally:
+        broker.close()
+
+
+def test_assist_admission_rejects_unrestricted_tools_and_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage = BridgeStorage(root_path=tmp_path / "state")
+    project = storage.create_project(
+        name="Assist project",
+        root_path=str(tmp_path / "workspace"),
+        default_model="gpt-5.6-codex",
+        default_thinking_level="high",
+    )
+    ha_storage = _HomeAssistantProfileStorage(storage)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(ha_storage, peer)
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.storage = ha_storage
+    app.state.runner = broker
+    app.state.mcp_manager = SimpleNamespace(enabled=False)
+    app.include_router(task_actions.router)
+    monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
+    http = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"}
+    payload = {
+        "task_id": "a" * 32, "project_id": project.project_id,
+        "title": "Assist", "prompt": "Hello", "assist": True,
+        "mode": "observe", "web_search": "disabled",
+    }
+    try:
+        assert http.post("/task-actions/start", headers=headers, json={**payload, "assist": "true"}).status_code == 422
+        assert http.post("/task-actions/start", headers=headers, json={**payload, "mode": "edit"}).status_code == 422
+        assert http.post("/task-actions/start", headers=headers, json={**payload, "web_search": "live"}).status_code == 422
+        app.state.mcp_manager.enabled = True
+        refused = http.post("/task-actions/start", headers=headers, json=payload)
+        assert refused.status_code == 409
+        assert refused.json()["detail"]["code"] == "assist_mcp_unavailable"
+        app.state.mcp_manager.enabled = False
+        accepted = http.post("/task-actions/start", headers=headers, json=payload)
+        assert accepted.status_code == 202, accepted.text
+        thread_id = accepted.json()["thread_id"]
+        assert http.post(
+            "/task-actions/continue", headers=headers,
+            json={"task_id": "b" * 32, "thread_id": thread_id, "prompt": "Bypass"},
+        ).status_code == 409
+        assert http.get(f"/task-actions/{payload['task_id']}/answer").status_code == 401
+    finally:
+        broker.close()

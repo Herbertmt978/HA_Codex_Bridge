@@ -28,6 +28,9 @@ from .const import (
     DOMAIN,
     CONF_WEB_SEARCH_MODE,
     CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+    CONF_ASSIST_ENABLED,
+    CONF_ASSIST_PROJECT_ID,
+    CONF_ASSIST_ALLOW_VOICE,
     WEB_SEARCH_MODE_DISABLED,
     WEB_SEARCH_MODE_LIVE,
 )
@@ -319,6 +322,32 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
     """Manage integration-owned settings for the Supervisor App connection."""
 
+    async def _assist_projects(self) -> dict[str, str]:
+        """Offer only active projects; an unavailable App never grants Assist access."""
+
+        data = self.config_entry.data
+        if CONF_BRIDGE_URL not in data or CONF_BRIDGE_TOKEN not in data:
+            return {}
+        client = BridgeApiClient(
+            async_get_clientsession(self.hass),
+            data[CONF_BRIDGE_URL],
+            data[CONF_BRIDGE_TOKEN],
+        )
+        try:
+            await client.async_ready()
+            client.require_api_v1()
+            projects = await client.async_list_projects()
+        except BridgeApiError:
+            return {}
+        return {
+            project["project_id"]: _safe_title(project.get("name"))
+            for project in projects
+            if isinstance(project, dict)
+            and isinstance(project.get("project_id"), str)
+            and project.get("kind") == "project"
+            and project.get("archived_at") is None
+        }
+
     async def async_step_init(self, user_input=None):
         """Offer the strict native web-search preference to Supervisor entries."""
 
@@ -328,17 +357,31 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         ):
             return self.async_abort(reason="supervisor_only")
 
+        projects = await self._assist_projects()
+        choices = {"": "Select a dedicated project", **projects}
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_WEB_SEARCH_MODE: user_input[CONF_WEB_SEARCH_MODE],
-                    CONF_ALLOW_UNATTENDED_TASK_ACTIONS: user_input.get(
-                        CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
-                        self.config_entry.options.get(CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False),
-                    ),
-                },
-            )
+            assist_enabled = user_input.get(CONF_ASSIST_ENABLED, False)
+            assist_project = user_input.get(CONF_ASSIST_PROJECT_ID, "")
+            if assist_enabled and assist_project not in projects:
+                errors["base"] = "assist_project_required"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_WEB_SEARCH_MODE: user_input[CONF_WEB_SEARCH_MODE],
+                        CONF_ALLOW_UNATTENDED_TASK_ACTIONS: user_input.get(
+                            CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+                            self.config_entry.options.get(CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False),
+                        ),
+                        CONF_ASSIST_ENABLED: assist_enabled,
+                        CONF_ASSIST_PROJECT_ID: assist_project if assist_enabled else "",
+                        CONF_ASSIST_ALLOW_VOICE: (
+                            user_input.get(CONF_ASSIST_ALLOW_VOICE, False)
+                            if assist_enabled else False
+                        ),
+                    },
+                )
 
         default = self.config_entry.options.get(
             CONF_WEB_SEARCH_MODE,
@@ -365,6 +408,23 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                             CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False
                         ),
                     ): bool,
+                    vol.Required(
+                        CONF_ASSIST_ENABLED,
+                        default=self.config_entry.options.get(CONF_ASSIST_ENABLED, False),
+                    ): bool,
+                    vol.Required(
+                        CONF_ASSIST_PROJECT_ID,
+                        default=(
+                            self.config_entry.options.get(CONF_ASSIST_PROJECT_ID, "")
+                            if self.config_entry.options.get(CONF_ASSIST_PROJECT_ID, "") in choices
+                            else ""
+                        ),
+                    ): vol.In(choices),
+                    vol.Required(
+                        CONF_ASSIST_ALLOW_VOICE,
+                        default=self.config_entry.options.get(CONF_ASSIST_ALLOW_VOICE, False),
+                    ): bool,
                 }
             ),
+            errors=errors,
         )
