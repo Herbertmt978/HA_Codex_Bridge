@@ -229,6 +229,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         *(("account_profiles_v1", "account_profile_details_v1") if os.name != "nt" else ()),
         "host_access_v1",
         "workspace_terminal_v1",
+        "discord_channel_v1",
     )
     assert app.state.host_access.status()["enabled"] is False
     paths = _registered_paths(app)
