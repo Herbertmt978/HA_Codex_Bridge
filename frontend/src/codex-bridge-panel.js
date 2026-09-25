@@ -3144,6 +3144,7 @@ template.innerHTML = `
     .mcp-stdio-settings { margin-block: 16px; }
     .stdio-server-card h4, .stdio-server-card p, .stdio-package-details p { margin: 0; }
     .stdio-package-details { display: grid; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; background: var(--secondary-background-color, #f5f5f5); overflow-wrap: anywhere; }
+    .stdio-package-details a { color: var(--primary-text-color, #111); text-decoration: underline; text-underline-offset: 2px; }
     .stdio-server-details { display: grid; grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: 6px 12px; margin: 0; padding-top: 10px; border-top: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
     .stdio-server-details dt { font-weight: 600; }
     .stdio-server-details dd { margin: 0; }

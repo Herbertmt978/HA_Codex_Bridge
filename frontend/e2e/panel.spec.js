@@ -3098,6 +3098,51 @@ test("workspace terminal accepts interactive input and closes when leaving the c
 
 
 for (const width of [1440, 390]) {
+  test(`isolated MCP package review fits and creates only a paused server at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      panel._config.capabilities = ["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1", "mcp_stdio_v1"];
+      window.stdioCalls = [];
+      const original = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => {
+        if (method === "list_mcp") return Promise.resolve({ items: [] });
+        if (method === "list_stdio_packages") return Promise.resolve({ items: [{
+          package_id: "bridge-time", revision: "1.0.0", title: "Time and timezone",
+          source: "https://example.org/bridge-time", licence: "MIT", python: "3.14",
+          digest: "a".repeat(64), entrypoint: ["python3.14", "-m", "codex_bridge_time"],
+          tools: ["get_current_time"], network: "none", files: "none", environment: [],
+        }] });
+        if (method === "add_stdio_mcp") { window.stdioCalls.push(args); return Promise.resolve({}); }
+        return original(method, args);
+      };
+      panel._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    await panel.getByRole("button", { name: "Add isolated server" }).click();
+    await expect(panel.getByText("Fixed command: python3.14 -m codex_bridge_time")).toBeVisible();
+    await expect(panel.getByText(/no network, no workspace files/)).toBeVisible();
+    const review = panel.getByLabel("I have reviewed this package, its fixed command, tools and access limits");
+    await panel.getByLabel("Server name").fill("time");
+    await panel.getByRole("button", { name: "Add paused server" }).click();
+    expect(await page.evaluate(() => window.stdioCalls)).toEqual([]);
+    await review.check();
+    const bounds = await panel.locator(".stdio-package-details").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({ path: testInfo.outputPath("stdio-package-review.png") });
+    await panel.getByRole("button", { name: "Add paused server" }).click();
+    await expect.poll(() => page.evaluate(() => window.stdioCalls.length)).toBe(1);
+    expect(await page.evaluate(() => window.stdioCalls[0])).toEqual({
+      name: "time", package_id: "bridge-time", revision: "1.0.0", acknowledged: true,
+    });
+  });
+
   test(`MCP tool selection is readable and keyboard accessible at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
