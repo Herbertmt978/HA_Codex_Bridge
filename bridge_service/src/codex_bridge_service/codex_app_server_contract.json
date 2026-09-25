@@ -3,6 +3,9 @@
     "initialized"
   ],
   "clientRequests": [
+    "account/gatewayOAuth/cancel",
+    "account/gatewayOAuth/login",
+    "account/gatewayOAuth/read",
     "account/login/cancel",
     "account/login/start",
     "account/logout",
@@ -105,10 +108,11 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.156.1",
+  "codexVersion": "codex-cli 0.157.0",
   "contractVersion": 1,
-  "schemaBundleSha256": "9541e023e7177fd82ee5ceebf5b2a5090f189f3f5f5902c4c13944bb9f9c441f",
+  "schemaBundleSha256": "4b1f3f0b35c0c940f07779a7dc7c38fc8c2d9c573b4688d01fc742d44081ddbd",
   "serverNotifications": [
+    "account/gatewayOAuth/changed",
     "account/login/completed",
     "account/rateLimits/updated",
     "account/updated",
@@ -204,6 +208,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "7a46767442ee74452d9eff612d279474d2c2729d8ca5f71d0b339d6d4e757c6e",
-  "v2SchemaSha256": "52bff5936b2fab3263d6090c855890f87d1a4ddb3dac7e4385dec50daf9f4bca"
+  "stableSchemaSha256": "8eb52e0f1d39c5b2263753bfadbbccb74032eab0639b8ca79eb5349e16ac8d73",
+  "v2SchemaSha256": "91f37a5530258330e62340829a9bbc5700ad604c599bbf0fe251c8b0cfadb9db"
 }

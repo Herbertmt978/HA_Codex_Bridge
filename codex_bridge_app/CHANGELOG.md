@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 1.7.1
+
+- Bundles the Sigstore-verified Codex runtime `0.157.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.13.0` without changing its Integration API compatibility.
+
 ## 1.7.0
 
 - Adds private ChatGPT account profiles in the Home Assistant App. Switching
