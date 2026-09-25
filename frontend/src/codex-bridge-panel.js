@@ -7569,7 +7569,7 @@ class CodexBridgePanel extends HTMLElement {
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
     const mobileAvailable = Object.keys(this._hass?.services?.notify || {}).filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
     const mobileTargets = [...new Set([...mobileAvailable, ...(editing?.notifications?.mobile_targets || [])])].filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
-    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.assist_origin ? null : this._activeThread?.thread_id || null, assistChatSelected: this._activeThread?.assist_origin === true, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
 
   _queueSchedulePreview(state, form) {
@@ -7696,6 +7696,7 @@ class CodexBridgePanel extends HTMLElement {
         const description = form.querySelector('[name="description"]')?.value || "";
         state.scheduleContext = this._scheduleContext();
         state.formDraft = proposeScheduleDescription(description, { timezone: state.scheduleContext.timezone });
+        if (state.formDraft.target_kind === "continue_thread" && state.scheduleContext.assistChatSelected) throw new Error("Assist conversations cannot run scheduled tasks. Choose a regular chat or schedule a new chat.");
         state.formError = "";
         state.form = "schedule";
         this._renderDesktopSurface();

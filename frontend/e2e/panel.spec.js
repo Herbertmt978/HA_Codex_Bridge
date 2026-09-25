@@ -511,6 +511,31 @@ test("reviews a chat message as a schedule before any task is created", async ({
   expect(accessibility.violations).toEqual([]);
 });
 
+test("does not offer an Assist conversation as a scheduled target", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-23T08:00:00Z"));
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._activeThread = { ...panel._activeThread, assist_origin: true };
+    panel._threads = panel._threads.map((thread) => thread.thread_id === panel._activeThread.thread_id ? panel._activeThread : thread);
+    panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1"] };
+    panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+    panel._render(true);
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.getByRole("button", { name: "Scheduled" }).click();
+  await panel.getByRole("button", { name: "Describe a task" }).click();
+  await panel.getByRole("textbox", { name: "Task and timing" }).fill("On 24 September 2026 at 09:00 in this chat, say hello");
+  await panel.getByRole("button", { name: "Review timing" }).click();
+  await expect(panel.locator(".schedule-description")).toContainText("Assist conversations cannot run scheduled tasks");
+  expect(await websocketCalls(page, "codex_bridge/create_automation")).toHaveLength(0);
+  await panel.getByRole("button", { name: "Cancel" }).click();
+  await panel.getByRole("button", { name: "New schedule" }).click();
+  await expect(panel.locator(".schedule-editor")).toContainText("Assist conversations cannot run scheduled tasks");
+  await expect(panel.locator('.schedule-editor [name="target_kind"] option[value="continue_thread"]')).toBeDisabled();
+});
+
 test("keeps a schedule draft after a save error and fits a narrow screen", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);

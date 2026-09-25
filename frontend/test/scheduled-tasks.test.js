@@ -17,7 +17,16 @@ describe("scheduled task form contract", () => {
   it("continues the current chat only when selected", () => {
     expect(buildAutomationPayload({ ...values(), target_kind: "continue_thread" }, context).target).toEqual({ kind: "continue_thread", thread_id: "t1" });
     expect(() => buildAutomationPayload(values(), { ...context, projectId: null })).toThrow(/Select a chat or workspace/);
+    expect(() => buildAutomationPayload({ ...values(), target_kind: "continue_thread" }, { ...context, threadId: null, assistChatSelected: true })).toThrow(/Select a chat or workspace/);
     expect(() => buildAutomationPayload({ ...values(), prompt: " " }, context)).toThrow(/title/);
+  });
+
+  it("explains why an Assist conversation is unavailable as a target", () => {
+    const form = renderScheduleForm(document, { formDraft: values() }, "Europe/London", {
+      ...context, threadId: null, assistChatSelected: true,
+    });
+    expect(form.querySelector('[name="target_kind"] option[value="continue_thread"]').disabled).toBe(true);
+    expect(form.textContent).toContain("Assist conversations cannot run scheduled tasks");
   });
 
   it("keeps phone notifications opt-in and selects only explicit destinations", () => {

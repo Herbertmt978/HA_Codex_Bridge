@@ -550,6 +550,10 @@ def create_app(
                     thread = storage.load_thread(str(target.get("thread_id", "")))
                     if thread.archived_at is not None:
                         raise AutomationValidationError("automation thread is archived")
+                    if thread.assist_origin:
+                        raise AutomationValidationError(
+                            "Assist conversations cannot be scheduled"
+                        )
                     return
             except AutomationValidationError:
                 raise
