@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.2
+
+- Keeps the optional Host Access App version aligned with Codex Bridge `1.7.2`.
+  It does not change host-access permissions or the separate grant.
+
 ## 1.7.1
 
 - Bundles the Sigstore-verified Codex runtime `0.157.0`.

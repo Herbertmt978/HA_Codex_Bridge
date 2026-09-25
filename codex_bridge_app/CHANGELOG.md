@@ -2,15 +2,10 @@
 
 All notable App changes are recorded here.
 
-## 1.7.1
+## 1.7.2
 
-- Bundles the Sigstore-verified Codex runtime `0.157.0`.
-- Keeps model and reasoning-level choices dynamically discovered from that runtime.
-- Bundles Bridge `0.13.0` with a capability-gated Assist answer endpoint;
-  existing Integration requests remain compatible.
-- Adds an opt-in Home Assistant Assist conversation agent that returns direct
-  Codex answers from an administrator-selected project. Assist turns remain
-  observe-only and unavailable while App-wide MCP is enabled.
+- Adds the capability-gated Assist answer endpoint, returning direct answers
+  from an administrator-selected project while keeping Assist observe-only.
 - Keeps mobile drawers below the phone's status area and clears touch tooltips
   after actions.
 - Adds opt-in scheduled-task notifications through Home Assistant. Persistent
@@ -18,6 +13,13 @@ All notable App changes are recorded here.
   phones can receive a task title and an optional short answer preview.
 - Refreshes Supervisor App options on every container start so an option change
   cannot be hidden by Bashio's previous cache.
+- Retains Codex `0.157.0` and Bridge `0.13.0` from the 1.7.1 App image.
+
+## 1.7.1
+
+- Bundles the Sigstore-verified Codex runtime `0.157.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.13.0` without changing its Integration API compatibility.
 
 ## 1.7.0
 
