@@ -2,6 +2,13 @@
 
 All notable App changes are recorded here.
 
+## 1.8.1
+
+- Fixes readiness validation when isolated stdio MCP is enabled. The Bridge now
+  advertises its verified stdio capability without rejecting its own response.
+- Pairs App, Integration and panel `1.8.1` with Bridge `0.14.1` and the
+  unchanged verified Codex runtime `0.157.0`.
+
 ## 1.8.0
 
 - Adds opt-in isolated stdio MCP support on amd64 Home Assistant OS. The first

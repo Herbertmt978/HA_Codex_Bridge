@@ -1,7 +1,7 @@
 # MCP-03: Isolated stdio servers
 
-Status: Included in App and Integration 1.8.0 source; publication and final
-image checks remain release gates. Design accepted on 25 September 2026.
+Status: Released in App and Integration 1.8.0, with a readiness correction in
+1.8.1. Native managed acceptance remains a release check.
 
 Tracking issue: [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99).
 

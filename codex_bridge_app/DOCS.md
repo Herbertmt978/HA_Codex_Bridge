@@ -147,7 +147,7 @@ and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.8.0`, with Bridge `0.14.0` and
+This release pairs App, Integration and panel `1.8.1`, with Bridge `0.14.1` and
 Codex `0.157.0`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).
