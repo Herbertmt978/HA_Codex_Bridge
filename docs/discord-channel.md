@@ -68,6 +68,14 @@ limit, or an uncertain response leaves the task available in Home Assistant
 without repeated channel delivery. Revocation and policy changes suppress
 unsent results. The status diagnostic reports only fixed error codes.
 
+The ingress journal retains at most 20,000 interaction claims and does not
+prune them. At that limit, new commands fail closed while existing task records
+remain available. An administrator must revoke the connection, let cancellation
+and delivery settle, stop the App, and arrange an offline rotation of its
+private Discord database before reconfiguring it. Do not remove the database
+while the App runs: doing so loses duplicate and delivery fences. Reset the
+Discord token when rotating this state, including where old backups exist.
+
 This candidate needs native qualification with a disposable server and bot:
 allow-list success and rejection, DM separation, guild visibility, permission
 removal, reconnect, restart, rate limiting and secret-free diagnostics. No
