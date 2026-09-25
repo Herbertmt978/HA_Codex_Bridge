@@ -144,14 +144,14 @@ def task_id_for(interaction_id: str) -> str:
 def safe_answer(value: str | None, *, shared: bool) -> str:
     """Publish one bounded text result; never transfer files or Bridge links."""
 
-    if not value:
-        return "Codex finished without a text answer. Open Home Assistant to review the task."
-    text = value.replace("\x00", "").strip()
+    text = (value or "").replace("\x00", "").strip()
     # Local artifact links require HA administrator authentication and must not
     # be implied to work, or copied into a shared room.
     text = re.sub(r"(?:sandbox:|/api/codex_bridge/)[^\s)]+", "[artifact omitted]", text)
     if shared:
-        text = re.sub(r"https?://[^\s)]+", "[link omitted]", text)
+        text = re.sub(r"https?://[^\s)]+", "[link omitted]", text, flags=re.IGNORECASE)
+    if not text:
+        return "Codex finished without a text answer. Open Home Assistant to review the task."
     return (text[:1750] + "…") if len(text) > 1750 else text
 
 

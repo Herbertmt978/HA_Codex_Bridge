@@ -737,10 +737,19 @@ def test_discord_delivery_is_fenced_before_external_send(
 
 def test_shared_text_omits_artifact_links() -> None:
     answer = safe_answer(
-        "See sandbox:/secret.png and /api/codex_bridge/file", shared=True
+        "See sandbox:/secret.png and /api/codex_bridge/file "
+        "and HTTPS://example.test/private", shared=True
     )
     assert "secret.png" not in answer
     assert "/api/codex_bridge" not in answer
+    assert "example.test" not in answer
+    assert "[link omitted]" in answer
+
+
+def test_empty_sanitised_answer_uses_fallback() -> None:
+    fallback = "Codex finished without a text answer. Open Home Assistant to review the task."
+    assert safe_answer(" \x00 ", shared=False) == fallback
+    assert safe_answer(None, shared=True) == fallback
 
 
 def test_discord_outbound_retries_only_definite_short_rate_limit(
