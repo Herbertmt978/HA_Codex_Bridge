@@ -1,7 +1,8 @@
 # CHANNEL-02: Discord access
 
-Status: Local candidate, pending native Discord acceptance. Version and date:
-unassigned. [Implementation and access guide](../discord-channel.md).
+Status: Local candidate with disposable native Discord acceptance on 25
+September 2026; pending review and release. Version unassigned.
+[Implementation and access guide](../discord-channel.md).
 
 Tracking issue: [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109).
 
@@ -25,6 +26,12 @@ Offer an optional Discord connection for bounded Codex chats and task results.
   duplicate runs or uncontrolled message delivery.
 - Native tests use a disposable server/bot and exercise permission removal and
   secret-free diagnostics.
+
+The disposable test passed closed-default refusal, allowed DM and shared
+commands, private status and cancellation, reconnect/restart, no duplicate
+delivery after restart, and a fixed diagnostic after bot send permission was
+removed. Provider rate-limit responses were simulated in focused local tests;
+a live 429 was not induced.
 
 ## Dependencies and boundary
 

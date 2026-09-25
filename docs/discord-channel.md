@@ -76,10 +76,17 @@ private Discord database before reconfiguring it. Do not remove the database
 while the App runs: doing so loses duplicate and delivery fences. Reset the
 Discord token when rotating this state, including where old backups exist.
 
-This candidate needs native qualification with a disposable server and bot:
-allow-list success and rejection, DM separation, guild visibility, permission
-removal, reconnect, restart, rate limiting and secret-free diagnostics. No
-production Discord connection is implied by including this code.
+Native qualification used a disposable server, bot and local task backend on
+25 September 2026. An unlisted user was refused. An allowed shared request
+posted one visible result in the chosen channel; two DM requests delivered
+privately and reused a separate DM conversation. Private status and active
+cancellation worked. The bot reconnected after the local Gateway host
+restarted without reposting a delivered result. Denying the bot Send Messages
+in the chosen channel left the admitted task recorded, posted no result to
+Discord, and exposed only `delivery_permission_denied` in status. Local
+tests simulate short and long Discord rate limits; a live 429 was not induced
+against the provider. No production Discord connection is implied by these
+checks.
 
 Discord protocol references: [application commands](https://docs.discord.com/developers/docs/interactions/slash-commands),
 [create message and nonce](https://docs.discord.com/developers/resources/message#create-message),
