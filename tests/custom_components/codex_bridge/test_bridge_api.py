@@ -1001,11 +1001,13 @@ async def test_thread_responses_strip_private_runtime_continuity(
         "thread_id": "thr_safe",
         "title": "Account-neutral history",
         "status": "idle",
+        "schedule_eligible": False,
         "codex_session_id": "legacy-provider-session",
         "codex_thread_id": "provider-thread-account-a",
         "active_turn_id": "provider-turn-account-a",
         "active_run_id": "run_private",
         "pending_prompts": [{"prompt": "private queued input"}],
+        "assist_origin": True,
     }
 
     async def handler(request: web.Request) -> web.Response:
@@ -1025,6 +1027,7 @@ async def test_thread_responses_strip_private_runtime_continuity(
         "thread_id": "thr_safe",
         "title": "Account-neutral history",
         "status": "idle",
+        "schedule_eligible": False,
     }
     assert listed == [expected]
     assert detail == expected

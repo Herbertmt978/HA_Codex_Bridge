@@ -517,7 +517,7 @@ test("does not offer an Assist conversation as a scheduled target", async ({ pag
   await selectHarnessThread(page);
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel");
-    panel._activeThread = { ...panel._activeThread, assist_origin: true };
+    panel._activeThread = { ...panel._activeThread, schedule_eligible: false };
     panel._threads = panel._threads.map((thread) => thread.thread_id === panel._activeThread.thread_id ? panel._activeThread : thread);
     panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1"] };
     panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
