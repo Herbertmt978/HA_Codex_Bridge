@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.7.3
+
+- Stops Assist conversations being selected for scheduled tasks. The editor
+  explains the restriction, while the Bridge rejects invalid targets when a
+  schedule is saved or dispatched.
+- Adds a browser-safe scheduling eligibility field to public chat records. The
+  Integration keeps the private Assist origin marker out of panel responses.
+- Retains Codex `0.157.0` and Bridge `0.13.0` from 1.7.2.
+
 ## 1.7.2
 
 - Adds the capability-gated Assist answer endpoint, returning direct answers
