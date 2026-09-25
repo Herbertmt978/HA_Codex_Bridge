@@ -22,6 +22,7 @@ describe("panel navigation actions", () => {
   beforeEach(() => {
     document.body.replaceChildren();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("requires an accessible in-panel confirmation before deleting a chat, traps focus, and restores it on Escape", async () => {
@@ -111,5 +112,35 @@ describe("panel navigation actions", () => {
     const bounded = panel._actionButton("icon-button", "test-tooltip", longLabel);
     expect(bounded.dataset.tooltip).toHaveLength(120);
     expect(bounded.hasAttribute("title")).toBe(false);
+  });
+
+  it("hides floating labels on touch devices and after an action", () => {
+    const panel = createPanel();
+    const newChat = panel.shadowRoot.getElementById("new-direct-chat-button");
+    const tooltip = panel.shadowRoot.getElementById("tooltip-layer");
+
+    newChat.focus();
+    expect(tooltip.hidden).toBe(false);
+    newChat.click();
+    expect(tooltip.hidden).toBe(true);
+
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    newChat.blur();
+    newChat.focus();
+    newChat.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    expect(tooltip.hidden).toBe(true);
+    expect(newChat.getAttribute("aria-label")).toBe("New chat");
+  });
+
+  it("reserves the mobile status-bar inset for the header and both drawers", () => {
+    const panel = createPanel();
+    const stylesheet = panel.shadowRoot.querySelector("style").textContent;
+    vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({ top: 56 });
+    panel._syncViewportHeight();
+
+    expect(panel.style.getPropertyValue("--panel-viewport-top")).toBe("56px");
+    expect(stylesheet).toContain("--panel-safe-area-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px))");
+    expect(stylesheet).toContain("top: max(var(--panel-viewport-top, 0px), var(--panel-safe-area-top))");
+    expect(stylesheet).toContain("padding-top: max(0px, calc(var(--panel-safe-area-top) - var(--panel-viewport-top, 0px)))");
   });
 });

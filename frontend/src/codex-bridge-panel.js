@@ -331,6 +331,7 @@ template.innerHTML = `
       --warning-surface: color-mix(in srgb, var(--brand-amber) 10%, var(--surface-bg) 90%);
       --success-surface: color-mix(in srgb, var(--brand-emerald) 10%, var(--surface-bg) 90%);
       --conversation-width: 960px;
+      --panel-safe-area-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
       --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06);
       --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06);
       display: block;
@@ -5099,6 +5100,7 @@ template.innerHTML = `
         max-height: none;
         min-height: 0;
         overflow: hidden;
+        padding-top: max(0px, calc(var(--panel-safe-area-top) - var(--panel-viewport-top, 0px)));
       }
 
       .main-pane {
@@ -5151,12 +5153,12 @@ template.innerHTML = `
       .rail-pane,
       .side-pane {
         position: fixed;
-        top: 0;
+        top: max(var(--panel-viewport-top, 0px), var(--panel-safe-area-top));
         bottom: 0;
         z-index: 4;
         width: min(88vw, 360px);
-        min-height: 100dvh;
-        height: 100dvh;
+        min-height: 0;
+        height: auto;
         transition: transform 180ms ease, box-shadow 180ms ease;
         box-shadow: 0 12px 32px color-mix(in srgb, var(--text-color) 18%, transparent);
         will-change: transform;
@@ -5182,10 +5184,10 @@ template.innerHTML = `
       .mobile-drawer-scrim {
         display: block;
         position: fixed;
-        inset: 0;
+        inset: max(var(--panel-viewport-top, 0px), var(--panel-safe-area-top)) 0 0;
         z-index: 3;
         width: 100%;
-        height: 100%;
+        height: auto;
         border: 0;
         border-radius: 0;
         background: color-mix(in srgb, var(--text-color) 28%, transparent);
@@ -6023,6 +6025,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _syncViewportHeight() {
     const top = Math.max(0, Math.round(this.getBoundingClientRect().top));
+    this.style.setProperty("--panel-viewport-top", `${top}px`);
     const viewportBottom = window.visualViewport
       ? window.visualViewport.offsetTop + window.visualViewport.height
       : window.innerHeight;
@@ -6333,6 +6336,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _handleClick(event) {
+    this._hideTooltip();
     const eventTarget = event.target instanceof Element ? event.target : null;
     const actionTarget = eventTarget?.closest("[data-action]");
     if (this._addMenuOpen && !eventTarget?.closest("#add-menu, #add-menu-button")) {
@@ -15008,6 +15012,12 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _showTooltipForTarget(target) {
+    // Touch browsers retain focus after a tap, which can strand this floating
+    // label over the conversation. Controls still have accessible names.
+    if (window.matchMedia?.("(hover: none)").matches) {
+      this._hideTooltip();
+      return;
+    }
     const trigger = target instanceof Element ? target.closest("[data-tooltip]") : null;
     if (!(trigger instanceof HTMLElement) || !this.shadowRoot.contains(trigger)) {
       return;
