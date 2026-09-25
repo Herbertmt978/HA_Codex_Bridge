@@ -79,7 +79,16 @@ async def test_discord_policy_view_requires_admin_and_never_reflects_token(
 ) -> None:
     secret = "synthetic-discord-bot-credential"
     bridge = SimpleNamespace(
-        async_get_discord_config=AsyncMock(return_value={"enabled": False, "credential_present": True}),
+        async_get_discord_config=AsyncMock(return_value={
+            "enabled": False,
+            "dm_user_ids": ["33333333333333333"],
+            "guilds": [{"guild_id": "11111111111111111", "channel_ids": ["22222222222222222"], "user_ids": ["33333333333333333"], "bot_token": secret}],
+            "credential_present": True,
+            "revision": 1,
+            "connected": False,
+            "diagnostic": secret,
+            "bot_token": secret,
+        }),
         async_set_discord_config=AsyncMock(return_value={"bot_token": secret}),
         async_revoke_discord=AsyncMock(return_value={"bot_token": secret}),
     )
@@ -101,7 +110,15 @@ async def test_discord_policy_view_requires_admin_and_never_reflects_token(
     put_response = await admin.put(path, json=payload)
     delete_response = await admin.delete(path)
     assert [response.status for response in (get_response, put_response, delete_response)] == [200, 200, 200]
-    assert await get_response.json() == {"enabled": False, "credential_present": True}
+    assert await get_response.json() == {
+        "enabled": False,
+        "dm_user_ids": ["33333333333333333"],
+        "guilds": [{"guild_id": "11111111111111111", "channel_ids": ["22222222222222222"], "user_ids": ["33333333333333333"]}],
+        "credential_present": True,
+        "revision": 1,
+        "connected": False,
+        "diagnostic": "discord_status_unavailable",
+    }
     assert await put_response.json() == {"saved": True}
     assert await delete_response.json() == {"revoked": True}
     for response in (get_response, put_response, delete_response):
@@ -144,6 +161,28 @@ async def test_discord_policy_view_reports_older_app_capability_without_secret(
     })
     assert response.status == 503
     assert (await response.json())["code"] == "bridge_incompatible"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert secret not in await response.text()
+
+
+async def test_discord_status_fails_closed_on_malformed_app_policy(
+    hass, hass_client,
+) -> None:
+    secret = "synthetic-discord-bot-credential"
+    bridge = SimpleNamespace(async_get_discord_config=AsyncMock(return_value={
+        "enabled": False,
+        "dm_user_ids": [],
+        "guilds": [{"guild_id": secret, "channel_ids": [secret], "user_ids": [secret]}],
+        "credential_present": True,
+        "revision": 1,
+        "connected": False,
+        "diagnostic": None,
+    }))
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    response = await client.get("/api/codex_bridge/discord")
+    assert response.status == 502
+    assert await response.json() == {"code": "bridge_invalid_response"}
     assert response.headers["Cache-Control"] == "no-store"
     assert secret not in await response.text()
 
