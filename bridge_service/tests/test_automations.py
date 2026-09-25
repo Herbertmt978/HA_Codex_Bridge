@@ -921,14 +921,20 @@ def test_run_preview_is_bounded_to_the_selected_completed_run(tmp_path):
     run = store.run_now(first["automation_id"], now=NOW)
     store.mark_running(run["automation_run_id"], bridge_run_id="run_selected", thread_id="thread_selected", now=NOW)
     store.complete(run["automation_run_id"], status="completed", now=NOW)
-    events = [
-        SimpleNamespace(event_type="message.completed", payload={"run_id": "run_selected", "role": "assistant", "text": "The answer  is\nready."}),
-        SimpleNamespace(event_type="message.completed", payload={"run_id": "another_run", "role": "assistant", "text": "Wrong answer"}),
-    ]
+    def selected_answer(thread_id, run_id):
+        assert (thread_id, run_id) == ("thread_selected", "run_selected")
+        return "The answer  is\nready."
+
+    def expired_replay(_thread_id):
+        raise AssertionError("An expired event replay must not be requested")
+
     app = FastAPI()
     app.state.auth_token = "secret"
     app.state.automations = store
-    app.state.storage = SimpleNamespace(list_thread_events=lambda thread_id: events if thread_id == "thread_selected" else [])
+    app.state.storage = SimpleNamespace(
+        event_store=SimpleNamespace(latest_assistant_message=selected_answer),
+        list_thread_events=expired_replay,
+    )
     app.include_router(create_router())
     client = TestClient(app)
     path = f"/automations/{first['automation_id']}/runs/{run['automation_run_id']}/preview"

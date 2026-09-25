@@ -256,28 +256,22 @@ def create_router() -> APIRouter:
         thread_id, bridge_run_id = run["thread_id"], run["bridge_run_id"]
         if not isinstance(thread_id, str) or not isinstance(bridge_run_id, str):
             return {"preview": None}
-        events = request.app.state.storage.list_thread_events(thread_id)
-        for event in reversed(events):
-            payload = event.payload
-            if (
-                event.event_type != "message.completed"
-                or payload.get("run_id") != bridge_run_id
-                or payload.get("role") != "assistant"
-                or not isinstance(payload.get("text"), str)
-            ):
-                continue
-            cleaned = "".join(
-                " " if char.isspace()
-                else "" if unicodedata.category(char).startswith("C")
-                else char
-                for char in payload["text"]
-            )
-            plain = " ".join(cleaned.split())
-            return {
-                "preview": plain[:160] + ("…" if len(plain) > 160 else "")
-                if plain else None
-            }
-        return {"preview": None}
+        answer = request.app.state.storage.event_store.latest_assistant_message(
+            thread_id, bridge_run_id
+        )
+        if answer is None:
+            return {"preview": None}
+        cleaned = "".join(
+            " " if char.isspace()
+            else "" if unicodedata.category(char).startswith("C")
+            else char
+            for char in answer
+        )
+        plain = " ".join(cleaned.split())
+        return {
+            "preview": plain[:160] + ("…" if len(plain) > 160 else "")
+            if plain else None
+        }
 
     return router
 
