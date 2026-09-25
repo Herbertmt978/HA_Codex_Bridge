@@ -1056,6 +1056,11 @@ def test_terminal_listener_receives_run_request_identity_and_unattended_flag(
         )
         _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
         run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        # Scheduled runs share the native MCP filter. Neither thread startup nor
+        # turn startup may supply a per-run MCP configuration that broadens it.
+        thread_start = _requests(client, "thread/start")[-1]
+        assert set(thread_start["config"]) == {"default_permissions", "web_search"}
+        assert "config" not in _requests(client, "turn/start")[-1]
         _complete(
             client,
             remote_thread_id=remote_thread_id,
