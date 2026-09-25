@@ -40803,7 +40803,7 @@ var CodexBridgePanel = class extends HTMLElement {
       case "select-reset-credit":
         this._pendingResetCredit = {
           id: actionTarget.dataset.creditId,
-          key: crypto.randomUUID()
+          key: this._createRandomUuid()
         };
         this._resetCreditNotice = "";
         this._renderUsagePanel();
@@ -41896,7 +41896,7 @@ var CodexBridgePanel = class extends HTMLElement {
       };
       const values = this._desktopFormValues(target);
       const payload = update ? { automation_id: state.editingAutomation?.automation_id, ...buildAutomationUpdatePayload(values, context) } : buildAutomationPayload(values, context);
-      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= crypto.randomUUID().replaceAll("-", "");
+      if (!update && this._config?.capabilities?.includes("automation_proposals_v1")) payload.client_request_id = state.createRequestId ||= this._createRandomUuid().replaceAll("-", "");
       await this._desktopMutation(update ? "update_automation" : "create_automation", payload, state, { clearFormDraft: true });
       if (!state.form) state.createRequestId = null;
       if (state.form && state.error) {
@@ -43248,14 +43248,17 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _createClientRequestId(prefix = "request") {
+    return `${prefix}-${this._createRandomUuid()}`;
+  }
+  _createRandomUuid() {
     const uuid = globalThis.crypto?.randomUUID?.();
-    if (uuid) {
-      return `${prefix}-${uuid}`;
-    }
-    const bytes = new Uint8Array(16);
-    globalThis.crypto?.getRandomValues?.(bytes);
-    const entropy = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
-    return `${prefix}-${Date.now().toString(36)}-${entropy || Math.random().toString(36).slice(2)}`;
+    if (uuid) return uuid;
+    if (!globalThis.crypto?.getRandomValues) throw new Error("Secure random numbers are unavailable in this browser");
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = bytes[6] & 15 | 64;
+    bytes[8] = bytes[8] & 63 | 128;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
   _bridgeErrorCode(error) {
     const candidates = [

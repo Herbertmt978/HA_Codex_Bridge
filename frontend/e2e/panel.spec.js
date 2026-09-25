@@ -386,11 +386,15 @@ test("scheduled runtime selections and grouped skills remain readable", async ({
 
 test("creates and edits a scheduled task using the reference form", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.addInitScript(() => {
+    Object.defineProperty(Crypto.prototype, "randomUUID", { value: undefined, configurable: true });
+  });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel");
     panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+    panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1"] };
   });
   const panel = page.locator("codex-bridge-panel");
   await panel.locator('[data-destination="scheduled"]').click();
@@ -434,6 +438,7 @@ test("creates and edits a scheduled task using the reference form", async ({ pag
   await expect(panel.getByRole("cell", { name: "Morning summary", exact: true })).toBeVisible();
   const created = (await websocketCalls(page, "codex_bridge/create_automation"))[0].payload;
   expect(created).toMatchObject({ name: "Morning summary", target: { kind: "standalone", project_id: "prj_vba" }, schedule: { kind: "rrule", rule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0;BYSECOND=0", timezone: "Europe/London" }, mode: "observe" });
+  expect(created.client_request_id).toMatch(/^[a-f0-9]{32}$/);
   await panel.getByRole("button", { name: "Update", exact: true }).click();
   await form.getByRole("textbox", { name: "Scheduled task title" }).fill("Renamed summary");
   await form.getByRole("button", { name: "Save changes", exact: true }).click();

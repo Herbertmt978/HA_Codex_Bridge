@@ -202,3 +202,48 @@ async def test_notification_setting_change_does_not_alert_for_older_run(monkeypa
     await coordinator.async_start()
     assert services.calls == []
     await coordinator.async_close()
+
+
+async def test_real_ha_services_receive_only_selected_disposable_recipients(
+    hass, monkeypatch
+):
+    """Exercise HA's service registry and dispatch rather than a fake service object."""
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.automation_notifications.async_track_time_interval",
+        lambda *_args: lambda: None,
+    )
+    calls = []
+
+    async def record(call):
+        calls.append((call.domain, call.service, dict(call.data)))
+
+    hass.services.async_register("persistent_notification", "create", record)
+    hass.services.async_register("notify", "mobile_app_test_phone", record)
+    hass.services.async_register("notify", "mobile_app_other_phone", record)
+    definition = {
+        "automation_id": "aut_one",
+        "name": "Morning check",
+        "notifications_revision": 1,
+        "notifications": _settings(targets=["mobile_app_test_phone"]),
+    }
+    client = SimpleNamespace(
+        async_list_automations=AsyncMock(return_value=[definition]),
+        async_list_automation_runs=AsyncMock(return_value=[_run()]),
+        async_automation_run_preview=AsyncMock(return_value=None),
+    )
+    runtime = SimpleNamespace(
+        client=client,
+        supports_capability=lambda value: value == "automation_notifications_v1",
+    )
+    coordinator = AutomationNotificationCoordinator(hass, runtime, _Store())
+    try:
+        await coordinator.async_start()
+        assert [(domain, service) for domain, service, _ in calls] == [
+            ("persistent_notification", "create"),
+            ("notify", "mobile_app_test_phone"),
+        ]
+        assert calls[0][2]["title"] == "Codex Bridge"
+        assert "Morning check" not in calls[0][2]["message"]
+        assert calls[1][2]["title"] == "Codex Bridge: Morning check"
+    finally:
+        await coordinator.async_close()

@@ -26,6 +26,8 @@ whether completion, failure or a request for attention should notify them.
   restart, reconnect and duplicate history delivery. A mobile service has no
   transactional acknowledgement: a Home Assistant crash after the receipt is
   saved but before delivery may lose that alert rather than sending it twice.
+  The App retains at most 200 runs per task and 5,000 overall; a run pruned
+  before Home Assistant reads it cannot generate a delayed notice.
 - Muted tasks remain quiet. Cancellation, skipped runs and expired sign-in have
   deliberate, documented notification semantics.
 - Unavailable notification services do not turn a successful task into a failed

@@ -13,6 +13,9 @@ All notable App changes are recorded here.
   observe-only and unavailable while App-wide MCP is enabled.
 - Keeps mobile drawers below the phone's status area and clears touch tooltips
   after actions.
+- Adds opt-in scheduled-task notifications through Home Assistant. Persistent
+  notices are generic because all HA users can see them; selected Companion App
+  phones can receive a task title and an optional short answer preview.
 - Refreshes Supervisor App options on every container start so an option change
   cannot be hidden by Bashio's previous cache.
 

@@ -7,6 +7,25 @@ import { getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, n
 describe("desktop feature surfaces", () => {
   beforeEach(() => document.body.replaceChildren());
 
+  it("uses getRandomValues for UUIDs when an HTTP origin lacks randomUUID", () => {
+    const panel = document.createElement("codex-bridge-panel");
+    let counter = 0;
+    vi.stubGlobal("crypto", { getRandomValues: (bytes) => {
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = counter++;
+      return bytes;
+    } });
+    try {
+      const first = panel._createRandomUuid();
+      const second = panel._createRandomUuid();
+      expect(first).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+      expect(second).not.toBe(first);
+      expect(first.replaceAll("-", "")).toMatch(/^[a-f0-9]{32}$/);
+      expect(panel._createClientRequestId("prompt")).toMatch(/^prompt-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("centres a labelled loading indicator until the plugins catalogue is ready", () => {
     const host = document.createElement("div");
     renderDesktopFeatureSurface(host, { destination: "plugins", state: { loading: true } });
