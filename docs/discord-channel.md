@@ -1,12 +1,13 @@
 # Discord channel candidate
 
 Discord access is optional and closed by default. The Home Assistant App opens
-an outbound Discord Gateway connection. No Discord callback, Bridge listener,
-or bot credential is exposed to the browser. A signed-in Home Assistant
-administrator manages the connection through `GET`, `PUT`, and `DELETE`
-`/api/codex_bridge/discord`; the Integration checks the App's
-`discord_channel_v1` capability before forwarding these requests. The `PUT`
-body contains `enabled`, `dm_user_ids`, `guilds`, and an optional `bot_token`.
+an outbound Discord Gateway connection. No Discord callback or Bridge listener
+is exposed to the browser, and the App never returns the saved bot credential.
+A signed-in Home Assistant administrator manages the connection through
+`GET`, `PUT`, and `DELETE` `/api/codex_bridge/discord`; the Integration checks
+the App's `discord_channel_v1` capability before forwarding these requests.
+The `PUT` body contains `enabled`, `dm_user_ids`, `guilds`, and an optional
+`bot_token`.
 `GET` returns the policy, connection state and a secret-free diagnostic, but
 never the bot token. `DELETE` revokes the credential and suppresses pending
 delivery. Updating the policy also cancels pending channel work and starts a
