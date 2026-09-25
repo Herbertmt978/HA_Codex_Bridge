@@ -50,7 +50,7 @@ next message uses the newly connected account without resuming the previous
 account's private provider conversation or automatically replaying old messages.
 
 The model and reasoning menus come from the installed Codex runtime and your
-account. Astra is supported by the bundled Codex `0.156.1` when advertised for
+account. Astra is supported by the bundled Codex `0.157.0` when advertised for
 the account. If a model is missing, check App updates and connection status;
 updating the HACS Integration alone does not update Codex.
 
@@ -130,8 +130,8 @@ and limits.
 
 ## Updates and recovery
 
-This release pairs App, Integration and panel `1.7.0`, with Bridge `0.13.0` and
-Codex `0.156.1`. Update the App through Supervisor and the Integration through
+This release pairs App, Integration and panel `1.7.2`, with Bridge `0.13.0` and
+Codex `0.157.0`. Update the App through Supervisor and the Integration through
 HACS, then restart Home Assistant and reload the panel after an Integration
 change. See [update troubleshooting](../docs/installation.md#update-an-existing-installation).
 
