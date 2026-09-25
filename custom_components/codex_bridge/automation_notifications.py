@@ -96,6 +96,8 @@ class AutomationNotificationCoordinator:
             # An optional notification ledger cannot prevent chat setup.
             _LOGGER.warning("Scheduled notification receipts are unavailable")
             return
+        if self._closed:
+            return
         if isinstance(saved, Mapping) and isinstance(saved.get("receipts"), dict):
             self._receipts = {
                 key: value

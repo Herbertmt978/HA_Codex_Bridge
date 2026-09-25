@@ -225,6 +225,33 @@ async def test_unload_stops_an_in_flight_notification_refresh(monkeypatch):
     client.async_list_automation_runs.assert_not_awaited()
 
 
+async def test_unload_during_receipt_load_does_not_install_timer(monkeypatch):
+    store = _Store()
+    load_started = asyncio.Event()
+    release_load = asyncio.Event()
+    installed = []
+
+    async def delayed_load():
+        load_started.set()
+        await release_load.wait()
+        return None
+
+    store.async_load = delayed_load
+    coordinator, client, services = _fixture(monkeypatch, [], [], store=store)
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.automation_notifications.async_track_time_interval",
+        lambda *_args: installed.append(True) or (lambda: None),
+    )
+    starting = asyncio.create_task(coordinator.async_start())
+    await load_started.wait()
+    await coordinator.async_close()
+    release_load.set()
+    await starting
+    assert installed == []
+    client.async_list_automations.assert_not_awaited()
+    assert services.calls == []
+
+
 async def test_unload_during_receipt_save_does_not_deliver(monkeypatch):
     settings = _settings(persistent=False, targets=["mobile_app_test_phone"])
     definition = {
