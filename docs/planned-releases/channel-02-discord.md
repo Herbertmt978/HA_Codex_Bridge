@@ -1,6 +1,8 @@
 # CHANNEL-02: Discord access
 
-Status: Planned. Version and date: unassigned.
+Status: Local candidate with disposable native Discord acceptance on 25
+September 2026; pending review and release. Version unassigned.
+[Implementation and access guide](../discord-channel.md).
 
 Tracking issue: [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109).
 
@@ -12,7 +14,8 @@ Offer an optional Discord connection for bounded Codex chats and task results.
 
 - Require explicit user, server and channel allow-lists with closed defaults.
 - Map conversations deliberately and explain who can see replies in a shared
-  channel. Keep direct-message and shared-channel policies separate.
+  channel. Keep direct-message and shared-channel policies and project roots
+  separate from one another and from HA direct chats.
 - Store bot credentials privately and provide revoke, status and cancellation
   controls. Define the minimal Discord permissions needed.
 
@@ -24,6 +27,13 @@ Offer an optional Discord connection for bounded Codex chats and task results.
   duplicate runs or uncontrolled message delivery.
 - Native tests use a disposable server/bot and exercise permission removal and
   secret-free diagnostics.
+
+The disposable test passed closed-default refusal, allowed DM and shared
+commands, private status and cancellation, reconnect/restart, no duplicate
+delivery after restart, and a fixed diagnostic after bot send permission was
+removed. Provider rate-limit responses were simulated in focused local tests;
+a live 429 was not induced. The subsequent workspace-root isolation fix has
+POSIX storage coverage but was not rerun against a live bot.
 
 ## Dependencies and boundary
 

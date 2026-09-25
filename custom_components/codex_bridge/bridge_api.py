@@ -1675,6 +1675,20 @@ class BridgeApiClient:
         self.require_capability("agents_v1")
         return await self._async_json("GET", _agents_path(project_id))
 
+    async def async_get_discord_config(self) -> dict[str, Any]:
+        self.require_capability("discord_channel_v1")
+        return await self._async_json("GET", "/discord/config", maximum_bytes=16 * 1024)
+
+    async def async_set_discord_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("discord_channel_v1")
+        return await self._async_json(
+            "PUT", "/discord/config", json_body=payload, maximum_bytes=16 * 1024
+        )
+
+    async def async_revoke_discord(self) -> dict[str, Any]:
+        self.require_capability("discord_channel_v1")
+        return await self._async_json("POST", "/discord/revoke", maximum_bytes=16 * 1024)
+
     async def async_update_agents(
         self, project_id: str | None, content: str
     ) -> dict[str, Any]:

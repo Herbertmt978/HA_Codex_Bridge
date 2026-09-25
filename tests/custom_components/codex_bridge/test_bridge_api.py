@@ -1409,6 +1409,34 @@ async def test_mcp_credentials_require_capability_before_sending_secret(bridge_s
     assert observed == (["POST", "PUT", "DELETE"] if supported else [])
 
 
+async def test_discord_policy_requires_capability_before_sending_bot_token(bridge_server_factory):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"] = ["api_v1"]
+    observed = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        observed.append(request.path)
+        return web.json_response({})
+
+    server = await bridge_server_factory(handler)
+    payload = {
+        "enabled": False, "dm_user_ids": [], "guilds": [],
+        "bot_token": "synthetic-discord-bot-credential",
+    }
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_get_discord_config()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_set_discord_config(payload)
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_revoke_discord()
+    assert observed == []
+
+
 @pytest.mark.parametrize("supported", [False, True])
 async def test_mcp_management_requires_capability_before_sending_edits(bridge_server_factory, supported):
     ready = _fixture("ready_v1.json")

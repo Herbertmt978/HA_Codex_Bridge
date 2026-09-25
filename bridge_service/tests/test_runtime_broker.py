@@ -1076,6 +1076,55 @@ def test_terminal_listener_receives_run_request_identity_and_unattended_flag(
         broker.close()
 
 
+@pytest.mark.parametrize("target_kind", ["standalone", "continue_thread"])
+def test_scheduled_mcp_runs_cannot_override_native_tool_selection(
+    tmp_path: Path, target_kind: str,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client, mcp_manager=_ActiveMcpManager())
+    try:
+        if target_kind == "continue_thread":
+            broker.submit_prompt(thread.thread_id, "Seed retained Codex thread")
+            _seed_run_id, remote_thread_id, turn_id = _active_ids(
+                storage, thread.thread_id
+            )
+            _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+            _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+            target = {"kind": "continue_thread", "thread_id": thread.thread_id}
+            method = "thread/resume"
+        else:
+            target = {"kind": "standalone", "project_id": thread.project_id}
+            method = "thread/start"
+
+        prior_thread_requests = len(_requests(client, method))
+        prior_turn_requests = len(_requests(client, "turn/start"))
+        with storage.prepare_automation_target(
+            target, title="Scheduled MCP policy", mode=RunMode.FULL_AUTO,
+        ) as scheduled_thread:
+            broker.submit_prompt(
+                scheduled_thread.thread_id,
+                "Use the saved MCP tool selection",
+                client_request_id=f"automation:{target_kind}",
+                unattended=True,
+            )
+        _wait_until(
+            lambda: len(_requests(client, "turn/start")) == prior_turn_requests + 1
+        )
+        assert len(_requests(client, method)) == prior_thread_requests + 1
+        # The saved MCP selection lives in native config. A scheduled run must
+        # not replace it in either the thread request or the turn request.
+        thread_request = _requests(client, method)[-1]
+        assert set(thread_request["config"]) == {"default_permissions", "web_search"}
+        assert "config" not in _requests(client, "turn/start")[-1]
+        _run_id, remote_thread_id, turn_id = _active_ids(
+            storage, scheduled_thread.thread_id
+        )
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+    finally:
+        broker.close()
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Home Assistant artifact sync requires POSIX descriptor operations",

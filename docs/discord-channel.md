@@ -1,0 +1,107 @@
+# Discord channel candidate
+
+Discord access is optional and closed by default. The Home Assistant App opens
+an outbound Discord Gateway connection. No Discord callback or Bridge listener
+is exposed to the browser, and the App never returns the saved bot credential.
+A signed-in Home Assistant administrator manages the connection through
+`GET`, `PUT`, and `DELETE` `/api/codex_bridge/discord`; the Integration checks
+the App's `discord_channel_v1` capability before forwarding these requests.
+The `PUT` body contains `enabled`, `dm_user_ids`, `guilds`, and an optional
+`bot_token`.
+`GET` returns the policy, connection state and a secret-free diagnostic, but
+never the bot token. `DELETE` revokes the credential and suppresses pending
+delivery. Updating the policy also cancels pending channel work and starts a
+new identity epoch, so a removed user cannot later regain an old conversation
+by being added again.
+
+Create a dedicated Discord application and bot for this connection. Use the
+**bot** installation scope; Discord includes `applications.commands` with it.
+Grant **View Channel** and **Send Messages** only in each chosen shared text
+channel. The commands use the Gateway interaction event and do not need the
+privileged Message Content intent, guild member/presence intents, Read Message
+History, Manage Messages, Manage Channels, Administrator or webhook permissions.
+Disable the bot's public installation option where practical. Give the App
+the bot token through the authenticated Home Assistant endpoint only. App
+private storage holds it in a mode `0600` database below a mode `0700`
+directory; it is absent from API responses, browser storage, Codex prompts,
+native Codex configuration and logs. Revoking disables the connection and
+clears the active saved credential. SQLite secure deletion is enabled for
+database updates, but local revocation is not a guarantee of forensic erasure.
+If the token may have been copied or disclosed, also reset it in Discord's
+Developer Portal; local revocation cannot invalidate a token outside this App.
+Home Assistant Supervisor backups may contain earlier copies of the App's
+private database. Reset the token in Discord when retiring this connection;
+local revocation does not scrub existing backups.
+
+The policy requires exact Discord snowflake IDs. `dm_user_ids` permits those
+users to invoke the commands in their bot DM. Every server rule requires its
+`guild_id`, at least one `channel_id`, and at least one `user_id`. All three
+must match on each command. Discord roles, channel membership, command
+visibility and server administrator status confer no Bridge permission.
+Bots and webhooks cannot invoke these slash commands as users; ordinary
+messages and attachments are ignored. The supported commands are `/codex`,
+`/codex_status`, and `/codex_cancel`.
+
+Each authorised DM user gets a separate continuing chat in a dedicated
+HA-visible project and workspace. Each shared-channel command gets a fresh
+standalone chat and dedicated project/workspace. The `ha_observe` permission
+profile grants file reads only inside that run's workspace root, so neither
+kind of Discord turn uses the HA direct-chat root or another Discord turn's
+root. There is no way to select another user's chat or upload an artifact
+through Discord. A shared result appears as a plain text message visible to
+everyone who can read that channel; the command acknowledgement and status
+are private to the invoker. The App omits artifact links and external links
+from shared answers and disables all mentions and embeds. Treat the prompt
+and its answer as shared with that channel's readers. Do not allow a private
+or sensitive prompt in a shared channel.
+
+The projects and workspaces remain visible in Home Assistant after tasks
+finish. Readiness and model-catalogue checks run before creating a project,
+so known rejected admissions do not create empty workspaces. A failure after
+project creation can still leave an empty project. An administrator may remove
+it after confirming the request has no active or recoverable run; deleting a
+project record does not erase its workspace directory. Keep that directory
+until its contents have been reviewed and any needed files retained.
+
+Discord turns use the existing constrained Home Assistant task-action path:
+observe mode, unattended interaction refusal, disabled web search, isolated
+project workspace, no Host Access grant and no Home Assistant
+administrator identity. While the App's MCP connection manager is enabled,
+this path declines new Discord work rather than granting tools through a
+different identity. All privileged approvals remain in Home Assistant.
+
+Interaction IDs are durably claimed before a Codex turn is submitted. The
+Bridge's task-action ID then makes admission idempotent across Gateway replay
+and restart. A result is fenced as attempted before the outbound HTTP call.
+Discord's `enforce_nonce` handles near-term duplicate POSTs; an uncertain
+network outcome is never retried automatically. A definite rate limit may be
+retried once after a short `Retry-After`. Permission removal, a long rate
+limit, or an uncertain response leaves the task available in Home Assistant
+without repeated channel delivery. Revocation and policy changes suppress
+unsent results. The status diagnostic reports only fixed error codes.
+
+The ingress journal retains at most 20,000 interaction claims and does not
+prune them. At that limit, new commands fail closed while existing task records
+remain available. An administrator must revoke the connection, let cancellation
+and delivery settle, stop the App, and arrange an offline rotation of its
+private Discord database before reconfiguring it. Do not remove the database
+while the App runs: doing so loses duplicate and delivery fences. Reset the
+Discord token when rotating this state, including where old backups exist.
+
+Native qualification used a disposable server, bot and local task backend on
+25 September 2026. An unlisted user was refused. An allowed shared request
+posted one visible result in the chosen channel; two DM requests delivered
+privately and reused a separate DM conversation. Private status and active
+cancellation worked. The bot reconnected after the local Gateway host
+restarted without reposting a delivered result. Denying the bot Send Messages
+in the chosen channel left the admitted task recorded, posted no result to
+Discord, and exposed only `delivery_permission_denied` in status. Local
+tests simulate short and long Discord rate limits; a live 429 was not induced
+against the provider. The later project-root isolation correction was checked
+against POSIX HA storage with two DM users, two shared requests and an HA
+direct chat; it was not rerun with a live bot. No production Discord
+connection is implied by these checks.
+
+Discord protocol references: [application commands](https://docs.discord.com/developers/docs/interactions/slash-commands),
+[create message and nonce](https://docs.discord.com/developers/resources/message#create-message),
+and [Gateway intents](https://docs.discord.com/developers/events/gateway#gateway-intents).

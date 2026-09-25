@@ -29,7 +29,7 @@ MCP-03 still requires a separate isolation design before implementation.
 | [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Run approved MCP server processes with bounded access. | Separate process isolation design | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
 | [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Included in 1.6.4 source: answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
 | [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Implemented for 1.4.0: edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
-| [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Included in 1.6.4 source: inspect server tools and choose which Codex may use. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
+| [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Released in 1.6.4; native allow/block, restart and changed-catalogue checks passed on DEV. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |
 
 ## Home Assistant integration
 
@@ -54,7 +54,7 @@ MCP-03 still requires a separate isolation design before implementation.
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
 | [CHANNEL-01: Telegram](planned-releases/channel-01-telegram.md) | Use a privately authorised Telegram bot to talk to Codex. | HA-01 and channel identity policy | [#108](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/108) |
-| [CHANNEL-02: Discord](planned-releases/channel-02-discord.md) | Use Codex from explicitly allowed Discord users and channels. | HA-01 and channel identity policy | [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109) |
+| [CHANNEL-02: Discord](planned-releases/channel-02-discord.md) | Local candidate: exact user/server/channel rules, separate DMs, private credentials and bounded task results; native qualification pending. | HA-01 and channel identity policy | [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109) |
 | [CHANNEL-03: WhatsApp](planned-releases/channel-03-whatsapp.md) | Connect an approved WhatsApp provider to bounded Codex tasks. | HA-01, provider choice and webhook authentication | [#110](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/110) |
 
 The initial priority is MCP-01 and MCP-02, followed by MCP-05 and MCP-06.
