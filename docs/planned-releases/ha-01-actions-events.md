@@ -1,6 +1,7 @@
 # HA-01: Task actions and result events
 
-Status: Released in 1.7.0; native acceptance completed on 25 September 2026.
+Status: Released in 1.7.0; native smoke checks completed on 25 September 2026.
+Full HAOS acceptance remains open.
 
 Tracking issue: [#103](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/103).
 
@@ -38,10 +39,12 @@ or allow an ordinary HA user to bypass administrator controls.
 The implementation and permission contract are documented in
 [Home Assistant task actions](../home-assistant-task-actions.md).
 
-Native HAOS-DEV checks exercised start, continue and get against a disposable
-chat, plus cancellation and an idempotent retry. The paired 1.7.3 App and
-Integration are installed on DEV and production. Unattended automation access
-remains disabled by default; this acceptance did not enable it in production.
+Native HAOS-DEV smoke checks exercised start, continue and get against a
+disposable chat, plus cancellation and an idempotent retry. The paired 1.7.3
+App and Integration are installed on DEV and production. Unattended automation
+access remains disabled by default. Native restart, negative-path, event-payload
+and Integration lifecycle checks in the acceptance criteria still need to be
+recorded before full acceptance is claimed.
 
 Reference: [Codex for Home Assistant](https://github.com/moryoav/home-assistant-codex)
 documents actions and task-result events. Its approach was reviewed as a feature
