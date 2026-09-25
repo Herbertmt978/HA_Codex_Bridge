@@ -21,6 +21,7 @@ from homeassistant.setup import async_setup_component
 
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiClient,
+    BridgeApiCapabilityError,
     BridgeApiConflictError,
     BridgeApiEndpointError,
     BridgeApiPayloadTooLargeError,
@@ -71,6 +72,80 @@ async def _install_runtime(hass, client, *, api_version: int = 1) -> None:
         "entry": SimpleNamespace(client=client, api_version=api_version)
     }
     async_register_http_views(hass)
+
+
+async def test_discord_policy_view_requires_admin_and_never_reflects_token(
+    hass, hass_client, hass_client_no_auth, hass_read_only_access_token, caplog,
+) -> None:
+    secret = "synthetic-discord-bot-credential"
+    bridge = SimpleNamespace(
+        async_get_discord_config=AsyncMock(return_value={"enabled": False, "credential_present": True}),
+        async_set_discord_config=AsyncMock(return_value={"bot_token": secret}),
+        async_revoke_discord=AsyncMock(return_value={"bot_token": secret}),
+    )
+    await _install_runtime(hass, bridge)
+    path = "/api/codex_bridge/discord"
+    payload = {"enabled": False, "dm_user_ids": [], "guilds": [], "bot_token": secret}
+    anonymous = await hass_client_no_auth()
+    readonly = await hass_client(hass_read_only_access_token)
+    for client in (anonymous, readonly):
+        for method in ("get", "put", "delete"):
+            response = await getattr(client, method)(path, **({"json": payload} if method == "put" else {}))
+            assert response.status in {401, 403}
+    bridge.async_get_discord_config.assert_not_called()
+    bridge.async_set_discord_config.assert_not_called()
+    bridge.async_revoke_discord.assert_not_called()
+
+    admin = await hass_client()
+    get_response = await admin.get(path)
+    put_response = await admin.put(path, json=payload)
+    delete_response = await admin.delete(path)
+    assert [response.status for response in (get_response, put_response, delete_response)] == [200, 200, 200]
+    assert await get_response.json() == {"enabled": False, "credential_present": True}
+    assert await put_response.json() == {"saved": True}
+    assert await delete_response.json() == {"revoked": True}
+    for response in (get_response, put_response, delete_response):
+        assert response.headers["Cache-Control"] == "no-store"
+        assert secret not in await response.text()
+    bridge.async_set_discord_config.assert_awaited_once_with(payload)
+    assert secret not in caplog.text
+
+
+async def test_discord_policy_view_rejects_malformed_and_oversized_input(
+    hass, hass_client, caplog,
+) -> None:
+    secret = "synthetic-discord-bot-credential"
+    bridge = SimpleNamespace(async_set_discord_config=AsyncMock())
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    path = "/api/codex_bridge/discord"
+    for body in (b"[1]", b'{"enabled":false,"bot_token":"' + secret.encode() + b'","unknown":1}',
+                 b"x" * (16 * 1024 + 1)):
+        response = await client.put(path, data=body, headers={"Content-Type": "application/json"})
+        assert response.status == 400
+        assert await response.json() == {"code": "discord_config_invalid"}
+        assert response.headers["Cache-Control"] == "no-store"
+        assert secret not in await response.text()
+    bridge.async_set_discord_config.assert_not_called()
+    assert secret not in caplog.text
+
+
+async def test_discord_policy_view_reports_older_app_capability_without_secret(
+    hass, hass_client,
+) -> None:
+    bridge = SimpleNamespace(
+        async_set_discord_config=AsyncMock(side_effect=BridgeApiCapabilityError()),
+    )
+    await _install_runtime(hass, bridge)
+    client = await hass_client()
+    secret = "synthetic-discord-bot-credential"
+    response = await client.put("/api/codex_bridge/discord", json={
+        "enabled": False, "dm_user_ids": [], "guilds": [], "bot_token": secret,
+    })
+    assert response.status == 503
+    assert (await response.json())["code"] == "bridge_incompatible"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert secret not in await response.text()
 
 
 def _upload_payload(**updates) -> dict:

@@ -1,6 +1,7 @@
 # CHANNEL-02: Discord access
 
-Status: Planned. Version and date: unassigned.
+Status: Local candidate, pending native Discord acceptance. Version and date:
+unassigned. [Implementation and access guide](../discord-channel.md).
 
 Tracking issue: [#109](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/109).
 

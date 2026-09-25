@@ -23,6 +23,7 @@ from .capabilities import CapabilitiesManager
 from .codex_app_server import CodexAppServerClient, CodexAppServerError
 from .codex_auth import CodexAuthManager
 from .diagnostics import BridgeDiagnosticsProbe
+from .discord_channel import DiscordChannelManager
 from .event_store import (
     DurableOperationTooLargeError,
     EventDraft,
@@ -54,6 +55,7 @@ from .routes import (
     capabilities,
     uploads,
     codex_auth,
+    discord,
     events,
     health,
     host_access,
@@ -258,6 +260,7 @@ def create_app(
     resolved_host_access: HostAccessManager | None = None
     resolved_terminal: WorkspaceTerminal | None = None
     resolved_local_mcp: McpRelay | None = None
+    resolved_discord: DiscordChannelManager | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -307,11 +310,15 @@ def create_app(
             # application becomes request-ready.
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
+            if resolved_discord is not None:
+                await resolved_discord.start()
             account_details = getattr(_app.state, "account_profile_details", None)
             if account_details is not None:
                 account_details.start_polling()
             yield
         finally:
+            if resolved_discord is not None:
+                await resolved_discord.close()
             account_details = getattr(_app.state, "account_profile_details", None)
             account_poll_stopped = (
                 await asyncio.to_thread(account_details.stop_polling)
@@ -355,6 +362,8 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request, error: RequestValidationError):
+        if request.url.path.startswith("/discord/"):
+            return JSONResponse(status_code=422, content={"detail": {"code": "discord_config_invalid"}})
         if request.url.path.startswith("/interactions/") and request.url.path.endswith("/mcp-form"):
             return JSONResponse(status_code=422, content={"detail": {
                 "code": "mcp_request_invalid", "retryable": False,
@@ -912,6 +921,10 @@ def create_app(
             "Home Assistant runtime."
         )
     app.state.runner = resolved_runner
+    if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        resolved_discord = DiscordChannelManager(app, Path(root_path))
+        app.state.discord_channel = resolved_discord
+        app.state.feature_capabilities += ("discord_channel_v1",)
     if (
         isinstance(resolved_runner, RuntimeBroker)
         and resolved_mcp_manager is not None
@@ -1024,6 +1037,7 @@ def create_app(
         app.include_router(agents.router)
         app.include_router(automations.router)
         app.include_router(task_actions.router)
+        app.include_router(discord.router)
         app.include_router(capabilities.router)
         app.include_router(mcp.router)
         app.include_router(uploads.router)

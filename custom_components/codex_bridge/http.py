@@ -383,7 +383,82 @@ class CodexBridgeMcpConnectionView(CodexBridgeMcpCredentialView):
     operations = frozenset({"edit", "state"})
 
 
+class CodexBridgeDiscordView(HomeAssistantView):
+    """Administrator-only, bounded Discord policy and write-only credential."""
+
+    url = "/api/codex_bridge/discord"
+    name = "api:codex_bridge:discord"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        headers = {"Cache-Control": "no-store"}
+        try:
+            runtime = async_get_runtime(self.hass)
+            result = await runtime.client.async_get_discord_config()
+            return web.json_response(result, headers=headers)
+        except BridgeApiError as error:
+            response = bridge_error_response(error)
+            response.headers.update(headers)
+            return response
+        except RuntimeError:
+            response = _runtime_unavailable_response()
+            response.headers.update(headers)
+            return response
+
+    async def put(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        headers = {"Cache-Control": "no-store"}
+        try:
+            if request.content_type != "application/json":
+                raise ValueError()
+            body = bytearray()
+            async with asyncio.timeout(15):
+                async for chunk in request.content.iter_chunked(4096):
+                    body.extend(chunk)
+                    if len(body) > 16 * 1024:
+                        raise ValueError()
+            payload = json.loads(body)
+            if not isinstance(payload, dict) or set(payload) - {
+                "enabled", "dm_user_ids", "guilds", "bot_token"
+            }:
+                raise ValueError()
+            runtime = async_get_runtime(self.hass)
+            await runtime.client.async_set_discord_config(payload)
+            return web.json_response({"saved": True}, headers=headers)
+        except (ValueError, TypeError, UnicodeError, asyncio.TimeoutError):
+            return web.json_response({"code": "discord_config_invalid"}, status=400, headers=headers)
+        except BridgeApiError as error:
+            response = bridge_error_response(error)
+            response.headers.update(headers)
+            return response
+        except RuntimeError:
+            response = _runtime_unavailable_response()
+            response.headers.update(headers)
+            return response
+
+    async def delete(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        headers = {"Cache-Control": "no-store"}
+        try:
+            runtime = async_get_runtime(self.hass)
+            await runtime.client.async_revoke_discord()
+            return web.json_response({"revoked": True}, headers=headers)
+        except BridgeApiError as error:
+            response = bridge_error_response(error)
+            response.headers.update(headers)
+            return response
+        except RuntimeError:
+            response = _runtime_unavailable_response()
+            response.headers.update(headers)
+            return response
+
+
 def async_register_http_views(hass: HomeAssistant) -> None:
+    hass.http.register_view(CodexBridgeDiscordView(hass))
     hass.http.register_view(CodexBridgeMcpCredentialView(hass))
     hass.http.register_view(CodexBridgeMcpConnectionView(hass))
     hass.http.register_view(CodexBridgeAttachmentUploadView(hass))
