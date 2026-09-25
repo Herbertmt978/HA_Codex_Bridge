@@ -53,6 +53,9 @@ Codex Bridge link. Selected phone notifications can show the task title and,
 only after a separate opt-in, a 160-character final-answer excerpt. The phone's
 lock screen and notification history may expose that excerpt. No raw tool
 output, credentials or private paths are copied into the default notice.
+Delivery failures log a generic warning without the task title, answer preview,
+destination name or service exception text. Unloading the Integration stops a
+refresh before it starts another delivery.
 
 ## Dependencies and boundary
 

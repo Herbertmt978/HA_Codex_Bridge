@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -164,6 +165,120 @@ async def test_current_off_mutes_and_missing_mobile_does_not_retry(monkeypatch):
     assert unavailable.calls == []
     assert len(store.value["receipts"]) == 1
     await coordinator.async_close()
+
+
+async def test_delivery_error_does_not_log_private_payload_or_retry(
+    monkeypatch, caplog
+):
+    settings = _settings(persistent=False, targets=["mobile_app_test_phone"])
+    definition = {
+        "automation_id": "aut_one",
+        "name": "Private task title",
+        "notifications_revision": 1,
+        "notifications": settings,
+    }
+    services = _Services({("notify", "mobile_app_test_phone")})
+    services.async_call = AsyncMock(
+        side_effect=RuntimeError("private result echoed by notification service")
+    )
+    store = _Store()
+    coordinator, _client, _services = _fixture(
+        monkeypatch,
+        [definition],
+        [_run(notifications=settings)],
+        services=services,
+        store=store,
+    )
+    await coordinator.async_start()
+    await coordinator.async_refresh()
+    assert services.async_call.await_count == 1
+    assert len(store.value["receipts"]) == 1
+    assert "Private task title" not in caplog.text
+    assert "private result" not in caplog.text
+    assert "mobile_app_test_phone" not in caplog.text
+    await coordinator.async_close()
+
+
+async def test_unload_stops_an_in_flight_notification_refresh(monkeypatch):
+    definition = {
+        "automation_id": "aut_one",
+        "name": "Morning check",
+        "notifications_revision": 1,
+        "notifications": _settings(targets=["mobile_app_test_phone"]),
+    }
+    coordinator, client, services = _fixture(monkeypatch, [definition], [_run()])
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def delayed_definitions():
+        started.set()
+        await release.wait()
+        return [definition]
+
+    client.async_list_automations.side_effect = delayed_definitions
+    refresh = asyncio.create_task(coordinator.async_refresh())
+    await started.wait()
+    await coordinator.async_close()
+    release.set()
+    await refresh
+    assert services.calls == []
+    client.async_list_automation_runs.assert_not_awaited()
+
+
+async def test_unload_during_receipt_load_does_not_install_timer(monkeypatch):
+    store = _Store()
+    load_started = asyncio.Event()
+    release_load = asyncio.Event()
+    installed = []
+
+    async def delayed_load():
+        load_started.set()
+        await release_load.wait()
+        return None
+
+    store.async_load = delayed_load
+    coordinator, client, services = _fixture(monkeypatch, [], [], store=store)
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.automation_notifications.async_track_time_interval",
+        lambda *_args: installed.append(True) or (lambda: None),
+    )
+    starting = asyncio.create_task(coordinator.async_start())
+    await load_started.wait()
+    await coordinator.async_close()
+    release_load.set()
+    await starting
+    assert installed == []
+    client.async_list_automations.assert_not_awaited()
+    assert services.calls == []
+
+
+async def test_unload_during_receipt_save_does_not_deliver(monkeypatch):
+    settings = _settings(persistent=False, targets=["mobile_app_test_phone"])
+    definition = {
+        "automation_id": "aut_one",
+        "name": "Morning check",
+        "notifications_revision": 1,
+        "notifications": settings,
+    }
+    store = _Store()
+    save_started = asyncio.Event()
+    release_save = asyncio.Event()
+
+    async def delayed_save(value):
+        save_started.set()
+        await release_save.wait()
+        await _Store.async_save(store, value)
+
+    store.async_save = delayed_save
+    coordinator, _client, services = _fixture(
+        monkeypatch, [definition], [_run(notifications=settings)], store=store
+    )
+    refresh = asyncio.create_task(coordinator.async_refresh())
+    await save_started.wait()
+    await coordinator.async_close()
+    release_save.set()
+    await refresh
+    assert services.calls == []
 
 
 async def test_preview_is_brief_opt_in_and_scoped_to_run(monkeypatch):
