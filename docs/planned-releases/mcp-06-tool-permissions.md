@@ -58,5 +58,6 @@ the rollback snapshot was deleted, and DEV remained running as found. Production
 was not changed.
 
 The same native server configuration applies to attended chats and scheduled
-work. The unattended run regression check confirms its thread and turn requests
-cannot supply a per-run MCP configuration that broadens the saved selection.
+work. The unattended run regression check covers both a new scheduled chat and
+continuation of an existing chat with MCP enabled. Neither thread nor turn
+requests can supply a per-run MCP configuration that broadens the selection.
