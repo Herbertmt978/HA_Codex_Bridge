@@ -38,6 +38,8 @@ You can also fill in the editor directly:
    limits it should respect.
 4. Under **Details**, choose **New chat** or **Current chat**. A new chat uses
    the selected project. Current chat continues the selected conversation.
+   Assist conversations cannot be scheduled; choose a regular chat or a new
+   chat for the task so Assist's separate permission boundary stays intact.
 5. Under **Frequency**, choose the repeat pattern and time. Check the preview
    beneath the card, then select **Create task**.
 6. Under **Notifications**, leave **Off** or choose when to be notified. Select

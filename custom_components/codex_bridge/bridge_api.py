@@ -84,6 +84,7 @@ _PRIVATE_THREAD_CONTINUITY_FIELDS = frozenset(
         "active_run_id",
         "pending_prompts",
         "task_action_fingerprint",
+        "assist_origin",
     }
 )
 _PRIVATE_INTERACTION_CONTINUITY_FIELDS = frozenset(

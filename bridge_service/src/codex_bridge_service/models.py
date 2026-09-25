@@ -234,6 +234,7 @@ class PublicThreadRecord(BaseModel):
     workspace_id: str
     workspace_path: str
     status: str
+    schedule_eligible: bool = True
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     last_error: str | None = None
@@ -255,19 +256,19 @@ class PublicThreadRecord(BaseModel):
 
     @classmethod
     def from_thread_view(cls, record: ThreadViewRecord) -> "PublicThreadRecord":
-        return cls.model_validate(
-            record.model_dump(
-                exclude={
-                    "codex_session_id",
-                    "codex_thread_id",
-                    "active_turn_id",
-                    "active_run_id",
-                    "pending_prompts",
-                    "task_action_fingerprint",
-                    "assist_origin",
-                }
-            )
+        public = record.model_dump(
+            exclude={
+                "codex_session_id",
+                "codex_thread_id",
+                "active_turn_id",
+                "active_run_id",
+                "pending_prompts",
+                "task_action_fingerprint",
+                "assist_origin",
+            }
         )
+        public["schedule_eligible"] = not record.assist_origin
+        return cls.model_validate(public)
 
 
 class RunRecord(BaseModel):

@@ -113,6 +113,7 @@ def test_thread_list_and_detail_hide_private_runtime_continuity(tmp_path) -> Non
         assert payload["thread_id"] == thread.thread_id
         assert payload["title"] == "Account-neutral history"
         assert payload["status"] == "idle"
+        assert payload["schedule_eligible"] is True
         for private_field in {
             "codex_session_id",
             "codex_thread_id",
@@ -126,6 +127,32 @@ def test_thread_list_and_detail_hide_private_runtime_continuity(tmp_path) -> Non
     assert preserved.codex_thread_id == "provider-thread-account-a"
     assert preserved.active_turn_id == "provider-turn-account-a"
     assert preserved.active_run_id == "run_private"
+
+
+def test_assist_thread_is_ineligible_to_schedule_in_public_list_and_detail(tmp_path) -> None:
+    app = create_app(
+        root_path=tmp_path,
+        auth_token="secret",
+        model_catalog_probe=FakeModelCatalogProbe(),
+    )
+    thread = app.state.storage.create_thread(
+        title="Assist conversation", mode=RunMode.OBSERVE
+    )
+    private = app.state.storage.load_thread(thread.thread_id)
+    private.assist_origin = True
+    app.state.storage.save_thread(private)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    listed = client.get("/threads", headers=headers)
+    detail = client.get(f"/threads/{thread.thread_id}", headers=headers)
+
+    assert listed.status_code == 200
+    assert detail.status_code == 200
+    for payload in (listed.json()[0], detail.json()):
+        assert payload["thread_id"] == thread.thread_id
+        assert payload["schedule_eligible"] is False
+        assert "assist_origin" not in payload
 
 
 @pytest.mark.parametrize(

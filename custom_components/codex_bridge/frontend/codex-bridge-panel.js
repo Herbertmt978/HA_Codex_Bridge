@@ -554,6 +554,7 @@ function renderScheduleForm(doc, state, timezone, context = {}) {
     ["standalone", context.projectName ? `New chat · ${context.projectName}` : "New chat for this task", !context.projectId && editing?.target?.kind !== "standalone"],
     ["continue_thread", savedThread ? "Original chat for this task" : "Current chat", !context.threadId && !savedThread]
   ]));
+  if (context.assistChatSelected && !savedThread) details.append(element(doc, "p", "desktop-note", "Assist conversations cannot run scheduled tasks. Choose a new chat for this task or open a regular chat."));
   const frequency = addGroup("Frequency");
   const repeats = initial.repeat === "custom" ? [...REPEATS, ["custom", "Keep custom schedule"]] : REPEATS;
   frequency.append(field(doc, "repeat", "Repeat", values.repeat, repeats));
@@ -41850,7 +41851,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const thread = editing?.target?.kind === "continue_thread" ? this._threads.find((item) => item.thread_id === editing.target.thread_id) : this._activeThread;
     const mobileAvailable = Object.keys(this._hass?.services?.notify || {}).filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
     const mobileTargets = [.../* @__PURE__ */ new Set([...mobileAvailable, ...editing?.notifications?.mobile_targets || []])].filter((name) => /^mobile_app_[a-z0-9_]{1,100}$/.test(name)).sort();
-    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.thread_id || null, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
+    return { hostAccessSupported: this._config?.capabilities?.includes("host_access_v1") === true, notificationsSupported: this._config?.capabilities?.includes("automation_notifications_v1") === true, mobileAvailable, mobileTargets, projectId: project?.project_id || null, projectName: project?.kind === "direct" ? "" : project?.name || "", threadId: this._activeThread?.schedule_eligible === false ? null : this._activeThread?.thread_id || null, assistChatSelected: this._activeThread?.schedule_eligible === false, timezone: this._hass?.config?.time_zone || "UTC", models: this._modelRecords().map((record) => ({ ...record, thinking_levels: this._thinkingLevelsForModel(record.model) })), defaultModel: project?.default_model || this._defaultModel(), threadModel: thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel() };
   }
   _queueSchedulePreview(state, form) {
     if (!form || !this._config?.capabilities?.includes("automation_proposals_v1")) return;
@@ -41997,6 +41998,7 @@ var CodexBridgePanel = class extends HTMLElement {
         const description = form.querySelector('[name="description"]')?.value || "";
         state.scheduleContext = this._scheduleContext();
         state.formDraft = proposeScheduleDescription(description, { timezone: state.scheduleContext.timezone });
+        if (state.formDraft.target_kind === "continue_thread" && state.scheduleContext.assistChatSelected) throw new Error("Assist conversations cannot run scheduled tasks. Choose a regular chat or schedule a new chat.");
         state.formError = "";
         state.form = "schedule";
         this._renderDesktopSurface();

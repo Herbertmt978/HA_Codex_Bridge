@@ -1052,7 +1052,7 @@ def _dispatch_test_app(tmp_path, *, target_kind: str):
         app_server_factory=_AutomationLifecycle,
         runner_factory=lambda _storage: runner,
     )
-    target_record = SimpleNamespace(archived_at=None)
+    target_record = SimpleNamespace(archived_at=None, assist_origin=False)
     if target_kind == "standalone":
         app.state.storage.load_project = lambda _project_id: target_record
         app.state.storage.create_thread = lambda **_kwargs: pytest.fail(
@@ -1066,6 +1066,36 @@ def _dispatch_test_app(tmp_path, *, target_kind: str):
         )
         target = {"kind": "continue_thread", "thread_id": "thr_dispatch"}
     return app, runner, target_record, target
+
+
+def test_assist_chat_cannot_become_a_scheduled_target(tmp_path):
+    app, runner, thread, target = _dispatch_test_app(
+        tmp_path, target_kind="continue_thread"
+    )
+    thread.assist_origin = True
+
+    with pytest.raises(AutomationValidationError, match="Assist conversations"):
+        app.state.automations.create(_payload(target=target), now=NOW)
+
+    assert runner.submissions == []
+
+
+def test_existing_schedule_blocks_when_target_becomes_an_assist_chat(tmp_path, monkeypatch):
+    app, runner, thread, target = _dispatch_test_app(
+        tmp_path, target_kind="continue_thread"
+    )
+    automation = app.state.automations.create(_payload(target=target), now=NOW)
+    thread.assist_origin = True
+    monkeypatch.setattr(
+        "codex_bridge_service.app.evaluate_readiness",
+        lambda *_args, **_kwargs: SimpleNamespace(state="ready"),
+    )
+    claim = app.state.automations.run_now(automation["automation_id"], now=NOW)
+
+    with pytest.raises(AutomationValidationError, match="Assist conversations"):
+        app.state.automation_dispatch(claim)
+
+    assert runner.submissions == []
 
 
 @pytest.mark.parametrize(

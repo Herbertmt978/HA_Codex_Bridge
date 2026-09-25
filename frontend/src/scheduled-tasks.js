@@ -266,6 +266,7 @@ export function renderScheduleForm(doc, state, timezone, context = {}) {
     ["standalone", context.projectName ? `New chat · ${context.projectName}` : "New chat for this task", !context.projectId && editing?.target?.kind !== "standalone"],
     ["continue_thread", savedThread ? "Original chat for this task" : "Current chat", !context.threadId && !savedThread],
   ]));
+  if (context.assistChatSelected && !savedThread) details.append(element(doc, "p", "desktop-note", "Assist conversations cannot run scheduled tasks. Choose a new chat for this task or open a regular chat."));
   const frequency = addGroup("Frequency");
   const repeats = initial.repeat === "custom" ? [...REPEATS, ["custom", "Keep custom schedule"]] : REPEATS;
   frequency.append(field(doc, "repeat", "Repeat", values.repeat, repeats));

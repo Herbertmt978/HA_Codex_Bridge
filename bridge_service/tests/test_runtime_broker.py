@@ -8125,9 +8125,9 @@ def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
         assert first.status_code == 202, first.text
         thread_id = first.json()["thread_id"]
         assert storage.load_thread(thread_id).assist_origin is True
-        assert "assist_origin" not in PublicThreadRecord.from_thread_view(
-            storage.get_thread(thread_id)
-        ).model_dump()
+        public = PublicThreadRecord.from_thread_view(storage.get_thread(thread_id))
+        assert "assist_origin" not in public.model_dump()
+        assert public.schedule_eligible is False
         _wait_until(lambda: len(_requests(peer, "turn/start")) == 1)
         assert image_authority.authorized_generations == []
         pending = http.get(f"/task-actions/{first_id}/answer", headers=headers).json()
