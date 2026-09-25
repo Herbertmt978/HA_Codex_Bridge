@@ -1797,23 +1797,28 @@ async def ws_add_stdio_mcp(hass, connection, msg) -> None:
     vol.Required("type"): f"{DOMAIN}/update_stdio_mcp",
     vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
     vol.Required("revision"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
     vol.Required("acknowledged"): vol.All(bool, vol.In([True])),
 })
 @websocket_api.async_response
 async def ws_update_stdio_mcp(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_update_stdio_mcp(
-                            msg["name"], {"revision": msg["revision"], "acknowledged": True}))
+                            msg["name"], {"revision": msg["revision"],
+                                          "expected_revision": msg["expected_revision"],
+                                          "acknowledged": True}))
 
 
 @websocket_api.websocket_command({
     vol.Required("type"): f"{DOMAIN}/rollback_stdio_mcp",
     vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
 })
 @websocket_api.async_response
 async def ws_rollback_stdio_mcp(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg,
-                        lambda client: client.async_rollback_stdio_mcp(msg["name"]))
+                        lambda client: client.async_rollback_stdio_mcp(
+                            msg["name"], msg["expected_revision"]))
 
 
 @websocket_api.websocket_command({

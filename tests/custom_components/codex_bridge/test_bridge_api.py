@@ -1482,7 +1482,7 @@ async def test_stdio_package_routes_require_separate_capability(bridge_server_fa
 
     server = await bridge_server_factory(handler)
     create = {"name": "probe", "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True}
-    update = {"revision": "1.1.0", "acknowledged": True}
+    update = {"revision": "1.1.0", "expected_revision": "b" * 64, "acknowledged": True}
     async with aiohttp.ClientSession() as session:
         client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
         await client.async_ready()
@@ -1494,13 +1494,13 @@ async def test_stdio_package_routes_require_separate_capability(bridge_server_fa
             with pytest.raises(ValueError):
                 await client.async_update_stdio_mcp("probe", {**update, "acknowledged": False})
             await client.async_update_stdio_mcp("probe", update)
-            await client.async_rollback_stdio_mcp("probe")
+            await client.async_rollback_stdio_mcp("probe", "b" * 64)
         else:
             for request in (
                 client.async_list_stdio_packages(),
                 client.async_add_stdio_mcp(create),
                 client.async_update_stdio_mcp("probe", update),
-                client.async_rollback_stdio_mcp("probe"),
+                client.async_rollback_stdio_mcp("probe", "b" * 64),
             ):
                 with pytest.raises(BridgeApiCapabilityError):
                     await request
@@ -1512,6 +1512,7 @@ async def test_stdio_package_routes_require_separate_capability(bridge_server_fa
     if supported:
         assert observed[1][2] == create
         assert observed[2][2] == update
+        assert observed[3][2] == {"expected_revision": "b" * 64}
 
 
 @pytest.mark.parametrize("supported", [False, True])

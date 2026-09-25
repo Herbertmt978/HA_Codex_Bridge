@@ -46,7 +46,13 @@ class CreateStdioServerRequest(BaseModel):
 class ChangeStdioRevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: str | None = Field(default=None, max_length=96)
+    expected_revision: str = Field(min_length=64, max_length=64)
     acknowledged: StrictBool = False
+
+
+class RollbackStdioRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: str = Field(min_length=64, max_length=64)
 
 
 class McpCredentialRequest(BaseModel):
@@ -164,18 +170,18 @@ def update_stdio_server(name: str, payload: ChangeStdioRevisionRequest, request:
     _authorize(request, authorization)
     try:
         return _manager(request).change_stdio_revision(name, revision=payload.revision,
-            acknowledged=payload.acknowledged)
+            expected_revision=payload.expected_revision, acknowledged=payload.acknowledged)
     except McpManagerError as error:
         raise _problem(error) from None
 
 
 @router.post("/mcp/stdio/servers/{name}/rollback")
-def rollback_stdio_server(name: str, request: Request,
+def rollback_stdio_server(name: str, payload: RollbackStdioRevisionRequest, request: Request,
                           authorization: str | None = Header(default=None)) -> dict[str, object]:
     _authorize(request, authorization)
     try:
         return _manager(request).change_stdio_revision(name, revision=None,
-            acknowledged=True, rollback=True)
+            expected_revision=payload.expected_revision, acknowledged=True, rollback=True)
     except McpManagerError as error:
         raise _problem(error) from None
 

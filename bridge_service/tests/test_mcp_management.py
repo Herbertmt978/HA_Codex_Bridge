@@ -12,7 +12,7 @@ from codex_bridge_service.mcp_manager import (
     McpConflictError, McpManager, McpRecoveryRequiredError, McpValidationError,
     McpUnavailableError, McpServerDefinition,
 )
-from codex_bridge_service.mcp_stdio_adapter import StdioMcpAdapter
+from codex_bridge_service.mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
 from codex_bridge_service.runtime_gate import RuntimeGate
 from codex_bridge_service.resource_limits import ResourceLimits
 from codex_bridge_service.routes.mcp import router
@@ -129,6 +129,12 @@ class StdioAdapterFixture:
         assert self.record is not None and self.record[0] == name
         self.allowed_tools = selected
 
+    def replace_package(self, name, revision):
+        if self.record is None or self.record[0] != name or self.active:
+            raise StdioAdapterError()
+        self.record = (name, self.record[1], revision)
+        self.allowed_tools = ()
+
     def deactivate(self, name):
         self.active = False
 
@@ -178,7 +184,9 @@ def test_stdio_connection_starts_paused_and_exposes_no_private_binding():
     assert adapter.record is None
 
 
-def test_stdio_create_route_requires_bridge_auth_and_explicit_review():
+def test_stdio_create_route_requires_bridge_auth_and_explicit_review(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, revision: "1.0.0" if revision == "1.1.0" else None)
     native = NativeConfig()
     adapter = StdioAdapterFixture()
     manager = McpManager(native, RuntimeGate(limits=ResourceLimits()), enabled=True,
@@ -201,6 +209,82 @@ def test_stdio_create_route_requires_bridge_auth_and_explicit_review():
     assert created.status_code == 201
     assert created.json()["enabled"] is False
     assert "private-token" not in created.text
+    current = next(row for row in client.get("/mcp/servers", headers=headers).json()
+                   if row["name"] == "clock")
+    update_url = "/mcp/stdio/servers/clock/update"
+    update = {"revision": "1.1.0", "acknowledged": True,
+              "expected_revision": current["revision"]}
+    assert client.post(update_url, headers=headers,
+                       json={"revision": "1.1.0", "acknowledged": True}).status_code == 422
+    assert client.post(update_url, headers=headers,
+                       json={**update, "expected_revision": "0" * 64}).status_code == 409
+    changed = client.post(update_url, headers=headers, json=update)
+    assert changed.status_code == 200
+    assert changed.json()["package_revision"] == "1.1.0"
+    rollback_url = "/mcp/stdio/servers/clock/rollback"
+    assert client.post(rollback_url, headers=headers,
+                       json={"expected_revision": current["revision"]}).status_code == 409
+    restored = client.post(rollback_url, headers=headers,
+                           json={"expected_revision": changed.json()["revision"]})
+    assert restored.status_code == 200
+    assert restored.json()["package_revision"] == "1.0.0"
+
+
+def test_stdio_revision_change_requires_paused_fresh_state(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, revision: "1.0.0" if revision == "1.1.0" else None)
+    native = NativeConfig()
+    adapter = StdioAdapterFixture()
+    manager = McpManager(native, RuntimeGate(limits=ResourceLimits()), enabled=True,
+                         resolver=lambda _: (), stdio_adapter=adapter)
+    manager.create_stdio_server(name="clock", package_id="bridge-time",
+                                revision="1.0.0", acknowledged=True)
+    created = next(row for row in manager.list_servers() if row["name"] == "clock")
+    resumed = manager.set_server_enabled("clock", enabled=True,
+                                         revision=created["revision"])
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=resumed["revision"], acknowledged=True)
+    paused = manager.set_server_enabled("clock", enabled=False,
+                                        revision=resumed["revision"])
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=created["revision"], acknowledged=True)
+    assert adapter.record == ("clock", "bridge-time", "1.0.0")
+    updated = manager.change_stdio_revision("clock", revision="1.1.0",
+        expected_revision=paused["revision"], acknowledged=True)
+    assert updated["package_revision"] == "1.1.0"
+    assert updated["enabled"] is False
+    assert native.servers["clock"]["enabled_tools"] == []
+    with pytest.raises(McpConflictError):
+        manager.change_stdio_revision("clock", revision=None,
+            expected_revision=paused["revision"], acknowledged=True, rollback=True)
+    rolled_back = manager.change_stdio_revision("clock", revision=None,
+        expected_revision=updated["revision"], acknowledged=True, rollback=True)
+    assert rolled_back["package_revision"] == "1.0.0"
+
+
+def test_failed_stdio_revision_reload_blocks_activation_until_recovery(monkeypatch):
+    monkeypatch.setattr("codex_bridge_service.mcp_manager.previous_revision",
+                        lambda _package, _revision: None)
+    native = NativeConfig()
+    adapter = StdioAdapterFixture()
+    gate = RuntimeGate(limits=ResourceLimits())
+    manager = McpManager(native, gate, enabled=True, resolver=lambda _: (),
+                         stdio_adapter=adapter)
+    manager.create_stdio_server(name="clock", package_id="bridge-time",
+                                revision="1.0.0", acknowledged=True)
+    created = next(row for row in manager.list_servers() if row["name"] == "clock")
+    native.reload_failures = 1
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.change_stdio_revision("clock", revision="1.1.0",
+            expected_revision=created["revision"], acknowledged=True)
+    assert adapter.record == ("clock", "bridge-time", "1.1.0")
+    assert native.servers["clock"]["enabled"] is False
+    assert native.servers["clock"]["enabled_tools"] == []
+    assert gate.snapshot().closed
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.list_servers()
 
 
 def test_pause_resume_revisions_and_retained_configuration():

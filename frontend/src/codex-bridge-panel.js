@@ -7716,6 +7716,11 @@ class CodexBridgePanel extends HTMLElement {
     const destructive = new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "rollback-stdio", "delete-agents"]);
     if (action === "confirm-desktop") { const pending = state.confirmAction; state.confirmAction = null; if (pending) return this._handleDesktopAction(pending.action, pending.dataset, target, { confirmed: true }); }
     if (action === "cancel-desktop-confirm") { state.confirmAction = null; this._renderDesktopSurface(); return; }
+    if (action === "rollback-stdio" && !confirmed) {
+      const reviewed = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!reviewed || reviewed.enabled !== false || !reviewed.rollback_available) return;
+      dataset = { ...dataset, expectedRevision: reviewed.revision };
+    }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
     if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
@@ -7818,7 +7823,7 @@ class CodexBridgePanel extends HTMLElement {
       } else {
         const server = state.stdioEditing;
         if (!server || server.enabled !== false || server.package_id !== selected.package_id || server.package_revision === selected.revision) return;
-        const saved = await this._desktopMutation("update_stdio_mcp", { name: server.name, revision: selected.revision, acknowledged: true }, state, { clearFormDraft: true });
+        const saved = await this._desktopMutation("update_stdio_mcp", { name: server.name, revision: selected.revision, expected_revision: server.revision, acknowledged: true }, state, { clearFormDraft: true });
         if (saved) { state.stdioEditing = null; state.notice = "Package update staged. The server remains paused until you review its tools and resume it."; }
       }
     }
@@ -7826,7 +7831,7 @@ class CodexBridgePanel extends HTMLElement {
       if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
       if (!server || server.enabled !== false || !server.rollback_available) return;
-      const saved = await this._desktopMutation("rollback_stdio_mcp", { name: server.name }, state);
+      const saved = await this._desktopMutation("rollback_stdio_mcp", { name: server.name, expected_revision: dataset.expectedRevision }, state);
       if (saved) state.notice = "The previous packaged revision was restored. Review its tools before resuming.";
     }
     else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {

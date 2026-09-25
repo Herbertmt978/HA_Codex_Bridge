@@ -667,7 +667,8 @@ class McpManager:
             return self._view_for_created(definition)
 
     def change_stdio_revision(self, name: object, *, revision: object,
-                              acknowledged: object, rollback: bool = False) -> dict[str, object]:
+                              expected_revision: object, acknowledged: object,
+                              rollback: bool = False) -> dict[str, object]:
         self._require_enabled()
         self._require_elicitation_handler()
         if self._stdio_adapter is None or acknowledged is not True:
@@ -678,6 +679,9 @@ class McpManager:
             previous = definitions.get(normalized)
             if previous is None or not previous.stdio or previous.package_id is None:
                 raise McpNotFoundError()
+            self._check_revision(normalized, version, expected_revision)
+            if previous.enabled:
+                raise McpConflictError()
             try:
                 target = previous_revision(
                     previous.package_id, previous.package_revision,
@@ -686,18 +690,26 @@ class McpManager:
                 raise McpValidationError() from None
             if not isinstance(target, str) or target == previous.package_revision:
                 raise McpValidationError()
-            paused = replace(previous, enabled=False, enabled_tools=())
+            paused = replace(previous, enabled_tools=())
             if previous != paused:
                 version = self._apply_definition(previous, paused, version)
             try:
                 self._stdio_adapter.replace_package(normalized, target)
-            except StdioAdapterError:
-                raise McpUnavailableError() from None
+                self._reload()
+                definitions, version = self._read_definitions()
+                updated = definitions.get(normalized)
+                if (updated is None or updated.enabled or updated.package_id != previous.package_id
+                        or updated.package_revision != target or updated.enabled_tools != ()):
+                    raise McpConflictError()
+            except (StdioAdapterError, McpManagerError):
+                # The package registry or native reload may have committed even
+                # when its response failed. Block all new work until restart
+                # reconciles the installed revision with the paused config.
+                self._require_recovery(normalized)
+                raise McpRecoveryRequiredError() from None
             self._mutation_serial += 1
             self._active_names = self._active_names - {normalized}
-            self._reload()
-            result = self._view_for_created(replace(paused,
-                url=f"stdio://{previous.package_id}/{target}", package_revision=target))
+            result = self._view_for_created(updated)
             result["revision"] = self._revision(normalized, version)
             return result
 

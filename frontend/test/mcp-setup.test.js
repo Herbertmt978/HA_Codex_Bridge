@@ -156,12 +156,14 @@ describe("isolated stdio MCP packages", () => {
     expect(field(panel, "stdio_package").value).toBe("safe-probe:1.1.0");
     field(panel, "stdio_acknowledged").click();
     await panel._handleDesktopAction("submit-stdio-update", {}, action(panel, "submit-stdio-update"));
-    expect(panel._callWS).toHaveBeenCalledWith("update_stdio_mcp", { name: "probe", revision: "1.1.0", acknowledged: true });
+    expect(panel._callWS).toHaveBeenCalledWith("update_stdio_mcp", { name: "probe", revision: "1.1.0", expected_revision: "b".repeat(64), acknowledged: true });
     await panel._handleDesktopAction("rollback-stdio", { id: "probe" });
     expect(state.confirmAction?.action).toBe("rollback-stdio");
+    expect(state.confirmAction?.dataset.expectedRevision).toBe("b".repeat(64));
     expect(panel._callWS).not.toHaveBeenCalledWith("rollback_stdio_mcp", expect.anything());
+    state.data.mcp_servers[0].revision = "c".repeat(64);
     await panel._handleDesktopAction("confirm-desktop");
-    expect(panel._callWS).toHaveBeenCalledWith("rollback_stdio_mcp", { name: "probe" });
+    expect(panel._callWS).toHaveBeenCalledWith("rollback_stdio_mcp", { name: "probe", expected_revision: "b".repeat(64) });
   });
 });
 

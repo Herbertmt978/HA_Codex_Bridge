@@ -1596,12 +1596,13 @@ class BridgeApiClient:
             json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
-    async def async_rollback_stdio_mcp(self, name: str) -> dict[str, Any]:
+    async def async_rollback_stdio_mcp(self, name: str, expected_revision: str) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_stdio_v1")
         self.require_capability("mcp_management_v1")
         return await self._async_json(
             "POST", f"/mcp/stdio/servers/{_path_segment(name)}/rollback",
+            json_body={"expected_revision": expected_revision},
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 

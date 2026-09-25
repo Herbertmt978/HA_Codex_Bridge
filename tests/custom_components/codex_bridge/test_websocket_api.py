@@ -824,12 +824,12 @@ async def test_stdio_admin_commands_forward_only_approved_package_fields() -> No
     ws_add_stdio_mcp(hass, connection, {"id": 42, "type": f"{DOMAIN}/add_stdio_mcp", "name": "probe",
         "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True})
     ws_update_stdio_mcp(hass, connection, {"id": 43, "type": f"{DOMAIN}/update_stdio_mcp", "name": "probe",
-        "revision": "1.1.0", "acknowledged": True})
-    ws_rollback_stdio_mcp(hass, connection, {"id": 44, "type": f"{DOMAIN}/rollback_stdio_mcp", "name": "probe"})
+        "revision": "1.1.0", "expected_revision": "b" * 64, "acknowledged": True})
+    ws_rollback_stdio_mcp(hass, connection, {"id": 44, "type": f"{DOMAIN}/rollback_stdio_mcp", "name": "probe", "expected_revision": "b" * 64})
     await hass.finish()
     runtime.client.async_add_stdio_mcp.assert_awaited_once_with({"name": "probe", "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True})
-    runtime.client.async_update_stdio_mcp.assert_awaited_once_with("probe", {"revision": "1.1.0", "acknowledged": True})
-    runtime.client.async_rollback_stdio_mcp.assert_awaited_once_with("probe")
+    runtime.client.async_update_stdio_mcp.assert_awaited_once_with("probe", {"revision": "1.1.0", "expected_revision": "b" * 64, "acknowledged": True})
+    runtime.client.async_rollback_stdio_mcp.assert_awaited_once_with("probe", "b" * 64)
     assert len(connection.results) == 4
 
 
