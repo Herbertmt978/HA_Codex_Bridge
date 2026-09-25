@@ -403,6 +403,28 @@ def _secure_directory(path: Path, *, mode: int, uid: int, gid: int) -> None:
         os.close(parent_descriptor)
 
 
+def _secure_worker_admission_file(*, gid: int) -> None:
+    """Keep the cross-worker lock inode outside the non-root user's unlink reach."""
+    path = Path("/run/codex-bridge/interactive-worker.lock")
+    descriptor = -1
+    try:
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL
+                                 | os.O_CLOEXEC | os.O_NOFOLLOW, 0o640)
+            os.fchown(descriptor, 0, gid)
+            os.fchmod(descriptor, 0o640)
+        except FileExistsError:
+            descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        details = os.fstat(descriptor)
+        if (not stat.S_ISREG(details.st_mode) or details.st_nlink != 1
+                or details.st_uid != 0 or details.st_gid != gid
+                or stat.S_IMODE(details.st_mode) != 0o640):
+            raise BootstrapError("worker admission file is unsafe")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
 def _atomic_write(
     parent: Path,
     name: str,
@@ -532,6 +554,7 @@ def initialize() -> None:
     _secure_directory(Path("/config/workspaces"), mode=0o700, uid=uid, gid=gid)
     _secure_directory(Path("/tmp/codex-bridge"), mode=0o700, uid=uid, gid=gid)
     _secure_directory(Path("/run/codex-bridge"), mode=0o750, uid=0, gid=gid)
+    _secure_worker_admission_file(gid=gid)
 
     # Supervisor restores App backup contents as root.  Reconcile only the
     # trees this App later uses as its non-root runtime; /data itself and the

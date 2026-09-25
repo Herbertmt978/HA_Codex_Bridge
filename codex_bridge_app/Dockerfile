@@ -14,6 +14,7 @@ COPY wheel/ /tmp/wheel/
 COPY codex-release.json /tmp/codex-release.json
 COPY assets/ /tmp/assets/
 COPY rootfs/ /
+COPY stdio-packages/ /opt/codex-stdio/packages/
 
 RUN set -eux; \
     case "${BUILD_ARCH}:${TARGETARCH}" in amd64:amd64|aarch64:arm64) ;; *) exit 1 ;; esac; \
@@ -48,6 +49,11 @@ RUN set -eux; \
       /opt/codex/bin/bwrap; \
     install -d -o root -g root -m 0755 /opt/codex-browser/bin; \
     install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-browser/bin/bwrap; \
+    install -d -o root -g root -m 0755 /opt/codex-stdio/bin; \
+    install -o root -g root -m 0755 /usr/local/bin/bwrap /opt/codex-stdio/bin/bwrap; \
+    chown -R root:root /opt/codex-stdio/packages; \
+    find /opt/codex-stdio/packages -type d -exec chmod 0555 {} +; \
+    find /opt/codex-stdio/packages -type f -exec chmod 0444 {} +; \
     rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
     chmod 0755 /usr/local/bin/codex-app-entrypoint /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
       /usr/local/bin/bwrap /opt/codex/bin/bwrap; \

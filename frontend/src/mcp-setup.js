@@ -2,16 +2,36 @@ import { selection } from "./selection.js";
 
 export const HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
 
+/** Do not offer approval for a partial or unexpected App catalogue record. */
+export function validStdioPackage(item) {
+  return item && typeof item.package_id === "string" && item.package_id.length > 0
+    && typeof item.revision === "string" && item.revision.length > 0
+    && typeof item.title === "string" && item.title.length > 0
+    && typeof item.source === "string" && item.source.startsWith("https://")
+    && typeof item.licence === "string" && item.licence.length > 0
+    && item.python === "3.14"
+    && Array.isArray(item.tools) && item.tools.length > 0 && item.tools.length <= 128
+    && item.tools.every((tool) => typeof tool === "string" && tool.length > 0 && tool.length <= 128)
+    && /^[a-f0-9]{64}$/iu.test(item.digest || "")
+    && Array.isArray(item.entrypoint) && item.entrypoint.length >= 2
+    && item.entrypoint.length <= 8 && item.entrypoint.every((part) =>
+      typeof part === "string" && part.length > 0 && part.length <= 160
+      && !Array.from(part).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
+    && item.network === "none" && item.files === "none"
+    && Array.isArray(item.environment) && item.environment.length === 0;
+}
+
 const text = (doc, tag, value, className = "") => {
   const node = doc.createElement(tag);
   node.textContent = value;
   node.className = className;
   return node;
 };
-const button = (doc, label, action) => {
+const button = (doc, label, action, extra = {}) => {
   const node = text(doc, "button", label, "panel-button");
   node.type = "button";
   node.dataset.desktopAction = action;
+  for (const [key, value] of Object.entries(extra)) node.dataset[key] = String(value);
   return node;
 };
 const link = (doc, label, href) => {
@@ -21,6 +41,113 @@ const link = (doc, label, href) => {
   node.rel = "noopener noreferrer";
   return node;
 };
+
+const stdioPackageKey = (item) => `${item.package_id}:${item.revision}`;
+
+function stdioPackageDetails(doc, item) {
+  const details = text(doc, "div", "", "stdio-package-details desktop-note");
+  const source = text(doc, "p", "Source: ");
+  source.append(link(doc, String(item.source).slice(0, 240), item.source));
+  details.append(
+    source,
+    text(doc, "p", `Version: ${item.revision} · Licence: ${item.licence || "Unspecified"} · Runtime: Python ${item.python || "3.14"}`),
+    text(doc, "p", `Fixed command: ${item.entrypoint.join(" ")}`),
+    text(doc, "p", `Package SHA-256: ${item.digest.slice(0, 16)}…`),
+    text(doc, "p", "Access: no network, no workspace files, no inherited environment or Home Assistant credentials."),
+    text(doc, "p", `Claimed tools: ${(Array.isArray(item.tools) ? item.tools : []).map((tool) => typeof tool === "string" ? tool : tool?.name).filter(Boolean).slice(0, 32).join(", ") || "None listed"}. Descriptions are package claims; choose allowed tools after adding the server.`),
+  );
+  return details;
+}
+
+/** The package manifest is reviewed before a paused, deny-all server is created. */
+export function renderStdioPackages(doc, state, { available = false, management = false, toolPermissions = false } = {}) {
+  const section = text(doc, "section", "", "mcp-stdio-settings");
+  section.append(text(doc, "h3", "Isolated local servers", "desktop-subheading"),
+    text(doc, "p", "Run an approved Python package inside the App's isolated worker. New servers start paused with no tools allowed. Package code still deserves review before you enable its tools.", "desktop-note"));
+  if (state.stdioError) { const error = text(doc, "p", "Package catalogue unavailable. Refresh connection options or check the App's worker status.", "desktop-error"); error.setAttribute("role", "alert"); section.append(error); }
+  const packages = (Array.isArray(state.data.stdio_packages) ? state.data.stdio_packages : []).filter(validStdioPackage);
+  const servers = (Array.isArray(state.data.mcp_servers) ? state.data.mcp_servers : []).filter((row) => row.transport === "stdio");
+  if (!available || !packages.length) section.append(text(doc, "p", "No verified local packages are available. Check the App option and worker status, then refresh. Existing connections are shown below.", "desktop-note"));
+  else section.append(button(doc, "Add isolated server", "open-stdio-form"));
+
+  if (["stdio-add", "stdio-update"].includes(state.form)) {
+    const updating = state.form === "stdio-update";
+    const server = updating ? state.stdioEditing : null;
+    const choices = updating ? packages.filter((item) => item.package_id === server?.package_id && item.revision !== server?.package_revision) : packages;
+    const selectedKey = state.formDraft?.stdio_package || (choices[0] && stdioPackageKey(choices[0]));
+    const selected = choices.find((item) => stdioPackageKey(item) === selectedKey);
+    const form = doc.createElement("form"); form.className = "desktop-form"; form.dataset.desktopForm = "stdio";
+    form.append(text(doc, "h3", updating ? `Update ${server?.name || "server"}` : "Add isolated server", "desktop-subheading"));
+    if (!updating) {
+      const name = text(doc, "label", "", "desktop-field");
+      const control = doc.createElement("input"); control.type = "text"; control.required = true; control.maxLength = 64;
+      control.pattern = "[a-z][a-z0-9_-]*"; control.autocomplete = "off"; control.dataset.desktopField = "stdio_name";
+      control.value = state.formDraft?.stdio_name || "";
+      name.append(text(doc, "span", "Server name", "desktop-field-label"), control);
+      form.append(name);
+    } else form.append(text(doc, "p", "Updating pauses the server and ends its active sessions. Its tools remain blocked until you review and resume it.", "desktop-note"));
+    const choice = text(doc, "label", "", "desktop-field");
+    const select = doc.createElement("select"); select.required = true; select.dataset.desktopField = "stdio_package";
+    for (const item of choices) {
+      const option = doc.createElement("option"); option.value = stdioPackageKey(item);
+      option.textContent = `${item.title || item.package_id} · ${item.revision}`; option.selected = option.value === selectedKey;
+      select.append(option);
+    }
+    choice.append(text(doc, "span", updating ? "Approved revision" : "Approved package", "desktop-field-label"), select);
+    form.append(choice);
+    if (selected) form.append(stdioPackageDetails(doc, selected));
+    else form.append(text(doc, "p", "The selected package is unavailable. Refresh the catalogue before continuing.", "desktop-error"));
+    const consent = text(doc, "label", "", "mcp-consent");
+    const check = doc.createElement("input"); check.type = "checkbox"; check.required = true;
+    check.dataset.desktopField = "stdio_acknowledged";
+    check.checked = Boolean(selected && state.formDraft?.stdio_acknowledged === true && state.formDraft?.stdio_reviewed_digest === selected.digest);
+    consent.append(check, text(doc, "span", "I have reviewed this package, its fixed command, tools and access limits"));
+    form.append(consent);
+    if (state.formError) { const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error); }
+    const actions = text(doc, "div", "", "desktop-form-actions");
+    const submit = button(doc, updating ? "Update paused server" : "Add paused server", updating ? "submit-stdio-update" : "submit-stdio-add");
+    submit.disabled = !selected || state.loading;
+    actions.append(submit, button(doc, "Cancel", "close-form")); form.append(actions); section.append(form);
+  }
+
+  for (const server of servers) {
+    const card = text(doc, "section", "", "schedule-card stdio-server-card");
+    const packaged = packages.find((item) => item.package_id === server.package_id && item.revision === server.package_revision);
+    const startup = ["starting", "ready", "failed", "cancelled", "paused", "unknown"].includes(server.startup) ? server.startup : "unknown";
+    card.append(text(doc, "h4", server.name), text(doc, "p", `${packaged?.title || server.package_id || "Unknown package"} · ${server.package_revision || "Unknown revision"} · ${server.enabled === false ? "Paused" : "Enabled"}`, "desktop-note"),
+      text(doc, "p", `Status: ${startup} · ${Number.isSafeInteger(server.tool_count) && server.tool_count >= 0 ? server.tool_count : 0} tools`, "desktop-note"));
+    if (server.failure || startup === "failed" || startup === "cancelled") card.append(text(doc, "p", "This worker needs attention. Pause it, check the App logs and package, then refresh status. If recovery is uncertain, restart the App.", "desktop-error"));
+    if (server.status_unavailable) card.append(text(doc, "p", "Worker status is unavailable. Refresh before enabling it.", "desktop-error"));
+    const actions = text(doc, "div", "", "mcp-connection-actions");
+    actions.append(button(doc, state.expandedStdioServer === server.name ? "Hide details" : "Details", "toggle-stdio-details", { id: server.name }));
+    if (available && server.enabled === false && packages.some((item) => item.package_id === server.package_id && item.revision !== server.package_revision)) actions.append(button(doc, "Update revision", "open-stdio-update", { id: server.name }));
+    if (available && server.rollback_available && server.enabled === false) actions.append(button(doc, "Roll back revision", "rollback-stdio", { id: server.name }));
+    if (available && toolPermissions) actions.append(button(doc, "Choose allowed tools", "edit-mcp-tools", { id: server.name }));
+    if (management) {
+      if (available || server.enabled !== false) {
+        const stateButton = button(doc, server.enabled === false ? "Resume" : "Pause", server.enabled === false ? "resume-mcp" : "pause-mcp", { id: server.name });
+        stateButton.disabled = server.enabled === false && server.status_unavailable;
+        actions.append(stateButton);
+      }
+    }
+    actions.append(button(doc, "Remove server", "remove-mcp", { id: server.name }));
+    card.append(actions);
+    if (state.expandedStdioServer === server.name) {
+      const details = text(doc, "dl", "", "stdio-server-details desktop-note");
+      for (const [label, value] of [
+        ["Worker", startup],
+        ["Package", String(server.package_id || "Unavailable").slice(0, 128)],
+        ["Revision", String(server.package_revision || "Unavailable").slice(0, 128)],
+        ["State", server.enabled === false ? "Paused" : "Enabled"],
+        ["Available tools", Number.isSafeInteger(server.tool_count) ? String(server.tool_count) : "Unavailable"],
+        ["Health", server.failure || startup === "failed" || startup === "cancelled" ? "Needs attention; check App logs" : server.status_unavailable ? "Status unavailable; refresh" : "No reported fault"],
+      ]) details.append(text(doc, "dt", label), text(doc, "dd", value));
+      card.append(details, text(doc, "p", "Refresh server status to recheck the worker. App logs contain further diagnostics when a worker fails.", "desktop-note"));
+    }
+    section.append(card);
+  }
+  return section;
+}
 
 /** Guided HA setup and the existing custom-server form share the same MCP API. */
 export function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEnabled = false) {

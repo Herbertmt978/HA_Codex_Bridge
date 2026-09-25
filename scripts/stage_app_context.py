@@ -515,7 +515,7 @@ def _verify_manifest(root: Path) -> None:
     actual = {
         path.relative_to(root).as_posix(): _sha256_file(path)
         for path in root.rglob("*")
-        if path.is_file() and path.name != "manifest.json"
+        if path.is_file() and path.relative_to(root).as_posix() != "manifest.json"
     }
     if actual != expected:
         raise StageError("published context does not match its manifest")
@@ -570,6 +570,17 @@ def stage(*, arch: str, output: Path) -> Path:
         sandbox_contract_path.chmod(0o444)
         wheel = _build_bridge_wheel(context / "wheel", scratch)
         _materialize_runtime(context / "runtime-site-packages", arch)
+        # Stage identical inert bytes on both architectures; App capability
+        # negotiation enables the worker only after amd64 HAOS qualification.
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "stage_stdio_packages.py"),
+                "--output",
+                str(context / "stdio-packages"),
+            ],
+            check=True,
+        )
 
         assets = lock["assets"][arch]
         for component in COMPONENTS:

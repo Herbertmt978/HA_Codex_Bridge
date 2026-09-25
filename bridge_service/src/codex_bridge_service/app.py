@@ -37,6 +37,9 @@ from .model_catalog import AppServerModelCatalogProbe, CodexModelCatalogProbe
 from .mcp_manager import McpManager, McpManagerError
 from .mcp_local_policy import LocalMcpError
 from .mcp_relay import McpRelay
+from .mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
+from .stdio_runtime import saved_stdio_records_present
+from .stdio_package_catalogue import verify_package as verify_stdio_package
 from .mcp_http import McpHttpBoundary
 from .models import CodexAuthStatusRecord, LimitsStatusRecord, RunMode, RuntimeProfile
 from .resource_limits import (
@@ -191,12 +194,16 @@ def create_app(
     model_cache_ttl_seconds: float = 600.0,
     enable_mcp: bool = False,
     enable_local_mcp: bool = False,
+    enable_stdio_mcp: bool = False,
+    stdio_worker_factory: Callable[[str, str], object] | None = None,
     browser_broker: BrowserBroker | None = None,
 ) -> FastAPI:
     if type(enable_mcp) is not bool:
         raise ValueError("MCP enabled state must be a boolean")
     if type(enable_local_mcp) is not bool:
         raise ValueError("Local MCP enabled state must be a boolean")
+    if type(enable_stdio_mcp) is not bool:
+        raise ValueError("Stdio MCP enabled state must be a boolean")
     resolved_runtime_profile = RuntimeProfile(runtime_profile)
     resolved_build_info = (
         build_info if build_info is not None else BuildInfo.from_environment()
@@ -258,6 +265,7 @@ def create_app(
     resolved_host_access: HostAccessManager | None = None
     resolved_terminal: WorkspaceTerminal | None = None
     resolved_local_mcp: McpRelay | None = None
+    resolved_stdio_mcp: StdioMcpAdapter | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -282,8 +290,18 @@ def create_app(
                 return
             if resolved_mcp_manager is not None:
                 try:
+                    if resolved_stdio_mcp is None and saved_stdio_records_present(
+                        storage.root / "mcp-stdio" / "stdio-servers.json"
+                    ):
+                        # Keep the bootstrap MCP mask and persisted selections
+                        # intact until the worker can be attested again.
+                        _app.state.runtime_startup_failed = True
+                        yield
+                        return
                     if resolved_local_mcp is not None:
                         await resolved_local_mcp.start()
+                    if resolved_stdio_mcp is not None:
+                        await resolved_stdio_mcp.start()
                     await asyncio.to_thread(
                         resolved_mcp_manager.sanitize_startup_servers
                     )
@@ -291,7 +309,7 @@ def create_app(
                         await asyncio.to_thread(
                             resolved_mcp_manager.activate_validated_mcp_config
                         )
-                except (McpManagerError, LocalMcpError):
+                except (McpManagerError, LocalMcpError, StdioAdapterError):
                     # The generation-scoped CLI override remains in place
                     # until the manager has durably sanitized native MCP
                     # configuration and activated a clean generation.
@@ -348,6 +366,8 @@ def create_app(
                 finally:
                     if resolved_local_mcp is not None:
                         await resolved_local_mcp.close()
+                    if resolved_stdio_mcp is not None:
+                        await resolved_stdio_mcp.close()
                     await asyncio.to_thread(storage.event_store.close)
 
     app = FastAPI(title="Codex Bridge", lifespan=lifespan)
@@ -580,11 +600,18 @@ def create_app(
         )
         if enable_mcp:
             resolved_local_mcp = McpRelay(storage.root / "mcp-local", local_enabled=enable_local_mcp)
+            if enable_stdio_mcp and stdio_worker_factory is not None:
+                resolved_stdio_mcp = StdioMcpAdapter(
+                    stdio_worker_factory,
+                    package_verifier=verify_stdio_package,
+                    root=storage.root / "mcp-stdio",
+                )
         resolved_mcp_manager = McpManager(
             cast(Any, resolved_app_server),
             resolved_runtime_gate,
             enabled=enable_mcp,
             relay=resolved_local_mcp,
+            stdio_adapter=resolved_stdio_mcp,
             discovery_marker=storage.root / "mcp-tool-discovery.pending",
         )
     if resolved_app_server is not None:
@@ -799,6 +826,8 @@ def create_app(
                 feature_capabilities.append("mcp_credentials_v1")
                 if resolved_local_mcp.local_enabled:
                     feature_capabilities.append("mcp_local_v1")
+            if resolved_stdio_mcp is not None:
+                feature_capabilities.append("mcp_stdio_v1")
         if browser_dynamic_tools_enabled:
             feature_capabilities.append("browser_v1")
         if getattr(resolved_app_server, "enable_experimental_api", False) is True:

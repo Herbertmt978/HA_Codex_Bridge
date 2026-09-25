@@ -20,6 +20,7 @@ from custom_components.codex_bridge.event_broker import EventBroker, EventRecord
 from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 from custom_components.codex_bridge.protocol import ProblemRecord
 from custom_components.codex_bridge.websocket_api import (
+    ws_add_stdio_mcp,
     ws_answer_interaction,
     ws_answer_mcp_form,
     ws_decide_interaction,
@@ -31,13 +32,16 @@ from custom_components.codex_bridge.websocket_api import (
     ws_consume_reset_credit,
     ws_create_automation,
     ws_login_mcp,
+    ws_list_stdio_packages,
     ws_list_artifacts,
     ws_preview_artifact,
     ws_run_automation,
+    ws_rollback_stdio_mcp,
     ws_send_prompt,
     ws_start_auth_login,
     ws_subscribe_events,
     ws_unsubscribe_events,
+    ws_update_stdio_mcp,
 )
 
 
@@ -806,6 +810,27 @@ async def test_upstream_exception_details_are_not_sent_to_browser() -> None:
 
     assert connection.errors == [(12, "bridge_error", "Bridge request failed")]
     assert "private-token-sentinel" not in repr(connection.errors)
+
+
+async def test_stdio_admin_commands_forward_only_approved_package_fields() -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_list_stdio_packages = AsyncMock(return_value=[{"package_id": "probe"}])
+    runtime.client.async_add_stdio_mcp = AsyncMock(return_value={"name": "probe", "enabled": False})
+    runtime.client.async_update_stdio_mcp = AsyncMock(return_value={"name": "probe", "enabled": False})
+    runtime.client.async_rollback_stdio_mcp = AsyncMock(return_value={"name": "probe", "enabled": False})
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_list_stdio_packages(hass, connection, {"id": 41, "type": f"{DOMAIN}/list_stdio_packages"})
+    ws_add_stdio_mcp(hass, connection, {"id": 42, "type": f"{DOMAIN}/add_stdio_mcp", "name": "probe",
+        "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True})
+    ws_update_stdio_mcp(hass, connection, {"id": 43, "type": f"{DOMAIN}/update_stdio_mcp", "name": "probe",
+        "revision": "1.1.0", "acknowledged": True})
+    ws_rollback_stdio_mcp(hass, connection, {"id": 44, "type": f"{DOMAIN}/rollback_stdio_mcp", "name": "probe"})
+    await hass.finish()
+    runtime.client.async_add_stdio_mcp.assert_awaited_once_with({"name": "probe", "package_id": "safe-probe", "revision": "1.0.0", "acknowledged": True})
+    runtime.client.async_update_stdio_mcp.assert_awaited_once_with("probe", {"revision": "1.1.0", "acknowledged": True})
+    runtime.client.async_rollback_stdio_mcp.assert_awaited_once_with("probe")
+    assert len(connection.results) == 4
 
 
 async def test_list_artifacts_exposes_only_the_safe_reservation_conflict_code() -> None:

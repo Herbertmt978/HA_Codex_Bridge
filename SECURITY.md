@@ -126,6 +126,49 @@ rejected. The relay redacts literal and JSON-escaped reflected credentials acros
 response chunks. A trusted server receives its credential and can misuse or
 transform it; redaction cannot make an untrusted provider safe.
 
+### Proposed isolated stdio MCP boundary
+
+[ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md) proposes a new,
+separately reviewed execution boundary for MCP-03. It is **not implemented or
+enabled in the released App**. Existing public HTTPS/OAuth and acknowledged
+LAN/App relay rules remain in force. Enabling MCP or installing an App update
+must not silently create or activate a stdio worker.
+
+The first proposed stdio release supports approved Python 3.14 packages on
+amd64 only. Packages and dependencies are pinned in a root-owned catalogue
+within the signed immutable App image, with source, exact version, file digests
+and fixed entrypoint recorded in a manifest. Activation re-verifies the
+package bytes. The administrator must see the source, fixed command, grants
+and selected tools before approval. A package update stages a new paused
+revision, verifies it, waits for active work, then switches atomically with a
+packaged previous revision available for rollback. Runtime package downloads,
+user-uploaded executables, native Codex `command` entries and arbitrary
+environment variables are not permitted by this proposal.
+
+Codex would connect only to a generated, authenticated loopback HTTP endpoint
+owned by the trusted Bridge. The Bridge would own each stdio session and pass
+only bounded MCP JSON-RPC lines through private pipes. Its capability header,
+HTTP authentication, Supervisor token and Codex sign-in state must never reach
+the worker. A worker needs its own AppArmor child, Bubblewrap namespaces,
+locked seccomp filter, no usable capabilities, clean allowlisted environment
+and independent root startup proof. It sees only immutable package files and
+bounded disposable scratch space. The first release grants no workspace,
+Home Assistant, App-private or host files and no network access. File access
+for a particular chat requires a proven request-to-chat ownership boundary;
+the current global MCP binding does not provide that evidence.
+
+New stdio connections start paused with no allowed tools. The administrator
+chooses tools after discovery; descriptions and safety annotations supplied
+by the package are untrusted. Configuration leases must keep pause, updates
+and tool policy consistent across chats and scheduled tasks. Admission requires
+a verified isolation proof and a resource budget coordinated with the
+optional browser worker. Time, process, memory, file-descriptor, stdout,
+stderr and message limits apply. Explicit cancellation, crashes, timeouts,
+restarts, pause, removal and failed updates must revoke sessions and clean
+up descendants and temporary state. Uncertain recovery blocks new work and
+shows a bounded recovery action; it must never fall back to running as the
+Bridge user. Native HAOS tests must prove these claims before publication.
+
 OAuth login is
 explicit and returns a one-shot authorization URL
 with `no-store` handling; do not log, cache, or paste it. MCP elicitation is

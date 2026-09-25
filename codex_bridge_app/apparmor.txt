@@ -53,6 +53,9 @@ profile codex_bridge flags=(attach_disconnected,mediate_deleted) {
   /opt/codex-browser/{,bin/} r,
   /opt/codex-browser/bin/bwrap mr,
   /opt/codex-browser/bin/bwrap Cx -> browser_bwrap,
+  /opt/codex-stdio/bin/bwrap mr,
+  /opt/codex-stdio/bin/bwrap Cx -> stdio_bwrap,
+  /opt/codex-stdio/packages/{,**} r,
   /opt/codex/ r,
   /opt/codex/bin/ r,
   /opt/codex/bin/bwrap mr,
@@ -234,6 +237,82 @@ profile codex_bridge flags=(attach_disconnected,mediate_deleted) {
     deny /proc/**/{root,cwd,mem,environ,map_files}{,/**} rwklmx,
     deny /proc/**/{fd,fdinfo}/* rwklmx,
     deny /data/{,**} rwklmx,
+    deny /run/codex-bridge/{,**} rwklmx,
+  }
+  # Separate, no-network boundary for approved pure-Python stdio MCP workers.
+  # The final Python process inherits this profile after Bubblewrap drops all
+  # capabilities. Boot attestation must inspect that process before activation.
+  profile stdio_bwrap flags=(attach_disconnected,mediate_deleted) {
+    #include <abstractions/base>
+
+    signal (send) peer=**//stdio_bwrap,
+    signal (receive),
+
+    capability chown,
+    capability dac_override,
+    capability fowner,
+    capability setgid,
+    capability setuid,
+    capability setpcap,
+    capability sys_admin,
+    capability sys_chroot,
+    capability net_admin,
+    capability mknod,
+
+    mount,
+    umount,
+    pivot_root,
+
+    # Bubblewrap may configure its new loopback device before the worker's
+    # seccomp filter starts. No inet or Unix socket permission is granted.
+    network netlink raw,
+    network netlink dgram,
+
+    / r,
+    /bin/ r,
+    /bin/** rix,
+    /sbin/ r,
+    /sbin/** rix,
+    /usr/ r,
+    /usr/bin/** rix,
+    /usr/lib/** mr,
+    /usr/share/ r,
+    /usr/share/zoneinfo/{,**} r,
+    /lib/ r,
+    /lib/** mr,
+    /usr/local/ r,
+    /usr/local/bin/ r,
+    /usr/local/bin/python* rix,
+    /usr/local/lib/** mr,
+    /usr/local/libexec/codex-bridge/ r,
+    /usr/local/libexec/codex-bridge/stdio_sandbox.py r,
+    /usr/local/libexec/codex-bridge/stdio_probe.py r,
+    /opt/codex-stdio/ r,
+    /opt/codex-stdio/bin/ r,
+    /opt/codex-stdio/bin/bwrap mr,
+    /opt/codex-stdio/bin/bwrap ix,
+    /opt/codex-stdio/packages/ r,
+    /opt/codex-stdio/packages/** mr,
+
+    /etc/ r,
+    /proc/ r,
+    /proc/** r,
+    owner /proc/*/{uid_map,gid_map,setgroups} rw,
+    /sys/ r,
+    /sys/** r,
+    /dev/ rw,
+    /dev/** rw,
+    /newroot/{,**} rwkl,
+    /tmp/ rw,
+    /tmp/** rwk,
+    /package/ r,
+    /package/** mr,
+
+    deny /proc/**/{root,cwd,mem,environ,map_files}{,/**} rwklmx,
+    deny /proc/**/{fd,fdinfo}/* rwklmx,
+    deny /proc/[0-9]*/{cmdline,maps,smaps,smaps_rollup} rwklmx,
+    deny /data/{,**} rwklmx,
+    deny /config/{,**} rwklmx,
     deny /run/codex-bridge/{,**} rwklmx,
   }
 }

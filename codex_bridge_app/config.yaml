@@ -16,8 +16,10 @@ discovery:
 options:
   enable_mcp: false
   enable_local_mcp: false
+  enable_stdio_mcp: false
   enable_browser: false
 schema:
   enable_mcp: bool
   enable_local_mcp: bool
+  enable_stdio_mcp: bool
   enable_browser: bool

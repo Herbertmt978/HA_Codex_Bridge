@@ -3,7 +3,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
-import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions } from "./mcp-setup.js";
+import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions, renderStdioPackages } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -404,15 +404,19 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
     const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
+    const stdio = config?.capabilities?.includes("mcp_stdio_v1")
+      && config?.capabilities?.includes("mcp_admin_v1") && management && toolPermissions;
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
     if (state.form === "mcp-tools" && toolPermissions) panel.append(renderMcpToolPermissions(documentRef, state));
+    if (stdio || mcp.some((row) => row.transport === "stdio")) panel.append(renderStdioPackages(documentRef, state, { available: stdio, management, toolPermissions }));
+    if (!stdio) panel.append(text(documentRef, "p", "Isolated local packages require a newer App with its separate stdio option enabled. Update the App and Integration, then refresh connection options.", "desktop-note"));
     panel.append(text(documentRef, "p", management
       ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats."
       : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
     panel.append(button(documentRef, "Refresh server status", "refresh-settings-capabilities"));
-    panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+    panel.append(renderTable(documentRef, mcp.filter((row) => row.transport !== "stdio"), [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const controls = text(documentRef, "div", "", "mcp-connection-actions");
       td.append(controls);
       const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth";
@@ -559,7 +563,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   container.setAttribute("aria-busy", "false");
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
-  if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
+  if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
   const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }

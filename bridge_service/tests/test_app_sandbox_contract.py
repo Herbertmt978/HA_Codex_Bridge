@@ -317,6 +317,7 @@ def test_apparmor_has_an_exact_bwrap_child_transition() -> None:
     assert "/usr/lib/bashio/** rix," in outer
     assert "/usr/local/bin/ r," in outer
     assert "/usr/local/libexec/codex-bridge/ r," in outer
+    assert "/opt/codex-stdio/packages/{,**} r," in outer
     assert "/config/.sandbox-self-test-* rw," in outer
     assert "/config/**" not in outer
     assert re.search(
@@ -328,7 +329,7 @@ def test_apparmor_has_an_exact_bwrap_child_transition() -> None:
         outer,
     ), "the bundled bwrap must not be directly executable by the parent profile"
     assert re.findall(r"(?m)^\s*profile\s+(\w+)", profile) == [
-        "codex_bridge", "codex_bwrap", "browser_bwrap"
+        "codex_bridge", "codex_bwrap", "browser_bwrap", "stdio_bwrap"
     ]
 
     bwrap = _apparmor_profile_body("//codex_bwrap")

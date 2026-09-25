@@ -33464,16 +33464,20 @@ function collectUserInputAnswers(container, model) {
 
 // frontend/src/mcp-setup.js
 var HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+function validStdioPackage(item) {
+  return item && typeof item.package_id === "string" && item.package_id.length > 0 && typeof item.revision === "string" && item.revision.length > 0 && typeof item.title === "string" && item.title.length > 0 && typeof item.source === "string" && item.source.startsWith("https://") && typeof item.licence === "string" && item.licence.length > 0 && item.python === "3.14" && Array.isArray(item.tools) && item.tools.length > 0 && item.tools.length <= 128 && item.tools.every((tool) => typeof tool === "string" && tool.length > 0 && tool.length <= 128) && /^[a-f0-9]{64}$/iu.test(item.digest || "") && Array.isArray(item.entrypoint) && item.entrypoint.length >= 2 && item.entrypoint.length <= 8 && item.entrypoint.every((part) => typeof part === "string" && part.length > 0 && part.length <= 160 && !Array.from(part).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) && item.network === "none" && item.files === "none" && Array.isArray(item.environment) && item.environment.length === 0;
+}
 var text = (doc, tag, value, className = "") => {
   const node2 = doc.createElement(tag);
   node2.textContent = value;
   node2.className = className;
   return node2;
 };
-var button = (doc, label, action) => {
+var button = (doc, label, action, extra = {}) => {
   const node2 = text(doc, "button", label, "panel-button");
   node2.type = "button";
   node2.dataset.desktopAction = action;
+  for (const [key, value] of Object.entries(extra)) node2.dataset[key] = String(value);
   return node2;
 };
 var link = (doc, label, href) => {
@@ -33483,6 +33487,135 @@ var link = (doc, label, href) => {
   node2.rel = "noopener noreferrer";
   return node2;
 };
+var stdioPackageKey = (item) => `${item.package_id}:${item.revision}`;
+function stdioPackageDetails(doc, item) {
+  const details = text(doc, "div", "", "stdio-package-details desktop-note");
+  const source = text(doc, "p", "Source: ");
+  source.append(link(doc, String(item.source).slice(0, 240), item.source));
+  details.append(
+    source,
+    text(doc, "p", `Version: ${item.revision} · Licence: ${item.licence || "Unspecified"} · Runtime: Python ${item.python || "3.14"}`),
+    text(doc, "p", `Fixed command: ${item.entrypoint.join(" ")}`),
+    text(doc, "p", `Package SHA-256: ${item.digest.slice(0, 16)}…`),
+    text(doc, "p", "Access: no network, no workspace files, no inherited environment or Home Assistant credentials."),
+    text(doc, "p", `Claimed tools: ${(Array.isArray(item.tools) ? item.tools : []).map((tool) => typeof tool === "string" ? tool : tool?.name).filter(Boolean).slice(0, 32).join(", ") || "None listed"}. Descriptions are package claims; choose allowed tools after adding the server.`)
+  );
+  return details;
+}
+function renderStdioPackages(doc, state, { available = false, management = false, toolPermissions = false } = {}) {
+  const section2 = text(doc, "section", "", "mcp-stdio-settings");
+  section2.append(
+    text(doc, "h3", "Isolated local servers", "desktop-subheading"),
+    text(doc, "p", "Run an approved Python package inside the App's isolated worker. New servers start paused with no tools allowed. Package code still deserves review before you enable its tools.", "desktop-note")
+  );
+  if (state.stdioError) {
+    const error = text(doc, "p", "Package catalogue unavailable. Refresh connection options or check the App's worker status.", "desktop-error");
+    error.setAttribute("role", "alert");
+    section2.append(error);
+  }
+  const packages = (Array.isArray(state.data.stdio_packages) ? state.data.stdio_packages : []).filter(validStdioPackage);
+  const servers = (Array.isArray(state.data.mcp_servers) ? state.data.mcp_servers : []).filter((row) => row.transport === "stdio");
+  if (!available || !packages.length) section2.append(text(doc, "p", "No verified local packages are available. Check the App option and worker status, then refresh. Existing connections are shown below.", "desktop-note"));
+  else section2.append(button(doc, "Add isolated server", "open-stdio-form"));
+  if (["stdio-add", "stdio-update"].includes(state.form)) {
+    const updating = state.form === "stdio-update";
+    const server = updating ? state.stdioEditing : null;
+    const choices = updating ? packages.filter((item) => item.package_id === server?.package_id && item.revision !== server?.package_revision) : packages;
+    const selectedKey = state.formDraft?.stdio_package || choices[0] && stdioPackageKey(choices[0]);
+    const selected = choices.find((item) => stdioPackageKey(item) === selectedKey);
+    const form = doc.createElement("form");
+    form.className = "desktop-form";
+    form.dataset.desktopForm = "stdio";
+    form.append(text(doc, "h3", updating ? `Update ${server?.name || "server"}` : "Add isolated server", "desktop-subheading"));
+    if (!updating) {
+      const name = text(doc, "label", "", "desktop-field");
+      const control = doc.createElement("input");
+      control.type = "text";
+      control.required = true;
+      control.maxLength = 64;
+      control.pattern = "[a-z][a-z0-9_-]*";
+      control.autocomplete = "off";
+      control.dataset.desktopField = "stdio_name";
+      control.value = state.formDraft?.stdio_name || "";
+      name.append(text(doc, "span", "Server name", "desktop-field-label"), control);
+      form.append(name);
+    } else form.append(text(doc, "p", "Updating pauses the server and ends its active sessions. Its tools remain blocked until you review and resume it.", "desktop-note"));
+    const choice = text(doc, "label", "", "desktop-field");
+    const select = doc.createElement("select");
+    select.required = true;
+    select.dataset.desktopField = "stdio_package";
+    for (const item of choices) {
+      const option = doc.createElement("option");
+      option.value = stdioPackageKey(item);
+      option.textContent = `${item.title || item.package_id} · ${item.revision}`;
+      option.selected = option.value === selectedKey;
+      select.append(option);
+    }
+    choice.append(text(doc, "span", updating ? "Approved revision" : "Approved package", "desktop-field-label"), select);
+    form.append(choice);
+    if (selected) form.append(stdioPackageDetails(doc, selected));
+    else form.append(text(doc, "p", "The selected package is unavailable. Refresh the catalogue before continuing.", "desktop-error"));
+    const consent = text(doc, "label", "", "mcp-consent");
+    const check = doc.createElement("input");
+    check.type = "checkbox";
+    check.required = true;
+    check.dataset.desktopField = "stdio_acknowledged";
+    check.checked = Boolean(selected && state.formDraft?.stdio_acknowledged === true && state.formDraft?.stdio_reviewed_digest === selected.digest);
+    consent.append(check, text(doc, "span", "I have reviewed this package, its fixed command, tools and access limits"));
+    form.append(consent);
+    if (state.formError) {
+      const error = text(doc, "p", state.formError, "desktop-error");
+      error.setAttribute("role", "alert");
+      form.append(error);
+    }
+    const actions = text(doc, "div", "", "desktop-form-actions");
+    const submit = button(doc, updating ? "Update paused server" : "Add paused server", updating ? "submit-stdio-update" : "submit-stdio-add");
+    submit.disabled = !selected || state.loading;
+    actions.append(submit, button(doc, "Cancel", "close-form"));
+    form.append(actions);
+    section2.append(form);
+  }
+  for (const server of servers) {
+    const card = text(doc, "section", "", "schedule-card stdio-server-card");
+    const packaged = packages.find((item) => item.package_id === server.package_id && item.revision === server.package_revision);
+    const startup = ["starting", "ready", "failed", "cancelled", "paused", "unknown"].includes(server.startup) ? server.startup : "unknown";
+    card.append(
+      text(doc, "h4", server.name),
+      text(doc, "p", `${packaged?.title || server.package_id || "Unknown package"} · ${server.package_revision || "Unknown revision"} · ${server.enabled === false ? "Paused" : "Enabled"}`, "desktop-note"),
+      text(doc, "p", `Status: ${startup} · ${Number.isSafeInteger(server.tool_count) && server.tool_count >= 0 ? server.tool_count : 0} tools`, "desktop-note")
+    );
+    if (server.failure || startup === "failed" || startup === "cancelled") card.append(text(doc, "p", "This worker needs attention. Pause it, check the App logs and package, then refresh status. If recovery is uncertain, restart the App.", "desktop-error"));
+    if (server.status_unavailable) card.append(text(doc, "p", "Worker status is unavailable. Refresh before enabling it.", "desktop-error"));
+    const actions = text(doc, "div", "", "mcp-connection-actions");
+    actions.append(button(doc, state.expandedStdioServer === server.name ? "Hide details" : "Details", "toggle-stdio-details", { id: server.name }));
+    if (available && server.enabled === false && packages.some((item) => item.package_id === server.package_id && item.revision !== server.package_revision)) actions.append(button(doc, "Update revision", "open-stdio-update", { id: server.name }));
+    if (available && server.rollback_available && server.enabled === false) actions.append(button(doc, "Roll back revision", "rollback-stdio", { id: server.name }));
+    if (available && toolPermissions) actions.append(button(doc, "Choose allowed tools", "edit-mcp-tools", { id: server.name }));
+    if (management) {
+      if (available || server.enabled !== false) {
+        const stateButton = button(doc, server.enabled === false ? "Resume" : "Pause", server.enabled === false ? "resume-mcp" : "pause-mcp", { id: server.name });
+        stateButton.disabled = server.enabled === false && server.status_unavailable;
+        actions.append(stateButton);
+      }
+    }
+    actions.append(button(doc, "Remove server", "remove-mcp", { id: server.name }));
+    card.append(actions);
+    if (state.expandedStdioServer === server.name) {
+      const details = text(doc, "dl", "", "stdio-server-details desktop-note");
+      for (const [label, value] of [
+        ["Worker", startup],
+        ["Package", String(server.package_id || "Unavailable").slice(0, 128)],
+        ["Revision", String(server.package_revision || "Unavailable").slice(0, 128)],
+        ["State", server.enabled === false ? "Paused" : "Enabled"],
+        ["Available tools", Number.isSafeInteger(server.tool_count) ? String(server.tool_count) : "Unavailable"],
+        ["Health", server.failure || startup === "failed" || startup === "cancelled" ? "Needs attention; check App logs" : server.status_unavailable ? "Status unavailable; refresh" : "No reported fault"]
+      ]) details.append(text(doc, "dt", label), text(doc, "dd", value));
+      card.append(details, text(doc, "p", "Refresh server status to recheck the worker. App logs contain further diagnostics when a worker fails.", "desktop-note"));
+    }
+    section2.append(card);
+  }
+  return section2;
+}
 function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEnabled = false) {
   const section2 = text(doc, "section", "", "mcp-setup");
   if (state.form === "mcp-choice") {
@@ -34183,13 +34316,16 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
     const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
+    const stdio = config?.capabilities?.includes("mcp_stdio_v1") && config?.capabilities?.includes("mcp_admin_v1") && management && toolPermissions;
     if (["mcp-choice", "mcp", "mcp-ha"].includes(state.form)) panel.append(renderMcpSetup(documentRef, state, config?.capabilities?.includes("mcp_admin_v1"), config?.capabilities?.includes("mcp_local_v1"), credentials));
     if (state.form === "mcp-credential" && credentials) panel.append(renderMcpCredentialForm(documentRef, state));
     if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
     if (state.form === "mcp-tools" && toolPermissions) panel.append(renderMcpToolPermissions(documentRef, state));
+    if (stdio || mcp.some((row) => row.transport === "stdio")) panel.append(renderStdioPackages(documentRef, state, { available: stdio, management, toolPermissions }));
+    if (!stdio) panel.append(text2(documentRef, "p", "Isolated local packages require a newer App with its separate stdio option enabled. Update the App and Integration, then refresh connection options.", "desktop-note"));
     panel.append(text2(documentRef, "p", management ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats." : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
     panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
-    panel.append(renderTable(documentRef, mcp, [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
+    panel.append(renderTable(documentRef, mcp.filter((row) => row.transport !== "stdio"), [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const controls = text2(documentRef, "div", "", "mcp-connection-actions");
       td.append(controls);
       const id = row.name || "";
@@ -34363,7 +34499,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const confirm2 = documentRef.createElement("div");
     confirm2.className = "desktop-notice";
     confirm2.setAttribute("role", "alert");
-    confirm2.append(text2(documentRef, "span", "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
+    confirm2.append(text2(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm2);
   }
   const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
@@ -35081,7 +35217,7 @@ template.innerHTML = `
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
     .schedule-card.host-access-settings { padding: 20px; }
     .host-access-settings + .host-access-settings { margin-top: 16px; }
-    .host-access-settings a, .mcp-setup a { color: var(--accent-color); overflow-wrap: anywhere; }
+    .host-access-settings a, .mcp-setup a, .mcp-stdio-settings a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
     .confirmation-dialog h2,
@@ -37535,6 +37671,13 @@ template.innerHTML = `
     .mcp-tool-row:last-child { border-bottom: 0; }
     .mcp-tool-row input { grid-row: 1 / span 3; margin: 3px 0; }
     .mcp-tool-row .desktop-note { grid-column: 2; margin: 2px 0 0; }
+    .mcp-stdio-settings, .stdio-server-card { display: grid; gap: 10px; min-width: 0; }
+    .mcp-stdio-settings { margin-block: 16px; }
+    .stdio-server-card h4, .stdio-server-card p, .stdio-package-details p { margin: 0; }
+    .stdio-package-details { display: grid; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; background: var(--secondary-background-color, #f5f5f5); overflow-wrap: anywhere; }
+    .stdio-server-details { display: grid; grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: 6px 12px; margin: 0; padding-top: 10px; border-top: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
+    .stdio-server-details dt { font-weight: 600; }
+    .stdio-server-details dd { margin: 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
     .settings-panel { display: grid; gap: 14px; }
 
@@ -41781,6 +41924,18 @@ var CodexBridgePanel = class extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (capabilities.includes("mcp_stdio_v1")) {
+          try {
+            state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
+            state.stdioError = "";
+          } catch (error) {
+            state.data.stdio_packages = [];
+            state.stdioError = normalizeDesktopError(error);
+          }
+        } else {
+          state.data.stdio_packages = [];
+          state.stdioError = "";
+        }
       }
       if (destination === "settings" && (!isCurrentSettingsRequest() || hasMovedProjects())) {
         if (isCurrentSettingsRequest()) {
@@ -41816,6 +41971,17 @@ var CodexBridgePanel = class extends HTMLElement {
     const state = this._desktopFeatures[this._activeDestination];
     if (!form || !field2 || !state?.form) return;
     state.formDraft = { ...state.formDraft || {}, [field2]: target.type === "checkbox" ? target.checked : target.value };
+    if (form.dataset.desktopForm === "stdio" && field2 === "stdio_package") {
+      state.formDraft.stdio_acknowledged = false;
+      state.formDraft.stdio_reviewed_digest = "";
+      this._renderDesktopSurface();
+      return;
+    }
+    if (form.dataset.desktopForm === "stdio" && field2 === "stdio_acknowledged") {
+      const selectedKey = form.querySelector('[data-desktop-field="stdio_package"]')?.value;
+      const selected = state.data.stdio_packages?.find((item) => validStdioPackage(item) && `${item.package_id}:${item.revision}` === selectedKey);
+      state.formDraft.stdio_reviewed_digest = target.checked ? selected?.digest || "" : "";
+    }
     if (form.dataset.desktopForm === "schedule") state.createRequestId = null;
     if (form.dataset.desktopForm === "mcp" && ["local", "url", "auth_mode", "credential_action"].includes(field2)) {
       state.formDraft.local_acknowledged = false;
@@ -41968,7 +42134,7 @@ var CodexBridgePanel = class extends HTMLElement {
       if (scope === "project") dataset.projectId = projectId;
       dataset.agentsDraftKey = this._agentsDraftKey(scope, projectId);
     }
-    const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "delete-agents"]);
+    const destructive = /* @__PURE__ */ new Set(["delete-automation", "delete-skill", "uninstall-plugin", "remove-marketplace", "remove-mcp", "remove-mcp-credential", "rollback-stdio", "delete-agents"]);
     if (action === "confirm-desktop") {
       const pending = state.confirmAction;
       state.confirmAction = null;
@@ -42022,6 +42188,22 @@ var CodexBridgePanel = class extends HTMLElement {
     } else if (action === "open-mcp-form") {
       this._clearDesktopFormDraft(state);
       state.form = "mcp-choice";
+    } else if (action === "open-stdio-form") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      this._clearDesktopFormDraft(state);
+      state.stdioEditing = null;
+      state.form = "stdio-add";
+    } else if (action === "open-stdio-update") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server || server.enabled !== false) return;
+      this._clearDesktopFormDraft(state);
+      state.stdioEditing = server;
+      state.form = "stdio-update";
+    } else if (action === "toggle-stdio-details") {
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server) return;
+      state.expandedStdioServer = state.expandedStdioServer === server.name ? null : server.name;
     } else if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) {
       this._clearDesktopFormDraft(state);
       state.form = action === "choose-ha-mcp" ? "mcp-ha" : "mcp";
@@ -42030,6 +42212,7 @@ var CodexBridgePanel = class extends HTMLElement {
     else if (action === "close-form") {
       this._clearDesktopFormDraft(state);
       state.editingAutomation = null;
+      state.stdioEditing = null;
       state.form = null;
     } else if (action === "submit-schedule") await this._submitScheduledTask(state, target, false);
     else if (action === "submit-schedule-update") await this._submitScheduledTask(state, target, true);
@@ -42070,6 +42253,40 @@ var CodexBridgePanel = class extends HTMLElement {
         state.formError = state.error;
         state.error = "";
       } else if (saved && guided) state.notice = this._config?.capabilities?.includes("mcp_tool_permissions_v1") ? "Home Assistant server added. Complete Sign in if requested, then choose allowed tools before asking Codex to use it." : "Home Assistant server added. Complete Sign in if requested, refresh server status, then start a new chat and ask Codex to describe an entity without changing it.";
+    } else if (["submit-stdio-add", "submit-stdio-update"].includes(action)) {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1") || state.loading) return;
+      const form = target?.closest("form");
+      if (!form?.reportValidity()) return;
+      const values = this._desktopFormValues(target);
+      const packages = Array.isArray(state.data.stdio_packages) ? state.data.stdio_packages : [];
+      const selected = packages.find((item) => validStdioPackage(item) && `${item.package_id}:${item.revision}` === values.stdio_package);
+      if (!selected || values.stdio_acknowledged !== true || state.formDraft?.stdio_reviewed_digest !== selected.digest) {
+        state.formError = "Review the current verified package and confirm its access limits before continuing.";
+        return;
+      }
+      if (action === "submit-stdio-add") {
+        const name = String(values.stdio_name || "").trim();
+        if (!/^[a-z][a-z0-9_-]{0,63}$/u.test(name)) {
+          state.formError = "Use a lower-case server name with letters, numbers, underscores or hyphens.";
+          return;
+        }
+        const saved = await this._desktopMutation("add_stdio_mcp", { name, package_id: selected.package_id, revision: selected.revision, acknowledged: true }, state, { clearFormDraft: true });
+        if (saved) state.notice = "Isolated server added in a paused state. Choose allowed tools, then resume it when ready.";
+      } else {
+        const server = state.stdioEditing;
+        if (!server || server.enabled !== false || server.package_id !== selected.package_id || server.package_revision === selected.revision) return;
+        const saved = await this._desktopMutation("update_stdio_mcp", { name: server.name, revision: selected.revision, acknowledged: true }, state, { clearFormDraft: true });
+        if (saved) {
+          state.stdioEditing = null;
+          state.notice = "Package update staged. The server remains paused until you review its tools and resume it.";
+        }
+      }
+    } else if (action === "rollback-stdio") {
+      if (!this._config?.capabilities?.includes("mcp_stdio_v1")) return;
+      const server = state.data.mcp_servers?.find((row) => row.name === dataset.id && row.transport === "stdio");
+      if (!server || server.enabled !== false || !server.rollback_available) return;
+      const saved = await this._desktopMutation("rollback_stdio_mcp", { name: server.name }, state);
+      if (saved) state.notice = "The previous packaged revision was restored. Review its tools before resuming.";
     } else if (["pause-mcp", "resume-mcp", "edit-mcp-connection"].includes(action)) {
       const server = state.data.mcp_servers?.find((row) => row.name === dataset.id);
       if (!server || !this._config?.capabilities?.includes("mcp_management_v1")) return;
@@ -42088,7 +42305,8 @@ var CodexBridgePanel = class extends HTMLElement {
       state.formError = "";
       state.error = "";
       try {
-        state.mcpToolInventory = await this._callWS("list_mcp_tools", { name: server.name });
+        const inventory = await this._callWS("list_mcp_tools", { name: server.name });
+        state.mcpToolInventory = server.transport === "stdio" ? { ...inventory, endpoint: "Isolated App worker" } : inventory;
         state.mcpToolDraft = null;
         state.form = "mcp-tools";
       } catch (error) {

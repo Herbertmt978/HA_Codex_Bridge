@@ -35,6 +35,7 @@ from typing import Any, Final
 
 from browser_policy import BrowserPolicyError, UnixPolicyProxy
 from browser_resources import BrowserResourceGuard
+from worker_admission import acquire_worker_lease, release_worker_lease
 from codex_bridge_service.browser_contract import (
     BrowserContractError,
     BrowserPageProjection,
@@ -330,15 +331,19 @@ class Session:
     policy: UnixPolicyProxy
     cdp: CdpPipe
     created_at: float
+    lease_fd: int = -1
     actions: int = 0
 
     @classmethod
     def create(cls, session_id: str, *, canary_fd: int | None = None) -> "Session":
-        profile = Path(tempfile.mkdtemp(prefix="codex-bridge-browser-", dir="/tmp"))
-        os.chmod(profile, 0o700)
-        policy = UnixPolicyProxy(profile / "egress.sock")
+        lease_fd = acquire_worker_lease()
+        profile: Path | None = None
+        policy: UnixPolicyProxy | None = None
         cdp = None
         try:
+            profile = Path(tempfile.mkdtemp(prefix="codex-bridge-browser-", dir="/tmp"))
+            os.chmod(profile, 0o700)
+            policy = UnixPolicyProxy(profile / "egress.sock")
             policy.start()
             cdp = CdpPipe(socket_path=policy.socket_path, canary_fd=canary_fd)
             cdp.call("Page.enable", {}, timeout=10)
@@ -350,12 +355,18 @@ class Session:
                 policy=policy,
                 cdp=cdp,
                 created_at=time.monotonic(),
+                lease_fd=lease_fd,
             )
         except BaseException:
-            if cdp is not None:
-                cdp.close()
-            policy.close()
-            _remove_profile(profile)
+            try:
+                if cdp is not None:
+                    cdp.close()
+                if policy is not None:
+                    policy.close()
+            finally:
+                if profile is not None:
+                    _remove_profile(profile)
+                release_worker_lease(lease_fd)
             raise
 
     def close(self) -> None:
@@ -365,7 +376,11 @@ class Session:
             try:
                 self.policy.close()
             finally:
-                _remove_profile(self.profile)
+                try:
+                    _remove_profile(self.profile)
+                finally:
+                    if self.lease_fd >= 0:
+                        release_worker_lease(self.lease_fd)
 
     def check_limits(self) -> None:
         if self.actions >= MAX_ACTIONS or time.monotonic() - self.created_at > MAX_SESSION_SECONDS:

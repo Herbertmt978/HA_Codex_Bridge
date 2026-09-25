@@ -35,9 +35,19 @@ changing product language or architecture.
   protocol and reserved headers. Submit credentials through bounded administrator
   HTTP views, never WebSocket commands, prompts or browser persistence. Keep
   private credentials out of responses, logs and native configuration; redact
-  reflected secrets in relay responses. Stdio and local OAuth remain unsupported. Keep
-  OAuth authorisation URLs one-shot and uncached. This local exception does
-  not change browser, shell or Host Access permissions.
+  reflected secrets in relay responses. Stdio and local OAuth remain unsupported
+  in the released runtime. Keep OAuth authorisation URLs one-shot and uncached.
+  This local exception does not change browser, shell or Host Access permissions.
+- For proposed MCP-03 stdio support, use the separate boundary in
+  [ADR 0009](docs/aegis/adr/0009-isolated-stdio-mcp.md); the ADR is not an
+  implementation or release claim. Codex must see only the Bridge-owned
+  authenticated loopback HTTP adapter, never a native executable command or
+  worker environment. Do not activate a worker without its own HAOS-proven
+  Bubblewrap/AppArmor/namespace/seccomp attestation, verified approved package
+  revision, explicit grants, tool allow-list and resource budget. The first
+  proposed runtime is Python 3.14 on amd64 with no network or workspace files.
+  Keep the stdio App option off by default, preserve existing HTTPS/LAN MCP
+  rules, and fail closed on uncertain startup, update or teardown.
 - Preserve native MCP pause state across restart. Destination edits require a
   paused server, a fresh revision and explicit authentication consent. Recover
   interrupted private edits before activating relay bindings; uncertain rollback
