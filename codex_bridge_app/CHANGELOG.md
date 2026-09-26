@@ -2,6 +2,20 @@
 
 All notable App changes are recorded here.
 
+## 1.8.10
+
+- Keeps chat action button names, tooltips and expanded state in sync after a
+  sidebar refresh or menu closure.
+- Gives the file preview more height while preserving the composer and a usable
+  chat area; aligns its outlined toolbar icons and wraps actions without clipping.
+- Keeps the expanded compact conversation picker below alerts in short chat areas.
+- Explains that Assist-managed conversations continue through Assist, instead of
+  offering an ordinary Send action that the backend rejects. Preserves drafts and
+  genuine uncertain-delivery retries without changing the Assist safety policy.
+- Retains the steady hover controls and visible terminal explanations from 1.8.9.
+- Pairs App, Integration and panel `1.8.10` with unchanged Bridge `0.15.0` and
+  Codex `0.157.1`.
+
 ## 1.8.9
 
 - Keeps chat menu items and submenu hover targets mounted during unrelated live

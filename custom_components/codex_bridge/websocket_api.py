@@ -860,6 +860,9 @@ async def ws_send_prompt(
             client_request_id=msg.get("client_request_id"),
             **runtime.web_search_payload(),
         ),
+        safe_error_messages={
+            "assist_policy_invalid": "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.",
+        },
     )
 
 

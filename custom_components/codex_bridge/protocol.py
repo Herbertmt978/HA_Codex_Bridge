@@ -98,6 +98,7 @@ _KNOWN_PROBLEM_CODES = frozenset(
         "authorization_failed",
         "agents_unavailable",
         "assist_mcp_unavailable",
+        "assist_policy_invalid",
         "automation_conflict",
         "automation_error",
         "automation_invalid",

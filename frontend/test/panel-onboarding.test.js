@@ -729,7 +729,7 @@ describe("HA-first panel integration", () => {
     expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(true);
     chatMore?.click();
     expect(chatMore?.getAttribute("aria-expanded")).toBe("true");
-    expect(chatMore?.getAttribute("aria-label")).toContain("Show actions");
+    expect(chatMore?.getAttribute("aria-label")).toContain("Hide actions");
     expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(false);
     chatMore?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(chatMore?.getAttribute("aria-expanded")).toBe("false");

@@ -132,14 +132,21 @@ export class ChatContextMenu {
   }
 
   syncTrigger() {
-    if (this.header) return;
-    const current = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button) => button.dataset.threadId === this.threadId);
-    if (current) {
-      this.trigger = current;
-      current.setAttribute("aria-expanded", String(!this.menu.hidden));
-      current.setAttribute("aria-controls", this.menu.id);
-      current.closest(".chat-row")?.classList.toggle("actions-open", !this.menu.hidden);
+    if (!this.header) {
+      const current = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button) => button.dataset.threadId === this.threadId);
+      if (current) this.trigger = current;
     }
+    const trigger = this.trigger;
+    if (!trigger) return;
+    const expanded = !this.menu.hidden;
+    trigger.setAttribute("aria-expanded", String(expanded));
+    trigger.setAttribute("aria-controls", this.menu.id);
+    if (!this.header && trigger.matches(".thread-actions-toggle")) {
+      const label = `${expanded ? "Hide" : "Show"} actions for ${this.thread()?.title || "chat"}`;
+      trigger.setAttribute("aria-label", label);
+      this.panel._setTooltipTarget(trigger, label);
+    }
+    trigger.closest(".chat-row")?.classList.toggle("actions-open", expanded);
   }
 
   async loadSections() {
@@ -181,9 +188,7 @@ export class ChatContextMenu {
     const rect = trigger?.getBoundingClientRect();
     this.point = point || { x: rect?.left || 8, y: rect?.bottom || 8 };
     this.menu.hidden = false;
-    this.trigger?.setAttribute("aria-expanded", "true");
-    this.trigger?.closest(".chat-row")?.classList.add("actions-open");
-    this.trigger?.setAttribute("aria-controls", this.menu.id);
+    this.syncTrigger();
     this.render();
     this.menu.querySelector("button:not(:disabled)")?.focus();
     const generation = this.generation;
@@ -201,8 +206,7 @@ export class ChatContextMenu {
     window.clearTimeout(this.hoverTimer);
     this.generation += 1;
     this.menu.hidden = true;
-    this.trigger?.setAttribute("aria-expanded", "false");
-    this.trigger?.closest(".chat-row")?.classList.remove("actions-open");
+    this.syncTrigger();
     if (focus) this.returnFocus();
   }
 
