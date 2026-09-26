@@ -3253,6 +3253,48 @@ test("workspace terminal accepts interactive input and closes when leaving the c
   await expect.poll(() => page.evaluate(() => window.terminalCalls.some((item) => item.operation === "close"))).toBe(true);
 });
 
+for (const [width, height] of [[320, 568], [390, 390], [900, 550], [1704, 734]]) {
+  test(`terminal availability stays explained and reachable at ${width}x${height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopPolling();
+      panel._config.capabilities = ["workspace_terminal_v1"];
+      panel._activeThread.mode = "observe";
+      panel._renderChatControls();
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.locator("#toggle-bottom-button").click();
+    await panel.locator("#bottom-terminal-button").click();
+    const reason = panel.locator("#terminal-availability");
+    const open = panel.locator("#open-terminal-button");
+    await expect(reason).toContainText("Observe mode is read-only");
+    await expect(open).toBeDisabled();
+    await expect(open).toHaveAttribute("aria-describedby", "terminal-availability");
+    await reason.scrollIntoViewIfNeeded();
+    await expect(reason).toBeInViewport();
+    await open.scrollIntoViewIfNeeded();
+    await expect(open).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath("terminal-unavailable.png") });
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._activeThread.mode = "edit";
+      panel._renderChatControls();
+    });
+    await expect(reason).toBeHidden();
+    await expect(open).toBeEnabled();
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._config.capabilities = [];
+      panel._renderChatControls();
+    });
+    await expect(reason).toContainText("Update the App");
+    await expect(open).toBeDisabled();
+  });
+}
+
 
 for (const width of [1440, 390]) {
   test(`isolated MCP package review fits and creates only a paused server at ${width}px`, async ({ page }, testInfo) => {
@@ -3754,3 +3796,91 @@ test("conversation navigation switches to a compact control in a narrow desktop 
   await page.screenshot({ path: testInfo.outputPath("narrow-desktop-conversation.png") });
   expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
 });
+
+
+// Hover stability is checked on real controls; no mutation actions are invoked.
+for (const reducedMotion of ["no-preference", "reduce"]) {
+  test(`chat menu hover keeps controls and geometry stable with motion ${reducedMotion}`, async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ reducedMotion });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator("#new-project-button")).toBeVisible();
+    await selectHarnessThread(page);
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [...(element._config.capabilities || []), "chat_operations_v1"] };
+      const original = element._callWS.bind(element);
+      element._callWS = (operation, payload) => operation === "list_chat_sections"
+        ? Promise.resolve({ sections: [{ section_id: "stable_section", name: "Stable section", revision: 1 }, { section_id: "another_section", name: "Another section", revision: 1 }] }) : original(operation, payload);
+      element._chatContextMenu.sectionsLoaded = false;
+      element._threads = element._threads.map((thread) => ({ ...thread, pinned: false, unread: false, navigation_revision: 1 }));
+      element._render();
+    });
+    await panel.locator('[data-chat-thread-id="thr_direct"]').click({ button: "right", position: { x: 50, y: 20 } });
+    const menu = panel.locator("#chat-context-menu"), root = menu.locator(".chat-menu-root");
+    await expect(menu).toBeVisible();
+    await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.sectionsLoaded)).toBe(true);
+    await panel.evaluate((element) => {
+      const owner = element._chatContextMenu;
+      window.__menuStability = { root: owner.rootPage, buttons: [...owner.rootPage.querySelectorAll("button")], bounds: owner.menu.getBoundingClientRect().toJSON(), expansions: 0 };
+      owner.menu.addEventListener("animationstart", (event) => { if (event.animationName === "chat-menu-expand") window.__menuStability.expansions += 1; });
+    });
+    const unchangedRoot = async () => {
+      const result = await panel.evaluate((element) => {
+        const owner = element._chatContextMenu, saved = window.__menuStability;
+        const current = owner.menu.getBoundingClientRect();
+        return { same: owner.rootPage === saved.root && [...owner.rootPage.querySelectorAll("button")].every((button, i) => button === saved.buttons[i]), geometry: ["x", "y", "width", "height"].every((key) => Math.abs(current[key] - saved.bounds[key]) < 1) };
+      });
+      expect(result).toEqual({ same: true, geometry: true });
+    };
+    const unrelatedUpdates = async () => panel.evaluate((element) => {
+      element._threads = element._threads.map((thread) => ({ ...thread, updated_at: String(Date.now()), navigation_revision: thread.navigation_revision + 1, context_usage: { used: Math.random() } }));
+      element._renderChatControls();
+      element._chatContextMenu.sync();
+    });
+    for (const name of ["Project", "Section", "Copy", "Fork"]) {
+      const trigger = root.locator('[data-chat-action="submenu"]').filter({ hasText: name });
+      await trigger.hover();
+      await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.page)).toBe(name.toLowerCase());
+      const submenu = menu.locator(".chat-menu-submenu");
+      await expect(submenu).toBeVisible();
+      await expect.poll(() => submenu.evaluate((node) => node.getAnimations().some((animation) => animation.playState === "running"))).toBe(false);
+      await panel.evaluate((element) => { const saved = window.__menuStability; saved.submenu = element._chatContextMenu.submenu; saved.items = [...saved.submenu.querySelectorAll("button")]; saved.animationCount = saved.expansions; });
+      for (const part of [trigger, trigger.locator(".chat-menu-label"), trigger.locator("svg").first(), trigger]) {
+        await part.hover(); await unrelatedUpdates(); await unchangedRoot();
+      }
+      for (const item of await submenu.locator("button:not([hidden])").all()) {
+        await item.hover(); await unrelatedUpdates(); await unchangedRoot();
+        expect(await panel.evaluate((element) => {
+          const saved = window.__menuStability, owner = element._chatContextMenu;
+          return owner.submenu === saved.submenu && [...owner.submenu.querySelectorAll("button")].every((button, i) => button === saved.items[i]) && saved.expansions === saved.animationCount;
+        })).toBe(true);
+      }
+      if (name === "Section") {
+        const section = submenu.locator('[data-chat-action="section"]').filter({ hasText: "Another section" });
+        await section.focus();
+        await panel.evaluate((element) => {
+          const owner = element._chatContextMenu;
+          window.__menuReorderedFocus = element.shadowRoot.activeElement;
+          owner.sections.reverse(); owner.sync();
+        });
+        await expect(section).toBeFocused();
+        expect(await panel.evaluate((element) => element.shadowRoot.activeElement === window.__menuReorderedFocus)).toBe(true);
+        await unchangedRoot();
+      }
+      const focused = submenu.locator("button:not([hidden]):not(:disabled)").first();
+      await focused.focus(); await unrelatedUpdates(); await expect(focused).toBeFocused();
+      await focused.press("End"); await expect(submenu.locator("button:not([hidden]):not(:disabled)").last()).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath(`stable-menu-${name.toLowerCase()}-${reducedMotion}.png`) });
+      await page.keyboard.press("ArrowLeft"); await expect(submenu).toHaveCount(0); await expect(trigger).toBeFocused(); await unchangedRoot();
+    }
+    for (const item of await root.locator("button").all()) {
+      if (await item.getAttribute("data-chat-action") === "submenu") continue;
+      await item.hover(); await unrelatedUpdates(); await unchangedRoot();
+      expect(await item.evaluate((node) => node.matches(":hover"))).toBe(true);
+    }
+    await page.keyboard.press("Escape"); await expect(menu).toBeHidden();
+  });
+}

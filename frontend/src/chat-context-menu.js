@@ -89,16 +89,22 @@ export class ChatContextMenu {
       if (item && !item.disabled) void this.perform(item.dataset.chatAction, item._chatValue);
     });
     this.menu.addEventListener("mouseover", (event) => {
-      const item = event.target.closest('button[data-chat-action="submenu"]');
-      if (item && !item.disabled && !window.matchMedia?.("(pointer:coarse)").matches) {
-        window.clearTimeout(this.hoverTimer);
+      const item = event.target.closest(".chat-menu-root button");
+      if (!item || item.contains(event.relatedTarget) || this.compact) return;
+      window.clearTimeout(this.hoverTimer);
+      const generation = this.generation;
+      if (item.dataset.chatAction === "submenu" && !item.disabled) {
+        if (this.page === item._chatValue) return;
         this.hoverTimer = window.setTimeout(() => {
-          if (this.menu.hidden || !item.isConnected) return;
+          if (this.menu.hidden || !item.isConnected || item.disabled || generation !== this.generation || this.page === item._chatValue) return;
           this.page = item._chatValue; this.notice = ""; this.render({ preserveFocus: true });
         }, 220);
-      } else if (event.target.closest(".chat-menu-root button") && this.page) {
-        window.clearTimeout(this.hoverTimer);
-        this.hoverTimer = window.setTimeout(() => { this.page = null; this.render({ preserveFocus: true }); }, 220);
+      } else if (this.page) {
+        const page = this.page;
+        this.hoverTimer = window.setTimeout(() => {
+          if (this.menu.hidden || generation !== this.generation || this.page !== page) return;
+          this.page = null; this.render({ preserveFocus: true });
+        }, 220);
       }
     });
     this.menu.addEventListener("mouseout", (event) => {
@@ -121,7 +127,7 @@ export class ChatContextMenu {
     this.syncTrigger();
     if (!this.thread()) { this.close(); return; }
     if (!this.supported && ["project", "section", "fork", "manage-sections", "manage-section"].includes(this.page)) this.page = null;
-    const key = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    const key = this.visibleProjection();
     if (key !== this.projectionKey) this.render({ preserveFocus: true });
   }
 
@@ -249,51 +255,103 @@ export class ChatContextMenu {
     ];
   }
 
+  visibleProjection() {
+    // Navigation revisions and runtime snapshots are read afresh by actions, but
+    // must not replace hovered controls when their visible state is unchanged.
+    return JSON.stringify([this.threadId, this.thread()?.title, this.page, this.compact,
+      this.entries(null), this.page ? this.entries() : null, this.sectionsLoaded,
+      this.busy.has(this.threadId), this.uncertain.has(this.threadId),
+      Boolean(this.panel._runActivityForThread(this.thread()).busy), this.notice]);
+  }
+
+  reconcilePage(page, entries) {
+    const previous = new Map([...page.children].filter((node) => node._chatKey).map((node) => [node._chatKey, node]));
+    const next = [];
+    const occurrences = new Map();
+    for (const entry of entries) {
+      const identity = entry ? JSON.stringify([entry.action, entry.value]) : "divider";
+      const occurrence = occurrences.get(identity) || 0;
+      occurrences.set(identity, occurrence + 1);
+      const key = `${identity}:${occurrence}`;
+      let node = previous.get(key);
+      if (!node) {
+        node = document.createElement(entry ? "button" : "hr");
+        node._chatKey = key;
+        if (!entry) { node.className = "chat-menu-divider"; node.setAttribute("role", "separator"); }
+        else {
+          node.type = "button"; node.setAttribute("role", "menuitem"); node.tabIndex = -1;
+          const icon = document.createElement("span"); icon.className = "chat-menu-icon";
+          const label = document.createElement("span"); label.className = "chat-menu-label";
+          node.append(icon, label); node._chatIcon = icon; node._chatLabel = label;
+        }
+      }
+      if (entry) {
+        node.dataset.chatAction = entry.action; node._chatValue = entry.value;
+        node.disabled = this.busy.has(this.threadId) || (this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action));
+        if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) node.disabled = true;
+        if (entry.action === "section" && !this.sectionsLoaded) node.disabled = true;
+        node.hidden = entry.action === "back" && !this.compact;
+        if (entry.action === "submenu") {
+          node.setAttribute("aria-haspopup", "menu");
+          node.setAttribute("aria-expanded", String(this.page === entry.value || (entry.value === "section" && this.page?.startsWith("manage-section"))));
+          if (!node._chatArrow) {
+            node._chatArrow = document.createElement("span");
+            this.panel._setTrustedButtonContent(node._chatArrow, this.icons.chevronRight);
+            node.append(node._chatArrow);
+          }
+        }
+        // Only the fixed trusted catalogue supplies SVG content.
+        const icon = this.icons[entry.icon] || this.icons.chat;
+        if (node._chatIconSource !== icon) { this.panel._setTrustedButtonContent(node._chatIcon, icon); node._chatIconSource = icon; }
+        if (node._chatLabel.textContent !== entry.label) node._chatLabel.textContent = entry.label;
+        if (entry.shortcut) {
+          if (!node._chatHint) { node._chatHint = document.createElement("span"); node._chatHint.className = "chat-menu-shortcut"; node.append(node._chatHint); }
+          if (node._chatHint.textContent !== entry.shortcut) node._chatHint.textContent = entry.shortcut;
+          node.setAttribute("aria-keyshortcuts", entry.shortcut.replace("Ctrl", "Control"));
+        } else { node._chatHint?.remove(); node._chatHint = null; node.removeAttribute("aria-keyshortcuts"); }
+      }
+      next.push(node);
+    }
+    // Keep retained nodes attached; replacing even the same nodes loses hover
+    // and can restart the submenu expansion or keyboard focus.
+    let cursor = page.firstChild;
+    for (const node of next) {
+      if (node === cursor) cursor = cursor.nextSibling;
+      else page.insertBefore(node, cursor);
+    }
+    const retained = new Set(next);
+    for (const node of [...page.children]) if (node._chatKey && !retained.has(node)) node.remove();
+  }
+
   render({ preserveFocus = false } = {}) {
-    this.projectionKey = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    this.projectionKey = this.visibleProjection();
     const old = this.menu.contains(this.panel.shadowRoot.activeElement) ? this.panel.shadowRoot.activeElement : null;
     const selected = old ? [old.dataset.chatAction, old._chatValue] : null;
-    this.menu.replaceChildren();
     this.menu.setAttribute("aria-label", `Actions for ${this.thread()?.title || "chat"}`);
     this.menu.setAttribute("aria-busy", String(this.busy.has(this.threadId)));
     this.menu.classList.toggle("has-submenu", Boolean(this.page));
-    const buildPage = (entries, nested = false) => {
-      const page = document.createElement("div");
-      page.className = nested ? "chat-menu-page chat-menu-submenu" : "chat-menu-page chat-menu-root";
-      if (nested) { page.setAttribute("role", "menu"); page.setAttribute("aria-label", `${this.page} options`); }
-      for (const entry of entries) {
-      if (!entry) { const line = document.createElement("hr"); line.className = "chat-menu-divider"; line.setAttribute("role", "separator"); page.append(line); continue; }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.chatAction = entry.action;
-      button._chatValue = entry.value;
-      button.setAttribute("role", "menuitem");
-      button.tabIndex = -1;
-      button.disabled = this.busy.has(this.threadId) || (this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action));
-      if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) button.disabled = true;
-      if (entry.action === "section" && !this.sectionsLoaded) button.disabled = true;
-      if (entry.action === "back") button.hidden = !this.compact;
-      if (entry.action === "submenu") { button.setAttribute("aria-haspopup", "menu"); button.setAttribute("aria-expanded", String(this.page === entry.value || (entry.value === "section" && this.page?.startsWith("manage-section")))); }
-      const icon = document.createElement("span"); icon.className = "chat-menu-icon";
-      // The icon source is the panel's fixed trusted catalogue, never server content.
-      this.panel._setTrustedButtonContent(icon, this.icons[entry.icon] || this.icons.chat);
-      const label = document.createElement("span"); label.className = "chat-menu-label"; label.textContent = entry.label;
-      button.append(icon, label);
-      if (entry.shortcut) { const hint = document.createElement("span"); hint.className = "chat-menu-shortcut"; hint.textContent = entry.shortcut; button.append(hint); }
-      if (entry.shortcut) button.setAttribute("aria-keyshortcuts", entry.shortcut.replace("Ctrl", "Control"));
-      if (entry.action === "submenu") { const arrow = document.createElement("span"); this.panel._setTrustedButtonContent(arrow, this.icons.chevronRight); button.append(arrow); }
-      page.append(button);
-      }
-      return page;
-    };
-    this.menu.append(buildPage(this.entries(null)));
-    const submenu = this.page ? buildPage(this.entries(), true) : null;
-    if (submenu) this.menu.append(submenu);
-    const status = document.createElement("p"); status.className = "chat-menu-status"; status.setAttribute("role", "status"); status.textContent = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
-    (submenu || this.menu).append(status);
+    if (!this.rootPage) {
+      this.rootPage = document.createElement("div"); this.rootPage.className = "chat-menu-page chat-menu-root";
+      this.menu.append(this.rootPage);
+    }
+    this.reconcilePage(this.rootPage, this.entries(null));
+    if (this.submenu?._chatPage !== this.page) { this.submenu?.remove(); this.submenu = null; }
+    if (this.page && !this.submenu) {
+      this.submenu = document.createElement("div"); this.submenu.className = "chat-menu-page chat-menu-submenu";
+      this.submenu._chatPage = this.page; this.submenu.setAttribute("role", "menu"); this.submenu.setAttribute("aria-label", `${this.page} options`);
+      this.menu.append(this.submenu);
+    }
+    if (this.submenu) this.reconcilePage(this.submenu, this.entries());
+    if (!this.status) { this.status = document.createElement("p"); this.status.className = "chat-menu-status"; this.status.setAttribute("role", "status"); }
+    const notice = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    if (this.status.textContent !== notice) this.status.textContent = notice;
+    const statusParent = this.submenu || this.menu;
+    if (this.status.parentNode !== statusParent) statusParent.append(this.status);
     this.position();
-    if (preserveFocus && selected) {
-      ([...this.menu.querySelectorAll("button")].find((button) => !button.hidden && !button.disabled && button.dataset.chatAction === selected[0] && button._chatValue === selected[1]) || this.menu.querySelector("button:not(:disabled):not([hidden])"))?.focus();
+    const available = (button) => !button.hidden && !button.disabled && !(this.compact && this.page && button.closest(".chat-menu-root"));
+    if (preserveFocus && selected && !(old.isConnected && available(old) && this.panel.shadowRoot.activeElement === old)) {
+      const buttons = [...this.menu.querySelectorAll("button")].filter(available);
+      (buttons.find((button) => button.dataset.chatAction === selected[0] && button._chatValue === selected[1]) || buttons[0])?.focus({ preventScroll: true });
     }
   }
 
@@ -326,6 +384,7 @@ export class ChatContextMenu {
       return true;
     }
     if (!this.menu.hidden) {
+      window.clearTimeout(this.hoverTimer);
       const current = this.panel.shadowRoot.activeElement;
       const container = current?.closest(".chat-menu-submenu") || this.menu.querySelector(".chat-menu-root");
       const items = [...container.querySelectorAll("button:not(:disabled):not([hidden])")];
@@ -357,6 +416,7 @@ export class ChatContextMenu {
     if (!thread) { this.close(); return; }
     if (this.busy.has(thread.thread_id)) return;
     if (action === "submenu" || action === "back" || action === "manage-sections" || action === "manage-section") {
+      window.clearTimeout(this.hoverTimer);
       const previous = this.page;
       if (["manage-sections", "manage-section"].includes(action) && !this.supported) return;
       if (action === "submenu" && ["project", "section", "fork"].includes(value) && !this.supported) return;

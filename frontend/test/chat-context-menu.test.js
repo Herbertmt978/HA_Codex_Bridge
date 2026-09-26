@@ -447,6 +447,96 @@ describe("shared chat context actions", () => {
     const { panel, menu, show } = setup(); await show(); const pin = menu.menu.querySelector('[data-chat-action="pin"]'); pin.focus();
     panel._threads[1] = { ...panel._threads[1], pinned: true, navigation_revision: 2 }; panel._renderChatControls();
     expect(menu.threadId).toBe("two"); expect(panel._selectedThreadId).toBe("one"); expect(panel.shadowRoot.activeElement.dataset.chatAction).toBe("pin"); expect(panel.shadowRoot.activeElement.textContent).toContain("Unpin");
+    expect(panel.shadowRoot.activeElement).toBe(pin);
+  });
+
+  it("does not redraw hovered controls for unrelated runtime and navigation snapshots", async () => {
+    const { panel, menu, show } = setup(); await show(); await menu.perform("submenu", "copy");
+    const root = [...menu.rootPage.querySelectorAll("button")], submenu = menu.submenu;
+    const copy = submenu.querySelector('[data-chat-action="copy-text"]'); copy.focus();
+    const icon = copy.querySelector("svg"), render = vi.spyOn(menu, "render");
+    panel._threads[1] = { ...panel._threads[1], updated_at: "later", navigation_revision: 99, context_usage: { used: 500 }, attachments: [{ filename: "file.txt" }] };
+    panel._threads[0].updated_at = "unrelated";
+    panel._renderChatControls();
+    expect(render).not.toHaveBeenCalled(); expect(menu.submenu).toBe(submenu);
+    expect([...menu.rootPage.querySelectorAll("button")]).toEqual(root);
+    expect(submenu.querySelector('[data-chat-action="copy-text"]')).toBe(copy);
+    expect(copy.querySelector("svg")).toBe(icon); expect(panel.shadowRoot.activeElement).toBe(copy);
+  });
+
+  it("retains every root control when switching submenus and every same-page control on render", async () => {
+    const { menu, show } = setup(); await show();
+    const root = [...menu.rootPage.children];
+    for (const page of ["project", "section", "copy", "fork", "manage-sections", "manage-section"]) {
+      menu.page = page; menu.managedSection = "work"; menu.render();
+      expect([...menu.rootPage.children]).toEqual(root);
+      const submenu = menu.submenu, controls = [...submenu.children];
+      menu.render({ preserveFocus: true });
+      expect(menu.submenu).toBe(submenu); expect([...submenu.children]).toEqual(controls);
+    }
+  });
+
+  it("opens each desktop submenu once and ignores repeated hover and label/icon crossings", async () => {
+    const { menu, show } = setup(); await show(); vi.useFakeTimers();
+    const render = vi.spyOn(menu, "render");
+    for (const page of ["project", "section", "copy", "fork"]) {
+      const button = [...menu.rootPage.querySelectorAll('[data-chat-action="submenu"]')].find((item) => item._chatValue === page);
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(220);
+      expect(menu.page).toBe(page); const count = render.mock.calls.length, submenu = menu.submenu;
+      for (const child of [button, button.querySelector("svg"), button.querySelector(".chat-menu-label")]) {
+        child.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: button }));
+        await vi.advanceTimersByTimeAsync(300);
+      }
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(300);
+      expect(render).toHaveBeenCalledTimes(count); expect(menu.submenu).toBe(submenu); expect(button.isConnected).toBe(true);
+    }
+  });
+
+  it("cancels a pending close while returning to the active submenu trigger", async () => {
+    const { menu, show } = setup(); await show(); await menu.perform("submenu", "copy"); vi.useFakeTimers();
+    const submenu = menu.submenu, rename = menu.rootPage.querySelector('[data-chat-action="rename"]');
+    rename.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(100);
+    const copy = [...menu.rootPage.querySelectorAll('[data-chat-action="submenu"]')].find((item) => item._chatValue === "copy");
+    copy.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(300);
+    expect(menu.page).toBe("copy"); expect(menu.submenu).toBe(submenu);
+    rename.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(220);
+    expect(menu.page).toBeNull(); expect(rename.isConnected).toBe(true);
+  });
+
+  it("cancels stale hover transitions when keyboard or touch navigation takes over", async () => {
+    const { menu, show } = setup(); await show(); vi.useFakeTimers();
+    const project = [...menu.rootPage.querySelectorAll('[data-chat-action="submenu"]')].find((item) => item._chatValue === "project");
+    project.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    key(menu.rootPage.querySelector('[data-chat-action="rename"]'), "ArrowDown");
+    await vi.advanceTimersByTimeAsync(300); expect(menu.page).toBeNull();
+    project.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    await menu.perform("submenu", "copy"); await vi.advanceTimersByTimeAsync(300); expect(menu.page).toBe("copy");
+  });
+
+  it("updates visible section names and runtime disabling in place", async () => {
+    const { panel, menu, show } = setup(); await show(); await menu.perform("submenu", "section");
+    const section = menu.submenu.querySelector('[data-chat-action="section"]:not(:first-child)'), controls = [...menu.rootPage.children];
+    const work = [...menu.submenu.querySelectorAll('[data-chat-action="section"]')].find((button) => button._chatValue === "work");
+    menu.sections[0] = { ...menu.sections[0], name: "Updated section", revision: 2 }; menu.sync();
+    expect(menu.submenu.contains(section)).toBe(true); expect(work.textContent).toContain("Updated section"); expect([...menu.rootPage.children]).toEqual(controls);
+    await menu.perform("submenu", "fork"); const fork = menu.submenu.querySelector('[data-chat-action="fork"]');
+    vi.spyOn(panel, "_runActivityForThread").mockReturnValue({ busy: true }); menu.sync(); expect(fork.disabled).toBe(true);
+    panel._runActivityForThread.mockReturnValue({ busy: false }); menu.sync(); expect(fork.disabled).toBe(false);
+    expect(menu.submenu.querySelector('[data-chat-action="fork"]')).toBe(fork);
+  });
+
+  it("does not open submenus from hover in narrow or coarse layouts", async () => {
+    const { menu, show } = setup(); await show(); vi.useFakeTimers();
+    const originalWidth = window.innerWidth, originalMedia = window.matchMedia;
+    try {
+      for (const [width, coarse] of [[390, false], [900, true]]) {
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: width }); window.matchMedia = () => ({ matches: coarse });
+        const copy = [...menu.rootPage.querySelectorAll('[data-chat-action="submenu"]')].find((item) => item._chatValue === "copy");
+        copy.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); await vi.advanceTimersByTimeAsync(300);
+        expect(menu.page).toBeNull(); copy.click(); expect(menu.page).toBe("copy");
+        menu.submenu.querySelector('[data-chat-action="back"]').click(); expect(menu.page).toBeNull();
+      }
+    } finally { Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth }); window.matchMedia = originalMedia; }
   });
 
   it("cancels a rename without writing, and refuses a section save after capability loss", async () => {

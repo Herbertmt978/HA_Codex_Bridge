@@ -34910,18 +34910,22 @@ var ChatContextMenu = class {
       if (item && !item.disabled) void this.perform(item.dataset.chatAction, item._chatValue);
     });
     this.menu.addEventListener("mouseover", (event) => {
-      const item = event.target.closest('button[data-chat-action="submenu"]');
-      if (item && !item.disabled && !window.matchMedia?.("(pointer:coarse)").matches) {
-        window.clearTimeout(this.hoverTimer);
+      const item = event.target.closest(".chat-menu-root button");
+      if (!item || item.contains(event.relatedTarget) || this.compact) return;
+      window.clearTimeout(this.hoverTimer);
+      const generation = this.generation;
+      if (item.dataset.chatAction === "submenu" && !item.disabled) {
+        if (this.page === item._chatValue) return;
         this.hoverTimer = window.setTimeout(() => {
-          if (this.menu.hidden || !item.isConnected) return;
+          if (this.menu.hidden || !item.isConnected || item.disabled || generation !== this.generation || this.page === item._chatValue) return;
           this.page = item._chatValue;
           this.notice = "";
           this.render({ preserveFocus: true });
         }, 220);
-      } else if (event.target.closest(".chat-menu-root button") && this.page) {
-        window.clearTimeout(this.hoverTimer);
+      } else if (this.page) {
+        const page = this.page;
         this.hoverTimer = window.setTimeout(() => {
+          if (this.menu.hidden || generation !== this.generation || this.page !== page) return;
           this.page = null;
           this.render({ preserveFocus: true });
         }, 220);
@@ -34954,7 +34958,7 @@ var ChatContextMenu = class {
       return;
     }
     if (!this.supported && ["project", "section", "fork", "manage-sections", "manage-section"].includes(this.page)) this.page = null;
-    const key = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    const key = this.visibleProjection();
     if (key !== this.projectionKey) this.render({ preserveFocus: true });
   }
   syncTrigger() {
@@ -35101,77 +35105,136 @@ var ChatContextMenu = class {
       ...(this.uncertain.has(this.threadId) || this.notice) && !this.header ? [null, control("Refresh", "refresh", "refresh")] : []
     ];
   }
+  visibleProjection() {
+    return JSON.stringify([
+      this.threadId,
+      this.thread()?.title,
+      this.page,
+      this.compact,
+      this.entries(null),
+      this.page ? this.entries() : null,
+      this.sectionsLoaded,
+      this.busy.has(this.threadId),
+      this.uncertain.has(this.threadId),
+      Boolean(this.panel._runActivityForThread(this.thread()).busy),
+      this.notice
+    ]);
+  }
+  reconcilePage(page, entries) {
+    const previous = new Map([...page.children].filter((node2) => node2._chatKey).map((node2) => [node2._chatKey, node2]));
+    const next = [];
+    const occurrences = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      const identity = entry ? JSON.stringify([entry.action, entry.value]) : "divider";
+      const occurrence = occurrences.get(identity) || 0;
+      occurrences.set(identity, occurrence + 1);
+      const key = `${identity}:${occurrence}`;
+      let node2 = previous.get(key);
+      if (!node2) {
+        node2 = document.createElement(entry ? "button" : "hr");
+        node2._chatKey = key;
+        if (!entry) {
+          node2.className = "chat-menu-divider";
+          node2.setAttribute("role", "separator");
+        } else {
+          node2.type = "button";
+          node2.setAttribute("role", "menuitem");
+          node2.tabIndex = -1;
+          const icon = document.createElement("span");
+          icon.className = "chat-menu-icon";
+          const label = document.createElement("span");
+          label.className = "chat-menu-label";
+          node2.append(icon, label);
+          node2._chatIcon = icon;
+          node2._chatLabel = label;
+        }
+      }
+      if (entry) {
+        node2.dataset.chatAction = entry.action;
+        node2._chatValue = entry.value;
+        node2.disabled = this.busy.has(this.threadId) || this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action);
+        if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) node2.disabled = true;
+        if (entry.action === "section" && !this.sectionsLoaded) node2.disabled = true;
+        node2.hidden = entry.action === "back" && !this.compact;
+        if (entry.action === "submenu") {
+          node2.setAttribute("aria-haspopup", "menu");
+          node2.setAttribute("aria-expanded", String(this.page === entry.value || entry.value === "section" && this.page?.startsWith("manage-section")));
+          if (!node2._chatArrow) {
+            node2._chatArrow = document.createElement("span");
+            this.panel._setTrustedButtonContent(node2._chatArrow, this.icons.chevronRight);
+            node2.append(node2._chatArrow);
+          }
+        }
+        const icon = this.icons[entry.icon] || this.icons.chat;
+        if (node2._chatIconSource !== icon) {
+          this.panel._setTrustedButtonContent(node2._chatIcon, icon);
+          node2._chatIconSource = icon;
+        }
+        if (node2._chatLabel.textContent !== entry.label) node2._chatLabel.textContent = entry.label;
+        if (entry.shortcut) {
+          if (!node2._chatHint) {
+            node2._chatHint = document.createElement("span");
+            node2._chatHint.className = "chat-menu-shortcut";
+            node2.append(node2._chatHint);
+          }
+          if (node2._chatHint.textContent !== entry.shortcut) node2._chatHint.textContent = entry.shortcut;
+          node2.setAttribute("aria-keyshortcuts", entry.shortcut.replace("Ctrl", "Control"));
+        } else {
+          node2._chatHint?.remove();
+          node2._chatHint = null;
+          node2.removeAttribute("aria-keyshortcuts");
+        }
+      }
+      next.push(node2);
+    }
+    let cursor = page.firstChild;
+    for (const node2 of next) {
+      if (node2 === cursor) cursor = cursor.nextSibling;
+      else page.insertBefore(node2, cursor);
+    }
+    const retained = new Set(next);
+    for (const node2 of [...page.children]) if (node2._chatKey && !retained.has(node2)) node2.remove();
+  }
   render({ preserveFocus = false } = {}) {
-    this.projectionKey = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    this.projectionKey = this.visibleProjection();
     const old = this.menu.contains(this.panel.shadowRoot.activeElement) ? this.panel.shadowRoot.activeElement : null;
     const selected = old ? [old.dataset.chatAction, old._chatValue] : null;
-    this.menu.replaceChildren();
     this.menu.setAttribute("aria-label", `Actions for ${this.thread()?.title || "chat"}`);
     this.menu.setAttribute("aria-busy", String(this.busy.has(this.threadId)));
     this.menu.classList.toggle("has-submenu", Boolean(this.page));
-    const buildPage = (entries, nested = false) => {
-      const page = document.createElement("div");
-      page.className = nested ? "chat-menu-page chat-menu-submenu" : "chat-menu-page chat-menu-root";
-      if (nested) {
-        page.setAttribute("role", "menu");
-        page.setAttribute("aria-label", `${this.page} options`);
-      }
-      for (const entry of entries) {
-        if (!entry) {
-          const line = document.createElement("hr");
-          line.className = "chat-menu-divider";
-          line.setAttribute("role", "separator");
-          page.append(line);
-          continue;
-        }
-        const button3 = document.createElement("button");
-        button3.type = "button";
-        button3.dataset.chatAction = entry.action;
-        button3._chatValue = entry.value;
-        button3.setAttribute("role", "menuitem");
-        button3.tabIndex = -1;
-        button3.disabled = this.busy.has(this.threadId) || this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action);
-        if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) button3.disabled = true;
-        if (entry.action === "section" && !this.sectionsLoaded) button3.disabled = true;
-        if (entry.action === "back") button3.hidden = !this.compact;
-        if (entry.action === "submenu") {
-          button3.setAttribute("aria-haspopup", "menu");
-          button3.setAttribute("aria-expanded", String(this.page === entry.value || entry.value === "section" && this.page?.startsWith("manage-section")));
-        }
-        const icon = document.createElement("span");
-        icon.className = "chat-menu-icon";
-        this.panel._setTrustedButtonContent(icon, this.icons[entry.icon] || this.icons.chat);
-        const label = document.createElement("span");
-        label.className = "chat-menu-label";
-        label.textContent = entry.label;
-        button3.append(icon, label);
-        if (entry.shortcut) {
-          const hint = document.createElement("span");
-          hint.className = "chat-menu-shortcut";
-          hint.textContent = entry.shortcut;
-          button3.append(hint);
-        }
-        if (entry.shortcut) button3.setAttribute("aria-keyshortcuts", entry.shortcut.replace("Ctrl", "Control"));
-        if (entry.action === "submenu") {
-          const arrow = document.createElement("span");
-          this.panel._setTrustedButtonContent(arrow, this.icons.chevronRight);
-          button3.append(arrow);
-        }
-        page.append(button3);
-      }
-      return page;
-    };
-    this.menu.append(buildPage(this.entries(null)));
-    const submenu = this.page ? buildPage(this.entries(), true) : null;
-    if (submenu) this.menu.append(submenu);
-    const status = document.createElement("p");
-    status.className = "chat-menu-status";
-    status.setAttribute("role", "status");
-    status.textContent = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
-    (submenu || this.menu).append(status);
+    if (!this.rootPage) {
+      this.rootPage = document.createElement("div");
+      this.rootPage.className = "chat-menu-page chat-menu-root";
+      this.menu.append(this.rootPage);
+    }
+    this.reconcilePage(this.rootPage, this.entries(null));
+    if (this.submenu?._chatPage !== this.page) {
+      this.submenu?.remove();
+      this.submenu = null;
+    }
+    if (this.page && !this.submenu) {
+      this.submenu = document.createElement("div");
+      this.submenu.className = "chat-menu-page chat-menu-submenu";
+      this.submenu._chatPage = this.page;
+      this.submenu.setAttribute("role", "menu");
+      this.submenu.setAttribute("aria-label", `${this.page} options`);
+      this.menu.append(this.submenu);
+    }
+    if (this.submenu) this.reconcilePage(this.submenu, this.entries());
+    if (!this.status) {
+      this.status = document.createElement("p");
+      this.status.className = "chat-menu-status";
+      this.status.setAttribute("role", "status");
+    }
+    const notice = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    if (this.status.textContent !== notice) this.status.textContent = notice;
+    const statusParent = this.submenu || this.menu;
+    if (this.status.parentNode !== statusParent) statusParent.append(this.status);
     this.position();
-    if (preserveFocus && selected) {
-      ([...this.menu.querySelectorAll("button")].find((button3) => !button3.hidden && !button3.disabled && button3.dataset.chatAction === selected[0] && button3._chatValue === selected[1]) || this.menu.querySelector("button:not(:disabled):not([hidden])"))?.focus();
+    const available = (button3) => !button3.hidden && !button3.disabled && !(this.compact && this.page && button3.closest(".chat-menu-root"));
+    if (preserveFocus && selected && !(old.isConnected && available(old) && this.panel.shadowRoot.activeElement === old)) {
+      const buttons = [...this.menu.querySelectorAll("button")].filter(available);
+      (buttons.find((button3) => button3.dataset.chatAction === selected[0] && button3._chatValue === selected[1]) || buttons[0])?.focus({ preventScroll: true });
     }
   }
   position() {
@@ -35209,6 +35272,7 @@ var ChatContextMenu = class {
       return true;
     }
     if (!this.menu.hidden) {
+      window.clearTimeout(this.hoverTimer);
       const current = this.panel.shadowRoot.activeElement;
       const container = current?.closest(".chat-menu-submenu") || this.menu.querySelector(".chat-menu-root");
       const items = [...container.querySelectorAll("button:not(:disabled):not([hidden])")];
@@ -35263,6 +35327,7 @@ var ChatContextMenu = class {
     }
     if (this.busy.has(thread.thread_id)) return;
     if (action === "submenu" || action === "back" || action === "manage-sections" || action === "manage-section") {
+      window.clearTimeout(this.hoverTimer);
       const previous = this.page;
       if (["manage-sections", "manage-section"].includes(action) && !this.supported) return;
       if (action === "submenu" && ["project", "section", "fork"].includes(value) && !this.supported) return;
@@ -35646,7 +35711,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.8";
+var PANEL_VERSION = "1.8.9";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -41463,6 +41528,7 @@ template.innerHTML = `
         <div id="bottom-terminal" hidden>
           <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
           <div class="terminal-tools"><button type="button" data-action="open-terminal" id="open-terminal-button">Open terminal</button><button type="button" data-action="close-terminal" id="close-terminal-button" disabled>Close terminal</button><span class="label-text" id="terminal-status" role="status">Terminal closed</span></div>
+          <p class="terminal-note" id="terminal-availability" role="status" hidden></p>
           <div id="terminal-host"></div>
           <p class="terminal-note">Ctrl+C interrupts. Ctrl+Shift+M returns focus to Close terminal. Closing this page or changing chats ends the session; hiding the panel keeps it running. Sessions end after 30 minutes.</p>
         </div>
@@ -45539,6 +45605,17 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderToolbar() {
     const container = this.shadowRoot.getElementById("compact-toolbar");
+    const limits = this._status?.limits;
+    const updateLimits = (button3) => {
+      if (!button3) return;
+      const summary = this._compactLimitsSummary(limits);
+      const description = `${summary}. ${this._limitsFootnote(limits)}`;
+      button3.textContent = summary;
+      button3.setAttribute("aria-label", `Open usage details. ${description}`);
+      button3.title = description;
+      this._setTooltipTarget(button3, description);
+    };
+    updateLimits(container.querySelector(".composer-limits-button"));
     const focused = this.shadowRoot.activeElement;
     if (focused instanceof HTMLElement && container.contains(focused) && focused.tagName === "SELECT") {
       return;
@@ -45548,15 +45625,15 @@ var CodexBridgePanel = class extends HTMLElement {
     const modelRecords = this._modelRecords();
     const effectiveModel = thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel();
     const thinkingLevels = this._thinkingLevelsForModel(effectiveModel, thread?.thinking_override || null);
-    const limits = this._status?.limits;
     const toolbarKey = JSON.stringify({
       threadId: thread?.thread_id || null,
       projectId: project?.project_id || null,
       modelOverride: thread?.model_override || null,
       thinkingOverride: thread?.thinking_override || null,
-      effectiveModel: thread?.effective_model || null,
+      effectiveModel,
       effectiveThinking: thread?.effective_thinking_level || null,
-      limits,
+      defaultModel: project?.default_model || null,
+      defaultThinking: project?.default_thinking_level || null,
       modelRecords,
       thinkingLevels
     });
@@ -45570,12 +45647,7 @@ var CodexBridgePanel = class extends HTMLElement {
     limitsUtility.className = "composer-utility composer-limits";
     limitsUtility.append(this._textElement("span", "composer-utility-label", "Limits"));
     const limitsButton = this._actionButton("composer-limits-button", "open-usage", "Open usage details");
-    const limitsSummary = this._compactLimitsSummary(limits);
-    const limitsDescription = `${limitsSummary}. ${this._limitsFootnote(limits)}`;
-    limitsButton.textContent = limitsSummary;
-    limitsButton.setAttribute("aria-label", `Open usage details. ${limitsDescription}`);
-    limitsButton.title = limitsDescription;
-    this._setTooltipTarget(limitsButton, limitsDescription);
+    updateLimits(limitsButton);
     limitsUtility.append(limitsButton);
     const modelUtility = this._toolbarUtility("Model", thread, () => {
       const select = this._select("compact-select stable-select", "thread-model-select", "Chat model override");
@@ -47537,9 +47609,15 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderTerminalAvailability() {
     const button3 = this.shadowRoot.getElementById("open-terminal-button");
+    const explanation = this.shadowRoot.getElementById("terminal-availability");
     const supported = this._config?.capabilities?.includes("workspace_terminal_v1");
-    button3.disabled = !supported || !this._activeThread || this._activeThread.mode === "observe" || Boolean(this._activeThread.archived_at) || this._runActivityForThread().busy || this._terminalActive;
-    button3.title = !supported ? "Update the App to use the workspace terminal" : this._activeThread?.mode === "observe" ? "Choose Edit workspace or Full auto to use the terminal" : "Open an isolated workspace terminal";
+    const reason = !supported ? "Update the App to use the workspace terminal." : !this._activeThread ? "Select an editable chat to use the workspace terminal." : this._activeThread.archived_at ? "Restore this archived chat before opening its terminal." : this._activeThread.mode === "observe" ? "Observe mode is read-only. Choose Edit workspace or Full auto in Chat settings to use the terminal." : this._runActivityForThread().busy ? "Wait for the current Codex turn to finish before opening the terminal." : "";
+    button3.disabled = Boolean(reason) || Boolean(this._terminalActive);
+    explanation.textContent = reason;
+    explanation.hidden = !reason;
+    if (reason) button3.setAttribute("aria-describedby", "terminal-availability");
+    else button3.removeAttribute("aria-describedby");
+    button3.removeAttribute("title");
   }
   _renderChatControls() {
     this._renderTerminalAvailability();

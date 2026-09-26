@@ -40,7 +40,7 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.8.8";
+const PANEL_VERSION = "1.8.9";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -5891,6 +5891,7 @@ template.innerHTML = `
         <div id="bottom-terminal" hidden>
           <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
           <div class="terminal-tools"><button type="button" data-action="open-terminal" id="open-terminal-button">Open terminal</button><button type="button" data-action="close-terminal" id="close-terminal-button" disabled>Close terminal</button><span class="label-text" id="terminal-status" role="status">Terminal closed</span></div>
+          <p class="terminal-note" id="terminal-availability" role="status" hidden></p>
           <div id="terminal-host"></div>
           <p class="terminal-note">Ctrl+C interrupts. Ctrl+Shift+M returns focus to Close terminal. Closing this page or changing chats ends the session; hiding the panel keeps it running. Sessions end after 30 minutes.</p>
         </div>
@@ -10150,6 +10151,17 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderToolbar() {
     const container = this.shadowRoot.getElementById("compact-toolbar");
+    const limits = this._status?.limits;
+    const updateLimits = (button) => {
+      if (!button) return;
+      const summary = this._compactLimitsSummary(limits);
+      const description = `${summary}. ${this._limitsFootnote(limits)}`;
+      button.textContent = summary;
+      button.setAttribute("aria-label", `Open usage details. ${description}`);
+      button.title = description;
+      this._setTooltipTarget(button, description);
+    };
+    updateLimits(container.querySelector(".composer-limits-button"));
     const focused = this.shadowRoot.activeElement;
     if (focused instanceof HTMLElement && container.contains(focused) && focused.tagName === "SELECT") {
       return;
@@ -10159,15 +10171,15 @@ class CodexBridgePanel extends HTMLElement {
     const modelRecords = this._modelRecords();
     const effectiveModel = thread?.model_override || thread?.effective_model || project?.default_model || this._defaultModel();
     const thinkingLevels = this._thinkingLevelsForModel(effectiveModel, thread?.thinking_override || null);
-    const limits = this._status?.limits;
     const toolbarKey = JSON.stringify({
       threadId: thread?.thread_id || null,
       projectId: project?.project_id || null,
       modelOverride: thread?.model_override || null,
       thinkingOverride: thread?.thinking_override || null,
-      effectiveModel: thread?.effective_model || null,
+      effectiveModel,
       effectiveThinking: thread?.effective_thinking_level || null,
-      limits,
+      defaultModel: project?.default_model || null,
+      defaultThinking: project?.default_thinking_level || null,
       modelRecords,
       thinkingLevels,
     });
@@ -10183,12 +10195,7 @@ class CodexBridgePanel extends HTMLElement {
     limitsUtility.className = "composer-utility composer-limits";
     limitsUtility.append(this._textElement("span", "composer-utility-label", "Limits"));
     const limitsButton = this._actionButton("composer-limits-button", "open-usage", "Open usage details");
-    const limitsSummary = this._compactLimitsSummary(limits);
-    const limitsDescription = `${limitsSummary}. ${this._limitsFootnote(limits)}`;
-    limitsButton.textContent = limitsSummary;
-    limitsButton.setAttribute("aria-label", `Open usage details. ${limitsDescription}`);
-    limitsButton.title = limitsDescription;
-    this._setTooltipTarget(limitsButton, limitsDescription);
+    updateLimits(limitsButton);
     limitsUtility.append(limitsButton);
 
     const modelUtility = this._toolbarUtility("Model", thread, () => {
@@ -12392,9 +12399,20 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderTerminalAvailability() {
     const button = this.shadowRoot.getElementById("open-terminal-button");
+    const explanation = this.shadowRoot.getElementById("terminal-availability");
     const supported = this._config?.capabilities?.includes("workspace_terminal_v1");
-    button.disabled = !supported || !this._activeThread || this._activeThread.mode === "observe" || Boolean(this._activeThread.archived_at) || this._runActivityForThread().busy || this._terminalActive;
-    button.title = !supported ? "Update the App to use the workspace terminal" : this._activeThread?.mode === "observe" ? "Choose Edit workspace or Full auto to use the terminal" : "Open an isolated workspace terminal";
+    const reason = !supported ? "Update the App to use the workspace terminal."
+      : !this._activeThread ? "Select an editable chat to use the workspace terminal."
+      : this._activeThread.archived_at ? "Restore this archived chat before opening its terminal."
+      : this._activeThread.mode === "observe" ? "Observe mode is read-only. Choose Edit workspace or Full auto in Chat settings to use the terminal."
+      : this._runActivityForThread().busy ? "Wait for the current Codex turn to finish before opening the terminal."
+      : "";
+    button.disabled = Boolean(reason) || Boolean(this._terminalActive);
+    explanation.textContent = reason;
+    explanation.hidden = !reason;
+    if (reason) button.setAttribute("aria-describedby", "terminal-availability");
+    else button.removeAttribute("aria-describedby");
+    button.removeAttribute("title");
   }
 
   _renderChatControls() {
