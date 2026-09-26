@@ -286,6 +286,64 @@ describe("shared chat context actions", () => {
     await vi.waitFor(() => expect(menu.dialog.hidden).toBe(true)); expect(panel._callWS).toHaveBeenCalledWith("delete_chat_section", { section_id: "new", revision: 2 }); expect(panel._callWS).not.toHaveBeenCalledWith("delete_thread", expect.anything());
   });
 
+  it.each(["create-section", "rename-section", "remove-section"].flatMap((action) => ["chat_section_conflict", "section_revision_conflict", "chat_section_not_found"].map((code) => [action, code])))("keeps chat actions available after %s receives definitive %s", async (action, code) => {
+    const { panel, menu, show } = setup(); await show();
+    const operation = action === "create-section" ? "create_chat_section" : action === "rename-section" ? "update_chat_section" : "delete_chat_section";
+    const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation(async (method, payload) => {
+      if (method === operation) throw Object.assign(new Error("The section changed. Refresh and try again."), { code });
+      return original(method, payload);
+    });
+    await menu.perform(action, "work"); const input = menu.dialog.querySelector("input"); if (input) input.value = "Research";
+    menu.dialog.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(menu.dialog.querySelector('button[type="submit"]').hidden).toBe(true));
+    expect(menu.uncertain.has("two")).toBe(false); expect(menu.busy.has("two")).toBe(false);
+    menu.dialog.querySelector('button[type="button"]').click(); await show();
+    expect(menu.menu.querySelector('[data-chat-action="pin"]').disabled).toBe(false);
+    await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "two", navigation_revision: 1, pinned: true });
+    expect(panel._threads[1].pinned).toBe(true); expect(panel._selectedThreadId).toBe("one");
+  });
+
+  it.each(["create-section", "rename-section", "remove-section"])("blocks repeated writes after an unknown %s outcome without disabling another chat", async (action) => {
+    const { panel, menu, show } = setup(); await show();
+    const operation = action === "create-section" ? "create_chat_section" : action === "rename-section" ? "update_chat_section" : "delete_chat_section";
+    const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation(async (method, payload) => {
+      if (method === operation) throw Object.assign(new Error("The acknowledgement was lost."), { code: "runtime_thread_operation_unknown" });
+      return original(method, payload);
+    });
+    await menu.perform(action, "work"); const input = menu.dialog.querySelector("input"); if (input) input.value = "Research";
+    const form = menu.dialog.querySelector("form"); form.dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(menu.uncertain.has("two")).toBe(true));
+    form.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(panel._callWS.mock.calls.filter(([method]) => method === operation)).toHaveLength(1);
+    menu.dialog.querySelector('button[type="button"]').click(); await show();
+    expect(menu.menu.querySelector('[data-chat-action="pin"]').disabled).toBe(true);
+    await menu.perform("pin"); await menu.perform(action, "work");
+    expect(panel._callWS).not.toHaveBeenCalledWith("update_thread", expect.objectContaining({ thread_id: "two" }));
+    expect(panel._callWS.mock.calls.filter(([method]) => method === operation)).toHaveLength(1);
+    await show("one"); await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "one", navigation_revision: 1, pinned: true });
+  });
+
+  it("retains a newly created section without locking the chat when assignment is definitely rejected", async () => {
+    const { panel, menu, show } = setup(); await show();
+    const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation(async (method, payload) => {
+      if (method === "create_chat_section") return { section_id: "new", name: payload.name, revision: 1 };
+      if (method === "update_thread" && payload.section_id) throw { body: { detail: { code: "navigation_revision_conflict" } } };
+      return original(method, payload);
+    });
+    await menu.perform("create-section"); menu.dialog.querySelector("input").value = "Research";
+    menu.dialog.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(menu.dialog.querySelector('button[type="submit"]').hidden).toBe(true));
+    expect(menu.sections).toContainEqual({ section_id: "new", name: "Research", revision: 1 }); expect(menu.uncertain.has("two")).toBe(false);
+    menu.dialog.querySelector('button[type="button"]').click(); await show(); await menu.perform("pin");
+    expect(panel._threads[1].pinned).toBe(true);
+    expect(panel._callWS.mock.calls.filter(([method]) => method === "create_chat_section")).toHaveLength(1);
+  });
+
   it("shares only an authenticated link and opens with browser isolation", async () => {
     const { panel, menu, show } = setup(); const copy = vi.spyOn(panel, "_writeClipboardText").mockResolvedValue(); const open = vi.spyOn(window, "open").mockReturnValue(null);
     await show(); await menu.perform("copy-link"); expect(new URL(copy.mock.calls[0][0]).searchParams.get("thread")).toBe("two"); expect(panel.shadowRoot.getElementById("share-status").textContent).toContain("sign-in is required");

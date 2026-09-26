@@ -44,7 +44,7 @@ _FEATURE_ERROR_MESSAGES = {
     "capabilities_unavailable": "Codex capabilities are temporarily unavailable",
     "navigation_revision_conflict": "This chat changed; refresh and try again",
     "section_revision_conflict": "This section changed; refresh and try again",
-    "chat_section_conflict": "The section could not be changed. Refresh and review its name",
+    "chat_section_conflict": "The section could not be changed. Refresh and try again",
     "chat_section_not_found": "The selected section no longer exists",
     "chat_operations_unavailable": "This App version does not support chat organisation. Update it and try again",
     "runtime_thread_operation_conflict": "This chat or destination changed; refresh and try again",
