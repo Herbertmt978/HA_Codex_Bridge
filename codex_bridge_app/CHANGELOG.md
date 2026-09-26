@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 1.8.11
+
+- Groups Home Assistant Assist conversations in a separate **HA Assistant Chats**
+  sidebar folder, including their archived conversations, without moving files
+  or changing project membership, history or permissions.
+- Keeps normal project chats, search, collapse controls and chat actions available;
+  Assist chats appear once even when they retain pin or custom-section metadata.
+- Includes the preview, terminal feedback, menu and Assist composer repairs in 1.8.10.
+- Pairs App, Integration and panel `1.8.11` with unchanged Bridge `0.15.0` and
+  Codex `0.157.1`.
+
 ## 1.8.10
 
 - Keeps chat action button names, tooltips and expanded state in sync after a

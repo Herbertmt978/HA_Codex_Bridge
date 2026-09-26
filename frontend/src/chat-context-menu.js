@@ -634,7 +634,7 @@ export class ChatContextMenu {
     else if (!event.shiftKey && active === items.at(-1)) { event.preventDefault(); items[0]?.focus(); }
   }
 
-  isGrouped(thread) { return this.supported && !thread.archived_at && (thread.pinned || (thread.section_id && this.sections.some((section) => section.section_id === thread.section_id))); }
+  isGrouped(thread) { return this.supported && !this.panel._isAssistantThread(thread) && !thread.archived_at && (thread.pinned || (thread.section_id && this.sections.some((section) => section.section_id === thread.section_id))); }
   renderNavigation() {
     let container = this.panel.shadowRoot.getElementById("chat-navigation-sections");
     if (!container) { container = document.createElement("div"); container.id = "chat-navigation-sections"; this.panel.shadowRoot.getElementById("direct-section")?.before(container); }
@@ -643,7 +643,7 @@ export class ChatContextMenu {
     if (!this.sectionsAttempted && this.panel._hass) void this.loadSections().catch(() => {});
     const groups = [{ section_id: "pinned", name: "Pinned", pinned: true }, ...this.sections];
     for (const group of groups) {
-      const threads = this.panel._threads.filter((thread) => this.panel._threadIsPrimaryActive(thread) && this.panel._threadMatchesQuery(thread) && (group.pinned ? thread.pinned : !thread.pinned && thread.section_id === group.section_id));
+      const threads = this.panel._threads.filter((thread) => !this.panel._isAssistantThread(thread) && this.panel._threadIsPrimaryActive(thread) && this.panel._threadMatchesQuery(thread) && (group.pinned ? thread.pinned : !thread.pinned && thread.section_id === group.section_id));
       if (!threads.length && (group.pinned || this.panel._searchQuery.trim())) continue;
       const details = document.createElement("details"); details.className = "chat-navigation-group"; details.dataset.group = group.section_id; details.open = previous.get(group.section_id) ?? true;
       const summary = document.createElement("summary"); const icon = document.createElement("span"); this.panel._setTrustedButtonContent(icon, this.icons[group.pinned ? "pin" : "menu"]); summary.append(icon, document.createTextNode(group.name)); details.append(summary);

@@ -819,10 +819,10 @@ test("centres feature loading and blends nested project actions into the selecte
   await more.click();
   const menu = panel.locator("#project-secondary-actions-prj_vba");
   await expect(menu).toBeVisible();
-  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await expect(menu).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await panel.screenshot({ path: testInfo.outputPath("project-actions-light.png") });
   await panel.evaluate((element) => element.setAttribute("data-panel-theme", "dark"));
-  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await expect(menu).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await panel.screenshot({ path: testInfo.outputPath("project-actions-dark.png") });
 });
 
@@ -3970,6 +3970,124 @@ test("sidebar menu labels follow refreshed triggers and every close path", async
   await expect(header).toHaveAccessibleName("Chat actions");
   await expect(header).toHaveAttribute("aria-expanded", "false");
 });
+
+for (const width of [390, 1440]) {
+  test(`HA Assistant Chats stay separate with working search, archives and menus at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 390 ? 900 : 1200 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [...(element._config.capabilities || []), "chat_operations_v1"] };
+      for (const [id, patch] of [
+        ["thr_direct", { schedule_eligible: false, pinned: true, unread: true, title: "Assist direct conversation" }],
+        ["thr_vba_1", { schedule_eligible: false, section_id: "assistant_section", title: "Assist mixed conversation" }],
+        ["thr_ytdlp", { schedule_eligible: false, title: "Assist project conversation" }],
+      ]) window.__codexHarness.updateThread(id, patch);
+      const original = element._callWS.bind(element);
+      const sections = [{ section_id: "assistant_section", name: "Assist custom section", revision: 1 }];
+      const records = new Map(element._threads.map((item) => [item.thread_id, { ...item, navigation_revision: 1 }]));
+      for (const id of ["thr_direct", "thr_vba_1", "thr_ytdlp"]) records.set(id, { ...records.get(id), ...window.__codexHarness.updateThread(id, {}), navigation_revision: 1 });
+      window.__assistantMenuCalls = [];
+      element._callWS = async (operation, payload = {}) => {
+        window.__assistantMenuCalls.push({ operation, payload: structuredClone(payload) });
+        if (operation === "list_chat_sections") return { sections: structuredClone(sections) };
+        if (operation === "list_threads") return structuredClone([...records.values()]);
+        if (operation === "get_thread") return structuredClone(records.get(payload.thread_id));
+        if (["update_thread", "archive_thread", "restore_thread"].includes(operation)) {
+          const record = records.get(payload.thread_id);
+          if (operation === "update_thread") Object.assign(record, payload, { navigation_revision: record.navigation_revision + 1 });
+          else record.archived_at = operation === "archive_thread" ? "2026-09-26T12:00:00Z" : null;
+          return structuredClone(record);
+        }
+        return original(operation, payload);
+      };
+      element._threads = structuredClone([...records.values()]);
+      element._activeThread = records.get("thr_vba_1");
+      element._chatContextMenu.sections = sections;
+      element._chatContextMenu.sectionsAttempted = true;
+      element._chatContextMenu.sectionsLoaded = true;
+      element._renderedNavigationKey = null;
+      element._render();
+    });
+    if (width < 880) await panel.locator("#mobile-nav-toggle").click();
+    const group = panel.locator("#assistant-section");
+    await expect(group.locator(".section-name").first()).toHaveText("HA Assistant Chats");
+    await expect(group.locator(".section-count").first()).toHaveText("3");
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdl"]')).toHaveCount(0);
+    await expect(panel.locator('#project-section [data-chat-thread-id="thr_vba_2"]')).toHaveCount(1);
+    await panel.locator('#project-section [data-action="select-project"][data-project-id="prj_vba"]').click();
+    await expect.poll(() => panel.evaluate((element) => element._selectedThreadId)).toBe("thr_vba_2");
+    if (width < 880) await panel.locator("#mobile-nav-toggle").click();
+    await expect(panel.locator("#chat-navigation-sections .chat-row")).toHaveCount(0);
+    for (const id of ["thr_direct", "thr_vba_1", "thr_ytdlp"]) await expect(panel.locator(`[data-chat-thread-id="${id}"]`)).toHaveCount(1);
+    expect(await group.locator(".section-name").first().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`ha-assistant-group-${width}.png`) });
+
+    const toggle = group.locator('[data-section="assistant"]');
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(group.locator("#assistant-chat-list")).toBeHidden();
+    await panel.locator("#search-input").fill("Assist project conversation");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(group.locator(".chat-row")).toHaveCount(1);
+    await expect(panel.locator("#rail-search-empty")).toBeHidden();
+    await panel.locator("#search-input").fill("missing conversation");
+    await expect(group.locator(".chat-row")).toHaveCount(0);
+    await expect(panel.locator("#rail-search-empty")).toBeVisible();
+    await panel.locator("#search-input").fill("");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    const source = group.locator('[data-chat-thread-id="thr_direct"]');
+    await source.click({ button: "right" });
+    const menu = panel.locator("#chat-context-menu");
+    await expect(menu).toBeVisible();
+    await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.sectionsLoaded)).toBe(true);
+    expect(await panel.evaluate((element) => element._selectedThreadId)).toBe("thr_vba_2");
+    await expect(source.locator(".thread-actions-toggle")).toHaveAttribute("aria-label", "Hide actions for Assist direct conversation");
+    const menuControl = source.locator(".thread-actions-toggle");
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await menuControl.click();
+    await expect(menu).toBeVisible();
+    await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.trigger === element.shadowRoot.querySelector('[data-chat-thread-id="thr_direct"] .thread-actions-toggle'))).toBe(true);
+    if (width === 390) { await menuControl.focus(); await page.keyboard.press("Enter"); }
+    else await menuControl.click();
+    await expect(menu).toBeHidden();
+    await expect(menuControl).toHaveAttribute("aria-expanded", "false");
+    await menuControl.click();
+    await menu.locator('[data-chat-action="pin"]').click();
+    await expect(menu).toBeHidden();
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    await expect(panel.locator("#chat-navigation-sections .chat-row")).toHaveCount(0);
+
+    await menuControl.click();
+    await menu.locator('[data-chat-action="archive"]').click();
+    const archived = group.locator("#assistant-archived-chat-list");
+    await expect(archived).toBeHidden();
+    await expect(panel.locator('#archived-section [data-chat-thread-id="thr_direct"]')).toHaveCount(0);
+    await group.locator('[data-section="assistantArchived"]').click();
+    await expect(archived.locator('[data-chat-thread-id="thr_direct"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`ha-assistant-archive-${width}.png`) });
+    await panel.locator("#search-input").fill("Assist direct conversation");
+    await expect(archived.locator(".chat-row")).toHaveCount(1);
+    await expect(panel.locator("#rail-search-empty")).toBeHidden();
+    await archived.locator(".thread-actions-toggle").click();
+    await menu.locator('[data-chat-action="archive"]').click();
+    await expect(archived).toHaveCount(0);
+    await panel.locator("#search-input").fill("");
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    const calls = await page.evaluate(() => window.__assistantMenuCalls);
+    expect(calls.filter((call) => call.operation === "archive_thread")).toHaveLength(1);
+    expect(calls.filter((call) => call.operation === "restore_thread")).toHaveLength(1);
+    expect(calls.find((call) => call.operation === "update_thread")?.payload).toMatchObject({ thread_id: "thr_direct", pinned: false, navigation_revision: 1 });
+    expect(calls.some((call) => call.operation === "move_thread_project" || call.operation === "fork_thread")).toBe(false);
+  });
+}
 
 test("expanded conversation navigation stays below alerts in a short chat pane", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 734 });

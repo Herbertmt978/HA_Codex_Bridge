@@ -27,6 +27,23 @@ describe("shared chat context actions", () => {
   beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
   afterEach(() => { vi.useRealTimers(); document.body.replaceChildren(); });
 
+  it("closes with the current sidebar Hide action after asynchronous sections rebuilt the trigger", async () => {
+    const { panel, menu, show } = setup();
+    const original = panel.shadowRoot.querySelector('[data-thread-id="two"].thread-actions-toggle');
+    await show();
+    const current = panel.shadowRoot.querySelector('[data-thread-id="two"].thread-actions-toggle');
+    expect(current).not.toBe(original);
+    expect(menu.trigger).toBe(current);
+    expect(current.getAttribute("aria-label")).toBe("Hide actions for Chat two");
+    const loads = panel._callWS.mock.calls.filter(([operation]) => operation === "list_chat_sections").length;
+    current.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, composed: true }));
+    current.click();
+    expect(menu.menu.hidden).toBe(true);
+    expect(current.getAttribute("aria-expanded")).toBe("false");
+    expect(current.getAttribute("aria-label")).toBe("Show actions for Chat two");
+    expect(panel._callWS.mock.calls.filter(([operation]) => operation === "list_chat_sections")).toHaveLength(loads);
+  });
+
   it("opens the owned right-click menu without selecting the chat", async () => {
     const fixture = setup(); const { panel, menu } = fixture;
     const select = vi.spyOn(panel, "_selectThread");
