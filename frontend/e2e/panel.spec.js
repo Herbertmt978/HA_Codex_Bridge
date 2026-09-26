@@ -386,6 +386,42 @@ test("scheduled runtime selections and grouped skills remain readable", async ({
 
 test.describe("schedule run outcomes", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
+  for (const width of [390, 900, 1200, 1440]) {
+    test(`keeps a completed status word intact at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      await selectHarnessThread(page);
+      await page.evaluate(async () => {
+        const panel = document.querySelector("codex-bridge-panel");
+        panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+        await panel._selectDesktopDestination("scheduled");
+        panel._desktopFeatures.scheduled.data.runs = [{
+          status: "completed",
+          due_at: "2026-09-26T05:31:00Z",
+          started_at: "2026-09-26T05:31:01Z",
+          completed_at: "2026-09-26T05:31:30Z",
+        }];
+        panel._render(true);
+      });
+      const panel = page.locator("codex-bridge-panel");
+      const table = panel.locator(".schedule-run-history");
+      const status = table.locator('td[data-label="Status"]');
+      await expect(status).toHaveText("Completed");
+      const lines = await status.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      });
+      expect(lines).toBe(1);
+      const bounds = await table.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return { right: box.right, width: element.scrollWidth, client: element.clientWidth };
+      });
+      expect(bounds.right).toBeLessThanOrEqual(width);
+      expect(bounds.width).toBeLessThanOrEqual(bounds.client + 1);
+      await panel.locator("#desktop-feature-surface").screenshot({ path: test.info().outputPath(`completed-status-${width}.png`) });
+    });
+  }
   for (const [name, timezone] of [["missing", undefined], ["empty", ""], ["configured UTC", "UTC"]]) {
     test(`the actual panel distinguishes ${name} HA time zone from fallback`, async ({ page }) => {
       await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

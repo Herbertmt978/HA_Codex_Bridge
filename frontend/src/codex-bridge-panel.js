@@ -3202,6 +3202,7 @@ template.innerHTML = `
     }
 
     .schedule-run-history td { overflow-wrap: anywhere; }
+    .schedule-run-history td[data-label="Status"] { overflow-wrap: normal; }
     .schedule-run-history td[data-label="Details"] { color: var(--muted-color); }
     .schedule-run-history td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 56%, var(--text-color) 44%); }
     .schedule-run-history td.is-negative { color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%); }
