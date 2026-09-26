@@ -61,7 +61,7 @@ class CodexBridgeRuntime:
         return {}
 
     async def async_refresh_capabilities(self, *, force: bool = False) -> bool:
-        """Recover provider-backed capabilities after ChatGPT authentication."""
+        """Refresh App capabilities after an upgrade or authentication change."""
 
         if self.connection_type != CONNECTION_TYPE_SUPERVISOR:
             return False

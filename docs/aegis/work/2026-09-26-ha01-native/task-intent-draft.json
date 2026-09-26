@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "Qualify native task actions and correct defects found before release",
+  "goal": "Qualify native task actions and correct defects found before release",
+  "successEvidence": [],
+  "stopCondition": "Done only with fresh release and managed DEV evidence; otherwise record exact blocker",
+  "nonGoals": [],
+  "scope": "Existing task services, capability refresh, broker cancellation, tests and paired release",
+  "changeKinds": [
+    "bugfix"
+  ],
+  "riskHints": []
+}

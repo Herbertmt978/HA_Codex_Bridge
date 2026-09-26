@@ -18,6 +18,13 @@ options before using them there. This option is off by default. Treat scripts
 that use it as trusted administrative automation. Non-admin user contexts are
 rejected, even when the option is enabled.
 
+From Integration 1.8.3, an authorised action refreshes the private App's
+advertised capabilities when task support is absent from the cached readiness
+response. This lets script-only users recover after an App upgrade without
+opening the panel. It does not grant unattended permission or enable features
+that an older App does not advertise. External Bridge connections retain their
+existing compatibility rules.
+
 `start_task` takes `project_id`, `title`, `prompt`, optional `mode` (`observe`,
 `edit`, or `full-auto`), and optional `model_override` and
 `thinking_override`. Use the project ID from the Bridge project you intend to

@@ -5553,6 +5553,252 @@ def test_cancel_watchdog_aborts_only_the_matching_generation(tmp_path: Path) -> 
         broker.close()
 
 
+@pytest.mark.parametrize(
+    "worker_error",
+    [RuntimeError, runtime_broker_module._RuntimeTotalDeadlineExceeded],
+    ids=["resume-aborted", "total-deadline"],
+)
+def test_cancel_during_thread_resume_abort_remains_cancelled_when_worker_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, worker_error: type[RuntimeError]
+) -> None:
+    """A cancellation-induced resume error must not publish task failure.
+
+    Real app-server aborts release blocked control requests before abort returns.
+    Force that worker to commit its terminal outcome before cancel_run reacquires
+    the broker lock, rather than relying on nondeterministic thread scheduling.
+    """
+
+    resume_entered = Event()
+    resume_aborted = Event()
+    terminal_committed = Event()
+
+    class ResumeAbortRaceAppServer(ValidatorBackedAppServer):
+        block_resume = False
+
+        def request(self, method, params=None, *, timeout_seconds=None):
+            result = super().request(
+                method, params, timeout_seconds=timeout_seconds
+            )
+            if method == "thread/resume" and self.block_resume:
+                resume_entered.set()
+                assert resume_aborted.wait(2)
+                raise worker_error("app-server request aborted during cancellation")
+            return result
+
+        def abort_generation(self, expected_generation):
+            aborted = super().abort_generation(expected_generation)
+            if aborted and self.block_resume:
+                resume_aborted.set()
+                assert terminal_committed.wait(2)
+            return aborted
+
+    storage, thread = _storage_and_thread(tmp_path)
+    peer = ResumeAbortRaceAppServer()
+    broker = _broker(storage, peer)
+    target_run = {}
+    original_terminalize = broker._terminalize_locked
+
+    def record_terminal_commit(run, status, message, **kwargs):
+        result = original_terminalize(run, status, message, **kwargs)
+        if run.run_id == target_run.get("run_id"):
+            terminal_committed.set()
+        return result
+
+    monkeypatch.setattr(broker, "_terminalize_locked", record_terminal_commit)
+    try:
+        first = broker.submit_prompt(
+            thread.thread_id, "Complete the first turn",
+            client_request_id="ha-action:" + "a" * 32,
+            unattended=True,
+        )
+        _, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(peer, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: broker.get_task_action_run("a" * 32).status == "completed")
+
+        peer.block_resume = True
+        later = broker.submit_prompt(
+            thread.thread_id, "Cancel the resumed turn before turn/start",
+            client_request_id="ha-action:" + "b" * 32,
+            unattended=True,
+        )
+        target_run["run_id"] = later.run_id
+        assert resume_entered.wait(2)
+        assert broker.get_task_action_run("b" * 32).status == "starting"
+        assert len(_requests(peer, "turn/start")) == 1
+
+        cancelled = broker.cancel_run(thread.thread_id, run_id=later.run_id)
+        assert terminal_committed.is_set()
+        assert cancelled.status == "cancelled"
+        assert broker.get_task_action_run("b" * 32).status == "cancelled"
+        assert peer.aborted_generations == [1]
+        assert len(_requests(peer, "turn/start")) == 1
+        assert storage.load_thread(thread.thread_id).status == "idle"
+        assert broker.get_task_action_run("a" * 32).run_id == first.run_id
+        assert broker.get_task_action_run("a" * 32).status == "completed"
+        result_events = [
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+            and event.payload.get("task_id") == "b" * 32
+        ]
+        assert len(result_events) == 1
+        assert result_events[0].payload == {
+            "task_id": "b" * 32,
+            "run_id": later.run_id,
+            "status": "cancelled",
+        }
+        assert not any(
+            event.event_type == "run.failed"
+            and event.payload.get("run_id") == later.run_id
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        peer.block_resume = False
+        resume_aborted.set()
+        terminal_committed.set()
+        broker.close()
+
+
+def test_watchdog_timeout_abort_preserves_cancellation_recorded_during_abort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The watchdog's pre-abort snapshot must not overwrite later cancel intent."""
+
+    storage, thread = _storage_and_thread(tmp_path)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(storage, peer, turn_timeout_seconds=0.1, cancel_grace_seconds=5)
+    abort_entered = Event()
+    allow_abort = Event()
+    original_abort = peer.abort_generation
+    pause_abort = {"enabled": True}
+
+    def abort_after_cancellation(expected_generation):
+        if pause_abort["enabled"]:
+            abort_entered.set()
+            assert allow_abort.wait(2)
+        return original_abort(expected_generation)
+
+    monkeypatch.setattr(peer, "abort_generation", abort_after_cancellation)
+    action_id = "c" * 32
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id, "Reach the turn timeout before cancellation",
+            client_request_id="ha-action:" + action_id, unattended=True,
+        )
+        _active_ids(storage, thread.thread_id)
+        assert abort_entered.wait(2)
+        assert broker.get_task_action_run(action_id).status == "running"
+
+        cancellation = broker.cancel_run(thread.thread_id, run_id=run.run_id)
+        assert cancellation.status == "cancelling"
+        allow_abort.set()
+        _wait_until(
+            lambda: broker.get_task_action_run(action_id).status
+            in {"cancelled", "failed", "interrupted"}
+        )
+        assert broker.get_task_action_run(action_id).status == "cancelled"
+        assert peer.aborted_generations == [1]
+        result_events = [
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+            and event.payload.get("task_id") == action_id
+        ]
+        assert len(result_events) == 1
+        assert result_events[0].payload["status"] == "cancelled"
+        assert storage.load_thread(thread.thread_id).status == "idle"
+    finally:
+        pause_abort["enabled"] = False
+        allow_abort.set()
+        broker.close()
+
+
+def test_generation_reconciliation_preserves_cancellation_after_interrupt_abort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reconciliation can run inside abort before cancel_run returns."""
+
+    storage, thread = _storage_and_thread(tmp_path)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(storage, peer, cancel_grace_seconds=5)
+    original_request = peer.request
+    original_abort = peer.abort_generation
+
+    def uncertain_interrupt(method, params=None, *, timeout_seconds=None):
+        result = original_request(method, params, timeout_seconds=timeout_seconds)
+        if method == "turn/interrupt":
+            raise AppServerTimeoutError(method)
+        return result
+
+    def abort_and_reconcile(expected_generation):
+        aborted = original_abort(expected_generation)
+        if aborted:
+            with broker._lock:
+                broker._reconcile_generation_locked(
+                    peer.generation, reason="app-server generation changed"
+                )
+        return aborted
+
+    monkeypatch.setattr(peer, "request", uncertain_interrupt)
+    monkeypatch.setattr(peer, "abort_generation", abort_and_reconcile)
+    action_id = "d" * 32
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id, "Cancel before generation reconciliation",
+            client_request_id="ha-action:" + action_id, unattended=True,
+        )
+        _active_ids(storage, thread.thread_id)
+        cancellation = broker.cancel_run(thread.thread_id, run_id=run.run_id)
+        assert cancellation.status == "cancelled"
+        assert broker.get_task_action_run(action_id).status == "cancelled"
+        assert peer.aborted_generations == [1]
+        result_events = [
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+            and event.payload.get("task_id") == action_id
+        ]
+        assert len(result_events) == 1
+        assert result_events[0].payload["status"] == "cancelled"
+        assert not any(
+            event.event_type == "run.interrupted"
+            and event.payload.get("run_id") == run.run_id
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("provider_status", ["completed", "failed"])
+def test_provider_terminal_outcome_after_cancel_request_is_not_relabelled(
+    tmp_path: Path, provider_status: str
+) -> None:
+    """Cancel intent cannot rewrite a genuine terminal provider response."""
+
+    storage, thread = _storage_and_thread(tmp_path)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(storage, peer, cancel_grace_seconds=5)
+    action_id = "e" * 32
+    try:
+        run = broker.submit_prompt(
+            thread.thread_id, "Provider completion may race cancellation",
+            client_request_id="ha-action:" + action_id, unattended=True,
+        )
+        _, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        cancellation = broker.cancel_run(thread.thread_id, run_id=run.run_id)
+        assert cancellation.status == "cancelling"
+        _complete(peer, remote_thread_id=remote_thread_id, turn_id=turn_id,
+                  status=provider_status)
+        assert broker.get_task_action_run(action_id).status == provider_status
+        result_events = [
+            event for event in storage.event_store.replay(after_cursor=0).events
+            if event.event_type == "task.result"
+            and event.payload.get("task_id") == action_id
+        ]
+        assert len(result_events) == 1
+        assert result_events[0].payload["status"] == provider_status
+        assert peer.aborted_generations == []
+    finally:
+        broker.close()
+
+
 def test_remote_failure_has_no_cli_fallback_and_never_persists_raw_cause(
     tmp_path: Path,
 ) -> None:

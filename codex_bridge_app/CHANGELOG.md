@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 1.8.3
+
+- Lets authorised Home Assistant task actions recover App capabilities after an
+  upgrade without opening the Bridge panel. Older Apps remain capability-gated.
+- Preserves cancellation when an aborted startup, deadline or runtime restart
+  races the cancel handler. Real provider completion and failure are retained.
+- Preserves reviewed stdio package bytes in Windows checkouts so immutable
+  package verification and App staging use the same source on every platform.
+- Pairs App, Integration and panel `1.8.3` with Bridge `0.14.3` and
+  verified Codex runtime `0.157.0`.
+
 ## 1.8.2
 
 - Fixes isolated stdio worker startup when the Bridge loads its fixed launcher

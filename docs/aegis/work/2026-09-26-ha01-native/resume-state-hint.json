@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-09-26-ha01-native",
+  "lastCheckpointRef": "docs/aegis/work/2026-09-26-ha01-native/todo-checkpoint-draft.json",
+  "resumeInstruction": "Recheck remote head and public-action spacing; preserve DEV data/options/power",
+  "knownPartialWork": [
+    "Local Bridge 2195 passed with 27 skips; HA 413 passed; frontend 478 unit and 85 browser; Windows 22; static, hassfest and image checks"
+  ],
+  "mustReadBeforeContinuing": [
+    "docs/aegis/work/2026-09-26-ha01-native/10-intent.md",
+    "docs/aegis/work/2026-09-26-ha01-native/20-checkpoint.md",
+    "docs/aegis/work/2026-09-26-ha01-native/todo-checkpoint-draft.json"
+  ],
+  "unsafeToAssume": [
+    "Native candidate acceptance pending; stale host grant native checks not exercised"
+  ]
+}

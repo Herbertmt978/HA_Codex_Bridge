@@ -1568,12 +1568,15 @@ class RuntimeBroker:
                 run = self._state.runs.get(run_id)
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     queued = run.status == "queued"
+                    cancelling = run.status == "cancelling"
                     self._terminalize_locked(
                         run,
-                        "cancelled" if queued else "failed",
+                        "cancelled" if queued or cancelling else "failed",
                         (
                             "The queued prompt expired."
                             if queued
+                            else "The Codex turn was cancelled."
+                            if cancelling
                             else "The Codex turn timed out."
                         ),
                     )
@@ -1596,8 +1599,20 @@ class RuntimeBroker:
                     )
                 run = self._state.runs.get(run_id)
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
+                    # Aborting a start/resume request can wake this worker
+                    # before cancel_run reacquires the lock. Preserve the
+                    # cancellation already recorded by the broker.
+                    cancelling = run.status == "cancelling"
                     self._terminalize_locked(
-                        run, "failed", str(start_error) if isinstance(start_error, HostAccessError) else "Codex could not start the turn."
+                        run,
+                        "cancelled" if cancelling else "failed",
+                        (
+                            "The Codex turn was cancelled before it started."
+                            if cancelling
+                            else str(start_error)
+                            if isinstance(start_error, HostAccessError)
+                            else "Codex could not start the turn."
+                        ),
                     )
         finally:
             with self._lock:
@@ -2046,6 +2061,7 @@ class RuntimeBroker:
                         current is not None
                         and current.status not in _TERMINAL_RUN_STATES
                     ):
+                        cancelling = current.status == "cancelling"
                         status = "cancelled" if cancelling else "failed"
                         message = (
                             "The Codex turn was cancelled."
@@ -3226,8 +3242,12 @@ class RuntimeBroker:
                 )
                 self._terminalize_locked(
                     run,
-                    "interrupted",
-                    "The Codex runtime restarted before the turn completed.",
+                    "cancelled" if run.status == "cancelling" else "interrupted",
+                    (
+                        "The Codex turn was cancelled."
+                        if run.status == "cancelling"
+                        else "The Codex runtime restarted before the turn completed."
+                    ),
                     preceding_events=preceding_events,
                 )
         self._persist_locked()

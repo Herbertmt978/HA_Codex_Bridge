@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-09-26-ha01-native",
+  "taskIntentRef": "docs/aegis/work/2026-09-26-ha01-native/task-intent-draft.json",
+  "baselineRefs": [],
+  "scopeStatus": "Existing task-action qualification and bounded bug fixes",
+  "compatStatus": "Existing private API and permissions unchanged",
+  "retirementStatus": "No duplicate owner or fallback added",
+  "newRiskSignals": [],
+  "decision": "needs-verification"
+}
