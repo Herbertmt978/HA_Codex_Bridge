@@ -143,7 +143,10 @@ def test_git_review_commit_scope_compares_merge_to_first_parent(tmp_path) -> Non
         "commit", "-qm", "main",
     )
     first_parent = _git(workspace, "rev-parse", "HEAD")
-    _git(workspace, "merge", "--no-ff", "feature", "-m", "merge feature")
+    _git(
+        workspace, "-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.test",
+        "merge", "--no-ff", "feature", "-m", "merge feature",
+    )
     merge_commit = _git(workspace, "rev-parse", "HEAD")
 
     listing = client.get(
@@ -464,14 +467,15 @@ def test_git_review_never_imports_alternates_added_during_snapshot(tmp_path, mon
 
 
 @pytest.mark.skipif(os.name == "nt", reason="requires POSIX descriptor-anchored worktree paths")
-def test_git_review_fails_closed_if_workspace_path_is_replaced_during_review(
+def test_git_review_stays_on_opened_workspace_if_path_is_replaced_during_review(
     tmp_path, monkeypatch
 ) -> None:
     _app, thread, workspace, client, headers = _repo(tmp_path)
     module = importlib.import_module("codex_bridge_service.routes.git_review")
+    (workspace / "sample.txt").write_text("inside authorised change\n", encoding="utf-8")
     outside = tmp_path / "replacement"
     outside.mkdir()
-    (outside / "sample.txt").write_text("outside secret", encoding="utf-8")
+    (outside / "outside.txt").write_text("outside secret", encoding="utf-8")
     original = module._name_status
 
     def replace_path(repo, scope, base_ref, commit_ref):
@@ -482,8 +486,13 @@ def test_git_review_fails_closed_if_workspace_path_is_replaced_during_review(
 
     monkeypatch.setattr(module, "_name_status", replace_path)
     response = client.get(
-        f"/threads/{thread.thread_id}/git-review?scope=unstaged", headers=headers
+        f"/threads/{thread.thread_id}/git-review",
+        params={"scope": "unstaged", "path": "sample.txt"},
+        headers=headers,
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "git_workspace_escape"
+    assert response.status_code == 200
+    assert response.json()["files"][0]["path"] == "sample.txt"
+    assert "+inside authorised change" in response.json()["files"][0]["patch"]
+    assert "outside.txt" not in response.text
+    assert "outside secret" not in response.text
