@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.8.8
+
+- Preserves definite chat-navigation and section revision conflicts through Home
+  Assistant, so stale updates request a refresh without being treated as an
+  uncertain operation. Unknown errors still use sanitised generic responses.
+- Pairs App, Integration and panel `1.8.8` with Bridge `0.15.0` and the unchanged
+  verified Codex runtime `0.157.1`.
+
 ## 1.8.7
 
 - Adds one chat actions menu for right-click, sidebar and header controls, with
