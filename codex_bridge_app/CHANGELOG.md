@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 1.8.4
+
+- Explains scheduled run outcomes, including overlap and missed-window skips,
+  with fixed safe text rather than raw provider errors or private identifiers.
+- Shows due, start and completion times in Home Assistant's configured time
+  zone, including daylight-saving labels and an explicit UTC fallback.
+- Preserves scheduler behaviour and existing grants. This TASK-01 history
+  improvement leaves conversational editing, pause and cancellation open.
+- Pairs App, Integration and panel `1.8.4` with unchanged Bridge `0.14.3`
+  and verified Codex runtime `0.157.0`.
+
 ## 1.8.3
 
 - Lets authorised Home Assistant task actions recover App capabilities after an

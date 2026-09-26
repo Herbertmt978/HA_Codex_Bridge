@@ -34660,7 +34660,7 @@ function proposeScheduleDescription(description, { timezone = "UTC", now = Date.
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.3";
+var PANEL_VERSION = "1.8.4";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
