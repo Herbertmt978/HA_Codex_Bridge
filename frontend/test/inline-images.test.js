@@ -64,7 +64,7 @@ describe("confined raster loading", () => {
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
   it("rejects oversized metadata, truncated ranges, missing stream and oversized stream", async () => {
-    for (const value of [response(png(), { "Content-Length": String(INLINE_IMAGE_MAX_BYTES + 1) }), response(png(), { "Content-Range": `bytes 0-31/${INLINE_IMAGE_MAX_BYTES + 1}` }), response(new Blob([new Uint8Array(INLINE_IMAGE_MAX_BYTES + 1)])), new Response(null)]) await expect(fetchInlineImage(inlineImageEndpoint("chat", "attachment", "att"), { fetchImpl: async () => value })).rejects.toThrow();
+    for (const value of [response(png(), { "Content-Length": String(INLINE_IMAGE_MAX_BYTES + 1) }), response(png(), { "Content-Range": `bytes 0-31/${INLINE_IMAGE_MAX_BYTES + 1}` }), response(png(), { "Content-Range": "bytes 0-31/64" }), response(png(), { "Content-Length": "64" }), response(new Blob([])), response(new Blob([new Uint8Array(INLINE_IMAGE_MAX_BYTES + 1)])), new Response(null)]) await expect(fetchInlineImage(inlineImageEndpoint("chat", "attachment", "att"), { fetchImpl: async () => value })).rejects.toThrow();
   });
 });
 
@@ -175,6 +175,72 @@ describe("image cards, actions and ownership", () => {
     setup(); controller.card("attachment", record()); const state = controller.records.get("attachment:image-1");
     vi.stubGlobal("isSecureContext", false); await controller.copy(state);
     expect(state.notice).toContain("Download the image instead");
+  });
+  it.each(["corrupt", "oversized dimensions"])("downloads unchanged original bytes when the %s preview fails", async (failure) => {
+    const original = failure === "corrupt" ? png() : png(9000, 1);
+    const fetchImpl = setup(vi.fn(async () => response(original)));
+    if (failure === "corrupt") vi.stubGlobal("Image", class { decode() { return Promise.reject(new Error("Corrupt raster")); } });
+    const card = controller.card("attachment", record()); root.append(card);
+    const state = controller.records.get("attachment:image-1"); await controller.load(state);
+    expect(state.status).toBe("error");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const decode = vi.spyOn(controller, "load");
+    await controller.download(state);
+    expect(decode).not.toHaveBeenCalled(); expect(fetchImpl).toHaveBeenCalledTimes(2); expect(click).toHaveBeenCalledOnce();
+    const downloaded = URL.createObjectURL.mock.calls.at(-1)[0];
+    expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(new Uint8Array(await original.arrayBuffer()));
+    expect(state.blob).toBeUndefined(); expect(card.querySelector("img")).toBeNull(); expect(state.notice).toBe("Download started.");
+  });
+  it("hands cached preview bytes to the browser synchronously without another request", async () => {
+    const fetchImpl = setup(); controller.card("attachment", record()); const state = controller.records.get("attachment:image-1"); await controller.load(state);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const download = controller.download(state);
+    expect(click).toHaveBeenCalledOnce(); expect(fetchImpl).toHaveBeenCalledOnce(); await download;
+  });
+  it("downloads a pending local original without fetching or decoding and releases its hand-off on removal", async () => {
+    const fetchImpl = setup(); const file = Object.assign(png(9000, 1), { name: "local.png" }); controller.setPending([file]);
+    controller.card("local", controller.pending[0]); const state = controller.records.get("local:pending-0");
+    const load = vi.spyOn(controller, "load"); const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const download = controller.download(state); expect(click).toHaveBeenCalledOnce(); await download;
+    expect(load).not.toHaveBeenCalled(); expect(fetchImpl).not.toHaveBeenCalled(); expect(URL.createObjectURL).toHaveBeenCalledWith(file);
+    controller.clearPending(); expect(controller.downloadTimers.size).toBe(0); expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
+  });
+  it.each(["network", "oversize", "truncated", "handoff"])("reports %s download failure without claiming success", async (failure) => {
+    setup(vi.fn(async () => {
+      if (failure === "network") throw new Error("private connection details");
+      if (failure === "oversize") return response(png(), { "Content-Length": String(INLINE_IMAGE_MAX_BYTES + 1) });
+      if (failure === "truncated") return response(png(), { "Content-Range": "bytes 0-31/64" });
+      return response();
+    }));
+    controller.card("attachment", record()); const state = controller.records.get("attachment:image-1");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => { if (failure === "handoff") throw new Error("Browser refused"); });
+    await controller.download(state);
+    expect(state.notice).toContain("could not be downloaded"); expect(state.notice).not.toContain("private"); expect(state.notice).not.toContain("started");
+    expect(controller.downloadTimers.size).toBe(0); expect(controller.downloadRequests.size).toBe(0);
+    if (failure === "handoff") expect(URL.revokeObjectURL).toHaveBeenCalledOnce(); else expect(click).not.toHaveBeenCalled();
+  });
+  it.each(["switch", "dispose"])("aborts remote downloads on %s without a late URL, save or notice", async (action) => {
+    let finish; const fetchImpl = setup(vi.fn(() => new Promise((resolve) => { finish = resolve; })));
+    controller.card("attachment", record()); const state = controller.records.get("attachment:image-1");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const download = controller.download(state); await Promise.resolve(); const signal = fetchImpl.mock.calls[0][1].signal;
+    if (action === "switch") controller.setThread("another-chat"); else controller.dispose();
+    expect(signal.aborted).toBe(true); finish(response()); await download;
+    expect(URL.createObjectURL).not.toHaveBeenCalled(); expect(click).not.toHaveBeenCalled(); expect(state.notice).toBe("Downloading image…");
+  });
+  it("shares the two-request limit with previews, deduplicates clicks and bounds retained downloads", async () => {
+    const finishes = []; const fetchImpl = setup(vi.fn(() => new Promise((resolve) => finishes.push(resolve))));
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const states = Array.from({ length: 6 }, (_, index) => { controller.card("attachment", record(`download-${index}`)); return controller.records.get(`attachment:download-${index}`); });
+    const preview = controller.load(states[0]); const downloads = states.slice(1, 5).map((state) => controller.download(state));
+    expect(controller.download(states[1])).toBe(downloads[0]); await controller.download(states[5]);
+    expect(states[5].notice).toContain("Please wait"); await Promise.resolve(); expect(fetchImpl).toHaveBeenCalledTimes(2);
+    finishes[0](response()); finishes[1](response());
+    await vi.waitFor(() => expect(finishes).toHaveLength(4)); finishes[2](response()); finishes[3](response());
+    await vi.waitFor(() => expect(finishes).toHaveLength(5)); finishes[4](response()); await Promise.all([preview, ...downloads]);
+    expect(controller.downloadTimers.size).toBe(4); expect(controller.downloadRequests.size).toBe(0);
+    await controller.download(states[0]); expect(states[0].notice).toContain("Please wait"); expect(controller.downloadTimers.size).toBe(4);
+    controller.setThread("another-chat"); expect(controller.downloadTimers.size).toBe(0);
   });
   it("retains no more than twelve raster blobs and releases hand-off URLs", async () => {
     setup();

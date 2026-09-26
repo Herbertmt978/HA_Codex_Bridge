@@ -41,7 +41,7 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.9.0";
+const PANEL_VERSION = "1.9.1";
 const ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;

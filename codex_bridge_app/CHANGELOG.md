@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.9.1
+
+- Allows image-menu downloads to save the original bounded file when its
+  content preview cannot be decoded, with a clear notice if retrieval fails.
+- Preserves authenticated Home Assistant downloads, chat confinement, preview
+  bounds, cached-image downloads, keyboard/touch actions and thread cleanup.
+- Pairs App, Integration and panel `1.9.1` with unchanged Bridge `0.16.0` and
+  Codex `0.157.1`.
+
 ## 1.9.0
 
 - Replaces the turn-button panel with a slim conversation rail on desktop and

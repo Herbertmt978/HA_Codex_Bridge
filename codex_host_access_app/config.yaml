@@ -1,5 +1,5 @@
 name: Codex Host Access
-version: "1.9.0"
+version: "1.9.1"
 slug: codex_host_access
 description: Optional root commands on Home Assistant OS. Can access files, credentials, services and the network.
 url: https://github.com/Herbertmt978/HA_Codex_Bridge

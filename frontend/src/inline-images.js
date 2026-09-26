@@ -6,6 +6,7 @@ const MAX_EDGE = 8192;
 const MAX_CACHED_IMAGES = 12;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const MAX_CACHE_PIXELS = 32 * 1024 * 1024;
+const MAX_DOWNLOADS = 4;
 const MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const identifier = (value) => typeof value === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(value);
 const imageFilename = (value, fallback = "image") => sanitizeFilename(typeof value === "string" ? value.split(/[\\/]/).at(-1) : value, fallback);
@@ -91,6 +92,9 @@ export async function fetchInlineImage(url, { token = "", signal, fetchImpl = fe
     }
   } catch (error) { await reader.cancel(); throw error; }
   finally { reader.releaseLock(); }
+  if (!size || (length && size !== Number(length)) || (range && (size !== Number(range.split("/")[1]) || Number(range.match(/^bytes 0-(\d+)/)[1]) + 1 !== size))) {
+    throw new Error("Image response was incomplete");
+  }
   return new Blob(chunks);
 }
 
@@ -106,7 +110,7 @@ export class InlineImageController {
   constructor({ root, token = () => "", fetchImpl = fetch } = {}) {
     this.root = root; this.token = token; this.fetchImpl = fetchImpl;
     this.threadId = ""; this.records = new Map(); this.targets = new Map(); this.pending = []; this.pendingRevision = 0;
-    this.downloadTimers = new Map(); this.generation = 0; this.modalRequest = 0; this.pendingModalRequest = null; this.activeLoads = 0; this.loadQueue = [];
+    this.downloadTimers = new Map(); this.downloadRequests = new Set(); this.generation = 0; this.modalRequest = 0; this.pendingModalRequest = null; this.activeLoads = 0; this.loadQueue = [];
     this.observer = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) { this.observer.unobserve(entry.target); void this.load(this.targets.get(entry.target)); }
     }, { root: null, rootMargin: "160px" }) : null;
@@ -203,10 +207,7 @@ export class InlineImageController {
     const generation = this.generation; const threadId = this.threadId;
     state.status = "loading"; state.notice = ""; this.paint(state);
     state.promise = (async () => {
-      await new Promise((resolve) => {
-        if (this.activeLoads < 2) { this.activeLoads += 1; resolve(); }
-        else this.loadQueue.push(resolve);
-      });
+      await this.acquireLoad();
       try {
         if (generation !== this.generation || state.controller.signal.aborted) return null;
         const blob = state.kind === "local" ? state.record.file : await fetchInlineImage(inlineImageEndpoint(threadId, state.kind, state.kind === "attachment" ? state.record.attachment_id : state.record.artifact_id), { token: this.token(), signal: state.controller.signal, fetchImpl: this.fetchImpl });
@@ -228,11 +229,19 @@ export class InlineImageController {
         return null;
       } finally {
         state.promise = null;
-        const next = this.loadQueue.shift(); if (next) next(); else this.activeLoads -= 1;
+        this.releaseLoad();
       }
     })();
     return state.promise;
   }
+
+  acquireLoad() {
+    return new Promise((resolve) => {
+      if (this.activeLoads < 2) { this.activeLoads += 1; resolve(); }
+      else this.loadQueue.push(resolve);
+    });
+  }
+  releaseLoad() { const next = this.loadQueue.shift(); if (next) next(); else this.activeLoads -= 1; }
 
   trim(current) {
     let cached = [...this.records.values()].filter((state) => state.blob);
@@ -253,6 +262,7 @@ export class InlineImageController {
   }
   clearPending() {
     for (const [key, state] of this.records) if (state.kind === "local") { state.controller.abort(); if (state.url) URL.revokeObjectURL(state.url); if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl); this.records.delete(key); }
+    for (const [url, download] of this.downloadTimers) if (download.state.kind === "local") this.releaseDownload(url);
     this.pending = []; this.pendingRevision += 1;
   }
   renderPending(container) {
@@ -354,20 +364,56 @@ export class InlineImageController {
     } catch { if (generation === this.generation) this.notice(state, "Image could not be copied. Check clipboard permission or download it instead."); }
   }
 
-  async download(state) {
-    const generation = this.generation; const loaded = await this.load(state);
-    if (!loaded || generation !== this.generation) return;
-    // Separate hand-off URL survives cache eviction while the browser saves it.
-    const url = URL.createObjectURL(loaded.blob); const anchor = element("a", ""); anchor.href = url; anchor.download = imageFilename(state.record.filename);
-    this.root.append(anchor); anchor.click(); anchor.remove();
-    this.downloadTimers.set(url, setTimeout(() => { URL.revokeObjectURL(url); this.downloadTimers.delete(url); }, 60000));
+  download(state) {
+    if (!state || this.records.get(state.key) !== state || !isInlineImage(state.record)) return Promise.resolve();
+    if (state.downloadPromise) return state.downloadPromise;
+    const generation = this.generation; const threadId = this.threadId;
+    const isCurrent = () => generation === this.generation && !state.controller.signal.aborted && this.records.get(state.key) === state;
+    const failure = () => { if (isCurrent()) this.notice(state, "Image could not be downloaded. Retry or check your Home Assistant connection."); };
+    // A decoded cache hit or pending local file keeps the browser's activation.
+    // Neither path requires another decoder or request to save original bytes.
+    const cached = state.blob || (state.kind === "local" ? state.record.file : null);
+    if (cached) {
+      try { this.handOffDownload(state, cached); } catch { failure(); }
+      return Promise.resolve();
+    }
+    if (this.downloadRequests.size >= MAX_DOWNLOADS || this.downloadTimers.size >= MAX_DOWNLOADS) {
+      this.notice(state, "Please wait for the current image downloads before trying again."); return Promise.resolve();
+    }
+    this.downloadRequests.add(state); this.notice(state, "Downloading image…");
+    state.downloadPromise = (async () => {
+      await this.acquireLoad();
+      try {
+        if (!isCurrent()) return;
+        const blob = await fetchInlineImage(inlineImageEndpoint(threadId, state.kind, state.kind === "attachment" ? state.record.attachment_id : state.record.artifact_id), { token: this.token(), signal: state.controller.signal, fetchImpl: this.fetchImpl });
+        if (isCurrent()) this.handOffDownload(state, blob);
+      } catch { failure(); }
+      finally { this.downloadRequests.delete(state); state.downloadPromise = null; this.releaseLoad(); }
+    })();
+    return state.downloadPromise;
   }
+
+  handOffDownload(state, blob) {
+    if (!blob || !blob.size || blob.size > INLINE_IMAGE_MAX_BYTES) throw new Error("Invalid image download");
+    // Four bounded hand-offs retain at most 32 MiB, separately from previews.
+    if (this.downloadTimers.size >= MAX_DOWNLOADS) {
+      this.notice(state, "Please wait for the current image downloads before trying again."); return;
+    }
+    // Separate hand-off URL survives cache eviction while the browser saves it.
+    const url = URL.createObjectURL(blob); const anchor = element("a", ""); anchor.href = url; anchor.download = imageFilename(state.record.filename);
+    try { this.root.append(anchor); anchor.click(); }
+    catch (error) { URL.revokeObjectURL(url); throw error; }
+    finally { anchor.remove(); }
+    this.downloadTimers.set(url, { state, timer: setTimeout(() => this.releaseDownload(url), 60000) });
+    this.notice(state, "Download started.");
+  }
+  releaseDownload(url) { const download = this.downloadTimers.get(url); if (!download) return; clearTimeout(download.timer); URL.revokeObjectURL(url); this.downloadTimers.delete(url); }
 
   clear() {
     this.generation += 1; this.closeModal(); this.closeMenu(); this.observer?.disconnect(); clearTimeout(this.pruneTimer);
     for (const state of this.records.values()) { state.controller.abort(); if (state.url) URL.revokeObjectURL(state.url); if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl); }
-    for (const [url, timer] of this.downloadTimers) { clearTimeout(timer); URL.revokeObjectURL(url); }
-    this.downloadTimers.clear(); this.records.clear(); this.targets.clear(); this.pending = []; this.pendingRevision += 1;
+    for (const url of this.downloadTimers.keys()) this.releaseDownload(url);
+    this.downloadRequests.clear(); this.records.clear(); this.targets.clear(); this.pending = []; this.pendingRevision += 1;
   }
   dispose() {
     this.clear(); this.root?.removeEventListener("pointerdown", this.outside);

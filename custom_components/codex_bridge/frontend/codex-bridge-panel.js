@@ -32363,6 +32363,7 @@ var MAX_EDGE = 8192;
 var MAX_CACHED_IMAGES = 12;
 var MAX_CACHE_BYTES = 32 * 1024 * 1024;
 var MAX_CACHE_PIXELS = 32 * 1024 * 1024;
+var MAX_DOWNLOADS = 4;
 var MIME = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 var identifier = (value) => typeof value === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(value);
 var imageFilename = (value, fallback = "image") => sanitizeFilename(typeof value === "string" ? value.split(/[\\/]/).at(-1) : value, fallback);
@@ -32454,6 +32455,9 @@ async function fetchInlineImage(url, { token = "", signal, fetchImpl = fetch } =
   } finally {
     reader.releaseLock();
   }
+  if (!size || length && size !== Number(length) || range && (size !== Number(range.split("/")[1]) || Number(range.match(/^bytes 0-(\d+)/)[1]) + 1 !== size)) {
+    throw new Error("Image response was incomplete");
+  }
   return new Blob(chunks);
 }
 function element2(tag, className, text3 = "") {
@@ -32480,6 +32484,7 @@ var InlineImageController = class {
     this.pending = [];
     this.pendingRevision = 0;
     this.downloadTimers = /* @__PURE__ */ new Map();
+    this.downloadRequests = /* @__PURE__ */ new Set();
     this.generation = 0;
     this.modalRequest = 0;
     this.pendingModalRequest = null;
@@ -32627,12 +32632,7 @@ var InlineImageController = class {
     state.notice = "";
     this.paint(state);
     state.promise = (async () => {
-      await new Promise((resolve) => {
-        if (this.activeLoads < 2) {
-          this.activeLoads += 1;
-          resolve();
-        } else this.loadQueue.push(resolve);
-      });
+      await this.acquireLoad();
       try {
         if (generation !== this.generation || state.controller.signal.aborted) return null;
         const blob = state.kind === "local" ? state.record.file : await fetchInlineImage(inlineImageEndpoint(threadId, state.kind, state.kind === "attachment" ? state.record.attachment_id : state.record.artifact_id), { token: this.token(), signal: state.controller.signal, fetchImpl: this.fetchImpl });
@@ -32668,12 +32668,23 @@ var InlineImageController = class {
         return null;
       } finally {
         state.promise = null;
-        const next = this.loadQueue.shift();
-        if (next) next();
-        else this.activeLoads -= 1;
+        this.releaseLoad();
       }
     })();
     return state.promise;
+  }
+  acquireLoad() {
+    return new Promise((resolve) => {
+      if (this.activeLoads < 2) {
+        this.activeLoads += 1;
+        resolve();
+      } else this.loadQueue.push(resolve);
+    });
+  }
+  releaseLoad() {
+    const next = this.loadQueue.shift();
+    if (next) next();
+    else this.activeLoads -= 1;
   }
   trim(current) {
     let cached = [...this.records.values()].filter((state) => state.blob);
@@ -32703,6 +32714,7 @@ var InlineImageController = class {
       if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl);
       this.records.delete(key);
     }
+    for (const [url, download] of this.downloadTimers) if (download.state.kind === "local") this.releaseDownload(url);
     this.pending = [];
     this.pendingRevision += 1;
   }
@@ -32882,21 +32894,74 @@ var InlineImageController = class {
       if (generation === this.generation) this.notice(state, "Image could not be copied. Check clipboard permission or download it instead.");
     }
   }
-  async download(state) {
+  download(state) {
+    if (!state || this.records.get(state.key) !== state || !isInlineImage(state.record)) return Promise.resolve();
+    if (state.downloadPromise) return state.downloadPromise;
     const generation = this.generation;
-    const loaded = await this.load(state);
-    if (!loaded || generation !== this.generation) return;
-    const url = URL.createObjectURL(loaded.blob);
+    const threadId = this.threadId;
+    const isCurrent = () => generation === this.generation && !state.controller.signal.aborted && this.records.get(state.key) === state;
+    const failure = () => {
+      if (isCurrent()) this.notice(state, "Image could not be downloaded. Retry or check your Home Assistant connection.");
+    };
+    const cached = state.blob || (state.kind === "local" ? state.record.file : null);
+    if (cached) {
+      try {
+        this.handOffDownload(state, cached);
+      } catch {
+        failure();
+      }
+      return Promise.resolve();
+    }
+    if (this.downloadRequests.size >= MAX_DOWNLOADS || this.downloadTimers.size >= MAX_DOWNLOADS) {
+      this.notice(state, "Please wait for the current image downloads before trying again.");
+      return Promise.resolve();
+    }
+    this.downloadRequests.add(state);
+    this.notice(state, "Downloading image…");
+    state.downloadPromise = (async () => {
+      await this.acquireLoad();
+      try {
+        if (!isCurrent()) return;
+        const blob = await fetchInlineImage(inlineImageEndpoint(threadId, state.kind, state.kind === "attachment" ? state.record.attachment_id : state.record.artifact_id), { token: this.token(), signal: state.controller.signal, fetchImpl: this.fetchImpl });
+        if (isCurrent()) this.handOffDownload(state, blob);
+      } catch {
+        failure();
+      } finally {
+        this.downloadRequests.delete(state);
+        state.downloadPromise = null;
+        this.releaseLoad();
+      }
+    })();
+    return state.downloadPromise;
+  }
+  handOffDownload(state, blob) {
+    if (!blob || !blob.size || blob.size > INLINE_IMAGE_MAX_BYTES) throw new Error("Invalid image download");
+    if (this.downloadTimers.size >= MAX_DOWNLOADS) {
+      this.notice(state, "Please wait for the current image downloads before trying again.");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
     const anchor = element2("a", "");
     anchor.href = url;
     anchor.download = imageFilename(state.record.filename);
-    this.root.append(anchor);
-    anchor.click();
-    anchor.remove();
-    this.downloadTimers.set(url, setTimeout(() => {
+    try {
+      this.root.append(anchor);
+      anchor.click();
+    } catch (error) {
       URL.revokeObjectURL(url);
-      this.downloadTimers.delete(url);
-    }, 6e4));
+      throw error;
+    } finally {
+      anchor.remove();
+    }
+    this.downloadTimers.set(url, { state, timer: setTimeout(() => this.releaseDownload(url), 6e4) });
+    this.notice(state, "Download started.");
+  }
+  releaseDownload(url) {
+    const download = this.downloadTimers.get(url);
+    if (!download) return;
+    clearTimeout(download.timer);
+    URL.revokeObjectURL(url);
+    this.downloadTimers.delete(url);
   }
   clear() {
     this.generation += 1;
@@ -32909,11 +32974,8 @@ var InlineImageController = class {
       if (state.url) URL.revokeObjectURL(state.url);
       if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl);
     }
-    for (const [url, timer] of this.downloadTimers) {
-      clearTimeout(timer);
-      URL.revokeObjectURL(url);
-    }
-    this.downloadTimers.clear();
+    for (const url of this.downloadTimers.keys()) this.releaseDownload(url);
+    this.downloadRequests.clear();
     this.records.clear();
     this.targets.clear();
     this.pending = [];
@@ -36339,7 +36401,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.9.0";
+var PANEL_VERSION = "1.9.1";
 var ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
