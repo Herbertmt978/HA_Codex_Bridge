@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 1.8.4
+
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.14.3` without changing its Integration API compatibility.
+
 ## 1.8.3
 
 - Lets authorised Home Assistant task actions recover App capabilities after an
