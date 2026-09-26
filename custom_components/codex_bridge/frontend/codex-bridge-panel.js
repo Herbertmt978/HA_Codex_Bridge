@@ -33467,10 +33467,10 @@ var OUTCOMES = Object.freeze({
   queued: ["Queued", "Waiting for Codex to start this run.", "is-attention"],
   running: ["Running", "Codex is working on this task.", "is-attention"],
   completed: ["Completed", "This task finished. Its response is in the task's chat.", "is-positive"],
-  failed: ["Failed", "This run could not finish. Check its chat and the App connection.", "is-negative"],
+  failed: ["Failed", "This run could not finish. Check its chat and the Bridge connection.", "is-negative"],
   cancelled: ["Cancelled", "This run was cancelled.", ""],
   blocked: ["Needs attention", "This run was blocked. Review its chat and permissions before trying again.", "is-attention"],
-  interrupted_restart: ["Interrupted", "The App restarted before this run completed.", "is-attention"],
+  interrupted_restart: ["Interrupted", "This run was interrupted before it completed.", "is-attention"],
   skipped_overlap: ["Skipped · already running", "An earlier run of this task was still active. No second run started.", "is-attention"],
   skipped_capacity: ["Skipped · at capacity", "Codex had no capacity for this run. No work started.", "is-attention"],
   skipped_misfire: ["Skipped · missed window", "Home Assistant reached this occurrence after its allowed start window. No catch-up run started.", "is-attention"],
@@ -34660,7 +34660,7 @@ function proposeScheduleDescription(description, { timezone = "UTC", now = Date.
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.4";
+var PANEL_VERSION = "1.8.5";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);

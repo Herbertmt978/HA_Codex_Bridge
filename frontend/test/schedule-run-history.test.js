@@ -28,6 +28,13 @@ describe("schedule run history", () => {
     expect(history.rows[2].due_at).toBe("25 Oct 2026, 01:30 GMT");
   });
 
+  it.each(["failed", "interrupted_restart"])("describes %s on managed and external deployments", (status) => {
+    const explanation = scheduleRunHistory([{ status }]).rows[0].explanation;
+    expect(explanation).not.toContain("App");
+    if (status === "interrupted_restart") expect(explanation).not.toContain("restarted");
+    else expect(explanation).toContain("Bridge");
+  });
+
   it.each(["new_private_status", "__proto__", null, { toString: null }])("never displays or evaluates unknown status values", (status) => {
     const row = scheduleRunHistory([{ status }]).rows[0];
     expect(row.status).toBe("Status unavailable");
