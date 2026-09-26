@@ -1,0 +1,42 @@
+# CB-040: answer Codex questions from Home Assistant notifications
+
+Prepared on 26 September 2026 for [existing issue #200](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/200), incorporating [Anthony's clarification](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/200#issuecomment-5849142509). Plan only: implementation belongs in a separate source/release slot after the selected five enhancements. Do not create a duplicate issue or mix its source into that candidate.
+
+## Intended behaviour
+
+A pending Codex clarification remains visible in its chat. With question notifications enabled, Home Assistant sends a persistent notification linking to that question and a Companion notification to the selected devices. A supported choice or text reply answers that exact interaction. The first accepted answer wins across chat and phones; the chat reflects it and every corresponding notification is cleared or updated. Complex forms open the authenticated chat. Generic replies never approve commands, files, MCP forms, Host Access or execution permissions.
+
+## Existing owners and boundaries
+
+- `runtime_broker.py`: `answer_user_input`, locked `_claim_interaction_locked`, response identity, expiry/generation/run checks, outcome-unknown handling and `interaction.created` / `interaction.resolved` events. Preserve this as the only answer/first-winner owner.
+- `models.py` and `routes/approvals.py`: bounded public `user_input` questions and the existing interaction-answer API. The public answer shape already carries question IDs and bounded values; no prompt submission is needed.
+- `bridge_api.py` / `websocket_api.py`: authenticated administrator chat answers using `interactions_v2`. Reuse the answer client from the notification coordinator, with its own verified HA authorisation before submission.
+- `event_broker.py`: one config-entry-owned event stream, durable-listener support and reconnect lifecycle. Subscribe here instead of opening another Bridge stream. Reconcile with the authoritative pending-interaction API on start/reconnect or history gaps.
+- `automation_notifications.py`: existing target validation, service delivery, persistent deep links and durable delivery receipts. Reuse its small shared mechanisms where appropriate; keep scheduled-run policies and receipts separate from question delivery.
+- Panel interaction rendering: retain the current question/choice controls and expiry logic, adding a stable authenticated question deep link and clear answered/expired state if current rendering does not already provide it.
+
+## Implementation slices
+
+1. Add opted-in, config-entry-owned question notification settings: selected registered Companion devices, persistent notice, preview privacy and enabled state. Default to off with a generic preview. Resolve each selected service to its actual mobile registration and authorised active HA user; do not treat arbitrary notify services as reply identities. Revalidate when users/devices/settings change. Reuse current option storage and migrate additively.
+2. Add one lightweight question notification coordinator under the Integration lifecycle. Accept only pending `user_input` interactions allowing `answer`; fetch current bounded public display before delivery. Store a bounded ledger per interaction/destination with expiry, authorised user/device binding, one-time random action correlation and delivery state. Do not put Bridge credentials, raw runtime context or complete answers in action payloads/logs. Question text previews are explicit opt-in and must use existing safe projection/redaction; uncertain/sensitive content falls back to generic Open chat.
+3. Send Companion `textInput` actions with unique per-delivery action identifiers and handle returned `reply_text`. Use short choice actions only for a single supported choice question that fits the device's action limits; text reply only where free text is allowed. Use Open chat for multiple questions, multi-select, long choices or unsupported phones. The persistent notification is a deep link, not an inline-reply control. Request device authentication where supported.
+4. Validate each `mobile_app_notification_action` before using the existing answer API: known unexpired action, current settings/destination, active authorised administrator user from HA event context, expected registration/device correlation, current interaction/thread/kind, supported question and bounded valid value. Ignore client-supplied routing/identity claims as authority. Re-read pending state, then submit with a stable request identity. Let the broker arbitrate races and stale/duplicate answers; do not build a second answer lock or create a new prompt. An unknown outcome must reconcile rather than resend under a new identity.
+5. Reconcile completion, expiry, cancellation and restart. On resolution, clear/update all selected devices and the persistent notice using stable tags. On HA reload, retain unexpired correlation only after revalidating the current broker question; on Bridge generation/run loss, invalidate it. Register/unregister event listeners with the Integration lifecycle. Persist delivery receipts before side effects as in existing notifications, disclose uncertain delivery, and use bounded reconciliation instead of unlimited retries. A missing/failed notification service cannot block chat or grant authority.
+
+## Identity qualification before enabling inline reply
+
+Current upstream mobile-app webhook code creates remote event context from the registered HA user. Its action payload is device-supplied, so a device identifier alone is not proof of origin. Bind a random per-destination action to the registered recipient and require the corresponding authenticated HA user/context. Verify the deployed HA/Companion versions actually expose the identity needed by this binding; do not claim independent device authentication from an arbitrary event field. If the recipient/user/device relationship cannot be established, send Open chat only. Never reuse/copy mobile webhook secrets or add an unauthenticated reply endpoint.
+
+## Acceptance and release
+
+Automated checks cover only eligible question kinds; explicit choices/text and complex-form fallback; invalid/missing user/device correlation; revoked users/destinations; expiry; stale/replayed actions; chat/phone and multi-device races; crash/reconnect/generation changes; outcome unknown; service failure; preview privacy; listener unload; and clearing all corresponding notices. Assert native response publication occurs once and no approval/permission path is invoked. Preserve existing scheduled-run notifications and old-App capability behaviour.
+
+Native DEV acceptance needs a disposable real Codex clarification, a physical supported Companion phone text reply and choice reply, chat response, multiple devices, stale replay, restart, service failure and fixture cleanup. Record service delivery separately from evidence that a physical phone displayed and answered it. The release coordinator allocates the source slot, checks exact supported versions/permissions, runs full applicable Linux/frontend/image gates and preserves resource power state. No device, deployment or release date is assumed by this plan.
+
+Rollback disables the opt-in coordinator and invalidates its action ledger while ordinary chat answering remains available. Uninstall/unload must remove listeners; remove only owned notification tags. The broker interaction contract and saved chats remain unchanged. Notification ledger/schema migration must be additive and bounded.
+
+## Sources and remaining decisions
+
+[Companion actionable notifications](https://companion.home-assistant.io/docs/notifications/actionable-notifications/) documents `textInput`, `reply_text`, choice actions, authentication and platform limits. [Core mobile-app webhook owner](https://github.com/home-assistant/core/blob/dev/homeassistant/components/mobile_app/webhook.py) and [registration context](https://github.com/home-assistant/core/blob/dev/homeassistant/components/mobile_app/helpers.py) show current upstream user-context propagation; verify the deployed release during implementation. These sources were checked on 26 September 2026.
+
+Remaining implementation decisions are the exact existing options UI placement, supported native phone/HA versions for qualification, and the verified registration-to-device/service mapping. Select these in the allocated follow-up slot; do not weaken identity checks to manufacture inline-reply coverage.

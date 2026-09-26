@@ -35,6 +35,8 @@ from .event_broker import EventBroker
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
+from .question_notifications import QuestionNotificationCoordinator
+from .question_notification_settings import question_notification_settings
 from .http import async_register_http_views
 from .ha_mcp_shortcut import HaMcpShortcut
 from .assist_settings import assist_mcp_selection
@@ -116,6 +118,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         discovery_uuid=entry.data.get(CONF_DISCOVERY_UUID),
         api_version=client.negotiated_api_version or 0,
         capabilities=tuple(getattr(ready, "capabilities", ())),
+        question_notification_settings=question_notification_settings(entry.options),
         web_search_mode=normalize_web_search_mode(
             entry.options.get(CONF_WEB_SEARCH_MODE),
             connection_type=connection_type,
@@ -162,6 +165,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass,
                 runtime,
                 Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.automation_notifications"),
+            )
+        if connection_type != CONNECTION_TYPE_EXTERNAL_LEGACY:
+            runtime.question_notifications = QuestionNotificationCoordinator(
+                hass, runtime,
+                Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications"),
             )
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
@@ -213,6 +221,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             and runtime.supports_capability("automation_notifications_v1")
         ):
             await runtime.automation_notifications.async_start()
+        if runtime.question_notifications is not None and runtime.supports_capability("interactions_v2"):
+            await runtime.question_notifications.async_start()
         if runtime.entity_coordinator is not None:
             await runtime.entity_coordinator.async_refresh()
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

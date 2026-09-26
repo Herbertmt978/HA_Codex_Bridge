@@ -68,3 +68,48 @@ async def test_capability_refresh_starts_new_notification_support() -> None:
     assert await runtime.async_refresh_capabilities(force=True)
 
     runtime.automation_notifications.async_start.assert_awaited_once()
+
+
+async def test_question_notifications_reconcile_removed_capability() -> None:
+    runtime = _runtime()
+    runtime.capabilities = ("api_v1", "interactions_v2")
+    runtime.question_notifications = SimpleNamespace(
+        async_start=AsyncMock(), async_refresh=AsyncMock(),
+    )
+    runtime.client.async_refresh_ready.return_value = SimpleNamespace(capabilities=("api_v1",))
+
+    assert await runtime.async_refresh_capabilities(force=True)
+
+    runtime.question_notifications.async_start.assert_not_awaited()
+    runtime.question_notifications.async_refresh.assert_awaited_once()
+
+
+async def test_question_notifications_start_when_new_capability_is_advertised() -> None:
+    runtime = _runtime()
+    runtime.question_notifications = SimpleNamespace(async_start=AsyncMock(), async_refresh=AsyncMock())
+    runtime.client.async_refresh_ready.return_value = SimpleNamespace(capabilities=("api_v1", "interactions_v2"))
+
+    assert await runtime.async_refresh_capabilities(force=True)
+
+    runtime.question_notifications.async_start.assert_awaited_once()
+
+
+async def test_question_listeners_close_before_stream_and_client() -> None:
+    runtime = _runtime()
+    closed = []
+
+    async def close_question():
+        closed.append("questions")
+
+    async def close_stream():
+        closed.append("stream")
+
+    async def close_client():
+        closed.append("client")
+
+    runtime.question_notifications = SimpleNamespace(async_close=close_question)
+    runtime.event_broker = SimpleNamespace(async_close=close_stream)
+    runtime.client.async_close = close_client
+    await runtime.async_close()
+
+    assert closed == ["questions", "stream", "client"]

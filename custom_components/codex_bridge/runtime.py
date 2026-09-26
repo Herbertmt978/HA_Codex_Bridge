@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .ha_mcp_shortcut import HaMcpShortcut
     from .entity_coordinator import BridgeEntityCoordinator
     from .task_events import TaskEventForwarder
+    from .question_notifications import QuestionNotificationCoordinator
 
 
 _CAPABILITY_REFRESH_INTERVAL_SECONDS = 5.0
@@ -40,6 +41,10 @@ class CodexBridgeRuntime:
     task_event_forwarder: TaskEventForwarder | None = None
     automation_scheduler: AutomationScheduler | None = None
     automation_notifications: AutomationNotificationCoordinator | None = None
+    question_notifications: QuestionNotificationCoordinator | None = None
+    question_notification_settings: dict = field(default_factory=lambda: {
+        "enabled": False, "persistent": True, "preview": False, "mobile_targets": [],
+    }, repr=False)
     entity_coordinator: BridgeEntityCoordinator | None = None
     ha_mcp_shortcut: HaMcpShortcut | None = None
     capabilities: tuple[str, ...] = ()
@@ -102,6 +107,11 @@ class CodexBridgeRuntime:
                 and self.supports_capability("automation_notifications_v1")
             ):
                 await self.automation_notifications.async_start()
+            if self.question_notifications is not None:
+                if self.supports_capability("interactions_v2"):
+                    await self.question_notifications.async_start()
+                else:
+                    await self.question_notifications.async_refresh()
             return True
 
     def capability_refresh_is_urgent(self, status: object) -> bool:
@@ -135,6 +145,8 @@ class CodexBridgeRuntime:
                 await self.automation_scheduler.async_close()
             if self.automation_notifications is not None:
                 await self.automation_notifications.async_close()
+            if self.question_notifications is not None:
+                await self.question_notifications.async_close()
             if self.event_broker is not None:
                 await self.event_broker.async_close()
         finally:

@@ -44,9 +44,15 @@ from .const import (
     CONF_ASSIST_REASONING,
     CONF_ASSIST_INSTRUCTIONS,
     CONF_ASSIST_MCP_SERVERS,
+    CONF_QUESTION_NOTIFICATIONS_ENABLED,
+    CONF_QUESTION_NOTIFICATIONS_PERSISTENT,
+    CONF_QUESTION_NOTIFICATIONS_PREVIEW,
+    CONF_QUESTION_NOTIFICATIONS_TARGETS,
     WEB_SEARCH_MODE_DISABLED,
     WEB_SEARCH_MODE_LIVE,
 )
+from .question_notification_recipients import async_resolve_question_recipients
+from .question_notification_settings import question_notification_settings
 from .protocol import (
     ApiIncompatibleError as ProtocolApiIncompatibleError,
     DiscoveryRecord,
@@ -333,7 +339,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
-    """Manage integration-owned settings for the Supervisor App connection."""
+    """Manage Integration-owned App, Assist and question notification settings."""
 
     async def _assist_projects(self) -> dict[str, str]:
         """Offer only active projects; an unavailable App never grants Assist access."""
@@ -403,7 +409,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             return {}
 
     async def async_step_init(self, user_input=None):
-        """Offer the strict native web-search preference to Supervisor entries."""
+        """Offer task, Assist and question notification settings to Supervisor entries."""
 
         if (
             self.config_entry.data.get(CONF_CONNECTION_TYPE)
@@ -429,6 +435,20 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                     f"{state[0]} (paused)" if state is not None
                     else f"{name} (unavailable)"
                 )
+        recipients = await async_resolve_question_recipients(self.hass)
+        recipient_choices = {item.registration_id: item.label for item in recipients}
+        saved_notifications = question_notification_settings(self.config_entry.options)
+        notification_fields = {
+            CONF_QUESTION_NOTIFICATIONS_ENABLED: "enabled",
+            CONF_QUESTION_NOTIFICATIONS_PERSISTENT: "persistent",
+            CONF_QUESTION_NOTIFICATIONS_PREVIEW: "preview",
+            CONF_QUESTION_NOTIFICATIONS_TARGETS: "mobile_targets",
+        }
+        notification_input = {
+            key: (user_input or {}).get(key, saved_notifications[field])
+            for key, field in notification_fields.items()
+        }
+        notifications = question_notification_settings(notification_input)
         errors = {}
         if user_input is not None:
             assist_enabled = user_input.get(CONF_ASSIST_ENABLED, False)
@@ -446,7 +466,21 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                 CONF_ASSIST_MCP_SERVERS, saved_mcp
             ))
             defaults = getattr(self, "_assist_project_defaults", {}).get(assist_project, (None, None))
-            if assist_enabled and assist_project not in projects:
+            invalid_notifications = (
+                any(type(notification_input[key]) is not bool for key in (
+                    CONF_QUESTION_NOTIFICATIONS_ENABLED,
+                    CONF_QUESTION_NOTIFICATIONS_PERSISTENT,
+                    CONF_QUESTION_NOTIFICATIONS_PREVIEW,
+                ))
+                or notification_input[CONF_QUESTION_NOTIFICATIONS_TARGETS] != notifications["mobile_targets"]
+                or (notifications["enabled"] and any(
+                    target not in recipient_choices for target in notifications["mobile_targets"]
+                ))
+                or (notifications["enabled"] and not notifications["persistent"] and not notifications["mobile_targets"])
+            )
+            if invalid_notifications:
+                errors["base"] = "question_notifications_invalid"
+            elif assist_enabled and assist_project not in projects:
                 errors["base"] = "assist_project_required"
             elif selected_mcp is None:
                 errors["base"] = "assist_mcp_unavailable"
@@ -485,6 +519,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_ASSIST_REASONING: assist_reasoning,
                         CONF_ASSIST_INSTRUCTIONS: instructions.strip(),
                         CONF_ASSIST_MCP_SERVERS: list(selected_mcp),
+                        **notification_input,
                     },
                 )
 
@@ -549,6 +584,28 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                     ): bool,
                     vol.Required(CONF_ASSIST_MODEL, default=current_model): vol.In(model_choices),
                     vol.Required(CONF_ASSIST_REASONING, default=current_reasoning): vol.In(reasoning_choices),
+                    vol.Required(
+                        CONF_QUESTION_NOTIFICATIONS_ENABLED,
+                        default=notifications["enabled"],
+                    ): bool,
+                    vol.Required(
+                        CONF_QUESTION_NOTIFICATIONS_PERSISTENT,
+                        default=notifications["persistent"],
+                    ): bool,
+                    vol.Required(
+                        CONF_QUESTION_NOTIFICATIONS_PREVIEW,
+                        default=notifications["preview"],
+                    ): bool,
+                    vol.Optional(
+                        CONF_QUESTION_NOTIFICATIONS_TARGETS,
+                        default=notifications["mobile_targets"],
+                    ): selector.SelectSelector(selector.SelectSelectorConfig(
+                        options=[{"value": key, "label": label} for key, label in {
+                            **recipient_choices,
+                            **{target: "Unavailable Companion device" for target in notifications["mobile_targets"] if target not in recipient_choices},
+                        }.items()],
+                        multiple=True,
+                    )),
                     vol.Optional(
                         CONF_ASSIST_INSTRUCTIONS,
                         default=submitted.get(CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")),

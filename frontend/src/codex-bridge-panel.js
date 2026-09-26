@@ -109,6 +109,8 @@ const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
 const ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 const ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
+const QUESTION_LINK_INTERACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/u;
+const QUESTION_LINK_THREAD_ID = /^[A-Za-z0-9_.:-]{1,200}$/u;
 
 function isGeneratedImageArtifact(artifact) {
   return artifact?.source === "generated_image";
@@ -5744,9 +5746,9 @@ template.innerHTML = `
       <div class="section-scroll">
         <div class="rail-sections">
           <section class="rail-section" id="direct-section"></section>
-          <section class="rail-section" id="assistant-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
+          <section class="rail-section" id="assistant-section"></section>
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
@@ -6028,6 +6030,7 @@ class CodexBridgePanel extends HTMLElement {
     this._selectedProjectId = null;
     this._selectedThreadId = null;
     this._sharedThreadChecked = false;
+    this._questionDeepLink = null;
     this._contextVisible = true;
     this._bottomPanelOpen = false;
     this._activityView = false;
@@ -6165,6 +6168,7 @@ class CodexBridgePanel extends HTMLElement {
     this._interactionAnswers = new Map();
     this._announcedInteractionIds = new Set();
     this._interactionExpiryTimer = null;
+    this._suppressInteractionFocusScroll = false;
     this._promptMutations = new Map();
     this._cancellingThreads = new Set();
     this._promptMutation = null;
@@ -6174,7 +6178,7 @@ class CodexBridgePanel extends HTMLElement {
     this._expandedProjectActions = {};
     this._collapsedSections = {
       direct: false,
-      assistant: false,
+      assistant: true,
       assistantArchived: true,
       archived: true,
     };
@@ -7344,7 +7348,9 @@ class CodexBridgePanel extends HTMLElement {
     const target = event.target;
     const timelineItem = target instanceof HTMLElement && target.matches(".timeline-item");
     if (!timelineItem) this._showTooltipForTarget(target);
-    this._scrollInteractionTargetIntoView(target);
+    if (!this._suppressInteractionFocusScroll) {
+      this._scrollInteractionTargetIntoView(target);
+    }
     if (timelineItem) {
       window.clearTimeout(this._timelineCloseTimer);
       this._timelinePreviewSequence = target.dataset.sequence;
@@ -9078,9 +9084,38 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderInteractions() {
     const region = this.shadowRoot.getElementById("interaction-region");
+    const questionLink = this._questionDeepLink;
+    const previousFocus = this.shadowRoot.activeElement;
+    const restoreQuestionFocus = Boolean(
+      questionLink?.focused
+      && questionLink.threadId === this._selectedThreadId
+      && previousFocus?.closest?.("[data-interaction-id]")?.dataset.interactionId === questionLink.interactionId
+    );
     region.replaceChildren();
     if (!this._selectedThreadId || !this._isSupervisorConnection()) {
       return;
+    }
+
+    const questionLinkApplies = questionLink && questionLink.threadId === this._selectedThreadId;
+    const linkedInteraction = questionLinkApplies && questionLink.interactionId
+      ? this._pendingInteractions.find((interaction) => (
+        interaction.thread_id === questionLink.threadId
+        && interaction.interaction_id === questionLink.interactionId
+        && interaction.kind === "user_input"
+        && interaction.status === "pending"
+      ))
+      : null;
+    let questionLinkStatus = questionLinkApplies && questionLink.invalid
+      ? "This question link is invalid. The chat is open."
+      : null;
+    if (!linkedInteraction && questionLinkApplies && questionLink.ready && !questionLink.invalid) {
+      questionLinkStatus = "This question is no longer available. The chat is open.";
+    }
+    if (questionLinkStatus) {
+      const status = this._textElement("p", "question-link-status", questionLinkStatus);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      region.append(status);
     }
 
     const visibleInteractions = this._pendingInteractions.filter(
@@ -9184,7 +9219,29 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     this._scheduleInteractionExpiryRefresh();
-    if (newCards.length) {
+    let focusedQuestionLink = false;
+    let restoredQuestionFocus = false;
+    if (linkedInteraction && (!questionLink.focused || restoreQuestionFocus)) {
+      const linkedCard = [...region.querySelectorAll("[data-interaction-id]")]
+        .find((card) => card.dataset.interactionId === questionLink.interactionId)
+        ?.querySelector("[role='alertdialog']");
+      if (linkedCard) {
+        if (questionLink.focused) {
+          restoredQuestionFocus = true;
+          this._suppressInteractionFocusScroll = true;
+          try {
+            linkedCard.focus({ preventScroll: true });
+          } finally {
+            this._suppressInteractionFocusScroll = false;
+          }
+        } else {
+          questionLink.focused = true;
+          focusedQuestionLink = true;
+          linkedCard.focus();
+        }
+      }
+    }
+    if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
         newCards[0].querySelector("[role='alertdialog']")?.focus();
@@ -10036,42 +10093,44 @@ class CodexBridgePanel extends HTMLElement {
     list.id = "assistant-chat-list";
     list.className = "chat-list direct-chat-list";
     list.hidden = collapsed;
-    const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
-    const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
-    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
-    for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
+    if (!collapsed) {
+      const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
+      const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
+      for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
+      for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
 
-    const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
-    if (archived.length) {
-      const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
-      const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
-      archiveToggle.dataset.section = "assistantArchived";
-      archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
-      archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
-      const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
-      archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
-      archiveToggle.append(archiveTitle);
-      list.append(archiveToggle);
-      const archiveList = document.createElement("div");
-      archiveList.id = "assistant-archived-chat-list";
-      archiveList.className = "chat-list";
-      archiveList.hidden = archiveCollapsed;
-      const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
-      const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
-      for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
-      const restoredProjectActions = new Set();
-      for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
-        archiveList.append(this._threadRow(thread, { archived: true }));
-        const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
-        if (project && !restoredProjectActions.has(project.project_id)) {
-          restoredProjectActions.add(project.project_id);
-          const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
-          restore.dataset.projectId = String(project.project_id);
-          this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
-          archiveList.append(restore);
+      const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
+      if (archived.length) {
+        const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
+        const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
+        archiveToggle.dataset.section = "assistantArchived";
+        archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
+        archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
+        const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
+        archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
+        archiveToggle.append(archiveTitle);
+        list.append(archiveToggle);
+        const archiveList = document.createElement("div");
+        archiveList.id = "assistant-archived-chat-list";
+        archiveList.className = "chat-list";
+        archiveList.hidden = archiveCollapsed;
+        const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
+        const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
+        for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
+        const restoredProjectActions = new Set();
+        for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
+          archiveList.append(this._threadRow(thread, { archived: true }));
+          const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
+          if (project && !restoredProjectActions.has(project.project_id)) {
+            restoredProjectActions.add(project.project_id);
+            const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
+            restore.dataset.projectId = String(project.project_id);
+            this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
+            archiveList.append(restore);
+          }
         }
+        list.append(archiveList);
       }
-      list.append(archiveList);
     }
     section.append(list);
   }
@@ -12948,13 +13007,30 @@ class CodexBridgePanel extends HTMLElement {
       : listedThreads;
     if (!this._sharedThreadChecked) {
       this._sharedThreadChecked = true;
-      const sharedId = new URL(window.location.href).searchParams.get("thread");
+      const parameters = new URL(window.location.href).searchParams;
+      const sharedId = parameters.get("thread");
+      if (parameters.has("interaction")) {
+        const interactionId = parameters.get("interaction");
+        const validThreadId = typeof sharedId === "string" && QUESTION_LINK_THREAD_ID.test(sharedId);
+        const validInteractionId = typeof interactionId === "string" && QUESTION_LINK_INTERACTION_ID.test(interactionId);
+        this._questionDeepLink = {
+          threadId: validThreadId ? sharedId : null,
+          interactionId: validInteractionId ? interactionId : null,
+          invalid: !validThreadId || !validInteractionId,
+          ready: false,
+          focused: false,
+        };
+      }
       const shared = this._threads.find((thread) => thread.thread_id === sharedId);
       if (shared) {
         this._setSelectedThreadId(shared.thread_id);
         this._selectedProjectId = shared.project_id;
-      } else if (sharedId) {
+      } else if (sharedId && !this._questionDeepLink) {
         throw new Error("This shared chat is no longer available on this Home Assistant.");
+      } else if (this._questionDeepLink && sharedId) {
+        this._questionDeepLink.threadId = null;
+        this._questionDeepLink.invalid = this._questionDeepLink.invalid
+          || !QUESTION_LINK_THREAD_ID.test(sharedId);
       }
     }
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
@@ -12963,6 +13039,9 @@ class CodexBridgePanel extends HTMLElement {
     if (!this._selectedThreadId) {
       const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
       this._setSelectedThreadId(firstActive?.thread_id || null);
+    }
+    if (this._questionDeepLink && !this._questionDeepLink.threadId) {
+      this._questionDeepLink.threadId = this._selectedThreadId;
     }
     if (!this._selectedProjectId && this._threads.length) {
       this._selectedProjectId = this._threads[0].project_id;
@@ -13059,6 +13138,9 @@ class CodexBridgePanel extends HTMLElement {
         this._clearArtifactRefreshRetry();
       }
       this._replacePendingInteractions(interactions);
+      if (this._questionDeepLink?.threadId === threadId) {
+        this._questionDeepLink.ready = true;
+      }
       this._mergeStatus(status);
       this._threadRefreshGraceUntil = 0;
       this._forceMessageRebuild = true;

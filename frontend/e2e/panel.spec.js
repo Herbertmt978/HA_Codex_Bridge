@@ -2724,6 +2724,25 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(answers[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 });
 
+test("opens an authenticated question link on its pending card without submitting anything", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html?thread=thr_vba_1&interaction=int_question_harness`);
+
+  const panel = page.locator("codex-bridge-panel");
+  const question = panel.locator('[data-interaction-id="int_question_harness"]');
+  const questionCard = question.locator(".user-input-card");
+  await expect(question).toBeVisible();
+  await expect(questionCard).toBeFocused();
+
+  const mutationCalls = await page.evaluate(() => window.__codexHarness.calls
+    .filter((call) => call.kind === "ws" && [
+      "codex_bridge/answer_interaction",
+      "codex_bridge/decide_interaction",
+      "codex_bridge/send_prompt",
+    ].includes(call.type))
+    .map((call) => call.type));
+  expect(mutationCalls).toEqual([]);
+});
+
 test("answers an MCP form and opens an explicit HTTPS authorisation link", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
@@ -4322,6 +4341,14 @@ for (const width of [390, 1440]) {
     const group = panel.locator("#assistant-section");
     await expect(group.locator(".section-name").first()).toHaveText("HA Assistant Chats");
     await expect(group.locator(".section-count").first()).toHaveText("3");
+    const toggle = group.locator('[data-section="assistant"]');
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(group.locator("#assistant-chat-list")).toBeHidden();
+    await expect(group.locator(".chat-row")).toHaveCount(0);
+    expect(await panel.locator(".rail-sections > .rail-section").evaluateAll((sections) => sections.map((section) => section.id)))
+      .toEqual(["direct-section", "project-section", "archived-section", "assistant-section"]);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(group.locator(".chat-row")).toHaveCount(3);
     await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
     await expect(panel.locator('#project-section [data-chat-thread-id="thr_vba_2"]')).toHaveCount(1);
@@ -4333,7 +4360,6 @@ for (const width of [390, 1440]) {
     expect(await group.locator(".section-name").first().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`ha-assistant-group-${width}.png`) });
 
-    const toggle = group.locator('[data-section="assistant"]');
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -4361,8 +4387,8 @@ for (const width of [390, 1440]) {
     await menuControl.click();
     await expect(menu).toBeVisible();
     await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.trigger === element.shadowRoot.querySelector('[data-chat-thread-id="thr_direct"] .thread-actions-toggle'))).toBe(true);
-    if (width === 390) { await menuControl.focus(); await page.keyboard.press("Enter"); }
-    else await menuControl.click();
+    await menuControl.focus();
+    await page.keyboard.press("Enter");
     await expect(menu).toBeHidden();
     await expect(menuControl).toHaveAttribute("aria-expanded", "false");
     await menuControl.click();
@@ -4439,6 +4465,7 @@ for (const width of [390, 1440]) {
     };
     await openDrawer();
     const group = panel.locator("#assistant-section");
+    await group.locator('[data-section="assistant"]').click();
     const shell = group.locator(".project-shell");
     const header = shell.locator('[data-action="select-project"]');
     const actions = shell.locator(".project-secondary-actions");

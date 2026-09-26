@@ -127,6 +127,10 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
         CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
     result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
 
@@ -141,6 +145,10 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
         CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
 
     enabled = await flow.async_step_init({
@@ -174,6 +182,10 @@ async def test_supervisor_options_remain_available_before_login_capability_recov
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
         CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
 
 
@@ -690,3 +702,29 @@ async def test_host_discovery_pairs_only_the_matching_private_companion(hass, ca
             client.async_pair_host_worker.assert_not_called()
     assert payload["token"] not in caplog.text
     assert TOKEN not in caplog.text
+
+
+async def test_question_notification_options_require_current_registered_admin_devices(hass):
+    entry = MockConfigEntry(domain=DOMAIN, title="Codex Bridge App", data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR})
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    with patch("custom_components.codex_bridge.config_flow.async_resolve_question_recipients", new=AsyncMock(return_value=[])):
+        invalid = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_targets": ["revoked_phone"],
+        })
+        assert invalid["errors"] == {"base": "question_notifications_invalid"}
+        no_destination = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_persistent": False,
+        })
+        assert no_destination["errors"] == {"base": "question_notifications_invalid"}
+        persistent = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_persistent": True,
+        })
+        assert persistent["type"] is FlowResultType.CREATE_ENTRY
+        assert persistent["data"]["question_notifications_enabled"] is True
+        assert persistent["data"]["question_notifications_preview"] is False
