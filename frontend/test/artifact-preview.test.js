@@ -309,7 +309,7 @@ describe("artifact previews", () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/codex_bridge/threads/thread_safe/artifacts/empty",
-      { headers: {} }
+      { headers: {}, credentials: "same-origin", mode: "same-origin", redirect: "error" }
     );
   });
 
@@ -404,7 +404,7 @@ describe("artifact previews", () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/codex_bridge/threads/thread_safe/artifacts/art_safe",
-      { headers: {} }
+      { headers: {}, credentials: "same-origin", mode: "same-origin", redirect: "error" }
     );
     expect(clickSpy).not.toHaveBeenCalled();
 
@@ -764,7 +764,7 @@ describe("artifact previews", () => {
     expect(panel._selectedArtifactId).toBe(previewable.artifact_id);
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/codex_bridge/threads/thread_safe/artifacts/art_previewable",
-      { headers: { Range: "bytes=0-11" } }
+      { headers: { Range: "bytes=0-11" }, credentials: "same-origin", mode: "same-origin", redirect: "error" }
     );
 
     panel._selectedArtifactId = unknown.artifact_id;
@@ -847,6 +847,9 @@ describe("artifact previews", () => {
     const panel = createPanel(artifact);
     panel._sideTab = "activity";
     panel._renderSideTabs();
+    // The history thumbnail has its own bounded request. This case exercises
+    // reuse of the full preview rather than eager jsdom thumbnail loading.
+    vi.spyOn(panel._inlineImages(), "load").mockResolvedValue(null);
     let resolvePreview;
     const pendingResponse = new Promise((resolve) => { resolvePreview = resolve; });
     const fetchSpy = vi.spyOn(window, "fetch").mockReturnValue(pendingResponse);

@@ -76,7 +76,7 @@ from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
 from codex_bridge_service.routes import task_actions
 from codex_bridge_service.routes import threads as thread_routes
 from codex_bridge_service.routes.prompts import PromptRequest
-from codex_bridge_service.model_catalog import ModelCatalogError
+from codex_bridge_service.model_catalog import CodexModelCatalogProbe, ModelCatalogError
 
 
 class _ContentionTrackingRLock:
@@ -8654,6 +8654,13 @@ def test_ha_task_action_start_retry_and_exact_cancel_are_durable(
     def submit_while_project_is_reserved(*args, **kwargs):
         with pytest.raises(ProjectMutationError):
             storage.archive_project(project.project_id)
+        with pytest.raises(ProjectMutationError):
+            storage.update_project(project.project_id, default_model="unavailable-model")
+        with pytest.raises(ProjectMutationError):
+            storage.update_project(project.project_id, default_thinking_level="unsupported")
+        current = storage.load_project(project.project_id)
+        assert current.default_model == "gpt-5.6-codex"
+        assert current.default_thinking_level == "high"
         return submit_prompt(*args, **kwargs)
 
     monkeypatch.setattr(broker, "submit_prompt", submit_while_project_is_reserved)
@@ -8814,6 +8821,21 @@ def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
     app.state.storage = ha_storage
     app.state.runner = broker
     app.state.mcp_manager = SimpleNamespace(enabled=False)
+
+    def refresh_under_admission() -> None:
+        with pytest.raises(RuntimeMutationConflictError):
+            broker.gate.acquire_auth_mutation()
+
+    app.state.model_catalog_probe = SimpleNamespace(
+        invalidate=refresh_under_admission,
+        probe=lambda **_: SimpleNamespace(
+            source="codex-app-server", stale=False,
+            models=[SimpleNamespace(
+                model="gpt-5.6-codex", catalogued=True, thinking_levels=("high",),
+                advertised_thinking_levels=("high",),
+            )],
+        ),
+    )
     app.include_router(task_actions.router)
     monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
     http = TestClient(app)
@@ -8821,6 +8843,20 @@ def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
     first_id = "d" * 32
     second_id = "e" * 32
     third_id = "f" * 32
+    submit_prompt = broker.submit_prompt
+    fenced_submissions = 0
+
+    def submit_with_fenced_assist_defaults(*args, **kwargs):
+        nonlocal fenced_submissions
+        if kwargs.get("assist") is True:
+            with pytest.raises(ProjectMutationError):
+                storage.update_project(project.project_id, default_model="unavailable-model")
+            with pytest.raises(ProjectMutationError):
+                storage.update_project(project.project_id, default_thinking_level="unsupported")
+            fenced_submissions += 1
+        return submit_prompt(*args, **kwargs)
+
+    monkeypatch.setattr(broker, "submit_prompt", submit_with_fenced_assist_defaults)
 
     def publish_answer(thread_id: str, text: str) -> None:
         _, remote_thread_id, turn_id = _active_ids(storage, thread_id)
@@ -8880,6 +8916,84 @@ def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
         assert http.get(f"/task-actions/{second_id}/answer", headers=headers).json()["answer"] == "Second reply"
         assert http.get(f"/task-actions/{first_id}/answer", headers=headers).json()["answer"] == "First reply"
 
+        available_probe = app.state.model_catalog_probe
+        native_with_configured_only_effort = CodexModelCatalogProbe._build_catalog(
+            {"config": {"model": "gpt-5.6-codex", "model_reasoning_effort": "high"}},
+            {"data": [{
+                "model": "gpt-5.6-codex", "defaultReasoningEffort": "medium",
+                "supportedReasoningEfforts": [{"reasoningEffort": "medium"}],
+            }]},
+        )
+        assert native_with_configured_only_effort.models[0].thinking_levels == ["medium", "high"]
+        invalid_catalogues = (
+            ("codex-app-server", False, [], 422),
+            ("codex-app-server", False, [SimpleNamespace(
+                model="gpt-5.6-codex", catalogued=False, thinking_levels=("high",),
+                advertised_thinking_levels=("high",),
+            )], 422),
+            ("codex-app-server", False, [SimpleNamespace(
+                model="gpt-5.6-codex", catalogued=True, thinking_levels=("medium",),
+                advertised_thinking_levels=("medium",),
+            )], 422),
+            ("last-known-good", True, [], 503),
+            ("codex-bundled", False, [], 503),
+            ("codex-app-server", False, native_with_configured_only_effort.models, 422),
+            ("codex-app-server", False, [SimpleNamespace(
+                model="gpt-5.6-codex", catalogued=True, thinking_levels=("high",),
+            )], 422),
+        )
+        for index, (source, stale, models, expected_status) in enumerate(invalid_catalogues):
+            refused_id = f"{index + 1:032x}"
+            app.state.model_catalog_probe = SimpleNamespace(
+                invalidate=refresh_under_admission,
+                probe=lambda **_: SimpleNamespace(source=source, stale=stale, models=models),
+            )
+            refused = http.post(
+                "/task-actions/continue", headers=headers,
+                json={
+                    "task_id": refused_id, "thread_id": thread_id,
+                    "prompt": "Unavailable choice", "web_search": "disabled", "assist": True,
+                },
+            )
+            assert refused.status_code == expected_status, refused.text
+            assert broker.get_task_action_run(refused_id) is None
+            # First turns validate before persisting even an idle chat, with
+            # project defaults and explicit overrides following the same gate.
+            for overrides in ({}, {"model_override": "gpt-5.6-codex", "thinking_override": "high"}):
+                refused_start = http.post(
+                    "/task-actions/start", headers=headers,
+                    json={
+                        "task_id": refused_id, "project_id": project.project_id,
+                        "title": "Unavailable Assist choice", "prompt": "Unavailable choice",
+                        "mode": "observe", "web_search": "disabled", "assist": True,
+                        **overrides,
+                    },
+                )
+                assert refused_start.status_code == expected_status, refused_start.text
+                assert broker.get_task_action_run(refused_id) is None
+                assert not (storage.threads_dir / f"thr_task_{refused_id}.json").exists()
+            # Reading and replaying accepted work must survive catalogue changes.
+            replay = http.post(
+                "/task-actions/continue", headers=headers,
+                json={
+                    "task_id": second_id, "thread_id": thread_id,
+                    "prompt": "Continue", "web_search": "disabled", "assist": True,
+                },
+            )
+            assert replay.status_code == 202, replay.text
+            assert replay.json()["run_id"] == second.json()["run_id"]
+            first_replay = http.post(
+                "/task-actions/start", headers=headers,
+                json={
+                    "task_id": first_id, "project_id": project.project_id,
+                    "title": "Assist conversation", "prompt": "Hello",
+                    "mode": "observe", "web_search": "disabled", "assist": True,
+                },
+            )
+            assert first_replay.status_code == 202, first_replay.text
+            assert first_replay.json()["run_id"] == first.json()["run_id"]
+        app.state.model_catalog_probe = available_probe
+
         third = http.post(
             "/task-actions/continue", headers=headers,
             json={
@@ -8910,6 +9024,11 @@ def test_assist_task_answers_are_run_scoped_and_only_return_after_success(
         bounded = http.get(f"/task-actions/{first_id}/answer", headers=headers).json()["answer"]
         assert len(bounded) == 4096
         assert bounded.endswith("…")
+        assert fenced_submissions == 3
+        # The reservation ends after admission; explicit administrator edits
+        # are then permitted and the next Assist turn must revalidate them.
+        storage.update_project(project.project_id, default_thinking_level="medium")
+        assert storage.load_project(project.project_id).default_thinking_level == "medium"
     finally:
         broker.close()
 
@@ -8932,6 +9051,16 @@ def test_assist_admission_rejects_unrestricted_tools_and_targets(
     app.state.storage = ha_storage
     app.state.runner = broker
     app.state.mcp_manager = SimpleNamespace(enabled=False)
+    app.state.model_catalog_probe = SimpleNamespace(
+        invalidate=lambda: None,
+        probe=lambda **_: SimpleNamespace(
+            source="codex-app-server", stale=False,
+            models=[SimpleNamespace(
+                model="gpt-5.6-codex", catalogued=True, thinking_levels=("high",),
+                advertised_thinking_levels=("high",),
+            )],
+        ),
+    )
     app.include_router(task_actions.router)
     monkeypatch.setattr(task_actions, "_require_ready", lambda *_: None)
     http = TestClient(app)

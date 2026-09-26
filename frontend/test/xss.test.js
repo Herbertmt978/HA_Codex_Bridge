@@ -171,11 +171,15 @@ describe("safe DOM and hostile content", () => {
     }
   });
 
-  it("encodes every artifact route segment before a same-origin preview request", async () => {
+  it.each([
+    ["thr/a?query#fragment", "art_safe"],
+    ["..", "art_safe"],
+    ["thr_safe", ".."],
+  ])("rejects hostile artifact route segments before HTTP and reports preview failure (%#)", async (threadId, artifactId) => {
     const panel = document.createElement("codex-bridge-panel");
     document.body.append(panel);
-    panel._selectedThreadId = "thr/a?query#fragment";
-    panel._selectedArtifactId = "art/../file?download#fragment";
+    panel._selectedThreadId = threadId;
+    panel._selectedArtifactId = artifactId;
     panel._artifacts = [makeArtifact({
       artifact_id: panel._selectedArtifactId,
       filename: "safe.txt",
@@ -185,13 +189,35 @@ describe("safe DOM and hostile content", () => {
     const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
       new Response("safe", { status: 200, headers: { "Content-Type": "text/plain" } })
     );
+    const authenticatedFetch = vi.fn();
+    panel._hass = { fetchWithAuth: authenticatedFetch };
 
     await panel._loadArtifactPreview(panel._selectedArtifactId);
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/codex_bridge/threads/thr%2Fa%3Fquery%23fragment/artifacts/art%2F..%2Ffile%3Fdownload%23fragment",
-      expect.any(Object)
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(authenticatedFetch).not.toHaveBeenCalled();
+    expect(panel._artifactPreview).toMatchObject({ kind: "binary", retryable: true });
+    expect(panel.shadowRoot.getElementById("artifact-preview").textContent)
+      .toContain("Preview could not be loaded through Home Assistant");
+    expect(panel.shadowRoot.getElementById("artifact-preview").querySelector("img, iframe, object, embed")).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it("encodes valid opaque artifact identifiers before a confined same-origin request", async () => {
+    const panel = document.createElement("codex-bridge-panel");
+    document.body.append(panel);
+    panel._selectedThreadId = "thr:chat-1";
+    panel._selectedArtifactId = "art:file-1";
+    panel._artifacts = [makeArtifact({ artifact_id: panel._selectedArtifactId, filename: "safe.txt", mime_type: "text/plain", size_bytes: 4 })];
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response("safe", { status: 200, headers: { "Content-Type": "text/plain" } })
     );
+    await panel._loadArtifactPreview(panel._selectedArtifactId);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/codex_bridge/threads/thr%3Achat-1/artifacts/art%3Afile-1",
+      expect.objectContaining({ headers: { Range: "bytes=0-3" }, mode: "same-origin", redirect: "error" })
+    );
+    expect(panel._artifactPreview).toMatchObject({ kind: "text", text: "safe" });
     fetchSpy.mockRestore();
   });
 });
