@@ -2,6 +2,7 @@ import json
 import asyncio
 from pathlib import Path
 import traceback
+from unittest.mock import AsyncMock
 
 import aiohttp
 from aiohttp import web
@@ -29,6 +30,8 @@ from custom_components.codex_bridge.bridge_api import (
     REQUEST_TIMEOUT,
 )
 from custom_components.codex_bridge.protocol import DiscoveryRecord, ReadyRecord
+from custom_components.codex_bridge.event_broker import EventBroker
+from custom_components.codex_bridge.task_events import TaskEventForwarder
 
 
 FIXTURES = Path(__file__).parents[2] / "fixtures"
@@ -1175,6 +1178,106 @@ async def test_v1_event_body_is_bounded_before_json_decoding(
         await client.async_ready()
         with pytest.raises(BridgeApiPayloadTooLargeError):
             await client.async_replay_events()
+
+
+async def test_interrupted_event_body_reconnects_and_forwards_accepted_once(
+    hass, bridge_server_factory,
+) -> None:
+    replay_cursors = []
+    wait_cursors = []
+    release_wait = asyncio.Event()
+    accepted = {
+        "cursor": 1, "event_id": "evt_accepted", "scope": "thread",
+        "thread_id": "thr_task_" + "a" * 32, "event_type": "task.accepted",
+        "payload": {"task_id": "a" * 32, "run_id": "run_accepted", "status": "accepted"},
+        "timestamp": "2026-09-26T08:00:00Z",
+    }
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        if request.path == "/events/replay":
+            replay_cursors.append(int(request.query["after"]))
+            events = [] if len(replay_cursors) == 1 else [accepted]
+            return web.json_response({"events": events, "next_cursor": 1 if events else 0,
+                                      "minimum_cursor": 0, "has_more": False})
+        wait_cursors.append(int(request.query["after"]))
+        if len(wait_cursors) == 1:
+            # The App disappears after HTTP headers but before its event body.
+            response = web.StreamResponse(headers={"Content-Length": "100", "Content-Type": "application/json"})
+            await response.prepare(request)
+            await response.write(b'{"events":')
+            request.transport.close()
+            return response
+        await release_wait.wait()
+        return web.json_response({"events": [], "next_cursor": 1, "minimum_cursor": 0,
+                                  "has_more": False, "heartbeat": True})
+
+    server = await bridge_server_factory(handler)
+    observed = []
+    hass.bus.async_listen("codex_bridge_task_accepted", observed.append)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        broker = EventBroker(client, initial_cursor=0, reconnect_delay=lambda _: 0)
+        store = AsyncMock()
+        store.async_load.return_value = None
+        forwarder = TaskEventForwarder(hass, broker, store)
+        await forwarder.async_start()
+        subscription = broker.subscribe(after=0)
+        try:
+            await broker.async_start()
+            status = await asyncio.wait_for(subscription.get(), 2)
+            assert status["state"] == "reconnecting"
+            delivered = await asyncio.wait_for(subscription.get(), 2)
+            assert delivered["type"] == "event"
+            assert delivered["event"].event_type == "task.accepted"
+            await hass.async_block_till_done()
+            assert len(observed) == 1
+            assert observed[0].data == {"task_id": "a" * 32,
+                                        "thread_id": accepted["thread_id"],
+                                        "run_id": "run_accepted", "status": "accepted"}
+            assert replay_cursors == [0, 0]
+            assert broker.connection_status["state"] == "connected"
+            store.async_save.assert_awaited_once_with({"cursor": 1})
+        finally:
+            release_wait.set()
+            await forwarder.async_close()
+            await broker.async_close()
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_state"),
+    [(b"{", "upstream_error"), (b"x" * 65, "upstream_error"),
+     (b'{"events":[],"next_cursor":"invalid","minimum_cursor":0}', "protocol_error")],
+)
+async def test_invalid_event_responses_stop_without_transport_retry(
+    bridge_server_factory, monkeypatch, body, expected_state,
+) -> None:
+    event_requests = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(_fixture("ready_v1.json"))
+        event_requests.append(request.path)
+        return web.Response(body=body, content_type="application/json")
+
+    monkeypatch.setattr("custom_components.codex_bridge.bridge_api.BRIDGE_EVENT_BATCH_MAX_BYTES", 64)
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        broker = EventBroker(client, initial_cursor=0, reconnect_delay=lambda _: 0)
+        subscription = broker.subscribe(after=0)
+        try:
+            await broker.async_start()
+            status = await asyncio.wait_for(subscription.get(), 2)
+            assert status["state"] == expected_state
+            await asyncio.sleep(0)
+            assert broker._task.done()
+            assert event_requests == ["/events/replay"]
+        finally:
+            await broker.async_close()
 
 
 async def test_interaction_answers_are_strict_bounded_and_unique(

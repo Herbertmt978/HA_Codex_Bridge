@@ -1746,7 +1746,11 @@ class BridgeApiClient:
                 raise BridgeApiReadTimeoutError() from None
             except asyncio.TimeoutError:
                 raise BridgeApiTimeoutError() from None
-            except asyncio.IncompleteReadError:
+            except (
+                asyncio.IncompleteReadError,
+                aiohttp.ClientConnectionError,
+                aiohttp.ClientPayloadError,
+            ):
                 raise BridgeApiConnectionError() from None
             except (aiohttp.ClientError, ValueError):
                 raise BridgeApiProblemError(status=response.status) from None
