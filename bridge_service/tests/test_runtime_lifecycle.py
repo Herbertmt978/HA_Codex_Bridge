@@ -544,7 +544,13 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
         "default_permissions": "ha_bridge",
         "web_search": "cached",
     }
-    assert "sandboxPolicy" not in turn_request
+    assert turn_request["sandboxPolicy"] == {
+        "type": "workspaceWrite",
+        "writableRoots": [thread_request["cwd"]],
+        "networkAccess": False,
+        "excludeSlashTmp": True,
+        "excludeTmpdirEnvVar": True,
+    }
     _wait_until(
         lambda: (
             not any(
