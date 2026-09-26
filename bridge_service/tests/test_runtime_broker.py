@@ -2218,7 +2218,7 @@ def test_maximum_route_prompt_that_cannot_fit_event_envelope_is_rejected_safely(
         (RunMode.FULL_AUTO, "never", "ha_bridge"),
     ],
 )
-def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandbox(
+def test_new_thread_uses_managed_profile_and_turn_applies_accepted_sandbox(
     tmp_path: Path,
     mode: RunMode,
     approval_policy: str,
@@ -2263,6 +2263,16 @@ def test_new_thread_and_turn_use_managed_permission_profile_without_legacy_sandb
                 "effort": "high",
                 "approvalPolicy": approval_policy,
                 "approvalsReviewer": "user",
+                "sandboxPolicy": (
+                    {"type": "readOnly", "networkAccess": False}
+                    if mode is RunMode.OBSERVE else {
+                        "type": "workspaceWrite",
+                        "writableRoots": [cwd],
+                        "networkAccess": False,
+                        "excludeSlashTmp": True,
+                        "excludeTmpdirEnvVar": True,
+                    }
+                ),
             }
         ]
     finally:
@@ -2872,6 +2882,13 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
             "effort": "high",
             "approvalPolicy": "on-request",
             "approvalsReviewer": "user",
+            "sandboxPolicy": {
+                "type": "workspaceWrite",
+                "writableRoots": [cwd],
+                "networkAccess": False,
+                "excludeSlashTmp": True,
+                "excludeTmpdirEnvVar": True,
+            },
         }
     finally:
         broker.close()
@@ -9669,5 +9686,93 @@ def test_assist_admission_rejects_unrestricted_tools_and_targets(
             json={"task_id": "b" * 32, "thread_id": thread_id, "prompt": "Bypass"},
         ).status_code == 409
         assert http.get(f"/task-actions/{payload['task_id']}/answer").status_code == 401
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("restart_at", [None, "before_plan", "after_plan"])
+@pytest.mark.parametrize("mode", [RunMode.EDIT, RunMode.OBSERVE])
+def test_queued_plan_then_execute_applies_dispatch_policy_after_recovery(
+    tmp_path: Path,
+    restart_at: str | None,
+    mode: RunMode,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=mode)
+
+    def new_client() -> ValidatorBackedAppServer:
+        client = ValidatorBackedAppServer()
+        client.enable_experimental_api = True
+        client.supports_collaboration_mode = True
+        return client
+
+    client = new_client()
+    broker = _broker(storage, client)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Hold the default turn",
+            client_request_id="queue-policy-active",
+        )
+        _, remote, turn = _active_ids(storage, thread.thread_id)
+        plan = broker.submit_prompt(
+            thread.thread_id,
+            "Plan the change",
+            client_request_id="queue-policy-plan",
+            follow_up_mode="queue",
+            collaboration_mode="plan",
+        )
+        execute = broker.submit_prompt(
+            thread.thread_id,
+            "Implement the plan",
+            client_request_id="queue-policy-execute",
+            follow_up_mode="queue",
+            collaboration_mode="default",
+        )
+        assert plan.status == execute.status == "queued"
+        assert storage.load_thread(thread.thread_id).collaboration_mode == "default"
+        if restart_at == "before_plan":
+            _restore_durable_runtime_checkpoint_after_stopping(broker, storage)
+            client = new_client()
+            broker = _broker(storage, client)
+        else:
+            _complete(client, remote_thread_id=remote, turn_id=turn)
+        _wait_until(
+            lambda: storage.load_thread(thread.thread_id).active_run_id == plan.run_id
+        )
+        _, remote, turn = _active_ids(storage, thread.thread_id)
+        plan_start = next(
+            params
+            for params in _requests(client, "turn/start")
+            if params["clientUserMessageId"] == "queue-policy-plan"
+        )
+        assert plan_start["sandboxPolicy"]["type"] == "readOnly"
+        if restart_at == "after_plan":
+            _restore_durable_runtime_checkpoint_after_stopping(broker, storage)
+            client = new_client()
+            broker = _broker(storage, client)
+        else:
+            _complete(client, remote_thread_id=remote, turn_id=turn)
+        _wait_until(
+            lambda: (
+                storage.load_thread(thread.thread_id).active_run_id == execute.run_id
+            )
+        )
+        _active_ids(storage, thread.thread_id)
+        execute_starts = [
+            params
+            for params in _requests(client, "turn/start")
+            if params["clientUserMessageId"] == "queue-policy-execute"
+        ]
+        assert len(execute_starts) == 1
+        policy = execute_starts[0]["sandboxPolicy"]
+        assert policy["type"] == (
+            "workspaceWrite" if mode is RunMode.EDIT else "readOnly"
+        )
+        assert policy["networkAccess"] is False
+        if mode is RunMode.EDIT:
+            assert policy["writableRoots"] == [
+                str(storage.resolve_workspace_path(thread.workspace_path))
+            ]
+        assert execute_starts[0]["collaborationMode"]["mode"] == "default"
     finally:
         broker.close()

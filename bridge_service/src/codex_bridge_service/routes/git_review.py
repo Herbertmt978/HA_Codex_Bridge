@@ -879,6 +879,8 @@ def _state_token(workspace: Path, scope: Scope, base_ref: str | None, commit_ref
     digest = hashlib.sha256()
     if scope in {"unstaged", "staged"}:
         if scope == "unstaged":
+            digest.update(b"unstaged-index\0")
+            digest.update(_private_index_digest())
             names = _git(workspace, "diff", "--name-only", "--no-ext-diff", "--no-textconv", "-z", "--")
             paths = [item.decode("utf-8", errors="replace") for item in names.split(b"\0") if item]
             untracked = _git(workspace, "ls-files", "--others", "--exclude-standard", "-z")
@@ -919,6 +921,46 @@ def _state_token(workspace: Path, scope: Scope, base_ref: str | None, commit_ref
         digest.update(_resolve_commit(workspace, base_ref).encode())
         digest.update(_resolve_commit(workspace, "HEAD").encode())
     return digest.hexdigest()
+
+
+def _private_index_digest() -> bytes:
+    """Hash the exact index baseline used by an unstaged diff."""
+    git_dir = _GIT_DIR.get()
+    if git_dir is None:
+        raise GitReviewError("git_snapshot_unavailable")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(git_dir / "index", flags)
+    except FileNotFoundError:
+        return hashlib.sha256(b"absent").digest()
+    except OSError as error:
+        raise GitReviewError("git_metadata_unsafe") from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > _MAX_METADATA_BYTES:
+            raise GitReviewError("git_metadata_too_large")
+        content = hashlib.sha256()
+        total = 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            deadline = _GIT_DEADLINE.get()
+            if deadline is not None and time.monotonic() > deadline:
+                raise GitReviewError("git_timeout")
+            total += len(chunk)
+            if total > _MAX_METADATA_BYTES:
+                raise GitReviewError("git_metadata_too_large")
+            content.update(chunk)
+        after = os.fstat(descriptor)
+        if (
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            or total != before.st_size
+        ):
+            raise GitReviewError("git_state_changed")
+        return content.digest()
+    except OSError as error:
+        raise GitReviewError("git_metadata_unsafe") from error
+    finally:
+        os.close(descriptor)
 
 
 def _patch(workspace: Path, scope: Scope, relative: str, base_ref: str | None, commit_ref: str | None) -> tuple[str | None, bool, bool]:

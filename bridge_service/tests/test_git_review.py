@@ -72,6 +72,75 @@ def test_git_review_separates_staged_unstaged_and_returns_actual_patch(tmp_path)
     assert staged.json()["state_token"] == staged_patch.json()["state_token"]
 
 
+def test_unstaged_token_rejects_partial_stage_with_same_worktree_and_pathset(
+    tmp_path,
+) -> None:
+    _app, thread, workspace, client, headers = _repo(tmp_path)
+    _git(workspace, "config", "core.autocrlf", "false")
+    file = workspace / "sample.txt"
+    lines = [f"line {index}\n" for index in range(1, 15)]
+    staged_lines = list(lines)
+    staged_lines[0] = "staged first line\n"
+    file.write_bytes("".join(staged_lines).encode("utf-8"))
+    _git(workspace, "add", "sample.txt")
+
+    working_lines = list(staged_lines)
+    working_lines[0] = "working first line\n"
+    working_lines[-1] = "working last line\n"
+    file.write_bytes("".join(working_lines).encode("utf-8"))
+    worktree_bytes = file.read_bytes()
+
+    listing = client.get(
+        f"/threads/{thread.thread_id}/git-review?scope=unstaged",
+        headers=headers,
+    )
+    assert listing.status_code == 200
+    assert [entry["path"] for entry in listing.json()["files"]] == ["sample.txt"]
+
+    staged_hunks = subprocess.run(
+        ["git", "-C", str(workspace), "add", "-p", "sample.txt"],
+        input="y\nn\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert "Stage this hunk" in staged_hunks.stdout
+    assert file.read_bytes() == worktree_bytes
+    assert _git(workspace, "diff", "--name-only") == "sample.txt"
+
+    stale_patch = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={
+            "scope": "unstaged",
+            "path": "sample.txt",
+            "expected_state_token": listing.json()["state_token"],
+        },
+        headers=headers,
+    )
+    assert stale_patch.status_code == 409
+    assert stale_patch.json()["detail"]["code"] == "git_state_changed"
+
+    refreshed_listing = client.get(
+        f"/threads/{thread.thread_id}/git-review?scope=unstaged",
+        headers=headers,
+    )
+    assert refreshed_listing.status_code == 200
+    refreshed_patch = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={
+            "scope": "unstaged",
+            "path": "sample.txt",
+            "expected_state_token": refreshed_listing.json()["state_token"],
+        },
+        headers=headers,
+    )
+
+    assert refreshed_patch.status_code == 200
+    patch = refreshed_patch.json()["files"][0]["patch"]
+    assert "+working last line" in patch
+    assert "+working first line" not in patch
+
+
 def test_git_review_accepts_multiple_refs_independent_of_directory_order(tmp_path) -> None:
     _app, thread, workspace, client, headers = _repo(tmp_path)
     oid = _git(workspace, "rev-parse", "HEAD")

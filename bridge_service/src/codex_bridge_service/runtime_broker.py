@@ -1227,10 +1227,6 @@ class RuntimeBroker:
                         web_search=web_search,
                         follow_up_mode=follow_up_mode,
                         collaboration_mode=selected_collaboration_mode,
-                        restore_execution_sandbox=(
-                            thread.collaboration_mode == "plan"
-                            and selected_collaboration_mode == "default"
-                        ),
                         prompt=prompt,
                         prompt_fingerprint=_fingerprint(prompt),
                         mode=thread.mode,
@@ -2427,12 +2423,11 @@ class RuntimeBroker:
             "approvalPolicy": policy.approval_policy,
             "approvalsReviewer": "user",
         }
-        if run.collaboration_mode == "plan":
-            turn_params["sandboxPolicy"] = mode_policy(
-                RunMode.OBSERVE, workspace
-            ).sandbox_policy
-        elif run.restore_execution_sandbox:
-            turn_params["sandboxPolicy"] = policy.sandbox_policy
+        # Codex retains turn overrides. Queue admission cannot predict which
+        # policy will precede this dispatch, including after durable recovery.
+        # Apply this run's accepted scope on every turn instead of inheriting
+        # the previous turn's sandbox or a submission-time restoration flag.
+        turn_params["sandboxPolicy"] = policy.sandbox_policy
         if self.supports_plan_mode:
             turn_params["collaborationMode"] = {
                 "mode": run.collaboration_mode,

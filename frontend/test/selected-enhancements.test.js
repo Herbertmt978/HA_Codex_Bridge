@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import transcriptSearchRequests from "../../tests/fixtures/transcript_search_requests.json";
 
 import "../src/codex-bridge-panel.js";
 
@@ -53,16 +54,14 @@ describe("selected enhancements panel behaviour", () => {
     const panel = makePanel({ capabilities: ["transcript_search_v1"] });
     const older = deferred();
     const newer = deferred();
-    panel._callWS.mockImplementation((_method, args) => args.q === "older" ? older.promise : newer.promise);
+    panel._callWS.mockImplementation((_method, args) => args.query === "older" ? older.promise : newer.promise);
     panel._searchQuery = "older";
     const oldSearch = panel._searchTranscript();
     panel._searchQuery = "newer";
     panel._searchArchived = true;
     const newSearch = panel._searchTranscript();
 
-    expect(panel._callWS).toHaveBeenNthCalledWith(2, "search_transcript", {
-      q: "newer", include_archived: true, limit: 50,
-    });
+    expect(panel._callWS).toHaveBeenNthCalledWith(2, "search_transcript", transcriptSearchRequests.initial);
     newer.resolve({ results: [{ thread_id: "thread-archived", sequence: 7, title: "Old chat", archived_at: "2026-09-01", excerpt: "matching text" }] });
     await newSearch;
     older.resolve({ results: [{ thread_id: "thread-old", sequence: 2, title: "Stale result", excerpt: "older match" }] });
@@ -76,7 +75,7 @@ describe("selected enhancements panel behaviour", () => {
     const panel = makePanel({ capabilities: ["transcript_search_v1"] });
     panel._searchQuery = "needle";
     panel._transcriptSearchResults = [{ thread_id: "thread-one", sequence: 1, title: "Chat", excerpt: "first" }];
-    panel._transcriptSearchCursor = "cursor-one";
+    panel._transcriptSearchCursor = 700;
     panel._transcriptSearchHasMore = true;
     panel._renderTranscriptSearch();
     const page = deferred();
@@ -86,13 +85,11 @@ describe("selected enhancements panel behaviour", () => {
     expect(more.hidden).toBe(false);
     more.click();
 
-    expect(panel._callWS).toHaveBeenCalledWith("search_transcript", {
-      q: "needle", include_archived: false, limit: 50, before_cursor: "cursor-one",
-    });
-    page.resolve({ results: [{ thread_id: "thread-one", sequence: 2, title: "Chat", excerpt: "second" }], next_cursor: "cursor-two", has_more: false });
+    expect(panel._callWS).toHaveBeenCalledWith("search_transcript", transcriptSearchRequests.pagination);
+    page.resolve({ results: [{ thread_id: "thread-one", sequence: 2, title: "Chat", excerpt: "second" }], next_cursor: 600, has_more: false });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(panel._transcriptSearchCursor).toBe("cursor-two");
+    expect(panel._transcriptSearchCursor).toBe(600);
     expect(panel._transcriptSearchResults.map((item) => item.excerpt)).toEqual(["first", "second"]);
     expect(panel.shadowRoot.getElementById("transcript-search-more").hidden).toBe(true);
   });

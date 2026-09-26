@@ -4639,7 +4639,10 @@ for (const width of [1440, 390]) {
       panel._enhancementCalls = [];
       panel._callWS = async (action, payload) => {
         panel._enhancementCalls.push({ action, payload });
-        if (action === "search_transcript") return { results: [{ thread_id: panel._selectedThreadId, title: "Earlier response", sequence: 30000, excerpt: "Phrase only in assistant history", archived_at: "2026-09-26" }], has_more: false };
+        if (action === "search_transcript") {
+          if (typeof payload.query !== "string" || "q" in payload) throw new Error("Invalid HA search request");
+          return { results: [{ thread_id: panel._selectedThreadId, title: "Earlier response", sequence: 30000, excerpt: "Phrase only in assistant history" }], has_more: false };
+        }
         if (action === "get_transcript_message") return { sequence: 30000, role: "assistant", text: "# Found earlier response\n\nPhrase only in assistant history" };
         if (action === "git_review") return { state_token: "fixture-state", files: [{ path: "src/long-file.js", status: "M", patch: payload.path ? `+${"x".repeat(1200)}\n` : null, patch_truncated: Boolean(payload.path) }], files_truncated: false };
         if (action === "prompt_queue") return [{ run_id: "queued-fixture", prompt: "Review the tests", revision: 1 }];
@@ -4677,5 +4680,12 @@ for (const width of [1440, 390]) {
     expect(sent.payload.follow_up_mode).toBe("queue");
     expect(sent.payload.collaboration_mode).toBe("plan");
     expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await panel.locator("#search-input").fill("assistant history");
+    await expect(panel.locator("#transcript-search-results")).toContainText("Phrase only in assistant history");
+    const searched = await panel.evaluate((node) => node._enhancementCalls.filter((item) => item.action === "search_transcript").at(-1));
+    expect(searched.payload).toEqual({ query: "assistant history", include_archived: false, limit: 50 });
+    await panel.locator('[data-action="open-search-result"]').click();
+    await expect(panel.locator('#message-list [data-sequence="30000"] h1')).toHaveText("Found earlier response");
   });
 }

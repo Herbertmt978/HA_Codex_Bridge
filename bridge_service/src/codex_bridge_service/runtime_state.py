@@ -85,7 +85,6 @@ class RuntimeRunState(BaseModel):
     # that predate the explicit follow-up control.
     follow_up_mode: Literal["auto", "queue", "steer"] = "auto"
     collaboration_mode: Literal["default", "plan"] = "default"
-    restore_execution_sandbox: bool = False
     queue_revision: int = Field(default=1, ge=1)
     message_sequence: int | None = Field(default=None, ge=1)
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)

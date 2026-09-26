@@ -103,6 +103,8 @@ The token is an internal verification detail, not a user-facing identifier.
 
 Review is read-only and confined to the chat's granted workspace. Content-reading
 Git operations use a bounded private metadata snapshot with trusted configuration.
+Review uses its own Git configuration, so line-ending normalisation and presentation
+can differ from a local checkout's global settings.
 Repository hooks, external diff/textconv and clean/process filter commands cannot
 be enabled by repository configuration or a concurrent configuration change.
 Diffs compare raw repository and worktree content without external transformations.

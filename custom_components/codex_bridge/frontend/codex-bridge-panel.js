@@ -49835,7 +49835,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._transcriptSearchError = "Searching messages…";
     this._renderTranscriptSearch();
     try {
-      const response = await this._callWS("search_transcript", { q: query, include_archived: this._searchArchived, limit: 50, ...this._transcriptSearchCursor ? { before_cursor: this._transcriptSearchCursor } : {} });
+      const response = await this._callWS("search_transcript", { query, include_archived: this._searchArchived, limit: 50, ...this._transcriptSearchCursor ? { before_cursor: this._transcriptSearchCursor } : {} });
       if (generation !== this._transcriptSearchGeneration) return;
       this._transcriptSearchResults = [...this._transcriptSearchResults, ...response.results || []];
       this._transcriptSearchCursor = response.next_cursor || null;

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -39,6 +41,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_run_automation,
     ws_rollback_stdio_mcp,
     ws_send_prompt,
+    ws_search_transcript,
     ws_start_auth_login,
     ws_subscribe_events,
     ws_unsubscribe_events,
@@ -116,6 +119,40 @@ def _runtime(*, queue_size: int = 256) -> tuple[CodexBridgeRuntime, EventBroker]
         CodexBridgeRuntime("entry", "Codex", client, "supervisor", "a" * 32, 1, broker),
         broker,
     )
+
+
+@pytest.mark.parametrize(
+    "search_request",
+    json.loads(
+        (Path(__file__).resolve().parents[2] / "fixtures" / "transcript_search_requests.json")
+        .read_text(encoding="utf-8")
+    ).values(),
+)
+async def test_panel_transcript_search_contract_is_accepted_and_forwarded(search_request) -> None:
+    """Validate the same initial and paginated requests asserted by the panel tests."""
+    runtime, _broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    runtime.client.async_search_transcript.return_value = {"results": []}
+    message = ws_search_transcript._ws_schema(
+        {"type": f"{DOMAIN}/search_transcript", **search_request}
+    )
+
+    ws_search_transcript(hass, connection, {"id": 92, **message})
+    await hass.finish()
+
+    runtime.client.async_search_transcript.assert_awaited_once_with(
+        search_request["query"],
+        include_archived=search_request["include_archived"],
+        limit=search_request["limit"],
+        before_cursor=search_request.get("before_cursor"),
+    )
+    assert connection.errors == []
+    assert connection.results == [(92, {"results": []})]
+    with pytest.raises(vol.Invalid):
+        ws_search_transcript._ws_schema(
+            {"type": f"{DOMAIN}/search_transcript", "q": search_request["query"]}
+        )
 
 
 async def test_v1_subscription_acknowledges_and_forwards_auth_without_a_chat() -> None:
