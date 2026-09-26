@@ -8743,6 +8743,80 @@ def test_explicit_queue_survives_broker_restart_without_duplicate_dispatch(
         recovered_broker.close()
 
 
+def test_closed_broker_wakes_recovered_queued_worker_and_preserves_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(storage, original_client)
+    try:
+        original_broker.submit_prompt(
+            thread.thread_id,
+            "Hold the active turn",
+            client_request_id="shutdown-queue-active",
+        )
+        _active_ids(storage, thread.thread_id)
+        queued = original_broker.submit_prompt(
+            thread.thread_id,
+            "Keep this queued across shutdown",
+            client_request_id="shutdown-queue-item",
+            follow_up_mode="queue",
+        )
+        assert queued.status == "queued"
+        _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+    finally:
+        original_broker.close()
+
+    recovered_client = ValidatorBackedAppServer()
+    start_entered = Event()
+    release_start = Event()
+    native_start_turn = RuntimeBroker._start_turn
+
+    def gated_start_turn(broker: RuntimeBroker, run_id: str) -> None:
+        if broker.app_server is recovered_client:
+            start_entered.set()
+            assert release_start.wait(3)
+        native_start_turn(broker, run_id)
+
+    monkeypatch.setattr(RuntimeBroker, "_start_turn", gated_start_turn)
+    recovered_broker = _broker(storage, recovered_client)
+    try:
+        assert start_entered.wait(3)
+        run = recovered_broker._state.runs[queued.run_id]
+        assert run.status == "queued"
+        worker = next(
+            worker
+            for worker in recovered_broker._workers
+            if worker.name.endswith(queued.run_id[-8:])
+        )
+
+        recovered_broker.close()
+        assert recovered_broker._state.runs[queued.run_id].status == "queued"
+        assert queued.run_id not in recovered_broker._completion_events
+
+        release_start.set()
+        worker.join(timeout=2)
+        assert not worker.is_alive()
+        assert not _requests(recovered_client, "turn/start")
+    finally:
+        release_start.set()
+        recovered_broker.close()
+
+    restarted_client = ValidatorBackedAppServer()
+    restarted_broker = _broker(storage, restarted_client)
+    try:
+        _wait_until(lambda: len(_requests(restarted_client, "turn/start")) == 1)
+        assert storage.load_thread(thread.thread_id).active_run_id == queued.run_id
+        assert [
+            item.run_id
+            for item in restarted_broker.list_queued_prompts(thread.thread_id)
+        ] == []
+        assert len(_requests(restarted_client, "turn/start")) == 1
+    finally:
+        restarted_broker.close()
+
+
 def test_plan_denies_command_and_file_approvals_but_keeps_questions_and_execute(
     tmp_path: Path,
 ) -> None:

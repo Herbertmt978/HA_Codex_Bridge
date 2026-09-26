@@ -1985,6 +1985,13 @@ class RuntimeBroker:
                     lease = self._leases.pop(run.run_id, None)
                     if lease is not None:
                         lease.cancel()
+                    # The old broker must stop owning its in-memory worker
+                    # even though this queued run remains durable. A worker
+                    # may already have passed lease admission and be about to
+                    # observe that the broker is closed in _start_turn().
+                    event = self._completion_events.pop(run.run_id, None)
+                    if event is not None:
+                        event.set()
                     continue
                 if run.generation is not None:
                     generations.add(run.generation)
