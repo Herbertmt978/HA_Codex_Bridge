@@ -130,8 +130,9 @@ from ordinary projects. Assist-only projects keep their project actions inside
 this group, including restore and delete actions when archived. Their workspace
 and history are retained; continue their messages through Home Assistant Assist.
 
-This release pairs App **1.9.1**, Integration and panel **1.9.1**, with Bridge **0.16.0**
-and Codex **0.157.1**. It prepares ARM64 development builds; published images
+This release pairs App **1.10.0**, Integration and panel **1.10.0**, with Bridge **0.17.0**
+and Codex **0.157.1**. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
+and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only
 bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local
 HA-MCP connections. [ARM64 development status](docs/arm64-development.md).

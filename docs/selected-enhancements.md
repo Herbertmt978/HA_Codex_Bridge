@@ -95,8 +95,9 @@ and reject explicit Plan requests; they do not simulate Plan with a prompt.
 ## Authentic Git review
 
 Review changes opens a file list and bounded per-file patches for Unstaged,
-Staged, Commit and Branch scopes. Commit defaults to HEAD; Branch requires an
-explicit comparison base. References are resolved by Git, and a state token
+Staged, Commit and Branch scopes. Commit defaults to HEAD and compares the selected
+commit with its first parent; a root commit compares with the empty tree. Branch
+requires an explicit comparison base. References are resolved by Git, and a state token
 prevents a later file load from silently using a different repository state.
 The token is an internal verification detail, not a user-facing identifier.
 
@@ -106,6 +107,12 @@ Repository hooks, external diff/textconv and clean/process filter commands canno
 be enabled by repository configuration or a concurrent configuration change.
 Diffs compare raw repository and worktree content without external transformations.
 No review action grants file, network, terminal or Host Access permission.
+
+Each request has a 20-second deadline. Metadata copying is limited to 256 MiB
+and 50,000 entries, with 16 MiB for index/reference consistency checks. Changed
+worktree hashing is limited to 256 MiB across the request. File lists retain at
+most 200 entries and each displayed patch is limited to 48 KiB. Larger requests
+return a labelled unavailable or truncated result.
 
 Binary files, oversized patches and truncated file lists are labelled. Symlinked
 worktree paths are unavailable rather than followed. Long lines

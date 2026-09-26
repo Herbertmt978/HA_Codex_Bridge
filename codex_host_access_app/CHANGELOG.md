@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0
+
+- Aligns the companion version with App and Integration `1.10.0`, Bridge `0.17.0`
+  and Codex `0.157.1`.
+- Retains existing pairing, administrator acknowledgement and per-chat grants.
+  The Bridge refuses Host commands during native Plan.
+
 ## 1.9.2
 
 - Bundles the Sigstore-verified Codex runtime `0.157.1`.

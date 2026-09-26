@@ -72,9 +72,32 @@ def test_git_review_separates_staged_unstaged_and_returns_actual_patch(tmp_path)
     assert staged.json()["state_token"] == staged_patch.json()["state_token"]
 
 
+def test_git_review_accepts_multiple_refs_independent_of_directory_order(tmp_path) -> None:
+    _app, thread, workspace, client, headers = _repo(tmp_path)
+    oid = _git(workspace, "rev-parse", "HEAD")
+    refs = workspace / ".git" / "refs" / "heads"
+    for name in ("zebra", "alpha", "z"):
+        (refs / name).write_text(f"{oid}\n", encoding="ascii")
+    nested = refs / "team"
+    nested.mkdir()
+    (nested / "x").write_text(f"{oid}\n", encoding="ascii")
+
+    response = client.get(
+        f"/threads/{thread.thread_id}/git-review?scope=unstaged", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert "state_token" in response.json()
+
+
 def test_git_review_commit_and_branch_scopes_resolve_real_commit_diffs(tmp_path) -> None:
     app, thread, workspace, client, headers = _repo(tmp_path)
     base = _git(workspace, "rev-parse", "HEAD")
+    root = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={"scope": "commit", "commit_ref": base, "path": "sample.txt"},
+        headers=headers,
+    )
     (workspace / "sample.txt").write_text("committed change\n", encoding="utf-8")
     _git(workspace, "add", "sample.txt")
     _git(workspace, "-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.test", "commit", "-qm", "feature")
@@ -91,11 +114,54 @@ def test_git_review_commit_and_branch_scopes_resolve_real_commit_diffs(tmp_path)
         headers=headers,
     )
 
-    assert commit.status_code == branch.status_code == 200
+    assert root.status_code == commit.status_code == branch.status_code == 200
+    assert root.json()["base_ref"] is None
+    assert "+before" in root.json()["files"][0]["patch"]
     assert commit.json()["base_ref"] == base
     assert commit.json()["head_ref"] == head
     assert "+committed change" in commit.json()["files"][0]["patch"]
     assert [item["path"] for item in branch.json()["files"]] == ["sample.txt"]
+
+
+def test_git_review_commit_scope_compares_merge_to_first_parent(tmp_path) -> None:
+    _app, thread, workspace, client, headers = _repo(tmp_path)
+    main_branch = _git(workspace, "symbolic-ref", "--short", "HEAD")
+
+    _git(workspace, "checkout", "-qb", "feature")
+    (workspace / "feature.txt").write_text("feature change\n", encoding="utf-8")
+    _git(workspace, "add", "feature.txt")
+    _git(
+        workspace, "-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.test",
+        "commit", "-qm", "feature",
+    )
+
+    _git(workspace, "checkout", main_branch)
+    (workspace / "main.txt").write_text("main change\n", encoding="utf-8")
+    _git(workspace, "add", "main.txt")
+    _git(
+        workspace, "-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.test",
+        "commit", "-qm", "main",
+    )
+    first_parent = _git(workspace, "rev-parse", "HEAD")
+    _git(workspace, "merge", "--no-ff", "feature", "-m", "merge feature")
+    merge_commit = _git(workspace, "rev-parse", "HEAD")
+
+    listing = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={"scope": "commit", "commit_ref": merge_commit},
+        headers=headers,
+    )
+    patch = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={"scope": "commit", "commit_ref": merge_commit, "path": "feature.txt"},
+        headers=headers,
+    )
+
+    assert listing.status_code == patch.status_code == 200
+    assert listing.json()["base_ref"] == first_parent
+    assert listing.json()["head_ref"] == merge_commit
+    assert [item["path"] for item in listing.json()["files"]] == ["feature.txt"]
+    assert "+feature change" in patch.json()["files"][0]["patch"]
 
 
 def test_git_review_labels_binary_and_large_diffs_and_detects_state_drift(tmp_path) -> None:

@@ -10,4 +10,4 @@ Compatibility: browser -> authenticated HA Integration -> private Bridge only. N
 
 Checks required: frontend lint/unit/build/browser; Ruff/compile; Bridge tests; full Linux Integration suite, root cold-restore, App image, transport, release authority checks. Parent coordinates shared Linux/native resources. No external publication from delivery chat.
 
-Status: implementation in progress. Independent parent review and release remain pending.
+Status: candidate source implemented and rebased onto the merged 1.9.2 release; local candidate checks complete, including merge/root comparisons and nested references. Independent parent review, Linux/image/native acceptance and release remain pending.

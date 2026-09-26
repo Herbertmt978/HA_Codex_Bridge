@@ -164,35 +164,14 @@ def _private_git_snapshot(workspace: Path) -> Iterator[None]:
             metadata_fd = os.open(".git", directory_flags, dir_fd=workspace_fd)
         except OSError as error:
             raise GitReviewError("git_metadata_unsupported") from error
-        names = {entry.name for entry in os.scandir(metadata_fd)}
+        names = set(_scandir_names_fd(metadata_fd, deadline))
         if "objects" not in names or "HEAD" not in names:
             raise GitReviewError("git_metadata_unsupported")
         if "commondir" in names or "gitdir" in names:
             raise GitReviewError("git_metadata_unsupported")
         _validate_git_format_fd(metadata_fd)
         source_state_before = _metadata_fingerprint_fd(metadata_fd, deadline)
-        objects_fd = None
-        try:
-            objects_fd = os.open("objects", directory_flags, dir_fd=metadata_fd)
-        except FileNotFoundError:
-            pass
-        if objects_fd is not None:
-            try:
-                info_fd = None
-                try:
-                    info_fd = os.open("info", directory_flags, dir_fd=objects_fd)
-                except FileNotFoundError:
-                    pass
-                except OSError as error:
-                    raise GitReviewError("git_metadata_unsafe") from error
-                if info_fd is not None:
-                    try:
-                        if "alternates" in {entry.name for entry in os.scandir(info_fd)}:
-                            raise GitReviewError("git_alternates_unsupported")
-                    finally:
-                        os.close(info_fd)
-            finally:
-                os.close(objects_fd)
+        _reject_alternates_fd(metadata_fd, directory_flags)
         budget = {"bytes": 0, "files": 0}
         for filename in ("HEAD", "index", "packed-refs", "shallow"):
             _copy_metadata_file(metadata_fd, git_dir, filename, budget, deadline, optional=True)
@@ -237,12 +216,10 @@ def _copy_git_metadata_windows(workspace: Path, git_dir: Path, deadline: float) 
     if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or reparse:
         raise GitReviewError("git_metadata_unsupported")
     _validate_git_format_path(source / "config")
-    names = {entry.name for entry in source.iterdir()}
+    names = set(_sorted_path_names(source, deadline))
     if "objects" not in names or "HEAD" not in names or "commondir" in names:
         raise GitReviewError("git_metadata_unsupported")
-    alternates = source / "objects" / "info" / "alternates"
-    if alternates.exists() or alternates.is_symlink():
-        raise GitReviewError("git_alternates_unsupported")
+    _reject_alternates_path(source)
     source_state_before = _metadata_fingerprint_path(source, deadline)
     budget = {"bytes": 0, "files": 0}
     for name in ("HEAD", "index", "packed-refs", "shallow"):
@@ -317,10 +294,79 @@ def _metadata_fingerprint_fd(root_fd: int, deadline: float) -> bytes:
         digest.update(b"refs:absent")
     else:
         try:
+            budget["files"] += 1
+            if budget["files"] > _MAX_METADATA_FILES:
+                raise GitReviewError("git_metadata_too_large")
             _hash_metadata_directory_fd(refs_fd, "refs", digest, budget, deadline)
         finally:
             os.close(refs_fd)
     return digest.digest()
+
+
+def _scandir_names_fd(directory_fd: int, deadline: float) -> list[str]:
+    """Read a bounded directory listing and return a stable lexical order."""
+    names: list[str] = []
+    with os.scandir(directory_fd) as entries:
+        for entry in entries:
+            if time.monotonic() > deadline:
+                raise GitReviewError("git_timeout")
+            if len(names) >= _MAX_METADATA_FILES:
+                raise GitReviewError("git_metadata_too_large")
+            names.append(entry.name)
+    return sorted(names)
+
+
+def _reject_alternates_fd(metadata_fd: int, directory_flags: int) -> None:
+    """Reject object alternates without enumerating or copying objects/info."""
+    try:
+        objects_fd = os.open("objects", directory_flags, dir_fd=metadata_fd)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise GitReviewError("git_metadata_unsafe") from error
+    try:
+        try:
+            info_fd = os.open("info", directory_flags, dir_fd=objects_fd)
+        except FileNotFoundError:
+            return
+        except OSError as error:
+            raise GitReviewError("git_metadata_unsafe") from error
+        try:
+            for name in ("alternates", "http-alternates"):
+                try:
+                    descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=info_fd)
+                except FileNotFoundError:
+                    continue
+                except OSError as error:
+                    raise GitReviewError("git_metadata_unsafe") from error
+                else:
+                    os.close(descriptor)
+                    raise GitReviewError("git_alternates_unsupported")
+        finally:
+            os.close(info_fd)
+    finally:
+        os.close(objects_fd)
+
+
+def _reject_alternates_path(metadata_path: Path) -> None:
+    """Windows fallback: inspect alternates only after lstat of each component."""
+    objects = metadata_path / "objects"
+    try:
+        _check_metadata_path(objects, directory=True)
+    except FileNotFoundError:
+        return
+    info = objects / "info"
+    try:
+        _check_metadata_path(info, directory=True)
+    except FileNotFoundError:
+        return
+    for name in ("alternates", "http-alternates"):
+        path = info / name
+        try:
+            _check_metadata_path(path, directory=False)
+        except FileNotFoundError:
+            continue
+        raise GitReviewError("git_alternates_unsupported")
 
 
 def _hash_metadata_file_fd(parent_fd: int, name: str, digest, budget, deadline,
@@ -358,24 +404,33 @@ def _hash_metadata_file_fd(parent_fd: int, name: str, digest, budget, deadline,
 
 def _hash_metadata_directory_fd(directory_fd: int, prefix: str, digest, budget,
                                 deadline: float) -> None:
-    for entry in os.scandir(directory_fd):
+    for name in _scandir_names_fd(directory_fd, deadline):
         if time.monotonic() > deadline:
             raise GitReviewError("git_timeout")
-        budget["files"] += 1
-        if budget["files"] > _MAX_METADATA_FILES:
+        budget["entries"] = budget.get("entries", 0) + 1
+        if budget["entries"] > _MAX_METADATA_FILES:
             raise GitReviewError("git_metadata_too_large")
-        info = entry.stat(follow_symlinks=False)
-        path = f"{prefix}/{entry.name}"
+        try:
+            info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        except OSError as error:
+            raise GitReviewError("git_metadata_changed") from error
+        path = f"{prefix}/{name}"
         if stat.S_ISDIR(info.st_mode):
-            child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                            dir_fd=directory_fd)
+            budget["files"] += 1
+            if budget["files"] > _MAX_METADATA_FILES:
+                raise GitReviewError("git_metadata_too_large")
+            try:
+                child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=directory_fd)
+            except OSError as error:
+                raise GitReviewError("git_metadata_changed") from error
             try:
                 _hash_metadata_directory_fd(child, path, digest, budget, deadline)
             finally:
                 os.close(child)
         elif stat.S_ISREG(info.st_mode):
             _hash_metadata_file_fd(
-                directory_fd, entry.name, digest, budget, deadline,
+                directory_fd, name, digest, budget, deadline,
                 display_name=path,
             )
         else:
@@ -409,13 +464,17 @@ def _metadata_fingerprint_path(root: Path, deadline: float) -> bytes:
                 digest.update(chunk)
     refs = root / "refs"
     if refs.exists():
-        for path in sorted(refs.rglob("*")):
-            if path.is_dir():
+        _check_metadata_path(refs, directory=True)
+        budget["files"] += 1
+        if budget["files"] > _MAX_METADATA_FILES:
+            raise GitReviewError("git_metadata_too_large")
+        for path, info in _iter_metadata_paths(refs, deadline, budget):
+            if stat.S_ISDIR(info.st_mode):
+                budget["files"] += 1
+                if budget["files"] > _MAX_METADATA_FILES:
+                    raise GitReviewError("git_metadata_too_large")
                 continue
             before = _check_metadata_path(path, directory=False)
-            budget["files"] += 1
-            if budget["files"] > _MAX_METADATA_FILES:
-                raise GitReviewError("git_metadata_too_large")
             with path.open("rb") as stream:
                 after = os.fstat(stream.fileno())
                 if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
@@ -431,6 +490,42 @@ def _metadata_fingerprint_path(root: Path, deadline: float) -> bytes:
     else:
         digest.update(b"refs:absent")
     return digest.digest()
+
+
+def _iter_metadata_paths(root: Path, deadline: float, budget: dict[str, int]):
+    """Yield bounded lexical depth-first metadata paths, matching fd traversal."""
+    stack: list[tuple[Path, object]] = [(root, iter(_sorted_path_names(root, deadline)))]
+    while stack:
+        directory, names = stack[-1]
+        try:
+            name = next(names)
+        except StopIteration:
+            stack.pop()
+            continue
+        budget["entries"] = budget.get("entries", 0) + 1
+        if budget["entries"] > _MAX_METADATA_FILES:
+            raise GitReviewError("git_metadata_too_large")
+        path = directory / name
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise GitReviewError("git_metadata_changed") from error
+        reparse = bool(getattr(info, "st_file_attributes", 0) & 0x400)
+        if stat.S_ISLNK(info.st_mode) or reparse:
+            raise GitReviewError("git_metadata_unsafe")
+        if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+            raise GitReviewError("git_metadata_unsafe")
+        yield path, info
+        if stat.S_ISDIR(info.st_mode):
+            checked = _check_metadata_path(path, directory=True)
+            try:
+                children = iter(_sorted_path_names(path, deadline))
+            except GitReviewError:
+                raise
+            after = _check_metadata_path(path, directory=True)
+            if (checked.st_dev, checked.st_ino) != (after.st_dev, after.st_ino):
+                raise GitReviewError("git_metadata_changed")
+            stack.append((path, children))
 
 
 def _check_metadata_path(path: Path, *, directory: bool) -> os.stat_result:
@@ -477,16 +572,20 @@ def _copy_metadata_tree_path(source: Path, target: Path,
     if budget["files"] > _MAX_METADATA_FILES:
         raise GitReviewError("git_metadata_too_large")
     target.mkdir(mode=0o700)
-    for entry in source.iterdir():
+    for name in _sorted_path_names(source, deadline):
         if time.monotonic() > deadline:
             raise GitReviewError("git_timeout")
-        if source.name == "objects" and entry.name == "info":
+        if source.name == "objects" and name == "info":
             continue
-        budget["files"] += 1
-        if budget["files"] > _MAX_METADATA_FILES:
+        budget["entries"] = budget.get("entries", 0) + 1
+        if budget["entries"] > _MAX_METADATA_FILES:
             raise GitReviewError("git_metadata_too_large")
+        entry = source / name
         info = entry.lstat()
         if stat.S_ISDIR(info.st_mode):
+            budget["files"] += 1
+            if budget["files"] > _MAX_METADATA_FILES:
+                raise GitReviewError("git_metadata_too_large")
             _copy_metadata_tree_path(entry, target / entry.name, budget, deadline)
         else:
             _copy_metadata_path(source, target, entry.name, budget, deadline)
@@ -528,6 +627,21 @@ def _copy_metadata_file(source_fd: int, target_root: Path, name: str,
             os.close(fd)
 
 
+def _sorted_path_names(directory: Path, deadline: float) -> list[str]:
+    names = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if time.monotonic() > deadline:
+                    raise GitReviewError("git_timeout")
+                if len(names) >= _MAX_METADATA_FILES:
+                    raise GitReviewError("git_metadata_too_large")
+                names.append(entry.name)
+    except OSError as error:
+        raise GitReviewError("git_metadata_changed") from error
+    return sorted(names)
+
+
 def _copy_metadata_tree(source_fd: int, target_root: Path, name: str,
                         budget: dict[str, int], deadline: float) -> None:
     try:
@@ -537,6 +651,10 @@ def _copy_metadata_tree(source_fd: int, target_root: Path, name: str,
         raise GitReviewError("git_metadata_unsafe") from error
     target = target_root / name
     target.mkdir(mode=0o700)
+    budget["files"] += 1
+    if budget["files"] > _MAX_METADATA_FILES:
+        os.close(root_fd)
+        raise GitReviewError("git_metadata_too_large")
     try:
         _copy_metadata_directory(root_fd, target, budget, deadline)
     finally:
@@ -545,19 +663,24 @@ def _copy_metadata_tree(source_fd: int, target_root: Path, name: str,
 
 def _copy_metadata_directory(source_fd: int, target: Path,
                              budget: dict[str, int], deadline: float) -> None:
-    for entry in os.scandir(source_fd):
+    for name in _scandir_names_fd(source_fd, deadline):
         if time.monotonic() > deadline:
             raise GitReviewError("git_timeout")
-        name = entry.name
         if name in {".", ".."} or "/" in name or "\\" in name:
             raise GitReviewError("git_metadata_unsafe")
         if target.name == "objects" and name == "info":
             continue
-        budget["files"] += 1
-        if budget["files"] > _MAX_METADATA_FILES:
+        budget["entries"] = budget.get("entries", 0) + 1
+        if budget["entries"] > _MAX_METADATA_FILES:
             raise GitReviewError("git_metadata_too_large")
-        info = entry.stat(follow_symlinks=False)
+        try:
+            info = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        except OSError as error:
+            raise GitReviewError("git_metadata_changed") from error
         if stat.S_ISDIR(info.st_mode):
+            budget["files"] += 1
+            if budget["files"] > _MAX_METADATA_FILES:
+                raise GitReviewError("git_metadata_too_large")
             fd = os.open(name, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
                          getattr(os, "O_NOFOLLOW", 0), dir_fd=source_fd)
             child = target / name
@@ -680,13 +803,17 @@ def _name_status(workspace: Path, scope: Scope, base_ref: str | None, commit_ref
         entries = _parse_name_status(raw)
     elif scope == "commit":
         head_oid = _resolve_commit(workspace, commit_ref or "HEAD")
-        base_oid = (
-            _git(workspace, "rev-parse", "--verify", f"{head_oid}^", timeout=3)
-            .decode("ascii", errors="strict").strip()
-            if _has_parent(workspace, head_oid)
-            else None
-        )
-        raw = _git(workspace, "diff-tree", "--root", "--no-commit-id", "--name-status", "-r", "-z", head_oid, "--")
+        base_oid = _first_parent(workspace, head_oid)
+        if base_oid is None:
+            raw = _git(
+                workspace, "diff-tree", "--root", "--no-commit-id", "--name-status",
+                "-r", "-z", head_oid, "--",
+            )
+        else:
+            raw = _git(
+                workspace, "diff", "--no-ext-diff", "--no-textconv", "--name-status",
+                "-z", base_oid, head_oid, "--",
+            )
         entries = _parse_name_status(raw)
     else:
         if not base_ref:
@@ -720,12 +847,20 @@ def _parse_name_status(raw: bytes) -> list[tuple[str, str]]:
     return result
 
 
-def _has_parent(workspace: Path, commit_oid: str) -> bool:
+def _first_parent(workspace: Path, commit_oid: str) -> str | None:
     try:
-        _git(workspace, "rev-parse", "--verify", f"{commit_oid}^", timeout=3)
-    except GitReviewError:
-        return False
-    return True
+        raw = _git(
+            workspace, "rev-parse", "--verify", "--end-of-options",
+            f"{commit_oid}^1", timeout=3,
+        )
+    except GitReviewError as error:
+        if error.code == "git_state_unavailable":
+            return None
+        raise
+    parent = raw.decode("ascii", errors="strict").strip()
+    if len(parent) not in {40, 64} or any(char not in "0123456789abcdefABCDEF" for char in parent):
+        raise GitReviewError("git_state_unavailable")
+    return parent
 
 
 def _state_token(workspace: Path, scope: Scope, base_ref: str | None, commit_ref: str | None) -> str:
@@ -807,7 +942,11 @@ def _patch(workspace: Path, scope: Scope, relative: str, base_ref: str | None, c
         args = ("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--no-indent-heuristic", "--unified=3", "--", pathspec)
     elif scope == "commit":
         head = _resolve_commit(workspace, commit_ref or "HEAD")
-        args = ("show", "--root", "--format=", "--no-ext-diff", "--no-textconv", "--no-color", "--no-indent-heuristic", "--unified=3", head, "--", pathspec)
+        base = _first_parent(workspace, head)
+        if base is None:
+            args = ("show", "--root", "--format=", "--no-ext-diff", "--no-textconv", "--no-color", "--no-indent-heuristic", "--unified=3", head, "--", pathspec)
+        else:
+            args = ("diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-indent-heuristic", "--unified=3", base, head, "--", pathspec)
     else:
         if not base_ref:
             raise GitReviewError("git_base_ref_required")
