@@ -306,6 +306,7 @@ class LimitsWindowRecord(BaseModel):
 
 class LimitsStatusRecord(BaseModel):
     available: bool = False
+    five_hour_enabled: bool | None = None
     blocked: bool = False
     message: str | None = None
     primary: LimitsWindowRecord | None = None
@@ -314,6 +315,11 @@ class LimitsStatusRecord(BaseModel):
     reset_credits: dict[str, Any] | None = None
     plan_type: str | None = None
     updated_at: str | None = None
+
+    @field_validator("five_hour_enabled", mode="before")
+    @classmethod
+    def _explicit_five_hour_enabled(cls, value: object) -> bool | None:
+        return value if type(value) is bool else None
 
 
 class CodexAccountRecord(BaseModel):
@@ -479,8 +485,21 @@ class CodexModelRecord(BaseModel):
     is_default: bool = False
     default_thinking_level: str = DEFAULT_THINKING_LEVEL
     thinking_levels: list[str] = Field(default_factory=list)
+    # Native advertised support stays distinct from configured recovery values.
+    advertised_thinking_levels: list[
+        Annotated[str, Field(min_length=1, max_length=64, strict=True)]
+    ] | None = Field(default=None, max_length=16)
     input_modalities: list[str] = Field(default_factory=list)
     catalogued: bool = True
+
+    @field_validator("advertised_thinking_levels")
+    @classmethod
+    def _advertised_efforts_are_plain(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and any(
+            effort != effort.strip() or not effort.isprintable() for effort in value
+        ):
+            raise ValueError("advertised reasoning efforts must be plain identifiers")
+        return value
 
 
 class CodexModelCatalogRecord(BaseModel):

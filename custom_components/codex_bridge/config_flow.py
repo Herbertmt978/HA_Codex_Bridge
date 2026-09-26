@@ -6,6 +6,13 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import selector
+
+from .assist_settings import (
+    MAX_ASSIST_INSTRUCTIONS,
+    assist_selection_supported,
+    live_assist_models,
+)
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -31,6 +38,9 @@ from .const import (
     CONF_ASSIST_ENABLED,
     CONF_ASSIST_PROJECT_ID,
     CONF_ASSIST_ALLOW_VOICE,
+    CONF_ASSIST_MODEL,
+    CONF_ASSIST_REASONING,
+    CONF_ASSIST_INSTRUCTIONS,
     WEB_SEARCH_MODE_DISABLED,
     WEB_SEARCH_MODE_LIVE,
 )
@@ -326,6 +336,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         """Offer only active projects; an unavailable App never grants Assist access."""
 
         data = self.config_entry.data
+        self._assist_project_defaults = {}
         if CONF_BRIDGE_URL not in data or CONF_BRIDGE_TOKEN not in data:
             return {}
         client = BridgeApiClient(
@@ -339,6 +350,13 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             projects = await client.async_list_projects()
         except BridgeApiError:
             return {}
+        self._assist_project_defaults = {
+            project["project_id"]: (
+                project.get("default_model"), project.get("default_thinking_level")
+            )
+            for project in projects
+            if isinstance(project, dict) and isinstance(project.get("project_id"), str)
+        }
         return {
             project["project_id"]: _safe_title(project.get("name"))
             for project in projects
@@ -347,6 +365,22 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             and project.get("kind") == "project"
             and project.get("archived_at") is None
         }
+
+    async def _assist_models(self):
+        """Keep stale or unverified catalogues out of explicit Assist settings."""
+
+        data = self.config_entry.data
+        if CONF_BRIDGE_URL not in data or CONF_BRIDGE_TOKEN not in data:
+            return {}
+        client = BridgeApiClient(
+            async_get_clientsession(self.hass),
+            data[CONF_BRIDGE_URL], data[CONF_BRIDGE_TOKEN],
+        )
+        try:
+            await client.async_ready()
+            return live_assist_models(await client.async_get_status())
+        except BridgeApiError:
+            return {}
 
     async def async_step_init(self, user_input=None):
         """Offer the strict native web-search preference to Supervisor entries."""
@@ -358,13 +392,35 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             return self.async_abort(reason="supervisor_only")
 
         projects = await self._assist_projects()
+        models = await self._assist_models()
         choices = {"": "Select a dedicated project", **projects}
         errors = {}
         if user_input is not None:
             assist_enabled = user_input.get(CONF_ASSIST_ENABLED, False)
             assist_project = user_input.get(CONF_ASSIST_PROJECT_ID, "")
+            assist_model = user_input.get(
+                CONF_ASSIST_MODEL, self.config_entry.options.get(CONF_ASSIST_MODEL, "")
+            )
+            assist_reasoning = user_input.get(
+                CONF_ASSIST_REASONING, self.config_entry.options.get(CONF_ASSIST_REASONING, "")
+            )
+            instructions = user_input.get(
+                CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")
+            )
+            defaults = getattr(self, "_assist_project_defaults", {}).get(assist_project, (None, None))
             if assist_enabled and assist_project not in projects:
                 errors["base"] = "assist_project_required"
+            elif not isinstance(instructions, str) or len(instructions) > MAX_ASSIST_INSTRUCTIONS:
+                errors["base"] = "assist_instructions_invalid"
+            elif (
+                not isinstance(assist_model, str) or len(assist_model) > 160
+                or not isinstance(assist_reasoning, str) or len(assist_reasoning) > 32
+            ):
+                errors["base"] = "assist_model_unavailable"
+            elif assist_enabled and (assist_model or assist_reasoning) and not assist_selection_supported(
+                models, assist_model or defaults[0], assist_reasoning or defaults[1]
+            ):
+                errors["base"] = "assist_model_unavailable"
             else:
                 return self.async_create_entry(
                     title="",
@@ -380,6 +436,9 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                             user_input.get(CONF_ASSIST_ALLOW_VOICE, False)
                             if assist_enabled else False
                         ),
+                        CONF_ASSIST_MODEL: assist_model,
+                        CONF_ASSIST_REASONING: assist_reasoning,
+                        CONF_ASSIST_INSTRUCTIONS: instructions.strip(),
                     },
                 )
 
@@ -389,6 +448,23 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         )
         if default not in {WEB_SEARCH_MODE_LIVE, WEB_SEARCH_MODE_DISABLED}:
             default = WEB_SEARCH_MODE_LIVE
+        submitted = user_input or {}
+        current_model = submitted.get(CONF_ASSIST_MODEL, self.config_entry.options.get(CONF_ASSIST_MODEL, ""))
+        current_reasoning = submitted.get(CONF_ASSIST_REASONING, self.config_entry.options.get(CONF_ASSIST_REASONING, ""))
+        if not isinstance(current_model, str):
+            current_model = ""
+        if not isinstance(current_reasoning, str):
+            current_reasoning = ""
+        model_choices = {"": "Use project default", **{key: value.label for key, value in models.items()}}
+        reasoning_choices = {"": "Use project default"}
+        reasoning_choices.update({
+            effort: effort.replace("_", " ").capitalize()
+            for model in models.values() for effort in model.reasoning
+        })
+        if current_model and current_model not in model_choices:
+            model_choices[current_model] = f"{current_model} (unavailable)"
+        if current_reasoning and current_reasoning not in reasoning_choices:
+            reasoning_choices[current_reasoning] = f"{current_reasoning} (unavailable)"
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -424,6 +500,12 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_ASSIST_ALLOW_VOICE,
                         default=self.config_entry.options.get(CONF_ASSIST_ALLOW_VOICE, False),
                     ): bool,
+                    vol.Required(CONF_ASSIST_MODEL, default=current_model): vol.In(model_choices),
+                    vol.Required(CONF_ASSIST_REASONING, default=current_reasoning): vol.In(reasoning_choices),
+                    vol.Optional(
+                        CONF_ASSIST_INSTRUCTIONS,
+                        default=submitted.get(CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")),
+                    ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
                 }
             ),
             errors=errors,

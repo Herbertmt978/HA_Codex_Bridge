@@ -94,7 +94,11 @@ describe("prompt composer mutation contract", () => {
     expect(prompt.value).toBe("Keep my draft");
     expect(prompt.disabled).toBe(true);
     expect(send.disabled).toBe(true);
-    expect(panel.shadowRoot.getElementById("composer-status").textContent).toMatch(/managed by Assist.*start a new chat/);
+    const notice = panel.shadowRoot.getElementById("assist-conversation-notice");
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toMatch(/Home Assistant conversation.*managed by Home Assistant Assist.*cannot be messaged here.*start a new chat/s);
+    expect(prompt.getAttribute("aria-describedby")).toContain("assist-conversation-notice");
+    expect(panel.shadowRoot.getElementById("composer-status").textContent).toBe("");
     await panel._sendPrompt();
     expect(panel._callWS).not.toHaveBeenCalled();
     expect(panel._promptMutations.size).toBe(0);
@@ -114,6 +118,22 @@ describe("prompt composer mutation contract", () => {
     expect(send.dataset.action).toBe("stop-run");
     expect(send.getAttribute("aria-label")).toBe("Stop");
     expect(panel.shadowRoot.getElementById("prompt-input").disabled).toBe(true);
+  });
+
+  it("removes the Assist banner when a regular chat is selected without losing its draft", () => {
+    const panel = createPanel();
+    panel._activeThread.schedule_eligible = false;
+    panel._render(true);
+    const notice = panel.shadowRoot.getElementById("assist-conversation-notice");
+    expect(notice.hidden).toBe(false);
+    panel._activeThread = { ...panel._activeThread, schedule_eligible: true };
+    panel._setDraftForThread("thread-alpha", "Regular draft");
+    panel._render(true);
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    expect(notice.hidden).toBe(true);
+    expect(prompt.value).toBe("Regular draft");
+    expect(prompt.disabled).toBe(false);
+    expect(prompt.getAttribute("aria-describedby")).not.toContain("assist-conversation-notice");
   });
 
   it.each([undefined, true, "false"])("does not infer Assist ownership from schedule_eligible %s", (eligible) => {
@@ -413,7 +433,7 @@ describe("prompt composer mutation contract", () => {
     expect(panel._promptMutations.size).toBe(0);
     expect(panel._draftForThread("thread-alpha")).toBe("Keep this draft");
     expect(prompt.value).toBe("Keep this draft");
-    expect(panel._error).toMatch(/managed by Assist/);
+    expect(panel._error).toMatch(/managed by Home Assistant Assist/);
     expect(panel._error).not.toMatch(/interrupted|private-policy-detail/);
     expect(panel._errorRetryable).toBe(false);
     expect(panel.shadowRoot.querySelector(".composer-shell").classList).not.toContain("retry-ready");

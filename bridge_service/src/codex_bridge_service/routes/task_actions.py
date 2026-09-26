@@ -129,6 +129,31 @@ def _record(task_id: str, run) -> dict[str, str]:
     }
 
 
+def _require_assist_model(request: Request, model: str, reasoning: str) -> None:
+    """Revalidate an Assist turn while its admission lease fences account changes."""
+
+    try:
+        probe = request.app.state.model_catalog_probe
+        probe.invalidate()
+        catalogue = probe.probe(refresh_stale=True)
+    except (ModelCatalogError, AttributeError):
+        raise HTTPException(
+            503, detail={"code": "runtime_unavailable", "retryable": True}
+        ) from None
+    if catalogue.stale or catalogue.source != "codex-app-server":
+        raise HTTPException(
+            503, detail={"code": "runtime_unavailable", "retryable": True}
+        )
+    supported = next((
+        item for item in catalogue.models
+        if item.model == model and item.catalogued is True
+    ), None)
+    if supported is None or reasoning not in (getattr(supported, "advertised_thinking_levels", None) or ()):
+        raise HTTPException(
+            422, detail={"code": "task_model_unavailable", "retryable": False}
+        )
+
+
 def _accepted(request: Request, task_id: str, run) -> dict[str, str]:
     request.app.state.storage.event_store.append(
         operation_key=f"task:{task_id}:accepted",
@@ -196,7 +221,9 @@ def start_task(
         raise _target_error(error) from None
 
     # Explicit model/effort choices must be in the installed provider catalogue.
-    if payload.model_override is not None or payload.thinking_override is not None:
+    if not payload.assist and (
+        payload.model_override is not None or payload.thinking_override is not None
+    ):
         try:
             catalogue = request.app.state.model_catalog_probe.probe()
         except ModelCatalogError:
@@ -249,6 +276,9 @@ def start_task(
                     model_override=payload.model_override,
                     thinking_override=payload.thinking_override,
                     assist_origin=payload.assist,
+                    model_validator=(
+                        lambda model, reasoning: _require_assist_model(request, model, reasoning)
+                    ) if payload.assist else None,
                 ) as thread:
                     run = runner.submit_prompt(
                         thread.thread_id,
@@ -325,6 +355,10 @@ def continue_task(
                                 "code": "task_host_access_denied",
                                 "retryable": False,
                             },
+                        )
+                    if payload.assist:
+                        _require_assist_model(
+                            request, thread.effective_model, thread.effective_thinking_level
                         )
                     run = runner.submit_prompt(
                         thread.thread_id,

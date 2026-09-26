@@ -1876,7 +1876,9 @@ class BridgeStorage:
         default_model: str | None = None,
         default_thinking_level: str | None = None,
     ) -> ProjectRecord:
-        with self._project_mutation_lock:
+        with self._automation_target_lock, self._project_mutation_lock:
+            if default_model is not None or default_thinking_level is not None:
+                self._assert_automation_project_unreserved(project_id)
             return self._update_project_locked(
                 project_id,
                 name=name,
@@ -2590,6 +2592,7 @@ class BridgeStorage:
         model_override: str | None = None,
         thinking_override: str | None = None,
         assist_origin: bool = False,
+        model_validator: Callable[[str, str], None] | None = None,
     ) -> ThreadViewRecord:
         """Create a project chat once, even across a task-action retry or restart."""
 
@@ -2610,13 +2613,21 @@ class BridgeStorage:
                     raise TaskActionConflictError("task action changed during retry")
                 if existing.archived_at is not None:
                     raise ProjectMutationError("task chat is archived")
-                return self._resolve_thread(existing)
+                resolved = self._resolve_thread(existing)
+                if model_validator is not None:
+                    model_validator(resolved.effective_model, resolved.effective_thinking_level)
+                return resolved
             # Workspace IDs are shorter than task IDs for the existing portable
             # workspace contract. Never let a rare prefix collision share files.
             for path in self.threads_dir.glob("*.json"):
                 existing = ThreadRecord.model_validate_json(path.read_text(encoding="utf-8"))
                 if existing.workspace_id == workspace_id:
                     raise TaskActionConflictError("task workspace identity is already in use")
+            if model_validator is not None:
+                model_validator(
+                    model_override or project.default_model,
+                    thinking_override or project.default_thinking_level,
+                )
             return self._create_thread_locked(
                 title=title,
                 project_id=project_id,
@@ -2641,6 +2652,7 @@ class BridgeStorage:
         model_override: str | None = None,
         thinking_override: str | None = None,
         assist_origin: bool = False,
+        model_validator: Callable[[str, str], None] | None = None,
     ) -> Iterator[ThreadViewRecord]:
         """Keep the project reserved until the new task has been submitted."""
 
@@ -2659,6 +2671,7 @@ class BridgeStorage:
                     model_override=model_override,
                     thinking_override=thinking_override,
                     assist_origin=assist_origin,
+                    model_validator=model_validator,
                 )
             except BaseException:
                 self._release_automation_target_locked(project_id, None)

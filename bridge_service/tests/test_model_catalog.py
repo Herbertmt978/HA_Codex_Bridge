@@ -1141,3 +1141,33 @@ def test_catalog_parsers_bound_fields_and_ignore_unsupported_defaults() -> None:
         assert record.default_thinking_level == "level-0"
         assert len(record.thinking_levels) == model_catalog._MAX_REASONING_LEVELS
         assert len(record.input_modalities) == model_catalog._MAX_INPUT_MODALITIES
+    assert live.advertised_thinking_levels == live.thinking_levels
+
+
+def test_native_advertised_efforts_do_not_include_configured_recovery_efforts() -> None:
+    model_catalog = _load_model_catalog_module()
+    catalogue = model_catalog.CodexModelCatalogProbe._build_catalog(
+        {"config": {"model": "gpt-6-luna", "model_reasoning_effort": "max"}},
+        {"data": [{
+            "model": "gpt-6-luna", "defaultReasoningEffort": "medium",
+            "supportedReasoningEfforts": [{"reasoningEffort": "medium"}],
+        }]},
+    )
+    record = catalogue.models[0]
+    assert catalogue.source == "codex-app-server"
+    assert record.catalogued is True
+    assert record.thinking_levels == ["medium", "max"]
+    assert catalogue.configured_thinking_level == "max"
+    assert record.advertised_thinking_levels == ["medium"]
+    assert record.model_dump()["advertised_thinking_levels"] == ["medium"]
+
+
+@pytest.mark.parametrize("efforts", [
+    ["medium"] * 17, ["x" * 65], [""], ["medium\nmax"], [" medium"], [1],
+])
+def test_advertised_effort_arrays_are_bounded_and_validated(efforts) -> None:
+    model_catalog = _load_model_catalog_module()
+    with pytest.raises(ValueError):
+        model_catalog.CodexModelRecord(
+            model="gpt-6-luna", display_name="GPT-6 Luna", advertised_thinking_levels=efforts,
+        )

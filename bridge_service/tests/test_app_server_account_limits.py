@@ -474,6 +474,7 @@ def test_limits_probe_normalizes_primary_and_secondary_windows() -> None:
     assert status.secondary.remaining_percent == 35.0
     assert status.secondary.window_minutes == 10_080
     assert status.secondary.resets_at == 1_789_404_800
+    assert status.five_hour_enabled is True
     assert status.credits == {
         "hasCredits": True,
         "unlimited": False,
@@ -483,6 +484,52 @@ def test_limits_probe_normalizes_primary_and_secondary_windows() -> None:
     assert status.updated_at is not None
     assert status.updated_at.endswith("Z")
     assert "." in status.updated_at
+
+
+@pytest.mark.parametrize(("primary", "secondary", "expected"), [
+    ({"usedPercent": 20, "windowDurationMins": 300}, None, True),
+    (None, {"usedPercent": 20, "windowDurationMins": 300}, True),
+    ({"usedPercent": 20, "windowDurationMins": 300},
+     {"usedPercent": 30, "windowDurationMins": 10080}, True),
+    ({"usedPercent": 20, "windowDurationMins": 10080},
+     {"usedPercent": 30, "windowDurationMins": 300}, True),
+    (None, {"usedPercent": 20, "windowDurationMins": 10080}, False),
+    (None, None, None),
+    ({}, {"usedPercent": 20, "windowDurationMins": 10080}, None),
+    ("malformed", {"usedPercent": 20, "windowDurationMins": 10080}, None),
+    ({"usedPercent": 20}, {"usedPercent": 20, "windowDurationMins": 10080}, None),
+    ({"usedPercent": 20, "windowDurationMins": 60}, None, None),
+    ({"usedPercent": True, "windowDurationMins": 10080}, None, None),
+    ({"usedPercent": nan, "windowDurationMins": 10080}, None, None),
+    ({"usedPercent": inf, "windowDurationMins": 10080}, None, None),
+    ({"usedPercent": 101, "windowDurationMins": 10080}, None, None),
+    ({"usedPercent": 10 ** 400, "windowDurationMins": 10080}, None, None),
+    ({"usedPercent": 20, "windowDurationMins": "10080"}, None, None),
+    ({"usedPercent": 20, "windowDurationMins": 10080},
+     {"usedPercent": 20, "windowDurationMins": 10080}, None),
+])
+def test_five_hour_allowance_uses_raw_valid_windows(primary, secondary, expected) -> None:
+    # Deliberately bypass contract validation to test malformed runtime data.
+    result = limits_module._app_server_five_hour_enabled({
+        "primary": primary, "secondary": secondary, "planType": "pro",
+    })
+    assert result is expected
+
+
+def test_sparse_and_legacy_usage_do_not_assert_a_disabled_allowance() -> None:
+    assert limits_module._app_server_limits_status({"rateLimits": {}}).five_hour_enabled is None
+    assert LimitsStatusRecord(available=True).five_hour_enabled is None
+
+
+@pytest.mark.parametrize("value", ["false", "true", 0, 1, {}, []])
+def test_serialized_allowance_flags_do_not_coerce_unknown_values(value) -> None:
+    assert LimitsStatusRecord(five_hour_enabled=value).five_hour_enabled is None
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_explicit_allowance_flag_survives_serialization(enabled) -> None:
+    value = LimitsStatusRecord(five_hour_enabled=enabled)
+    assert LimitsStatusRecord.model_validate_json(value.model_dump_json()).five_hour_enabled is enabled
 
 
 def test_limits_probe_classifies_a_weekly_only_primary_window_as_secondary() -> None:
@@ -505,6 +552,7 @@ def test_limits_probe_classifies_a_weekly_only_primary_window_as_secondary() -> 
     assert status.secondary.remaining_percent == 100.0
     assert status.secondary.window_minutes == 10_080
     assert status.secondary.resets_at == 1_789_404_800
+    assert status.five_hour_enabled is False
 
 
 def test_limits_probe_orders_known_windows_by_duration_not_protocol_position() -> None:
