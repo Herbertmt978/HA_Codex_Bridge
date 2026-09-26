@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.9.1`, Integration and panel `1.9.1`, Bridge `0.16.0` and
+- This release pairs App `1.9.2`, Integration and panel `1.9.2`, Bridge `0.16.1` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -54,6 +54,9 @@ to the App or Bridge.
   changes. The previous account's provider handle is detached; earlier local
   messages are not automatically replayed to the newly connected account.
   Unverified identity blocks new prompts and unattended turns.
+- Five-hour diagnostic visibility follows a verified native usage window, not
+  the Pro plan label. A weekly-only allowance hides the two unused diagnostics
+  reversibly; existing entity IDs and explicit user visibility choices remain.
 - Saved ChatGPT accounts belong to the Home Assistant App, separately from
   desktop Codex profiles. Administrators can save and select private App
   sign-ins; switching replaces only the managed Codex app-server process and

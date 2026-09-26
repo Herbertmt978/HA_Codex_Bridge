@@ -103,7 +103,9 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
   link that requires Home Assistant sign-in. The bottom panel includes an
   interactive workspace terminal. See [Chat controls](docs/chat-controls.md).
 - **Assist conversation agent:** an administrator can opt in to direct Codex
-  answers from one selected project. Assist requests are restricted to observe
+  answers from one selected project, with model, reasoning level and plain-text
+  instructions in the Integration's settings. The agent appears on the Bridge
+  device. Assist requests are restricted to observe
   mode and are separate from ordinary device control. See the
   [Assist setup and access guide](docs/home-assistant-assist.md).
 

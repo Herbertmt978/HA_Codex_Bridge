@@ -84,6 +84,80 @@ test.afterAll(async () => {
   });
 });
 
+test("refreshes HA-owned HTTP authentication during PNG upload and image reads without reload or replay", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await prepareStaticHarnessThread(page);
+  const bytes = await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._pendingInteractions = [];
+    panel._config.capabilities = [...(panel._config.capabilities || []), "attachment_downloads"];
+    const canvas = document.createElement("canvas"); canvas.width = 24; canvas.height = 16;
+    const graphics = canvas.getContext("2d"); graphics.fillStyle = "#1768b2"; graphics.fillRect(0, 0, 24, 16);
+    const blob = await new Promise((resolveBlob) => canvas.toBlob(resolveBlob, "image/png"));
+    const evidence = { refreshes: 0, requests: [], staleRequests: 0 };
+    window.__haHttpEvidence = evidence;
+    const auth = { expired: true, accessToken: "expired-synthetic-value", refreshAccessToken: async () => {
+      evidence.refreshes += 1; auth.expired = false; auth.accessToken = `fresh-synthetic-${evidence.refreshes}`;
+    } };
+    let uploaded;
+    const generated = { artifact_id: "fresh_auth_image", filename: "generated.png", source: "generated_image", mime_type: "image/png", size_bytes: blob.size };
+    const harnessFetch = window.fetch;
+    // All fixtures remain local. Requests with the old token deliberately fail,
+    // recreating HTTP expiry while the established WebSocket remains usable.
+    const rawFetch = async (path, init) => {
+      const fresh = new Headers(init.headers).get("authorization") === `Bearer ${auth.accessToken}` && !auth.expired;
+      evidence.requests.push({ path, method: init.method || "GET", fresh, range: new Headers(init.headers).get("range"), mode: init.mode, redirect: init.redirect });
+      if (!fresh) { evidence.staleRequests += 1; return new Response(null, { status: 401 }); }
+      if (path.includes("/attachments/") || path.endsWith("/artifacts/fresh_auth_image")) return new Response(blob, { headers: { "Content-Type": "image/png", "Content-Length": String(blob.size) } });
+      const response = await harnessFetch(path, init);
+      if (path.endsWith("/complete")) uploaded = await response.clone().json();
+      if (path.endsWith("/uploads") || path.endsWith("/complete")) auth.expired = true;
+      return response;
+    };
+    const originalWs = panel._hass.connection.sendMessagePromise;
+    panel._hass.connection.sendMessagePromise = async (payload) => {
+      const result = await originalWs(payload);
+      if (uploaded && payload.type === "codex_bridge/get_events") return [
+        ...result,
+        { sequence: 900, event_type: "attachment.added", payload: uploaded },
+        { sequence: 901, event_type: "artifact.added", payload: generated },
+      ];
+      if (uploaded && payload.type === "codex_bridge/list_artifacts") return [...result, generated];
+      return result;
+    };
+    panel._hass = { ...panel._hass, auth, fetchWithAuth: async (path, init) => {
+      if (auth.expired) await auth.refreshAccessToken();
+      init.credentials = "same-origin"; init.headers.authorization = `Bearer ${auth.accessToken}`;
+      return rawFetch(path, init);
+    } };
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+  const panel = page.locator("codex-bridge-panel");
+  await panel.locator("#file-input").setInputFiles({ name: "fresh-auth.png", mimeType: "image/png", buffer: Buffer.from(bytes) });
+  const composerImage = panel.locator("#attachment-chip-list .inline-image-raster");
+  const uploadedImage = panel.locator(".uploaded-image-message .inline-image-raster");
+  const generatedImage = panel.locator(".generated-image-message .inline-image-raster");
+  await expect.poll(() => page.evaluate(() => window.__haHttpEvidence.requests.filter((request) => request.path.includes("/uploads")).map((request) => request.method))).toEqual(["POST", "PUT", "POST"]);
+  await expect.poll(() => panel.evaluate((element) => element._pendingUploads)).toBe(0);
+  await expect(panel.locator("#error-strip")).toBeHidden();
+  await expect(composerImage).toBeVisible();
+  await expect.poll(() => panel.evaluate((element) => element._events.some((event) => event.sequence === 900))).toBe(true);
+  await panel.locator(".uploaded-image-message").scrollIntoViewIfNeeded();
+  await expect(uploadedImage).toBeVisible();
+  await expect(generatedImage).toBeVisible();
+  for (const image of [composerImage, uploadedImage, generatedImage]) await expect.poll(() => image.evaluate((node) => node.complete && node.naturalWidth)).toBe(24);
+  const evidence = await page.evaluate(() => window.__haHttpEvidence);
+  expect(evidence.staleRequests).toBe(0);
+  expect(evidence.refreshes).toBeGreaterThanOrEqual(3);
+  expect(evidence.requests.filter((request) => request.path.includes("/uploads")).map((request) => request.method)).toEqual(["POST", "PUT", "POST"]);
+  expect(evidence.requests.some((request) => request.path.includes("/attachments/") && request.range)).toBe(true);
+  expect(evidence.requests.some((request) => request.path.endsWith("/artifacts/fresh_auth_image") && request.range)).toBe(true);
+  expect(evidence.requests.every((request) => request.fresh && request.path.startsWith("/api/codex_bridge/") && request.mode === "same-origin" && request.redirect === "error")).toBe(true);
+  await expect(panel.locator("#error-strip")).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath("fresh-ha-auth-upload-images.png"), animations: "disabled" });
+});
+
 async function selectHarnessThread(page, threadId = "thr_vba_1") {
   await page.evaluate((selectedThreadId) => document.querySelector("codex-bridge-panel")._selectThread(selectedThreadId), threadId);
   await expect(page.locator("codex-bridge-panel").locator("#thread-title-label")).not.toBeEmpty();
@@ -1885,7 +1959,7 @@ test("downloads a cached generated-image preview inside the user activation", as
     const generatedImage = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 77]);
     const originalAnchorClick = HTMLAnchorElement.prototype.click;
     window.__codexBridgeCachedDownloadUserActive = null;
-    window.__codexBridgeCachedDownloadFetched = false;
+    window.__codexBridgeCachedDownloadFetchCount = 0;
     HTMLAnchorElement.prototype.click = function () {
       window.__codexBridgeCachedDownloadUserActive = navigator.userActivation.isActive;
       return originalAnchorClick.call(this);
@@ -1907,7 +1981,7 @@ test("downloads a cached generated-image preview inside the user activation", as
     window.fetch = async (url, init) => {
       const pathname = new URL(String(url), window.location.origin).pathname;
       if (pathname.endsWith("/artifacts/art_generated_cached")) {
-        window.__codexBridgeCachedDownloadFetched = true;
+        window.__codexBridgeCachedDownloadFetchCount += 1;
       }
       return harnessFetch(url, init);
     };
@@ -1922,6 +1996,14 @@ test("downloads a cached generated-image preview inside the user activation", as
     panel.shadowRoot.getElementById("message-list").append(card);
   });
 
+  // The synthetic cached descriptor has no display URL, so its independent
+  // history thumbnail is fetched and rejects the harness's non-image bytes.
+  // Settle that read before proving the Download click adds no HTTP request.
+  const card = page.locator("codex-bridge-panel").locator('.generated-image-message[data-sequence="19999"]');
+  await card.scrollIntoViewIfNeeded();
+  await expect(card.locator(".inline-image-status")).toContainText("Preview unavailable");
+  const readsBeforeDownload = await page.evaluate(() => window.__codexBridgeCachedDownloadFetchCount);
+  expect(readsBeforeDownload).toBe(1);
   const downloadEvent = page.waitForEvent("download");
   await page.locator("codex-bridge-panel").locator(
     '.generated-image-download[data-artifact-id="art_generated_cached"]'
@@ -1930,7 +2012,7 @@ test("downloads a cached generated-image preview inside the user activation", as
   expect(download.suggestedFilename()).toBe("generated-cached.png");
   expect([...await readFile(await download.path())]).toEqual([137, 80, 78, 71, 13, 10, 26, 10, 77]);
   expect(await page.evaluate(() => window.__codexBridgeCachedDownloadUserActive)).toBe(true);
-  expect(await page.evaluate(() => window.__codexBridgeCachedDownloadFetched)).toBe(false);
+  expect(await page.evaluate(() => window.__codexBridgeCachedDownloadFetchCount)).toBe(readsBeforeDownload);
   await expect(page.locator('a[download="generated-cached.png"]')).toBeAttached();
 });
 
@@ -4499,3 +4581,48 @@ test("corrupt image containers show a retry state and download unchanged origina
   await menu.getByRole("menuitem", { name: "Download image", exact: true }).click();
   await expect(card.locator(".inline-image-status")).toContainText("could not be downloaded");
 });
+
+for (const width of [390, 1280]) {
+  test(`Assist conversation boundary remains prominent above history and rail previews at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await panel.evaluate((element) => {
+      window.__codexHarness.updateThread(element._selectedThreadId, { schedule_eligible: false, status: "idle", active_run_id: null });
+      element._activeThread = { ...element._activeThread, schedule_eligible: false, status: "idle", active_run_id: null };
+      element._pendingInteractions = [];
+      element._events = [
+        { sequence: 1, event_type: "message.created", payload: { run_id: "assist-banner-fixture", text: "Say only hello" } },
+        { sequence: 2, event_type: "message.completed", payload: { run_id: "assist-banner-fixture", text: "hello" } },
+      ];
+      element._forceMessageRebuild = true;
+      element._render();
+    });
+    const notice = panel.getByRole("note", { name: "Home Assistant conversation" });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("This chat is managed by Home Assistant Assist and cannot be messaged here.");
+    await expect(panel.locator("#composer-status")).toBeEmpty();
+    await expect(panel.getByRole("textbox", { name: "Message Codex" })).toBeDisabled();
+    const bounds = await notice.boundingBox();
+    const scroller = await panel.locator("#conversation-scroll").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(scroller.y + 1);
+    await panel.locator(".timeline-item").first().hover();
+    const preview = panel.locator("#conversation-timeline-desktop-preview");
+    await expect(preview).toBeVisible();
+    expect((await preview.boundingBox()).y).toBeGreaterThanOrEqual(bounds.y + bounds.height);
+    await preview.hover();
+    await expect(preview).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`assist-conversation-notice-${width}.png`), animations: "disabled" });
+    await panel.evaluate((element) => {
+      window.__codexHarness.updateThread(element._selectedThreadId, { schedule_eligible: true });
+      element._activeThread = { ...element._activeThread, schedule_eligible: true };
+      element._render();
+    });
+    await expect(notice).toBeHidden();
+    await expect(panel.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(panel.locator("#message-list")).toContainText("Say only hello");
+  });
+}

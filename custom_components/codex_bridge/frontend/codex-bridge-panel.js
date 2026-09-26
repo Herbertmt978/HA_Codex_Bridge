@@ -712,6 +712,53 @@ function authenticatedChatUrl(location, threadId) {
   return url.href;
 }
 
+// frontend/src/ha-http.js
+var refreshes = /* @__PURE__ */ new WeakMap();
+function abortIfNeeded(signal) {
+  if (signal?.aborted) throw new DOMException("The request was cancelled.", "AbortError");
+}
+function validatePath(path) {
+  const hasControlOrSpace = (value) => [...value].some((character) => character.charCodeAt(0) <= 32);
+  if (typeof path !== "string" || !path.startsWith("/api/codex_bridge/") || /[\\?#]/u.test(path) || hasControlOrSpace(path)) throw new Error("Invalid Home Assistant API path");
+  for (const segment of path.slice(1).split("/")) {
+    let decoded;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      throw new Error("Invalid Home Assistant API path");
+    }
+    if (!decoded || decoded === "." || decoded === ".." || /[\\/]/u.test(decoded) || hasControlOrSpace(decoded)) throw new Error("Invalid Home Assistant API path");
+  }
+}
+async function fetchHomeAssistantApi(hass, path, init = {}, { fetchImpl = fetch, accessToken = () => "" } = {}) {
+  validatePath(path);
+  abortIfNeeded(init.signal);
+  const headers = init.headers instanceof Headers || Array.isArray(init.headers) ? Object.fromEntries(new Headers(init.headers).entries()) : { ...init.headers };
+  for (const name of Object.keys(headers)) if (name.toLowerCase() === "authorization") delete headers[name];
+  const request = { ...init, headers, credentials: "same-origin", mode: "same-origin", redirect: "error" };
+  if (typeof hass?.fetchWithAuth === "function") return hass.fetchWithAuth(path, request);
+  const auth = hass?.auth || hass?.connection?.options?.auth;
+  if (auth?.expired === true) {
+    if (typeof auth.refreshAccessToken !== "function") throw new Error("Home Assistant sign-in expired. Reload the page and sign in again.");
+    let pending = refreshes.get(auth);
+    if (!pending) {
+      pending = Promise.resolve().then(() => auth.refreshAccessToken());
+      refreshes.set(auth, pending);
+    }
+    try {
+      await pending;
+    } catch {
+      throw new Error("Home Assistant sign-in could not be refreshed. Reload the page and sign in again.");
+    } finally {
+      if (refreshes.get(auth) === pending) refreshes.delete(auth);
+    }
+  }
+  abortIfNeeded(init.signal);
+  const token = accessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetchImpl(path, request);
+}
+
 // node_modules/@xterm/xterm/lib/xterm.mjs
 var zs = Object.defineProperty;
 var Rl = Object.getOwnPropertyDescriptor;
@@ -36401,8 +36448,8 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.9.1";
-var ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
+var PANEL_VERSION = "1.9.2";
+var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -41044,6 +41091,12 @@ template.innerHTML = `
       min-width: 0;
     }
 
+    .assist-conversation-notice { flex-shrink: 0; }
+    .assist-conversation-notice.visible { grid-template-columns: 20px minmax(0, 1fr); }
+    .assist-conversation-notice[hidden] { display: none; }
+    .assist-conversation-notice .error-title { color: var(--danger-color); }
+    .assist-conversation-notice .error-message { overflow-wrap: anywhere; }
+
     .error-title {
       color: var(--text-color);
       font-size: var(--font-caption-size);
@@ -42077,6 +42130,13 @@ template.innerHTML = `
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
+      <section class="error-strip assist-conversation-notice" id="assist-conversation-notice" role="note" aria-labelledby="assist-conversation-title" aria-live="polite" hidden>
+        <span class="error-icon" id="assist-conversation-icon" aria-hidden="true"></span>
+        <div class="error-copy">
+          <strong class="error-title" id="assist-conversation-title">Home Assistant conversation</strong>
+          <span class="error-message">${ASSIST_PROMPT_MESSAGE}</span>
+        </div>
+      </section>
       <div class="conversation-scroll" id="conversation-scroll">
         <div class="main-top">
           <div class="runtime-shell" id="runtime-strip"></div>
@@ -42640,6 +42700,9 @@ var CodexBridgePanel = class extends HTMLElement {
   _accessToken() {
     return this._hass?.auth?.data?.access_token || this._hass?.auth?.data?.accessToken || this._hass?.auth?.accessToken || this._hass?.connection?.options?.auth?.accessToken || "";
   }
+  _fetchHaApi(path, init = {}) {
+    return fetchHomeAssistantApi(this._hass, path, init, { accessToken: () => this._accessToken() });
+  }
   _installStaticUi() {
     if (this._staticUiInstalled) {
       return;
@@ -42649,6 +42712,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("app-menu-toggle"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("assist-conversation-icon"), icons.alert);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("chat-menu-button"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("share-chat-button"), icons.upload, "Share");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-activity-button"), icons.activity);
@@ -44618,7 +44682,7 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       const token = this._accessToken();
       if (!token) throw new Error("Sign in to Home Assistant");
-      const response = await fetch("/api/codex_bridge/mcp/credentials", {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/credentials", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -44660,7 +44724,7 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       const token = this._accessToken();
       if (!token) throw new Error("Home Assistant sign-in required");
-      const response = await fetch("/api/codex_bridge/mcp/connections", {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/connections", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -45043,6 +45107,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const isRunning = this._runActivityForThread(activeThread).busy;
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const assistManaged = activeThread?.schedule_eligible === false;
+    const assistNotice = this.shadowRoot.getElementById("assist-conversation-notice");
+    assistNotice.hidden = !assistManaged;
+    assistNotice.classList.toggle("visible", assistManaged);
+    promptInput.setAttribute("aria-describedby", assistManaged ? "assist-conversation-notice composer-shortcut-hint composer-status" : "composer-shortcut-hint composer-status");
     const retryable = !assistManaged && mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
     const cancelling = this._cancellingThreads.has(this._selectedThreadId);
@@ -45078,7 +45146,7 @@ var CodexBridgePanel = class extends HTMLElement {
     sendButton.setAttribute("aria-label", actionLabel);
     this._setTooltipTarget(sendButton, actionTitle);
     if (assistManaged) {
-      composerStatus.textContent = ASSIST_PROMPT_MESSAGE;
+      composerStatus.textContent = "";
     } else if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
@@ -46574,7 +46642,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _inlineImages() {
     if (!this._inlineImageController) {
-      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, token: () => this._accessToken() });
+      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, fetchImpl: (path, init) => this._fetchHaApi(path, init) });
     }
     this._inlineImageController.setThread(this._selectedThreadId || "");
     return this._inlineImageController;
@@ -49638,7 +49706,6 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     try {
-      const token = this._accessToken();
       const abortController = new AbortController();
       this._uploadAbortController = abortController;
       this._pendingUploads = files.length;
@@ -49657,7 +49724,6 @@ var CodexBridgePanel = class extends HTMLElement {
         this._uploadProgress.currentPercent = 0;
         await this._uploadSingleFile(file, {
           relativePath,
-          token,
           threadId,
           signal: abortController.signal
         });
@@ -49678,12 +49744,12 @@ var CodexBridgePanel = class extends HTMLElement {
       this._render();
     }
   }
-  _uploadSingleFile(file, { relativePath, token, threadId, signal }) {
+  _uploadSingleFile(file, { relativePath, threadId, signal }) {
     return uploadResumableFile({
       file,
       threadId,
       relativePath,
-      accessToken: token,
+      fetchImpl: (path, init) => this._fetchHaApi(path, init),
       signal,
       onProgress: ({ completedBytes, totalBytes }) => {
         if (!this._uploadProgress) {
@@ -49997,15 +50063,14 @@ var CodexBridgePanel = class extends HTMLElement {
         this._render();
         return;
       }
-      const token = this._accessToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers = {};
       const limit = artifactPreviewLimit(artifact);
       if (artifact.size_bytes > 0) {
         headers.Range = `bytes=0-${Math.min(limit.bytes, artifact.size_bytes) - 1}`;
       }
       const threadSegment = encodeURIComponent(this._selectedThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
-      const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
+      const response = await this._fetchHaApi(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
         headers
       });
       if (!response.ok) {
@@ -50220,12 +50285,10 @@ var CodexBridgePanel = class extends HTMLElement {
     this._artifactDownloadPendingId = artifactId;
     this._refreshArtifactDownloadUi();
     try {
-      const token = this._accessToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const threadSegment = encodeURIComponent(downloadThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
-      const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
-        headers
+      const response = await this._fetchHaApi(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
+        headers: {}
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));

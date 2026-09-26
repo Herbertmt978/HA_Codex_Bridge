@@ -38,6 +38,7 @@ class EntitySnapshot:
     five_hour_reset: datetime | None
     weekly_used: float | None
     weekly_reset: datetime | None
+    five_hour_enabled: bool | None
 
 
 def _time(value: object) -> datetime | None:
@@ -103,6 +104,14 @@ def project_status(
     )
     primary = _window(limits.get("primary"), 300) if fresh else (None, None)
     secondary = _window(limits.get("secondary"), 10080) if fresh else (None, None)
+    five_hour_enabled = limits.get("five_hour_enabled") if fresh else None
+    if type(five_hour_enabled) is not bool or (
+        five_hour_enabled is True and primary[0] is None
+    ) or (
+        five_hour_enabled is False
+        and (limits.get("primary") is not None or secondary[0] is None)
+    ):
+        five_hour_enabled = None
     return EntitySnapshot(
         authenticated=authenticated,
         task_running=running,
@@ -112,6 +121,7 @@ def project_status(
         five_hour_reset=primary[1],
         weekly_used=secondary[0],
         weekly_reset=secondary[1],
+        five_hour_enabled=five_hour_enabled,
     )
 
 
@@ -145,7 +155,16 @@ class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
                 # outcome for the newly selected account.
                 self._last_outcome = None
                 if self.data is not None:
-                    self.async_set_updated_data(replace(self.data, last_outcome=None))
+                    self.async_set_updated_data(replace(
+                        self.data,
+                        last_outcome=None,
+                        usage_available=False,
+                        five_hour_used=None,
+                        five_hour_reset=None,
+                        weekly_used=None,
+                        weekly_reset=None,
+                        five_hour_enabled=None,
+                    ))
             elif not event.event_type.startswith("run."):
                 return
         self._refresh_pending = True

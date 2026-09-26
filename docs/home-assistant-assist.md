@@ -13,7 +13,10 @@ not replace Home Assistant's built-in device-control agent.
    use a project containing private chats or configuration files.
 2. In **Settings → Devices & services → Codex Bridge → Configure**, enable
    **Codex Bridge Assist conversation agent** and select that project. The
-   agent is off by default.
+   agent is off by default. Configure **Assist model**, **Assist reasoning level**
+   and **Assist instructions** here too. Model choices come from the signed-in
+   Codex account; leave model or reasoning unset to use the project's defaults.
+   The existing conversation entity appears on the Codex Bridge device.
 3. Select **Codex Bridge Assist** as the conversation agent in the desired
    Assist pipeline. A signed-in Home Assistant administrator can use it.
 4. To use a voice satellite or another Assist entry point without a signed-in
@@ -33,7 +36,8 @@ Each Assist turn uses **Observe** mode, disabled web search and unattended
 request handling. It has no Home Assistant OS host-access grant, browser
 dynamic tools, image publication or ability to approve an interactive request.
 The selected project's workspace remains readable to Codex and its answer may
-quote material from it. Assist sends only the question text to the App. It does
+quote material from it. Assist sends the question and any configured plain-text
+instructions to the App. It does
 not send HA states, devices, areas, user identity, voice-device identity or the
 HA chat log. The Bridge keeps the Codex chat in the selected project; HA keeps
 its own Assist chat log according to HA's session lifecycle.
@@ -51,3 +55,14 @@ Assist cannot control HA devices. Use the normal HA conversation agent for
 device control. The native `codex_bridge.start_task` and related actions are
 separate administrative automation features described in
 [Home Assistant task actions](home-assistant-task-actions.md).
+
+Instructions are limited to 4,096 characters and are not rendered as templates.
+They do not grant tools or device access. Unsupported model/reasoning pairs
+must be corrected in settings; the agent does not silently substitute another
+model after an account change. Existing accepted tasks remain safe to retry.
+Explicit model and reasoning settings require App 1.9.2 or later. With an older
+App, leave those settings unset to retain the existing project-default agent.
+
+These conversations appear under **HA Assistant Chats**. Their history and files
+remain accessible, with a red notice explaining that messages are managed by
+Home Assistant Assist. Continue in Assist, or create an ordinary Bridge chat.

@@ -52,6 +52,13 @@ def test_panel_and_http_file_surfaces_require_home_assistant_admin() -> None:
 def test_home_assistant_setup_uses_protected_side_effect_free_readiness_check() -> None:
     for filename in ("__init__.py", "config_flow.py"):
         source = (COMPONENT_ROOT / filename).read_text(encoding="utf-8")
+        if filename == "config_flow.py":
+            # The interactive options form may read the signed-in model catalogue;
+            # connection setup must still use only protected readiness.
+            source = ast.unparse(next(
+                node for node in ast.parse(source).body
+                if isinstance(node, ast.ClassDef) and node.name == "CodexBridgeConfigFlow"
+            ))
         assert "await client.async_ready()" in source
         assert "await client.async_get_status()" not in source
 

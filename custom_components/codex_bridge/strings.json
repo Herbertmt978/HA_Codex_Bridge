@@ -57,12 +57,17 @@
           "allow_unattended_task_actions": "Allow unattended task actions from automations",
           "assist_enabled": "Enable Codex Bridge Assist conversation agent",
           "assist_project_id": "Project available to Assist",
-          "assist_allow_voice_without_user": "Allow voice requests without a signed-in HA user"
+          "assist_allow_voice_without_user": "Allow voice requests without a signed-in HA user",
+          "assist_model": "Assist model",
+          "assist_reasoning": "Assist reasoning level",
+          "assist_instructions": "Assist instructions (plain text, up to 4,096 characters)"
         }
       }
     },
     "error": {
-      "assist_project_required": "Choose an active project before enabling Assist. Create a dedicated project in Codex Bridge if none is listed."
+      "assist_project_required": "Choose an active project before enabling Assist. Create a dedicated project in Codex Bridge if none is listed.",
+      "assist_model_unavailable": "This model and reasoning combination is not advertised by the signed-in Codex account. Choose a supported combination or use the project defaults. Saved unavailable choices are not replaced automatically.",
+      "assist_instructions_invalid": "Use plain-text Assist instructions of up to 4,096 characters. Templates are not evaluated."
     },
     "abort": {
       "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",

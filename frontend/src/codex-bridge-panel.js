@@ -1,6 +1,7 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
 import { contextUsage } from "./context-usage.js";
 import { authenticatedChatUrl, chatResources } from "./chat-resources.js";
+import { fetchHomeAssistantApi } from "./ha-http.js";
 import { WorkspaceTerminalView, terminalCss } from "./workspace-terminal.js";
 import { SELECTION_STYLES } from "./selection.js";
 import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js";
@@ -41,8 +42,8 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.9.1";
-const ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
+const PANEL_VERSION = "1.9.2";
+const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -4718,6 +4719,12 @@ template.innerHTML = `
       min-width: 0;
     }
 
+    .assist-conversation-notice { flex-shrink: 0; }
+    .assist-conversation-notice.visible { grid-template-columns: 20px minmax(0, 1fr); }
+    .assist-conversation-notice[hidden] { display: none; }
+    .assist-conversation-notice .error-title { color: var(--danger-color); }
+    .assist-conversation-notice .error-message { overflow-wrap: anywhere; }
+
     .error-title {
       color: var(--text-color);
       font-size: var(--font-caption-size);
@@ -5751,6 +5758,13 @@ template.innerHTML = `
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
+      <section class="error-strip assist-conversation-notice" id="assist-conversation-notice" role="note" aria-labelledby="assist-conversation-title" aria-live="polite" hidden>
+        <span class="error-icon" id="assist-conversation-icon" aria-hidden="true"></span>
+        <div class="error-copy">
+          <strong class="error-title" id="assist-conversation-title">Home Assistant conversation</strong>
+          <span class="error-message">${ASSIST_PROMPT_MESSAGE}</span>
+        </div>
+      </section>
       <div class="conversation-scroll" id="conversation-scroll">
         <div class="main-top">
           <div class="runtime-shell" id="runtime-strip"></div>
@@ -6343,6 +6357,10 @@ class CodexBridgePanel extends HTMLElement {
     );
   }
 
+  _fetchHaApi(path, init = {}) {
+    return fetchHomeAssistantApi(this._hass, path, init, { accessToken: () => this._accessToken() });
+  }
+
   _installStaticUi() {
     if (this._staticUiInstalled) {
       return;
@@ -6352,6 +6370,7 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("app-menu-toggle"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("new-direct-chat-button"), icons.plus, "New chat");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("search-icon"), icons.search);
+    this._setTrustedButtonContent(this.shadowRoot.getElementById("assist-conversation-icon"), icons.alert);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("chat-menu-button"), icons.more);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("share-chat-button"), icons.upload, "Share");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("toggle-activity-button"), icons.activity);
@@ -8314,7 +8333,7 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const token = this._accessToken();
       if (!token) throw new Error("Sign in to Home Assistant");
-      const response = await fetch("/api/codex_bridge/mcp/credentials", {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/credentials", {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(120000),
       });
@@ -8344,7 +8363,7 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const token = this._accessToken();
       if (!token) throw new Error("Home Assistant sign-in required");
-      const response = await fetch("/api/codex_bridge/mcp/connections", {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/connections", {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(250000),
       });
@@ -8740,6 +8759,12 @@ class CodexBridgePanel extends HTMLElement {
     const isRunning = this._runActivityForThread(activeThread).busy;
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     const assistManaged = activeThread?.schedule_eligible === false;
+    const assistNotice = this.shadowRoot.getElementById("assist-conversation-notice");
+    assistNotice.hidden = !assistManaged;
+    assistNotice.classList.toggle("visible", assistManaged);
+    promptInput.setAttribute("aria-describedby", assistManaged
+      ? "assist-conversation-notice composer-shortcut-hint composer-status"
+      : "composer-shortcut-hint composer-status");
     const retryable = !assistManaged && mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
     const cancelling = this._cancellingThreads.has(this._selectedThreadId);
@@ -8780,7 +8805,7 @@ class CodexBridgePanel extends HTMLElement {
     sendButton.setAttribute("aria-label", actionLabel);
     this._setTooltipTarget(sendButton, actionTitle);
     if (assistManaged) {
-      composerStatus.textContent = ASSIST_PROMPT_MESSAGE;
+      composerStatus.textContent = "";
     } else if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
@@ -10466,7 +10491,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _inlineImages() {
     if (!this._inlineImageController) {
-      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, token: () => this._accessToken() });
+      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, fetchImpl: (path, init) => this._fetchHaApi(path, init) });
     }
     this._inlineImageController.setThread(this._selectedThreadId || "");
     return this._inlineImageController;
@@ -13865,7 +13890,6 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     try {
-      const token = this._accessToken();
       const abortController = new AbortController();
       this._uploadAbortController = abortController;
       this._pendingUploads = files.length;
@@ -13886,7 +13910,6 @@ class CodexBridgePanel extends HTMLElement {
         this._uploadProgress.currentPercent = 0;
         await this._uploadSingleFile(file, {
           relativePath,
-          token,
           threadId,
           signal: abortController.signal,
         });
@@ -13908,12 +13931,12 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  _uploadSingleFile(file, { relativePath, token, threadId, signal }) {
+  _uploadSingleFile(file, { relativePath, threadId, signal }) {
     return uploadResumableFile({
       file,
       threadId,
       relativePath,
-      accessToken: token,
+      fetchImpl: (path, init) => this._fetchHaApi(path, init),
       signal,
       onProgress: ({ completedBytes, totalBytes }) => {
         if (!this._uploadProgress) {
@@ -14247,15 +14270,14 @@ class CodexBridgePanel extends HTMLElement {
         this._render();
         return;
       }
-      const token = this._accessToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers = {};
       const limit = artifactPreviewLimit(artifact);
       if (artifact.size_bytes > 0) {
         headers.Range = `bytes=0-${Math.min(limit.bytes, artifact.size_bytes) - 1}`;
       }
       const threadSegment = encodeURIComponent(this._selectedThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
-      const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
+      const response = await this._fetchHaApi(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
         headers,
       });
       if (!response.ok) {
@@ -14495,12 +14517,10 @@ class CodexBridgePanel extends HTMLElement {
     this._artifactDownloadPendingId = artifactId;
     this._refreshArtifactDownloadUi();
     try {
-      const token = this._accessToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const threadSegment = encodeURIComponent(downloadThreadId);
       const artifactSegment = encodeURIComponent(artifactId);
-      const response = await fetch(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
-        headers,
+      const response = await this._fetchHaApi(`/api/codex_bridge/threads/${threadSegment}/artifacts/${artifactSegment}`, {
+        headers: {},
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));

@@ -151,6 +151,7 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
     plan_type = snapshot.get("planType")
     return LimitsStatusRecord(
         available=True,
+        five_hour_enabled=_app_server_five_hour_enabled(snapshot),
         blocked=blocked,
         message="Usage limit reached" if blocked else None,
         primary=primary,
@@ -162,6 +163,34 @@ def _app_server_limits_status(response: object) -> LimitsStatusRecord | None:
         .isoformat(timespec="microseconds")
         .replace("+00:00", "Z"),
     )
+
+
+def _app_server_five_hour_enabled(snapshot: dict[str, Any]) -> bool | None:
+    """Distinguish a weekly-only allowance from missing or malformed windows."""
+
+    durations = []
+    for key in ("primary", "secondary"):
+        window = snapshot.get(key)
+        if window is None:
+            continue
+        if not isinstance(window, dict):
+            return None
+        used = window.get("usedPercent")
+        duration = window.get("windowDurationMins")
+        if (
+            type(used) not in (int, float)
+            or not 0 <= used <= 100
+            or not isfinite(used)
+            or type(duration) is not int
+            or duration not in (300, 10080)
+        ):
+            return None
+        durations.append(duration)
+    if len(durations) != len(set(durations)):
+        return None
+    if 300 in durations:
+        return True
+    return False if durations == [10080] else None
 
 
 def _app_server_reset_credits(value: object) -> dict[str, Any] | None:

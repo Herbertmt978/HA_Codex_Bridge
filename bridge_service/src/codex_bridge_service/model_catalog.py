@@ -847,6 +847,9 @@ class CodexModelCatalogProbe:
             thinking_levels = CodexModelCatalogProbe._reasoning_efforts(
                 raw_model.get("supportedReasoningEfforts")
             )
+            advertised_thinking_levels = [
+                effort for effort in thinking_levels if effort.isprintable()
+            ]
             if (
                 model == configured_model
                 and configured_thinking
@@ -892,6 +895,7 @@ class CodexModelCatalogProbe:
                     ),
                     default_thinking_level=default_thinking_level,
                     thinking_levels=thinking_levels,
+                    advertised_thinking_levels=advertised_thinking_levels,
                     input_modalities=input_modalities,
                 )
             )

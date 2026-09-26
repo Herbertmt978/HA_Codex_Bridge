@@ -18,15 +18,26 @@ from homeassistant.components.conversation.chat_log import AssistantContent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge_api import BridgeApiConnectionError, BridgeApiError
+from .assist_settings import (
+    MAX_ASSIST_INSTRUCTIONS,
+    assist_prompt,
+    assist_selection_supported,
+    live_assist_models,
+)
 from .const import (
     CONF_ASSIST_ALLOW_VOICE,
     CONF_ASSIST_ENABLED,
     CONF_ASSIST_PROJECT_ID,
+    CONF_ASSIST_MODEL,
+    CONF_ASSIST_REASONING,
+    CONF_ASSIST_INSTRUCTIONS,
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR,
+    DOMAIN,
 )
 from .runtime import CodexBridgeRuntime, async_get_runtime
 
@@ -76,6 +87,11 @@ class CodexAssistConversation(ConversationEntity):
         self._entry = entry
         self._runtime = runtime
         self._attr_unique_id = f"{entry.entry_id}_assist"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, getattr(runtime, "discovery_uuid", None) or entry.entry_id)},
+            name=getattr(runtime, "title", entry.title),
+            manufacturer="Codex Bridge",
+        )
         self._sessions: OrderedDict[str, _AssistSession] = OrderedDict()
         # Reject concurrent voice requests rather than queueing unbounded work.
         self._request_lock = asyncio.Lock()
@@ -105,6 +121,12 @@ class CodexAssistConversation(ConversationEntity):
                 )
 
         prompt = user_input.text.strip()
+        instructions = self._entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")
+        if not isinstance(instructions, str) or len(instructions) > MAX_ASSIST_INSTRUCTIONS:
+            return self._reply(
+                user_input, chat_log,
+                "Ask a Home Assistant administrator to review the Codex Bridge Assist instructions.",
+            )
         if not prompt or len(prompt) > _MAX_PROMPT_CHARS:
             return self._reply(
                 user_input,
@@ -198,10 +220,25 @@ class CodexAssistConversation(ConversationEntity):
                         user_input, chat_log, previous_answer, conversation_id
                     )
 
+            try:
+                supported = await self._async_selection_supported(session)
+            except BridgeApiError:
+                supported = False
+            if not supported:
+                speech = "The selected Assist model and reasoning level are unavailable. Ask a Home Assistant administrator to review the Codex Bridge settings."
+                if previous_answer:
+                    speech = f"Previous answer: {previous_answer[:1024]}\n\n{speech}"
+                if session.thread_id is None:
+                    self._sessions.pop(conversation_id, None)
+                return self._reply(
+                    user_input, chat_log, speech,
+                    conversation_id if session.thread_id else None,
+                )
+
             task_id = uuid4().hex
             payload = {
                 "task_id": task_id,
-                "prompt": prompt,
+                "prompt": assist_prompt(prompt, instructions.strip()),
                 "assist": True,
                 "web_search": "disabled",
             }
@@ -213,6 +250,12 @@ class CodexAssistConversation(ConversationEntity):
                         "mode": "observe",
                     }
                 )
+                for option, field in (
+                    (CONF_ASSIST_MODEL, "model_override"),
+                    (CONF_ASSIST_REASONING, "thinking_override"),
+                ):
+                    if self._entry.options.get(option):
+                        payload[field] = self._entry.options[option]
             else:
                 payload["thread_id"] = session.thread_id
             session.pending_task_id = task_id
@@ -252,6 +295,8 @@ class CodexAssistConversation(ConversationEntity):
                     speech = "Assist conversations need MCP to be disabled in the Codex Bridge App."
                 elif error.code in {"authentication_required", "authentication_failed"}:
                     speech = "Sign in to Codex Bridge before using Assist."
+                elif error.code in {"assist_model_unavailable", "task_model_unavailable"}:
+                    speech = "The selected Assist model and reasoning level are unavailable. Ask a Home Assistant administrator to review the Codex Bridge settings."
                 else:
                     speech = "Codex Bridge could not answer just now. Please try again."
                 return self._reply(
@@ -293,6 +338,38 @@ class CodexAssistConversation(ConversationEntity):
         elif session.thread_id != reference["thread_id"]:
             raise BridgeApiError("task_target_unavailable")
         session.pending_payload = None
+
+    async def _async_selection_supported(self, session: _AssistSession) -> bool:
+        """Recheck explicit choices after account changes without substituting a model."""
+
+        selected_model = self._entry.options.get(CONF_ASSIST_MODEL, "")
+        selected_reasoning = self._entry.options.get(CONF_ASSIST_REASONING, "")
+        if not selected_model and not selected_reasoning:
+            return True
+        choices = live_assist_models(await self._runtime.client.async_get_status())
+        if not choices:
+            return False
+        if session.thread_id is not None:
+            thread = await self._runtime.client.async_get_thread(session.thread_id)
+            model = thread.get("effective_model")
+            reasoning = thread.get("effective_thinking_level")
+            if (selected_model and model != selected_model) or (
+                selected_reasoning and reasoning != selected_reasoning
+            ):
+                return False
+        else:
+            projects = await self._runtime.client.async_list_projects()
+            project = next((
+                item for item in projects
+                if isinstance(item, dict)
+                and item.get("project_id") == self._entry.options[CONF_ASSIST_PROJECT_ID]
+                and item.get("archived_at") is None
+            ), None)
+            if project is None:
+                return False
+            model = selected_model or project.get("default_model")
+            reasoning = selected_reasoning or project.get("default_thinking_level")
+        return assist_selection_supported(choices, model, reasoning)
 
     async def _wait_for_answer(self, task_id: str) -> dict:
         async with asyncio.timeout(_RESPONSE_TIMEOUT_SECONDS):

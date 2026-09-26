@@ -24,6 +24,9 @@ from custom_components.codex_bridge.const import (
     CONF_ASSIST_ENABLED,
     CONF_ASSIST_PROJECT_ID,
     CONF_ASSIST_ALLOW_VOICE,
+    CONF_ASSIST_MODEL,
+    CONF_ASSIST_REASONING,
+    CONF_ASSIST_INSTRUCTIONS,
     CONF_WEB_SEARCH_MODE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
@@ -33,6 +36,7 @@ from custom_components.codex_bridge.config_flow import (
     CodexBridgeConfigFlow,
     CodexBridgeOptionsFlow,
 )
+from custom_components.codex_bridge.assist_settings import AssistModelChoice
 
 
 TOKEN = "a" * 48
@@ -118,6 +122,9 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_ENABLED: False,
         CONF_ASSIST_PROJECT_ID: "",
         CONF_ASSIST_ALLOW_VOICE: False,
+        CONF_ASSIST_MODEL: "",
+        CONF_ASSIST_REASONING: "",
+        CONF_ASSIST_INSTRUCTIONS: "",
     }
     result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
 
@@ -128,6 +135,9 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_ENABLED: False,
         CONF_ASSIST_PROJECT_ID: "",
         CONF_ASSIST_ALLOW_VOICE: False,
+        CONF_ASSIST_MODEL: "",
+        CONF_ASSIST_REASONING: "",
+        CONF_ASSIST_INSTRUCTIONS: "",
     }
 
     enabled = await flow.async_step_init({
@@ -157,6 +167,9 @@ async def test_supervisor_options_remain_available_before_login_capability_recov
         CONF_ASSIST_ENABLED: False,
         CONF_ASSIST_PROJECT_ID: "",
         CONF_ASSIST_ALLOW_VOICE: False,
+        CONF_ASSIST_MODEL: "",
+        CONF_ASSIST_REASONING: "",
+        CONF_ASSIST_INSTRUCTIONS: "",
     }
 
 
@@ -188,6 +201,58 @@ async def test_assist_options_require_an_active_selected_project(hass):
     assert enabled["type"] is FlowResultType.CREATE_ENTRY
     assert enabled["data"][CONF_ASSIST_PROJECT_ID] == "prj_assist"
     assert enabled["data"][CONF_ASSIST_ALLOW_VOICE] is True
+
+
+async def test_assist_settings_validate_per_model_reasoning_and_plain_instructions(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR})
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass, flow.handler = hass, entry.entry_id
+    flow._assist_project_defaults = {"prj_assist": ("gpt-6-astra", "high")}
+    models = {
+        "gpt-6-astra": AssistModelChoice("GPT-6 Astra", ("medium", "high", "max")),
+        "gpt-6-luna": AssistModelChoice("GPT-6 Luna", ("medium",)),
+    }
+    base = {
+        CONF_WEB_SEARCH_MODE: "disabled", CONF_ASSIST_ENABLED: True,
+        CONF_ASSIST_PROJECT_ID: "prj_assist", CONF_ASSIST_MODEL: "gpt-6-astra",
+        CONF_ASSIST_REASONING: "max", CONF_ASSIST_INSTRUCTIONS: "Be brief. {{ literal }}",
+    }
+    with patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj_assist": "Assist"})), patch.object(
+        flow, "_assist_models", new=AsyncMock(return_value=models)
+    ):
+        accepted = await flow.async_step_init(base)
+        assert accepted["type"] is FlowResultType.CREATE_ENTRY
+        assert accepted["data"][CONF_ASSIST_MODEL] == "gpt-6-astra"
+        assert accepted["data"][CONF_ASSIST_REASONING] == "max"
+        assert accepted["data"][CONF_ASSIST_INSTRUCTIONS] == "Be brief. {{ literal }}"
+        invalid_pair = await flow.async_step_init({**base, CONF_ASSIST_MODEL: "gpt-6-luna"})
+        assert invalid_pair["errors"] == {"base": "assist_model_unavailable"}
+        too_long = await flow.async_step_init({**base, CONF_ASSIST_INSTRUCTIONS: "x" * 4097})
+        assert too_long["errors"] == {"base": "assist_instructions_invalid"}
+
+
+async def test_unavailable_saved_assist_choice_is_preserved_and_not_substituted(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+        options={CONF_ASSIST_MODEL: "gpt-6-astra", CONF_ASSIST_REASONING: "max"},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass, flow.handler = hass, entry.entry_id
+    with patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj_assist": "Assist"})), patch.object(
+        flow, "_assist_models", new=AsyncMock(return_value={})
+    ):
+        form = await flow.async_step_init()
+        defaults = form["data_schema"]({})
+        assert defaults[CONF_ASSIST_MODEL] == "gpt-6-astra"
+        assert defaults[CONF_ASSIST_REASONING] == "max"
+        refused = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "disabled", CONF_ASSIST_ENABLED: True,
+            CONF_ASSIST_PROJECT_ID: "prj_assist",
+        })
+        assert refused["type"] is FlowResultType.FORM
+        assert refused["errors"] == {"base": "assist_model_unavailable"}
 
 
 async def test_external_legacy_entry_has_no_native_web_search_options(hass):

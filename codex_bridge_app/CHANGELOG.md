@@ -2,6 +2,22 @@
 
 All notable App changes are recorded here.
 
+## 1.9.2
+
+- Attaches the existing Assist conversation entity to the Codex Bridge device,
+  with model, reasoning level and plain-text instructions in Integration settings.
+  Live catalogue validation preserves accepted retries and rejects unavailable
+  choices without creating an empty chat.
+- Displays a prominent red notice above Assist chat history explaining that
+  messages must continue through Home Assistant Assist or an ordinary new chat.
+- Reversibly hides unused five-hour diagnostics for a verified weekly-only
+  allowance, retaining entity identity and manual visibility choices. Account
+  changes immediately invalidate the previous account's usage values.
+- Uses Home Assistant's authenticated HTTP requests for file uploads, image
+  reads and downloads so an expired access token does not require a page reload.
+- Pairs App, Integration and panel `1.9.2` with Bridge `0.16.1` and unchanged
+  Codex `0.157.1`.
+
 ## 1.9.1
 
 - Allows image-menu downloads to save the original bounded file when its
