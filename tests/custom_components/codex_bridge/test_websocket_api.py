@@ -232,6 +232,62 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
 
 
 @pytest.mark.parametrize(
+    ("handler", "method", "payload", "error_code", "status", "safe_message"),
+    [
+        (ws_update_thread, "async_update_thread", {"thread_id": "thr_safe", "pinned": True, "navigation_revision": 7}, "navigation_revision_conflict", 409, "This chat changed; refresh and try again"),
+        (ws_update_thread, "async_update_thread", {"thread_id": "thr_safe", "section_id": "sec_removed", "navigation_revision": 7}, "chat_section_not_found", 404, "The selected section no longer exists"),
+        (ws_update_thread, "async_update_thread", {"thread_id": "thr_safe", "pinned": True, "navigation_revision": 7}, "chat_operations_unavailable", 409, "This App version does not support chat organisation. Update it and try again"),
+        (ws_create_chat_section, "async_create_chat_section", {"name": "Research"}, "chat_section_conflict", 409, "The section could not be changed. Refresh and try again"),
+        (ws_delete_chat_section, "async_delete_chat_section", {"section_id": "sec_busy", "revision": 2}, "chat_section_conflict", 409, "The section could not be changed. Refresh and try again"),
+        (ws_update_chat_section, "async_update_chat_section", {"section_id": "sec_safe", "name": "Research", "revision": 2}, "section_revision_conflict", 409, "This section changed; refresh and try again"),
+        (ws_delete_chat_section, "async_delete_chat_section", {"section_id": "sec_safe", "revision": 2}, "section_revision_conflict", 409, "This section changed; refresh and try again"),
+        (ws_update_chat_section, "async_update_chat_section", {"section_id": "sec_removed", "name": "Research", "revision": 2}, "chat_section_not_found", 404, "The selected section no longer exists"),
+    ],
+)
+async def test_chat_navigation_public_websocket_preserves_known_rejection_codes(
+    handler, method: str, payload: dict, error_code: str, status: int, safe_message: str
+) -> None:
+    runtime, _broker = _runtime()
+    problem = ProblemRecord.from_payload(status, {"detail": {"code": error_code, "message": "private-token-sentinel"}})
+    getattr(runtime.client, method).side_effect = BridgeApiProblemError(problem=problem)
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    handler(hass, connection, {"id": 94, "type": f"{DOMAIN}/{method.removeprefix('async_')}", **payload})
+    await hass.finish()
+
+    assert connection.errors == [(94, error_code, safe_message)]
+    assert connection.results == []
+    assert getattr(runtime.client, method).await_count == 1
+    assert "private-token-sentinel" not in repr(connection.errors)
+
+
+@pytest.mark.parametrize(
+    ("handler", "method", "payload"),
+    [
+        (ws_update_thread, "async_update_thread", {"thread_id": "thr_safe", "pinned": True, "navigation_revision": 7}),
+        (ws_create_chat_section, "async_create_chat_section", {"name": "Research"}),
+        (ws_update_chat_section, "async_update_chat_section", {"section_id": "sec_safe", "name": "Research", "revision": 2}),
+        (ws_delete_chat_section, "async_delete_chat_section", {"section_id": "sec_safe", "revision": 2}),
+    ],
+)
+async def test_chat_navigation_public_websocket_redacts_unknown_errors(
+    handler, method: str, payload: dict
+) -> None:
+    runtime, _broker = _runtime()
+    getattr(runtime.client, method).side_effect = BridgeApiError("private-token-sentinel")
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    handler(hass, connection, {"id": 95, "type": f"{DOMAIN}/{method.removeprefix('async_')}", **payload})
+    await hass.finish()
+
+    assert connection.errors == [(95, "bridge_error", "Bridge request failed")]
+    assert connection.results == []
+    assert "private-token-sentinel" not in repr(connection.errors)
+
+
+@pytest.mark.parametrize(
     ("operation", "error_code", "status", "safe_message"),
     [
         (

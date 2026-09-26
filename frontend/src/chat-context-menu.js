@@ -378,7 +378,7 @@ export class ChatContextMenu {
       const section = await this.panel._callWS("create_chat_section", { name });
       this.sections.push(section); this.sectionsLoaded = true;
       await this.mutate(thread, "update_thread", { section_id: section.section_id, navigation_revision: thread.navigation_revision });
-    }); return; }
+    }, { uncertainOnFailure: (failure) => !this.knownFailure(failure) }); return; }
     if (action === "rename-section" || action === "remove-section") {
       const section = this.sections.find((item) => item.section_id === value); if (!section) return;
       this.openDialog(action === "remove-section" ? "Remove section" : "Rename section", action === "remove-section" ? null : "Section name", section.name, async (name) => {
@@ -391,7 +391,7 @@ export class ChatContextMenu {
           this.sections = this.sections.map((item) => item.section_id === section.section_id ? updated : item);
         }
         await this.panel._loadThreads(); this.panel._renderedNavigationKey = null; this.panel._render();
-      }, { description: action === "remove-section" ? "Chats in this section stay available. Only the grouping is removed." : "", submit: action === "remove-section" ? "Remove section" : "Save" }); return;
+      }, { description: action === "remove-section" ? "Chats in this section stay available. Only the grouping is removed." : "", submit: action === "remove-section" ? "Remove section" : "Save", uncertainOnFailure: (failure) => !this.knownFailure(failure) }); return;
     }
     if (action === "settings") { this.close(); this.panel._openThreadFormForEdit(thread.thread_id); return; }
     if (action === "delete") { const trigger = this.trigger; this.close(); await this.panel._deleteThread(thread.thread_id, trigger); return; }
@@ -431,7 +431,7 @@ export class ChatContextMenu {
 
   knownFailure(error) {
     const code = error?.code || error?.body?.code || error?.body?.detail?.code;
-    return ["navigation_revision_conflict", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable", "thread_has_scheduled_automation", "runtime_thread_operation_conflict", "not_found"].includes(code);
+    return ["navigation_revision_conflict", "section_revision_conflict", "chat_section_conflict", "chat_section_not_found", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable", "thread_has_scheduled_automation", "runtime_thread_operation_conflict", "not_found"].includes(code);
   }
 
   errorMessage(error, write = false) {

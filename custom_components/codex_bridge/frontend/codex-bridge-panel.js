@@ -35293,7 +35293,7 @@ var ChatContextMenu = class {
         this.sections.push(section2);
         this.sectionsLoaded = true;
         await this.mutate(thread, "update_thread", { section_id: section2.section_id, navigation_revision: thread.navigation_revision });
-      });
+      }, { uncertainOnFailure: (failure) => !this.knownFailure(failure) });
       return;
     }
     if (action === "rename-section" || action === "remove-section") {
@@ -35311,7 +35311,7 @@ var ChatContextMenu = class {
         await this.panel._loadThreads();
         this.panel._renderedNavigationKey = null;
         this.panel._render();
-      }, { description: action === "remove-section" ? "Chats in this section stay available. Only the grouping is removed." : "", submit: action === "remove-section" ? "Remove section" : "Save" });
+      }, { description: action === "remove-section" ? "Chats in this section stay available. Only the grouping is removed." : "", submit: action === "remove-section" ? "Remove section" : "Save", uncertainOnFailure: (failure) => !this.knownFailure(failure) });
       return;
     }
     if (action === "settings") {
@@ -35387,7 +35387,7 @@ var ChatContextMenu = class {
   }
   knownFailure(error) {
     const code2 = error?.code || error?.body?.code || error?.body?.detail?.code;
-    return ["navigation_revision_conflict", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable", "thread_has_scheduled_automation", "runtime_thread_operation_conflict", "not_found"].includes(code2);
+    return ["navigation_revision_conflict", "section_revision_conflict", "chat_section_conflict", "chat_section_not_found", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable", "thread_has_scheduled_automation", "runtime_thread_operation_conflict", "not_found"].includes(code2);
   }
   errorMessage(error, write = false) {
     return `${normalizeDesktopError(error) || "The action could not be completed."}${write ? " Refresh the chat list and check the result before trying again." : ""}`;
@@ -35646,7 +35646,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.7";
+var PANEL_VERSION = "1.8.8";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
