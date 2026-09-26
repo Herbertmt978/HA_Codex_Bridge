@@ -297,6 +297,11 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         stdio_worker_factory=lambda _package, _revision: None,
     )
     assert "mcp_stdio_v1" in stdio_verified.state.feature_capabilities
+    stdio_response = TestClient(stdio_verified).get("/ready", headers={
+        "Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"
+    })
+    assert stdio_response.status_code == 200
+    assert "mcp_stdio_v1" in stdio_response.json()["capabilities"]
 
     external = create_app(root_path=tmp_path / "external", auth_token="secret")
     external_paths = _registered_paths(external)

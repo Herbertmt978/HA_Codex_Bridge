@@ -536,6 +536,7 @@ class BridgeReadinessRecord(BaseModel):
             "mcp_management_v1",
             "mcp_tool_permissions_v1",
             "mcp_elicitation_v1",
+            "mcp_stdio_v1",
             "skills_v1",
             "plugins_v1",
             "agents_v1",
