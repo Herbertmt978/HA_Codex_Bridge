@@ -124,8 +124,9 @@ it, restart Home Assistant after an Integration update, and reload open panel
 tabs. [Update steps and missing-update checks](docs/installation.md#update-an-existing-installation).
 
 Assist conversations appear in the **HA Assistant Chats** sidebar group, separately
-from ordinary projects. Their workspace and history are retained; continue their
-messages through Home Assistant Assist.
+from ordinary projects. Assist-only projects keep their project actions inside
+this group, including restore and delete actions when archived. Their workspace
+and history are retained; continue their messages through Home Assistant Assist.
 
 This release pairs App **1.8.11**, Integration and panel **1.8.11**, with Bridge **0.15.0**
 and Codex **0.157.1**. It prepares ARM64 development builds; published images

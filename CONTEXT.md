@@ -125,6 +125,8 @@ to the App or Bridge.
 - Assist-managed conversations are grouped under **HA Assistant Chats** in the
   sidebar. This is a presentation group; workspace and project membership remain
   unchanged, and ordinary chat submission stays blocked by the Assist policy.
+  Assist-only project controls also live in this group, with archived project
+  restore/delete controls inside its Archived disclosure.
 - Share currently copies an authenticated Home Assistant chat link. Public
   snapshots remain planned and need a separate publication/privacy design.
 

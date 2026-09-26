@@ -4017,7 +4017,7 @@ for (const width of [390, 1440]) {
     await expect(group.locator(".section-name").first()).toHaveText("HA Assistant Chats");
     await expect(group.locator(".section-count").first()).toHaveText("3");
     await expect(group.locator(".chat-row")).toHaveCount(3);
-    await expect(panel.locator('#project-section [data-project-id="prj_ytdl"]')).toHaveCount(0);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
     await expect(panel.locator('#project-section [data-chat-thread-id="thr_vba_2"]')).toHaveCount(1);
     await panel.locator('#project-section [data-action="select-project"][data-project-id="prj_vba"]').click();
     await expect.poll(() => panel.evaluate((element) => element._selectedThreadId)).toBe("thr_vba_2");
@@ -4086,6 +4086,139 @@ for (const width of [390, 1440]) {
     expect(calls.filter((call) => call.operation === "restore_thread")).toHaveLength(1);
     expect(calls.find((call) => call.operation === "update_thread")?.payload).toMatchObject({ thread_id: "thr_direct", pinned: false, navigation_revision: 1 });
     expect(calls.some((call) => call.operation === "move_thread_project" || call.operation === "fork_thread")).toBe(false);
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`Assist-only projects retain their canonical active and archived controls at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await expect.poll(() => panel.evaluate((element) => Boolean(element._config) && !element._isLoading)).toBe(true);
+    await selectHarnessThread(page);
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      window.__codexHarness.updateThread("thr_ytdlp", { schedule_eligible: false, title: "Managed Assist conversation", status: "idle", active_run_id: null });
+      const records = new Map(element._threads.map((item) => [item.thread_id, { ...item }]));
+      records.set("thr_ytdlp", window.__codexHarness.updateThread("thr_ytdlp", {}));
+      const projects = new Map(element._projects.map((item) => [item.project_id, { ...item }]));
+      const original = element._callWS.bind(element);
+      window.__assistantProjectCalls = [];
+      element._callWS = async (operation, payload = {}) => {
+        window.__assistantProjectCalls.push({ operation, payload: structuredClone(payload) });
+        if (operation === "list_threads") return structuredClone([...records.values()]);
+        if (operation === "list_projects") return structuredClone([...projects.values()]);
+        if (operation === "get_thread") return structuredClone(records.get(payload.thread_id));
+        if (operation === "create_thread") { const created = await original(operation, payload); records.set(created.thread_id, created); return created; }
+        if (operation === "delete_thread") { records.delete(payload.thread_id); return original(operation, payload); }
+        if (["update_project", "archive_project", "restore_project"].includes(operation)) {
+          const record = projects.get(payload.project_id);
+          if (operation === "update_project") Object.assign(record, payload);
+          else record.archived_at = operation === "archive_project" ? "2026-09-26T12:00:00Z" : null;
+          return structuredClone(record);
+        }
+        if (operation === "delete_project") {
+          projects.delete(payload.project_id);
+          for (const [id, thread] of records) if (thread.project_id === payload.project_id) records.delete(id);
+          return {};
+        }
+        return original(operation, payload);
+      };
+      element._threads = structuredClone([...records.values()]);
+      element._renderedNavigationKey = null;
+      element._render();
+    });
+    const openDrawer = async () => {
+      if (width < 880 && await panel.locator("#mobile-nav-toggle").getAttribute("aria-expanded") !== "true") await panel.locator("#mobile-nav-toggle").click();
+    };
+    await openDrawer();
+    const group = panel.locator("#assistant-section");
+    const shell = group.locator(".project-shell");
+    const header = shell.locator('[data-action="select-project"]');
+    const actions = shell.locator(".project-secondary-actions");
+    const more = shell.locator('[data-action="toggle-project-actions"]');
+    await expect(shell).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    await header.click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Managed Assist conversation");
+    await expect(panel.locator("#prompt-input")).toBeDisabled();
+    await openDrawer();
+    const collapse = shell.locator('[data-action="toggle-project-collapse"]');
+    await collapse.click();
+    await expect(collapse).toHaveAttribute("aria-expanded", "false");
+    await expect(shell.locator(".chat-list")).toBeHidden();
+    await panel.locator("#search-input").fill("Youtube DL");
+    await expect(collapse).toHaveAttribute("aria-expanded", "true");
+    await expect(shell.locator('[data-chat-thread-id="thr_ytdlp"]')).toBeVisible();
+    await header.click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Managed Assist conversation");
+    await openDrawer();
+    await panel.locator("#search-input").fill("");
+    await collapse.click();
+    await more.click();
+    await expect(actions.locator('[data-action="new-chat"]')).toBeVisible();
+    await expect(actions.locator('[data-action="edit-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="archive-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="delete-project"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`assistant-project-controls-${width}.png`) });
+    await actions.locator('[data-action="edit-project"]').click();
+    await panel.locator("#project-name-input").fill("Assistant workspace renamed");
+    await panel.locator('[data-action="save-project"]').click();
+    await expect(header).toContainText("Assistant workspace renamed");
+    await more.click();
+    await actions.locator('[data-action="new-chat"]').click();
+    await expect(panel.locator("#thread-form-panel")).toContainText("Assistant workspace renamed");
+    await panel.locator("#thread-title-input").fill("Ordinary chat in the same workspace");
+    await panel.locator('#thread-form-panel [data-action="save-thread"]').click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Ordinary chat in the same workspace");
+    await expect(group.locator(".project-shell")).toHaveCount(0);
+    await expect(group.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"][data-action="select-project"]')).toHaveCount(1);
+    if (width < 880) await panel.locator("#mobile-drawer-scrim").click({ position: { x: 380, y: 5 } });
+    await panel.locator("#chat-menu-button").click();
+    await panel.locator('#chat-context-menu [data-chat-action="delete"]').click();
+    await panel.locator("#confirm-delete-button").click();
+    await openDrawer();
+    await expect(shell).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    await more.click();
+    await actions.locator('[data-action="archive-project"]').click();
+    const archived = group.locator("#assistant-archived-chat-list");
+    await expect(archived).toBeHidden();
+    await group.locator('[data-section="assistantArchived"]').click();
+    await expect(archived.locator(".project-shell")).toHaveCount(1);
+    await expect(archived.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await more.click();
+    await expect(actions.locator('[data-action="restore-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="delete-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="new-chat"]')).toHaveCount(0);
+    await expect(actions.locator('[data-action="edit-project"]')).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath(`assistant-archived-project-controls-${width}.png`) });
+    await actions.locator('[data-action="restore-project"]').click();
+    await expect(archived).toHaveCount(0);
+    await expect(shell.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await openDrawer();
+    await more.click();
+    await actions.locator('[data-action="archive-project"]').click();
+    await more.click();
+    await actions.locator('[data-action="delete-project"]').click();
+    await expect(panel.locator("#confirmation-dialog")).toBeVisible();
+    let calls = await page.evaluate(() => window.__assistantProjectCalls);
+    expect(calls.some((call) => call.operation === "delete_project")).toBe(false);
+    await panel.locator("#cancel-delete-button").click();
+    if (await more.getAttribute("aria-expanded") !== "true") await more.click();
+    await actions.locator('[data-action="delete-project"]').click();
+    await panel.locator("#confirm-delete-button").click();
+    await expect(group.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(0);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    const ids = await panel.evaluate((element) => [...element.shadowRoot.querySelectorAll("[id]")].map((node) => node.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    calls = await page.evaluate(() => window.__assistantProjectCalls);
+    expect(calls.filter((call) => call.operation === "archive_project")).toHaveLength(2);
+    expect(calls.filter((call) => call.operation === "restore_project")).toHaveLength(1);
+    expect(calls.filter((call) => call.operation === "delete_project")).toHaveLength(1);
+    expect(calls.find((call) => call.operation === "create_thread")?.payload.project_id).toBe("prj_ytdlp");
+    expect(calls.find((call) => call.operation === "update_project")?.payload).toMatchObject({ project_id: "prj_ytdlp", name: "Assistant workspace renamed", root_path: "projects/media-tools" });
   });
 }
 

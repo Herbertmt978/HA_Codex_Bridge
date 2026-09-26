@@ -40,7 +40,7 @@ describe("HA Assistant Chats sidebar group", () => {
     const panel = setup();
     panel._threads.push(thread("string-marker", "mixed", { schedule_eligible: "false" }));
     render(panel);
-    expect(rows(panel, "#assistant-section")).toEqual(["assistant-direct", "assistant-project", "assistant-mixed"]);
+    expect(rows(panel, "#assistant-section")).toEqual(["assistant-direct", "assistant-mixed", "assistant-project"]);
     expect(rows(panel, "#direct-section")).toEqual(["legacy"]);
     expect(rows(panel, "#project-section")).toEqual(["normal", "string-marker"]);
     expect(panel.shadowRoot.querySelector('#project-section [data-project-id="assistant-only"]')).toBeNull();
@@ -76,12 +76,12 @@ describe("HA Assistant Chats sidebar group", () => {
     panel._projects[1].archived_at = "2026-09-26T12:00:00Z";
     panel._threads.push(thread("normal-archive", "mixed", { archived_at: "2026-09-26T12:00:00Z" }));
     render(panel);
-    expect(rows(panel, "#assistant-archived-chat-list")).toEqual(["assistant-direct", "assistant-project"]);
+    expect(rows(panel, "#assistant-archived-chat-list").sort()).toEqual(["assistant-direct", "assistant-project"]);
     expect(rows(panel, "#archived-section")).toEqual(["normal-archive"]);
     expect(panel.shadowRoot.getElementById("assistant-archived-chat-list").hidden).toBe(true);
     const restore = panel.shadowRoot.querySelector('#assistant-section [data-action="restore-project"]');
     expect(restore.dataset.projectId).toBe("assistant-only");
-    expect(restore.getAttribute("aria-label")).toBe("Restore assistant-only project");
+    expect(restore.getAttribute("aria-label")).toBe("Restore project");
     const invoke = vi.spyOn(panel, "_restoreProject").mockResolvedValue();
     restore.click();
     expect(invoke).toHaveBeenCalledWith("assistant-only");
@@ -165,5 +165,63 @@ describe("HA Assistant Chats sidebar group", () => {
     const select = vi.spyOn(panel, "_selectThread").mockResolvedValue();
     panel.shadowRoot.querySelector(`[data-action="select-project"][data-project-id="mixed"]`).click();
     expect(select).toHaveBeenCalledWith("normal");
+  });
+
+  it.each([false, true])("keeps Assist-only project selection and canonical action routes inside the Assist group, archived: %s", (archived) => {
+    const panel = setup();
+    if (archived) { panel._projects[1].archived_at = "2026-09-26T12:00:00Z"; panel._collapsedSections.assistantArchived = false; }
+    render(panel);
+    const group = panel.shadowRoot.getElementById("assistant-section");
+    const header = group.querySelector('[data-action="select-project"][data-project-id="assistant-only"]');
+    expect(header.dataset.assistantProject).toBe("true");
+    const select = vi.spyOn(panel, "_selectThread").mockResolvedValue();
+    header.click();
+    expect(select).toHaveBeenCalledWith("assistant-project");
+    const methods = archived
+      ? [["restore-project", "_restoreProject"], ["delete-project", "_deleteProject"]]
+      : [["new-chat", "_openThreadFormForProject"], ["edit-project", "_openProjectFormForEdit"], ["archive-project", "_archiveProject"], ["delete-project", "_deleteProject"]];
+    for (const [action, method] of methods) {
+      const button = group.querySelector(`[data-action="${action}"][data-project-id="assistant-only"]`);
+      expect(button).not.toBeNull();
+      const invoke = vi.spyOn(panel, method).mockResolvedValue();
+      button.click();
+      expect(invoke.mock.calls[0][0]).toBe("assistant-only");
+      if (action === "delete-project") expect(invoke.mock.calls[0][1]).toBe(button);
+    }
+    expect(panel.shadowRoot.querySelectorAll(".project-shell").length).toBe(3);
+    const ids = [...panel.shadowRoot.querySelectorAll("[id]")].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(panel.shadowRoot.querySelectorAll('[data-chat-thread-id="assistant-project"]')).toHaveLength(1);
+  });
+
+  it("preserves Assist project collapse and expands its matching chat for a project-name search", () => {
+    const panel = setup();
+    const projectToggle = () => panel.shadowRoot.querySelector('#assistant-section [data-action="toggle-project-collapse"][data-project-id="assistant-only"]');
+    const projectList = () => panel.shadowRoot.getElementById(projectToggle().getAttribute("aria-controls"));
+    projectToggle().click();
+    expect(projectToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(projectList().hidden).toBe(true);
+    panel._searchQuery = "assistant-only";
+    render(panel);
+    expect(projectToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(projectList().hidden).toBe(false);
+    expect(rows(panel, "#assistant-section")).toEqual(["assistant-project"]);
+    const select = vi.spyOn(panel, "_selectThread").mockResolvedValue();
+    panel.shadowRoot.querySelector('#assistant-section [data-action="select-project"]').click();
+    expect(select).toHaveBeenCalledWith("assistant-project");
+    panel._searchQuery = "";
+    render(panel);
+    expect(projectToggle().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows project controls without duplicating a chat when all its Assist chats are individually archived", () => {
+    const panel = setup();
+    panel._threads[1].archived_at = "2026-09-26T12:00:00Z";
+    render(panel);
+    expect(panel.shadowRoot.querySelector('#assistant-section [data-action="archive-project"][data-project-id="assistant-only"]')).not.toBeNull();
+    expect(rows(panel, '#assistant-section .project-shell')).toEqual([]);
+    expect(panel.shadowRoot.querySelector('#assistant-section .project-shell .empty-note').textContent).toBe("No active chats.");
+    expect(rows(panel, "#assistant-archived-chat-list")).toEqual(["assistant-project"]);
+    expect(panel.shadowRoot.querySelectorAll('[data-chat-thread-id="assistant-project"]')).toHaveLength(1);
   });
 });

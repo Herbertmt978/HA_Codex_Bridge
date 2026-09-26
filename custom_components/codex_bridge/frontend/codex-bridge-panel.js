@@ -42432,7 +42432,8 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
-        this._selectProject(actionTarget.dataset.projectId || null);
+        if (actionTarget.dataset.assistantProject === "true") this._selectProject(actionTarget.dataset.projectId || null, { assistant: true });
+        else this._selectProject(actionTarget.dataset.projectId || null);
         break;
       case "edit-project":
         this._openProjectFormForEdit(actionTarget.dataset.projectId || "");
@@ -45428,7 +45429,10 @@ var CodexBridgePanel = class extends HTMLElement {
     list.id = "assistant-chat-list";
     list.className = "chat-list direct-chat-list";
     list.hidden = collapsed;
-    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item))) list.append(this._threadRow(thread));
+    const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
+    const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
+    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
+    for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
     const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
     if (archived.length) {
       const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
@@ -45444,12 +45448,15 @@ var CodexBridgePanel = class extends HTMLElement {
       archiveList.id = "assistant-archived-chat-list";
       archiveList.className = "chat-list";
       archiveList.hidden = archiveCollapsed;
-      const archivedProjects = /* @__PURE__ */ new Set();
-      for (const thread of archived) {
+      const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
+      const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
+      for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
+      const restoredProjectActions = /* @__PURE__ */ new Set();
+      for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
         archiveList.append(this._threadRow(thread, { archived: true }));
         const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
-        if (project && !archivedProjects.has(project.project_id)) {
-          archivedProjects.add(project.project_id);
+        if (project && !restoredProjectActions.has(project.project_id)) {
+          restoredProjectActions.add(project.project_id);
           const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
           restore.dataset.projectId = String(project.project_id);
           this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
@@ -45492,8 +45499,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     section2.append(projectList);
   }
-  _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
-    const threads = this._projectThreads(project.project_id, includeArchivedThreads);
+  _projectSection(project, { archived = false, includeArchivedThreads = false, assistant = false } = {}) {
+    const threads = assistant ? this._assistantThreads().filter((thread) => thread.project_id === project.project_id && (includeArchivedThreads || !thread.archived_at)) : this._projectThreads(project.project_id, includeArchivedThreads);
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedProjects[project.project_id]) && !searchActive;
     const active = this._selectedProjectId === project.project_id || this._activeThread?.project_id === project.project_id;
@@ -45518,6 +45525,7 @@ var CodexBridgePanel = class extends HTMLElement {
       `Select ${project.name || "project"}, ${chatCount}`
     );
     projectButton.dataset.projectId = String(project.project_id || "");
+    if (assistant) projectButton.dataset.assistantProject = "true";
     this._setTooltipTarget(projectButton, `${project.name || "Untitled project"} · ${chatCount}`);
     const titleLine = document.createElement("span");
     titleLine.className = "section-title-line";
@@ -45569,10 +45577,10 @@ var CodexBridgePanel = class extends HTMLElement {
     chatList.hidden = collapsed;
     if (threads.length) {
       for (const thread of threads) {
-        chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) }));
+        chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) || assistant && archived }));
       }
     } else {
-      chatList.append(this._textElement("div", "empty-note", "No chats yet."));
+      chatList.append(this._textElement("div", "empty-note", assistant ? "No active chats." : "No chats yet."));
     }
     shell.append(chatList);
     return shell;
@@ -48271,11 +48279,11 @@ var CodexBridgePanel = class extends HTMLElement {
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
   }
-  _selectProject(projectId) {
+  _selectProject(projectId, { assistant = false } = {}) {
     this._selectedProjectId = projectId;
     const project = this._projects.find((item) => item.project_id === projectId) || null;
-    const visibleThread = this._threads.find(
-      (thread) => thread.project_id === projectId && !this._isAssistantThread(thread) && this._threadMatchesQuery(thread) && (project?.archived_at ? true : !thread.archived_at)
+    const visibleThread = (assistant ? this._assistantThreads() : this._threads).find(
+      (thread) => thread.project_id === projectId && this._isAssistantThread(thread) === assistant && (assistant || this._threadMatchesQuery(thread)) && (project?.archived_at ? true : !thread.archived_at)
     );
     if (visibleThread && visibleThread.thread_id !== this._selectedThreadId) {
       this._selectThread(visibleThread.thread_id);
