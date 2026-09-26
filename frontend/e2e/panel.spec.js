@@ -3713,7 +3713,7 @@ test("coarse pointer tablet keeps chat menu Back reachable", async ({ browser },
   } finally { await context.close(); }
 });
 
-test("conversation timeline previews and jumps at desktop and touch widths", async ({ page }) => {
+test("conversation timeline previews and jumps at desktop and touch widths", async ({ page }, testInfo) => {
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -3764,7 +3764,7 @@ test("conversation timeline previews and jumps at desktop and touch widths", asy
     }
     expect(await navigation.innerText()).not.toContain("private-run-one");
     await expect(first).toHaveAttribute("aria-current", "location");
-    await page.screenshot({ path: `D:/CodexWork/.tmp/conversation-navigation/conversation-timeline-${width}.png`, animations: "disabled" });
+    await page.screenshot({ path: testInfo.outputPath(`conversation-timeline-${width}.png`), animations: "disabled" });
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
   }
@@ -3975,6 +3975,7 @@ test("expanded conversation navigation stays below alerts in a short chat pane",
   await page.setViewportSize({ width: 1000, height: 734 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
+  await expect.poll(() => panel.evaluate((element) => Boolean(element._config) && !element._isLoading)).toBe(true);
   await selectHarnessThread(page);
   await panel.evaluate((element) => {
     element._stopPolling(); element._pendingInteractions = [];
@@ -3987,11 +3988,15 @@ test("expanded conversation navigation stays below alerts in a short chat pane",
     element._assignError("A controlled connection warning."); element._render();
   });
   await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
+  await expect(panel.locator("#error-strip")).toBeVisible();
   const disclosure = panel.getByRole("button", { name: "Jump to message" });
   await disclosure.click();
   const navigation = panel.getByRole("navigation", { name: "Conversation turns" });
-  const navBox = await navigation.boundingBox(), scrollBox = await panel.locator("#conversation-scroll").boundingBox();
-  expect(navBox.y).toBeGreaterThanOrEqual(scrollBox.y - 1);
+  const disclosureBox = await disclosure.boundingBox(), scrollBox = await panel.locator("#conversation-scroll").boundingBox();
+  const alertBox = await panel.locator("#error-strip").boundingBox();
+  expect(disclosureBox.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height - 1);
+  expect(disclosureBox.y).toBeGreaterThanOrEqual(scrollBox.y - 1);
+  expect(disclosureBox.y + disclosureBox.height).toBeLessThanOrEqual(scrollBox.y + scrollBox.height + 1);
   await expect(disclosure).toHaveAttribute("aria-expanded", "true");
   await page.screenshot({ path: testInfo.outputPath("short-chat-navigation.png"), animations: "disabled" });
   await navigation.locator(".timeline-item").click();
