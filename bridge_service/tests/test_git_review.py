@@ -294,17 +294,31 @@ def test_git_review_snapshot_ignores_config_mutated_during_review(tmp_path, monk
 def test_git_review_rejects_ref_changes_during_snapshot(tmp_path, monkeypatch) -> None:
     _app, thread, workspace, client, headers = _repo(tmp_path)
     module = importlib.import_module("codex_bridge_service.routes.git_review")
-    original = module._copy_metadata_tree_path
+    def change_ref():
+        branch = _git(workspace, "symbolic-ref", "--short", "HEAD")
+        ref_path = workspace / ".git" / "refs" / "heads" / branch
+        ref_path.write_text("0" * 40 + "\n", encoding="ascii")
 
-    def mutate_ref(source, target, budget, deadline):
-        result = original(source, target, budget, deadline)
-        if source.name == "refs":
-            branch = _git(workspace, "symbolic-ref", "--short", "HEAD")
-            ref_path = workspace / ".git" / "refs" / "heads" / branch
-            ref_path.write_text("0" * 40 + "\n", encoding="ascii")
-        return result
+    if os.name == "nt":
+        original = module._copy_metadata_tree_path
 
-    monkeypatch.setattr(module, "_copy_metadata_tree_path", mutate_ref)
+        def mutate_ref(source, target, budget, deadline):
+            result = original(source, target, budget, deadline)
+            if source.name == "refs":
+                change_ref()
+            return result
+
+        monkeypatch.setattr(module, "_copy_metadata_tree_path", mutate_ref)
+    else:
+        original = module._copy_metadata_tree
+
+        def mutate_ref(source_fd, target_root, name, budget, deadline):
+            result = original(source_fd, target_root, name, budget, deadline)
+            if name == "refs":
+                change_ref()
+            return result
+
+        monkeypatch.setattr(module, "_copy_metadata_tree", mutate_ref)
     response = client.get(
         f"/threads/{thread.thread_id}/git-review?scope=unstaged", headers=headers
     )
