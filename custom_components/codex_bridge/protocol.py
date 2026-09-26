@@ -64,6 +64,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "account_profile_details_v1",
         "office_preview_v1",
         "chat_operations_v1",
+        "attachment_downloads",
         "discord_channel_v1",
         "mcp_admin_v1",
         "mcp_management_v1",

@@ -2600,6 +2600,7 @@ test("keeps the conversation rail stable and opens Activity as a compact-width d
       const main = rect(".main-pane");
       const side = rect(".side-pane");
       const messages = rect("#message-list");
+      const conversation = rect(".conversation-layout");
       const composer = rect(".composer-shell");
       const toolbar = root?.querySelector("#compact-toolbar");
       const bubble = root?.querySelector(".bubble-text");
@@ -2611,6 +2612,7 @@ test("keeps the conversation rail stable and opens Activity as a compact-width d
         mainWidth: main?.width || 0,
         sideOffCanvas: Boolean(side && side.left >= window.innerWidth - 1),
         readingMeasure: messages?.width || 0,
+        conversationMeasure: conversation?.width || 0,
         composerMeasure: composer?.width || 0,
         toolbarInComposer: Boolean(toolbar && root?.querySelector(".composer-shell")?.contains(toolbar)),
         proseFont: bubble ? getComputedStyle(bubble).fontFamily : "",
@@ -2623,7 +2625,8 @@ test("keeps the conversation rail stable and opens Activity as a compact-width d
     expect(compactLayout.railWidth).toBeLessThanOrEqual(280.5);
     expect(compactLayout.mainWidth).toBeCloseTo(width - compactLayout.railWidth, 0);
     expect(compactLayout.sideOffCanvas).toBe(true);
-    expect(compactLayout.readingMeasure).toBeCloseTo(960, 0);
+    expect(compactLayout.conversationMeasure).toBeCloseTo(960, 0);
+    expect(compactLayout.readingMeasure).toBeCloseTo(compactLayout.conversationMeasure - 40, 0);
     expect(compactLayout.composerMeasure).toBeCloseTo(960, 0);
     expect(compactLayout.toolbarInComposer).toBe(true);
     expect(compactLayout.proseFont).not.toMatch(/monospace|consolas|courier/i);
@@ -2843,7 +2846,7 @@ test("aligns the desktop workspace rails and reading edges at wide widths", asyn
     const side = rect(".side-pane");
     const title = rect("#thread-title-label");
     const actions = rect(".main-header .row-actions");
-    const messages = rect("#message-list");
+    const messages = rect(".conversation-layout");
     const fontSize = (selector) => {
       const element = root?.querySelector(selector);
       return element ? getComputedStyle(element).fontSize : "";
@@ -3738,36 +3741,75 @@ test("conversation timeline previews and jumps at desktop and touch widths", asy
     await expect(turns).toHaveCount(2);
     const first = turns.first();
     await expect(first).toHaveAttribute("aria-label", /Summarise the current workspace layout/);
-    if (width > 880) {
-      expect((await first.boundingBox()).height).toBeGreaterThanOrEqual(24);
-      await first.hover();
-      await expect(navigation.locator("#conversation-timeline-desktop-preview")).toBeVisible();
-      await first.focus();
-      await expect(navigation.locator("#conversation-timeline-desktop-preview")).toContainText("The workspace contains the integration and its tests.");
-      await first.press("Enter");
-    } else {
-      const disclosure = navigation.getByRole("button", { name: "Jump to message" });
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-      await expect(turns.first()).toBeHidden();
-      await disclosure.click();
-      await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-      expect((await first.boundingBox()).height).toBeGreaterThanOrEqual(44);
-      await first.click();
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-      await expect(disclosure).toBeFocused();
-      await expect(first).toBeHidden();
-      await disclosure.click();
-      await first.focus();
-      await first.press("Escape");
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-      await expect(disclosure).toBeFocused();
-    }
+    expect((await first.boundingBox()).height).toBeGreaterThanOrEqual(width > 880 ? 24 : 44);
+    await expect(navigation.locator("#conversation-timeline-toggle")).toHaveCount(0);
+    await first.hover();
+    const preview = navigation.locator("#conversation-timeline-desktop-preview");
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText("The workspace contains the integration and its tests.");
+    await preview.hover();
+    await expect(preview).toBeVisible();
+    const bookmark = preview.locator(".timeline-bookmark");
+    if (await bookmark.getAttribute("aria-pressed") === "true") await bookmark.click();
+    await bookmark.click();
+    await expect(first).toHaveAttribute("data-bookmarked", "");
+    await expect(preview.getByRole("button", { name: "Remove bookmark from turn 1" })).toHaveAttribute("aria-pressed", "true");
+    const previewBounds = await preview.boundingBox(), conversationBounds = await panel.locator("#conversation-scroll").boundingBox();
+    expect(previewBounds.y).toBeGreaterThanOrEqual(conversationBounds.y);
+    expect(previewBounds.y + previewBounds.height).toBeLessThanOrEqual(conversationBounds.y + conversationBounds.height);
+    expect(previewBounds.x + previewBounds.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`conversation-rail-preview-${width}.png`), animations: "disabled" });
+    await preview.getByRole("button", { name: "Go to turn 1" }).click();
+    await expect(preview).toBeHidden();
+    await first.focus();
+    await first.press("Escape");
+    await expect(preview).toBeHidden();
+    await expect(first).toBeFocused();
     expect(await navigation.innerText()).not.toContain("private-run-one");
     await expect(first).toHaveAttribute("aria-current", "location");
     await page.screenshot({ path: testInfo.outputPath(`conversation-timeline-${width}.png`), animations: "disabled" });
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
   }
+});
+
+test("touch rail previews, bookmarks and jumps without moving the transcript on the first tap", async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: "dark" });
+  try {
+    const page = await context.newPage();
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._events = Array.from({ length: 30 }, (_, index) => [
+        { sequence: index * 2 + 101, event_type: "message.created", payload: { run_id: `touch-${index}`, text: `Touch prompt ${index + 1}` } },
+        { sequence: index * 2 + 102, event_type: "message.completed", payload: { run_id: `touch-${index}`, text: "A response long enough to keep the chat scrollable. ".repeat(15) } },
+      ]).flat();
+      element._forceMessageRebuild = true;
+      element._render();
+    });
+    const panel = page.locator("codex-bridge-panel");
+    const scroll = panel.locator("#conversation-scroll");
+    const first = panel.locator(".timeline-item").first();
+    await scroll.evaluate((node) => { node.scrollTop = 0; });
+    await expect(first).toHaveAttribute("aria-current", "location");
+    const before = await scroll.evaluate((node) => node.scrollTop);
+    await first.tap();
+    const preview = panel.locator(".timeline-preview");
+    await expect(preview).toBeVisible();
+    expect(await scroll.evaluate((node) => node.scrollTop)).toBe(before);
+    await preview.locator(".timeline-bookmark").tap();
+    await expect(first).toHaveAttribute("data-bookmarked", "");
+    await page.screenshot({ path: testInfo.outputPath("conversation-rail-touch.png"), animations: "disabled" });
+    await preview.getByRole("button", { name: "Go to turn 1" }).tap();
+    await expect(preview).toBeHidden();
+    await expect(first).toBeFocused();
+    await first.tap();
+    await expect(preview).toBeVisible();
+    await panel.locator("#prompt-input").tap();
+    await expect(preview).toBeHidden();
+  } finally { await context.close(); }
 });
 
 test("empty chats and long conversation tracks keep the desktop message width", async ({ page }, testInfo) => {
@@ -3810,7 +3852,53 @@ test("empty chats and long conversation tracks keep the desktop message width", 
   await page.screenshot({ path: testInfo.outputPath("long-track-desktop.png") });
 });
 
-test("conversation navigation switches to a compact control in a narrow desktop chat area", async ({ page }, testInfo) => {
+test("rail follows scrolling, persists bookmarks and remains stable with long streaming histories", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  await selectHarnessThread(page);
+  const panel = page.locator("codex-bridge-panel");
+  const installTurns = async () => panel.evaluate((element) => {
+    element._stopPolling(); element._pendingInteractions = []; element._activeThread.status = "idle";
+    element._events = Array.from({ length: 1000 }, (_, index) => ({
+      sequence: index + 1, event_type: index % 2 ? "message.completed" : "message.created",
+      payload: { run_id: `rail-fixture-${Math.floor(index / 2)}`, text: index % 2 ? "A useful answer with details. ".repeat(index % 12 + 1) : `Question ${Math.floor(index / 2) + 1}` },
+    }));
+    element._forceMessageRebuild = true; element._render();
+  });
+  await installTurns();
+  const ticks = panel.locator(".timeline-item");
+  await expect(ticks).toHaveCount(500);
+  await expect(ticks.last()).toHaveAttribute("aria-current", "location");
+  const currentBounds = await ticks.last().boundingBox(), trackBounds = await panel.locator("#conversation-timeline-track").boundingBox();
+  expect(currentBounds.y).toBeGreaterThanOrEqual(trackBounds.y - 1);
+  expect(currentBounds.y + currentBounds.height).toBeLessThanOrEqual(trackBounds.y + trackBounds.height + 1);
+  await panel.locator("#conversation-scroll").evaluate((element) => { element.scrollTop = 0; });
+  await expect(ticks.first()).toHaveAttribute("aria-current", "location");
+  await ticks.first().hover();
+  const preview = panel.locator("#conversation-timeline-desktop-preview");
+  await preview.locator(".timeline-bookmark").click();
+  await expect(ticks.first()).toHaveAttribute("data-bookmarked", "");
+  await page.reload(); await selectHarnessThread(page); await installTurns();
+  await expect(ticks.first()).toHaveAttribute("data-bookmarked", "");
+  await panel.locator("#conversation-scroll").evaluate((element) => { element.scrollTop = 1000; });
+  const before = await panel.locator("#conversation-scroll").evaluate((element) => element.scrollTop);
+  const projection = await panel.evaluate((element) => {
+    const original = element._conversationTurns;
+    const started = performance.now();
+    for (let index = 0; index < 100; index++) {
+      element._events = [...element._events, { sequence: 1001 + index, event_type: "message.delta", payload: { text: "Stream" } }];
+      element._renderConversationTimeline();
+    }
+    return { reused: original === element._conversationTurns, elapsed: performance.now() - started };
+  });
+  expect(projection.reused).toBe(true);
+  expect(await panel.locator("#conversation-scroll").evaluate((element) => element.scrollTop)).toBe(before);
+  await testInfo.attach("rail-streaming-performance", { body: JSON.stringify(projection), contentType: "application/json" });
+  await ticks.nth(10).focus();
+  await page.screenshot({ path: testInfo.outputPath("long-conversation-rail.png"), animations: "disabled" });
+});
+
+test("conversation navigation retains a slim rail in a narrow desktop chat area", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
@@ -3825,18 +3913,13 @@ test("conversation navigation switches to a compact control in a narrow desktop 
     element._render();
   });
   const layout = panel.locator("#conversation-layout");
-  await expect(layout).toHaveClass(/timeline-compact/);
-  const disclosure = panel.getByRole("button", { name: "Jump to message" });
-  await expect(disclosure).toBeVisible();
+  await expect(panel.locator("#conversation-timeline-toggle")).toHaveCount(0);
   const layoutBounds = await layout.boundingBox();
   const navigationBounds = await panel.locator("#conversation-timeline").boundingBox();
-  expect(navigationBounds.x).toBeCloseTo(layoutBounds.x, 0);
-  expect(navigationBounds.width).toBeCloseTo(layoutBounds.width, 0);
+  expect(navigationBounds.width).toBeLessThanOrEqual(32);
   expect(layoutBounds.x).toBeGreaterThanOrEqual(0);
   expect(layoutBounds.x + layoutBounds.width).toBeLessThanOrEqual(1000);
-  await disclosure.click();
   await panel.locator(".timeline-item").click();
-  await expect(disclosure).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath("narrow-desktop-conversation.png") });
   expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
 });
@@ -4240,19 +4323,14 @@ test("expanded conversation navigation stays below alerts in a short chat pane",
   });
   await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
   await expect(panel.locator("#error-strip")).toBeVisible();
-  const disclosure = panel.getByRole("button", { name: "Jump to message" });
-  await disclosure.click();
   const navigation = panel.getByRole("navigation", { name: "Conversation turns" });
-  const disclosureBox = await disclosure.boundingBox(), scrollBox = await panel.locator("#conversation-scroll").boundingBox();
+  const railBox = await navigation.boundingBox(), scrollBox = await panel.locator("#conversation-scroll").boundingBox();
   const alertBox = await panel.locator("#error-strip").boundingBox();
-  expect(disclosureBox.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height - 1);
-  expect(disclosureBox.y).toBeGreaterThanOrEqual(scrollBox.y - 1);
-  expect(disclosureBox.y + disclosureBox.height).toBeLessThanOrEqual(scrollBox.y + scrollBox.height + 1);
-  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  expect(railBox.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height - 1);
+  expect(railBox.y).toBeGreaterThanOrEqual(scrollBox.y - 1);
+  expect(railBox.y + railBox.height).toBeLessThanOrEqual(scrollBox.y + scrollBox.height + 1);
   await page.screenshot({ path: testInfo.outputPath("short-chat-navigation.png"), animations: "disabled" });
   await navigation.locator(".timeline-item").click();
-  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-  await expect(disclosure).toBeFocused();
   await expect(panel.locator("#message-list")).toContainText("A short answer");
   for (const size of [{ width: 390, height: 390 }, { width: 320, height: 400 }, { width: 390, height: 568 }]) {
     await page.setViewportSize(size);
@@ -4268,4 +4346,111 @@ test("expanded conversation navigation stays below alerts in a short chat pane",
   }
   await panel.getByRole("button", { name: "Hide bottom panel" }).click();
   await expect(panel.locator("#bottom-panel")).toBeHidden();
+});
+
+// Inline raster images: native browser decoding, clipboard, menus and downloads.
+for (const width of [390, 1440]) {
+  test(`inline image previews and real clipboard actions at ${width}px`, async ({ page, context }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme: width === 390 ? "dark" : "light" });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(async () => {
+      const panel = document.querySelector("codex-bridge-panel"); panel._stopPolling(); panel._pendingInteractions = [];
+      const canvas = document.createElement("canvas"); canvas.width = 480; canvas.height = 240;
+      const graphics = canvas.getContext("2d"); graphics.fillStyle = "#f0f4fa"; graphics.fillRect(0, 0, 480, 240);
+      graphics.fillStyle = "#1768b2"; graphics.fillRect(24, 24, 432, 60);
+      graphics.fillStyle = "#ffffff"; graphics.font = "bold 24px sans-serif"; graphics.fillText("Screenshot preview", 42, 63);
+      graphics.fillStyle = "#334155"; graphics.font = "20px sans-serif"; graphics.fillText("Images stay inside Home Assistant", 36, 136);
+      graphics.fillText("Open, copy or download", 36, 177);
+      const blob = await new Promise((resolveBlob) => canvas.toBlob(resolveBlob, "image/png"));
+      window.__inlineImageFixtureBlob = blob; window.__inlineImageRequests = [];
+      const oldFetch = window.fetch;
+      window.fetch = async (url, init) => {
+        const path = new URL(String(url), location.origin).pathname;
+        if (/\/(?:attachments\/att_inline_image|artifacts\/art_inline_image)$/.test(path)) {
+          window.__inlineImageRequests.push({ path, headers: Object.keys(init.headers || {}) });
+          return new Response(blob, { status: 200, headers: { "Content-Type": "application/octet-stream", "Content-Length": String(blob.size) } });
+        }
+        return oldFetch(url, init);
+      };
+      panel._inlineImages().fetchImpl = window.fetch;
+      const attachment = { attachment_id: "att_inline_image", filename: "screen.png", relative_path: "private/resumable/upload-id/screen.png", mime_type: "image/png", size_bytes: blob.size };
+      const artifact = { artifact_id: "art_inline_image", filename: "generated.png", relative_path: "generated.png", mime_type: "image/png", size_bytes: blob.size, source: "generated_image" };
+      panel._config.capabilities = [...(panel._config.capabilities || []), "attachment_downloads"];
+      panel._activeThread = { ...panel._activeThread, status: "idle", attachments: [attachment] }; panel._artifacts = [artifact];
+      panel._events = [
+        { sequence: 1, event_type: "attachment.added", payload: attachment },
+        { sequence: 2, event_type: "message.created", payload: { text: "Describe this screenshot", run_id: "image-run" } },
+        { sequence: 3, event_type: "message.completed", payload: { text: "A clear screenshot preview.", run_id: "image-run" } },
+        { sequence: 4, event_type: "artifact.added", payload: artifact },
+        { sequence: 5, event_type: "run.completed", payload: { run_id: "image-run" } },
+      ];
+      panel._forceMessageRebuild = true; panel._render();
+    });
+    const panel = page.locator("codex-bridge-panel");
+    const upload = panel.locator(".uploaded-image-message .inline-image-thumbnail");
+    await upload.scrollIntoViewIfNeeded();
+    await expect.poll(() => upload.locator("img").evaluate((image) => image.complete && image.naturalWidth)).toBe(480);
+    await expect(panel.locator("#attachment-chip-list .inline-image-raster")).toBeVisible();
+    await expect(panel.locator("#message-list")).not.toContainText("resumable/upload-id");
+    const composerOptions = panel.locator("#attachment-chip-list .inline-image-actions button").first();
+    await composerOptions.click();
+    await panel.evaluate((element) => { window.__composerImageTrigger = element._inlineImageController.menuTrigger; element._render(); });
+    expect(await page.evaluate(() => window.__composerImageTrigger.isConnected && document.querySelector("codex-bridge-panel")._inlineImageController.menuTrigger === window.__composerImageTrigger)).toBe(true);
+    await panel.getByRole("menu", { name: "Image actions" }).press("Escape");
+    await upload.click({ button: "right" });
+    const menu = panel.getByRole("menu", { name: "Image actions" });
+    await expect(menu).toBeVisible();
+    const box = await menu.boundingBox(); expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`image-menu-${width}.png`), animations: "disabled" });
+    await menu.getByRole("menuitem", { name: "Copy image", exact: true }).click();
+    await expect(panel.locator(".uploaded-image-message .inline-image-status")).toHaveText("Image copied.");
+    expect(await page.evaluate(async () => (await navigator.clipboard.read())[0].types)).toContain("image/png");
+    await upload.click();
+    const dialog = panel.getByRole("dialog", { name: "Image preview: screen.png" });
+    await expect(dialog).toBeVisible();
+    const fullImage = dialog.locator("img"); await expect.poll(() => fullImage.evaluate((image) => image.complete && image.naturalWidth)).toBe(480);
+    const dialogBox = await dialog.boundingBox(); expect(dialogBox.x).toBeGreaterThanOrEqual(0); expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`image-modal-${width}.png`), animations: "disabled" });
+    await page.setViewportSize({width, height: 480});
+    await expect.poll(async () => { const bounds = await dialog.boundingBox(); return bounds.y >= 0 && bounds.y + bounds.height <= 480; }).toBe(true);
+    await page.setViewportSize({width, height: 844});
+    const downloadReady = page.waitForEvent("download"); await dialog.getByRole("button", { name: "Download", exact: true }).click();
+    const download = await downloadReady; expect(download.suggestedFilename()).toBe("screen.png");
+    expect([...await readFile(await download.path())].slice(0, 8)).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    await page.evaluate(() => { Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write: async () => { throw new DOMException("Permission denied", "NotAllowedError"); } } }); });
+    await dialog.getByRole("button", { name: "Copy image", exact: true }).click();
+    await expect(dialog.locator(".inline-image-status")).toContainText("could not be copied");
+    await dialog.getByRole("button", { name: "Close", exact: true }).click(); await expect(dialog).toHaveCount(0);
+    await panel.evaluate(async (element) => {
+      const controller = element._inlineImages();
+      controller.setPending([new File([window.__inlineImageFixtureBlob], "pending-screen.png", { type: "image/png" })]);
+      element._renderAttachmentChips();
+    });
+    await expect.poll(() => panel.locator('#attachment-chip-list .inline-image-card').first().locator("img").evaluate((image) => image.complete && image.naturalWidth)).toBe(480);
+    await page.screenshot({ path: testInfo.outputPath(`image-composer-${width}.png`), animations: "disabled" });
+    expect(await page.evaluate(() => window.__inlineImageRequests.every(({ path }) => path.startsWith("/api/codex_bridge/threads/")))).toBe(true);
+  });
+}
+
+test("corrupt image containers show a retry state rather than a broken image", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`); await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel"); panel._stopPolling();
+    const bytes = new Uint8Array(32); bytes.set([137, 80, 78, 71, 13, 10, 26, 10]); bytes.set([73, 72, 68, 82], 12);
+    const view = new DataView(bytes.buffer); view.setUint32(16, 2); view.setUint32(20, 3);
+    const original = window.fetch;
+    window.fetch = async (url, init) => String(url).endsWith("/attachments/att_corrupt") ? new Response(bytes) : original(url, init);
+    panel._inlineImages().fetchImpl = window.fetch;
+    panel._config.capabilities = [...(panel._config.capabilities || []), "attachment_downloads"];
+    const attachment = { attachment_id: "att_corrupt", filename: "corrupt.png", size_bytes: bytes.length, mime_type: "image/png" };
+    panel._activeThread = { ...panel._activeThread, attachments: [attachment] };
+    panel._events = [{ sequence: 1, event_type: "attachment.added", payload: attachment }];
+    panel._forceMessageRebuild = true; panel._render();
+  });
+  const card = page.locator("codex-bridge-panel .uploaded-image-message .inline-image-card");
+  await card.scrollIntoViewIfNeeded(); await expect(card.locator(".inline-image-status")).toContainText("Preview unavailable");
+  await expect(card.locator("img")).toHaveCount(0);
 });

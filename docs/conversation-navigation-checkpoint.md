@@ -1,8 +1,43 @@
-# Conversation timeline checkpoint
+# Conversation navigation and image previews
 
-The panel now projects retained chat message events into a compact turn timeline. A turn groups its user prompt and assistant replies by Bridge `run_id`, with chronological fallback for older events. Desktop markers form a centred, sticky vertical stack; hover and keyboard focus expand a horizontal tick and show a preview outside the scrollable marker track. Large histories scroll inside the bounded track. Touch and narrow layouts start with a 44 px “Jump to message” disclosure; opening it shows a horizontal turn list and preview, while choosing a turn jumps and closes the list. Escape also closes it and restores focus to the disclosure.
+The panel projects retained chat events into a slim vertical rail on desktop and
+touch screens. The former disclosure, turn buttons and summary cards have been
+removed. Existing run associations group each prompt and response, with
+chronological fallback for older events. Marker lengths reflect the original
+content within a 6–26 px range. Long histories scroll inside a bounded sticky
+track. Visible transcript position owns the current marker.
 
-The timeline uses the existing conversation event history and its 25,000-event retention limit, with a 12,500-turn projection cap. It groups RuntimeBroker `run.queued` with the matching turn and clears that state on `run.started`; legacy `run.dequeued` is also supported. Repeated steer prompts, responses and accessible labels are bounded to 120 characters. It adds no persistence or bookmark state. Preview text is inserted as text, and provider/account data and internal run identifiers are not rendered.
+Hover and keyboard focus expand a marker and show a prompt/response preview.
+Delayed dismissal allows stable pointer movement into the card. Desktop click
+jumps; a first touch tap opens the preview, whose explicit action jumps. Arrow
+keys, Home, End and Escape provide navigation with visible focus and restoration.
+Reduced motion removes animation. Cards stay inside the visual viewport and
+conversation pane, clear of the composer and Home Assistant header.
+
+Bookmarks persist in browser local storage, scoped by the existing HA user
+preference key and selected chat. Only bounded numeric turn anchors are stored;
+prompts, responses, provider IDs and credentials are not. Bookmarks do not
+synchronise between devices.
+
+The existing 25,000-event retention limit and 12,500-turn projection cap remain.
+Cached projections avoid work for unchanged histories and irrelevant streaming
+events. Animation frames coalesce scroll work; cached anchor positions locate
+the current marker. Keyed controls and preview actions preserve focus across
+relevant streaming updates without moving the transcript scroll position.
+
+Uploaded, generated and workspace PNG, JPEG, WebP and GIF images have decoded
+inline thumbnails and enlarged previews. Right-click, Shift+F10 and a visible
+action button expose Open, Copy image and Download. Pending uploads preview
+locally; ordinary files retain their existing cards. Menus use design tokens and
+visual viewport bounds.
+
+Downloads remain administrator-authenticated through HA. The private Bridge
+checks thread ownership and reads confined, quota-bound snapshots. Older Apps
+without the new capability fail closed. Raster byte/dimension/decoder checks,
+concurrency and decoded-pixel cache bounds limit browser resources. Switching
+chats cancels pending work and disposes object URLs. No external image URL is
+loaded from chat text. Copy image needs a secure context and browser permission;
+unavailable or rejected access reports a download alternative truthfully.
 
 Focused verification completed:
 
@@ -11,17 +46,13 @@ Focused verification completed:
 - `npx playwright test frontend/e2e/panel.spec.js --grep "conversation timeline previews"`
 - `npm run build`
 
-The Playwright check exercised desktop hover/focus/jump, the initially closed mobile disclosure, mobile preview/jump/close and Escape focus restoration, dark theme, reduced motion and axe checks. Screenshots are retained with the private local verification receipt.
+Current browser checks exercise short, empty, 40-turn and 500-turn histories,
+scroll synchronisation, bookmark reload, stable hover/focus, streaming projection
+reuse, real touch tap/jump, light/dark themes, reduced motion and axe checks.
+Image checks exercise real decoding, clipboard write/read, downloaded PNG bytes,
+permission denial, corrupt input, pending uploads and menu stability on refresh.
+Harness events are synthetic; native HA acceptance and physical phone tests must
+be reported separately.
 
-Integrated verification passed all 604 frontend units and 102 browser scenarios.
-Follow-up regressions cover terminal failed/cancelled/interrupted turns, cleared
-queues, malformed historical records, empty chats and long scrollable tracks.
-The rail uses the existing reading-area gutter without reducing message width;
-when the actual conversation area lacks room, it uses the compact disclosure.
-Header, message and composer alignment, target spacing and the narrow desktop
-fallback are asserted in real Chromium layout checks. These local browser
-checks use synthetic events and do not establish native provider acceptance.
-
-The final PR #153 review build passed all 610 frontend units and 102 Chromium
-scenarios. The review corrections preserve unknown native outcomes across
-the Bridge, Home Assistant and panel and distinguish definitive rejection.
+Earlier results in PR #153 belong to the previous navigation implementation.
+Release notes and private receipts record fresh results for this replacement.

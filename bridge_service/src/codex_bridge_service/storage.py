@@ -5319,6 +5319,48 @@ class BridgeStorage:
                 )
             return record.artifacts
 
+    def open_attachment(
+        self,
+        thread_id: str,
+        attachment_id: str,
+    ) -> tuple[AttachmentRecord, BinaryIO, int]:
+        """Lease a verified, thread-owned upload without exposing its locator."""
+        if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+            raise RuntimeError(
+                "descriptor attachment opens require the home_assistant profile"
+            )
+        attachment = self.get_attachment(thread_id, attachment_id)
+        lease = self._lease_transient_snapshot(
+            self._home_assistant_uploads_boundary(), attachment.stored_path
+        )
+        try:
+            if (
+                attachment.size_bytes is not None
+                and lease.size_bytes != attachment.size_bytes
+            ):
+                raise WorkspaceEscapeError()
+            if attachment.sha256 is not None:
+                digest = hashlib.sha256()
+                offset = 0
+                while block := os.pread(lease.fileno(), 1024 * 1024, offset):
+                    digest.update(block)
+                    offset += len(block)
+                if digest.hexdigest() != attachment.sha256:
+                    raise WorkspaceEscapeError()
+            size_bytes = lease.size_bytes
+            file_fd, release = lease.detach_with_close_callback()
+        except BaseException:
+            lease.close()
+            raise
+        try:
+            raw_stream = os.fdopen(file_fd, "rb")
+            return attachment, _ReleasingBinaryStream(raw_stream, release), size_bytes
+        except BaseException:
+            os.close(file_fd)
+            if release is not None:
+                release()
+            raise
+
     def open_artifact(
         self,
         thread_id: str,

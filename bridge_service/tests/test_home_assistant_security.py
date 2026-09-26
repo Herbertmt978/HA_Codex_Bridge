@@ -41,6 +41,7 @@ def test_panel_and_http_file_surfaces_require_home_assistant_admin() -> None:
         "CodexBridgeUploadChunkView.put": "_require_admin(request)",
         "CodexBridgeUploadCompleteView.post": "_require_admin(request)",
         "CodexBridgeArtifactDownloadView.get": "_require_admin(request)",
+        "CodexBridgeAttachmentDownloadView.get": "_require_admin(request)",
         "CodexBridgeMcpCredentialView.post": "_require_admin(request)",
         "CodexBridgeDiscordView.get": "_require_admin(request)",
         "CodexBridgeDiscordView.put": "_require_admin(request)",

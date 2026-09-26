@@ -74,6 +74,119 @@ async def _install_runtime(hass, client, *, api_version: int = 1) -> None:
     async_register_http_views(hass)
 
 
+async def test_attachment_download_requires_admin(
+    hass, hass_client, hass_client_no_auth, hass_read_only_access_token,
+) -> None:
+    bridge = SimpleNamespace(async_stream_attachment=AsyncMock())
+    await _install_runtime(hass, bridge)
+    path = f"/api/codex_bridge/threads/{THREAD_ID}/attachments/att_safe"
+    anonymous = await hass_client_no_auth()
+    readonly = await hass_client(hass_read_only_access_token)
+    for client in (anonymous, readonly):
+        assert (await client.get(path)).status in {401, 403}
+    bridge.async_stream_attachment.assert_not_called()
+
+
+async def test_attachment_download_streams_only_safe_headers_and_range(
+    hass, hass_client,
+) -> None:
+    stream = _FakeStream(
+        status=206,
+        headers={
+            "Content-Length": "7", "Content-Range": "bytes 2-8/10",
+            "Content-Disposition": "attachment; filename=\"image.png\"; filename*=UTF-8''image.png",
+            "Content-Type": "image/svg+xml", "Set-Cookie": "private=sentinel",
+        },
+        blocks=(b"pay", b"load"),
+    )
+    observed = {}
+    closed = asyncio.Event()
+
+    @asynccontextmanager
+    async def download(thread_id, attachment_id, **kwargs):
+        observed.update(thread_id=thread_id, attachment_id=attachment_id, **kwargs)
+        try:
+            yield stream
+        finally:
+            closed.set()
+
+    await _install_runtime(hass, SimpleNamespace(async_stream_attachment=download))
+    client = await hass_client()
+    response = await client.get(
+        f"/api/codex_bridge/threads/{THREAD_ID}/attachments/att_safe",
+        headers={"Range": "bytes=2-8"},
+    )
+    assert response.status == 206
+    assert await response.read() == b"payload"
+    assert observed == {
+        "thread_id": THREAD_ID, "attachment_id": "att_safe",
+        "range_header": "bytes=2-8", "if_range": None,
+    }
+    assert closed.is_set()
+    assert response.headers["Content-Type"] == "application/octet-stream"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "no-store" in response.headers["Cache-Control"]
+    assert "Set-Cookie" not in response.headers
+    assert stream.requested_chunk_sizes == [DOWNLOAD_STREAM_CHUNK_BYTES]
+
+
+@pytest.mark.parametrize("api_version", [0, 1])
+async def test_attachment_download_fails_closed_without_transport_or_capability(
+    hass, hass_client, api_version,
+) -> None:
+    @asynccontextmanager
+    async def download(*args, **kwargs):
+        raise BridgeApiCapabilityError()
+        yield  # pragma: no cover
+
+    bridge = SimpleNamespace(async_stream_attachment=download, async_list_artifacts=AsyncMock())
+    await _install_runtime(hass, bridge, api_version=api_version)
+    client = await hass_client()
+    response = await client.get(f"/api/codex_bridge/threads/{THREAD_ID}/attachments/att_safe")
+    assert response.status == 503
+    assert (await response.json())["code"] == "bridge_incompatible"
+    bridge.async_list_artifacts.assert_not_called()
+
+
+async def test_attachment_client_capability_and_path_validation_precede_network():
+    class UnexpectedSession:
+        async def request(self, *_args, **_kwargs):
+            raise AssertionError("network must not be reached")
+
+    bridge = BridgeApiClient(UnexpectedSession(), "http://127.0.0.1:8766", TOKEN)
+    bridge._api_version = 1
+    with pytest.raises(BridgeApiCapabilityError):
+        async with bridge.async_stream_attachment(THREAD_ID, "att_safe"):
+            pass
+    bridge._capabilities = frozenset({"attachment_downloads"})
+    for thread_id, attachment_id in (("../private", "att_safe"), (THREAD_ID, "../private")):
+        with pytest.raises(BridgeApiEndpointError):
+            async with bridge.async_stream_attachment(thread_id, attachment_id):
+                pass
+
+
+async def test_attachment_client_retains_capability_and_proxies_authenticated_range(
+    bridge_server_factory,
+) -> None:
+    observed = {}
+
+    async def handler(request):
+        if request.path == "/ready":
+            payload = json.loads((FIXTURES / "ready_v1.json").read_text(encoding="utf-8"))
+            payload["capabilities"].append("attachment_downloads")
+            return web.json_response(payload)
+        observed.update(path=request.path, range=request.headers.get("Range"), authenticated=request.headers.get("Authorization") == f"Bearer {TOKEN}")
+        return web.Response(body=b"image", headers={"Content-Length": "5"})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        bridge = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await bridge.async_ready()
+        async with bridge.async_stream_attachment(THREAD_ID, "att_safe", range_header="bytes=0-4") as response:
+            assert await response.read_chunk(5) == b"image"
+    assert observed == {"path": f"/threads/{THREAD_ID}/attachments/att_safe", "range": "bytes=0-4", "authenticated": True}
+
+
 async def test_discord_policy_view_requires_admin_and_never_reflects_token(
     hass, hass_client, hass_client_no_auth, hass_read_only_access_token, caplog,
 ) -> None:

@@ -22,6 +22,7 @@ function createPanel(events) {
   panel._selectedThreadId = thread.thread_id;
   panel._activeThread = thread;
   panel._events = events;
+  vi.spyOn(panel.shadowRoot.getElementById("conversation-scroll"), "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 640, left: 0, right: 800, width: 800, height: 640 });
   panel._forceMessageRebuild = true;
   panel._render(true);
   return panel;
@@ -47,7 +48,7 @@ describe("conversation timeline panel", () => {
     expect(buttons).toHaveLength(2);
     expect(buttons[0].getAttribute("aria-label")).toContain("You: Find the config");
     buttons[0].focus();
-    expect(navigation.querySelector(".timeline-preview-desktop").textContent).toContain("Codex: The config is in settings.");
+    expect(navigation.querySelector(".timeline-preview-desktop").textContent).toContain("The config is in settings.");
     expect(buttons[1].getAttribute("aria-label")).toContain("Codex response in progress");
     expect(navigation.textContent).not.toContain("private-run-id");
     expect(navigation.querySelector("[aria-current='location']").dataset.sequence).toBe("3");
@@ -103,8 +104,62 @@ describe("conversation timeline panel", () => {
     const panel = createPanel([]);
     expect(panel.shadowRoot.getElementById("conversation-timeline").hidden).toBe(true);
     const stylesheet = panel.shadowRoot.querySelector("style").textContent;
-    expect(stylesheet).toContain(".conversation-layout.timeline-compact");
+    expect(panel.shadowRoot.getElementById("conversation-timeline-toggle")).toBeNull();
+    expect(stylesheet.includes("grid-template-columns: 32px")).toBe(true);
     expect(stylesheet).toMatch(/min-width:\s*44px/);
     expect(stylesheet).toMatch(/prefers-reduced-motion\s*:\s*reduce/i);
+  });
+
+  it("persists bookmark anchors without storing transcript text and isolates chats", () => {
+    localStorage.clear();
+    const events = [event(1, "message.created", { text: "Private prompt" })];
+    const panel = createPanel(events);
+    panel.shadowRoot.querySelector(".timeline-item").focus();
+    const bookmark = panel.shadowRoot.querySelector(".timeline-bookmark");
+    bookmark.click();
+    expect(panel.shadowRoot.querySelector(".timeline-item").hasAttribute("data-bookmarked")).toBe(true);
+    expect(localStorage.getItem(panel._conversationBookmarkKey())).toBe("[1]");
+    panel.remove();
+    const restored = createPanel(events);
+    expect(restored.shadowRoot.querySelector(".timeline-item").hasAttribute("data-bookmarked")).toBe(true);
+    restored._selectedThreadId = "another-chat";
+    restored._renderConversationTimeline();
+    expect(restored.shadowRoot.querySelector(".timeline-item").hasAttribute("data-bookmarked")).toBe(false);
+  });
+
+  it("keeps preview controls stable across unrelated renders and Escape dismisses the card", () => {
+    const panel = createPanel([event(1, "message.created", { text: "First" })]);
+    panel.shadowRoot.querySelector(".timeline-item").focus();
+    const bookmark = panel.shadowRoot.querySelector(".timeline-bookmark");
+    bookmark.focus();
+    panel._renderConversationTimeline();
+    expect(panel.shadowRoot.querySelector(".timeline-bookmark")).toBe(bookmark);
+    expect(panel.shadowRoot.activeElement).toBe(bookmark);
+    bookmark.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(panel.shadowRoot.getElementById("conversation-timeline-desktop-preview").hidden).toBe(true);
+    expect(panel.shadowRoot.activeElement).toBe(panel.shadowRoot.querySelector(".timeline-item"));
+  });
+
+  it("does not cancel pending hover dismissal when streamed events arrive", () => {
+    vi.useFakeTimers();
+    const panel = createPanel([event(1, "message.created", { text: "First" })]);
+    const tick = panel.shadowRoot.querySelector(".timeline-item");
+    panel._handleTimelinePointerOver({ target: tick });
+    panel._handleTimelinePointerOut({ target: tick, relatedTarget: null });
+    panel._events = [...panel._events, event(2, "message.completed", { text: "Answer" })];
+    panel._renderConversationTimeline();
+    vi.advanceTimersByTime(210);
+    expect(panel.shadowRoot.getElementById("conversation-timeline-desktop-preview").hidden).toBe(true);
+    panel.remove();
+    vi.useRealTimers();
+  });
+
+  it("keeps the jump action focused when a response completes", () => {
+    const panel = createPanel([event(1, "message.created", { text: "First" })]);
+    panel.shadowRoot.querySelector(".timeline-item").focus();
+    panel.shadowRoot.querySelector(".timeline-preview-jump").focus();
+    panel._events = [...panel._events, event(2, "message.completed", { text: "Answer" })];
+    panel._renderConversationTimeline();
+    expect(panel.shadowRoot.activeElement).toBe(panel.shadowRoot.querySelector(".timeline-preview-jump"));
   });
 });

@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.8.11`, Integration and panel `1.8.11`, Bridge `0.15.0` and
+- This release pairs App `1.9.0`, Integration and panel `1.9.0`, Bridge `0.16.0` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -93,6 +93,17 @@ to the App or Bridge.
   previous-image rollback require their own target acceptance evidence.
 
 ## Product language
+
+- Conversation navigation uses a slim rail of content-sized turn markers on
+  desktop and touch screens. Scroll position owns the current marker; previews
+  expose the prompt, response excerpt, jump and bookmark actions. Bookmarks
+  store only local turn anchors in this browser, scoped to the HA user and chat;
+  they do not synchronise between devices or publish conversation text.
+- Uploaded and generated raster images use bounded, decoded previews and
+  administrator-authenticated HA downloads. Enlarged previews and image actions
+  retain the browser -> HA -> private Bridge boundary. Clipboard copying needs
+  a secure browser context and permission; unavailable or rejected access shows
+  a truthful download alternative. Image previews grant no broader file access.
 
 - MCP-05 adds pause/resume and destination editing. Native enabled state owns
   pause; saved private settings survive restart. Edits require pause and an

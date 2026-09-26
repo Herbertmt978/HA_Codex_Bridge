@@ -571,6 +571,7 @@ class BridgeReadinessRecord(BaseModel):
             "office_preview_v1",
             "discord_channel_v1",
             "chat_operations_v1",
+            "attachment_downloads",
         ],
         ...,
     ] = (

@@ -1,5 +1,23 @@
 export const MAX_CONVERSATION_TURNS = 12_500;
 const SNIPPET_LIMIT = 120;
+export function conversationMarkerWidth(length) {
+  return Math.round(6 + Math.min(1, Math.log2(1 + Math.max(0, Number(length) || 0)) / 14) * 20);
+}
+
+// Bookmarks contain only turn anchors, scoped by the HA user and chat in the
+// caller. Never persist prompt/response text or provider identifiers here.
+export function readConversationBookmarks(storage, key) {
+  try {
+    const value = JSON.parse(storage.getItem(key) || "[]");
+    return new Set((Array.isArray(value) ? value : []).filter((item) => Number.isSafeInteger(item) && item > 0).slice(-500));
+  } catch { return new Set(); }
+}
+
+export function saveConversationBookmarks(storage, key, values) {
+  const safe = [...values].filter((item) => Number.isSafeInteger(item) && item > 0).slice(-500);
+  storage.setItem(key, JSON.stringify(safe));
+  return new Set(safe);
+}
 const TERMINAL_LABELS = Object.freeze({
   completed: "Run completed without a recorded answer",
   cancelled: "Run cancelled",
@@ -59,6 +77,7 @@ export function projectConversationTurns(events = []) {
       turn.userSequence ??= event.sequence;
       turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
       turn.prompt = snippet([turn.prompt, snippet(payload.text)].filter(Boolean).join(" "));
+      turn.contentLength = Math.min(1_000_000, (turn.contentLength || 0) + (typeof payload.text === "string" ? payload.text.length : 0));
       turn.queued ||= payload.queued === true;
       lastUserTurn = turn;
       continue;
@@ -72,6 +91,7 @@ export function projectConversationTurns(events = []) {
     }
     turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
     const response = snippet(payload.text);
+    turn.contentLength = Math.min(1_000_000, (turn.contentLength || 0) + (typeof payload.text === "string" ? payload.text.length : 0));
     if (response) turn.response = snippet([turn.response, response].filter(Boolean).join(" · "));
   }
 
@@ -101,6 +121,7 @@ export function projectConversationTurns(events = []) {
       pending,
       outcomeLabel,
       label,
+      markerWidth: conversationMarkerWidth(turn.contentLength),
     };
   });
 }
