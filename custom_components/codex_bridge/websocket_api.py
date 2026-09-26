@@ -943,6 +943,12 @@ async def ws_send_prompt(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    explicit_mode_kwargs = {
+        field: msg[field]
+        for field in ("follow_up_mode", "collaboration_mode")
+        if msg.get(field) is not None
+    }
+
     async def _send(runtime):
         if msg.get("follow_up_mode") is not None and not runtime.supports_capability(
             "prompt_queue_v1"
@@ -956,8 +962,7 @@ async def ws_send_prompt(
             msg["thread_id"],
             msg["prompt"],
             client_request_id=msg.get("client_request_id"),
-            follow_up_mode=msg.get("follow_up_mode"),
-            collaboration_mode=msg.get("collaboration_mode"),
+            **explicit_mode_kwargs,
             **runtime.web_search_payload(),
         )
 
@@ -969,8 +974,7 @@ async def ws_send_prompt(
             msg["thread_id"],
             msg["prompt"],
             client_request_id=msg.get("client_request_id"),
-            follow_up_mode=msg.get("follow_up_mode"),
-            collaboration_mode=msg.get("collaboration_mode"),
+            **explicit_mode_kwargs,
         ),
         runtime_handler=_send,
         safe_error_messages={

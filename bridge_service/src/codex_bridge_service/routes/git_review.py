@@ -287,7 +287,10 @@ def _metadata_fingerprint_fd(root_fd: int, deadline: float) -> bytes:
     digest = hashlib.sha256()
     budget = {"bytes": 0, "files": 0}
     for name in ("HEAD", "index", "packed-refs", "shallow"):
-        _hash_metadata_file_fd(root_fd, name, digest, budget, deadline, optional=True)
+        _hash_metadata_file_fd(
+            root_fd, name, digest, budget, deadline, optional=True,
+            include_mtime=name == "index",
+        )
     try:
         refs_fd = os.open("refs", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd)
     except FileNotFoundError:
@@ -370,7 +373,8 @@ def _reject_alternates_path(metadata_path: Path) -> None:
 
 
 def _hash_metadata_file_fd(parent_fd: int, name: str, digest, budget, deadline,
-                           *, optional: bool = False, display_name: str | None = None) -> None:
+                           *, optional: bool = False, display_name: str | None = None,
+                           include_mtime: bool = False) -> None:
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
     except FileNotFoundError:
@@ -388,6 +392,8 @@ def _hash_metadata_file_fd(parent_fd: int, name: str, digest, budget, deadline,
         if budget["files"] > _MAX_METADATA_FILES:
             raise GitReviewError("git_metadata_too_large")
         digest.update((display_name or name).encode("utf-8") + b"\0")
+        if include_mtime:
+            digest.update(f"mtime_ns:{info.st_mtime_ns}\0".encode("ascii"))
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
             while chunk := stream.read(1024 * 1024):
@@ -455,6 +461,8 @@ def _metadata_fingerprint_path(root: Path, deadline: float) -> bytes:
             if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
                 raise GitReviewError("git_metadata_changed")
             digest.update(name.encode("utf-8") + b"\0")
+            if name == "index":
+                digest.update(f"mtime_ns:{after.st_mtime_ns}\0".encode("ascii"))
             while chunk := stream.read(1024 * 1024):
                 budget["bytes"] += len(chunk)
                 if budget["bytes"] > _MAX_REF_INDEX_BYTES:
@@ -563,6 +571,8 @@ def _copy_metadata_path(source: Path, target_root: Path, name: str,
                 if budget["bytes"] > _MAX_METADATA_BYTES:
                     raise GitReviewError("git_metadata_too_large")
                 output.write(chunk)
+        if name == "index":
+            os.utime(target, ns=(after.st_atime_ns, after.st_mtime_ns))
 
 
 def _copy_metadata_tree_path(source: Path, target: Path,
@@ -622,6 +632,8 @@ def _copy_metadata_file(source_fd: int, target_root: Path, name: str,
                     if remaining < 0:
                         raise GitReviewError("git_metadata_too_large")
                     destination.write(chunk)
+        if name == "index":
+            os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns))
     finally:
         if fd >= 0:
             os.close(fd)

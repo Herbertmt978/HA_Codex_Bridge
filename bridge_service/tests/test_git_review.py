@@ -327,6 +327,99 @@ def test_git_review_rejects_ref_changes_during_snapshot(tmp_path, monkeypatch) -
     assert response.json()["detail"]["code"] == "git_state_changed"
 
 
+def test_git_review_snapshot_preserves_source_index_timestamp(tmp_path) -> None:
+    _app, _thread, workspace, _client, _headers = _repo(tmp_path)
+    module = importlib.import_module("codex_bridge_service.routes.git_review")
+    source_index = workspace / ".git" / "index"
+    source_mtime_ns = source_index.stat().st_mtime_ns
+
+    with module._private_git_snapshot(workspace):
+        snapshot_index = module._GIT_DIR.get() / "index"
+        assert snapshot_index.stat().st_mtime_ns == source_mtime_ns
+
+    assert source_index.stat().st_mtime_ns == source_mtime_ns
+
+
+def test_git_review_rejects_source_index_timestamp_change_during_snapshot(
+    tmp_path, monkeypatch
+) -> None:
+    _app, thread, workspace, client, headers = _repo(tmp_path)
+    module = importlib.import_module("codex_bridge_service.routes.git_review")
+    index = workspace / ".git" / "index"
+    if os.name == "nt":
+        original = module._copy_metadata_path
+
+        def change_index_timestamp(source, target_root, name, budget, deadline, *, optional=False):
+            result = original(
+                source, target_root, name, budget, deadline, optional=optional
+            )
+            if name == "index":
+                info = index.stat()
+                os.utime(index, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+            return result
+
+        monkeypatch.setattr(module, "_copy_metadata_path", change_index_timestamp)
+    else:
+        original = module._copy_metadata_file
+
+        def change_index_timestamp(source_fd, target_root, name, budget, deadline, *, optional=False):
+            result = original(
+                source_fd, target_root, name, budget, deadline, optional=optional
+            )
+            if name == "index":
+                info = index.stat()
+                os.utime(index, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+            return result
+
+        monkeypatch.setattr(module, "_copy_metadata_file", change_index_timestamp)
+
+    response = client.get(
+        f"/threads/{thread.thread_id}/git-review?scope=unstaged", headers=headers
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "git_state_changed"
+
+
+def test_git_review_repeated_reads_keep_same_size_racy_change(tmp_path, monkeypatch) -> None:
+    _app, thread, workspace, client, headers = _repo(tmp_path)
+    module = importlib.import_module("codex_bridge_service.routes.git_review")
+    binary = workspace / "binary.bin"
+    fixed_ns = 1_700_000_000_000_000_000
+    binary.write_bytes(b"old\0data")
+    os.utime(binary, ns=(fixed_ns, fixed_ns))
+    _git(workspace, "add", "binary.bin")
+    _git(
+        workspace, "-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.test",
+        "commit", "-qm", "binary",
+    )
+    index = workspace / ".git" / "index"
+    os.utime(index, ns=(fixed_ns, fixed_ns))
+    binary.write_bytes(b"new\0data")
+    os.utime(binary, ns=(fixed_ns, fixed_ns))
+
+    original_prefix = module._git_prefix
+
+    def use_racy_stat_control(repo):
+        return original_prefix(repo) + [
+            "-c", "core.checkStat=minimal", "-c", "core.trustctime=false",
+        ]
+
+    monkeypatch.setattr(module, "_git_prefix", use_racy_stat_control)
+    listing = client.get(
+        f"/threads/{thread.thread_id}/git-review?scope=unstaged", headers=headers
+    )
+    patch = client.get(
+        f"/threads/{thread.thread_id}/git-review",
+        params={"scope": "unstaged", "path": "binary.bin"},
+        headers=headers,
+    )
+
+    assert listing.status_code == patch.status_code == 200
+    assert "binary.bin" in [item["path"] for item in listing.json()["files"]]
+    assert patch.json()["files"][0]["binary"] is True
+
+
 def test_git_review_never_imports_alternates_added_during_snapshot(tmp_path, monkeypatch) -> None:
     app, thread, workspace, client, headers = _repo(tmp_path)
     module = importlib.import_module("codex_bridge_service.routes.git_review")

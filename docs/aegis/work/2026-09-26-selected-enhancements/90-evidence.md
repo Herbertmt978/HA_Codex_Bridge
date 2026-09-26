@@ -12,8 +12,8 @@
 | Desktop and mobile browser checks | 124 passed | frontend-e2e-candidate.log |
 | Release, packaging and native schema regression tests | 37 passed, 2 platform skips | candidate-packaging-corrected.log |
 | Retained transcript search | 10 passed | candidate-search-tests.log |
-| Git review, merge/root comparisons and nested references | 10 passed, 1 POSIX-only skip | candidate-git-final-tests.log |
-| Ruff across Bridge, Integration, scripts and tests | Pass | ruff-candidate.log |
+| Git review, merge/root comparisons, nested references and index timing | 13 passed, 1 POSIX-only skip | candidate3-git-tests.log |
+| Ruff across Bridge, Integration, scripts and tests | Pass after final correction | candidate3-ruff.log |
 | Native schema regeneration against signed pinned runtime | Pass | native-schema-candidate.log |
 | Release projections and Codex runtime lock | Pass | Machine-readable receipt |
 | Python compilation and generated JavaScript syntax | Pass | Machine-readable receipt |
@@ -29,3 +29,11 @@ Parent owns the final independent review, full Linux suites, root restore gate, 
 ## Completion and follow-up
 
 Keep the final source and generated panel committed together. Record exact verification identifiers only in the machine-readable handoff receipt. No publishing or host power changes were performed by this delivery chat. Parent owns returning initially stopped CT105 to stopped; HAOS-DEV remains in its initially running state.
+
+## Qualification corrections
+
+Parent Linux qualification exposed an Integration omission-compatibility failure: absent follow-up and collaboration modes were forwarded as `None`. Both runtime and fallback prompt paths now pass these fields only when explicitly supplied. Existing legacy assertions remain intact. Ruff and compilation pass; the Integration suite needs the parent Linux rerun because the Windows environment cannot collect its Home Assistant dependencies. The earlier Linux result was 478 passed and five failed before this correction, not a full pass.
+
+A repeated Windows probe confirmed the intermittent binary-path failure was a product defect. The private snapshot copied index bytes with a newer filesystem timestamp, suppressing Git's racy-stat content check for same-size changes. Independent counterfactuals kept every input constant except the private index timestamp: preserving the source timestamp detected the edit; advancing it hid the edit. Both snapshot copy owners now preserve the captured source index timestamp. Matching metadata fingerprints include it, so timestamp drift during copying is rejected. Source metadata/configuration is untouched.
+
+The final Git module passes 13 tests with one POSIX-only skip. New deterministic coverage verifies source timestamp preservation, drift rejection and consecutive list/per-file detection with matching cached stat fields. Three independent repetitions of the original binary/large/state-drift case pass, without delays or relaxed assertions. Parent must qualify corrected App inputs and rerun Linux checks on this committed source.
