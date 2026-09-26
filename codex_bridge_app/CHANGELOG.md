@@ -8,6 +8,8 @@ All notable App changes are recorded here.
   with fixed safe text rather than raw provider errors or private identifiers.
 - Shows due, start and completion times in Home Assistant's configured time
   zone, including daylight-saving labels and an explicit UTC fallback.
+- Reconnects the Integration's event consumer when an App connection closes
+  during a response body, retaining its cursor and duplicate-event protection.
 - Preserves scheduler behaviour and existing grants. This TASK-01 history
   improvement leaves conversational editing, pause and cancellation open.
 - Pairs App, Integration and panel `1.8.4` with unchanged Bridge `0.14.3`
