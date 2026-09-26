@@ -95,10 +95,17 @@ See [Host Access](../codex_host_access_app/DOCS.md) before using this mode.
 An unattended task cannot answer approval requests or questions. A run may be
 stopped or skipped if it needs interaction, overlaps another run, exceeds
 capacity or misses its scheduling window. Check **Runs** for the recorded
-outcome. Successful responses appear in the task's chat. **Needs attention or
-failed** notifies for blocked, failed, interrupted and skipped runs. **All
-outcomes** adds completions and cancellations, including manual runs. If your
-ChatGPT sign-in expires, the blocked or failed run follows the attention setting.
+outcome. Successful responses appear in the task's chat.
+
+Run history explains skipped runs, including an earlier run still being active
+or an occurrence missing its allowed start window. Due, start and completion
+times use Home Assistant's configured time zone. A skipped run does not start
+Codex work; it remains recorded in the history.
+
+**Needs attention or failed** notifies for blocked, failed, interrupted and
+skipped runs. **All outcomes** adds completions and cancellations, including
+manual runs. If your ChatGPT sign-in expires, the blocked or failed run follows
+the attention setting.
 
 Home Assistant's persistent notifications are visible to all HA users. Codex
 Bridge therefore puts only a generic update and a link in them; the link opens

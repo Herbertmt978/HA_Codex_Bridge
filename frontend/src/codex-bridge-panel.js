@@ -3201,6 +3201,11 @@ template.innerHTML = `
       text-transform: uppercase;
     }
 
+    .schedule-run-history td { overflow-wrap: anywhere; }
+    .schedule-run-history td[data-label="Details"] { color: var(--muted-color); }
+    .schedule-run-history td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 56%, var(--text-color) 44%); }
+    .schedule-run-history td.is-negative { color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%); }
+
     .desktop-table td button {
       margin: 4px 8px 4px 0;
     }
@@ -8064,7 +8069,7 @@ class CodexBridgePanel extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone, hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     } else container?.removeAttribute("aria-label");
   }
 

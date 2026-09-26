@@ -384,6 +384,71 @@ test("scheduled runtime selections and grouped skills remain readable", async ({
   await panel.screenshot({ path: test.info().outputPath("skills-grouped.png") });
 });
 
+test.describe("schedule run outcomes", () => {
+  test.use({ timezoneId: "America/Los_Angeles" });
+  for (const [name, timezone] of [["missing", undefined], ["empty", ""], ["configured UTC", "UTC"]]) {
+    test(`the actual panel distinguishes ${name} HA time zone from fallback`, async ({ page }) => {
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      await selectHarnessThread(page);
+      await page.evaluate(async ({ timezone }) => {
+        const panel = document.querySelector("codex-bridge-panel");
+        panel.hass = { ...panel.hass, config: timezone === undefined ? {} : { time_zone: timezone } };
+        await panel._selectDesktopDestination("scheduled");
+        panel._desktopFeatures.scheduled.data.runs = [{ status: "completed", due_at: "2026-09-25T08:00:00Z" }];
+        panel._render(true);
+      }, { timezone });
+      const panel = page.locator("codex-bridge-panel");
+      const surface = panel.locator("#desktop-feature-surface");
+      await expect(surface).toContainText("25 Sept 2026, 08:00 UTC");
+      await expect(surface).toContainText(timezone ? "Times shown in Home Assistant's UTC time zone." : "Times shown in UTC because the Home Assistant time zone is unavailable.");
+      await panel.getByRole("button", { name: "New schedule", exact: true }).click();
+      expect(await page.evaluate(() => document.querySelector("codex-bridge-panel")._scheduleContext().timezone)).toBe("UTC");
+      await expect(panel.locator(".schedule-editor")).toBeVisible();
+    });
+  }
+  for (const width of [390, 1440]) {
+    test(`explains scheduler outcomes in HA time without overflow at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      await selectHarnessThread(page);
+      await page.evaluate(async () => {
+        const panel = document.querySelector("codex-bridge-panel");
+        panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+        await panel._selectDesktopDestination("scheduled");
+        panel._desktopFeatures.scheduled.data.runs = [
+          { status: "skipped_overlap", due_at: "2026-09-25T08:00:00Z", error: "private-error", automation_run_id: "private-id" },
+          { status: "skipped_misfire", due_at: "2026-09-25T09:00:00Z" },
+          { status: "queued", due_at: "2026-09-25T10:00:00Z" },
+          { status: "failed", due_at: "2026-09-25T11:00:00Z", completed_at: "2026-09-25T11:00:30Z", error: "private-error" },
+          { status: "completed", due_at: "2026-09-25T12:00:00Z", started_at: "2026-09-25T12:00:01Z", completed_at: "2026-09-25T12:00:30Z" },
+          { status: "private-unknown-status", due_at: "private-invalid-date" },
+        ];
+        panel._render(true);
+      });
+      const panel = page.locator("codex-bridge-panel");
+      const table = panel.locator(".schedule-run-history");
+      await expect(table).toContainText("Skipped · already running");
+      await expect(table).toContainText("No second run started");
+      await expect(table).toContainText("Skipped · missed window");
+      await expect(table).toContainText("25 Sept 2026, 09:00 BST");
+      await expect(table).toContainText("Status unavailable");
+      await expect(table).toContainText("Completed");
+      await expect(table).not.toContainText("private-");
+      await expect(panel.locator("#desktop-feature-surface")).toContainText("Home Assistant's Europe/London time zone");
+      const bounds = await table.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return { right: box.right, left: box.left, width: element.scrollWidth, client: element.clientWidth };
+      });
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(width);
+      expect(bounds.width).toBeLessThanOrEqual(bounds.client + 1);
+      await panel.locator("#desktop-feature-surface").screenshot({ path: test.info().outputPath(`schedule-run-history-${width}.png`) });
+      const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+      expect(accessibility.violations).toEqual([]);
+    });
+  }
+});
+
 test("creates and edits a scheduled task using the reference form", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.addInitScript(() => {
