@@ -11,8 +11,15 @@ function png(width = 2, height = 3) {
 const record = (id = "image-1") => ({ attachment_id: id, filename: "screen.png", mime_type: "image/png", size_bytes: 32, file: png() });
 const response = (blob = png(), headers = {}) => new Response(blob, { status: 200, headers });
 let controller, host, root;
+const originalDialogMethods = {
+  showModal: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal"),
+  close: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close"),
+};
 
 beforeEach(() => {
+  for (const name of ["showModal", "close"]) {
+    if (!originalDialogMethods[name]) Object.defineProperty(HTMLDialogElement.prototype, name, { configurable: true, value() {} });
+  }
   vi.stubGlobal("Blob", Blob);
   // jsdom has no raster decoder. Browser acceptance uses real PNG decoding.
   vi.stubGlobal("Image", class { constructor() { this.naturalWidth = 2; this.naturalHeight = 3; } decode() { return Promise.resolve(); } });
@@ -20,7 +27,10 @@ beforeEach(() => {
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   host = document.createElement("div"); root = host.attachShadow({ mode: "open" }); document.body.append(host);
 });
-afterEach(() => { controller?.dispose(); controller = null; host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  controller?.dispose(); controller = null; host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals();
+  for (const name of ["showModal", "close"]) if (!originalDialogMethods[name]) delete HTMLDialogElement.prototype[name];
+});
 
 describe("confined raster loading", () => {
   it("uses HA endpoints with encoded, checked IDs only", () => {
@@ -89,6 +99,46 @@ describe("image cards, actions and ownership", () => {
     controller.card("attachment", record()); const state = controller.records.get("attachment:image-1"); const pending = controller.load(state);
     await Promise.resolve(); controller.setThread("other-chat"); resolve(response()); await pending;
     expect(URL.createObjectURL).not.toHaveBeenCalled(); expect(controller.records.size).toBe(0);
+  });
+  function prepareModal() {
+    setup();
+    vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(function () { this.setAttribute("open", ""); });
+    vi.spyOn(HTMLDialogElement.prototype, "close").mockImplementation(function () { this.removeAttribute("open"); });
+    const trigger = document.createElement("button"); root.append(trigger);
+    const state = (filename) => ({ record: { filename }, url: `blob:http://localhost/${filename}`, nodes: new Set() });
+    return { trigger, state };
+  }
+  it("keeps the most recently requested image when an older load finishes later", async () => {
+    const { trigger, state } = prepareModal(); const older = state("older.png"), newer = state("newer.png");
+    let finishOlder;
+    vi.spyOn(controller, "load").mockImplementation((item) => item === older ? new Promise((resolve) => { finishOlder = resolve; }) : Promise.resolve(item));
+    const oldOpen = controller.open(older, trigger);
+    await controller.open(newer, trigger);
+    const newerDialog = controller.modal;
+    expect(newerDialog.getAttribute("aria-label")).toBe("Image preview: newer.png");
+    finishOlder(older); await oldOpen;
+    expect(controller.modal).toBe(newerDialog);
+    expect(controller.modalState).toBe(newer);
+    expect(root.querySelectorAll("dialog")).toHaveLength(1);
+  });
+  it.each(["close", "escape", "dispose"])("does not create a dialog after %s while its image is loading", async (action) => {
+    const { trigger, state } = prepareModal(); const image = state("pending.png"); let finish;
+    vi.spyOn(controller, "load").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const opening = controller.open(image, trigger);
+    if (action === "close") controller.closeModal();
+    else if (action === "dispose") controller.dispose();
+    else trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    finish(image); await opening;
+    expect(root.querySelector("dialog")).toBeNull(); expect(controller.modal).toBeUndefined();
+    expect(controller.pendingModalRequest).toBeNull();
+  });
+  it("does not reopen a dismissed newer preview when an older load finishes", async () => {
+    const { trigger, state } = prepareModal(); const older = state("older.png"), newer = state("newer.png"); let finishOlder;
+    vi.spyOn(controller, "load").mockImplementation((item) => item === older ? new Promise((resolve) => { finishOlder = resolve; }) : Promise.resolve(item));
+    const oldOpen = controller.open(older, trigger); await controller.open(newer, trigger);
+    controller.modal.dispatchEvent(new Event("cancel", { cancelable: true }));
+    finishOlder(older); await oldOpen;
+    expect(root.querySelector("dialog")).toBeNull(); expect(controller.modal).toBeNull();
   });
   it("rejects decoder failures and revokes the candidate URL without a broken thumbnail", async () => {
     setup(); vi.stubGlobal("Image", class { decode() { return Promise.reject(new Error("Corrupt raster")); } });

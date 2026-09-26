@@ -106,12 +106,18 @@ export class InlineImageController {
   constructor({ root, token = () => "", fetchImpl = fetch } = {}) {
     this.root = root; this.token = token; this.fetchImpl = fetchImpl;
     this.threadId = ""; this.records = new Map(); this.targets = new Map(); this.pending = []; this.pendingRevision = 0;
-    this.downloadTimers = new Map(); this.generation = 0; this.activeLoads = 0; this.loadQueue = [];
+    this.downloadTimers = new Map(); this.generation = 0; this.modalRequest = 0; this.pendingModalRequest = null; this.activeLoads = 0; this.loadQueue = [];
     this.observer = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) { this.observer.unobserve(entry.target); void this.load(this.targets.get(entry.target)); }
     }, { root: null, rootMargin: "160px" }) : null;
     this.outside = (event) => { if (this.menu && !event.composedPath().includes(this.menu)) this.closeMenu(); };
     root?.addEventListener("pointerdown", this.outside);
+    this.cancelPendingModal = (event) => {
+      if (event.key === "Escape" && this.pendingModalRequest !== null && !this.modal) {
+        event.preventDefault(); event.stopPropagation(); this.closeModal();
+      }
+    };
+    root?.addEventListener("keydown", this.cancelPendingModal);
     this.resize = () => { this.placeMenu(); this.placeModal(); };
     window.addEventListener("resize", this.resize);
     window.visualViewport?.addEventListener("resize", this.resize);
@@ -303,9 +309,12 @@ export class InlineImageController {
   }
 
   async open(state, trigger) {
-    const generation = this.generation; const loaded = await this.load(state);
-    if (!loaded || generation !== this.generation) return;
-    this.closeModal();
+    const generation = this.generation; const request = ++this.modalRequest;
+    this.pendingModalRequest = request;
+    const loaded = await this.load(state);
+    if (this.pendingModalRequest === request) this.pendingModalRequest = null;
+    if (!loaded || generation !== this.generation || request !== this.modalRequest) return;
+    this._removeModal();
     const modal = element("dialog", "inline-image-dialog"); modal.setAttribute("aria-label", `Image preview: ${imageFilename(state.record.filename)}`);
     const controls = element("div", "inline-image-dialog-controls");
     const close = button("Close", () => this.closeModal());
@@ -319,7 +328,8 @@ export class InlineImageController {
     modal.addEventListener("contextmenu", (event) => { if (event.target === image) { event.preventDefault(); this.openMenu(state, close, { x: event.clientX, y: event.clientY }); } });
     modal.showModal(); this.placeModal(); close.focus();
   }
-  closeModal() { if (!this.modal) return; this.closeMenu(); this.modal.close(); this.modal.remove(); this.modal = null; this.modalState = null; this.modalTrigger?.focus(); this.modalTrigger = null; }
+  closeModal() { this.modalRequest += 1; this.pendingModalRequest = null; this._removeModal(); }
+  _removeModal() { if (!this.modal) return; this.closeMenu(); this.modal.close(); this.modal.remove(); this.modal = null; this.modalState = null; this.modalTrigger?.focus(); this.modalTrigger = null; }
   notice(state, text) { state.notice = text; this.paint(state); if (this.modalState === state) { this.modal.querySelector(".inline-image-status").textContent = text; this.placeModal(); } }
 
   async copy(state) {
@@ -361,6 +371,7 @@ export class InlineImageController {
   }
   dispose() {
     this.clear(); this.root?.removeEventListener("pointerdown", this.outside);
+    this.root?.removeEventListener("keydown", this.cancelPendingModal);
     window.removeEventListener("resize", this.resize);
     window.visualViewport?.removeEventListener("resize", this.resize);
     window.visualViewport?.removeEventListener("scroll", this.resize);

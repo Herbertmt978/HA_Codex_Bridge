@@ -32481,6 +32481,8 @@ var InlineImageController = class {
     this.pendingRevision = 0;
     this.downloadTimers = /* @__PURE__ */ new Map();
     this.generation = 0;
+    this.modalRequest = 0;
+    this.pendingModalRequest = null;
     this.activeLoads = 0;
     this.loadQueue = [];
     this.observer = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
@@ -32493,6 +32495,14 @@ var InlineImageController = class {
       if (this.menu && !event.composedPath().includes(this.menu)) this.closeMenu();
     };
     root?.addEventListener("pointerdown", this.outside);
+    this.cancelPendingModal = (event) => {
+      if (event.key === "Escape" && this.pendingModalRequest !== null && !this.modal) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeModal();
+      }
+    };
+    root?.addEventListener("keydown", this.cancelPendingModal);
     this.resize = () => {
       this.placeMenu();
       this.placeModal();
@@ -32782,9 +32792,12 @@ var InlineImageController = class {
   }
   async open(state, trigger) {
     const generation = this.generation;
+    const request = ++this.modalRequest;
+    this.pendingModalRequest = request;
     const loaded = await this.load(state);
-    if (!loaded || generation !== this.generation) return;
-    this.closeModal();
+    if (this.pendingModalRequest === request) this.pendingModalRequest = null;
+    if (!loaded || generation !== this.generation || request !== this.modalRequest) return;
+    this._removeModal();
     const modal = element2("dialog", "inline-image-dialog");
     modal.setAttribute("aria-label", `Image preview: ${imageFilename(state.record.filename)}`);
     const controls = element2("div", "inline-image-dialog-controls");
@@ -32816,6 +32829,11 @@ var InlineImageController = class {
     close.focus();
   }
   closeModal() {
+    this.modalRequest += 1;
+    this.pendingModalRequest = null;
+    this._removeModal();
+  }
+  _removeModal() {
     if (!this.modal) return;
     this.closeMenu();
     this.modal.close();
@@ -32904,6 +32922,7 @@ var InlineImageController = class {
   dispose() {
     this.clear();
     this.root?.removeEventListener("pointerdown", this.outside);
+    this.root?.removeEventListener("keydown", this.cancelPendingModal);
     window.removeEventListener("resize", this.resize);
     window.visualViewport?.removeEventListener("resize", this.resize);
     window.visualViewport?.removeEventListener("scroll", this.resize);

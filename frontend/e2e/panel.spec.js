@@ -89,6 +89,33 @@ async function selectHarnessThread(page, threadId = "thr_vba_1") {
   await expect(page.locator("codex-bridge-panel").locator("#thread-title-label")).not.toBeEmpty();
 }
 
+// Synthetic transcripts must replace a settled snapshot, otherwise bootstrap
+// or a harness subscription can overwrite the fixture during an interaction.
+async function prepareStaticHarnessThread(page) {
+  await expect.poll(() => page.evaluate(() => {
+    const panel = document.querySelector("codex-bridge-panel");
+    return Boolean(panel?._config) && !panel._isLoading;
+  })).toBe(true);
+  await page.evaluate(() => document.querySelector("codex-bridge-panel")._stopSystemEventSubscription());
+  await selectHarnessThread(page);
+  await page.evaluate(async () => {
+    const panel = document.querySelector("codex-bridge-panel");
+    panel._stopPolling();
+    panel._stopEventSubscription();
+    panel._clearArtifactRefreshRetry();
+    await panel._artifactPreviewLoad?.promise;
+  });
+  await settleConversationRender(page);
+}
+
+async function settleConversationRender(page) {
+  // Transcript rebuilding schedules its bottom scroll on the next frame.
+  // Drain that work and its scroll observer before choosing a reading position.
+  await page.evaluate(() => new Promise((resolveFrame) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolveFrame));
+  }));
+}
+
 async function websocketCalls(page, type) {
   return page.evaluate((commandType) => window.__codexHarness.calls.filter((call) => call.kind === "ws" && call.type === commandType), type);
 }
@@ -3778,7 +3805,7 @@ test("touch rail previews, bookmarks and jumps without moving the transcript on 
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
-    await selectHarnessThread(page);
+    await prepareStaticHarnessThread(page);
     await page.evaluate(() => {
       const element = document.querySelector("codex-bridge-panel");
       element._stopPolling();
@@ -3789,10 +3816,12 @@ test("touch rail previews, bookmarks and jumps without moving the transcript on 
       element._forceMessageRebuild = true;
       element._render();
     });
+    await settleConversationRender(page);
     const panel = page.locator("codex-bridge-panel");
     const scroll = panel.locator("#conversation-scroll");
     const first = panel.locator(".timeline-item").first();
     await scroll.evaluate((node) => { node.scrollTop = 0; });
+    await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBe(0);
     await expect(first).toHaveAttribute("aria-current", "location");
     const before = await scroll.evaluate((node) => node.scrollTop);
     await first.tap();
@@ -4355,7 +4384,7 @@ for (const width of [390, 1440]) {
     await page.emulateMedia({ colorScheme: width === 390 ? "dark" : "light" });
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
-    await selectHarnessThread(page);
+    await prepareStaticHarnessThread(page);
     await page.evaluate(async () => {
       const panel = document.querySelector("codex-bridge-panel"); panel._stopPolling(); panel._pendingInteractions = [];
       const canvas = document.createElement("canvas"); canvas.width = 480; canvas.height = 240;
@@ -4389,6 +4418,7 @@ for (const width of [390, 1440]) {
       ];
       panel._forceMessageRebuild = true; panel._render();
     });
+    await settleConversationRender(page);
     const panel = page.locator("codex-bridge-panel");
     const upload = panel.locator(".uploaded-image-message .inline-image-thumbnail");
     await upload.scrollIntoViewIfNeeded();
@@ -4436,7 +4466,7 @@ for (const width of [390, 1440]) {
 }
 
 test("corrupt image containers show a retry state rather than a broken image", async ({ page }) => {
-  await page.goto(`${origin}/frontend/e2e/panel-harness.html`); await selectHarnessThread(page);
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`); await prepareStaticHarnessThread(page);
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel"); panel._stopPolling();
     const bytes = new Uint8Array(32); bytes.set([137, 80, 78, 71, 13, 10, 26, 10]); bytes.set([73, 72, 68, 82], 12);
@@ -4450,6 +4480,7 @@ test("corrupt image containers show a retry state rather than a broken image", a
     panel._events = [{ sequence: 1, event_type: "attachment.added", payload: attachment }];
     panel._forceMessageRebuild = true; panel._render();
   });
+  await settleConversationRender(page);
   const card = page.locator("codex-bridge-panel .uploaded-image-message .inline-image-card");
   await card.scrollIntoViewIfNeeded(); await expect(card.locator(".inline-image-status")).toContainText("Preview unavailable");
   await expect(card.locator("img")).toHaveCount(0);
